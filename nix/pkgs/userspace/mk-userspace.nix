@@ -209,7 +209,11 @@ in rec {
     cargoBuildFlags ? "--bin ${binaryName}",
     ...
   }@args:
-    mkPackage (args // {
+    let
+      # Remove binaryName from args before passing to mkPackage
+      cleanArgs = builtins.removeAttrs args [ "binaryName" ];
+    in
+    mkPackage (cleanArgs // {
       inherit cargoBuildFlags;
       installPhase = args.installPhase or ''
         runHook preInstall

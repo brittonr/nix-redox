@@ -39,17 +39,12 @@ rec {
 
     # Library search paths
     "-L ${relibc}/${redoxTarget}/lib"
-    "-L ${stubLibs}/lib"
 
     # Panic strategy - abort instead of unwinding (smaller binaries)
     "-C panic=abort"
 
     # Use clang as linker driver for cross-compilation
     "-C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
-
-    # Enable section splitting for dead code elimination
-    "-C function-sections=true"
-    "-C data-sections=true"
   ] ++ (map (arg: "-C link-arg=${arg}") linkerArgs));
 
   # RUSTFLAGS with additional optimizations

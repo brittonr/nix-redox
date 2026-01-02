@@ -26,6 +26,8 @@
   sysrootVendor,
   inputs,
   redoxTarget ? "x86_64-unknown-redox",
+  # Optional: pass relibc from flake to avoid IFD issues with modular relibc
+  relibc ? null,
 }:
 
 let
@@ -61,12 +63,17 @@ let
     };
   };
 
-  # System components - core OS requiring special build handling
-  system = rec {
-    relibc = import ./system/relibc.nix (commonArgs // {
+  # Use passed relibc if available (avoids IFD issues)
+  # Otherwise build it from source
+  resolvedRelibc = if relibc != null then relibc else
+    import ./system/relibc.nix (commonArgs // {
       inherit (inputs) relibc-src openlibm-src compiler-builtins-src dlmalloc-rs-src;
       inherit (inputs) cc-rs-src redox-syscall-src object-src;
     });
+
+  # System components - core OS requiring special build handling
+  system = rec {
+    relibc = resolvedRelibc;
 
     kernel = import ./system/kernel.nix (commonArgs // {
       inherit (inputs) kernel-src rmm-src redox-path-src fdt-src;
@@ -84,7 +91,7 @@ let
 
   # Userspace helper - creates cross-compiled packages with common settings
   mkUserspace = import ./userspace/mk-userspace.nix (commonArgs // {
-    relibc = system.relibc;
+    relibc = resolvedRelibc;
   });
 
   # Userspace applications - cross-compiled for Redox target
