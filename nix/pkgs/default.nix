@@ -438,7 +438,7 @@ let
     };
   };
 
-  # Infrastructure packages (initfs-tools, bootstrap)
+  # Infrastructure packages (initfs-tools, bootstrap, mkInitfs, mkDiskImage)
   infrastructure = import ./infrastructure {
     inherit
       pkgs
@@ -450,6 +450,8 @@ let
     inherit (redoxLib) vendor;
     base-src = inputs.base-src;
     relibc-src = inputs.relibc-src;
+    # Pass the host redoxfs tool for disk image creation
+    redoxfs = host.redoxfs;
   };
 
 in
