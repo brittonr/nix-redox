@@ -1,11 +1,15 @@
-# Cross-compilation helpers for RedoxOS userspace packages
+# Cross-compilation helpers for RedoxOS packages
 #
-# This module provides a high-level function for building Rust packages
+# This module provides high-level functions for building Rust packages
 # for the Redox target. It handles:
 # - Vendor directory setup with sysroot merging
 # - RUSTFLAGS configuration
 # - Stub library linking
 # - build-std invocation
+#
+# Usage:
+#   crossCompile = import ./cross-compile.nix { ... };
+#   ion = crossCompile.mkRedoxBinary { pname = "ion"; ... };
 
 { pkgs, lib, redoxTarget, relibc, stubLibs, sysrootVendor, rustToolchain }:
 
@@ -13,8 +17,22 @@ let
   vendor = import ./vendor.nix { inherit pkgs lib; };
   rustFlags = import ./rust-flags.nix { inherit lib pkgs redoxTarget relibc stubLibs; };
 
+  # Common native build inputs for all cross-compiled packages
+  commonNativeBuildInputs = [
+    rustToolchain
+    pkgs.gnumake
+    pkgs.llvmPackages.clang
+    pkgs.llvmPackages.bintools
+    pkgs.llvmPackages.llvm
+    pkgs.llvmPackages.lld
+    pkgs.python3
+  ];
+
 in rec {
-  # Build a Rust package for Redox
+  # Re-export useful components
+  inherit rustFlags vendor;
+
+  # Build a Rust package for Redox with full control
   #
   # Example:
   #   ion = mkRedoxPackage {
@@ -34,6 +52,7 @@ in rec {
     projectVendor,
     cargoBuildFlags ? "",
     cargoExtraArgs ? "",
+    preConfigure ? "",
     preBuild ? "",
     postBuild ? "",
     installPhase,
@@ -53,15 +72,12 @@ in rec {
 
     dontUnpack = true;
 
-    nativeBuildInputs = [
-      rustToolchain
-      pkgs.gnumake
-      pkgs.llvmPackages.llvm
-      pkgs.llvmPackages.lld
-      pkgs.python3
-    ] ++ nativeBuildInputs;
+    nativeBuildInputs = commonNativeBuildInputs ++ nativeBuildInputs;
 
-    inherit buildInputs;
+    buildInputs = [ relibc ] ++ buildInputs;
+
+    TARGET = redoxTarget;
+    RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
 
     configurePhase = ''
       runHook preConfigure
@@ -70,6 +86,8 @@ in rec {
       cp -r ${src}/* .
       chmod -R u+w .
 
+      ${preConfigure}
+
       # Link merged vendor directory
       ln -s ${mergedVendor} vendor-combined
 
@@ -77,6 +95,15 @@ in rec {
       mkdir -p .cargo
       cat > .cargo/config.toml << 'EOF'
       ${vendor.mkCargoConfig { inherit gitSources; }}
+
+      [build]
+      target = "${redoxTarget}"
+
+      [target.${redoxTarget}]
+      linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
+
+      [profile.release]
+      panic = "abort"
       EOF
 
       runHook postConfigure
@@ -86,7 +113,7 @@ in rec {
       runHook preBuild
 
       export HOME=$(mktemp -d)
-      export ${rustFlags.cargoEnvVar}="${rustFlags.userRustFlags}"
+      export ${rustFlags.cargoEnvVar}="${rustFlags.userRustFlags} -L ${stubLibs}/lib"
 
       ${preBuild}
 
@@ -94,7 +121,8 @@ in rec {
         ${cargoBuildFlags} \
         --target ${redoxTarget} \
         --release \
-        ${rustFlags.buildStdArgs} \
+        -Z build-std=core,alloc,std,panic_abort \
+        -Z build-std-features=compiler-builtins-mem \
         ${cargoExtraArgs}
 
       ${postBuild}
@@ -102,12 +130,10 @@ in rec {
       runHook postBuild
     '';
 
-    inherit installPhase;
-
-    inherit meta;
+    inherit installPhase meta;
   };
 
-  # Simpler version for packages that just need a binary copied
+  # Simpler version for packages that just need a single binary copied
   mkRedoxBinary = {
     pname,
     src,
@@ -118,10 +144,49 @@ in rec {
   }@args:
     mkRedoxPackage (args // {
       inherit cargoBuildFlags;
-      installPhase = ''
+      installPhase = args.installPhase or ''
         runHook preInstall
         mkdir -p $out/bin
         cp target/${redoxTarget}/release/${binaryName} $out/bin/
+        runHook postInstall
+      '';
+    });
+
+  # For packages with multiple binaries
+  mkRedoxMultiBinary = {
+    pname,
+    src,
+    projectVendor,
+    binaries,
+    ...
+  }@args:
+    mkRedoxPackage (args // {
+      installPhase = args.installPhase or ''
+        runHook preInstall
+        mkdir -p $out/bin
+        ${lib.concatMapStringsSep "\n" (bin: ''
+          if [ -f target/${redoxTarget}/release/${bin} ]; then
+            cp target/${redoxTarget}/release/${bin} $out/bin/
+          fi
+        '') binaries}
+        runHook postInstall
+      '';
+    });
+
+  # For packages that need all built executables
+  mkRedoxAllBinaries = {
+    pname,
+    src,
+    projectVendor,
+    ...
+  }@args:
+    mkRedoxPackage (args // {
+      installPhase = args.installPhase or ''
+        runHook preInstall
+        mkdir -p $out/bin
+        find target/${redoxTarget}/release -maxdepth 1 -type f -executable \
+          ! -name "*.d" ! -name "*.rlib" ! -name "build-script-*" \
+          -exec cp {} $out/bin/ \;
         runHook postInstall
       '';
     });
