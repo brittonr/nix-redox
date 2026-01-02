@@ -25,6 +25,8 @@
   vendor,
   base-src,
   relibc-src,
+  # Host redoxfs tool (for creating RedoxFS images)
+  redoxfs ? null,
   # System packages required for boot
   systemPkgs ? { },
   # Userspace packages to include in rootfs
@@ -67,6 +69,7 @@ in
       base,
       ion,
       redoxfsTarget,
+      netutils ? null,
       kernel ? null,
       bootloader ? null,
     }:
@@ -77,7 +80,12 @@ in
         initfsTools
         bootstrap
         ;
-      inherit base ion redoxfsTarget;
+      inherit
+        base
+        ion
+        redoxfsTarget
+        netutils
+        ;
     };
 
   mkDiskImage =
@@ -93,7 +101,10 @@ in
       sodium ? null,
       netutils ? null,
       uutils ? null,
-    }:
+      # Allow caller to override redoxfs if needed
+      redoxfs ? redoxfs,
+    }@args:
+    assert args.redoxfs != null;
     import ./disk-image.nix {
       inherit pkgs lib;
       inherit kernel bootloader initfs;
@@ -107,11 +118,6 @@ in
         netutils
         uutils
         ;
-      redoxfs = pkgs.callPackage ../host/redoxfs.nix {
-        inherit pkgs lib;
-        craneLib = null; # Will be passed from flake
-        rustToolchain = rustToolchain;
-        src = null; # Will be passed from flake
-      };
+      inherit (args) redoxfs;
     };
 }
