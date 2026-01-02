@@ -160,6 +160,36 @@
       url = "github:sajattack/terminfo";
       flake = false;
     };
+
+    # binutils - binary utilities (strings, hex, hexdump)
+    binutils-src = {
+      url = "gitlab:redox-os/binutils/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # extrautils - extended utilities (grep, tar, gzip, less, etc.)
+    extrautils-src = {
+      url = "gitlab:redox-os/extrautils/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # sodium - vi-like text editor
+    sodium-src = {
+      url = "gitlab:redox-os/sodium/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # extrautils dependencies
+    filetime-src = {
+      url = "github:jackpot51/filetime";
+      flake = false;
+    };
+
+    # libredox - stable API for Redox OS
+    libredox-src = {
+      url = "gitlab:redox-os/libredox/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
   };
 
   outputs =
@@ -195,6 +225,11 @@
       drm-rs-src,
       uutils-src,
       terminfo-src,
+      binutils-src,
+      extrautils-src,
+      sodium-src,
+      filetime-src,
+      libredox-src,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
@@ -1375,6 +1410,703 @@
               description = "Helix Editor for Redox OS";
               homepage = "https://gitlab.redox-os.org/redox-os/helix";
               license = licenses.mpl20;
+            };
+          };
+
+          # binutils - vendor dependencies using fetchCargoVendor (FOD)
+          binutilsVendor = pkgs.rustPlatform.fetchCargoVendor {
+            name = "binutils-cargo-vendor";
+            src = binutils-src;
+            hash = "sha256-RjHYE47M66f8vVAUINdi3yyB74nnKmzXuIHPc98QN5E=";
+          };
+
+          binutils = pkgs.stdenv.mkDerivation {
+            pname = "redox-binutils";
+            version = "unstable";
+
+            dontUnpack = true;
+
+            nativeBuildInputs = [
+              rustToolchain
+              pkgs.llvmPackages.clang
+              pkgs.llvmPackages.bintools
+              pkgs.llvmPackages.lld
+              pkgs.python3
+            ];
+
+            buildInputs = [ relibc ];
+
+            TARGET = redoxTarget;
+            RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+
+            configurePhase = ''
+                            runHook preConfigure
+
+                            cp -r ${binutils-src}/* .
+                            chmod -R u+w .
+
+                            # Merge binutils + sysroot vendors
+                            mkdir -p vendor-combined
+
+                            get_version() {
+                              grep '^version = ' "$1/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/'
+                            }
+
+                            for crate in ${binutilsVendor}/*/; do
+                              crate_name=$(basename "$crate")
+                              if [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
+                                continue
+                              fi
+                              cp -rL "$crate" "vendor-combined/$crate_name"
+                            done
+                            chmod -R u+w vendor-combined/
+
+                            for crate in ${sysrootVendor}/*/; do
+                              crate_name=$(basename "$crate")
+                              if [ ! -d "$crate" ]; then
+                                continue
+                              fi
+                              if [ -d "vendor-combined/$crate_name" ]; then
+                                base_version=$(get_version "vendor-combined/$crate_name")
+                                sysroot_version=$(get_version "$crate")
+                                if [ "$base_version" != "$sysroot_version" ]; then
+                                  versioned_name="$crate_name-$sysroot_version"
+                                  if [ ! -d "vendor-combined/$versioned_name" ]; then
+                                    cp -rL "$crate" "vendor-combined/$versioned_name"
+                                  fi
+                                fi
+                              else
+                                cp -rL "$crate" "vendor-combined/$crate_name"
+                              fi
+                            done
+                            chmod -R u+w vendor-combined/
+
+                            # Regenerate checksums
+                            ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
+              import json
+              import hashlib
+              from pathlib import Path
+
+              vendor_dir = Path("vendor-combined")
+              for crate_dir in vendor_dir.iterdir():
+                  if not crate_dir.is_dir():
+                      continue
+                  checksum_file = crate_dir / ".cargo-checksum.json"
+                  if not checksum_file.exists():
+                      continue
+                  with open(checksum_file) as f:
+                      existing = json.load(f)
+                  pkg_hash = existing.get("package")
+                  files = {}
+                  for file_path in sorted(crate_dir.rglob("*")):
+                      if file_path.is_file() and file_path.name != ".cargo-checksum.json":
+                          rel_path = str(file_path.relative_to(crate_dir))
+                          with open(file_path, "rb") as f:
+                              sha = hashlib.sha256(f.read()).hexdigest()
+                          files[rel_path] = sha
+                  new_data = {"files": files}
+                  if pkg_hash:
+                      new_data["package"] = pkg_hash
+                  with open(checksum_file, "w") as f:
+                      json.dump(new_data, f)
+              PYTHON_CHECKSUM
+
+                            mkdir -p .cargo
+                            cat > .cargo/config.toml << 'CARGOCONF'
+              [source.crates-io]
+              replace-with = "vendored-sources"
+
+              [source.vendored-sources]
+              directory = "vendor-combined"
+
+              [source."git+https://gitlab.redox-os.org/redox-os/libextra.git"]
+              git = "https://gitlab.redox-os.org/redox-os/libextra.git"
+              replace-with = "vendored-sources"
+
+              [net]
+              offline = true
+
+              [build]
+              target = "x86_64-unknown-redox"
+
+              [target.x86_64-unknown-redox]
+              linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
+
+              [profile.release]
+              panic = "abort"
+              CARGOCONF
+
+                            runHook postConfigure
+            '';
+
+            buildPhase = ''
+                            runHook preBuild
+
+                            export HOME=$(mktemp -d)
+
+                            # Create stub libs
+                            mkdir -p stub-libs
+                            cat > stub-libs/unwind_stubs.c << 'EOF'
+              typedef void* _Unwind_Reason_Code;
+              typedef void* _Unwind_Context;
+              typedef void* _Unwind_Ptr;
+
+              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
+              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
+              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
+              EOF
+                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
+                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
+                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
+
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+
+                            # Build all binutils binaries
+                            cargo build \
+                              --target ${redoxTarget} \
+                              --release \
+                              -Z build-std=core,alloc,std,panic_abort \
+                              -Z build-std-features=compiler-builtins-mem
+
+                            runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/bin
+              cp target/${redoxTarget}/release/strings $out/bin/ 2>/dev/null || true
+              cp target/${redoxTarget}/release/hex $out/bin/ 2>/dev/null || true
+              cp target/${redoxTarget}/release/hexdump $out/bin/ 2>/dev/null || true
+              runHook postInstall
+            '';
+
+            meta = with lib; {
+              description = "Binary utilities (strings, hex, hexdump) for Redox OS";
+              homepage = "https://gitlab.redox-os.org/redox-os/binutils";
+              license = licenses.mit;
+            };
+          };
+
+          # extrautils - vendor dependencies using crane (handles crate conflicts better)
+          extrautilsVendor = craneLib.vendorCargoDeps {
+            src = extrautils-src;
+          };
+
+          extrautils = pkgs.stdenv.mkDerivation {
+            pname = "redox-extrautils";
+            version = "unstable";
+
+            dontUnpack = true;
+
+            nativeBuildInputs = [
+              rustToolchain
+              pkgs.llvmPackages.clang
+              pkgs.llvmPackages.bintools
+              pkgs.llvmPackages.lld
+              pkgs.python3
+            ];
+
+            buildInputs = [ relibc ];
+
+            TARGET = redoxTarget;
+            RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+
+            configurePhase = ''
+                            runHook preConfigure
+
+                            cp -r ${extrautils-src}/* .
+                            chmod -R u+w .
+
+                            # Remove checksums from Cargo.lock for git dependencies
+                            # (Cargo can't verify checksums when we replace sources)
+                            sed -i '/^checksum = /d' Cargo.lock
+
+                            # Remove rust-lzma dependency and tar binary (needs liblzma for cross-compile)
+                            # Use sed to remove the problematic lines
+                            # Remove rust-lzma dependency
+                            sed -i '/^rust-lzma/d' Cargo.toml
+                            # Remove [features] section entirely (between [features] and next [ or EOF)
+                            sed -i '/^\[features\]/,/^\[/{ /^\[features\]/d; /^\[/!d; }' Cargo.toml
+                            # Remove tar [[bin]] section - match from [[bin]] with name = "tar" through path line
+                            sed -i '/^\[\[bin\]\]$/,/^path = /{
+                              /name = "tar"/,/^path = /{d}
+                            }' Cargo.toml
+                            # Clean up any remaining orphaned [[bin]] without name
+                            sed -i '/^\[\[bin\]\]$/{N; /\n$/d}' Cargo.toml
+
+                            # Replace patch section with path dependencies
+                            substituteInPlace Cargo.toml \
+                              --replace-quiet 'filetime = { git = "https://github.com/jackpot51/filetime.git" }' \
+                                              'filetime = { path = "${filetime-src}" }' \
+                              --replace-quiet 'cc-11 = { git = "https://github.com/tea/cc-rs", branch="riscv-abi-arch-fix", package = "cc" }' \
+                                              'cc-11 = { path = "${cc-rs-src}", package = "cc" }'
+
+                            # Merge extrautils + sysroot vendors
+                            mkdir -p vendor-combined
+
+                            get_version() {
+                              grep '^version = ' "$1/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/'
+                            }
+
+                            # Crane uses nested directories: hash_dir -> symlinks to crate directories
+                            # We need to flatten this structure
+                            for hash_link in ${extrautilsVendor}/*; do
+                              hash_name=$(basename "$hash_link")
+                              # Skip config.toml file
+                              if [ "$hash_name" = "config.toml" ]; then
+                                continue
+                              fi
+                              # Hash directories are symlinks to -linkLockedDeps which contain crate symlinks
+                              if [ -L "$hash_link" ]; then
+                                resolved=$(readlink -f "$hash_link")
+                                for crate_symlink in "$resolved"/*; do
+                                  if [ -L "$crate_symlink" ]; then
+                                    crate_name=$(basename "$crate_symlink")
+                                    # Resolve the crate symlink and copy
+                                    crate_target=$(readlink -f "$crate_symlink")
+                                    if [ -d "$crate_target" ] && [ ! -d "vendor-combined/$crate_name" ]; then
+                                      cp -rL "$crate_target" "vendor-combined/$crate_name"
+                                    fi
+                                  fi
+                                done
+                              elif [ -d "$hash_link" ]; then
+                                # Direct directory (vendor-registry case)
+                                for crate in "$hash_link"/*; do
+                                  if [ -d "$crate" ]; then
+                                    crate_name=$(basename "$crate")
+                                    if [ ! -d "vendor-combined/$crate_name" ]; then
+                                      cp -rL "$crate" "vendor-combined/$crate_name"
+                                    fi
+                                  fi
+                                done
+                              fi
+                            done
+                            chmod -R u+w vendor-combined/
+
+                            for crate in ${sysrootVendor}/*/; do
+                              crate_name=$(basename "$crate")
+                              if [ ! -d "$crate" ]; then
+                                continue
+                              fi
+                              if [ -d "vendor-combined/$crate_name" ]; then
+                                base_version=$(get_version "vendor-combined/$crate_name")
+                                sysroot_version=$(get_version "$crate")
+                                if [ "$base_version" != "$sysroot_version" ]; then
+                                  versioned_name="$crate_name-$sysroot_version"
+                                  if [ ! -d "vendor-combined/$versioned_name" ]; then
+                                    cp -rL "$crate" "vendor-combined/$versioned_name"
+                                  fi
+                                fi
+                              else
+                                cp -rL "$crate" "vendor-combined/$crate_name"
+                              fi
+                            done
+                            chmod -R u+w vendor-combined/
+
+                            # Regenerate checksums (and create for git deps that don't have them)
+                            ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
+              import json
+              import hashlib
+              from pathlib import Path
+
+              vendor_dir = Path("vendor-combined")
+              for crate_dir in vendor_dir.iterdir():
+                  if not crate_dir.is_dir():
+                      continue
+                  checksum_file = crate_dir / ".cargo-checksum.json"
+                  pkg_hash = None
+                  if checksum_file.exists():
+                      with open(checksum_file) as f:
+                          existing = json.load(f)
+                      pkg_hash = existing.get("package")
+                  files = {}
+                  for file_path in sorted(crate_dir.rglob("*")):
+                      if file_path.is_file() and file_path.name != ".cargo-checksum.json":
+                          rel_path = str(file_path.relative_to(crate_dir))
+                          with open(file_path, "rb") as f:
+                              sha = hashlib.sha256(f.read()).hexdigest()
+                          files[rel_path] = sha
+                  new_data = {"files": files}
+                  if pkg_hash:
+                      new_data["package"] = pkg_hash
+                  with open(checksum_file, "w") as f:
+                      json.dump(new_data, f)
+              PYTHON_CHECKSUM
+
+                            mkdir -p .cargo
+                            cat > .cargo/config.toml << 'CARGOCONF'
+              [source.crates-io]
+              replace-with = "vendored-sources"
+
+              [source.vendored-sources]
+              directory = "vendor-combined"
+
+              # Git dependencies for extrautils
+              [source."git+https://gitlab.redox-os.org/redox-os/arg_parser.git"]
+              git = "https://gitlab.redox-os.org/redox-os/arg_parser.git"
+              replace-with = "vendored-sources"
+
+              [source."git+https://gitlab.redox-os.org/redox-os/libextra.git"]
+              git = "https://gitlab.redox-os.org/redox-os/libextra.git"
+              replace-with = "vendored-sources"
+
+              [source."git+https://gitlab.redox-os.org/redox-os/libredox.git"]
+              git = "https://gitlab.redox-os.org/redox-os/libredox.git"
+              replace-with = "vendored-sources"
+
+              [source."git+https://gitlab.redox-os.org/redox-os/pager.git"]
+              git = "https://gitlab.redox-os.org/redox-os/pager.git"
+              replace-with = "vendored-sources"
+
+              [source."git+https://gitlab.redox-os.org/nicholasbishop/os_release.git?rev=bb0b7bd"]
+              git = "https://gitlab.redox-os.org/nicholasbishop/os_release.git"
+              rev = "bb0b7bd"
+              replace-with = "vendored-sources"
+
+              [source."git+https://github.com/tea/cc-rs?branch=riscv-abi-arch-fix"]
+              git = "https://github.com/tea/cc-rs"
+              branch = "riscv-abi-arch-fix"
+              replace-with = "vendored-sources"
+
+              [source."git+https://github.com/jackpot51/filetime.git"]
+              git = "https://github.com/jackpot51/filetime.git"
+              replace-with = "vendored-sources"
+
+              [source."git+https://gitlab.redox-os.org/redox-os/libpager.git"]
+              git = "https://gitlab.redox-os.org/redox-os/libpager.git"
+              replace-with = "vendored-sources"
+
+              [source."git+https://gitlab.redox-os.org/redox-os/termion.git"]
+              git = "https://gitlab.redox-os.org/redox-os/termion.git"
+              replace-with = "vendored-sources"
+
+              [source."git+https://gitlab.redox-os.org/redox-os/arg-parser.git"]
+              git = "https://gitlab.redox-os.org/redox-os/arg-parser.git"
+              replace-with = "vendored-sources"
+
+              [net]
+              offline = true
+
+              [build]
+              target = "x86_64-unknown-redox"
+
+              [target.x86_64-unknown-redox]
+              linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
+
+              [profile.release]
+              panic = "abort"
+              CARGOCONF
+
+                            runHook postConfigure
+            '';
+
+            buildPhase = ''
+                            runHook preBuild
+
+                            export HOME=$(mktemp -d)
+
+                            # Create stub libs
+                            mkdir -p stub-libs
+                            cat > stub-libs/unwind_stubs.c << 'EOF'
+              typedef void* _Unwind_Reason_Code;
+              typedef void* _Unwind_Context;
+              typedef void* _Unwind_Ptr;
+
+              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
+              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
+              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
+              EOF
+                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
+                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
+                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
+
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+
+                            # Build all extrautils binaries (tar excluded via Cargo.toml patch)
+                            cargo build \
+                              --target ${redoxTarget} \
+                              --release \
+                              -Z build-std=core,alloc,std,panic_abort \
+                              -Z build-std-features=compiler-builtins-mem
+
+                            runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/bin
+              # Copy all built binaries
+              find target/${redoxTarget}/release -maxdepth 1 -type f -executable \
+                ! -name "*.d" ! -name "*.rlib" ! -name "build-script-*" \
+                -exec cp {} $out/bin/ \;
+              runHook postInstall
+            '';
+
+            meta = with lib; {
+              description = "Extended utilities (grep, tar, gzip, less, etc.) for Redox OS";
+              homepage = "https://gitlab.redox-os.org/redox-os/extrautils";
+              license = licenses.mit;
+            };
+          };
+
+          # sodium - vendor libredox (orbclient's only Redox dependency)
+          # Create a fake package with libredox as a dependency to vendor it
+          sodiumDepsSource = pkgs.writeTextDir "sodium-deps" ''
+            # Placeholder - we use pkgs.writeTextDir + additional files below
+          '' // {
+            passthru = {};
+          };
+
+          sodiumDepsSourceReal = pkgs.runCommand "sodium-deps-source" {} ''
+            mkdir -p $out/src
+            echo "fn main() {}" > $out/src/main.rs
+            cat > $out/Cargo.toml << 'TOML'
+[package]
+name = "sodium-deps"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+libredox = "0.1"
+TOML
+            cat > $out/Cargo.lock << 'LOCK'
+# This file is automatically @generated by Cargo.
+# It is not intended for manual editing.
+version = 4
+
+[[package]]
+name = "bitflags"
+version = "2.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
+
+[[package]]
+name = "libc"
+version = "0.2.172"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d750af042f7ef4f724306de029d18836c26c1765a54a6a3f094cbd23a7267ffa"
+
+[[package]]
+name = "libredox"
+version = "0.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d0b95e02c851351f877147b7deea7b1afb1df71b63aa5f8270716e0c5720616"
+dependencies = [
+ "bitflags",
+ "libc",
+ "redox_syscall",
+]
+
+[[package]]
+name = "redox_syscall"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "49f3fe0889e69e2ae9e41f4d6c4c0181701d00e4697b356fb1f74173a5e0ee27"
+dependencies = [
+ "bitflags",
+]
+
+[[package]]
+name = "sodium-deps"
+version = "0.1.0"
+dependencies = [
+ "libredox",
+]
+LOCK
+          '';
+
+          sodiumVendor = pkgs.rustPlatform.fetchCargoVendor {
+            name = "sodium-deps-vendor";
+            src = sodiumDepsSourceReal;
+            hash = "sha256-yuxAB+9CZHCz/bAKPD82+8LfU3vgVWU6KeTVVk1JcO8=";
+          };
+
+          sodium = pkgs.stdenv.mkDerivation {
+            pname = "sodium";
+            version = "unstable";
+
+            dontUnpack = true;
+
+            nativeBuildInputs = [
+              rustToolchain
+              pkgs.llvmPackages.clang
+              pkgs.llvmPackages.bintools
+              pkgs.llvmPackages.lld
+              pkgs.python3
+            ];
+
+            buildInputs = [ relibc ];
+
+            TARGET = redoxTarget;
+            RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+
+            configurePhase = ''
+                            runHook preConfigure
+
+                            cp -r ${sodium-src}/* .
+                            chmod -R u+w .
+
+                            # Copy orbclient and patch it to remove sdl2 patch section (not needed for Redox)
+                            mkdir -p orbclient-patched
+                            cp -r ${orbclient-src}/* orbclient-patched/
+                            chmod -R u+w orbclient-patched/
+
+                            # Remove the [patch.crates-io] section entirely (not needed for Redox target)
+                            sed -i '/\[patch\.crates-io\]/,$d' orbclient-patched/Cargo.toml
+
+                            # Patch Cargo.toml to use patched orbclient without default features (no SDL)
+                            substituteInPlace Cargo.toml \
+                              --replace-fail 'orbclient = "0.3"' 'orbclient = { path = "orbclient-patched", default-features = false }'
+
+                            # Merge libredox vendor + sysroot vendors
+                            mkdir -p vendor-combined
+
+                            get_version() {
+                              grep '^version = ' "$1/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/'
+                            }
+
+                            # Copy libredox vendor (flat structure from fetchCargoVendor)
+                            for crate in ${sodiumVendor}/*/; do
+                              crate_name=$(basename "$crate")
+                              if [ -d "$crate" ]; then
+                                cp -rL "$crate" "vendor-combined/$crate_name"
+                              fi
+                            done
+                            chmod -R u+w vendor-combined/
+
+                            # Copy sysroot vendor
+                            for crate in ${sysrootVendor}/*/; do
+                              crate_name=$(basename "$crate")
+                              if [ ! -d "$crate" ]; then
+                                continue
+                              fi
+                              if [ -d "vendor-combined/$crate_name" ]; then
+                                base_version=$(get_version "vendor-combined/$crate_name")
+                                sysroot_version=$(get_version "$crate")
+                                if [ "$base_version" != "$sysroot_version" ]; then
+                                  versioned_name="$crate_name-$sysroot_version"
+                                  if [ ! -d "vendor-combined/$versioned_name" ]; then
+                                    cp -rL "$crate" "vendor-combined/$versioned_name"
+                                  fi
+                                fi
+                              else
+                                cp -rL "$crate" "vendor-combined/$crate_name"
+                              fi
+                            done
+                            chmod -R u+w vendor-combined/
+
+                            # Regenerate checksums
+                            ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
+              import json
+              import hashlib
+              from pathlib import Path
+
+              vendor_dir = Path("vendor-combined")
+              for crate_dir in vendor_dir.iterdir():
+                  if not crate_dir.is_dir():
+                      continue
+                  checksum_file = crate_dir / ".cargo-checksum.json"
+                  if not checksum_file.exists():
+                      continue
+                  with open(checksum_file) as f:
+                      existing = json.load(f)
+                  pkg_hash = existing.get("package")
+                  files = {}
+                  for file_path in sorted(crate_dir.rglob("*")):
+                      if file_path.is_file() and file_path.name != ".cargo-checksum.json":
+                          rel_path = str(file_path.relative_to(crate_dir))
+                          with open(file_path, "rb") as f:
+                              sha = hashlib.sha256(f.read()).hexdigest()
+                          files[rel_path] = sha
+                  new_data = {"files": files}
+                  if pkg_hash:
+                      new_data["package"] = pkg_hash
+                  with open(checksum_file, "w") as f:
+                      json.dump(new_data, f)
+              PYTHON_CHECKSUM
+
+                            mkdir -p .cargo
+                            cat > .cargo/config.toml << 'CARGOCONF'
+              [source.crates-io]
+              replace-with = "vendored-sources"
+
+              [source.vendored-sources]
+              directory = "vendor-combined"
+
+              [net]
+              offline = true
+
+              [build]
+              target = "x86_64-unknown-redox"
+
+              [target.x86_64-unknown-redox]
+              linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
+
+              [profile.release]
+              panic = "abort"
+              CARGOCONF
+
+                            runHook postConfigure
+            '';
+
+            buildPhase = ''
+                            runHook preBuild
+
+                            export HOME=$(mktemp -d)
+
+                            # Create stub libs
+                            mkdir -p stub-libs
+                            cat > stub-libs/unwind_stubs.c << 'EOF'
+              typedef void* _Unwind_Reason_Code;
+              typedef void* _Unwind_Context;
+              typedef void* _Unwind_Ptr;
+
+              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
+              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
+              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
+              EOF
+                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
+                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
+                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
+
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+
+                            # Build sodium with ansi feature (terminal mode, not orbital GUI)
+                            cargo build \
+                              --bin sodium \
+                              --target ${redoxTarget} \
+                              --release \
+                              --no-default-features \
+                              --features ansi \
+                              -Z build-std=core,alloc,std,panic_abort \
+                              -Z build-std-features=compiler-builtins-mem
+
+                            runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/bin
+              cp target/${redoxTarget}/release/sodium $out/bin/
+              runHook postInstall
+            '';
+
+            meta = with lib; {
+              description = "Sodium: A vi-like text editor for Redox OS";
+              homepage = "https://gitlab.redox-os.org/redox-os/sodium";
+              license = licenses.mit;
             };
           };
 
@@ -3501,6 +4233,9 @@ CACHE
               ion
               terminfo
               helix
+              binutils
+              extrautils
+              sodium
             ];
 
             buildPhase = ''
@@ -3632,6 +4367,36 @@ CACHE
                               echo "Copied helix successfully"
                             else
                               echo "WARNING: Helix not found at ${helix}/bin - continuing without it"
+                            fi
+
+                            # Copy binutils (strings, hex, hexdump)
+                            echo "Copying binutils..."
+                            if [ -d "${binutils}/bin" ]; then
+                              cp -rv ${binutils}/bin/* redoxfs-root/bin/ 2>/dev/null || true
+                              echo "Copied binutils (strings, hex, hexdump)"
+                            else
+                              echo "WARNING: binutils not found at ${binutils}/bin"
+                            fi
+
+                            # Copy extrautils (grep, tar, gzip, less, etc.)
+                            echo "Copying extrautils..."
+                            if [ -d "${extrautils}/bin" ]; then
+                              cp -rv ${extrautils}/bin/* redoxfs-root/bin/ 2>/dev/null || true
+                              cp -rv ${extrautils}/bin/* redoxfs-root/usr/bin/ 2>/dev/null || true
+                              echo "Copied extrautils (grep, tar, gzip, less, dmesg, watch, etc.)"
+                            else
+                              echo "WARNING: extrautils not found at ${extrautils}/bin"
+                            fi
+
+                            # Copy sodium editor
+                            echo "Copying sodium editor..."
+                            if [ -f "${sodium}/bin/sodium" ]; then
+                              cp -v ${sodium}/bin/sodium redoxfs-root/bin/
+                              # Create vi symlink for familiarity
+                              ln -sf sodium redoxfs-root/bin/vi
+                              echo "Copied sodium editor (also available as 'vi')"
+                            else
+                              echo "WARNING: sodium not found at ${sodium}/bin"
                             fi
 
                             # Copy terminfo database for terminal capabilities
@@ -4022,6 +4787,11 @@ CACHE
               ncurses
               helixVendor
               helix
+              binutilsVendor
+              binutils
+              extrautilsVendor
+              extrautils
+              sodium
               diskImage
               runQemu
               runQemuGraphical

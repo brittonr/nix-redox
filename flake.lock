@@ -19,6 +19,25 @@
         "type": "gitlab"
       }
     },
+    "binutils-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1753534630,
+        "narHash": "sha256-rA4538n+260JYCycVgWpCloxQULh/uSBcXolkvw9fPk=",
+        "owner": "redox-os",
+        "repo": "binutils",
+        "rev": "d26234f8841c23c6c284f2892dfab5fde1c731ef",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "binutils",
+        "type": "gitlab"
+      }
+    },
     "bootloader-src": {
       "flake": false,
       "locked": {
@@ -124,6 +143,25 @@
         "type": "github"
       }
     },
+    "extrautils-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1763476658,
+        "narHash": "sha256-OGasTUINTHr+NuNL5BXXtX1IMWXu4cyAg9uj5P3Lm9E=",
+        "owner": "redox-os",
+        "repo": "extrautils",
+        "rev": "fb669415bdc829639fbeb1318717d6b7c180f5f5",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "extrautils",
+        "type": "gitlab"
+      }
+    },
     "fdt-src": {
       "flake": false,
       "locked": {
@@ -138,6 +176,22 @@
         "owner": "repnop",
         "repo": "fdt",
         "rev": "2fb1409edd1877c714a0aa36b6a7c5351004be54",
+        "type": "github"
+      }
+    },
+    "filetime-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1724701795,
+        "narHash": "sha256-lU7dPotdnmyleS2B75SmDab7qJfEzmJnHPF18CN/Y98=",
+        "owner": "jackpot51",
+        "repo": "filetime",
+        "rev": "186e19d3190ead16b05329400cb5b2350d8f44cf",
+        "type": "github"
+      },
+      "original": {
+        "owner": "jackpot51",
+        "repo": "filetime",
         "type": "github"
       }
     },
@@ -253,6 +307,25 @@
         "owner": "redox-os",
         "ref": "redox-0.2",
         "repo": "liblibc",
+        "type": "gitlab"
+      }
+    },
+    "libredox-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1766846845,
+        "narHash": "sha256-SVM6ng7jhoVTwj63nxVpgB8zm9um7OzrcJOHpwggpPs=",
+        "owner": "redox-os",
+        "repo": "libredox",
+        "rev": "6a75c953a651e4d81022bb86796de4b302d5694c",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "libredox",
         "type": "gitlab"
       }
     },
@@ -465,19 +538,23 @@
     "root": {
       "inputs": {
         "base-src": "base-src",
+        "binutils-src": "binutils-src",
         "bootloader-src": "bootloader-src",
         "cc-rs-src": "cc-rs-src",
         "compiler-builtins-src": "compiler-builtins-src",
         "crane": "crane",
         "dlmalloc-rs-src": "dlmalloc-rs-src",
         "drm-rs-src": "drm-rs-src",
+        "extrautils-src": "extrautils-src",
         "fdt-src": "fdt-src",
+        "filetime-src": "filetime-src",
         "flake-parts": "flake-parts",
         "helix-src": "helix-src",
         "installer-src": "installer-src",
         "ion-src": "ion-src",
         "kernel-src": "kernel-src",
         "liblibc-src": "liblibc-src",
+        "libredox-src": "libredox-src",
         "nixpkgs": "nixpkgs",
         "object-src": "object-src",
         "openlibm-src": "openlibm-src",
@@ -491,6 +568,7 @@
         "rmm-src": "rmm-src",
         "rust-overlay": "rust-overlay",
         "rustix-redox-src": "rustix-redox-src",
+        "sodium-src": "sodium-src",
         "terminfo-src": "terminfo-src",
         "uefi-src": "uefi-src",
         "uutils-src": "uutils-src"
@@ -531,6 +609,25 @@
         "ref": "redox-ioctl",
         "repo": "rustix",
         "type": "github"
+      }
+    },
+    "sodium-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1733262248,
+        "narHash": "sha256-pyDaMfdS+lm9eK7GhafR/GtNXEzdCphzuomE0Pbnk1Y=",
+        "owner": "redox-os",
+        "repo": "sodium",
+        "rev": "43feb1333b739a3b6eeb476904e4aeabf3787650",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "sodium",
+        "type": "gitlab"
       }
     },
     "terminfo-src": {
