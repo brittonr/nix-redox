@@ -49,6 +49,11 @@
       flake = false;
     };
 
+    helix-src = {
+      url = "gitlab:redox-os/helix/redox?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
     # The main Redox repository (contains cookbook)
     redox-src = {
       url = "gitlab:redox-os/redox/master?host=gitlab.redox-os.org";
@@ -149,6 +154,12 @@
       url = "github:uutils/coreutils/0.0.27";
       flake = false;
     };
+
+    # terminfo database for terminal capabilities
+    terminfo-src = {
+      url = "github:sajattack/terminfo";
+      flake = false;
+    };
   };
 
   outputs =
@@ -164,6 +175,7 @@
       installer-src,
       pkgutils-src,
       ion-src,
+      helix-src,
       redox-src,
       openlibm-src,
       compiler-builtins-src,
@@ -182,6 +194,7 @@
       rustix-redox-src,
       drm-rs-src,
       uutils-src,
+      terminfo-src,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
@@ -1162,6 +1175,209 @@
             };
           };
 
+          # Helix editor - vendor dependencies using fetchCargoVendor (FOD)
+          helixVendor = pkgs.rustPlatform.fetchCargoVendor {
+            name = "helix-cargo-vendor";
+            src = helix-src;
+            hash = "sha256-p82CxDgI6SNSfN1BTY/s8hLh7/nhg4UHFHA2b5vQZf0=";
+          };
+
+          helix = pkgs.stdenv.mkDerivation {
+            pname = "helix-editor";
+            version = "unstable";
+
+            dontUnpack = true;
+
+            nativeBuildInputs = [
+              rustToolchain
+              pkgs.llvmPackages.clang
+              pkgs.llvmPackages.bintools
+              pkgs.llvmPackages.lld
+              pkgs.python3
+            ];
+
+            buildInputs = [ relibc ];
+
+            TARGET = redoxTarget;
+            RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+
+            configurePhase = ''
+                            runHook preConfigure
+
+                            cp -r ${helix-src}/* .
+                            chmod -R u+w .
+
+                            # Merge helix + sysroot vendors
+                            mkdir -p vendor-combined
+
+                            get_version() {
+                              grep '^version = ' "$1/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/'
+                            }
+
+                            for crate in ${helixVendor}/*/; do
+                              crate_name=$(basename "$crate")
+                              # Skip .cargo and Cargo.lock
+                              if [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
+                                continue
+                              fi
+                              cp -rL "$crate" "vendor-combined/$crate_name"
+                            done
+                            chmod -R u+w vendor-combined/
+
+                            for crate in ${sysrootVendor}/*/; do
+                              crate_name=$(basename "$crate")
+                              if [ ! -d "$crate" ]; then
+                                continue
+                              fi
+                              if [ -d "vendor-combined/$crate_name" ]; then
+                                existing_ver=$(get_version "vendor-combined/$crate_name")
+                                new_ver=$(get_version "$crate")
+                                if [ "$existing_ver" != "$new_ver" ]; then
+                                  mv "vendor-combined/$crate_name" "vendor-combined/$crate_name-$existing_ver"
+                                  cp -rL "$crate" "vendor-combined/$crate_name-$new_ver"
+                                fi
+                              else
+                                cp -rL "$crate" "vendor-combined/$crate_name"
+                              fi
+                            done
+                            chmod -R u+w vendor-combined/
+
+                            # Regenerate checksums
+                            python3 << 'PYTHON_CHECKSUM'
+              import json
+              import hashlib
+              from pathlib import Path
+
+              vendor = Path("vendor-combined")
+              for crate_dir in vendor.iterdir():
+                  if not crate_dir.is_dir():
+                      continue
+                  checksum_file = crate_dir / ".cargo-checksum.json"
+                  pkg_hash = None
+                  if checksum_file.exists():
+                      with open(checksum_file) as f:
+                          existing = json.load(f)
+                      pkg_hash = existing.get("package")
+                  files = {}
+                  for file_path in sorted(crate_dir.rglob("*")):
+                      if file_path.is_file() and file_path.name != ".cargo-checksum.json":
+                          rel_path = str(file_path.relative_to(crate_dir))
+                          with open(file_path, "rb") as f:
+                              sha = hashlib.sha256(f.read()).hexdigest()
+                          files[rel_path] = sha
+                  new_data = {"files": files}
+                  if pkg_hash:
+                      new_data["package"] = pkg_hash
+                  with open(checksum_file, "w") as f:
+                      json.dump(new_data, f)
+              PYTHON_CHECKSUM
+
+                            mkdir -p .cargo
+                            cat > .cargo/config.toml << 'CARGOCONF'
+              [source.crates-io]
+              replace-with = "vendored-sources"
+
+              [source.vendored-sources]
+              directory = "vendor-combined"
+
+              [source."git+https://github.com/nicholasbishop/helix-misc?branch=x86_64-unknown-redox"]
+              git = "https://github.com/nicholasbishop/helix-misc"
+              branch = "x86_64-unknown-redox"
+              replace-with = "vendored-sources"
+
+              [source."git+https://github.com/nicholasbishop/ropey?branch=x86_64-unknown-redox"]
+              git = "https://github.com/nicholasbishop/ropey"
+              branch = "x86_64-unknown-redox"
+              replace-with = "vendored-sources"
+
+              [source."git+https://github.com/nicholasbishop/gix?branch=x86_64-unknown-redox"]
+              git = "https://github.com/nicholasbishop/gix"
+              branch = "x86_64-unknown-redox"
+              replace-with = "vendored-sources"
+
+              [source."git+https://github.com/helix-editor/tree-sitter?rev=660481dbf71413eba5a928b0b0ab8da50c1109e0"]
+              git = "https://github.com/helix-editor/tree-sitter"
+              rev = "660481dbf71413eba5a928b0b0ab8da50c1109e0"
+              replace-with = "vendored-sources"
+
+              [net]
+              offline = true
+
+              [build]
+              target = "x86_64-unknown-redox"
+
+              [target.x86_64-unknown-redox]
+              linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
+
+              [profile.release]
+              panic = "abort"
+              CARGOCONF
+
+                            runHook postConfigure
+            '';
+
+            buildPhase = ''
+                            runHook preBuild
+
+                            export HOME=$(mktemp -d)
+
+                            # Disable auto grammar build
+                            export HELIX_DISABLE_AUTO_GRAMMAR_BUILD=1
+
+                            # Disable FORTIFY_SOURCE for target C builds (tree-sitter)
+                            # FORTIFY_SOURCE uses _chk functions that don't exist in relibc
+                            # Use target-specific env vars to avoid affecting host builds
+                            # Note: relibc has headers in include/ not usr/include/, so we need -I
+                            export CFLAGS_x86_64_unknown_redox="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -I${relibc}/${redoxTarget}/include"
+                            export CC_x86_64_unknown_redox="${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
+
+                            # Create stub libs
+                            mkdir -p stub-libs
+                            cat > stub-libs/unwind_stubs.c << 'EOF'
+              typedef void* _Unwind_Reason_Code;
+              typedef void* _Unwind_Context;
+              typedef void* _Unwind_Ptr;
+
+              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
+              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
+              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
+              EOF
+                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
+                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
+                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
+
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+
+                            # Build helix from helix-term subdirectory
+                            cargo build \
+                              --bin hx \
+                              --target ${redoxTarget} \
+                              --release \
+                              -Z build-std=core,alloc,std,panic_abort \
+                              -Z build-std-features=compiler-builtins-mem \
+                              --manifest-path helix-term/Cargo.toml
+
+                            runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/bin
+              cp target/${redoxTarget}/release/hx $out/bin/helix
+              runHook postInstall
+            '';
+
+            meta = with lib; {
+              description = "Helix Editor for Redox OS";
+              homepage = "https://gitlab.redox-os.org/redox-os/helix";
+              license = licenses.mpl20;
+            };
+          };
+
           # Minimal shell - a very basic shell for Redox written in Rust
           minishell = pkgs.stdenv.mkDerivation {
             pname = "minishell";
@@ -1553,6 +1769,381 @@
             meta = with lib; {
               description = "Minimal shell and console utilities for Redox";
               license = licenses.mit;
+            };
+          };
+
+          # Terminfo - terminal capability database
+          terminfo = pkgs.stdenv.mkDerivation {
+            pname = "terminfo";
+            version = "unstable";
+
+            src = terminfo-src;
+
+            dontBuild = true;
+
+            installPhase = ''
+              runHook preInstall
+
+              # Copy terminfo database files for common terminals
+              mkdir -p $out/share/terminfo/{a,d,l,s,t,v,x}
+              cp -r $src/tabset $out/share/ 2>/dev/null || true
+
+              # Copy only the most common terminal definitions
+              cp $src/terminfo/a/ansi* $out/share/terminfo/a/ 2>/dev/null || true
+              cp $src/terminfo/d/dumb* $out/share/terminfo/d/ 2>/dev/null || true
+              cp $src/terminfo/l/linux* $out/share/terminfo/l/ 2>/dev/null || true
+              cp $src/terminfo/s/screen* $out/share/terminfo/s/ 2>/dev/null || true
+              cp $src/terminfo/t/tmux* $out/share/terminfo/t/ 2>/dev/null || true
+              cp $src/terminfo/v/vt100* $out/share/terminfo/v/ 2>/dev/null || true
+              cp $src/terminfo/x/xterm* $out/share/terminfo/x/ 2>/dev/null || true
+
+              runHook postInstall
+            '';
+
+            meta = with lib; {
+              description = "Terminfo database for Redox";
+              license = licenses.mit;
+            };
+          };
+
+          # ncurses - cross-compiled for Redox
+          ncursesSrc = pkgs.fetchurl {
+            url = "https://ftp.gnu.org/gnu/ncurses/ncurses-6.4.tar.gz";
+            hash = "sha256-aTEoPZrIfFBz8wtikMTHXyFjK7T8NgOsgQCBK+0kgVk=";
+          };
+
+          ncurses = pkgs.stdenv.mkDerivation {
+            pname = "ncurses";
+            version = "6.4";
+
+            src = ncursesSrc;
+
+            nativeBuildInputs = [
+              pkgs.llvmPackages.clang-unwrapped # Use unwrapped clang for cross-compilation
+              pkgs.llvmPackages.bintools
+              pkgs.llvmPackages.lld
+              pkgs.llvmPackages.llvm
+              pkgs.gnumake
+            ];
+
+            buildInputs = [ relibc ];
+
+            # Disable standard configure hook - we do it manually
+            dontAddPrefix = true;
+
+            configurePhase = ''
+              runHook preConfigure
+
+              # Apply Redox patch to configure script
+              sed -i 's/(linux\*|gnu\*|k\*bsd\*-gnu)/(linux*|gnu*|k*bsd*-gnu|redox*)/' configure
+
+              # Set up cross-compilation environment using unwrapped clang
+              export CC="${pkgs.llvmPackages.clang-unwrapped}/bin/clang --target=${redoxTarget} --sysroot=${relibc}/${redoxTarget}"
+              export AR="${pkgs.llvmPackages.llvm}/bin/llvm-ar"
+              export RANLIB="${pkgs.llvmPackages.llvm}/bin/llvm-ranlib"
+              export STRIP="${pkgs.llvmPackages.llvm}/bin/llvm-strip"
+              export LD="${pkgs.llvmPackages.lld}/bin/ld.lld"
+
+              # sig_atomic_t is in stdint.h in relibc, not signal.h
+              # Define SIG_ATOMIC_T for ncurses compatibility
+              # Include termios.h for baud rate definitions (B9600, etc.)
+              # Include signal.h for SIGTERM etc.
+              # Define __redox__ since clang doesn't define it automatically
+              export CFLAGS="-I${relibc}/${redoxTarget}/include -fPIC -nostdinc -D__redox__ -DSIG_ATOMIC_T=sig_atomic_t -include stdint.h -include termios.h -include signal.h"
+              export CPPFLAGS="-I${relibc}/${redoxTarget}/include -DSIG_ATOMIC_T=sig_atomic_t"
+              export LDFLAGS="-L${relibc}/${redoxTarget}/lib -fuse-ld=lld -static -nostdlib ${relibc}/${redoxTarget}/lib/crt0.o ${relibc}/${redoxTarget}/lib/crti.o ${relibc}/${redoxTarget}/lib/crtn.o -lc"
+
+              # Fix relibc sgtty.h bug: add typedef for sgttyb
+              mkdir -p include_fixes
+              echo "typedef struct sgttyb sgttyb;" > include_fixes/sgtty_fix.h
+              export CFLAGS="$CFLAGS -include $(pwd)/include_fixes/sgtty_fix.h"
+              export CPPFLAGS="$CPPFLAGS -include $(pwd)/include_fixes/sgtty_fix.h"
+
+              # Pre-define configure cache variables for cross-compilation
+              # Set ac_cv_func_sigaction=no to disable USE_SIGTSTP which has compatibility issues
+              cat > config.cache << 'CONFCACHE'
+cf_cv_func_mkstemp=yes
+ac_cv_type_sig_atomic_t=yes
+cf_cv_sig_atomic_t="volatile sig_atomic_t"
+cf_cv_type_sigaction=no
+ac_cv_func_sigaction=no
+ac_cv_func_sigvec=no
+cf_cv_posix_c_source=no
+CONFCACHE
+
+              ./configure \
+                --host=x86_64-unknown-redox \
+                --prefix=/usr \
+                --cache-file=config.cache \
+                --disable-shared \
+                --enable-static \
+                --disable-db-install \
+                --disable-stripping \
+                --without-ada \
+                --without-manpages \
+                --without-tests \
+                --without-cxx-binding \
+                --without-debug \
+                --disable-sigwinch \
+                --disable-termcap \
+                --disable-tcap-names \
+                --disable-ext-funcs \
+                --disable-lp64 \
+                --with-terminfo-dirs=/share/terminfo \
+                --with-default-terminfo-dir=/share/terminfo \
+                cf_cv_func_mkstemp=yes \
+                cf_cv_ospeed=short
+
+              runHook postConfigure
+            '';
+
+            buildPhase = ''
+              runHook preBuild
+
+              # Build ncurses with cross-compiler (single-threaded for cleaner error output)
+              make -j1
+
+              runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+
+              make DESTDIR=$out install
+
+              # Move files to expected locations for cross-compilation
+              mkdir -p $out/${redoxTarget}
+              if [ -d $out/usr/lib ]; then
+                mv $out/usr/lib $out/${redoxTarget}/lib
+              fi
+              if [ -d $out/usr/include ]; then
+                mv $out/usr/include $out/${redoxTarget}/include
+              fi
+              rm -rf $out/usr
+
+              runHook postInstall
+            '';
+
+            meta = with lib; {
+              description = "ncurses library for Redox";
+              license = licenses.mit;
+            };
+          };
+
+          # nano text editor - cross-compiled for Redox
+          nanoSrc = pkgs.fetchurl {
+            url = "https://www.nano-editor.org/dist/v7/nano-7.2.tar.xz";
+            hash = "sha256-hvNEJ2i9KHPOxpP4PN+AtLRErTzBR2C3Q2FHT8h6RSY=";
+          };
+
+          nano = pkgs.stdenv.mkDerivation {
+            pname = "nano";
+            version = "7.2";
+
+            src = nanoSrc;
+
+            nativeBuildInputs = [
+              pkgs.llvmPackages.clang-unwrapped
+              pkgs.llvmPackages.bintools
+              pkgs.llvmPackages.lld
+              pkgs.llvmPackages.llvm
+              pkgs.gnumake
+              pkgs.pkg-config
+            ];
+
+            buildInputs = [
+              relibc
+              ncurses
+            ];
+
+            # Disable standard configure hook - we do it manually
+            dontAddPrefix = true;
+
+            configurePhase = ''
+              runHook preConfigure
+
+              # Create a comprehensive cross-compiler wrapper
+              # This is needed because clang-unwrapped doesn't know how to link for x86_64-unknown-redox
+              # and falls back to using gcc as a linker driver
+              mkdir -p $TMPDIR/bin
+
+              CLANG="${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
+              LLD="${pkgs.llvmPackages.lld}/bin/ld.lld"
+              SYSROOT="${relibc}/${redoxTarget}"
+              CRT0="$SYSROOT/lib/crt0.o"
+              CRTI="$SYSROOT/lib/crti.o"
+              CRTN="$SYSROOT/lib/crtn.o"
+
+              cat > $TMPDIR/bin/x86_64-unknown-redox-gcc << 'GCCWRAPPER'
+#!/bin/sh
+# Parse arguments to determine if we're compiling or linking
+
+compile_only=0
+output_file=""
+sources=""
+objects=""
+libs=""
+libdirs=""
+other_args=""
+static=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -c)
+            compile_only=1
+            other_args="$other_args $1"
+            ;;
+        -o)
+            output_file="$2"
+            shift
+            ;;
+        -l*)
+            libs="$libs $1"
+            ;;
+        -L*)
+            libdirs="$libdirs $1"
+            ;;
+        -static|--static)
+            static="-static"
+            ;;
+        *.c|*.cc|*.cpp|*.S|*.s)
+            sources="$sources $1"
+            ;;
+        *.o|*.a)
+            objects="$objects $1"
+            ;;
+        *)
+            other_args="$other_args $1"
+            ;;
+    esac
+    shift
+done
+
+IFLAGS="-I@SYSROOT@/include"
+
+if [ "$compile_only" = "1" ] || [ -z "$output_file" -a -n "$sources" -a -z "$objects" ]; then
+    # Just compile - pass to clang
+    if [ -n "$output_file" ]; then
+        exec @CLANG@ --target=x86_64-unknown-redox --sysroot="@SYSROOT@" $IFLAGS $other_args $sources -o "$output_file"
+    else
+        exec @CLANG@ --target=x86_64-unknown-redox --sysroot="@SYSROOT@" $IFLAGS $other_args $sources
+    fi
+else
+    # Need to compile and/or link
+    tmp_objs=""
+    for src in $sources; do
+        tmp_obj="/tmp/cc_$$_$(basename $src | sed 's/\.[^.]*$//').o"
+        "@CLANG@" --target=x86_64-unknown-redox --sysroot="@SYSROOT@" $IFLAGS $other_args -c "$src" -o "$tmp_obj" || exit $?
+        tmp_objs="$tmp_objs $tmp_obj"
+    done
+
+    # Link with lld (use -Bstatic to ensure static libc.a is used)
+    "@LLD@" $static -o "$output_file" @CRT0@ @CRTI@ $tmp_objs $objects -L@SYSROOT@/lib $libdirs $libs -Bstatic -lc @CRTN@ || exit $?
+
+    # Cleanup temp files
+    rm -f $tmp_objs
+fi
+GCCWRAPPER
+
+              # Substitute paths into wrapper
+              sed -i "s|@CLANG@|$CLANG|g" $TMPDIR/bin/x86_64-unknown-redox-gcc
+              sed -i "s|@LLD@|$LLD|g" $TMPDIR/bin/x86_64-unknown-redox-gcc
+              sed -i "s|@SYSROOT@|$SYSROOT|g" $TMPDIR/bin/x86_64-unknown-redox-gcc
+              sed -i "s|@CRT0@|$CRT0|g" $TMPDIR/bin/x86_64-unknown-redox-gcc
+              sed -i "s|@CRTI@|$CRTI|g" $TMPDIR/bin/x86_64-unknown-redox-gcc
+              sed -i "s|@CRTN@|$CRTN|g" $TMPDIR/bin/x86_64-unknown-redox-gcc
+              chmod +x $TMPDIR/bin/x86_64-unknown-redox-gcc
+
+              # Create symlinks for other tools
+              ln -sf ${pkgs.llvmPackages.llvm}/bin/llvm-ar $TMPDIR/bin/x86_64-unknown-redox-ar
+              ln -sf ${pkgs.llvmPackages.llvm}/bin/llvm-ranlib $TMPDIR/bin/x86_64-unknown-redox-ranlib
+              ln -sf ${pkgs.llvmPackages.llvm}/bin/llvm-strip $TMPDIR/bin/x86_64-unknown-redox-strip
+              ln -sf ${pkgs.llvmPackages.lld}/bin/ld.lld $TMPDIR/bin/x86_64-unknown-redox-ld
+
+              export PATH="$TMPDIR/bin:$PATH"
+              export CC="x86_64-unknown-redox-gcc"
+              export AR="x86_64-unknown-redox-ar"
+              export RANLIB="x86_64-unknown-redox-ranlib"
+              export STRIP="x86_64-unknown-redox-strip"
+              export LD="x86_64-unknown-redox-ld"
+
+              # Include paths for relibc and ncurses
+              # Need explicit -I for relibc since sysroot has /include not /usr/include
+              # Add defines to stub out missing GNU glob extensions
+              GLOB_COMPAT="-DGLOB_TILDE=0 -DGLOB_TILDE_CHECK=0 -DGLOB_BRACE=0 -DGLOB_ONLYDIR=0 -DGLOB_ALTDIRFUNC=0 -DGLOB_NOMAGIC=0 -D__GLOB_FLAGS=0 -DO_SEARCH=O_RDONLY -DSETLOCALE_NULL_MAX=256"
+              export CFLAGS="-I${relibc}/${redoxTarget}/include -I${ncurses}/${redoxTarget}/include -I${ncurses}/${redoxTarget}/include/ncurses -D__redox__ $GLOB_COMPAT"
+              export CPPFLAGS="-I${relibc}/${redoxTarget}/include -I${ncurses}/${redoxTarget}/include -I${ncurses}/${redoxTarget}/include/ncurses $GLOB_COMPAT"
+              export LDFLAGS="-L${ncurses}/${redoxTarget}/lib --static"
+              export LIBS="-lncurses"
+
+              # Tell configure where to find ncurses
+              export NCURSES_CFLAGS="-I${ncurses}/${redoxTarget}/include -I${ncurses}/${redoxTarget}/include/ncurses"
+              export NCURSES_LIBS="-L${ncurses}/${redoxTarget}/lib -lncurses"
+
+              # Create cache file to prevent gnulib from using replacement functions
+              # that conflict with relibc's implementations
+              cat > config.cache << 'CACHE'
+gl_cv_func_lstat_dereferences_slashed_symlink=yes
+gl_cv_func_fstatat_zero_flag=yes
+ac_cv_header_stat_broken=no
+ac_cv_func_lstat=yes
+ac_cv_func_stat=yes
+ac_cv_func_fstat=yes
+ac_cv_func_fstatat=yes
+ac_cv_func_openat=yes
+ac_cv_func_mkstemp=yes
+ac_cv_func_glob=yes
+ac_cv_func_glob_pattern_p=yes
+gl_cv_glob_lists_symlinks=yes
+CACHE
+
+              ./configure \
+                --host=x86_64-unknown-redox \
+                --prefix=/usr \
+                --cache-file=config.cache \
+                --disable-nls \
+                --disable-browser \
+                --disable-speller \
+                --disable-wordcomp \
+                --disable-libmagic \
+                --disable-tabcomp \
+                --disable-histories \
+                --disable-operatingdir \
+                --disable-multibuffer \
+                --disable-nanorc \
+                --disable-mouse \
+                --disable-linter \
+                --disable-formatter \
+                --disable-extra \
+                --disable-color \
+                --disable-justify \
+                --disable-help \
+                --enable-tiny
+
+              runHook postConfigure
+            '';
+
+            buildPhase = ''
+              runHook preBuild
+
+              make -j$NIX_BUILD_CORES
+
+              runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+
+              mkdir -p $out/bin
+              cp src/nano $out/bin/
+
+              runHook postInstall
+            '';
+
+            meta = with lib; {
+              description = "GNU nano text editor for Redox";
+              homepage = "https://www.nano-editor.org/";
+              license = licenses.gpl3Plus;
             };
           };
 
@@ -2902,12 +3493,14 @@
               redoxfs # redoxfs-ar for creating populated RedoxFS
             ];
 
-            # Include base, uutils, shells for populating root filesystem
+            # Include base, uutils, shells, and user applications for populating root filesystem
             buildInputs = [
               base
               uutils
               minishell
               ion
+              terminfo
+              helix
             ];
 
             buildPhase = ''
@@ -3032,6 +3625,25 @@
                               echo "WARNING: Ion shell not found at ${ion}/bin - continuing without it"
                             fi
 
+                            # Copy helix text editor
+                            echo "Copying Helix editor..."
+                            if [ -f "${helix}/bin/helix" ]; then
+                              cp -v ${helix}/bin/helix redoxfs-root/bin/
+                              echo "Copied helix successfully"
+                            else
+                              echo "WARNING: Helix not found at ${helix}/bin - continuing without it"
+                            fi
+
+                            # Copy terminfo database for terminal capabilities
+                            echo "Copying terminfo database..."
+                            if [ -d "${terminfo}/share/terminfo" ]; then
+                              mkdir -p redoxfs-root/share/terminfo
+                              cp -rv ${terminfo}/share/terminfo/* redoxfs-root/share/terminfo/
+                              echo "Copied terminfo database successfully"
+                            else
+                              echo "WARNING: terminfo not found at ${terminfo}/share/terminfo - continuing without it"
+                            fi
+
                             # Create a startup script that will run Ion shell
                             cat > redoxfs-root/startup.sh << 'STARTUP_SCRIPT'
               #!/bin/sh
@@ -3040,9 +3652,9 @@
               echo "  Welcome to Redox OS"
               echo "=========================================="
               echo ""
-              echo "Available shells:"
-              echo "  /bin/ion  - Ion shell (full-featured)"
-              echo "  /bin/sh   - Minimal shell (fallback)"
+              echo "Available programs:"
+              echo "  /bin/ion   - Ion shell (full-featured)"
+              echo "  /bin/sh    - Minimal shell (fallback)"
               echo ""
 
               # Try Ion first, fall back to minimal shell
@@ -3081,8 +3693,8 @@
                             # Create the RedoxFS partition image using redoxfs-ar
                             # redoxfs-ar creates a RedoxFS image from a directory
                             echo "Contents of redoxfs-root before creating image:"
-                            find redoxfs-root -type f | head -20
-                            echo "Total files: $(find redoxfs-root -type f | wc -l)"
+                            find redoxfs-root -type f 2>/dev/null | head -20 || true
+                            echo "Total files: $(find redoxfs-root -type f 2>/dev/null | wc -l)"
                             truncate -s $REDOXFS_SIZE redoxfs.img
                             redoxfs-ar redoxfs.img redoxfs-root
 
@@ -3406,6 +4018,10 @@
               initfs
               minishell
               ion
+              terminfo
+              ncurses
+              helixVendor
+              helix
               diskImage
               runQemu
               runQemuGraphical

@@ -161,6 +161,25 @@
         "type": "github"
       }
     },
+    "helix-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1719924337,
+        "narHash": "sha256-3yhZuhbX6xEThkGbI1R7C5CGqUO37eZeihhej00t85g=",
+        "owner": "redox-os",
+        "repo": "helix",
+        "rev": "a039755139d92737503f90652fa9b9e23035e128",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "redox",
+        "repo": "helix",
+        "type": "gitlab"
+      }
+    },
     "installer-src": {
       "flake": false,
       "locked": {
@@ -454,6 +473,7 @@
         "drm-rs-src": "drm-rs-src",
         "fdt-src": "fdt-src",
         "flake-parts": "flake-parts",
+        "helix-src": "helix-src",
         "installer-src": "installer-src",
         "ion-src": "ion-src",
         "kernel-src": "kernel-src",
@@ -471,6 +491,7 @@
         "rmm-src": "rmm-src",
         "rust-overlay": "rust-overlay",
         "rustix-redox-src": "rustix-redox-src",
+        "terminfo-src": "terminfo-src",
         "uefi-src": "uefi-src",
         "uutils-src": "uutils-src"
       }
@@ -509,6 +530,22 @@
         "owner": "jackpot51",
         "ref": "redox-ioctl",
         "repo": "rustix",
+        "type": "github"
+      }
+    },
+    "terminfo-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1512336690,
+        "narHash": "sha256-Mvqe+sbIrrUZ8xsg+jt8Te1+6EGvpxPhqvyajlWV1wE=",
+        "owner": "sajattack",
+        "repo": "terminfo",
+        "rev": "dc5712b13b4a4058ffca1f077167994b1764828a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sajattack",
+        "repo": "terminfo",
         "type": "github"
       }
     },
