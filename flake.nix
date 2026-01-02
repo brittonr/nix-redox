@@ -1099,7 +1099,7 @@
               target = "x86_64-unknown-redox"
 
               [target.x86_64-unknown-redox]
-              linker = "ld.lld"
+              linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
 
               [profile.release]
               panic = "abort"
@@ -1135,7 +1135,7 @@
                             # Use target-cpu=x86-64 to restrict instruction set to baseline x86-64
                             # This prevents LLVM from generating RDRAND, SSE4, AVX, or other advanced instructions
                             # that may not be available in QEMU or on older CPUs
-                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C link-arg=-nostdlib -C link-arg=-static -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=--allow-multiple-definition"
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
 
                             # Build Ion shell
                             cargo build \
@@ -2775,9 +2775,13 @@
                             # Copy redoxfs
                             cp ${redoxfsTarget}/bin/redoxfs initfs/bin/
 
-                            # Copy shell and console-exec to initfs for debugging
-                            cp ${minishell}/bin/sh initfs/bin/
-                            cp ${minishell}/bin/sh initfs/usr/bin/
+                            # Copy Ion shell to initfs as the primary shell
+                            cp ${ion}/bin/ion initfs/bin/
+                            cp ${ion}/bin/ion initfs/usr/bin/
+                            # Also provide ion as /bin/sh for compatibility
+                            cp ${ion}/bin/ion initfs/bin/sh
+                            cp ${ion}/bin/ion initfs/usr/bin/sh
+                            # Keep console-exec from minishell (helper utility for PTY setup)
                             cp ${minishell}/bin/console-exec initfs/bin/
 
                             # Copy driver binaries to lib/drivers/ (no graphics: removed virtio-gpud)
@@ -2790,6 +2794,12 @@
                             # Copy config files
                             cp ${base-src}/init_drivers.rc initfs/etc/
                             cp ${base-src}/drivers/initfs.toml initfs/etc/pcid/
+
+                            # Create Ion shell configuration with simple prompt (no subprocess expansion)
+                            mkdir -p initfs/etc/ion
+                            echo '# Simple Ion shell configuration for headless Redox' > initfs/etc/ion/initrc
+                            echo '# Use a simple prompt without subprocess expansion' >> initfs/etc/ion/initrc
+                            echo 'let PROMPT = "ion> "' >> initfs/etc/ion/initrc
 
                             # Create headless init.rc (no graphics daemons)
                             cat > initfs/etc/init.rc << 'INITRC'
@@ -2841,10 +2851,19 @@
               echo "Starting shell..."
               echo ""
 
-              # Set TERM=dumb to disable fancy terminal features
-              # Use minishell instead of ion - ion crashes with abort() during startup
+              # Set TERM=dumb to disable fancy terminal features that may not work in QEMU
               export TERM dumb
-              /bin/console-exec /bin/sh -i
+              # Set XDG_CONFIG_HOME so Ion finds its config file with simple prompt
+              export XDG_CONFIG_HOME /etc
+              export HOME /home/user
+              # Run Ion shell test
+              echo "Testing Ion shell..."
+              /bin/ion -c help
+              echo ""
+              echo "Ion shell is working! Type commands (no line editing in this mode)."
+              echo "Examples: ls, echo hello, help, exit"
+              # Use Ion shell in fake-interactive mode (reads from stdin, no line editing)
+              /bin/console-exec /bin/ion -f
               INITRC
 
                             # Create initfs image
