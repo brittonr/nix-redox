@@ -29,9 +29,14 @@ pkgs.stdenv.mkDerivation {
     // when building with panic=abort.
 
     typedef void* _Unwind_Reason_Code;
+    typedef void* _Unwind_Action;
     typedef void* _Unwind_Context;
+    typedef void* _Unwind_Exception;
     typedef void* _Unwind_Ptr;
+    typedef void* _Unwind_Word;
+    typedef unsigned long uintptr_t;
 
+    // Basic unwinding functions
     _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
     _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
     _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
@@ -39,6 +44,20 @@ pkgs.stdenv.mkDerivation {
     _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
     _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
     void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
+
+    // Additional functions required by Rust's exception personality
+    _Unwind_Ptr _Unwind_GetLanguageSpecificData(_Unwind_Context* ctx) { return 0; }
+    uintptr_t _Unwind_GetIPInfo(_Unwind_Context* ctx, int* ip_before_insn) {
+        if (ip_before_insn) *ip_before_insn = 0;
+        return 0;
+    }
+    void _Unwind_SetGR(_Unwind_Context* ctx, int index, uintptr_t value) { }
+    void _Unwind_SetIP(_Unwind_Context* ctx, uintptr_t value) { }
+
+    // Resume/raise functions (never called with panic=abort)
+    _Unwind_Reason_Code _Unwind_RaiseException(_Unwind_Exception* exc) { return 0; }
+    void _Unwind_Resume(_Unwind_Exception* exc) { }
+    void _Unwind_DeleteException(_Unwind_Exception* exc) { }
     EOF
 
     ${pkgs.llvmPackages.clang-unwrapped}/bin/clang \

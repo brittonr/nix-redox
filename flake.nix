@@ -290,6 +290,32 @@
             TARGET = redoxTarget;
           };
 
+          # Import modular library for cross-compilation utilities
+          redoxLib = import ./nix/lib {
+            inherit pkgs lib;
+            inherit redoxTarget;
+          };
+
+          # Stub libraries for unwinding (built once, used by all cross-compiled packages)
+          stubLibs = redoxLib.stubLibs;
+
+          # Source inputs for modular packages
+          srcInputs = {
+            inherit relibc-src kernel-src redoxfs-src installer-src redox-src;
+            inherit openlibm-src compiler-builtins-src dlmalloc-rs-src cc-rs-src redox-syscall-src object-src;
+            inherit rmm-src redox-path-src fdt-src;
+            inherit bootloader-src uefi-src;
+            inherit base-src liblibc-src orbclient-src rustix-redox-src drm-rs-src;
+            inherit ion-src helix-src binutils-src extrautils-src sodium-src netutils-src;
+            inherit uutils-src terminfo-src filetime-src libredox-src;
+          };
+
+          # Import modular packages (can be enabled gradually)
+          modularPkgs = import ./nix/pkgs {
+            inherit pkgs lib craneLib rustToolchain sysrootVendor redoxTarget;
+            inputs = srcInputs;
+          };
+
           # Common native build inputs
           commonNativeBuildInputs = with pkgs; [
             rustToolchain
@@ -332,170 +358,8 @@
             ]
           );
 
-          # Cookbook - Redox package build system (host tool)
-          cookbook = craneLib.buildPackage {
-            pname = "redox-cookbook";
-            version = "0.1.0";
-
-            src = redox-src;
-
-            cargoExtraArgs = "--locked";
-
-            nativeBuildInputs = with pkgs; [
-              pkg-config
-            ];
-
-            buildInputs = with pkgs; [
-              openssl
-              fuse
-            ];
-
-            # Only build binaries, skip tests for now
-            doCheck = false;
-
-            meta = with lib; {
-              description = "Redox OS Cookbook - package build system";
-              homepage = "https://gitlab.redox-os.org/redox-os/redox";
-              license = licenses.mit;
-            };
-          };
-
-          # RedoxFS - filesystem tools (host tool)
-          redoxfs = craneLib.buildPackage {
-            pname = "redoxfs";
-            version = "unstable";
-
-            src = redoxfs-src;
-
-            cargoExtraArgs = "--locked";
-
-            nativeBuildInputs = with pkgs; [
-              pkg-config
-            ];
-
-            buildInputs = with pkgs; [
-              fuse
-              fuse3
-            ];
-
-            doCheck = false;
-
-            meta = with lib; {
-              description = "Redox Filesystem";
-              homepage = "https://gitlab.redox-os.org/redox-os/redoxfs";
-              license = licenses.mit;
-            };
-          };
-
-          # Fetch ring 0.17.8 from crates.io with pregenerated assembly files
-          # The git repos don't have these - they're only in crates.io releases
-          ringCrate = pkgs.fetchurl {
-            url = "https://crates.io/api/v1/crates/ring/0.17.8/download";
-            sha256 = "sha256-wX+ky2WONYNCPpFbnzrMAczq7hhg4z1Z665mrcOi3A0=";
-          };
-
-          # Installer - Redox filesystem builder (host tool)
-          # Uses ring from crates.io (with pregenerated assembly) instead of git
-          installerSrc = pkgs.stdenv.mkDerivation {
-            name = "installer-src-patched";
-            src = installer-src;
-
-            phases = [
-              "unpackPhase"
-              "patchPhase"
-              "installPhase"
-            ];
-
-            patchPhase = ''
-              runHook prePatch
-
-              # Extract ring crate from crates.io (has pregenerated assembly files)
-              mkdir -p deps
-              tar -xzf ${ringCrate} -C deps
-              mv deps/ring-0.17.8 deps/ring
-
-              # Replace the git URL in [patch.crates-io] with a local path
-              sed -i 's|ring = { git = "https://gitlab.redox-os.org/redox-os/ring.git", branch = "redox-0.17.8" }|ring = { path = "deps/ring" }|' Cargo.toml
-
-              runHook postPatch
-            '';
-
-            installPhase = ''
-              cp -r . $out
-            '';
-          };
-
-          # Vendor dependencies using fetchCargoVendor
-          # The vendor will NOT include ring since it's patched to a local path
-          installerVendor = pkgs.rustPlatform.fetchCargoVendor {
-            name = "installer-cargo-vendor";
-            src = installerSrc;
-            hash = "sha256-RMxyZ/isSvgxEtRompst/F6ZavAMbHBYMB/G8H4Wk5A=";
-          };
-
-          installer = pkgs.stdenv.mkDerivation {
-            pname = "redox-installer";
-            version = "unstable";
-
-            src = installerSrc;
-
-            nativeBuildInputs = [
-              rustToolchain
-              pkgs.pkg-config
-            ];
-
-            buildInputs = with pkgs; [
-              fuse
-              fuse3
-            ];
-
-            # Configure cargo to use the vendor directory
-            configurePhase = ''
-              runHook preConfigure
-
-              mkdir -p .cargo
-              cat > .cargo/config.toml << EOF
-              [source.crates-io]
-              replace-with = "vendored"
-
-              [source.vendored]
-              directory = "${installerVendor}"
-
-              [net]
-              offline = true
-              EOF
-
-              export HOME=$(mktemp -d)
-
-              runHook postConfigure
-            '';
-
-            buildPhase = ''
-              runHook preBuild
-
-              cargo build --release
-
-              runHook postBuild
-            '';
-
-            installPhase = ''
-              runHook preInstall
-
-              mkdir -p $out/bin
-              cp target/release/redox_installer $out/bin/
-              cp target/release/redox_installer_tui $out/bin/ 2>/dev/null || true
-
-              runHook postInstall
-            '';
-
-            doCheck = false;
-
-            meta = with lib; {
-              description = "Redox OS Installer - filesystem builder";
-              homepage = "https://gitlab.redox-os.org/redox-os/installer";
-              license = licenses.mit;
-            };
-          };
+          # Host tools - imported from modular packages
+          inherit (modularPkgs.host) cookbook redoxfs installer;
 
           # All filesystem tools combined
           fstools = pkgs.symlinkJoin {
@@ -1269,29 +1133,10 @@
 
                             export HOME=$(mktemp -d)
 
-                            # Create stub libs
-                            mkdir -p stub-libs
-                            cat > stub-libs/unwind_stubs.c << 'EOF'
-              typedef void* _Unwind_Reason_Code;
-              typedef void* _Unwind_Context;
-              typedef void* _Unwind_Ptr;
-
-              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
-              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
-              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
-              EOF
-                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
-
                             # Use target-cpu=x86-64 to restrict instruction set to baseline x86-64
                             # This prevents LLVM from generating RDRAND, SSE4, AVX, or other advanced instructions
                             # that may not be available in QEMU or on older CPUs
-                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
 
                             # Build Ion shell
                             cargo build \
@@ -1474,26 +1319,7 @@
                             export CFLAGS_x86_64_unknown_redox="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -I${relibc}/${redoxTarget}/include"
                             export CC_x86_64_unknown_redox="${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
 
-                            # Create stub libs
-                            mkdir -p stub-libs
-                            cat > stub-libs/unwind_stubs.c << 'EOF'
-              typedef void* _Unwind_Reason_Code;
-              typedef void* _Unwind_Context;
-              typedef void* _Unwind_Ptr;
-
-              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
-              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
-              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
-              EOF
-                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
-
-                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
 
                             # Build helix from helix-term subdirectory
                             cargo build \
@@ -1652,26 +1478,7 @@
 
                             export HOME=$(mktemp -d)
 
-                            # Create stub libs
-                            mkdir -p stub-libs
-                            cat > stub-libs/unwind_stubs.c << 'EOF'
-              typedef void* _Unwind_Reason_Code;
-              typedef void* _Unwind_Context;
-              typedef void* _Unwind_Ptr;
-
-              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
-              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
-              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
-              EOF
-                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
-
-                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
 
                             # Build all binutils binaries
                             cargo build \
@@ -1917,26 +1724,7 @@
 
                             export HOME=$(mktemp -d)
 
-                            # Create stub libs
-                            mkdir -p stub-libs
-                            cat > stub-libs/unwind_stubs.c << 'EOF'
-              typedef void* _Unwind_Reason_Code;
-              typedef void* _Unwind_Context;
-              typedef void* _Unwind_Ptr;
-
-              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
-              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
-              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
-              EOF
-                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
-
-                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
 
                             # Build all extrautils binaries (tar excluded via Cargo.toml patch)
                             cargo build \
@@ -2170,26 +1958,7 @@ LOCK
 
                             export HOME=$(mktemp -d)
 
-                            # Create stub libs
-                            mkdir -p stub-libs
-                            cat > stub-libs/unwind_stubs.c << 'EOF'
-              typedef void* _Unwind_Reason_Code;
-              typedef void* _Unwind_Context;
-              typedef void* _Unwind_Ptr;
-
-              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
-              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
-              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
-              EOF
-                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
-
-                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
 
                             # Build sodium with ansi feature (terminal mode, not orbital GUI)
                             cargo build \
@@ -2347,26 +2116,7 @@ LOCK
 
                             export HOME=$(mktemp -d)
 
-                            # Create stub libs
-                            mkdir -p stub-libs
-                            cat > stub-libs/unwind_stubs.c << 'EOF'
-              typedef void* _Unwind_Reason_Code;
-              typedef void* _Unwind_Context;
-              typedef void* _Unwind_Ptr;
-
-              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
-              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
-              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
-              EOF
-                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
-
-                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
 
                             # Build all network utilities
                             cargo build \
@@ -2737,54 +2487,13 @@ LOCK
               path = "src/console_exec.rs"
               CARGO
 
-              # Create comprehensive stub libs for all unwind symbols
-              mkdir -p stub-libs
-              cat > stub-libs/unwind_stubs.c << 'EOF'
-              typedef void* _Unwind_Reason_Code;
-              typedef void* _Unwind_Context;
-              typedef void* _Unwind_Exception;
-              typedef unsigned long _Unwind_Ptr;
-              typedef unsigned long _Unwind_Word;
-              typedef void (*_Unwind_Exception_Cleanup_Fn)(_Unwind_Reason_Code, _Unwind_Exception*);
-
-              // Backtrace support
-              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
-
-              // Context getters
-              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* context) { return 0; }
-              _Unwind_Ptr _Unwind_GetIPInfo(_Unwind_Context* context, int* ip_before_insn) {
-                  if (ip_before_insn) *ip_before_insn = 0;
-                  return 0;
-              }
-              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* context) { return 0; }
-              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* context) { return 0; }
-              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* context) { return 0; }
-              _Unwind_Ptr _Unwind_GetLanguageSpecificData(_Unwind_Context* context) { return 0; }
-
-              // Context setters
-              void _Unwind_SetGR(_Unwind_Context* context, int index, _Unwind_Word value) {}
-              void _Unwind_SetIP(_Unwind_Context* context, _Unwind_Ptr value) {}
-
-              // Exception handling
-              _Unwind_Reason_Code _Unwind_RaiseException(_Unwind_Exception* exception) {
-                  // panic=abort means we should never get here
-                  __builtin_trap();
-                  return 0;
-              }
-              void _Unwind_DeleteException(_Unwind_Exception* exception) {}
-              EOF
-              clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
-              ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
-              ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
-              ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libunwind.a stub-libs/unwind_stubs.o
-
               # The cargo config was already set up in configurePhase
 
               export HOME=$(mktemp -d)
               export CARGO_BUILD_TARGET="${redoxTarget}"
               export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER="${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
               # Use target-cpu=x86-64 to restrict instruction set to baseline x86-64
-              export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+              export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
 
               # Build with explicit target specification
               cargo build --target ${redoxTarget} --release -Z build-std=core,alloc
@@ -3453,39 +3162,11 @@ CACHE
 
                             export HOME=$(mktemp -d)
 
-                            # Create stub libs since we use LLVM and don't have GCC's libs
-                            mkdir -p stub-libs
-
-                            # Create stub implementations for _Unwind_* functions
-                            # Since we use panic=abort, these should never be called, but std references them
-                            cat > stub-libs/unwind_stubs.c << 'EOF'
-              // Stub implementations for unwinding functions
-              // These are referenced by std's backtrace but never called with panic=abort
-              typedef void* _Unwind_Reason_Code;
-              typedef void* _Unwind_Action;
-              typedef void* _Unwind_Context;
-              typedef void* _Unwind_Exception;
-              typedef void* _Unwind_Ptr;
-              typedef void* _Unwind_Word;
-
-              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
-              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
-              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
-              EOF
-                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libunwind.a stub-libs/unwind_stubs.o
-
                             # Set up RUSTFLAGS for cross-linking with relibc
                             # Use --allow-multiple-definition to ignore duplicate symbols between relibc's libc.a and build-std's rlibs
                             # This is necessary because relibc bundles core/alloc and we also build them with -Z build-std
                             # Use target-cpu=x86-64 to restrict instruction set to baseline x86-64 (no RDRAND, SSE4, AVX)
-                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C link-arg=-nostdlib -C link-arg=-static -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=--allow-multiple-definition"
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C link-arg=-nostdlib -C link-arg=-static -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=--allow-multiple-definition"
 
                             # Build all workspace members for Redox target
                             # Use -Z build-std to build the standard library, but allow duplicate symbols from relibc
@@ -3720,33 +3401,9 @@ CACHE
 
                             export HOME=$(mktemp -d)
 
-                            # Create stub libs for unwinding functions (same as base package)
-                            mkdir -p stub-libs
-                            cat > stub-libs/unwind_stubs.c << 'EOF'
-              // Stub implementations for unwinding functions
-              typedef void* _Unwind_Reason_Code;
-              typedef void* _Unwind_Action;
-              typedef void* _Unwind_Context;
-              typedef void* _Unwind_Exception;
-              typedef void* _Unwind_Ptr;
-              typedef void* _Unwind_Word;
-
-              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
-              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
-              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
-              EOF
-                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libunwind.a stub-libs/unwind_stubs.o
-
                             # Set up RUSTFLAGS for cross-linking with relibc
                             # Use target-cpu=x86-64 to restrict instruction set to baseline x86-64 (no RDRAND, SSE4, AVX)
-                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C link-arg=-nostdlib -C link-arg=-static -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=--allow-multiple-definition"
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C link-arg=-nostdlib -C link-arg=-static -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=--allow-multiple-definition"
 
                             # Build essential utilities as individual binaries
                             # Use --features to build specific utilities we need
@@ -4072,28 +3729,8 @@ CACHE
 
                             export HOME=$(mktemp -d)
 
-                            # Create stub libs
-                            mkdir -p stub-libs
-                            cat > stub-libs/unwind_stubs.c << 'EOF'
-              typedef void* _Unwind_Reason_Code;
-              typedef void* _Unwind_Context;
-              typedef void* _Unwind_Ptr;
-
-              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
-              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
-              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
-              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
-              EOF
-                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
-                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libunwind.a stub-libs/unwind_stubs.o
-
                             # Use target-cpu=x86-64 to restrict instruction set to baseline x86-64 (no RDRAND, SSE4, AVX)
-                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C link-arg=-nostdlib -C link-arg=-static -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=--allow-multiple-definition"
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C link-arg=-nostdlib -C link-arg=-static -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=--allow-multiple-definition"
 
                             # Build redoxfs binary (without fuse feature for Redox target)
                             cargo build \
