@@ -32,7 +32,13 @@
 let
   # Import rust-flags for centralized RUSTFLAGS
   rustFlags = import ../../lib/rust-flags.nix {
-    inherit lib pkgs redoxTarget relibc stubLibs;
+    inherit
+      lib
+      pkgs
+      redoxTarget
+      relibc
+      stubLibs
+      ;
   };
 
   # Common native build inputs for all userspace packages
@@ -45,203 +51,219 @@ let
   ];
 
   # Generate cargo config content
-  mkCargoConfigContent = { gitSources ? [] }: ''
-    [source.crates-io]
-    replace-with = "vendored-sources"
+  mkCargoConfigContent =
+    {
+      gitSources ? [ ],
+    }:
+    ''
+      [source.crates-io]
+      replace-with = "vendored-sources"
 
-    [source.vendored-sources]
-    directory = "vendor-combined"
+      [source.vendored-sources]
+      directory = "vendor-combined"
 
-    ${lib.concatMapStringsSep "\n" (src: ''
-    [source."${src.url}"]
-    git = "${src.git}"
-    ${lib.optionalString (src ? branch) "branch = \"${src.branch}\""}
-    ${lib.optionalString (src ? rev) "rev = \"${src.rev}\""}
-    replace-with = "vendored-sources"
-    '') gitSources}
+      ${lib.concatMapStringsSep "\n" (src: ''
+        [source."${src.url}"]
+        git = "${src.git}"
+        ${lib.optionalString (src ? branch) "branch = \"${src.branch}\""}
+        ${lib.optionalString (src ? rev) "rev = \"${src.rev}\""}
+        replace-with = "vendored-sources"
+      '') gitSources}
 
-    [net]
-    offline = true
+      [net]
+      offline = true
 
-    [build]
-    target = "${redoxTarget}"
+      [build]
+      target = "${redoxTarget}"
 
-    [target.${redoxTarget}]
-    linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
+      [target.${redoxTarget}]
+      linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
 
-    [profile.release]
-    panic = "abort"
-  '';
+      [profile.release]
+      panic = "abort"
+    '';
 
   # Python script for regenerating checksums
   checksumScript = vendor.checksumScript;
 
-in rec {
+in
+rec {
   # Build a generic Rust package for Redox
-  mkPackage = {
-    pname,
-    version ? "unstable",
-    src,
-    vendorHash,
-    cargoBuildFlags ? "",
-    preConfigure ? "",
-    postConfigure ? "",
-    preBuild ? "",
-    postBuild ? "",
-    installPhase,
-    nativeBuildInputs ? [],
-    buildInputs ? [],
-    gitSources ? [],
-    meta ? {},
-  }:
-  let
-    # Vendor project dependencies
-    projectVendor = pkgs.rustPlatform.fetchCargoVendor {
-      name = "${pname}-cargo-vendor";
-      inherit src;
-      hash = vendorHash;
-    };
-  in
-  pkgs.stdenv.mkDerivation {
-    inherit pname version;
+  mkPackage =
+    {
+      pname,
+      version ? "unstable",
+      src,
+      vendorHash,
+      cargoBuildFlags ? "",
+      preConfigure ? "",
+      postConfigure ? "",
+      preBuild ? "",
+      postBuild ? "",
+      installPhase,
+      nativeBuildInputs ? [ ],
+      buildInputs ? [ ],
+      gitSources ? [ ],
+      meta ? { },
+    }:
+    let
+      # Vendor project dependencies
+      projectVendor = pkgs.rustPlatform.fetchCargoVendor {
+        name = "${pname}-cargo-vendor";
+        inherit src;
+        hash = vendorHash;
+      };
+    in
+    pkgs.stdenv.mkDerivation {
+      inherit pname version;
 
-    dontUnpack = true;
+      dontUnpack = true;
 
-    nativeBuildInputs = commonNativeBuildInputs ++ nativeBuildInputs;
+      nativeBuildInputs = commonNativeBuildInputs ++ nativeBuildInputs;
 
-    buildInputs = [ relibc ] ++ buildInputs;
+      buildInputs = [ relibc ] ++ buildInputs;
 
-    TARGET = redoxTarget;
-    RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+      TARGET = redoxTarget;
+      RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
 
-    configurePhase = ''
-      runHook preConfigure
+      configurePhase = ''
+        runHook preConfigure
 
-      # Copy source with write permissions
-      cp -r ${src}/* .
-      chmod -R u+w .
+        # Copy source with write permissions
+        cp -r ${src}/* .
+        chmod -R u+w .
 
-      ${preConfigure}
+        ${preConfigure}
 
-      # Merge project + sysroot vendors with version conflict resolution
-      mkdir -p vendor-combined
+        # Merge project + sysroot vendors with version conflict resolution
+        mkdir -p vendor-combined
 
-      get_version() {
-        grep '^version = ' "$1/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/'
-      }
+        get_version() {
+          grep '^version = ' "$1/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/'
+        }
 
-      # Copy project vendor crates
-      for crate in ${projectVendor}/*/; do
-        crate_name=$(basename "$crate")
-        if [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
-          continue
-        fi
-        if [ -d "$crate" ]; then
-          cp -rL "$crate" "vendor-combined/$crate_name"
-        fi
-      done
-      chmod -R u+w vendor-combined/
-
-      # Merge sysroot vendor with version conflict resolution
-      for crate in ${sysrootVendor}/*/; do
-        crate_name=$(basename "$crate")
-        if [ ! -d "$crate" ]; then
-          continue
-        fi
-        if [ -d "vendor-combined/$crate_name" ]; then
-          base_version=$(get_version "vendor-combined/$crate_name")
-          sysroot_version=$(get_version "$crate")
-          if [ "$base_version" != "$sysroot_version" ]; then
-            versioned_name="$crate_name-$sysroot_version"
-            if [ ! -d "vendor-combined/$versioned_name" ]; then
-              cp -rL "$crate" "vendor-combined/$versioned_name"
-            fi
+        # Copy project vendor crates
+        for crate in ${projectVendor}/*/; do
+          crate_name=$(basename "$crate")
+          if [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
+            continue
           fi
-        else
-          cp -rL "$crate" "vendor-combined/$crate_name"
-        fi
-      done
-      chmod -R u+w vendor-combined/
+          if [ -d "$crate" ]; then
+            cp -rL "$crate" "vendor-combined/$crate_name"
+          fi
+        done
+        chmod -R u+w vendor-combined/
 
-      # Regenerate checksums
-      ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
-      ${checksumScript}
-      PYTHON_CHECKSUM
+        # Merge sysroot vendor with version conflict resolution
+        for crate in ${sysrootVendor}/*/; do
+          crate_name=$(basename "$crate")
+          if [ ! -d "$crate" ]; then
+            continue
+          fi
+          if [ -d "vendor-combined/$crate_name" ]; then
+            base_version=$(get_version "vendor-combined/$crate_name")
+            sysroot_version=$(get_version "$crate")
+            if [ "$base_version" != "$sysroot_version" ]; then
+              versioned_name="$crate_name-$sysroot_version"
+              if [ ! -d "vendor-combined/$versioned_name" ]; then
+                cp -rL "$crate" "vendor-combined/$versioned_name"
+              fi
+            fi
+          else
+            cp -rL "$crate" "vendor-combined/$crate_name"
+          fi
+        done
+        chmod -R u+w vendor-combined/
 
-      # Create cargo config
-      mkdir -p .cargo
-      cat > .cargo/config.toml << 'CARGOCONF'
-      ${mkCargoConfigContent { inherit gitSources; }}
-      CARGOCONF
+        # Regenerate checksums
+        ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
+        ${checksumScript}
+        PYTHON_CHECKSUM
 
-      ${postConfigure}
+        # Create cargo config
+        mkdir -p .cargo
+        cat > .cargo/config.toml << 'CARGOCONF'
+        ${mkCargoConfigContent { inherit gitSources; }}
+        CARGOCONF
 
-      runHook postConfigure
-    '';
+        ${postConfigure}
 
-    buildPhase = ''
-      runHook preBuild
+        runHook postConfigure
+      '';
 
-      export HOME=$(mktemp -d)
+      buildPhase = ''
+        runHook preBuild
 
-      ${preBuild}
+        export HOME=$(mktemp -d)
 
-      # Set RUSTFLAGS for cross-compilation
-      export ${rustFlags.cargoEnvVar}="${rustFlags.userRustFlags} -L ${stubLibs}/lib"
+        ${preBuild}
 
-      # Build the package
-      cargo build \
-        ${cargoBuildFlags} \
-        --target ${redoxTarget} \
-        --release \
-        -Z build-std=core,alloc,std,panic_abort \
-        -Z build-std-features=compiler-builtins-mem
+        # Set RUSTFLAGS for cross-compilation
+        export ${rustFlags.cargoEnvVar}="${rustFlags.userRustFlags} -L ${stubLibs}/lib"
 
-      ${postBuild}
+        # Build the package
+        cargo build \
+          ${cargoBuildFlags} \
+          --target ${redoxTarget} \
+          --release \
+          -Z build-std=core,alloc,std,panic_abort \
+          -Z build-std-features=compiler-builtins-mem
 
-      runHook postBuild
-    '';
+        ${postBuild}
 
-    inherit installPhase meta;
-  };
+        runHook postBuild
+      '';
+
+      inherit installPhase meta;
+    };
 
   # Simplified helper for packages that just install a single binary
-  mkBinary = {
-    pname,
-    binaryName ? pname,
-    cargoBuildFlags ? "--bin ${binaryName}",
-    ...
-  }@args:
+  mkBinary =
+    {
+      pname,
+      binaryName ? pname,
+      cargoBuildFlags ? "--bin ${binaryName}",
+      ...
+    }@args:
     let
       # Remove binaryName from args before passing to mkPackage
       cleanArgs = builtins.removeAttrs args [ "binaryName" ];
     in
-    mkPackage (cleanArgs // {
-      inherit cargoBuildFlags;
-      installPhase = args.installPhase or ''
-        runHook preInstall
-        mkdir -p $out/bin
-        cp target/${redoxTarget}/release/${binaryName} $out/bin/
-        runHook postInstall
-      '';
-    });
+    mkPackage (
+      cleanArgs
+      // {
+        inherit cargoBuildFlags;
+        installPhase =
+          args.installPhase or ''
+            runHook preInstall
+            mkdir -p $out/bin
+            cp target/${redoxTarget}/release/${binaryName} $out/bin/
+            runHook postInstall
+          '';
+      }
+    );
 
   # Helper for packages with multiple binaries
-  mkMultiBinary = {
-    pname,
-    binaries,
-    ...
-  }@args:
-    mkPackage (args // {
-      installPhase = args.installPhase or ''
-        runHook preInstall
-        mkdir -p $out/bin
-        ${lib.concatMapStringsSep "\n" (bin: ''
-          if [ -f target/${redoxTarget}/release/${bin} ]; then
-            cp target/${redoxTarget}/release/${bin} $out/bin/
-          fi
-        '') binaries}
-        runHook postInstall
-      '';
-    });
+  mkMultiBinary =
+    {
+      pname,
+      binaries,
+      ...
+    }@args:
+    mkPackage (
+      args
+      // {
+        installPhase =
+          args.installPhase or ''
+            runHook preInstall
+            mkdir -p $out/bin
+            ${lib.concatMapStringsSep "\n" (bin: ''
+              if [ -f target/${redoxTarget}/release/${bin} ]; then
+                cp target/${redoxTarget}/release/${bin} $out/bin/
+              fi
+            '') binaries}
+            runHook postInstall
+          '';
+      }
+    );
 }

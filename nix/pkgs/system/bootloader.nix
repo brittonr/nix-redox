@@ -27,7 +27,11 @@ let
     name = "bootloader-src-patched";
     src = bootloader-src;
 
-    phases = [ "unpackPhase" "patchPhase" "installPhase" ];
+    phases = [
+      "unpackPhase"
+      "patchPhase"
+      "installPhase"
+    ];
 
     patchPhase = ''
       runHook prePatch
@@ -53,7 +57,8 @@ let
     src = patchedSrc;
   };
 
-in pkgs.stdenv.mkDerivation {
+in
+pkgs.stdenv.mkDerivation {
   pname = "redox-bootloader";
   version = "unstable";
 

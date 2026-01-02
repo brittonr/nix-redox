@@ -23,12 +23,21 @@
   rustix-redox-src,
   drm-rs-src,
   relibc-src,
+  # Accept but ignore extra args from commonArgs
+  craneLib ? null,
+  ...
 }:
 
 let
   # Import rust-flags for centralized RUSTFLAGS
   rustFlags = import ../../lib/rust-flags.nix {
-    inherit lib pkgs redoxTarget relibc stubLibs;
+    inherit
+      lib
+      pkgs
+      redoxTarget
+      relibc
+      stubLibs
+      ;
   };
 
   # Prepare source with patched dependencies
@@ -36,7 +45,11 @@ let
     name = "base-src-patched";
     src = base-src;
 
-    phases = [ "unpackPhase" "patchPhase" "installPhase" ];
+    phases = [
+      "unpackPhase"
+      "patchPhase"
+      "installPhase"
+    ];
 
     patchPhase = ''
       runHook prePatch
@@ -89,16 +102,48 @@ let
 
   # Git source mappings for cargo config
   gitSources = [
-    { url = "git+https://github.com/jackpot51/acpi.git"; git = "https://github.com/jackpot51/acpi.git"; }
-    { url = "git+https://github.com/repnop/fdt.git"; git = "https://github.com/repnop/fdt.git"; }
-    { url = "git+https://github.com/Smithay/drm-rs.git"; git = "https://github.com/Smithay/drm-rs.git"; }
-    { url = "git+https://gitlab.redox-os.org/redox-os/liblibc.git?branch=redox-0.2"; git = "https://gitlab.redox-os.org/redox-os/liblibc.git"; branch = "redox-0.2"; }
-    { url = "git+https://gitlab.redox-os.org/redox-os/relibc.git"; git = "https://gitlab.redox-os.org/redox-os/relibc.git"; }
-    { url = "git+https://gitlab.redox-os.org/redox-os/orbclient.git"; git = "https://gitlab.redox-os.org/redox-os/orbclient.git"; }
-    { url = "git+https://gitlab.redox-os.org/redox-os/rehid.git"; git = "https://gitlab.redox-os.org/redox-os/rehid.git"; }
-    { url = "git+https://github.com/jackpot51/range-alloc.git"; git = "https://github.com/jackpot51/range-alloc.git"; }
-    { url = "git+https://github.com/jackpot51/rustix.git?branch=redox-ioctl"; git = "https://github.com/jackpot51/rustix.git"; branch = "redox-ioctl"; }
-    { url = "git+https://github.com/jackpot51/hidreport"; git = "https://github.com/jackpot51/hidreport"; }
+    {
+      url = "git+https://github.com/jackpot51/acpi.git";
+      git = "https://github.com/jackpot51/acpi.git";
+    }
+    {
+      url = "git+https://github.com/repnop/fdt.git";
+      git = "https://github.com/repnop/fdt.git";
+    }
+    {
+      url = "git+https://github.com/Smithay/drm-rs.git";
+      git = "https://github.com/Smithay/drm-rs.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/liblibc.git?branch=redox-0.2";
+      git = "https://gitlab.redox-os.org/redox-os/liblibc.git";
+      branch = "redox-0.2";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/relibc.git";
+      git = "https://gitlab.redox-os.org/redox-os/relibc.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/orbclient.git";
+      git = "https://gitlab.redox-os.org/redox-os/orbclient.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/rehid.git";
+      git = "https://gitlab.redox-os.org/redox-os/rehid.git";
+    }
+    {
+      url = "git+https://github.com/jackpot51/range-alloc.git";
+      git = "https://github.com/jackpot51/range-alloc.git";
+    }
+    {
+      url = "git+https://github.com/jackpot51/rustix.git?branch=redox-ioctl";
+      git = "https://github.com/jackpot51/rustix.git";
+      branch = "redox-ioctl";
+    }
+    {
+      url = "git+https://github.com/jackpot51/hidreport";
+      git = "https://github.com/jackpot51/hidreport";
+    }
   ];
 
   # Generate cargo config content
@@ -110,11 +155,11 @@ let
     directory = "vendor-combined"
 
     ${lib.concatMapStringsSep "\n" (src: ''
-    [source."${src.url}"]
-    git = "${src.git}"
-    ${lib.optionalString (src ? branch) "branch = \"${src.branch}\""}
-    ${lib.optionalString (src ? rev) "rev = \"${src.rev}\""}
-    replace-with = "vendored-sources"
+      [source."${src.url}"]
+      git = "${src.git}"
+      ${lib.optionalString (src ? branch) "branch = \"${src.branch}\""}
+      ${lib.optionalString (src ? rev) "rev = \"${src.rev}\""}
+      replace-with = "vendored-sources"
     '') gitSources}
 
     [net]
@@ -130,7 +175,8 @@ let
     panic = "abort"
   '';
 
-in pkgs.stdenv.mkDerivation {
+in
+pkgs.stdenv.mkDerivation {
   pname = "redox-base";
   version = "unstable";
 

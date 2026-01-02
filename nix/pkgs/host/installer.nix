@@ -5,7 +5,13 @@
 #
 # Note: Uses ring from crates.io instead of git to get pregenerated assembly.
 
-{ pkgs, lib, rustToolchain, src, ... }:
+{
+  pkgs,
+  lib,
+  rustToolchain,
+  src,
+  ...
+}:
 
 let
   # Fetch ring 0.17.8 from crates.io with pregenerated assembly files
@@ -19,7 +25,11 @@ let
     name = "installer-src-patched";
     inherit src;
 
-    phases = [ "unpackPhase" "patchPhase" "installPhase" ];
+    phases = [
+      "unpackPhase"
+      "patchPhase"
+      "installPhase"
+    ];
 
     patchPhase = ''
       runHook prePatch
@@ -47,7 +57,8 @@ let
     hash = "sha256-RMxyZ/isSvgxEtRompst/F6ZavAMbHBYMB/G8H4Wk5A=";
   };
 
-in pkgs.stdenv.mkDerivation {
+in
+pkgs.stdenv.mkDerivation {
   pname = "redox-installer";
   version = "unstable";
 

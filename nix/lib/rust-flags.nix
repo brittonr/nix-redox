@@ -4,7 +4,13 @@
 # Redox userspace packages. Centralizing these eliminates ~10 lines of
 # duplicated configuration from each package.
 
-{ lib, pkgs, redoxTarget, relibc, stubLibs }:
+{
+  lib,
+  pkgs,
+  redoxTarget,
+  relibc,
+  stubLibs,
+}:
 
 rec {
   # Common linker arguments for all Redox userspace binaries
@@ -24,34 +30,40 @@ rec {
   # Linker optimizations for smaller binaries
   # These are optional but recommended for release builds
   linkerOptimizations = [
-    "-Wl,--gc-sections"      # Remove unused sections
-    "-Wl,--icf=all"          # Identical code folding
-    "-Wl,-O2"                # LLD optimization level
-    "-Wl,--as-needed"        # Only link needed libraries
+    "-Wl,--gc-sections" # Remove unused sections
+    "-Wl,--icf=all" # Identical code folding
+    "-Wl,-O2" # LLD optimization level
+    "-Wl,--as-needed" # Only link needed libraries
   ];
 
   # Base RUSTFLAGS for cross-compiled Redox userspace
   # Use this for packages that need the standard library
-  userRustFlags = lib.concatStringsSep " " ([
-    # Target CPU - use baseline x86-64 to avoid advanced instructions
-    # (RDRAND, SSE4, AVX) that may not be available in QEMU or older CPUs
-    "-C target-cpu=x86-64"
+  userRustFlags = lib.concatStringsSep " " (
+    [
+      # Target CPU - use baseline x86-64 to avoid advanced instructions
+      # (RDRAND, SSE4, AVX) that may not be available in QEMU or older CPUs
+      "-C target-cpu=x86-64"
 
-    # Library search paths
-    "-L ${relibc}/${redoxTarget}/lib"
+      # Library search paths
+      "-L ${relibc}/${redoxTarget}/lib"
 
-    # Panic strategy - abort instead of unwinding (smaller binaries)
-    "-C panic=abort"
+      # Panic strategy - abort instead of unwinding (smaller binaries)
+      "-C panic=abort"
 
-    # Use clang as linker driver for cross-compilation
-    "-C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
-  ] ++ (map (arg: "-C link-arg=${arg}") linkerArgs));
+      # Use clang as linker driver for cross-compilation
+      "-C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
+    ]
+    ++ (map (arg: "-C link-arg=${arg}") linkerArgs)
+  );
 
   # RUSTFLAGS with additional optimizations
   # Use for release builds where binary size matters
-  userRustFlagsOptimized = lib.concatStringsSep " " ([
-    userRustFlags
-  ] ++ (map (arg: "-C link-arg=${arg}") linkerOptimizations));
+  userRustFlagsOptimized = lib.concatStringsSep " " (
+    [
+      userRustFlags
+    ]
+    ++ (map (arg: "-C link-arg=${arg}") linkerOptimizations)
+  );
 
   # Environment variable name for Cargo
   cargoEnvVar = "CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS";
@@ -74,10 +86,12 @@ rec {
   '';
 
   # Helper function to set up cross-compilation environment
-  mkCrossEnv = { extraFlags ? "" }: {
-    ${cargoEnvVar} = if extraFlags == ""
-      then userRustFlags
-      else "${userRustFlags} ${extraFlags}";
-    CARGO_BUILD_TARGET = redoxTarget;
-  };
+  mkCrossEnv =
+    {
+      extraFlags ? "",
+    }:
+    {
+      ${cargoEnvVar} = if extraFlags == "" then userRustFlags else "${userRustFlags} ${extraFlags}";
+      CARGO_BUILD_TARGET = redoxTarget;
+    };
 }

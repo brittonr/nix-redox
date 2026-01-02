@@ -4,16 +4,20 @@
 # - stub-libs: Unwinding stub libraries for panic=abort builds
 # - rust-flags: Centralized RUSTFLAGS configuration
 # - vendor: Cargo vendor merging utilities
+# - sysroot: Rust sysroot vendor management
 # - cross-compile: High-level package building helpers
 #
 # Usage in flake.nix:
 #   redoxLib = import ./nix/lib {
-#     inherit pkgs lib;
+#     inherit pkgs lib rustToolchain;
 #     redoxTarget = "x86_64-unknown-redox";
 #   };
 #
 #   # Use the stub libraries (built once, used by all packages)
 #   stubLibs = redoxLib.stubLibs;
+#
+#   # Use the sysroot vendor (for -Z build-std)
+#   sysrootVendor = redoxLib.sysroot.vendor;
 #
 #   # Get RUSTFLAGS (after relibc is built)
 #   rustFlags = redoxLib.mkRustFlags { inherit relibc; };
@@ -26,14 +30,22 @@
 #
 # For package definitions, see ../pkgs/default.nix
 
-{ pkgs, lib, redoxTarget ? "x86_64-unknown-redox" }:
+{
+  pkgs,
+  lib,
+  redoxTarget ? "x86_64-unknown-redox",
+  rustToolchain ? null,
+}:
 
 let
   # Import individual modules
   stubLibsModule = import ./stub-libs.nix { inherit pkgs redoxTarget; };
   vendorModule = import ./vendor.nix { inherit pkgs lib; };
+  sysrootModule =
+    if rustToolchain != null then import ./sysroot.nix { inherit pkgs rustToolchain; } else null;
 
-in rec {
+in
+rec {
   # Stub libraries for unwinding (built once, used by all packages)
   # These provide empty _Unwind_* symbols required by Rust's panic infrastructure
   # but never called when building with panic=abort
@@ -44,10 +56,17 @@ in rec {
   # - userRustFlags: The complete RUSTFLAGS string
   # - cargoEnvVar: The correct env var name for Cargo
   # - buildStdArgs: Arguments for -Z build-std
-  mkRustFlags = { relibc }: import ./rust-flags.nix {
-    inherit lib pkgs redoxTarget relibc;
-    stubLibs = stubLibsModule;
-  };
+  mkRustFlags =
+    { relibc }:
+    import ./rust-flags.nix {
+      inherit
+        lib
+        pkgs
+        redoxTarget
+        relibc
+        ;
+      stubLibs = stubLibsModule;
+    };
 
   # Cross-compilation helpers factory (requires all deps to be passed in)
   # Returns an attrset with:
@@ -55,9 +74,21 @@ in rec {
   # - mkRedoxBinary: Simple single-binary packages
   # - mkRedoxMultiBinary: Packages with multiple named binaries
   # - mkRedoxAllBinaries: Packages where all executables should be installed
-  mkCrossCompile = { relibc, sysrootVendor, rustToolchain }:
+  mkCrossCompile =
+    {
+      relibc,
+      sysrootVendor,
+      rustToolchain,
+    }:
     import ./cross-compile.nix {
-      inherit pkgs lib redoxTarget relibc sysrootVendor rustToolchain;
+      inherit
+        pkgs
+        lib
+        redoxTarget
+        relibc
+        sysrootVendor
+        rustToolchain
+        ;
       stubLibs = stubLibsModule;
     };
 
@@ -69,7 +100,16 @@ in rec {
   vendor = vendorModule;
 
   # Convenience re-exports from vendor module
-  inherit (vendorModule) mkMergedVendor mkCargoConfig mergeVendorsScript checksumScript;
+  inherit (vendorModule)
+    mkMergedVendor
+    mkCargoConfig
+    mergeVendorsScript
+    checksumScript
+    ;
+
+  # Sysroot vendor management (requires rustToolchain to be passed)
+  # Access via: redoxLib.sysroot.vendor, redoxLib.sysroot.mkSysroot { relibc }
+  sysroot = sysrootModule;
 
   # Target configuration
   target = {

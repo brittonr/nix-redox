@@ -3,7 +3,13 @@
 # This is the package manager and build system for Redox OS.
 # It runs on the host machine (not cross-compiled).
 
-{ pkgs, lib, craneLib, src, ... }:
+{
+  pkgs,
+  lib,
+  craneLib,
+  src,
+  ...
+}:
 
 craneLib.buildPackage {
   pname = "redox-cookbook";

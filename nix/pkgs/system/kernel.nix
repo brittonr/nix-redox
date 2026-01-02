@@ -26,7 +26,11 @@ let
     name = "kernel-src-patched";
     src = kernel-src;
 
-    phases = [ "unpackPhase" "patchPhase" "installPhase" ];
+    phases = [
+      "unpackPhase"
+      "patchPhase"
+      "installPhase"
+    ];
 
     postUnpack = ''
       rm -rf $sourceRoot/rmm
@@ -60,7 +64,8 @@ let
     src = patchedSrc;
   };
 
-in pkgs.stdenv.mkDerivation {
+in
+pkgs.stdenv.mkDerivation {
   pname = "redox-kernel";
   version = "unstable";
 

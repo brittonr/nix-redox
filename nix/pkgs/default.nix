@@ -31,68 +31,128 @@
 }:
 
 let
-  # Import the shared library modules
+  # Import the shared library modules (with rustToolchain for sysroot support)
   redoxLib = import ../lib {
-    inherit pkgs lib redoxTarget;
+    inherit
+      pkgs
+      lib
+      redoxTarget
+      rustToolchain
+      ;
   };
 
   # Common arguments passed to all package modules
   commonArgs = {
-    inherit pkgs lib craneLib rustToolchain sysrootVendor redoxTarget;
+    inherit
+      pkgs
+      lib
+      craneLib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
     inherit (redoxLib) stubLibs vendor;
   };
 
   # Host tools - run on build machine, no cross-compilation
   host = {
-    cookbook = import ./host/cookbook.nix (commonArgs // {
-      src = inputs.redox-src;
-    });
+    cookbook = import ./host/cookbook.nix (
+      commonArgs
+      // {
+        src = inputs.redox-src;
+      }
+    );
 
-    redoxfs = import ./host/redoxfs.nix (commonArgs // {
-      src = inputs.redoxfs-src;
-    });
+    redoxfs = import ./host/redoxfs.nix (
+      commonArgs
+      // {
+        src = inputs.redoxfs-src;
+      }
+    );
 
-    installer = import ./host/installer.nix (commonArgs // {
-      src = inputs.installer-src;
-    });
+    installer = import ./host/installer.nix (
+      commonArgs
+      // {
+        src = inputs.installer-src;
+      }
+    );
 
     # Combined host tools
     fstools = pkgs.symlinkJoin {
       name = "redox-fstools";
-      paths = [ host.cookbook host.redoxfs host.installer ];
+      paths = [
+        host.cookbook
+        host.redoxfs
+        host.installer
+      ];
     };
   };
 
   # Use passed relibc if available (avoids IFD issues)
   # Otherwise build it from source
-  resolvedRelibc = if relibc != null then relibc else
-    import ./system/relibc.nix (commonArgs // {
-      inherit (inputs) relibc-src openlibm-src compiler-builtins-src dlmalloc-rs-src;
-      inherit (inputs) cc-rs-src redox-syscall-src object-src;
-    });
+  resolvedRelibc =
+    if relibc != null then
+      relibc
+    else
+      import ./system/relibc.nix (
+        commonArgs
+        // {
+          inherit (inputs)
+            relibc-src
+            openlibm-src
+            compiler-builtins-src
+            dlmalloc-rs-src
+            ;
+          inherit (inputs) cc-rs-src redox-syscall-src object-src;
+        }
+      );
 
   # System components - core OS requiring special build handling
   system = rec {
     relibc = resolvedRelibc;
 
-    kernel = import ./system/kernel.nix (commonArgs // {
-      inherit (inputs) kernel-src rmm-src redox-path-src fdt-src;
-    });
+    kernel = import ./system/kernel.nix (
+      commonArgs
+      // {
+        inherit (inputs)
+          kernel-src
+          rmm-src
+          redox-path-src
+          fdt-src
+          ;
+      }
+    );
 
-    bootloader = import ./system/bootloader.nix (commonArgs // {
-      inherit (inputs) bootloader-src uefi-src fdt-src;
-    });
+    bootloader = import ./system/bootloader.nix (
+      commonArgs
+      // {
+        inherit (inputs) bootloader-src uefi-src fdt-src;
+      }
+    );
 
-    base = import ./system/base.nix (commonArgs // {
-      inherit relibc;
-      inherit (inputs) base-src liblibc-src orbclient-src rustix-redox-src drm-rs-src relibc-src;
-    });
+    base = import ./system/base.nix (
+      commonArgs
+      // {
+        inherit relibc;
+        inherit (inputs)
+          base-src
+          liblibc-src
+          orbclient-src
+          rustix-redox-src
+          drm-rs-src
+          relibc-src
+          ;
+      }
+    );
   };
 
   # Userspace helper - creates cross-compiled packages with common settings
-  mkUserspace = import ./userspace/mk-userspace.nix (commonArgs // {
-    relibc = resolvedRelibc;
-  });
+  mkUserspace = import ./userspace/mk-userspace.nix (
+    commonArgs
+    // {
+      relibc = resolvedRelibc;
+    }
+  );
 
   # Userspace applications - cross-compiled for Redox target
   userspace = {
@@ -105,10 +165,24 @@ let
         echo "nix-build" > git_revision.txt
       '';
       gitSources = [
-        { url = "git+https://gitlab.redox-os.org/redox-os/liner"; git = "https://gitlab.redox-os.org/redox-os/liner"; }
-        { url = "git+https://gitlab.redox-os.org/redox-os/calc?rev=d2719efb67ab38c4c33ab3590822114453960da5"; git = "https://gitlab.redox-os.org/redox-os/calc"; rev = "d2719efb67ab38c4c33ab3590822114453960da5"; }
-        { url = "git+https://github.com/nix-rust/nix.git?rev=ff6f8b8a"; git = "https://github.com/nix-rust/nix.git"; rev = "ff6f8b8a"; }
-        { url = "git+https://gitlab.redox-os.org/redox-os/small"; git = "https://gitlab.redox-os.org/redox-os/small"; }
+        {
+          url = "git+https://gitlab.redox-os.org/redox-os/liner";
+          git = "https://gitlab.redox-os.org/redox-os/liner";
+        }
+        {
+          url = "git+https://gitlab.redox-os.org/redox-os/calc?rev=d2719efb67ab38c4c33ab3590822114453960da5";
+          git = "https://gitlab.redox-os.org/redox-os/calc";
+          rev = "d2719efb67ab38c4c33ab3590822114453960da5";
+        }
+        {
+          url = "git+https://github.com/nix-rust/nix.git?rev=ff6f8b8a";
+          git = "https://github.com/nix-rust/nix.git";
+          rev = "ff6f8b8a";
+        }
+        {
+          url = "git+https://gitlab.redox-os.org/redox-os/small";
+          git = "https://gitlab.redox-os.org/redox-os/small";
+        }
       ];
       meta = {
         description = "Ion Shell for Redox OS";
@@ -134,10 +208,26 @@ let
         runHook postInstall
       '';
       gitSources = [
-        { url = "git+https://github.com/nicholasbishop/helix-misc?branch=x86_64-unknown-redox"; git = "https://github.com/nicholasbishop/helix-misc"; branch = "x86_64-unknown-redox"; }
-        { url = "git+https://github.com/nicholasbishop/ropey?branch=x86_64-unknown-redox"; git = "https://github.com/nicholasbishop/ropey"; branch = "x86_64-unknown-redox"; }
-        { url = "git+https://github.com/nicholasbishop/gix?branch=x86_64-unknown-redox"; git = "https://github.com/nicholasbishop/gix"; branch = "x86_64-unknown-redox"; }
-        { url = "git+https://github.com/helix-editor/tree-sitter?rev=660481dbf71413eba5a928b0b0ab8da50c1109e0"; git = "https://github.com/helix-editor/tree-sitter"; rev = "660481dbf71413eba5a928b0b0ab8da50c1109e0"; }
+        {
+          url = "git+https://github.com/nicholasbishop/helix-misc?branch=x86_64-unknown-redox";
+          git = "https://github.com/nicholasbishop/helix-misc";
+          branch = "x86_64-unknown-redox";
+        }
+        {
+          url = "git+https://github.com/nicholasbishop/ropey?branch=x86_64-unknown-redox";
+          git = "https://github.com/nicholasbishop/ropey";
+          branch = "x86_64-unknown-redox";
+        }
+        {
+          url = "git+https://github.com/nicholasbishop/gix?branch=x86_64-unknown-redox";
+          git = "https://github.com/nicholasbishop/gix";
+          branch = "x86_64-unknown-redox";
+        }
+        {
+          url = "git+https://github.com/helix-editor/tree-sitter?rev=660481dbf71413eba5a928b0b0ab8da50c1109e0";
+          git = "https://github.com/helix-editor/tree-sitter";
+          rev = "660481dbf71413eba5a928b0b0ab8da50c1109e0";
+        }
       ];
       meta = {
         description = "Helix Editor for Redox OS";
@@ -159,7 +249,10 @@ let
         runHook postInstall
       '';
       gitSources = [
-        { url = "git+https://gitlab.redox-os.org/redox-os/libextra.git"; git = "https://gitlab.redox-os.org/redox-os/libextra.git"; }
+        {
+          url = "git+https://gitlab.redox-os.org/redox-os/libextra.git";
+          git = "https://gitlab.redox-os.org/redox-os/libextra.git";
+        }
       ];
       meta = {
         description = "Binary utilities (strings, hex, hexdump) for Redox OS";
@@ -235,6 +328,15 @@ let
       };
     };
 
+    # Extrautils - extended utilities (grep, gzip, less, etc.)
+    extrautils = import ./userspace/extrautils.nix (
+      commonArgs
+      // {
+        inherit (inputs) extrautils-src filetime-src cc-rs-src;
+        relibc = resolvedRelibc;
+      }
+    );
+
     uutils = mkUserspace.mkPackage {
       pname = "redox-uutils";
       version = "0.0.27";
@@ -247,71 +349,71 @@ let
         # This will be done after vendor-combined is created
       '';
       postConfigure = ''
-        # Patch ctrlc after vendor merge
-        if [ -d "vendor-combined/ctrlc" ]; then
-          rm -f vendor-combined/ctrlc/src/platform/unix/mod.rs
-          cat > vendor-combined/ctrlc/src/lib.rs << 'CTRLC_EOF'
-//! Cross-platform library for sending and receiving Unix signals (simplified for Redox)
+                # Patch ctrlc after vendor merge
+                if [ -d "vendor-combined/ctrlc" ]; then
+                  rm -f vendor-combined/ctrlc/src/platform/unix/mod.rs
+                  cat > vendor-combined/ctrlc/src/lib.rs << 'CTRLC_EOF'
+        //! Cross-platform library for sending and receiving Unix signals (simplified for Redox)
 
-use std::sync::atomic::{AtomicBool, Ordering};
+        use std::sync::atomic::{AtomicBool, Ordering};
 
-#[derive(Debug)]
-pub enum Error {
-    System(String),
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::System(msg) => write!(f, "System error: {}", msg),
+        #[derive(Debug)]
+        pub enum Error {
+            System(String),
         }
-    }
-}
 
-impl std::error::Error for Error {}
+        impl std::fmt::Display for Error {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                match self {
+                    Error::System(msg) => write!(f, "System error: {}", msg),
+                }
+            }
+        }
 
-static SHOULD_TERMINATE: AtomicBool = AtomicBool::new(false);
+        impl std::error::Error for Error {}
 
-/// Register a handler for Ctrl-C signals (no-op on Redox)
-pub fn set_handler<F>(_handler: F) -> Result<(), Error>
-where
-    F: FnMut() + 'static + Send,
-{
-    // Ctrl-C handling not supported on Redox
-    Ok(())
-}
+        static SHOULD_TERMINATE: AtomicBool = AtomicBool::new(false);
 
-/// Check if a Ctrl-C signal has been received (always false on Redox)
-pub fn check() -> bool {
-    SHOULD_TERMINATE.load(Ordering::SeqCst)
-}
-CTRLC_EOF
-          # Regenerate checksum for patched ctrlc
-          ${pkgs.python3}/bin/python3 << 'PYTHON_PATCH'
-import json
-import hashlib
-from pathlib import Path
+        /// Register a handler for Ctrl-C signals (no-op on Redox)
+        pub fn set_handler<F>(_handler: F) -> Result<(), Error>
+        where
+            F: FnMut() + 'static + Send,
+        {
+            // Ctrl-C handling not supported on Redox
+            Ok(())
+        }
 
-crate_dir = Path("vendor-combined/ctrlc")
-checksum_file = crate_dir / ".cargo-checksum.json"
-if checksum_file.exists():
-    with open(checksum_file) as f:
-        existing = json.load(f)
-    pkg_hash = existing.get("package")
-    files = {}
-    for file_path in sorted(crate_dir.rglob("*")):
-        if file_path.is_file() and file_path.name != ".cargo-checksum.json":
-            rel_path = str(file_path.relative_to(crate_dir))
-            with open(file_path, "rb") as f:
-                sha = hashlib.sha256(f.read()).hexdigest()
-            files[rel_path] = sha
-    new_data = {"files": files}
-    if pkg_hash:
-        new_data["package"] = pkg_hash
-    with open(checksum_file, "w") as f:
-        json.dump(new_data, f)
-PYTHON_PATCH
-        fi
+        /// Check if a Ctrl-C signal has been received (always false on Redox)
+        pub fn check() -> bool {
+            SHOULD_TERMINATE.load(Ordering::SeqCst)
+        }
+        CTRLC_EOF
+                  # Regenerate checksum for patched ctrlc
+                  ${pkgs.python3}/bin/python3 << 'PYTHON_PATCH'
+        import json
+        import hashlib
+        from pathlib import Path
+
+        crate_dir = Path("vendor-combined/ctrlc")
+        checksum_file = crate_dir / ".cargo-checksum.json"
+        if checksum_file.exists():
+            with open(checksum_file) as f:
+                existing = json.load(f)
+            pkg_hash = existing.get("package")
+            files = {}
+            for file_path in sorted(crate_dir.rglob("*")):
+                if file_path.is_file() and file_path.name != ".cargo-checksum.json":
+                    rel_path = str(file_path.relative_to(crate_dir))
+                    with open(file_path, "rb") as f:
+                        sha = hashlib.sha256(f.read()).hexdigest()
+                    files[rel_path] = sha
+            new_data = {"files": files}
+            if pkg_hash:
+                new_data["package"] = pkg_hash
+            with open(checksum_file, "w") as f:
+                json.dump(new_data, f)
+        PYTHON_PATCH
+                fi
       '';
       installPhase = ''
         runHook preInstall
@@ -336,8 +438,28 @@ PYTHON_PATCH
     };
   };
 
-in {
-  inherit host system userspace;
+  # Infrastructure packages (initfs-tools, bootstrap)
+  infrastructure = import ./infrastructure {
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
+    inherit (redoxLib) vendor;
+    base-src = inputs.base-src;
+    relibc-src = inputs.relibc-src;
+  };
+
+in
+{
+  inherit
+    host
+    system
+    userspace
+    infrastructure
+    ;
 
   # Convenience: flatten all packages for direct access
   all = host // system // userspace;
