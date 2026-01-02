@@ -380,14 +380,115 @@
             };
           };
 
-          # Installer - For now, use the cookbook-built version
-          # The ring crate has issues with Nix vendoring due to pregenerated assembly
-          # TODO: Fix ring crate vendoring or wait for upstream fix
-          installer = pkgs.writeShellScriptBin "redox_installer" ''
-            echo "Installer must be built via cookbook in devShell"
-            echo "Run: nix develop && cd redox-src && make fstools"
-            exit 1
-          '';
+          # Fetch ring 0.17.8 from crates.io with pregenerated assembly files
+          # The git repos don't have these - they're only in crates.io releases
+          ringCrate = pkgs.fetchurl {
+            url = "https://crates.io/api/v1/crates/ring/0.17.8/download";
+            sha256 = "sha256-wX+ky2WONYNCPpFbnzrMAczq7hhg4z1Z665mrcOi3A0=";
+          };
+
+          # Installer - Redox filesystem builder (host tool)
+          # Uses ring from crates.io (with pregenerated assembly) instead of git
+          installerSrc = pkgs.stdenv.mkDerivation {
+            name = "installer-src-patched";
+            src = installer-src;
+
+            phases = [
+              "unpackPhase"
+              "patchPhase"
+              "installPhase"
+            ];
+
+            patchPhase = ''
+              runHook prePatch
+
+              # Extract ring crate from crates.io (has pregenerated assembly files)
+              mkdir -p deps
+              tar -xzf ${ringCrate} -C deps
+              mv deps/ring-0.17.8 deps/ring
+
+              # Replace the git URL in [patch.crates-io] with a local path
+              sed -i 's|ring = { git = "https://gitlab.redox-os.org/redox-os/ring.git", branch = "redox-0.17.8" }|ring = { path = "deps/ring" }|' Cargo.toml
+
+              runHook postPatch
+            '';
+
+            installPhase = ''
+              cp -r . $out
+            '';
+          };
+
+          # Vendor dependencies using fetchCargoVendor
+          # The vendor will NOT include ring since it's patched to a local path
+          installerVendor = pkgs.rustPlatform.fetchCargoVendor {
+            name = "installer-cargo-vendor";
+            src = installerSrc;
+            hash = "sha256-RMxyZ/isSvgxEtRompst/F6ZavAMbHBYMB/G8H4Wk5A=";
+          };
+
+          installer = pkgs.stdenv.mkDerivation {
+            pname = "redox-installer";
+            version = "unstable";
+
+            src = installerSrc;
+
+            nativeBuildInputs = [
+              rustToolchain
+              pkgs.pkg-config
+            ];
+
+            buildInputs = with pkgs; [
+              fuse
+              fuse3
+            ];
+
+            # Configure cargo to use the vendor directory
+            configurePhase = ''
+              runHook preConfigure
+
+              mkdir -p .cargo
+              cat > .cargo/config.toml << EOF
+              [source.crates-io]
+              replace-with = "vendored"
+
+              [source.vendored]
+              directory = "${installerVendor}"
+
+              [net]
+              offline = true
+              EOF
+
+              export HOME=$(mktemp -d)
+
+              runHook postConfigure
+            '';
+
+            buildPhase = ''
+              runHook preBuild
+
+              cargo build --release
+
+              runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+
+              mkdir -p $out/bin
+              cp target/release/redox_installer $out/bin/
+              cp target/release/redox_installer_tui $out/bin/ 2>/dev/null || true
+
+              runHook postInstall
+            '';
+
+            doCheck = false;
+
+            meta = with lib; {
+              description = "Redox OS Installer - filesystem builder";
+              homepage = "https://gitlab.redox-os.org/redox-os/installer";
+              license = licenses.mit;
+            };
+          };
 
           # All filesystem tools combined
           fstools = pkgs.symlinkJoin {
