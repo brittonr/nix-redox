@@ -190,6 +190,12 @@
       url = "gitlab:redox-os/libredox/master?host=gitlab.redox-os.org";
       flake = false;
     };
+
+    # netutils - network utilities (dhcpd, dnsd, ping, ifconfig, nc)
+    netutils-src = {
+      url = "gitlab:redox-os/netutils/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
   };
 
   outputs =
@@ -230,6 +236,7 @@
       sodium-src,
       filetime-src,
       libredox-src,
+      netutils-src,
       ...
     }:
     flake-parts.lib.mkFlake { inherit inputs; } {
@@ -2211,6 +2218,185 @@ LOCK
             };
           };
 
+          # netutils - network utilities (dhcpd, dnsd, ping, ifconfig, nc)
+          netutilsVendor = pkgs.rustPlatform.fetchCargoVendor {
+            name = "netutils-cargo-vendor";
+            src = netutils-src;
+            hash = "sha256-bXjd6oVEl4GmxgNtGqYpAIvNH1u3to31jzlQlYKWD9Y=";
+          };
+
+          netutils = pkgs.stdenv.mkDerivation {
+            pname = "netutils";
+            version = "unstable";
+
+            dontUnpack = true;
+
+            nativeBuildInputs = [
+              rustToolchain
+              pkgs.llvmPackages.clang
+              pkgs.llvmPackages.bintools
+              pkgs.llvmPackages.lld
+              pkgs.python3
+            ];
+
+            buildInputs = [ relibc ];
+
+            TARGET = redoxTarget;
+            RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+
+            configurePhase = ''
+                            runHook preConfigure
+
+                            cp -r ${netutils-src}/* .
+                            chmod -R u+w .
+
+                            # Merge netutils vendor + sysroot vendors
+                            mkdir -p vendor-combined
+
+                            get_version() {
+                              grep '^version = ' "$1/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/'
+                            }
+
+                            for crate in ${netutilsVendor}/*/; do
+                              crate_name=$(basename "$crate")
+                              if [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
+                                continue
+                              fi
+                              if [ -d "$crate" ]; then
+                                cp -rL "$crate" "vendor-combined/$crate_name"
+                              fi
+                            done
+                            chmod -R u+w vendor-combined/
+
+                            for crate in ${sysrootVendor}/*/; do
+                              crate_name=$(basename "$crate")
+                              if [ ! -d "$crate" ]; then
+                                continue
+                              fi
+                              if [ -d "vendor-combined/$crate_name" ]; then
+                                base_version=$(get_version "vendor-combined/$crate_name")
+                                sysroot_version=$(get_version "$crate")
+                                if [ "$base_version" != "$sysroot_version" ]; then
+                                  versioned_name="$crate_name-$sysroot_version"
+                                  if [ ! -d "vendor-combined/$versioned_name" ]; then
+                                    cp -rL "$crate" "vendor-combined/$versioned_name"
+                                  fi
+                                fi
+                              else
+                                cp -rL "$crate" "vendor-combined/$crate_name"
+                              fi
+                            done
+                            chmod -R u+w vendor-combined/
+
+                            # Regenerate checksums
+                            ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
+              import json
+              import hashlib
+              from pathlib import Path
+
+              vendor_dir = Path("vendor-combined")
+              for crate_dir in vendor_dir.iterdir():
+                  if not crate_dir.is_dir():
+                      continue
+                  checksum_file = crate_dir / ".cargo-checksum.json"
+                  if not checksum_file.exists():
+                      continue
+                  with open(checksum_file) as f:
+                      existing = json.load(f)
+                  pkg_hash = existing.get("package")
+                  files = {}
+                  for file_path in sorted(crate_dir.rglob("*")):
+                      if file_path.is_file() and file_path.name != ".cargo-checksum.json":
+                          rel_path = str(file_path.relative_to(crate_dir))
+                          with open(file_path, "rb") as f:
+                              sha = hashlib.sha256(f.read()).hexdigest()
+                          files[rel_path] = sha
+                  new_data = {"files": files}
+                  if pkg_hash:
+                      new_data["package"] = pkg_hash
+                  with open(checksum_file, "w") as f:
+                      json.dump(new_data, f)
+              PYTHON_CHECKSUM
+
+                            mkdir -p .cargo
+                            cat > .cargo/config.toml << 'CARGOCONF'
+              [source.crates-io]
+              replace-with = "vendored-sources"
+
+              [source.vendored-sources]
+              directory = "vendor-combined"
+
+              [net]
+              offline = true
+
+              [build]
+              target = "x86_64-unknown-redox"
+
+              [target.x86_64-unknown-redox]
+              linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
+
+              [profile.release]
+              panic = "abort"
+              CARGOCONF
+
+                            runHook postConfigure
+            '';
+
+            buildPhase = ''
+                            runHook preBuild
+
+                            export HOME=$(mktemp -d)
+
+                            # Create stub libs
+                            mkdir -p stub-libs
+                            cat > stub-libs/unwind_stubs.c << 'EOF'
+              typedef void* _Unwind_Reason_Code;
+              typedef void* _Unwind_Context;
+              typedef void* _Unwind_Ptr;
+
+              _Unwind_Reason_Code _Unwind_Backtrace(void* fn, void* arg) { return 0; }
+              _Unwind_Ptr _Unwind_GetIP(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetTextRelBase(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetDataRelBase(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetRegionStart(_Unwind_Context* ctx) { return 0; }
+              _Unwind_Ptr _Unwind_GetCFA(_Unwind_Context* ctx) { return 0; }
+              void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
+              EOF
+                            clang --target=${redoxTarget} -c stub-libs/unwind_stubs.c -o stub-libs/unwind_stubs.o
+                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc_eh.a stub-libs/unwind_stubs.o
+                            ${pkgs.llvmPackages.llvm}/bin/llvm-ar crs stub-libs/libgcc.a stub-libs/unwind_stubs.o
+
+                            export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L $(pwd)/stub-libs -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+
+                            # Build all network utilities
+                            cargo build \
+                              --target ${redoxTarget} \
+                              --release \
+                              -Z build-std=core,alloc,std,panic_abort \
+                              -Z build-std-features=compiler-builtins-mem
+
+                            runHook postBuild
+            '';
+
+            installPhase = ''
+              runHook preInstall
+              mkdir -p $out/bin
+              # Copy all built binaries (dhcpd, dns, nc, ping, ifconfig)
+              for bin in dhcpd dns nc ping ifconfig; do
+                if [ -f target/${redoxTarget}/release/$bin ]; then
+                  cp target/${redoxTarget}/release/$bin $out/bin/
+                fi
+              done
+              runHook postInstall
+            '';
+
+            meta = with lib; {
+              description = "Network utilities for Redox OS (dhcpd, dnsd, ping, ifconfig, nc)";
+              homepage = "https://gitlab.redox-os.org/redox-os/netutils";
+              license = licenses.mit;
+            };
+          };
+
           # Minimal shell - a very basic shell for Redox written in Rust
           minishell = pkgs.stdenv.mkDerivation {
             pname = "minishell";
@@ -4184,10 +4370,16 @@ CACHE
                             runHook preBuild
 
                             # Create initfs directory structure
+                            # Note: /dev symlinks can't be created here because the initfs archiver
+                            # can't handle absolute symlinks to paths that don't exist on the host.
+                            # Programs needing random during initfs should use /scheme/rand directly.
+                            # ipcd and other daemons that use getrandom crate are started from rootfs
+                            # init.d scripts where /dev/urandom -> /scheme/rand symlink exists.
                             mkdir -p initfs/bin initfs/lib/drivers initfs/etc/pcid initfs/usr/bin
 
                             # Copy core binaries to bin/ (no graphics: removed vesad, fbbootlogd, fbcond, inputd)
-                            for bin in init logd ramfs randd zerod pcid pcid-spawner lived acpid hwd rtcd ps2d ptyd; do
+                            # Added: ipcd (IPC daemon), smolnetd (network stack)
+                            for bin in init logd ramfs randd zerod pcid pcid-spawner lived acpid hwd rtcd ps2d ptyd ipcd smolnetd; do
                               if [ -f ${base}/bin/$bin ]; then
                                 cp ${base}/bin/$bin initfs/bin/
                               fi
@@ -4209,15 +4401,76 @@ CACHE
                             cp ${minishell}/bin/console-exec initfs/bin/
 
                             # Copy driver binaries to lib/drivers/ (no graphics: removed virtio-gpud)
-                            for drv in ahcid ided nvmed virtio-blkd; do
+                            # Added: e1000d (Intel network, QEMU default), virtio-netd (VirtIO network)
+                            echo "=== Copying drivers from ${base}/bin to initfs/lib/drivers ==="
+                            for drv in ahcid ided nvmed virtio-blkd e1000d virtio-netd; do
                               if [ -f ${base}/bin/$drv ]; then
-                                cp ${base}/bin/$drv initfs/lib/drivers/
+                                echo "Copying $drv..."
+                                cp -v ${base}/bin/$drv initfs/lib/drivers/
+                              else
+                                echo "WARNING: $drv not found in ${base}/bin"
                               fi
                             done
+                            echo "=== Drivers in initfs/lib/drivers ==="
+                            ls -la initfs/lib/drivers/
 
-                            # Copy config files
-                            cp ${base-src}/init_drivers.rc initfs/etc/
-                            cp ${base-src}/drivers/initfs.toml initfs/etc/pcid/
+                            # Create init_drivers.rc
+                            cat > initfs/etc/init_drivers.rc << 'DRIVERS_RC'
+ps2d us
+hwd
+pcid-spawner /scheme/initfs/etc/pcid/initfs.toml
+DRIVERS_RC
+
+                            # Verify drivers are actually copied
+                            echo "Checking for drivers in initfs..."
+                            ls -la initfs/lib/drivers/ || echo "No drivers found!"
+
+                            # Create custom pcid config with network drivers added
+                            # Use dedented heredoc to avoid TOML parsing issues
+                            cat > initfs/etc/pcid/initfs.toml << 'EOF'
+# Drivers for InitFS (with network support)
+
+# Storage drivers - AHCI
+[[drivers]]
+class = 1
+subclass = 6
+command = ["/scheme/initfs/lib/drivers/ahcid"]
+
+# Storage drivers - IDE
+[[drivers]]
+class = 1
+subclass = 1
+command = ["/scheme/initfs/lib/drivers/ided"]
+
+# Storage drivers - NVME
+[[drivers]]
+class = 1
+subclass = 8
+command = ["/scheme/initfs/lib/drivers/nvmed"]
+
+# Storage drivers - virtio-blk
+[[drivers]]
+vendor = 0x1AF4
+device = 0x1001
+command = ["/scheme/initfs/lib/drivers/virtio-blkd"]
+
+# Network drivers - Intel e1000 (QEMU default: 8086:100e)
+# Using simple vendor/device format instead of ids map
+[[drivers]]
+name = "E1000 NIC"
+class = 0x02
+vendor = 0x8086
+device = 0x100e
+command = ["/scheme/initfs/lib/drivers/e1000d"]
+
+# Network drivers - virtio-net
+[[drivers]]
+name = "VirtIO Net"
+class = 0x02
+vendor = 0x1AF4
+device = 0x1000
+command = ["/scheme/initfs/lib/drivers/virtio-netd"]
+EOF
 
                             # Create Ion shell configuration with simple prompt (no subprocess expansion)
                             mkdir -p initfs/etc/ion
@@ -4226,69 +4479,81 @@ CACHE
                             echo 'let PROMPT = "ion> "' >> initfs/etc/ion/initrc
 
                             # Create headless init.rc (no graphics daemons)
-                            cat > initfs/etc/init.rc << 'INITRC'
-              # Headless Redox init - no graphics support
-              export PATH /scheme/initfs/bin
-              export RUST_BACKTRACE 1
-              rtcd
-              nulld
-              zerod
-              randd
+                            cat > initfs/etc/init.rc << 'EOF'
+# Headless Redox init - no graphics support
+export PATH /scheme/initfs/bin
+export RUST_BACKTRACE 1
+rtcd
+nulld
+zerod
+echo "Starting random daemon..."
+randd
+echo "."
+echo "."
+echo "."
+echo "."
+echo "."
+echo "Random daemon ready"
 
-              # PTY daemon - needed for interactive shells
-              ptyd
+# PTY daemon - needed for interactive shells
+ptyd
 
-              # Logging
-              logd
-              stdio /scheme/log
-              ramfs logging
+# Logging
+logd
+stdio /scheme/log
+ramfs logging
 
-              # Live disk
-              lived
+# Live disk
+lived
 
-              # Drivers
-              run /scheme/initfs/etc/init_drivers.rc
-              unset RSDP_ADDR RSDP_SIZE
+# Drivers (pcid-spawner will start e1000d when it detects the network card)
+# Note: pcid is started by hwd
+echo "Loading drivers..."
+run /scheme/initfs/etc/init_drivers.rc
+unset RSDP_ADDR RSDP_SIZE
 
-              # Mount rootfs
-              # Note: init.rc is executed line-by-line by init, not by a shell, so we can't use if/then/else
-              echo "Mounting RedoxFS..."
-              # Use the UUID directly if available, otherwise let redoxfs find it
-              redoxfs --uuid $REDOXFS_UUID file $REDOXFS_BLOCK
-              unset REDOXFS_UUID REDOXFS_BLOCK REDOXFS_PASSWORD_ADDR REDOXFS_PASSWORD_SIZE
+# Note: ipcd requires /dev/urandom which only exists after rootfs mounts
+# It will be started from /usr/lib/init.d/00_base after rootfs transition
 
-              # Exit initfs
-              echo "Transitioning from initfs to root filesystem..."
-              cd /
-              export PATH="/bin:/usr/bin"
-              echo "PATH set to: $PATH"
-              echo "Running init scripts..."
-              # run.d is a subcommand of init - just use run.d directly since it's part of init
-              run.d /usr/lib/init.d /etc/init.d
+# Mount rootfs
+# Note: init.rc is executed line-by-line by init, not by a shell, so we can't use if/then/else
+echo "Mounting RedoxFS..."
+# Use the UUID directly if available, otherwise let redoxfs find it
+redoxfs --uuid $REDOXFS_UUID file $REDOXFS_BLOCK
+unset REDOXFS_UUID REDOXFS_BLOCK REDOXFS_PASSWORD_ADDR REDOXFS_PASSWORD_SIZE
 
-              # Boot complete - start interactive shell
-              echo ""
-              echo "=========================================="
-              echo "  Redox OS Boot Complete!"
-              echo "=========================================="
-              echo ""
-              echo "Starting shell..."
-              echo ""
+# Exit initfs
+echo "Transitioning from initfs to root filesystem..."
+cd /
+export PATH="/bin:/usr/bin"
+echo "PATH set to: $PATH"
+echo "Running init scripts..."
+# run.d is a subcommand of init - just use run.d directly since it's part of init
+run.d /usr/lib/init.d /etc/init.d
 
-              # Set TERM=dumb to disable fancy terminal features that may not work in QEMU
-              export TERM dumb
-              # Set XDG_CONFIG_HOME so Ion finds its config file with simple prompt
-              export XDG_CONFIG_HOME /etc
-              export HOME /home/user
-              # Run Ion shell test
-              echo "Testing Ion shell..."
-              /bin/ion -c help
-              echo ""
-              echo "Ion shell is working! Type commands (no line editing in this mode)."
-              echo "Examples: ls, echo hello, help, exit"
-              # Use Ion shell in fake-interactive mode (reads from stdin, no line editing)
-              /bin/console-exec /bin/ion -f
-              INITRC
+# Boot complete - start interactive shell
+echo ""
+echo "=========================================="
+echo "  Redox OS Boot Complete!"
+echo "=========================================="
+echo ""
+echo "Starting shell..."
+echo ""
+
+# Set TERM=dumb to disable fancy terminal features that may not work in QEMU
+export TERM dumb
+# Set XDG_CONFIG_HOME so Ion finds its config file with simple prompt
+export XDG_CONFIG_HOME /etc
+export HOME /home/user
+# Run Ion shell test
+echo "Testing Ion shell..."
+/bin/ion -c help
+echo ""
+echo "Ion shell is working! Type commands (no line editing in this mode)."
+echo "Examples: ls, echo hello, help, exit"
+# Use Ion shell in fake-interactive mode (reads from stdin, no line editing)
+/bin/console-exec /bin/ion -f
+EOF
 
                             # Create initfs image
                             redox-initfs-ar initfs ${bootstrap}/bin/bootstrap -o initfs.img
@@ -4314,7 +4579,7 @@ CACHE
           diskImage = pkgs.stdenv.mkDerivation {
             pname = "redox-disk-image";
             version = "unstable";
-
+            # Force rebuild: cache invalidation timestamp 2026-01-02-rebuild
             dontUnpack = true;
             dontPatchELF = true;
             dontFixup = true;
@@ -4337,10 +4602,12 @@ CACHE
               binutils
               extrautils
               sodium
+              netutils
             ];
 
             buildPhase = ''
                             runHook preBuild
+                            echo "Build timestamp: 2026-01-02T11:42:00Z"
 
                             # Create 512MB disk image (increased for larger ESP)
                             IMAGE_SIZE=$((512 * 1024 * 1024))
@@ -4399,6 +4666,18 @@ CACHE
                             mkdir -p redoxfs-root/sys
                             mkdir -p redoxfs-root/proc
                             mkdir -p redoxfs-root/home/user
+
+                            # Create /dev symlinks for compatibility with getrandom crate and other tools
+                            # These symlinks point to the appropriate scheme paths
+                            ln -s /scheme/rand redoxfs-root/dev/urandom
+                            ln -s /scheme/rand redoxfs-root/dev/random
+                            ln -s /scheme/null redoxfs-root/dev/null
+                            ln -s /scheme/zero redoxfs-root/dev/zero
+                            # Additional standard device symlinks
+                            ln -s libc:tty redoxfs-root/dev/tty
+                            ln -s libc:stdin redoxfs-root/dev/stdin
+                            ln -s libc:stdout redoxfs-root/dev/stdout
+                            ln -s libc:stderr redoxfs-root/dev/stderr
 
                             # Copy all binaries from base to provide utilities
                             echo "Copying base system utilities..."
@@ -4500,6 +4779,48 @@ CACHE
                               echo "WARNING: sodium not found at ${sodium}/bin"
                             fi
 
+                            # Copy network utilities (dhcpd, dnsd, ping, ifconfig, nc)
+                            echo "Copying network utilities..."
+                            if [ -d "${netutils}/bin" ]; then
+                              cp -rv ${netutils}/bin/* redoxfs-root/bin/ 2>/dev/null || true
+                              cp -rv ${netutils}/bin/* redoxfs-root/usr/bin/ 2>/dev/null || true
+                              echo "Copied netutils (dhcpd, dns, ping, ifconfig, nc)"
+                            else
+                              echo "WARNING: netutils not found at ${netutils}/bin"
+                            fi
+
+                            # Create network configuration directory and files
+                            echo "Creating network configuration..."
+                            mkdir -p redoxfs-root/etc/net
+
+                            # DNS server configuration (use Cloudflare and Google DNS)
+                            echo "1.1.1.1" > redoxfs-root/etc/net/dns
+                            echo "8.8.8.8" >> redoxfs-root/etc/net/dns
+
+                            # QEMU user-mode networking configuration
+                            # Gateway is 10.0.2.2 (required for smolnetd to start)
+                            echo "10.0.2.2" > redoxfs-root/etc/net/ip_router
+
+                            # Create init.d directory with startup scripts
+                            # These run after rootfs is mounted, so /dev/urandom symlink exists
+                            mkdir -p redoxfs-root/etc/init.d
+                            mkdir -p redoxfs-root/usr/lib/init.d
+
+                            # Base daemons (ipcd needs /dev/urandom -> /scheme/rand)
+                            # Note: ptyd is already started in initfs, don't start again
+                            cat > redoxfs-root/usr/lib/init.d/00_base << 'INIT_BASE'
+/bin/ipcd
+INIT_BASE
+
+                            # Network daemons
+                            cat > redoxfs-root/etc/init.d/10_net << 'INIT_NET'
+/bin/smolnetd
+INIT_NET
+
+                            cat > redoxfs-root/etc/init.d/15_dhcp << 'INIT_DHCP'
+/bin/dhcpd
+INIT_DHCP
+
                             # Copy terminfo database for terminal capabilities
                             echo "Copying terminfo database..."
                             if [ -d "${terminfo}/share/terminfo" ]; then
@@ -4511,38 +4832,38 @@ CACHE
                             fi
 
                             # Create a startup script that will run Ion shell
-                            cat > redoxfs-root/startup.sh << 'STARTUP_SCRIPT'
-              #!/bin/sh
-              echo ""
-              echo "=========================================="
-              echo "  Welcome to Redox OS"
-              echo "=========================================="
-              echo ""
-              echo "Available programs:"
-              echo "  /bin/ion   - Ion shell (full-featured)"
-              echo "  /bin/sh    - Minimal shell (fallback)"
-              echo ""
+                            cat > redoxfs-root/startup.sh << 'EOF'
+#!/bin/sh
+echo ""
+echo "=========================================="
+echo "  Welcome to Redox OS"
+echo "=========================================="
+echo ""
+echo "Available programs:"
+echo "  /bin/ion   - Ion shell (full-featured)"
+echo "  /bin/sh    - Minimal shell (fallback)"
+echo ""
 
-              # Try Ion first, fall back to minimal shell
-              if [ -x /bin/ion ]; then
-                  echo "Starting Ion shell..."
-                  exec /bin/ion
-              else
-                  echo "Ion not found, starting minimal shell..."
-                  exec /bin/sh -i
-              fi
-              STARTUP_SCRIPT
+# Try Ion first, fall back to minimal shell
+if [ -x /bin/ion ]; then
+    echo "Starting Ion shell..."
+    exec /bin/ion
+else
+    echo "Ion not found, starting minimal shell..."
+    exec /bin/sh -i
+fi
+EOF
                             chmod +x redoxfs-root/startup.sh
 
                             # Create init config that points to our startup script
                             mkdir -p redoxfs-root/etc
-                            cat > redoxfs-root/etc/init.toml << 'INIT'
-              [[services]]
-              name = "shell"
-              command = "/startup.sh"
-              stdio = "debug"
-              restart = false
-              INIT
+                            cat > redoxfs-root/etc/init.toml << 'EOF'
+[[services]]
+name = "shell"
+command = "/startup.sh"
+stdio = "debug"
+restart = false
+EOF
 
                             # Verify the shell binary is actually there
                             echo "Checking for shell binary in filesystem root..."
@@ -4550,11 +4871,11 @@ CACHE
                             file redoxfs-root/bin/sh 2>/dev/null || echo "Cannot determine file type"
 
                             # Create a simple profile
-                            cat > redoxfs-root/etc/profile << 'PROFILE'
-              export PATH=/bin:/usr/bin
-              export HOME=/home/user
-              export USER=user
-              PROFILE
+                            cat > redoxfs-root/etc/profile << 'EOF'
+export PATH=/bin:/usr/bin
+export HOME=/home/user
+export USER=user
+EOF
 
                             # Create the RedoxFS partition image using redoxfs-ar
                             # redoxfs-ar creates a RedoxFS image from a directory
@@ -4641,12 +4962,15 @@ CACHE
               -bios "$OVMF" \
               -kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI \
               -drive file="$IMAGE",format=raw,if=ide \
+              -netdev user,id=net0,hostfwd=tcp::8022-:22,hostfwd=tcp::8080-:80 \
+              -device e1000,netdev=net0 \
               -vga std \
               -display gtk \
               -serial file:"$LOG_FILE" \
               "$@"
 
             echo ""
+            echo "Network: e1000 with user-mode NAT (ports: 8022->22, 8080->80)"
             echo "QEMU has exited. Serial log saved to: $LOG_FILE"
             echo "Displaying last 50 lines of log:"
             echo "----------------------------------------"
@@ -4671,11 +4995,16 @@ CACHE
             cp ${pkgs.OVMF.fd}/FV/OVMF.fd "$OVMF"
             chmod +w "$IMAGE" "$OVMF"
 
-            echo "Starting Redox OS (headless)..."
+            echo "Starting Redox OS (headless with networking)..."
             echo ""
             echo "Controls:"
             echo "  Auto-selecting resolution in 5 seconds..."
             echo "  Ctrl+A then X: Quit QEMU"
+            echo ""
+            echo "Network: e1000 with user-mode NAT"
+            echo "  - Host ports 8022->22 (SSH), 8080->80 (HTTP)"
+            echo "  - Guest IP via DHCP (typically 10.0.2.15)"
+            echo "  - Gateway: 10.0.2.2"
             echo ""
             echo "Shell will be available after boot completes..."
             echo ""
@@ -4694,6 +5023,8 @@ CACHE
               -bios $OVMF \
               -kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI \
               -drive file=$IMAGE,format=raw,if=ide \
+              -netdev user,id=net0,hostfwd=tcp::8022-:22,hostfwd=tcp::8080-:80 \
+              -device e1000,netdev=net0 \
               -nographic
 
               # Wait for the resolution selection screen and automatically select
@@ -4893,6 +5224,8 @@ CACHE
               extrautilsVendor
               extrautils
               sodium
+              netutilsVendor
+              netutils
               diskImage
               runQemu
               runQemuGraphical

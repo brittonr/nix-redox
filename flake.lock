@@ -329,6 +329,25 @@
         "type": "gitlab"
       }
     },
+    "netutils-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1764887732,
+        "narHash": "sha256-HDhwhQmYda6cKeBjh81DbCAYJGcxu0AGKv+lWnLIlVo=",
+        "owner": "redox-os",
+        "repo": "netutils",
+        "rev": "26ffc855a76a2c7f7cdde18cb23ed43810bd2b13",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "netutils",
+        "type": "gitlab"
+      }
+    },
     "nixpkgs": {
       "locked": {
         "lastModified": 1766902085,
@@ -555,6 +574,7 @@
         "kernel-src": "kernel-src",
         "liblibc-src": "liblibc-src",
         "libredox-src": "libredox-src",
+        "netutils-src": "netutils-src",
         "nixpkgs": "nixpkgs",
         "object-src": "object-src",
         "openlibm-src": "openlibm-src",
