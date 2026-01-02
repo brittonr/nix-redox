@@ -5,25 +5,32 @@
 # - Various drivers: ps2d, pcid, nvmed, etc.
 # - Core daemons: ipcd, logd, ptyd, etc.
 # - Basic utilities
+#
+# Uses FOD (fetchCargoVendor) for reliable offline builds
 
 {
   pkgs,
   lib,
-  craneLib,
   rustToolchain,
   sysrootVendor,
   redoxTarget,
   relibc,
   stubLibs,
+  vendor,
   base-src,
   liblibc-src,
   orbclient-src,
   rustix-redox-src,
   drm-rs-src,
-  ...
+  relibc-src,
 }:
 
 let
+  # Import rust-flags for centralized RUSTFLAGS
+  rustFlags = import ../../lib/rust-flags.nix {
+    inherit lib pkgs redoxTarget relibc stubLibs;
+  };
+
   # Prepare source with patched dependencies
   patchedSrc = pkgs.stdenv.mkDerivation {
     name = "base-src-patched";
@@ -34,16 +41,33 @@ let
     patchPhase = ''
       runHook prePatch
 
-      # Patch Cargo.toml to replace git dependencies with local paths
+      # Replace git dependencies with path dependencies in Cargo.toml
+      # The [patch.crates-io] section needs to point to local paths
       substituteInPlace Cargo.toml \
-        --replace-quiet 'libc = { git = "https://gitlab.redox-os.org/nicholasbishop/liblibc.git", branch = "redox-0.2" }' \
+        --replace-quiet 'libc = { git = "https://gitlab.redox-os.org/redox-os/liblibc.git", branch = "redox-0.2" }' \
                        'libc = { path = "${liblibc-src}" }' \
-        --replace-quiet 'orbclient = { git = "https://gitlab.redox-os.org/nicholasbishop/orbclient.git", branch = "redox-0.4" }' \
-                       'orbclient = { path = "${orbclient-src}", default-features = false }' \
-        --replace-quiet 'rustix = { git = "https://github.com/jackpot51/rustix", branch = "redox-ioctl" }' \
+        --replace-quiet 'orbclient = { git = "https://gitlab.redox-os.org/redox-os/orbclient.git", version = "0.3.44" }' \
+                       'orbclient = { path = "${orbclient-src}" }' \
+        --replace-quiet 'rustix = { git = "https://github.com/jackpot51/rustix.git", branch = "redox-ioctl" }' \
                        'rustix = { path = "${rustix-redox-src}" }' \
-        --replace-quiet 'drm = { git = "https://github.com/Smithay/drm-rs" }' \
-                       'drm = { path = "${drm-rs-src}/drm" }'
+        --replace-quiet 'drm = { git = "https://github.com/Smithay/drm-rs.git" }' \
+                       'drm = { path = "${drm-rs-src}" }' \
+        --replace-quiet 'drm-sys = { git = "https://github.com/Smithay/drm-rs.git" }' \
+                       'drm-sys = { path = "${drm-rs-src}/drm-ffi/drm-sys" }'
+
+      # Add patch for redox-rt from relibc (used by individual crates)
+      # Append to the [patch.crates-io] section
+      echo "" >> Cargo.toml
+      echo '# Added by Nix build' >> Cargo.toml
+      echo 'redox-rt = { path = "${relibc-src}/redox-rt" }' >> Cargo.toml
+
+      # Also patch individual crate Cargo.toml files that use git deps
+      for crate_toml in */Cargo.toml; do
+        if [ -f "$crate_toml" ]; then
+          # Replace redox-rt git dependency with our relibcSrc path
+          sed -i 's|redox-rt = { git = "https://gitlab.redox-os.org/redox-os/relibc.git".*}|redox-rt = { path = "${relibc-src}/redox-rt", default-features = false }|g' "$crate_toml"
+        fi
+      done
 
       runHook postPatch
     '';
@@ -53,9 +77,58 @@ let
     '';
   };
 
-  baseCargoArtifacts = craneLib.vendorCargoDeps {
+  # Vendor dependencies using FOD (Fixed-Output-Derivation)
+  baseVendor = pkgs.rustPlatform.fetchCargoVendor {
+    name = "base-cargo-vendor";
     src = patchedSrc;
+    hash = "sha256-/qhjJPlJWxRNkyzOyfSSBp8zrOVrVRvQ0ltKlFu4Pf4=";
   };
+
+  # Python checksum script from vendor module
+  checksumScript = vendor.checksumScript;
+
+  # Git source mappings for cargo config
+  gitSources = [
+    { url = "git+https://github.com/jackpot51/acpi.git"; git = "https://github.com/jackpot51/acpi.git"; }
+    { url = "git+https://github.com/repnop/fdt.git"; git = "https://github.com/repnop/fdt.git"; }
+    { url = "git+https://github.com/Smithay/drm-rs.git"; git = "https://github.com/Smithay/drm-rs.git"; }
+    { url = "git+https://gitlab.redox-os.org/redox-os/liblibc.git?branch=redox-0.2"; git = "https://gitlab.redox-os.org/redox-os/liblibc.git"; branch = "redox-0.2"; }
+    { url = "git+https://gitlab.redox-os.org/redox-os/relibc.git"; git = "https://gitlab.redox-os.org/redox-os/relibc.git"; }
+    { url = "git+https://gitlab.redox-os.org/redox-os/orbclient.git"; git = "https://gitlab.redox-os.org/redox-os/orbclient.git"; }
+    { url = "git+https://gitlab.redox-os.org/redox-os/rehid.git"; git = "https://gitlab.redox-os.org/redox-os/rehid.git"; }
+    { url = "git+https://github.com/jackpot51/range-alloc.git"; git = "https://github.com/jackpot51/range-alloc.git"; }
+    { url = "git+https://github.com/jackpot51/rustix.git?branch=redox-ioctl"; git = "https://github.com/jackpot51/rustix.git"; branch = "redox-ioctl"; }
+    { url = "git+https://github.com/jackpot51/hidreport"; git = "https://github.com/jackpot51/hidreport"; }
+  ];
+
+  # Generate cargo config content
+  cargoConfigContent = ''
+    [source.crates-io]
+    replace-with = "vendored-sources"
+
+    [source.vendored-sources]
+    directory = "vendor-combined"
+
+    ${lib.concatMapStringsSep "\n" (src: ''
+    [source."${src.url}"]
+    git = "${src.git}"
+    ${lib.optionalString (src ? branch) "branch = \"${src.branch}\""}
+    ${lib.optionalString (src ? rev) "rev = \"${src.rev}\""}
+    replace-with = "vendored-sources"
+    '') gitSources}
+
+    [net]
+    offline = true
+
+    [build]
+    target = "${redoxTarget}"
+
+    [target.${redoxTarget}]
+    linker = "ld.lld"
+
+    [profile.release]
+    panic = "abort"
+  '';
 
 in pkgs.stdenv.mkDerivation {
   pname = "redox-base";
@@ -66,9 +139,11 @@ in pkgs.stdenv.mkDerivation {
   nativeBuildInputs = [
     rustToolchain
     pkgs.gnumake
+    pkgs.nasm
     pkgs.llvmPackages.clang
     pkgs.llvmPackages.bintools
     pkgs.llvmPackages.lld
+    pkgs.jq
     pkgs.python3
   ];
 
@@ -80,136 +155,69 @@ in pkgs.stdenv.mkDerivation {
   configurePhase = ''
     runHook preConfigure
 
+    # Copy source with write permissions
     cp -r ${patchedSrc}/* .
     chmod -R u+w .
 
-    # Merge vendors
+    # Merge sysroot + base vendors with version-aware conflict resolution
     mkdir -p vendor-combined
 
+    # Helper function to get version from Cargo.toml
     get_version() {
       grep '^version = ' "$1/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/'
     }
 
-    # Handle crane's nested vendor structure
-    for hash_link in ${baseCargoArtifacts}/*; do
-      hash_name=$(basename "$hash_link")
-      if [ "$hash_name" = "config.toml" ]; then
-        continue
-      fi
-      if [ -L "$hash_link" ]; then
-        resolved=$(readlink -f "$hash_link")
-        for crate_symlink in "$resolved"/*; do
-          if [ -L "$crate_symlink" ]; then
-            crate_name=$(basename "$crate_symlink")
-            crate_target=$(readlink -f "$crate_symlink")
-            if [ -d "$crate_target" ] && [ ! -d "vendor-combined/$crate_name" ]; then
-              cp -rL "$crate_target" "vendor-combined/$crate_name"
-            fi
-          fi
-        done
-      elif [ -d "$hash_link" ]; then
-        for crate in "$hash_link"/*; do
-          if [ -d "$crate" ]; then
-            crate_name=$(basename "$crate")
-            if [ ! -d "vendor-combined/$crate_name" ]; then
-              cp -rL "$crate" "vendor-combined/$crate_name"
-            fi
-          fi
-        done
-      fi
-    done
-    chmod -R u+w vendor-combined/
-
-    # Merge sysroot vendor
-    for crate in ${sysrootVendor}/*/; do
+    # First copy base vendor (project dependencies)
+    for crate in ${baseVendor}/*/; do
       crate_name=$(basename "$crate")
-      if [ ! -d "$crate" ]; then
+      # Skip .cargo and Cargo.lock from fetchCargoVendor output
+      if [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
         continue
       fi
-      if [ -d "vendor-combined/$crate_name" ]; then
-        base_version=$(get_version "vendor-combined/$crate_name")
-        sysroot_version=$(get_version "$crate")
-        if [ "$base_version" != "$sysroot_version" ]; then
-          versioned_name="$crate_name-$sysroot_version"
-          if [ ! -d "vendor-combined/$versioned_name" ]; then
-            cp -rL "$crate" "vendor-combined/$versioned_name"
-          fi
-        fi
-      else
+      if [ -d "$crate" ]; then
         cp -rL "$crate" "vendor-combined/$crate_name"
       fi
     done
     chmod -R u+w vendor-combined/
 
-    # Regenerate checksums
-    ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
-import json
-import hashlib
-from pathlib import Path
-
-vendor = Path("vendor-combined")
-for crate_dir in vendor.iterdir():
-    if not crate_dir.is_dir():
+    # Then merge sysroot vendor - if conflict, use versioned directory name
+    for crate in ${sysrootVendor}/*/; do
+      crate_name=$(basename "$crate")
+      if [ ! -d "$crate" ]; then
         continue
-    checksum_file = crate_dir / ".cargo-checksum.json"
-    pkg_hash = None
-    if checksum_file.exists():
-        with open(checksum_file) as f:
-            existing = json.load(f)
-        pkg_hash = existing.get("package")
-    files = {}
-    for file_path in sorted(crate_dir.rglob("*")):
-        if file_path.is_file() and file_path.name != ".cargo-checksum.json":
-            rel_path = str(file_path.relative_to(crate_dir))
-            with open(file_path, "rb") as f:
-                sha = hashlib.sha256(f.read()).hexdigest()
-            files[rel_path] = sha
-    new_data = {"files": files}
-    if pkg_hash:
-        new_data["package"] = pkg_hash
-    with open(checksum_file, "w") as f:
-        json.dump(new_data, f)
-PYTHON_CHECKSUM
+      fi
 
+      if [ -d "vendor-combined/$crate_name" ]; then
+        # Version conflict - check if versions differ
+        base_version=$(get_version "vendor-combined/$crate_name")
+        sysroot_version=$(get_version "$crate")
+
+        if [ "$base_version" != "$sysroot_version" ]; then
+          # Different versions - add sysroot version with version suffix
+          versioned_name="$crate_name-$sysroot_version"
+          if [ ! -d "vendor-combined/$versioned_name" ]; then
+            cp -rL "$crate" "vendor-combined/$versioned_name"
+          fi
+        fi
+        # Same version - skip (already have it)
+      else
+        # No conflict - just copy
+        cp -rL "$crate" "vendor-combined/$crate_name"
+      fi
+    done
+    chmod -R u+w vendor-combined/
+
+    # Regenerate checksums for all vendored crates
+    echo "Regenerating vendor checksums..."
+    ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
+    ${checksumScript}
+    PYTHON_CHECKSUM
+
+    # Create cargo config
     mkdir -p .cargo
     cat > .cargo/config.toml << 'CARGOCONF'
-[source.crates-io]
-replace-with = "vendored-sources"
-
-[source.vendored-sources]
-directory = "vendor-combined"
-
-[source."git+https://gitlab.redox-os.org/nicholasbishop/liblibc.git?branch=redox-0.2"]
-git = "https://gitlab.redox-os.org/nicholasbishop/liblibc.git"
-branch = "redox-0.2"
-replace-with = "vendored-sources"
-
-[source."git+https://gitlab.redox-os.org/nicholasbishop/orbclient.git?branch=redox-0.4"]
-git = "https://gitlab.redox-os.org/nicholasbishop/orbclient.git"
-branch = "redox-0.4"
-replace-with = "vendored-sources"
-
-[source."git+https://github.com/jackpot51/rustix?branch=redox-ioctl"]
-git = "https://github.com/jackpot51/rustix"
-branch = "redox-ioctl"
-replace-with = "vendored-sources"
-
-[source."git+https://github.com/Smithay/drm-rs"]
-git = "https://github.com/Smithay/drm-rs"
-replace-with = "vendored-sources"
-
-[net]
-offline = true
-
-[build]
-target = "${redoxTarget}"
-
-[target.${redoxTarget}]
-linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
-
-[profile.release]
-panic = "abort"
-CARGOCONF
+    ${cargoConfigContent}
+    CARGOCONF
 
     runHook postConfigure
   '';
@@ -218,9 +226,14 @@ CARGOCONF
     runHook preBuild
 
     export HOME=$(mktemp -d)
-    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
 
+    # Set RUSTFLAGS for cross-linking with relibc
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C link-arg=-nostdlib -C link-arg=-static -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=--allow-multiple-definition"
+
+    # Build all workspace members for Redox target
     cargo build \
+      --workspace \
+      --exclude bootstrap \
       --target ${redoxTarget} \
       --release \
       -Z build-std=core,alloc,std,panic_abort \
@@ -233,15 +246,22 @@ CARGOCONF
     runHook preInstall
 
     mkdir -p $out/bin
+    mkdir -p $out/lib
+
+    # Copy all built binaries
     find target/${redoxTarget}/release -maxdepth 1 -type f -executable \
-      ! -name "*.d" ! -name "*.rlib" ! -name "build-script-*" \
+      ! -name "*.d" ! -name "*.rlib" \
       -exec cp {} $out/bin/ \;
+
+    # Copy libraries if any
+    find target/${redoxTarget}/release -maxdepth 1 -name "*.so" \
+      -exec cp {} $out/lib/ \; 2>/dev/null || true
 
     runHook postInstall
   '';
 
   meta = with lib; {
-    description = "Redox OS Base - essential system components";
+    description = "Redox OS Base System Components";
     homepage = "https://gitlab.redox-os.org/redox-os/base";
     license = licenses.mit;
   };

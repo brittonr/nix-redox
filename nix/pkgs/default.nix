@@ -85,7 +85,7 @@ let
 
     base = import ./system/base.nix (commonArgs // {
       inherit relibc;
-      inherit (inputs) base-src liblibc-src orbclient-src rustix-redox-src drm-rs-src;
+      inherit (inputs) base-src liblibc-src orbclient-src rustix-redox-src drm-rs-src relibc-src;
     });
   };
 
