@@ -85,6 +85,7 @@ in rec {
     vendorHash,
     cargoBuildFlags ? "",
     preConfigure ? "",
+    postConfigure ? "",
     preBuild ? "",
     postBuild ? "",
     installPhase,
@@ -172,6 +173,8 @@ in rec {
       cat > .cargo/config.toml << 'CARGOCONF'
       ${mkCargoConfigContent { inherit gitSources; }}
       CARGOCONF
+
+      ${postConfigure}
 
       runHook postConfigure
     '';

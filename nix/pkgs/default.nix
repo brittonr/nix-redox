@@ -215,6 +215,125 @@ let
         license = lib.licenses.mit;
       };
     };
+
+    # redoxfs compiled for Redox target (goes into initfs)
+    redoxfsTarget = mkUserspace.mkPackage {
+      pname = "redoxfs-target";
+      src = inputs.redoxfs-src;
+      vendorHash = "sha256-ByeO0QNB9PggQHxU51DnlISCo9nBUmqLKS5dj9vO8xo=";
+      cargoBuildFlags = "--bin redoxfs";
+      installPhase = ''
+        runHook preInstall
+        mkdir -p $out/bin
+        cp target/${redoxTarget}/release/redoxfs $out/bin/
+        runHook postInstall
+      '';
+      meta = {
+        description = "Redox filesystem driver for Redox target";
+        homepage = "https://gitlab.redox-os.org/redox-os/redoxfs";
+        license = lib.licenses.mit;
+      };
+    };
+
+    uutils = mkUserspace.mkPackage {
+      pname = "redox-uutils";
+      version = "0.0.27";
+      src = inputs.uutils-src;
+      vendorHash = "sha256-Ucf4C9pXt2Gp125IwA3TuUWXTviHbyzhmfUX1GhuTko=";
+      nativeBuildInputs = [ pkgs.jq ];
+      cargoBuildFlags = "--features \"ls head cat echo mkdir touch rm cp mv pwd df du wc sort uniq\" --no-default-features";
+      preConfigure = ''
+        # Patch ctrlc to disable semaphore usage on Redox
+        # This will be done after vendor-combined is created
+      '';
+      postConfigure = ''
+        # Patch ctrlc after vendor merge
+        if [ -d "vendor-combined/ctrlc" ]; then
+          rm -f vendor-combined/ctrlc/src/platform/unix/mod.rs
+          cat > vendor-combined/ctrlc/src/lib.rs << 'CTRLC_EOF'
+//! Cross-platform library for sending and receiving Unix signals (simplified for Redox)
+
+use std::sync::atomic::{AtomicBool, Ordering};
+
+#[derive(Debug)]
+pub enum Error {
+    System(String),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::System(msg) => write!(f, "System error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+static SHOULD_TERMINATE: AtomicBool = AtomicBool::new(false);
+
+/// Register a handler for Ctrl-C signals (no-op on Redox)
+pub fn set_handler<F>(_handler: F) -> Result<(), Error>
+where
+    F: FnMut() + 'static + Send,
+{
+    // Ctrl-C handling not supported on Redox
+    Ok(())
+}
+
+/// Check if a Ctrl-C signal has been received (always false on Redox)
+pub fn check() -> bool {
+    SHOULD_TERMINATE.load(Ordering::SeqCst)
+}
+CTRLC_EOF
+          # Regenerate checksum for patched ctrlc
+          ${pkgs.python3}/bin/python3 << 'PYTHON_PATCH'
+import json
+import hashlib
+from pathlib import Path
+
+crate_dir = Path("vendor-combined/ctrlc")
+checksum_file = crate_dir / ".cargo-checksum.json"
+if checksum_file.exists():
+    with open(checksum_file) as f:
+        existing = json.load(f)
+    pkg_hash = existing.get("package")
+    files = {}
+    for file_path in sorted(crate_dir.rglob("*")):
+        if file_path.is_file() and file_path.name != ".cargo-checksum.json":
+            rel_path = str(file_path.relative_to(crate_dir))
+            with open(file_path, "rb") as f:
+                sha = hashlib.sha256(f.read()).hexdigest()
+            files[rel_path] = sha
+    new_data = {"files": files}
+    if pkg_hash:
+        new_data["package"] = pkg_hash
+    with open(checksum_file, "w") as f:
+        json.dump(new_data, f)
+PYTHON_PATCH
+        fi
+      '';
+      installPhase = ''
+        runHook preInstall
+        mkdir -p $out/bin
+        find target/${redoxTarget}/release -maxdepth 1 -type f -executable \
+          ! -name "*.d" ! -name "*.rlib" \
+          -exec cp {} $out/bin/ \;
+        # Create symlinks for multicall binary
+        if [ -f "$out/bin/coreutils" ]; then
+          cd $out/bin
+          for util in ls head cat echo mkdir touch rm cp mv pwd df du wc sort uniq; do
+            ln -sf coreutils $util
+          done
+        fi
+        runHook postInstall
+      '';
+      meta = {
+        description = "Rust implementation of GNU coreutils for Redox OS";
+        homepage = "https://github.com/uutils/coreutils";
+        license = lib.licenses.mit;
+      };
+    };
   };
 
 in {
