@@ -471,7 +471,8 @@
         "rmm-src": "rmm-src",
         "rust-overlay": "rust-overlay",
         "rustix-redox-src": "rustix-redox-src",
-        "uefi-src": "uefi-src"
+        "uefi-src": "uefi-src",
+        "uutils-src": "uutils-src"
       }
     },
     "rust-overlay": {
@@ -528,6 +529,23 @@
         "ref": "master",
         "repo": "uefi",
         "type": "gitlab"
+      }
+    },
+    "uutils-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1719095370,
+        "narHash": "sha256-6MbX3C5NVwiOwXW5xJO2X3qKMh3pUSALR9aK2IbgaaU=",
+        "owner": "uutils",
+        "repo": "coreutils",
+        "rev": "9b11753e7cb06b0f76f4221fc237019c0a86f8f5",
+        "type": "github"
+      },
+      "original": {
+        "owner": "uutils",
+        "ref": "0.0.27",
+        "repo": "coreutils",
+        "type": "github"
       }
     }
   },
