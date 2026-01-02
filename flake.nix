@@ -2593,8 +2593,7 @@ LOCK
 
               use std::env;
               use std::fs::{File, OpenOptions};
-              use std::io::{Read, Write};
-              use std::os::unix::io::{AsRawFd, RawFd, FromRawFd};
+              use std::os::unix::io::{AsRawFd, IntoRawFd, RawFd};
               use std::os::unix::process::CommandExt;
               use std::process::Command;
 
@@ -2629,7 +2628,25 @@ LOCK
               }
 
               fn try_open_debug() -> Option<File> {
-                  eprintln!("[console-exec] Trying to open debug console /scheme/debug...");
+                  // Try /scheme/debug/no-preserve first - this is the correct path for
+                  // bidirectional serial console I/O (used by Redox's getty)
+                  eprintln!("[console-exec] Trying to open debug console /scheme/debug/no-preserve...");
+                  match OpenOptions::new()
+                      .read(true)
+                      .write(true)
+                      .open("/scheme/debug/no-preserve")
+                  {
+                      Ok(f) => {
+                          eprintln!("[console-exec] Opened debug/no-preserve successfully");
+                          return Some(f);
+                      }
+                      Err(e) => {
+                          eprintln!("[console-exec] Failed to open debug/no-preserve: {}", e);
+                      }
+                  }
+
+                  // Fall back to plain /scheme/debug
+                  eprintln!("[console-exec] Trying fallback /scheme/debug...");
                   match OpenOptions::new()
                       .read(true)
                       .write(true)
@@ -2658,15 +2675,18 @@ LOCK
                   let program = &args[1];
                   let program_args = &args[2..];
 
-                  // Try debug console first (works in headless mode), fall back to PTY
-                  let console = try_open_debug()
-                      .or_else(try_open_pty)
+                  // Try PTY first for proper interactive terminal support
+                  // PTY provides bidirectional communication, while debug may be output-only
+                  let console = try_open_pty()
+                      .or_else(try_open_debug)
                       .unwrap_or_else(|| {
                           eprintln!("[console-exec] No console available!");
                           std::process::exit(1);
                       });
 
-                  let console_fd = console.as_raw_fd();
+                  // CRITICAL: Use into_raw_fd() to take ownership of the fd
+                  // This prevents the File from closing the fd when dropped
+                  let console_fd = console.into_raw_fd();
                   eprintln!("[console-exec] Console fd: {}", console_fd);
 
                   // Redirect stdin, stdout, stderr to the console
@@ -2683,15 +2703,15 @@ LOCK
                           eprintln!("[console-exec] Failed to dup2 stderr");
                           std::process::exit(1);
                       }
-                      // Close the original fd since we've duplicated it
+                      // Close the original fd since we've duplicated it to 0, 1, 2
                       if console_fd > STDERR_FILENO {
                           close(console_fd);
                       }
                   }
 
-                  eprintln!("[console-exec] Executing: {} {:?}", program, program_args);
+                  eprintln!("[console-exec] Stdio redirected, executing: {} {:?}", program, program_args);
 
-                  // Exec the program
+                  // Exec the program - replaces this process
                   let err = Command::new(program)
                       .args(program_args)
                       .exec();
@@ -4545,14 +4565,31 @@ export TERM dumb
 # Set XDG_CONFIG_HOME so Ion finds its config file with simple prompt
 export XDG_CONFIG_HOME /etc
 export HOME /home/user
-# Run Ion shell test
+# Run Ion shell test to show it works
 echo "Testing Ion shell..."
 /bin/ion -c help
 echo ""
-echo "Ion shell is working! Type commands (no line editing in this mode)."
-echo "Examples: ls, echo hello, help, exit"
-# Use Ion shell in fake-interactive mode (reads from stdin, no line editing)
-/bin/console-exec /bin/ion -f
+echo "Ion shell is working!"
+echo ""
+
+# Test network connectivity via script
+echo "=== NETWORK TEST START ==="
+echo "Listing network schemes..."
+/bin/ion -c "ls /scheme"
+echo ""
+echo "Checking for e1000 network driver..."
+/bin/ion -c "ls /scheme/network*"
+echo ""
+echo "Running ifconfig..."
+/bin/ifconfig
+echo ""
+echo "Running ping test to QEMU gateway (10.0.2.2)..."
+/bin/ping -c 3 10.0.2.2
+echo ""
+echo "=== NETWORK TEST COMPLETE ==="
+echo ""
+echo "Interactive shell not available in headless mode."
+echo "Use graphical mode (nix run .#run-redox-graphical) for interactive shell."
 EOF
 
                             # Create initfs image
@@ -4579,7 +4616,7 @@ EOF
           diskImage = pkgs.stdenv.mkDerivation {
             pname = "redox-disk-image";
             version = "unstable";
-            # Force rebuild: cache invalidation timestamp 2026-01-02-rebuild
+            # Force rebuild: cache invalidation timestamp 2026-01-02-net-test
             dontUnpack = true;
             dontPatchELF = true;
             dontFixup = true;
