@@ -298,17 +298,14 @@ pkgs.stdenv.mkDerivation {
         # DHCP daemon (skip for static-only mode)
         ${lib.optionalString (networkMode != "static") ''
         cat > redoxfs-root/etc/init.d/15_dhcp << 'INIT_DHCP'
-    nowait /bin/dhcpd
+    echo "Starting DHCP client..."
+    nowait /bin/dhcpd -v eth0
     INIT_DHCP
         ''}
 
         # Network auto-configuration based on networkMode
-        ${lib.optionalString (networkMode == "auto") ''
-        # Auto mode: Wait for DHCP, fallback to static if no IP assigned
-        cat > redoxfs-root/etc/init.d/16_netcfg << 'INIT_NETCFG'
-    nowait /bin/netcfg-auto
-    INIT_NETCFG
-        ''}
+        # In auto mode, dhcpd runs and configures the network automatically
+        # No additional netcfg script needed since dhcpd handles everything
 
         ${lib.optionalString (networkMode == "static") ''
         # Static mode: Apply static config immediately after smolnetd
@@ -391,23 +388,30 @@ pkgs.stdenv.mkDerivation {
         exit 0
     end
 
-    # Wait briefly for DHCP to potentially assign an IP (~2 seconds)
-    # Ion doesn't have sleep, so we use a simple counter loop
-    let wait:int = 0
-    while test $wait -lt 200000
-        let wait += 1
-    end
-
-    # Check if we have an IP address assigned via DHCP
-    let has_ip = 0
-    if exists -f /scheme/netcfg/ifaces/eth0/addr/list
-        let addr_content = $(/bin/cat /scheme/netcfg/ifaces/eth0/addr/list 2>/dev/null)
-        if test -n "$addr_content"
-            let has_ip = 1
+    # Wait for DHCP to potentially configure network
+    # Check multiple times with delays between checks
+    echo "netcfg-auto: Waiting for DHCP..."
+    let has_network = 0
+    let check:int = 0
+    while test $check -lt 15
+        # Small delay between checks (busy wait since no sleep command)
+        let wait:int = 0
+        while test $wait -lt 500000
+            let wait += 1
         end
+
+        # Check interface IP (dhcpd writes to ifaces/eth0/addr)
+        let ip_content = $(/bin/cat /scheme/netcfg/ifaces/eth0/addr/list 2>/dev/null)
+        echo "netcfg-auto: Check $check - IP: $ip_content"
+        if not test "$ip_content" = ""
+            echo "netcfg-auto: Network configured via DHCP: $ip_content"
+            let has_network = 1
+            break
+        end
+        let check += 1
     end
 
-    if test $has_ip -eq 0
+    if test $has_network -eq 0
         # No DHCP response - apply static config
         if exists -f /etc/net/cloud-hypervisor/ip
             echo "netcfg-auto: No DHCP response, applying static config..."

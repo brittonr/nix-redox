@@ -247,8 +247,8 @@ echo "Ion shell is working!"
 echo ""
 
 # Network status
-echo "Network is being configured automatically via netcfg-auto."
-echo "Once configured, test with: ping 172.16.0.1"
+echo "Network configured via DHCP."
+echo "Test connectivity: ping 172.16.0.1"
 echo ""
 echo "Interactive shell not available in headless mode."
 echo "Use graphical mode (nix run .#run-redox-graphical) for interactive shell."
