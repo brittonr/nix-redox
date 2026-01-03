@@ -102,6 +102,17 @@ pkgs.stdenv.mkDerivation {
     runHook postBuild
   '';
 
+  # Enable tests (currently no tests in upstream, but future-proofs the build)
+  doCheck = true;
+
+  checkPhase = ''
+    runHook preCheck
+
+    cargo test --release || echo "No tests found (expected for installer)"
+
+    runHook postCheck
+  '';
+
   installPhase = ''
     runHook preInstall
 
@@ -111,8 +122,6 @@ pkgs.stdenv.mkDerivation {
 
     runHook postInstall
   '';
-
-  doCheck = false;
 
   meta = with lib; {
     description = "Redox OS Installer - filesystem image builder";

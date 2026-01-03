@@ -28,7 +28,9 @@ craneLib.buildPackage {
     fuse
   ];
 
-  doCheck = false;
+  # Enable unit tests only (cookbook may have network-dependent tests)
+  doCheck = true;
+  cargoTestExtraArgs = "--lib";
 
   meta = with lib; {
     description = "Redox OS Cookbook - package build system and package manager";

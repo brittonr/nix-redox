@@ -28,7 +28,9 @@ craneLib.buildPackage {
     fuse3
   ];
 
-  doCheck = false;
+  # Enable unit tests only (integration tests require FUSE mounting which needs sandbox relaxation)
+  doCheck = true;
+  cargoTestExtraArgs = "--lib";
 
   meta = with lib; {
     description = "Redox Filesystem tools for creating and managing RedoxFS images";
