@@ -1,5 +1,20 @@
 {
-  description = "RedoxOS - Pure Nix build system (replacing Make/Podman)";
+  description = ''
+    RedoxOS - Pure Nix build system
+
+    A complete, reproducible build system for RedoxOS using Nix flakes.
+    Replaces the traditional Make/Podman workflow with pure Nix derivations.
+
+    Quick start:
+      nix build .#diskImage     - Build complete bootable image
+      nix run .#run-redox       - Run in QEMU (headless)
+      nix run .#run-redox-graphical - Run with display
+      nix develop               - Enter development shell
+
+    Host tools: cookbook, redoxfs, installer
+    System: relibc, kernel, bootloader, base
+    Userspace: ion, helix, binutils, extrautils, uutils, sodium, netutils
+  '';
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -7,6 +22,18 @@
     flake-parts = {
       url = "github:hercules-ci/flake-parts";
       inputs.nixpkgs-lib.follows = "nixpkgs";
+    };
+
+    # Code formatting with treefmt
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # Pre-commit hooks
+    git-hooks = {
+      url = "github:cachix/git-hooks.nix";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
 
     rust-overlay = {
@@ -209,14 +236,17 @@
 
       # Import all flake-parts modules
       imports = [
+        ./nix/flake-modules/toolchain.nix
         ./nix/flake-modules/packages.nix
         ./nix/flake-modules/devshells.nix
         ./nix/flake-modules/checks.nix
         ./nix/flake-modules/apps.nix
-        ./nix/flake-modules/formatter.nix
+        ./nix/flake-modules/treefmt.nix
+        ./nix/flake-modules/git-hooks.nix
         ./nix/flake-modules/overlays.nix
         ./nix/flake-modules/nixos-module.nix
         ./nix/flake-modules/flake-modules.nix
+        ./nix/flake-modules/config.nix
       ];
 
       # Legacy packages interface (for backwards compatibility)

@@ -113,19 +113,24 @@ in
             '';
           };
         };
+
+        # Computed values (read-only)
+        _computed = {
+          redoxTarget = mkOption {
+            type = types.str;
+            readOnly = true;
+            default = "${config.redox.config.targetArch}-unknown-redox";
+            description = "Computed Redox target triple";
+          };
+
+          uefiTarget = mkOption {
+            type = types.str;
+            readOnly = true;
+            default = "${config.redox.config.targetArch}-unknown-uefi";
+            description = "Computed UEFI target triple";
+          };
+        };
       };
     }
   );
-
-  config = {
-    # Provide computed values based on config
-    perSystem =
-      { config, ... }:
-      {
-        redox._computed = {
-          redoxTarget = "${config.redox.config.targetArch}-unknown-redox";
-          uefiTarget = "${config.redox.config.targetArch}-unknown-uefi";
-        };
-      };
-  };
 }

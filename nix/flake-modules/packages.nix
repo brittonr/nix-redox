@@ -19,38 +19,16 @@
       system,
       lib,
       self',
+      config,
       ...
     }:
     let
-      # Import nixpkgs with rust-overlay
-      pkgsWithOverlay = import inputs.nixpkgs {
-        inherit system;
-        overlays = [ inputs.rust-overlay.overlays.default ];
-      };
-
-      # Configuration - can be overridden via module options
-      config = {
-        # Rust nightly version to use (matches rust-toolchain.toml)
-        rustNightlyDate = "2025-10-03";
-        # Primary target triple
-        targetArch = "x86_64";
-      };
-
-      redoxTarget = "${config.targetArch}-unknown-redox";
-
-      # Nightly Rust toolchain with Redox target
-      rustToolchain = pkgsWithOverlay.rust-bin.nightly.${config.rustNightlyDate}.default.override {
-        extensions = [
-          "rust-src"
-          "rustfmt"
-          "clippy"
-          "rust-analyzer"
-        ];
-        targets = [ redoxTarget ];
-      };
-
-      # Crane for building Rust packages
-      craneLib = (inputs.crane.mkLib pkgsWithOverlay).overrideToolchain rustToolchain;
+      # Get toolchain from the toolchain module
+      inherit (config._module.args.redoxToolchain)
+        rustToolchain
+        craneLib
+        redoxTarget
+        ;
 
       # Import modular library for cross-compilation utilities
       redoxLib = import ../lib {

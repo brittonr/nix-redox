@@ -115,8 +115,14 @@ pkgs.stdenv.mkDerivation {
   doCheck = false;
 
   meta = with lib; {
-    description = "Redox OS Installer - filesystem builder";
+    description = "Redox OS Installer - filesystem image builder";
+    longDescription = ''
+      The Redox installer creates RedoxFS filesystem images from directory trees.
+      It is used during the build process to create bootable Redox images.
+    '';
     homepage = "https://gitlab.redox-os.org/redox-os/installer";
     license = licenses.mit;
+    platforms = platforms.linux;
+    mainProgram = "redox_installer";
   };
 }

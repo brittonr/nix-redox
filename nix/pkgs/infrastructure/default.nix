@@ -66,7 +66,12 @@ in
   mkQemuRunners =
     { diskImage, bootloader }:
     import ./qemu-runners.nix {
-      inherit pkgs lib diskImage bootloader;
+      inherit
+        pkgs
+        lib
+        diskImage
+        bootloader
+        ;
     };
 
   # initfs and diskImage require system and userspace packages

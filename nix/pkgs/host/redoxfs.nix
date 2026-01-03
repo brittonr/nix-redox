@@ -31,8 +31,14 @@ craneLib.buildPackage {
   doCheck = false;
 
   meta = with lib; {
-    description = "Redox Filesystem";
+    description = "Redox Filesystem tools for creating and managing RedoxFS images";
+    longDescription = ''
+      RedoxFS is the filesystem used by Redox OS. This package provides host
+      tools for creating, mounting, and manipulating RedoxFS filesystem images.
+    '';
     homepage = "https://gitlab.redox-os.org/redox-os/redoxfs";
     license = licenses.mit;
+    platforms = platforms.linux;
+    mainProgram = "redoxfs";
   };
 }

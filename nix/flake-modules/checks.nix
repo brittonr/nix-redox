@@ -1,17 +1,16 @@
 # Flake-parts module for RedoxOS checks
 #
 # This module provides comprehensive build and quality checks:
-# - Format check: Ensures Nix files are properly formatted
+# - Formatting: Via treefmt-nix (automatic)
+# - Pre-commit: Via git-hooks.nix (automatic)
 # - Eval check: Verifies all packages can be evaluated
 # - Build checks: Ensures key packages build successfully
+# - DevShell validation: Ensures development shells build
 # - Boot test: Verifies complete system boots
 #
-# Usage in flake.nix:
-#   imports = [ ./nix/flake-modules/checks.nix ];
-#
-# Run checks:
-#   nix flake check
-#   nix build .#checks.<system>.format
+# Usage:
+#   nix flake check           - Run all checks
+#   nix build .#checks.x86_64-linux.eval-packages
 
 { self, inputs, ... }:
 
@@ -31,35 +30,8 @@
     in
     {
       checks = {
-        # Format check - ensures all Nix files are properly formatted
-        format =
-          pkgs.runCommand "format-check"
-            {
-              nativeBuildInputs = [ pkgs.nixfmt-rfc-style ];
-            }
-            ''
-              echo "Checking Nix file formatting..."
-              nixfmt --check ${self}/flake.nix
-
-              # Check all nix files in nix/ directory
-              for file in ${self}/nix/pkgs/*.nix \
-                          ${self}/nix/pkgs/host/*.nix \
-                          ${self}/nix/pkgs/system/*.nix \
-                          ${self}/nix/pkgs/userspace/*.nix \
-                          ${self}/nix/pkgs/infrastructure/*.nix \
-                          ${self}/nix/lib/*.nix \
-                          ${self}/nix/flake-modules/*.nix; do
-                if [ -f "$file" ]; then
-                  nixfmt --check "$file"
-                fi
-              done
-
-              echo "All Nix files are properly formatted."
-              touch $out
-            '';
-
         # Package evaluation check - verifies packages can be evaluated without building
-        eval = pkgs.runCommand "eval-check" { } ''
+        eval-packages = pkgs.runCommand "eval-packages-check" { } ''
           echo "Package evaluation check passed - all packages are valid."
           echo ""
           echo "Verified package categories:"
@@ -70,6 +42,10 @@
           echo ""
           touch $out
         '';
+
+        # DevShell validation - ensures all dev shells can be built
+        devshell-default = self'.devShells.default;
+        devshell-minimal = self'.devShells.minimal;
 
         # Host tools build checks (fast, native builds)
         cookbook-build = packages.cookbook;

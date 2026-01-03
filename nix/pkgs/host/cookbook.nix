@@ -31,8 +31,14 @@ craneLib.buildPackage {
   doCheck = false;
 
   meta = with lib; {
-    description = "Redox OS Cookbook - package build system";
+    description = "Redox OS Cookbook - package build system and package manager";
+    longDescription = ''
+      The Cookbook is the Redox OS package build system and repository manager.
+      It provides the 'repo' command for building and managing Redox packages.
+    '';
     homepage = "https://gitlab.redox-os.org/redox-os/redox";
     license = licenses.mit;
+    platforms = platforms.linux;
+    mainProgram = "repo";
   };
 }

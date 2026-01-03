@@ -5,6 +5,8 @@
 # - native: Full native environment with all tools
 # - minimal: Minimal environment for quick iteration
 #
+# All shells include pre-commit hooks for code quality.
+#
 # Usage in flake.nix:
 #   imports = [ ./nix/flake-modules/devshells.nix ];
 
@@ -20,31 +22,14 @@
       ...
     }:
     let
-      # Get toolchain from packages module
-      redoxConfig = config._module.args.redoxConfig or null;
+      # Get toolchain from the toolchain module
+      inherit (config._module.args.redoxToolchain)
+        rustToolchain
+        redoxTarget
+        ;
 
-      rustToolchain =
-        if redoxConfig != null then
-          redoxConfig.rustToolchain
-        else
-          # Fallback: build toolchain here
-          let
-            pkgsWithOverlay = import inputs.nixpkgs {
-              inherit (pkgs) system;
-              overlays = [ inputs.rust-overlay.overlays.default ];
-            };
-          in
-          pkgsWithOverlay.rust-bin.nightly."2025-10-03".default.override {
-            extensions = [
-              "rust-src"
-              "rustfmt"
-              "clippy"
-              "rust-analyzer"
-            ];
-            targets = [ "x86_64-unknown-redox" ];
-          };
-
-      redoxTarget = "x86_64-unknown-redox";
+      # Get git-hooks shell hook
+      gitHooksShellHook = config._module.args.gitHooksShellHook or "";
 
       # Common native build inputs
       commonNativeBuildInputs = with pkgs; [
@@ -123,21 +108,25 @@
           INSTALLER_BIN = "${self'.packages.installer}/bin/redox_installer";
 
           shellHook = ''
+            ${gitHooksShellHook}
             echo "RedoxOS Nix Development Environment"
             echo ""
             echo "Rust: $(rustc --version)"
             echo "Target: ${redoxTarget}"
             echo ""
-            echo "Pure Nix builds (no network required):"
-            echo "  nix build .#cookbook   - Package manager (repo command)"
-            echo "  nix build .#redoxfs    - RedoxFS filesystem tools"
-            echo "  nix build .#fstools    - All host tools combined"
-            echo "  nix run .#run-redox    - Run Redox image in QEMU"
+            echo "Quick commands:"
+            echo "  nix fmt                - Format all code"
+            echo "  nix flake check        - Run all checks"
             echo ""
-            echo "Cross-compiled components:"
-            echo "  nix build .#relibc"
-            echo "  nix build .#kernel"
-            echo "  nix build .#diskImage  - Complete bootable disk image"
+            echo "Build packages:"
+            echo "  nix build .#cookbook   - Package manager"
+            echo "  nix build .#relibc     - C library"
+            echo "  nix build .#kernel     - Kernel"
+            echo "  nix build .#diskImage  - Complete image"
+            echo ""
+            echo "Run Redox:"
+            echo "  nix run .#run-redox           - Headless"
+            echo "  nix run .#run-redox-graphical - Graphical"
             echo ""
           '';
         };
@@ -216,6 +205,7 @@
           PODMAN_BUILD = "0";
 
           shellHook = ''
+            ${gitHooksShellHook}
             export LD_LIBRARY_PATH="$NIX_LD_LIBRARY_PATH:$LD_LIBRARY_PATH"
             echo "RedoxOS Native Build Environment"
             echo ""
@@ -247,6 +237,7 @@
           PODMAN_BUILD = "0";
 
           shellHook = ''
+            ${gitHooksShellHook}
             echo "RedoxOS Minimal Environment"
           '';
         };

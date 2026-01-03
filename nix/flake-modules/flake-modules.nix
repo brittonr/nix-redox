@@ -25,15 +25,24 @@
   ];
 
   flake.flakeModules = {
-    # Default module - includes packages, devshells, checks, apps, formatter
+    # Default module - includes all functionality
     default = ./default.nix;
 
-    # Individual modules for fine-grained control
+    # Core modules
+    toolchain = ./toolchain.nix;
     packages = ./packages.nix;
+    config = ./config.nix;
+
+    # Development experience
     devshells = ./devshells.nix;
+    treefmt = ./treefmt.nix;
+    git-hooks = ./git-hooks.nix;
+
+    # CI/CD
     checks = ./checks.nix;
     apps = ./apps.nix;
-    formatter = ./formatter.nix;
+
+    # Integration
     overlays = ./overlays.nix;
     nixos-module = ./nixos-module.nix;
   };

@@ -1,7 +1,7 @@
 # Flake-parts module for RedoxOS overlays
 #
-# This module exports overlays that can be used by other flakes
-# to access RedoxOS packages and toolchains.
+# This module exports overlays using easyOverlay for simplified generation.
+# It provides automatic overlay creation from perSystem packages.
 #
 # Usage in other flakes:
 #   {
@@ -20,75 +20,74 @@
 { self, inputs, ... }:
 
 {
-  flake = {
-    overlays = {
-      # Default overlay - provides redox packages and toolchain
-      default =
-        final: prev:
-        let
-          pkgsWithRustOverlay = import inputs.nixpkgs {
-            inherit (prev) system;
-            overlays = [ inputs.rust-overlay.overlays.default ];
-          };
-        in
-        {
-          redox = {
-            # Rust toolchain configured for Redox
-            rustToolchain = pkgsWithRustOverlay.rust-bin.nightly."2025-10-03".default.override {
-              extensions = [
-                "rust-src"
-                "rustfmt"
-                "clippy"
-              ];
-              targets = [ "x86_64-unknown-redox" ];
-            };
+  imports = [
+    inputs.flake-parts.flakeModules.easyOverlay
+  ];
 
-            # Host tools (run on build machine)
-            inherit (self.packages.${prev.system})
-              cookbook
-              redoxfs
-              installer
-              fstools
-              ;
+  perSystem =
+    {
+      config,
+      pkgs,
+      final,
+      lib,
+      ...
+    }:
+    {
+      # Packages to include in the default overlay
+      # easyOverlay automatically creates overlays.default from this
+      overlayAttrs = {
+        redox = {
+          # Host tools
+          inherit (config.packages)
+            cookbook
+            redoxfs
+            installer
+            fstools
+            ;
 
-            # System components
-            inherit (self.packages.${prev.system})
-              relibc
-              kernel
-              bootloader
-              base
-              sysroot
-              ;
+          # System components
+          inherit (config.packages)
+            relibc
+            kernel
+            bootloader
+            base
+            sysroot
+            ;
 
-            # Userspace packages
-            inherit (self.packages.${prev.system})
-              ion
-              helix
-              binutils
-              extrautils
-              sodium
-              netutils
-              uutils
-              redoxfsTarget
-              ;
+          # Userspace packages
+          inherit (config.packages)
+            ion
+            helix
+            binutils
+            extrautils
+            sodium
+            netutils
+            uutils
+            redoxfsTarget
+            ;
 
-            # Infrastructure
-            inherit (self.packages.${prev.system})
-              initfs
-              diskImage
-              runQemu
-              runQemuGraphical
-              ;
+          # Infrastructure
+          inherit (config.packages)
+            initfs
+            diskImage
+            runQemu
+            runQemuGraphical
+            ;
 
-            # Library functions
-            lib = import ../lib {
-              pkgs = prev;
-              inherit (prev) lib;
-              redoxTarget = "x86_64-unknown-redox";
-            };
+          # Rust toolchain for Redox
+          rustToolchain = config._module.args.redoxToolchain.rustToolchain;
+
+          # Library functions for advanced use
+          lib = import ../lib {
+            inherit pkgs lib;
+            redoxTarget = "x86_64-unknown-redox";
           };
         };
+      };
+    };
 
+  flake = {
+    overlays = {
       # Minimal overlay - just the rust toolchain
       toolchain =
         final: prev:
