@@ -4,6 +4,7 @@
 # - run-redox: Run Redox in QEMU (headless)
 # - run-redox-graphical: Run Redox in QEMU (graphical)
 # - build-cookbook: Run the cookbook/repo tool
+# - clean-results: Remove result symlinks
 #
 # Usage in flake.nix:
 #   imports = [ ./nix/flake-modules/apps.nix ];
@@ -11,6 +12,7 @@
 # Run apps:
 #   nix run .#run-redox
 #   nix run .#run-redox-graphical
+#   nix run .#clean-results
 
 { self, inputs, ... }:
 
@@ -37,6 +39,17 @@
         build-cookbook = {
           type = "app";
           program = "${self'.packages.cookbook}/bin/repo";
+        };
+
+        clean-results = {
+          type = "app";
+          program = toString (
+            pkgs.writeShellScript "clean-results" ''
+              echo "Removing result symlinks..."
+              rm -f result result-*
+              echo "Done."
+            ''
+          );
         };
       };
     };

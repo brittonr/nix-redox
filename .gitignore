@@ -1,0 +1,6 @@
+# Nix build outputs
+result
+result-*
+
+# Temporary build artifacts
+wrappers/

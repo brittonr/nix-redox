@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 
+# Build and run RedoxOS for testing
+set -e
+
 # Build the disk image first
 echo "Building RedoxOS disk image..."
-nix build .#diskImage --option sandbox false || exit 1
+nix build .#diskImage || exit 1
 
-# Find OVMF
-OVMF=$(ls /nix/store/*/FV/OVMF.fd 2>/dev/null | head -1)
+# Discover OVMF from nix store
+OVMF=$(find /nix/store -maxdepth 2 -name "OVMF.fd" -path "*/FV/*" 2>/dev/null | head -1)
 if [ -z "$OVMF" ]; then
-  echo "Error: OVMF.fd not found"
+  echo "Error: OVMF.fd not found in nix store"
+  echo "Hint: Enter a nix shell with 'nix develop' first"
   exit 1
 fi
 
@@ -16,14 +20,7 @@ WORK_DIR=$(mktemp -d)
 trap "rm -rf $WORK_DIR" EXIT
 
 echo "Copying disk image to $WORK_DIR..."
-if [ -r result/redox.img ]; then
-  cp result/redox.img "$WORK_DIR/redox.img"
-else
-  # If we can't read it as normal user, try with sudo
-  echo "Need sudo to copy disk image..."
-  sudo cp result/redox.img "$WORK_DIR/redox.img"
-  sudo chown $(whoami):$(whoami) "$WORK_DIR/redox.img"
-fi
+cp result/redox.img "$WORK_DIR/redox.img"
 chmod +w "$WORK_DIR/redox.img"
 
 echo "Starting RedoxOS with OVMF at: $OVMF"
@@ -31,22 +28,23 @@ echo "Press Enter to select resolution, then the shell will start"
 echo "Type 'exit' to quit the shell"
 echo ""
 
-# Find the bootloader
-BOOTLOADER=$(ls /nix/store/*/boot/EFI/BOOT/BOOTX64.EFI 2>/dev/null | head -1)
+# Find the bootloader from result
+BOOTLOADER=""
+if [ -L result ]; then
+  BOOTLOADER=$(find "$(readlink -f result)" -name "BOOTX64.EFI" 2>/dev/null | head -1)
+fi
+if [ -z "$BOOTLOADER" ] && [ -f result/boot/EFI/BOOT/BOOTX64.EFI ]; then
+  BOOTLOADER="result/boot/EFI/BOOT/BOOTX64.EFI"
+fi
+
 if [ -z "$BOOTLOADER" ]; then
-  # Try to find it from the result directory
-  if [ -f result/boot/BOOTX64.EFI ]; then
-    BOOTLOADER="result/boot/BOOTX64.EFI"
-  else
-    echo "Error: BOOTX64.EFI not found"
-    exit 1
-  fi
+  echo "Error: BOOTX64.EFI not found in build output"
+  exit 1
 fi
 
 echo "Using bootloader: $BOOTLOADER"
 
 # Run QEMU with the writable disk image
-# Note: RedoxOS requires direct kernel boot to work properly
 qemu-system-x86_64 \
   -M pc \
   -cpu host \
