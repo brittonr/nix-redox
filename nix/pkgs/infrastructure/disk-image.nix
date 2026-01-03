@@ -304,14 +304,23 @@ pkgs.stdenv.mkDerivation {
         ''}
 
         # Network auto-configuration based on networkMode
-        # In auto mode, dhcpd runs and configures the network automatically
-        # No additional netcfg script needed since dhcpd handles everything
+        # In auto mode, dhcpd runs first, then netcfg-auto checks if IP was assigned
+        # and falls back to static config if no DHCP response
 
         ${lib.optionalString (networkMode == "static") ''
         # Static mode: Apply static config immediately after smolnetd
         cat > redoxfs-root/etc/init.d/15_netcfg << 'INIT_NETCFG'
     /bin/netcfg-static
     INIT_NETCFG
+        ''}
+
+        ${lib.optionalString (networkMode == "auto") ''
+        # Auto mode: Run netcfg-auto after dhcpd to check if IP was assigned
+        # Falls back to static config from /etc/net/cloud-hypervisor/ if no DHCP
+        cat > redoxfs-root/etc/init.d/16_netcfg << 'INIT_NETCFG_AUTO'
+echo "Running network auto-configuration..."
+nowait /bin/netcfg-auto
+INIT_NETCFG_AUTO
         ''}
 
         # Network configuration helper for Cloud Hypervisor
