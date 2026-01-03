@@ -76,13 +76,15 @@ in
 
   # Cloud Hypervisor runners factory - requires diskImage only
   # (bootloader is loaded from ESP partition on disk)
+  # Optional diskImageNet for network-optimized image with static IP config
   mkCloudHypervisorRunners =
-    { diskImage }:
+    { diskImage, diskImageNet ? null }:
     import ./cloud-hypervisor-runners.nix {
       inherit
         pkgs
         lib
         diskImage
+        diskImageNet
         ;
     };
 
@@ -127,6 +129,14 @@ in
       uutils ? null,
       # Allow caller to override redoxfs if needed
       redoxfs ? redoxfs,
+      # Network configuration mode: "auto" | "dhcp" | "static" | "none"
+      networkMode ? "auto",
+      # Static IP configuration (for "static" or "auto" fallback)
+      staticNetworkConfig ? {
+        ip = "172.16.0.2";
+        netmask = "255.255.255.0";
+        gateway = "172.16.0.1";
+      },
     }@args:
     assert args.redoxfs != null;
     import ./disk-image.nix {
@@ -141,6 +151,8 @@ in
         sodium
         netutils
         uutils
+        networkMode
+        staticNetworkConfig
         ;
       inherit (args) redoxfs;
     };

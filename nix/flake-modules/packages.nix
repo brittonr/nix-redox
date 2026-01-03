@@ -109,6 +109,7 @@
       };
 
       # Create disk image using modular mkDiskImage factory function
+      # Default: auto mode (DHCP with static fallback)
       diskImage = modularPkgs.infrastructure.mkDiskImage {
         inherit (modularPkgs.system) kernel bootloader base;
         inherit initfs sodium;
@@ -121,6 +122,29 @@
           netutils
           ;
         redoxfs = modularPkgs.host.redoxfs;
+        networkMode = "auto";
+      };
+
+      # Cloud Hypervisor optimized disk image with static networking
+      # Skips DHCP, applies static config immediately for faster boot
+      diskImageCloudHypervisor = modularPkgs.infrastructure.mkDiskImage {
+        inherit (modularPkgs.system) kernel bootloader base;
+        inherit initfs sodium;
+        inherit (modularPkgs.userspace)
+          ion
+          uutils
+          helix
+          binutils
+          extrautils
+          netutils
+          ;
+        redoxfs = modularPkgs.host.redoxfs;
+        networkMode = "static";
+        staticNetworkConfig = {
+          ip = "172.16.0.2";
+          netmask = "255.255.255.0";
+          gateway = "172.16.0.1";
+        };
       };
 
       # QEMU runners from modular infrastructure
@@ -130,8 +154,11 @@
       };
 
       # Cloud Hypervisor runners from modular infrastructure
+      # headless uses default diskImage (auto network mode)
+      # withNetwork uses diskImageCloudHypervisor (static network mode for TAP)
       cloudHypervisorRunners = modularPkgs.infrastructure.mkCloudHypervisorRunners {
         inherit diskImage;
+        diskImageNet = diskImageCloudHypervisor;
       };
 
       # Combined sysroot
@@ -173,7 +200,7 @@
 
         # Infrastructure
         inherit (modularPkgs.infrastructure) initfsTools bootstrap;
-        inherit initfs diskImage;
+        inherit initfs diskImage diskImageCloudHypervisor;
 
         # QEMU runners
         runQemu = qemuRunners.headless;
@@ -183,6 +210,7 @@
         # Cloud Hypervisor runners
         runCloudHypervisor = cloudHypervisorRunners.headless;
         runCloudHypervisorNet = cloudHypervisorRunners.withNetwork;
+        setupCloudHypervisorNetwork = cloudHypervisorRunners.setupNetwork;
 
         # Default package
         default = modularPkgs.host.fstools;

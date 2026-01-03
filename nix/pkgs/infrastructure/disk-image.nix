@@ -32,6 +32,18 @@
   extrautils ? null,
   sodium ? null,
   netutils ? null,
+  # Network configuration mode:
+  # - "auto": Try DHCP first, fallback to static config if no IP assigned (default)
+  # - "dhcp": DHCP only, no static fallback (for QEMU user-mode networking)
+  # - "static": Apply static config immediately, skip DHCP (for Cloud Hypervisor)
+  # - "none": No automatic network configuration
+  networkMode ? "auto",
+  # Static IP configuration (used when networkMode is "static" or "auto" fallback)
+  staticNetworkConfig ? {
+    ip = "172.16.0.2";
+    netmask = "255.255.255.0";
+    gateway = "172.16.0.1";
+  },
 }:
 
 pkgs.stdenv.mkDerivation {
@@ -255,9 +267,17 @@ pkgs.stdenv.mkDerivation {
         echo "1.1.1.1" > redoxfs-root/etc/net/dns
         echo "8.8.8.8" >> redoxfs-root/etc/net/dns
 
-        # QEMU user-mode networking configuration
-        # Gateway is 10.0.2.2 (required for smolnetd to start)
+        # Default router for QEMU user-mode networking (10.0.2.2)
+        # Cloud Hypervisor uses 172.16.0.1 - configure via netcfg or ifconfig
         echo "10.0.2.2" > redoxfs-root/etc/net/ip_router
+
+        # Cloud Hypervisor network configuration (when TAP networking is used)
+        # These files are read by network configuration scripts
+        # Values come from staticNetworkConfig parameter
+        mkdir -p redoxfs-root/etc/net/cloud-hypervisor
+        echo "${staticNetworkConfig.ip}" > redoxfs-root/etc/net/cloud-hypervisor/ip
+        echo "${staticNetworkConfig.netmask}" > redoxfs-root/etc/net/cloud-hypervisor/netmask
+        echo "${staticNetworkConfig.gateway}" > redoxfs-root/etc/net/cloud-hypervisor/gateway
 
         # Create init.d directory with startup scripts
         # These run after rootfs is mounted, so /dev/urandom symlink exists
@@ -275,9 +295,204 @@ pkgs.stdenv.mkDerivation {
     /bin/smolnetd
     INIT_NET
 
+        # DHCP daemon (skip for static-only mode)
+        ${lib.optionalString (networkMode != "static") ''
         cat > redoxfs-root/etc/init.d/15_dhcp << 'INIT_DHCP'
-    /bin/dhcpd
+    nowait /bin/dhcpd
     INIT_DHCP
+        ''}
+
+        # Network auto-configuration based on networkMode
+        ${lib.optionalString (networkMode == "auto") ''
+        # Auto mode: Wait for DHCP, fallback to static if no IP assigned
+        cat > redoxfs-root/etc/init.d/16_netcfg << 'INIT_NETCFG'
+    nowait /bin/netcfg-auto
+    INIT_NETCFG
+        ''}
+
+        ${lib.optionalString (networkMode == "static") ''
+        # Static mode: Apply static config immediately after smolnetd
+        cat > redoxfs-root/etc/init.d/15_netcfg << 'INIT_NETCFG'
+    /bin/netcfg-static
+    INIT_NETCFG
+        ''}
+
+        # Network configuration helper for Cloud Hypervisor
+        # Can be run manually: /bin/netcfg-ch
+        cat > redoxfs-root/bin/netcfg-ch << 'NETCFG_CH'
+    #!/bin/ion
+    # Configure network for Cloud Hypervisor TAP networking
+    #
+    # Usage: netcfg-ch
+    #
+    # This configures eth0 with:
+    #   IP: 172.16.0.2/24
+    #   Gateway: 172.16.0.1
+    #   DNS: 1.1.1.1
+    #
+    # Uses /scheme/netcfg interface (like dhcpd does)
+
+    echo "Configuring network for Cloud Hypervisor..."
+
+    # Check if eth0 exists in netcfg
+    if not exists -f /scheme/netcfg/ifaces/eth0/mac
+        echo "Error: eth0 interface not found in netcfg"
+        echo "Make sure virtio-netd driver is running"
+        exit 1
+    end
+
+    # Read configuration from files
+    let ip = $(/bin/cat /etc/net/cloud-hypervisor/ip)
+    let gateway = $(/bin/cat /etc/net/cloud-hypervisor/gateway)
+    let prefix = "24"
+
+    echo "Setting IP: $ip/$prefix"
+    echo "$ip/$prefix" > /scheme/netcfg/ifaces/eth0/addr/set
+
+    echo "Setting gateway: $gateway"
+    echo "default via $gateway" > /scheme/netcfg/route/add
+
+    echo "Setting DNS: 1.1.1.1"
+    echo "1.1.1.1" > /scheme/netcfg/resolv/nameserver
+
+    echo ""
+    echo "Network configured for Cloud Hypervisor!"
+    echo "  IP: $ip/$prefix"
+    echo "  Gateway: $gateway"
+    echo "  DNS: 1.1.1.1"
+    echo ""
+    echo "Test with: ping 172.16.0.1"
+    NETCFG_CH
+        chmod +x redoxfs-root/bin/netcfg-ch
+
+        # Auto-configuration script: waits for DHCP, falls back to static
+        ${lib.optionalString (networkMode == "auto") ''
+        cat > redoxfs-root/bin/netcfg-auto << 'NETCFG_AUTO'
+    #!/bin/ion
+    # Auto-configure network: wait for DHCP, fallback to static if no IP
+    #
+    # This script runs after dhcpd starts. It waits briefly for DHCP to
+    # assign an IP address. If no IP is assigned (e.g., Cloud Hypervisor
+    # TAP networking without DHCP server), it applies static configuration.
+    #
+    # Uses /scheme/netcfg interface (like dhcpd does)
+
+    # Wait for eth0 interface
+    let i:int = 0
+    while test $i -lt 30
+        if exists -f /scheme/netcfg/ifaces/eth0/mac
+            break
+        end
+        let i += 1
+    end
+
+    if not exists -f /scheme/netcfg/ifaces/eth0/mac
+        echo "netcfg-auto: eth0 not found"
+        exit 0
+    end
+
+    # Wait briefly for DHCP to potentially assign an IP (~2 seconds)
+    # Ion doesn't have sleep, so we use a simple counter loop
+    let wait:int = 0
+    while test $wait -lt 200000
+        let wait += 1
+    end
+
+    # Check if we have an IP address assigned via DHCP
+    let has_ip = 0
+    if exists -f /scheme/netcfg/ifaces/eth0/addr/list
+        let addr_content = $(/bin/cat /scheme/netcfg/ifaces/eth0/addr/list 2>/dev/null)
+        if test -n "$addr_content"
+            let has_ip = 1
+        end
+    end
+
+    if test $has_ip -eq 0
+        # No DHCP response - apply static config
+        if exists -f /etc/net/cloud-hypervisor/ip
+            echo "netcfg-auto: No DHCP response, applying static config..."
+            let ip = $(/bin/cat /etc/net/cloud-hypervisor/ip)
+            let gateway = $(/bin/cat /etc/net/cloud-hypervisor/gateway)
+            let prefix = "24"
+
+            echo "netcfg-auto: Setting IP $ip/$prefix"
+            echo "$ip/$prefix" > /scheme/netcfg/ifaces/eth0/addr/set
+
+            echo "netcfg-auto: Setting default route via $gateway"
+            echo "default via $gateway" > /scheme/netcfg/route/add
+
+            echo "netcfg-auto: Setting DNS"
+            echo "1.1.1.1" > /scheme/netcfg/resolv/nameserver
+
+            echo "netcfg-auto: Network configured (static)"
+            echo "  IP: $ip/$prefix"
+            echo "  Gateway: $gateway"
+        else
+            echo "netcfg-auto: No static config available"
+        end
+    else
+        echo "netcfg-auto: DHCP configuration detected, using DHCP settings"
+    end
+    NETCFG_AUTO
+        chmod +x redoxfs-root/bin/netcfg-auto
+        ''}
+
+        # Static configuration script: applies config immediately
+        # Uses pipes with /bin/cat for writes since Ion shell redirection may not work with schemes
+        ${lib.optionalString (networkMode == "static") ''
+        cat > redoxfs-root/bin/netcfg-static << 'NETCFG_STATIC'
+    #!/bin/ion
+    # Apply static network configuration immediately
+    #
+    # Used when networkMode="static" for Cloud Hypervisor TAP networking
+    # where no DHCP server is available.
+    #
+    # Uses pipes with cat since direct redirection may not work with /scheme files
+
+    echo "netcfg-static: Configuring network..."
+
+    # Wait for eth0 interface to appear in netcfg
+    let i:int = 0
+    while test $i -lt 30
+        if exists -f /scheme/netcfg/ifaces/eth0/mac
+            break
+        end
+        let i += 1
+    end
+
+    if not exists -f /scheme/netcfg/ifaces/eth0/mac
+        echo "netcfg-static: eth0 interface not found in netcfg"
+        exit 1
+    end
+
+    echo "netcfg-static: Found eth0 interface"
+
+    # Read static configuration
+    let ip = $(/bin/cat /etc/net/cloud-hypervisor/ip)
+    let gateway = $(/bin/cat /etc/net/cloud-hypervisor/gateway)
+    let prefix = "24"
+    let addr = "$ip/$prefix"
+    let route = "default via $gateway"
+
+    echo "netcfg-static: Setting IP $addr"
+    echo "$addr" | /bin/cat - > /scheme/netcfg/ifaces/eth0/addr/set
+    let actual_ip = $(/bin/cat /scheme/netcfg/ifaces/eth0/addr/list 2>/dev/null)
+    echo "netcfg-static: Verified IP: $actual_ip"
+
+    echo "netcfg-static: Setting default route: $route"
+    echo "$route" | /bin/cat - > /scheme/netcfg/route/add
+    let actual_route = $(/bin/cat /scheme/netcfg/route/list 2>/dev/null)
+    echo "netcfg-static: Verified route: $actual_route"
+
+    echo "netcfg-static: Setting DNS servers"
+    echo "1.1.1.1" | /bin/cat - > /scheme/netcfg/resolv/nameserver
+    let actual_dns = $(/bin/cat /scheme/netcfg/resolv/nameserver 2>/dev/null)
+    echo "netcfg-static: Verified DNS: $actual_dns"
+
+    echo "netcfg-static: Network configuration complete"
+    NETCFG_STATIC
+        chmod +x redoxfs-root/bin/netcfg-static
+        ''}
 
         # Create a startup script that will run Ion shell
         cat > redoxfs-root/startup.sh << 'EOF'

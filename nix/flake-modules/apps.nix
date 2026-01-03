@@ -47,6 +47,12 @@
           program = "${self'.packages.runCloudHypervisorNet}/bin/run-redox-cloud-hypervisor-net";
         };
 
+        # Helper script to set up TAP networking for Cloud Hypervisor
+        setup-cloud-hypervisor-network = {
+          type = "app";
+          program = "${self'.packages.setupCloudHypervisorNetwork}/bin/setup-cloud-hypervisor-network";
+        };
+
         build-cookbook = {
           type = "app";
           program = "${self'.packages.cookbook}/bin/repo";
