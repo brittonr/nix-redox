@@ -1,13 +1,15 @@
 # Cloud Hypervisor runner scripts for RedoxOS
 #
 # Provides scripts for running Redox in Cloud Hypervisor:
-# - runCloudHypervisor: Headless mode with serial console
+# - headless: Serial console mode
+# - withNetwork: TAP networking mode
 #
-# Cloud Hypervisor is a Rust-based VMM that only supports virtio devices.
-# This requires:
-# - virtio-blk for storage (no IDE)
-# - virtio-net for networking (no e1000)
-# - CLOUDHV.fd firmware (not OVMF.fd)
+# Cloud Hypervisor is a Rust-based VMM using virtio devices:
+# - virtio-blk for storage
+# - virtio-net for networking
+# - CLOUDHV.fd firmware
+#
+# RedoxOS boots fully in Cloud Hypervisor with modern virtio support.
 
 {
   pkgs,
@@ -60,13 +62,6 @@ in
     # - --pci-segment: Increase 32-bit MMIO aperture weight
     # - --serial: serial console to tty
     # - --console: disable virtio-console (we use serial)
-    #
-    # KNOWN ISSUE: RedoxOS PCI BAR allocation fails with Cloud Hypervisor.
-    # Error: "Failed moving device BAR: failed allocating new MMIO range: 0xc0000000->0xfffffff0"
-    # This prevents RedoxFS from mounting after kernel handoff.
-    # Root cause: Cloud Hypervisor's MMIO allocator cannot satisfy BAR relocation
-    # requests from RedoxOS's pcid driver. QEMU handles this correctly.
-    # Status: Experimental - boots to kernel but RedoxFS mount fails.
     ${cloudHypervisor}/bin/cloud-hypervisor \
       --firmware "$FIRMWARE" \
       --disk path="$IMAGE" \
@@ -115,8 +110,6 @@ in
     echo "TAP: $TAP_NAME"
     echo ""
 
-    # NOTE: Same PCI BAR allocation issue as headless runner applies here.
-    # See comments in headless runner for details.
     ${cloudHypervisor}/bin/cloud-hypervisor \
       --firmware "$FIRMWARE" \
       --disk path="$IMAGE" \

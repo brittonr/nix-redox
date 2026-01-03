@@ -3,20 +3,17 @@
     "base-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
-        "lastModified": 1767202099,
-        "narHash": "sha256-OaCAXM9yEO61wVzmi4m9X7PQ4mII8rdrhWL4jDYfM3M=",
-        "owner": "redox-os",
-        "repo": "base",
-        "rev": "1cd9ff91038230c9713821d1c9b9fc8200209f80",
-        "type": "gitlab"
+        "lastModified": 1767468443,
+        "narHash": "sha256-vjycLE5WgThWuEjEBVJ+pheZJiYgCmdsepJDCCKV3Wc=",
+        "ref": "refs/heads/main",
+        "rev": "9331c9ebde79c021b601e8ba202543639422e1a7",
+        "revCount": 2584,
+        "type": "git",
+        "url": "file:./redox-src/recipes/core/base/source"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
-        "ref": "main",
-        "repo": "base",
-        "type": "gitlab"
+        "type": "git",
+        "url": "file:./redox-src/recipes/core/base/source"
       }
     },
     "binutils-src": {
