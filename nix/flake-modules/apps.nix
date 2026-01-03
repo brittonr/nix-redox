@@ -36,6 +36,17 @@
           program = "${self'.packages.runQemuGraphical}/bin/run-redox-graphical";
         };
 
+        # Cloud Hypervisor runners (virtio-only, Rust-based VMM)
+        run-redox-cloud-hypervisor = {
+          type = "app";
+          program = "${self'.packages.runCloudHypervisor}/bin/run-redox-cloud-hypervisor";
+        };
+
+        run-redox-cloud-hypervisor-net = {
+          type = "app";
+          program = "${self'.packages.runCloudHypervisorNet}/bin/run-redox-cloud-hypervisor-net";
+        };
+
         build-cookbook = {
           type = "app";
           program = "${self'.packages.cookbook}/bin/repo";

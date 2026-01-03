@@ -74,6 +74,18 @@ in
         ;
     };
 
+  # Cloud Hypervisor runners factory - requires diskImage only
+  # (bootloader is loaded from ESP partition on disk)
+  mkCloudHypervisorRunners =
+    { diskImage }:
+    import ./cloud-hypervisor-runners.nix {
+      inherit
+        pkgs
+        lib
+        diskImage
+        ;
+    };
+
   # initfs and diskImage require system and userspace packages
   # They're built on-demand when those packages are available
   mkInitfs =

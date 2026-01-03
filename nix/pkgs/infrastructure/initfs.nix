@@ -125,10 +125,16 @@ pkgs.stdenv.mkDerivation {
     subclass = 8
     command = ["/scheme/initfs/lib/drivers/nvmed"]
 
-    # Storage drivers - virtio-blk
+    # Storage drivers - virtio-blk (legacy device ID 0x1001)
     [[drivers]]
     vendor = 0x1AF4
     device = 0x1001
+    command = ["/scheme/initfs/lib/drivers/virtio-blkd"]
+
+    # Storage drivers - virtio-blk (modern device ID 0x1042 - Cloud Hypervisor)
+    [[drivers]]
+    vendor = 0x1AF4
+    device = 0x1042
     command = ["/scheme/initfs/lib/drivers/virtio-blkd"]
 
     # Network drivers - Intel e1000 (QEMU default: 8086:100e)
@@ -140,12 +146,20 @@ pkgs.stdenv.mkDerivation {
     device = 0x100e
     command = ["/scheme/initfs/lib/drivers/e1000d"]
 
-    # Network drivers - virtio-net
+    # Network drivers - virtio-net (legacy device ID 0x1000)
     [[drivers]]
     name = "VirtIO Net"
     class = 0x02
     vendor = 0x1AF4
     device = 0x1000
+    command = ["/scheme/initfs/lib/drivers/virtio-netd"]
+
+    # Network drivers - virtio-net (modern device ID 0x1041 - Cloud Hypervisor)
+    [[drivers]]
+    name = "VirtIO Net Modern"
+    class = 0x02
+    vendor = 0x1AF4
+    device = 0x1041
     command = ["/scheme/initfs/lib/drivers/virtio-netd"]
     EOF
 

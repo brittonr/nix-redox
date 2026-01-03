@@ -129,6 +129,11 @@
         inherit (modularPkgs.system) bootloader;
       };
 
+      # Cloud Hypervisor runners from modular infrastructure
+      cloudHypervisorRunners = modularPkgs.infrastructure.mkCloudHypervisorRunners {
+        inherit diskImage;
+      };
+
       # Combined sysroot
       sysroot = pkgs.symlinkJoin {
         name = "redox-sysroot";
@@ -174,6 +179,10 @@
         runQemu = qemuRunners.headless;
         runQemuGraphical = qemuRunners.graphical;
         bootTest = qemuRunners.bootTest;
+
+        # Cloud Hypervisor runners
+        runCloudHypervisor = cloudHypervisorRunners.headless;
+        runCloudHypervisorNet = cloudHypervisorRunners.withNetwork;
 
         # Default package
         default = modularPkgs.host.fstools;

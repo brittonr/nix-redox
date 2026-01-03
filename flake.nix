@@ -9,6 +9,7 @@
       nix build .#diskImage     - Build complete bootable image
       nix run .#run-redox       - Run in QEMU (headless)
       nix run .#run-redox-graphical - Run with display
+      nix run .#run-redox-cloud-hypervisor - Run in Cloud Hypervisor
       nix develop               - Enter development shell
 
     Host tools: cookbook, redoxfs, installer
@@ -150,8 +151,9 @@
     };
 
     # base - essential system components (init, drivers, daemons)
+    # Using local git repo to pick up pcid fix for Cloud Hypervisor BAR handling
     base-src = {
-      url = "gitlab:redox-os/base/main?host=gitlab.redox-os.org";
+      url = "git+file:./redox-src/recipes/core/base/source";
       flake = false;
     };
 
