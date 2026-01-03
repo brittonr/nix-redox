@@ -62,6 +62,13 @@ in
 {
   inherit initfsTools bootstrap;
 
+  # QEMU runners factory - requires diskImage and bootloader
+  mkQemuRunners =
+    { diskImage, bootloader }:
+    import ./qemu-runners.nix {
+      inherit pkgs lib diskImage bootloader;
+    };
+
   # initfs and diskImage require system and userspace packages
   # They're built on-demand when those packages are available
   mkInitfs =
