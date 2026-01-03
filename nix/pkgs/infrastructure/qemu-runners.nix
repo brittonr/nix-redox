@@ -269,7 +269,7 @@
 
         # Create output to satisfy Nix
         mkdir -p $out
-        echo "Boot test passed at $(date)" > $out/result.txt
+        echo "Boot test passed" > $out/result.txt
         cp "$LOG" $out/boot.log 2>/dev/null || true
 
         echo "=== Boot Test Complete ==="

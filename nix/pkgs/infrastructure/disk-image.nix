@@ -61,9 +61,12 @@ pkgs.stdenv.mkDerivation {
   ++ lib.optional (sodium != null) sodium
   ++ lib.optional (netutils != null) netutils;
 
+  # Use a fixed timestamp for reproducible builds
+  # This ensures identical inputs produce identical outputs
+  SOURCE_DATE_EPOCH = "1";
+
   buildPhase = ''
         runHook preBuild
-        echo "Build timestamp: $(date -Iseconds)"
 
         # Create 512MB disk image (increased for larger ESP)
         IMAGE_SIZE=$((512 * 1024 * 1024))
