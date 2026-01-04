@@ -44,7 +44,7 @@
             };
 
             # Prevent merge conflict markers
-            check-merge-conflict.enable = true;
+            check-merge-conflicts.enable = true;
 
             # Prevent large files
             check-added-large-files = {
@@ -54,7 +54,7 @@
             };
 
             # Whitespace cleanup
-            trailing-whitespace = {
+            trim-trailing-whitespace = {
               enable = true;
               stages = [ "pre-commit" ];
             };

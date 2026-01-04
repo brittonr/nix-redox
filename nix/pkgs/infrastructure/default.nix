@@ -78,7 +78,10 @@ in
   # (bootloader is loaded from ESP partition on disk)
   # Optional diskImageNet for network-optimized image with static IP config
   mkCloudHypervisorRunners =
-    { diskImage, diskImageNet ? null }:
+    {
+      diskImage,
+      diskImageNet ? null,
+    }:
     import ./cloud-hypervisor-runners.nix {
       inherit
         pkgs

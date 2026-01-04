@@ -18,7 +18,8 @@ let
   system = builtins.currentSystem;
   devShells = flake.devShells.${system};
 in
-devShells.default // {
+devShells.default
+// {
   native = devShells.native;
   minimal = devShells.minimal;
 }
