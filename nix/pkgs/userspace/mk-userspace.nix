@@ -47,7 +47,6 @@ let
     pkgs.llvmPackages.clang
     pkgs.llvmPackages.bintools
     pkgs.llvmPackages.lld
-    pkgs.python3
   ];
 
   # Generate cargo config content
@@ -83,9 +82,6 @@ let
       panic = "abort"
     '';
 
-  # Python script for regenerating checksums
-  checksumScript = vendor.checksumScript;
-
 in
 rec {
   # Build a generic Rust package for Redox
@@ -113,6 +109,12 @@ rec {
         inherit src;
         hash = vendorHash;
       };
+
+      # Create merged vendor directory (cached as separate derivation)
+      mergedVendor = vendor.mkMergedVendor {
+        name = pname;
+        inherit projectVendor sysrootVendor;
+      };
     in
     pkgs.stdenv.mkDerivation {
       inherit pname version;
@@ -135,50 +137,9 @@ rec {
 
         ${preConfigure}
 
-        # Merge project + sysroot vendors with version conflict resolution
-        mkdir -p vendor-combined
-
-        get_version() {
-          grep '^version = ' "$1/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/'
-        }
-
-        # Copy project vendor crates
-        for crate in ${projectVendor}/*/; do
-          crate_name=$(basename "$crate")
-          if [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
-            continue
-          fi
-          if [ -d "$crate" ]; then
-            cp -rL "$crate" "vendor-combined/$crate_name"
-          fi
-        done
-        chmod -R u+w vendor-combined/
-
-        # Merge sysroot vendor with version conflict resolution
-        for crate in ${sysrootVendor}/*/; do
-          crate_name=$(basename "$crate")
-          if [ ! -d "$crate" ]; then
-            continue
-          fi
-          if [ -d "vendor-combined/$crate_name" ]; then
-            base_version=$(get_version "vendor-combined/$crate_name")
-            sysroot_version=$(get_version "$crate")
-            if [ "$base_version" != "$sysroot_version" ]; then
-              versioned_name="$crate_name-$sysroot_version"
-              if [ ! -d "vendor-combined/$versioned_name" ]; then
-                cp -rL "$crate" "vendor-combined/$versioned_name"
-              fi
-            fi
-          else
-            cp -rL "$crate" "vendor-combined/$crate_name"
-          fi
-        done
-        chmod -R u+w vendor-combined/
-
-        # Regenerate checksums
-        ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
-        ${checksumScript}
-        PYTHON_CHECKSUM
+        # Use pre-merged vendor directory
+        cp -rL ${mergedVendor} vendor-combined
+        chmod -R u+w vendor-combined
 
         # Create cargo config
         mkdir -p .cargo

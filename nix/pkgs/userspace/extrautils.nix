@@ -35,6 +35,14 @@ let
     src = extrautils-src;
   };
 
+  # Create merged vendor directory (cached as separate derivation)
+  mergedVendor = vendor.mkMergedVendor {
+    name = "extrautils";
+    projectVendor = extrautilsVendor;
+    inherit sysrootVendor;
+    useCrane = true;
+  };
+
 in
 pkgs.stdenv.mkDerivation {
   pname = "redox-extrautils";
@@ -47,7 +55,6 @@ pkgs.stdenv.mkDerivation {
     pkgs.llvmPackages.clang
     pkgs.llvmPackages.bintools
     pkgs.llvmPackages.lld
-    pkgs.python3
   ];
 
   buildInputs = [ relibc ];
@@ -79,67 +86,9 @@ pkgs.stdenv.mkDerivation {
       --replace-quiet 'cc-11 = { git = "https://github.com/tea/cc-rs", branch="riscv-abi-arch-fix", package = "cc" }' \
                       'cc-11 = { path = "${cc-rs-src}", package = "cc" }'
 
-    # Merge extrautils + sysroot vendors
-    mkdir -p vendor-combined
-
-    get_version() {
-      grep '^version = ' "$1/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/'
-    }
-
-    # Crane uses nested directories - flatten structure
-    for hash_link in ${extrautilsVendor}/*; do
-      hash_name=$(basename "$hash_link")
-      if [ "$hash_name" = "config.toml" ]; then
-        continue
-      fi
-      if [ -L "$hash_link" ]; then
-        resolved=$(readlink -f "$hash_link")
-        for crate_symlink in "$resolved"/*; do
-          if [ -L "$crate_symlink" ]; then
-            crate_name=$(basename "$crate_symlink")
-            crate_target=$(readlink -f "$crate_symlink")
-            if [ -d "$crate_target" ] && [ ! -d "vendor-combined/$crate_name" ]; then
-              cp -rL "$crate_target" "vendor-combined/$crate_name"
-            fi
-          fi
-        done
-      elif [ -d "$hash_link" ]; then
-        for crate in "$hash_link"/*; do
-          if [ -d "$crate" ]; then
-            crate_name=$(basename "$crate")
-            if [ ! -d "vendor-combined/$crate_name" ]; then
-              cp -rL "$crate" "vendor-combined/$crate_name"
-            fi
-          fi
-        done
-      fi
-    done
-    chmod -R u+w vendor-combined/
-
-    for crate in ${sysrootVendor}/*/; do
-      crate_name=$(basename "$crate")
-      if [ ! -d "$crate" ]; then
-        continue
-      fi
-      if [ -d "vendor-combined/$crate_name" ]; then
-        base_version=$(get_version "vendor-combined/$crate_name")
-        sysroot_version=$(get_version "$crate")
-        if [ "$base_version" != "$sysroot_version" ]; then
-          versioned_name="$crate_name-$sysroot_version"
-          if [ ! -d "vendor-combined/$versioned_name" ]; then
-            cp -rL "$crate" "vendor-combined/$versioned_name"
-          fi
-        fi
-      else
-        cp -rL "$crate" "vendor-combined/$crate_name"
-      fi
-    done
-    chmod -R u+w vendor-combined/
-
-    # Regenerate checksums
-    ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
-    ${vendor.checksumScript}
-    PYTHON_CHECKSUM
+    # Use pre-merged vendor directory
+    cp -rL ${mergedVendor} vendor-combined
+    chmod -R u+w vendor-combined
 
     mkdir -p .cargo
     cat > .cargo/config.toml << 'CARGOCONF'

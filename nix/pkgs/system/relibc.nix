@@ -24,6 +24,7 @@
   cc-rs-src,
   redox-syscall-src,
   object-src,
+  vendor,
   ...
 }:
 
@@ -172,6 +173,14 @@ let
     src = patchedSrc;
   };
 
+  # Create merged vendor directory (cached as separate derivation)
+  mergedVendor = vendor.mkMergedVendor {
+    name = "relibc";
+    projectVendor = relibcCargoArtifacts;
+    inherit sysrootVendor;
+    useCrane = true;
+  };
+
 in
 pkgs.stdenv.mkDerivation {
   pname = "relibc";
@@ -198,25 +207,9 @@ pkgs.stdenv.mkDerivation {
     cp -r ${patchedSrc}/* .
     chmod -R u+w .
 
-    # Merge vendors
-    mkdir -p vendor-combined
-    for dir in ${relibcCargoArtifacts}/*/; do
-      if [ -d "$dir" ]; then
-        cp -rL "$dir"/* vendor-combined/ 2>/dev/null || true
-      fi
-    done
-    chmod -R u+w vendor-combined/
-
-    for crate in ${sysrootVendor}/*/; do
-      crate_name=$(basename "$crate")
-      if [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
-        continue
-      fi
-      if [ -d "$crate" ]; then
-        cp -rL "$crate" vendor-combined/ 2>/dev/null || true
-      fi
-    done
-    chmod -R u+w vendor-combined/
+    # Use pre-merged vendor directory
+    cp -rL ${mergedVendor} vendor-combined
+    chmod -R u+w vendor-combined
 
     # Set up cargo config
     mkdir -p .cargo

@@ -19,6 +19,7 @@
   redoxTarget,
   relibc,
   stubLibs,
+  vendor,
   sodium-src,
   orbclient-src,
 }:
@@ -90,35 +91,12 @@ let
     hash = "sha256-yuxAB+9CZHCz/bAKPD82+8LfU3vgVWU6KeTVVk1JcO8=";
   };
 
-  # Python script for regenerating checksums (no leading indentation for heredoc)
-  checksumScript = ''
-    import json
-    import hashlib
-    from pathlib import Path
-
-    vendor_dir = Path("vendor-combined")
-    for crate_dir in vendor_dir.iterdir():
-        if not crate_dir.is_dir():
-            continue
-        checksum_file = crate_dir / ".cargo-checksum.json"
-        if not checksum_file.exists():
-            continue
-        with open(checksum_file) as f:
-            existing = json.load(f)
-        pkg_hash = existing.get("package")
-        files = {}
-        for file_path in sorted(crate_dir.rglob("*")):
-            if file_path.is_file() and file_path.name != ".cargo-checksum.json":
-                rel_path = str(file_path.relative_to(crate_dir))
-                with open(file_path, "rb") as f:
-                    sha = hashlib.sha256(f.read()).hexdigest()
-                files[rel_path] = sha
-        new_data = {"files": files}
-        if pkg_hash:
-            new_data["package"] = pkg_hash
-        with open(checksum_file, "w") as f:
-            json.dump(new_data, f)
-  '';
+  # Create merged vendor directory (cached as separate derivation)
+  mergedVendor = vendor.mkMergedVendor {
+    name = "sodium";
+    projectVendor = sodiumVendor;
+    inherit sysrootVendor;
+  };
 
 in
 pkgs.stdenv.mkDerivation {
@@ -132,7 +110,6 @@ pkgs.stdenv.mkDerivation {
     pkgs.llvmPackages.clang
     pkgs.llvmPackages.bintools
     pkgs.llvmPackages.lld
-    pkgs.python3
   ];
 
   buildInputs = [ relibc ];
@@ -141,67 +118,29 @@ pkgs.stdenv.mkDerivation {
   RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
 
   configurePhase = ''
-            runHook preConfigure
+    runHook preConfigure
 
-            cp -r ${sodium-src}/* .
-            chmod -R u+w .
+    cp -r ${sodium-src}/* .
+    chmod -R u+w .
 
-            # Copy orbclient and patch it to remove sdl2 patch section (not needed for Redox)
-            mkdir -p orbclient-patched
-            cp -r ${orbclient-src}/* orbclient-patched/
-            chmod -R u+w orbclient-patched/
+    # Copy orbclient and patch it to remove sdl2 patch section (not needed for Redox)
+    mkdir -p orbclient-patched
+    cp -r ${orbclient-src}/* orbclient-patched/
+    chmod -R u+w orbclient-patched/
 
-            # Remove the [patch.crates-io] section entirely (not needed for Redox target)
-            sed -i '/\[patch\.crates-io\]/,$d' orbclient-patched/Cargo.toml
+    # Remove the [patch.crates-io] section entirely (not needed for Redox target)
+    sed -i '/\[patch\.crates-io\]/,$d' orbclient-patched/Cargo.toml
 
-            # Patch Cargo.toml to use patched orbclient without default features (no SDL)
-            substituteInPlace Cargo.toml \
-              --replace-fail 'orbclient = "0.3"' 'orbclient = { path = "orbclient-patched", default-features = false }'
+    # Patch Cargo.toml to use patched orbclient without default features (no SDL)
+    substituteInPlace Cargo.toml \
+      --replace-fail 'orbclient = "0.3"' 'orbclient = { path = "orbclient-patched", default-features = false }'
 
-            # Merge libredox vendor + sysroot vendors
-            mkdir -p vendor-combined
+    # Use pre-merged vendor directory
+    cp -rL ${mergedVendor} vendor-combined
+    chmod -R u+w vendor-combined
 
-            get_version() {
-              grep '^version = ' "$1/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/'
-            }
-
-            # Copy libredox vendor (flat structure from fetchCargoVendor)
-            for crate in ${sodiumVendor}/*/; do
-              crate_name=$(basename "$crate")
-              if [ -d "$crate" ]; then
-                cp -rL "$crate" "vendor-combined/$crate_name"
-              fi
-            done
-            chmod -R u+w vendor-combined/
-
-            # Copy sysroot vendor
-            for crate in ${sysrootVendor}/*/; do
-              crate_name=$(basename "$crate")
-              if [ ! -d "$crate" ]; then
-                continue
-              fi
-              if [ -d "vendor-combined/$crate_name" ]; then
-                base_version=$(get_version "vendor-combined/$crate_name")
-                sysroot_version=$(get_version "$crate")
-                if [ "$base_version" != "$sysroot_version" ]; then
-                  versioned_name="$crate_name-$sysroot_version"
-                  if [ ! -d "vendor-combined/$versioned_name" ]; then
-                    cp -rL "$crate" "vendor-combined/$versioned_name"
-                  fi
-                fi
-              else
-                cp -rL "$crate" "vendor-combined/$crate_name"
-              fi
-            done
-            chmod -R u+w vendor-combined/
-
-            # Regenerate checksums
-            ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
-    ${checksumScript}
-    PYTHON_CHECKSUM
-
-            mkdir -p .cargo
-            cat > .cargo/config.toml << 'CARGOCONF'
+    mkdir -p .cargo
+    cat > .cargo/config.toml << 'CARGOCONF'
     [source.crates-io]
     replace-with = "vendored-sources"
 
@@ -221,7 +160,7 @@ pkgs.stdenv.mkDerivation {
     panic = "abort"
     CARGOCONF
 
-            runHook postConfigure
+    runHook postConfigure
   '';
 
   buildPhase = ''

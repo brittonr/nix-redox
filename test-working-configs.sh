@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Test script for working QEMU configurations with RedoxOS using direct kernel boot
-set -e
+set -euo pipefail
 
 # Configuration
 DISK_IMAGE="${DISK_IMAGE:-/tmp/redox-test.img}"

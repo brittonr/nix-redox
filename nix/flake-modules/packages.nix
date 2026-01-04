@@ -98,7 +98,7 @@
           redoxTarget
           ;
         inherit (modularPkgs.system) relibc;
-        inherit (redoxLib) stubLibs;
+        inherit (redoxLib) stubLibs vendor;
         inherit (inputs) sodium-src orbclient-src;
       };
 

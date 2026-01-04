@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Build and run RedoxOS for testing
-set -e
+set -euo pipefail
 
 # Build the disk image first
 echo "Building RedoxOS disk image..."
@@ -17,7 +17,7 @@ fi
 
 # Copy disk image to a writable location
 WORK_DIR=$(mktemp -d)
-trap "rm -rf $WORK_DIR" EXIT
+trap 'rm -rf "$WORK_DIR"' EXIT
 
 echo "Copying disk image to $WORK_DIR..."
 cp result/redox.img "$WORK_DIR/redox.img"

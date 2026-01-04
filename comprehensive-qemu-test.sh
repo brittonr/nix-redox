@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Comprehensive QEMU test for RedoxOS UEFI configurations
-set -e
+set -euo pipefail
 
 # Configuration
 DISK_IMAGE="${DISK_IMAGE:-/tmp/redox-test.img}"

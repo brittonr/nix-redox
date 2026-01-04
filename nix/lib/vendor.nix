@@ -94,11 +94,18 @@ rec {
 
   # Create a merged vendor directory as a separate derivation
   # This allows the merged vendor to be cached independently
+  #
+  # Parameters:
+  #   name: Name prefix for the derivation
+  #   projectVendor: Vendored dependencies from the project (fetchCargoVendor or crane)
+  #   sysrootVendor: Vendored dependencies from sysroot (for -Z build-std)
+  #   useCrane: Set to true if projectVendor is from crane (has nested hash-link structure)
   mkMergedVendor =
     {
       name,
       projectVendor,
       sysrootVendor,
+      useCrane ? false,
     }:
     pkgs.runCommand "${name}-merged-vendor"
       {
@@ -107,23 +114,60 @@ rec {
       ''
         mkdir -p vendor-combined
 
-        # Copy project vendor crates
-        for crate in ${projectVendor}/*/; do
-          crate_name=$(basename "$crate")
-          if [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
-            continue
-          fi
-          if [ -d "$crate" ]; then
-            cp -rL "$crate" "vendor-combined/$crate_name"
-          fi
-        done
-        chmod -R u+w vendor-combined/
-
-        # Merge sysroot vendor
+        # Helper to extract version from Cargo.toml
         get_version() {
           grep '^version = ' "$1/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/'
         }
 
+        ${
+          if useCrane then
+            ''
+              # Crane uses nested hash-link directories - flatten the structure
+              for hash_link in ${projectVendor}/*; do
+                hash_name=$(basename "$hash_link")
+                if [ "$hash_name" = "config.toml" ]; then
+                  continue
+                fi
+                if [ -L "$hash_link" ]; then
+                  resolved=$(readlink -f "$hash_link")
+                  for crate_symlink in "$resolved"/*; do
+                    if [ -L "$crate_symlink" ]; then
+                      crate_name=$(basename "$crate_symlink")
+                      crate_target=$(readlink -f "$crate_symlink")
+                      if [ -d "$crate_target" ] && [ ! -d "vendor-combined/$crate_name" ]; then
+                        cp -rL "$crate_target" "vendor-combined/$crate_name"
+                      fi
+                    fi
+                  done
+                elif [ -d "$hash_link" ]; then
+                  for crate in "$hash_link"/*; do
+                    if [ -d "$crate" ]; then
+                      crate_name=$(basename "$crate")
+                      if [ ! -d "vendor-combined/$crate_name" ]; then
+                        cp -rL "$crate" "vendor-combined/$crate_name"
+                      fi
+                    fi
+                  done
+                fi
+              done
+            ''
+          else
+            ''
+              # Standard fetchCargoVendor output - copy crates directly
+              for crate in ${projectVendor}/*/; do
+                crate_name=$(basename "$crate")
+                if [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
+                  continue
+                fi
+                if [ -d "$crate" ]; then
+                  cp -rL "$crate" "vendor-combined/$crate_name"
+                fi
+              done
+            ''
+        }
+        chmod -R u+w vendor-combined/
+
+        # Merge sysroot vendor with version conflict resolution
         for crate in ${sysrootVendor}/*/; do
           crate_name=$(basename "$crate")
           if [ ! -d "$crate" ]; then

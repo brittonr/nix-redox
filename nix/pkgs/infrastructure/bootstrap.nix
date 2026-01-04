@@ -108,6 +108,13 @@ let
     hash = "sha256-mZ2joQC+831fSEfWAtH4paQJp28MMHnb61KuTYsGV/A=";
   };
 
+  # Create merged vendor directory (cached as separate derivation)
+  mergedVendor = vendor.mkMergedVendor {
+    name = "bootstrap";
+    projectVendor = bootstrapVendor;
+    inherit sysrootVendor;
+  };
+
 in
 pkgs.stdenv.mkDerivation {
   pname = "redox-bootstrap";
@@ -139,48 +146,11 @@ pkgs.stdenv.mkDerivation {
     cp -r ${patchedSrc}/initfs/* $INITFS_DIR/
     chmod -R u+w $PWD/workspace
 
-    # Version-aware vendor merge
-    mkdir -p $BOOTSTRAP_DIR/vendor-combined
+    # Use pre-merged vendor directory
+    cp -rL ${mergedVendor} $BOOTSTRAP_DIR/vendor-combined
+    chmod -R u+w $BOOTSTRAP_DIR/vendor-combined
 
-    get_version() {
-      grep '^version = ' "$1/Cargo.toml" | head -1 | sed 's/version = "\(.*\)"/\1/'
-    }
-
-    for crate in ${bootstrapVendor}/*/; do
-      crate_name=$(basename "$crate")
-      if [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
-        continue
-      fi
-      cp -rL "$crate" "$BOOTSTRAP_DIR/vendor-combined/$crate_name"
-    done
-    chmod -R u+w $BOOTSTRAP_DIR/vendor-combined/
-
-    for crate in ${sysrootVendor}/*/; do
-      crate_name=$(basename "$crate")
-      if [ ! -d "$crate" ]; then
-        continue
-      fi
-      if [ -d "$BOOTSTRAP_DIR/vendor-combined/$crate_name" ]; then
-        base_version=$(get_version "$BOOTSTRAP_DIR/vendor-combined/$crate_name")
-        sysroot_version=$(get_version "$crate")
-        if [ "$base_version" != "$sysroot_version" ]; then
-          versioned_name="$crate_name-$sysroot_version"
-          if [ ! -d "$BOOTSTRAP_DIR/vendor-combined/$versioned_name" ]; then
-            cp -rL "$crate" "$BOOTSTRAP_DIR/vendor-combined/$versioned_name"
-          fi
-        fi
-      else
-        cp -rL "$crate" "$BOOTSTRAP_DIR/vendor-combined/$crate_name"
-      fi
-    done
-    chmod -R u+w $BOOTSTRAP_DIR/vendor-combined/
-
-    # Regenerate checksums
     cd $BOOTSTRAP_DIR
-    ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
-    ${vendor.checksumScript}
-    PYTHON_CHECKSUM
-
     mkdir -p .cargo
     cat > .cargo/config.toml << 'CARGOCONF'
     [source.crates-io]

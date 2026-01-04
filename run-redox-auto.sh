@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 # Build and run RedoxOS with automatic resolution selection using flake runner
-set -e
+set -euo pipefail
 
 echo "Building RedoxOS..."
 nix build .#diskImage || exit 1

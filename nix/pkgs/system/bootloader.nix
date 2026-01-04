@@ -15,6 +15,7 @@
   bootloader-src,
   uefi-src,
   fdt-src,
+  vendor,
   ...
 }:
 
@@ -57,6 +58,14 @@ let
     src = patchedSrc;
   };
 
+  # Create merged vendor directory (cached as separate derivation)
+  mergedVendor = vendor.mkMergedVendor {
+    name = "bootloader";
+    projectVendor = bootloaderCargoArtifacts;
+    inherit sysrootVendor;
+    useCrane = true;
+  };
+
 in
 pkgs.stdenv.mkDerivation {
   pname = "redox-bootloader";
@@ -80,14 +89,9 @@ pkgs.stdenv.mkDerivation {
     cp -r ${patchedSrc}/* .
     chmod -R u+w .
 
-    # Merge vendors
-    mkdir -p vendor-combined
-    for dir in ${bootloaderCargoArtifacts}/*/; do
-      if [ -d "$dir" ]; then
-        cp -rL "$dir"/* vendor-combined/ 2>/dev/null || true
-      fi
-    done
-    cp -rL ${sysrootVendor}/* vendor-combined/
+    # Use pre-merged vendor directory
+    cp -rL ${mergedVendor} vendor-combined
+    chmod -R u+w vendor-combined
 
     mkdir -p .cargo
     cat > .cargo/config.toml << 'EOF'
