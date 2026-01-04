@@ -82,6 +82,9 @@
           orbutils-src
           orbfont-src
           orbimage-src
+          # Userutils - user management (getty, login, passwd, su, sudo)
+          userutils-src
+          termion-src
           ;
         # Use patched base source with Cloud Hypervisor support
         base-src = patchedSources.base;
@@ -162,10 +165,31 @@
           ;
       };
 
+      # Import userutils (getty, login, passwd, su, sudo)
+      userutils = import ../pkgs/userspace/userutils.nix {
+        inherit
+          pkgs
+          lib
+          craneLib
+          rustToolchain
+          sysrootVendor
+          redoxTarget
+          ;
+        inherit (modularPkgs.system) relibc;
+        inherit (redoxLib) stubLibs vendor;
+        inherit (inputs)
+          userutils-src
+          termion-src
+          orbclient-src
+          libredox-src
+          ;
+      };
+
       # Create initfs using modular mkInitfs factory function (headless)
       initfs = modularPkgs.infrastructure.mkInitfs {
         inherit (modularPkgs.system) base;
         inherit (modularPkgs.userspace) ion redoxfsTarget netutils;
+        inherit userutils;
         enableGraphics = false;
       };
 
@@ -173,6 +197,7 @@
       initfsGraphical = modularPkgs.infrastructure.mkInitfs {
         inherit (modularPkgs.system) base;
         inherit (modularPkgs.userspace) ion redoxfsTarget netutils;
+        inherit userutils;
         enableGraphics = true;
       };
 
@@ -180,7 +205,7 @@
       # Default: auto mode (DHCP with static fallback)
       diskImage = modularPkgs.infrastructure.mkDiskImage {
         inherit (modularPkgs.system) kernel bootloader base;
-        inherit initfs sodium;
+        inherit initfs sodium userutils;
         inherit (modularPkgs.userspace)
           ion
           uutils
@@ -197,7 +222,7 @@
       # Skips DHCP, applies static config immediately for faster boot
       diskImageCloudHypervisor = modularPkgs.infrastructure.mkDiskImage {
         inherit (modularPkgs.system) kernel bootloader base;
-        inherit initfs sodium;
+        inherit initfs sodium userutils;
         inherit (modularPkgs.userspace)
           ion
           uutils
@@ -223,7 +248,7 @@
       diskImageGraphical = modularPkgs.infrastructure.mkDiskImage {
         inherit (modularPkgs.system) kernel bootloader base;
         initfs = initfsGraphical;
-        inherit sodium orbdata;
+        inherit sodium orbdata userutils;
         inherit (modularPkgs.userspace)
           ion
           uutils
@@ -303,6 +328,9 @@
         # Orbital graphics packages
         inherit orbdata orbital orbterm;
 
+        # Userutils - user management (getty, login, passwd, su, sudo)
+        inherit userutils;
+
         # Infrastructure
         inherit (modularPkgs.infrastructure) initfsTools bootstrap;
         inherit
@@ -315,13 +343,11 @@
 
         # QEMU runners
         runQemu = qemuRunners.headless;
-        runQemuGraphical = qemuRunners.graphical;
+        runQemuGraphical = qemuRunnersGraphical.graphical;
         bootTest = qemuRunners.bootTest;
 
-        # Graphical QEMU runners (uses diskImageGraphical with graphics drivers)
-        # Note: orbital/orbterm are blocked, so no desktop appears yet
-        runQemuGraphicalDrivers = qemuRunnersGraphical.graphical;
-        runQemuGraphicalDriversHeadless = qemuRunnersGraphical.headless;
+        # Headless runner with graphical disk image (for testing graphics drivers without display)
+        runQemuGraphicalHeadless = qemuRunnersGraphical.headless;
 
         # Cloud Hypervisor runners
         runCloudHypervisor = cloudHypervisorRunners.headless;

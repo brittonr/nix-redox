@@ -251,6 +251,30 @@
       url = "gitlab:redox-os/orbimage/master?host=gitlab.redox-os.org";
       flake = false;
     };
+
+    # userutils - user management utilities (getty, login, passwd, su, sudo)
+    userutils-src = {
+      url = "gitlab:redox-os/userutils/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # redox_users - user/group management library
+    redox-users-src = {
+      url = "gitlab:redox-os/users/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # termion - terminal I/O library for Redox
+    termion-src = {
+      url = "gitlab:redox-os/termion/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # redox_liner - line editing library
+    redox-liner-src = {
+      url = "gitlab:redox-os/liner/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
   };
 
   outputs =

@@ -99,6 +99,7 @@ in
       ion,
       redoxfsTarget,
       netutils ? null,
+      userutils ? null,
       kernel ? null,
       bootloader ? null,
       enableGraphics ? false,
@@ -116,6 +117,7 @@ in
         ion
         redoxfsTarget
         netutils
+        userutils
         ;
     };
 
@@ -132,6 +134,8 @@ in
       sodium ? null,
       netutils ? null,
       uutils ? null,
+      # User management utilities (getty, login, passwd)
+      userutils ? null,
       # Orbital graphics packages
       orbdata ? null,
       orbital ? null,
@@ -161,6 +165,7 @@ in
         sodium
         netutils
         uutils
+        userutils
         orbdata
         orbital
         orbterm

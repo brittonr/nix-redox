@@ -23,6 +23,9 @@
   # Optional: netutils for network testing commands (ping, ifconfig)
   # Note: netutils binaries are copied if available for network testing
   netutils ? null,
+  # Optional: userutils for getty/login (terminal and authentication)
+  # Note: getty is needed for proper terminal initialization with PTY support
+  userutils ? null,
   # Enable graphics support (vesad, inputd, fbbootlogd, etc.)
   enableGraphics ? false,
 }:
@@ -92,6 +95,20 @@ pkgs.stdenv.mkDerivation {
               fi
             ''}
 
+            # Copy userutils binaries if available (getty for terminal, login for auth)
+            # getty is essential for proper terminal initialization with PTY support
+            ${lib.optionalString (userutils != null) ''
+              echo "=== Copying userutils (getty, login) ==="
+              for bin in getty login; do
+                if [ -f ${userutils}/bin/$bin ]; then
+                  echo "Copying $bin..."
+                  cp -v ${userutils}/bin/$bin initfs/bin/
+                else
+                  echo "WARNING: $bin not found in ${userutils}/bin"
+                fi
+              done
+            ''}
+
             # Copy driver binaries to lib/drivers/
             # Added: e1000d (Intel network, QEMU default), virtio-netd (VirtIO network)
             echo "=== Copying drivers from ${base}/bin to initfs/lib/drivers ==="
@@ -121,8 +138,8 @@ pkgs.stdenv.mkDerivation {
             ls -la initfs/lib/drivers/
 
             # Create init_drivers.rc
+            # NOTE: ps2d is moved to graphics startup section because it needs inputd to be running
             cat > initfs/etc/init_drivers.rc << 'DRIVERS_RC'
-    ps2d us
     echo "Starting hwd..."
     hwd
     echo "hwd completed, starting pcid-spawner..."
@@ -196,7 +213,7 @@ pkgs.stdenv.mkDerivation {
 
             # Add graphics driver entries to pcid config if enabled
             ${lib.optionalString enableGraphics ''
-                        cat >> initfs/etc/pcid/initfs.toml << 'EOF_GRAPHICS'
+                          cat >> initfs/etc/pcid/initfs.toml << 'EOF_GRAPHICS'
 
               # Graphics drivers - VirtIO GPU (QEMU with virtio-vga)
               [[drivers]]
@@ -268,15 +285,30 @@ pkgs.stdenv.mkDerivation {
     unset RSDP_ADDR RSDP_SIZE
     EOF
 
-            # Add graphics daemons startup if enabled
+            # Add graphics daemons startup AFTER drivers if enabled
+            # CORRECT ORDER (based on scheme dependencies):
+            # 1. inputd (no -A) - creates input: scheme, but don't activate VT yet
+            # 2. vesad - creates display.vesa scheme, registers DisplayHandle with inputd
+            # 3. inputd -A 1 - now activate VT 1 (vesad is ready to receive it)
+            # 4. ps2d - acts as input producer, needs inputd running
+            # 5. fbbootlogd - uses display scheme created by vesad
+            #
+            # Note: The -A flag tells inputd to activate a VT, which requires a display
+            # handle to be available. So we start inputd first WITHOUT -A, then vesad
+            # creates the display scheme, then we activate the VT.
             ${lib.optionalString enableGraphics ''
-                        cat >> initfs/etc/init.rc << 'EOF_GRAPHICS'
+                      cat >> initfs/etc/init.rc << 'EOF_GRAPHICS'
 
-              # Graphics support - start display and input daemons
-              echo "Starting graphics daemons..."
+              # Graphics support - start display and input daemons AFTER drivers loaded
+              # inputd creates input: scheme, vesad registers display handle with it
+              echo "Starting input daemon (background, no VT activation)..."
+              nowait inputd
+              echo "Starting display daemon..."
               vesad
-              inputd
-              fbbootlogd
+              echo "Starting PS/2 input driver..."
+              ps2d us
+              echo "Starting framebuffer boot logger..."
+              nowait fbbootlogd
               EOF_GRAPHICS
             ''}
 
@@ -302,33 +334,30 @@ pkgs.stdenv.mkDerivation {
     # run.d is a subcommand of init - just use run.d directly since it's part of init
     run.d /usr/lib/init.d /etc/init.d
 
-    # Boot complete - start interactive shell
+    # Boot complete
     echo ""
     echo "=========================================="
     echo "  Redox OS Boot Complete!"
     echo "=========================================="
     echo ""
-    echo "Starting shell..."
-    echo ""
 
-    # Set TERM=dumb to disable fancy terminal features that may not work in QEMU
-    export TERM dumb
-    # Set XDG_CONFIG_HOME so Ion finds its config file with simple prompt
+    # Set environment for shell
+    export TERM xterm
     export XDG_CONFIG_HOME /etc
     export HOME /home/user
-    # Run Ion shell test to show it works
-    echo "Testing Ion shell..."
-    /bin/ion -c help
-    echo ""
-    echo "Ion shell is working!"
-    echo ""
+    export USER user
+    export PATH /bin:/usr/bin
 
-    # Network status
-    echo "Network configured via DHCP."
-    echo "Test connectivity: ping 172.16.0.1"
+    # Start interactive shell using PTY for proper terminal support
+    # The ptyd daemon creates /scheme/pty which provides proper termios support
+    # that liner/termion needs for line editing (raw mode, etc.)
+    echo "Starting interactive shell..."
+    echo "Type 'help' for commands, 'exit' to quit"
     echo ""
-    echo "Interactive shell not available in headless mode."
-    echo "Use graphical mode (nix run .#run-redox-graphical) for interactive shell."
+    # Use getty to properly initialize terminal and spawn shell
+    # getty opens TTY, sets up terminal parameters, then execs login
+    # For headless serial console, use debug: scheme with -J to not clear
+    getty -J debug:
     EOF
 
             # Create initfs image

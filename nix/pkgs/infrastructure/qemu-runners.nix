@@ -53,6 +53,9 @@
       -device e1000,netdev=net0 \
       -vga std \
       -display gtk \
+      -device qemu-xhci,id=xhci \
+      -device usb-kbd \
+      -device usb-tablet \
       -serial file:"$LOG_FILE" \
       "$@"
 
