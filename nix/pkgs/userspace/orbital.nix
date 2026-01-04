@@ -35,26 +35,26 @@
 
 # Return a placeholder derivation that documents the blocked status
 pkgs.runCommand "orbital-blocked" { } ''
-  mkdir -p $out
-  cat > $out/README << 'EOF'
-Orbital package is currently blocked due to complex nested dependencies.
+    mkdir -p $out
+    cat > $out/README << 'EOF'
+  Orbital package is currently blocked due to complex nested dependencies.
 
-The following issues need resolution:
-- redox-scheme version conflict (0.8.3 required, 0.8.2 available)
-- Nested path dependencies from base package (graphics-ipc, inputd, daemon)
-- Git dependencies that need path conversion (redox-ioctl from relibc)
+  The following issues need resolution:
+  - redox-scheme version conflict (0.8.3 required, 0.8.2 available)
+  - Nested path dependencies from base package (graphics-ipc, inputd, daemon)
+  - Git dependencies that need path conversion (redox-ioctl from relibc)
 
-Graphics drivers ARE included in the graphical initfs:
-- vesad (VESA display driver)
-- inputd (input device daemon)
-- bgad (Bochs Graphics Adapter)
-- virtio-gpud (VirtIO GPU driver)
+  Graphics drivers ARE included in the graphical initfs:
+  - vesad (VESA display driver)
+  - inputd (input device daemon)
+  - bgad (Bochs Graphics Adapter)
+  - virtio-gpud (VirtIO GPU driver)
 
-To test graphics without Orbital:
-1. Build: nix build .#diskImageGraphical
-2. Run: nix run .#runQemuGraphical
-3. Graphics drivers will initialize but no desktop will appear
+  To test graphics without Orbital:
+  1. Build: nix build .#diskImageGraphical
+  2. Run: nix run .#runQemuGraphical
+  3. Graphics drivers will initialize but no desktop will appear
 
-The orbdata package (fonts, icons, cursors) IS available and included.
-EOF
+  The orbdata package (fonts, icons, cursors) IS available and included.
+  EOF
 ''

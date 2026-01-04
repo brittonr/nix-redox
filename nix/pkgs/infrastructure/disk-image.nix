@@ -371,13 +371,13 @@ pkgs.stdenv.mkDerivation {
 
         # Orbital display server startup (if graphics enabled)
         ${lib.optionalString (enableGraphics && orbital != null) ''
-          cat > redoxfs-root/usr/lib/init.d/20_orbital << 'INIT_ORBITAL'
-    # Start Orbital display server and login manager
-    # vesad, inputd, and graphics drivers are already started from initfs
-    echo "Starting Orbital..."
-    nowait orbital orbterm
-    INIT_ORBITAL
-          echo "Created Orbital init script at /usr/lib/init.d/20_orbital"
+                cat > redoxfs-root/usr/lib/init.d/20_orbital << 'INIT_ORBITAL'
+          # Start Orbital display server and login manager
+          # vesad, inputd, and graphics drivers are already started from initfs
+          echo "Starting Orbital..."
+          nowait orbital orbterm
+          INIT_ORBITAL
+                echo "Created Orbital init script at /usr/lib/init.d/20_orbital"
         ''}
 
         # Network configuration helper for Cloud Hypervisor

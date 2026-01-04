@@ -122,7 +122,13 @@
 
       # Import orbital (display server) - vendor hash needs computation
       orbital = import ../pkgs/userspace/orbital.nix {
-        inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+        inherit
+          pkgs
+          lib
+          rustToolchain
+          sysrootVendor
+          redoxTarget
+          ;
         inherit (modularPkgs.system) relibc;
         inherit (redoxLib) stubLibs vendor;
         inherit (inputs)
@@ -137,7 +143,13 @@
 
       # Import orbterm (terminal emulator) - vendor hash needs computation
       orbterm = import ../pkgs/userspace/orbterm.nix {
-        inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+        inherit
+          pkgs
+          lib
+          rustToolchain
+          sysrootVendor
+          redoxTarget
+          ;
         inherit (modularPkgs.system) relibc;
         inherit (redoxLib) stubLibs vendor;
         inherit (inputs)
@@ -293,7 +305,13 @@
 
         # Infrastructure
         inherit (modularPkgs.infrastructure) initfsTools bootstrap;
-        inherit initfs initfsGraphical diskImage diskImageCloudHypervisor diskImageGraphical;
+        inherit
+          initfs
+          initfsGraphical
+          diskImage
+          diskImageCloudHypervisor
+          diskImageGraphical
+          ;
 
         # QEMU runners
         runQemu = qemuRunners.headless;

@@ -196,24 +196,24 @@ pkgs.stdenv.mkDerivation {
 
             # Add graphics driver entries to pcid config if enabled
             ${lib.optionalString enableGraphics ''
-              cat >> initfs/etc/pcid/initfs.toml << 'EOF_GRAPHICS'
+                        cat >> initfs/etc/pcid/initfs.toml << 'EOF_GRAPHICS'
 
-    # Graphics drivers - VirtIO GPU (QEMU with virtio-vga)
-    [[drivers]]
-    name = "VirtIO GPU"
-    class = 0x03
-    vendor = 0x1AF4
-    device = 0x1050
-    command = ["/scheme/initfs/lib/drivers/virtio-gpud"]
+              # Graphics drivers - VirtIO GPU (QEMU with virtio-vga)
+              [[drivers]]
+              name = "VirtIO GPU"
+              class = 0x03
+              vendor = 0x1AF4
+              device = 0x1050
+              command = ["/scheme/initfs/lib/drivers/virtio-gpud"]
 
-    # Graphics drivers - Bochs Graphics Adapter (QEMU with -vga std)
-    [[drivers]]
-    name = "Bochs VGA"
-    class = 0x03
-    vendor = 0x1234
-    device = 0x1111
-    command = ["/scheme/initfs/lib/drivers/bgad"]
-    EOF_GRAPHICS
+              # Graphics drivers - Bochs Graphics Adapter (QEMU with -vga std)
+              [[drivers]]
+              name = "Bochs VGA"
+              class = 0x03
+              vendor = 0x1234
+              device = 0x1111
+              command = ["/scheme/initfs/lib/drivers/bgad"]
+              EOF_GRAPHICS
             ''}
 
             # Create Ion shell configuration with simple prompt (no subprocess expansion)
@@ -224,13 +224,18 @@ pkgs.stdenv.mkDerivation {
 
             # Create init.rc based on graphics mode
             # NOTE: Content must NOT be indented - init.rc format is line-by-line commands
-            ${if enableGraphics then ''
-              cat > initfs/etc/init.rc << 'EOF'
-    # Redox init with graphics support
-            '' else ''
-              cat > initfs/etc/init.rc << 'EOF'
-    # Headless Redox init - no graphics support
-            ''}
+            ${
+              if enableGraphics then
+                ''
+                            cat > initfs/etc/init.rc << 'EOF'
+                  # Redox init with graphics support
+                ''
+              else
+                ''
+                            cat > initfs/etc/init.rc << 'EOF'
+                  # Headless Redox init - no graphics support
+                ''
+            }
     export PATH /scheme/initfs/bin
     export RUST_BACKTRACE 1
     rtcd
@@ -265,14 +270,14 @@ pkgs.stdenv.mkDerivation {
 
             # Add graphics daemons startup if enabled
             ${lib.optionalString enableGraphics ''
-              cat >> initfs/etc/init.rc << 'EOF_GRAPHICS'
+                        cat >> initfs/etc/init.rc << 'EOF_GRAPHICS'
 
-    # Graphics support - start display and input daemons
-    echo "Starting graphics daemons..."
-    vesad
-    inputd
-    fbbootlogd
-    EOF_GRAPHICS
+              # Graphics support - start display and input daemons
+              echo "Starting graphics daemons..."
+              vesad
+              inputd
+              fbbootlogd
+              EOF_GRAPHICS
             ''}
 
             # Continue with rest of init.rc

@@ -36,23 +36,23 @@
 
 # Return a placeholder derivation that documents the blocked status
 pkgs.runCommand "orbterm-blocked" { } ''
-  mkdir -p $out
-  cat > $out/README << 'EOF'
-Orbterm package is currently blocked (depends on orbital which is blocked).
+    mkdir -p $out
+    cat > $out/README << 'EOF'
+  Orbterm package is currently blocked (depends on orbital which is blocked).
 
-Orbterm is a graphical terminal emulator for Redox OS.
+  Orbterm is a graphical terminal emulator for Redox OS.
 
-The vendor hash has been computed:
-  sha256-/ZLt7HMD3wXQsXSiaNEFwURJYBYOwj9TNcR8CUUjB5k=
+  The vendor hash has been computed:
+    sha256-/ZLt7HMD3wXQsXSiaNEFwURJYBYOwj9TNcR8CUUjB5k=
 
-To complete this package:
-1. First resolve orbital package dependencies
-2. Then build orbterm which depends on orbital at runtime
+  To complete this package:
+  1. First resolve orbital package dependencies
+  2. Then build orbterm which depends on orbital at runtime
 
-For now, the graphical disk image includes:
-- Graphics drivers (vesad, inputd, bgad, virtio-gpud)
-- orbdata (fonts, icons, cursors)
+  For now, the graphical disk image includes:
+  - Graphics drivers (vesad, inputd, bgad, virtio-gpud)
+  - orbdata (fonts, icons, cursors)
 
-But no graphical applications until orbital is resolved.
-EOF
+  But no graphical applications until orbital is resolved.
+  EOF
 ''
