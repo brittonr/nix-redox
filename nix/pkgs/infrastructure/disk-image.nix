@@ -376,10 +376,19 @@ pkgs.stdenv.mkDerivation {
     INIT_NET
 
             # DHCP daemon (skip for static-only mode)
+            # Output redirected to log file to avoid polluting login console
+            mkdir -p redoxfs-root/var/log
             ${lib.optionalString (networkMode != "static") ''
-              cat > redoxfs-root/etc/init.d/15_dhcp << 'INIT_DHCP'
-              echo "Starting DHCP client..."
-              nowait /bin/dhcpd -v eth0
+                            # Create wrapper script to redirect dhcpd output
+                            cat > redoxfs-root/bin/dhcpd-quiet << 'DHCPD_WRAPPER'
+              #!/bin/ion
+              /bin/dhcpd -v eth0 > /var/log/dhcpd.log
+              DHCPD_WRAPPER
+                            chmod +x redoxfs-root/bin/dhcpd-quiet
+
+                            cat > redoxfs-root/etc/init.d/15_dhcp << 'INIT_DHCP'
+                            echo "Starting DHCP client..."
+                            nowait /bin/dhcpd-quiet
               INIT_DHCP
             ''}
 
@@ -395,11 +404,18 @@ pkgs.stdenv.mkDerivation {
             ''}
 
             ${lib.optionalString (networkMode == "auto") ''
-              # Auto mode: Run netcfg-auto after dhcpd to check if IP was assigned
-              # Falls back to static config from /etc/net/cloud-hypervisor/ if no DHCP
-              cat > redoxfs-root/etc/init.d/16_netcfg << 'INIT_NETCFG_AUTO'
-              echo "Running network auto-configuration..."
-              nowait /bin/netcfg-auto
+                            # Auto mode: Run netcfg-auto after dhcpd to check if IP was assigned
+                            # Falls back to static config from /etc/net/cloud-hypervisor/ if no DHCP
+                            # Output redirected to log file to avoid polluting login console
+                            cat > redoxfs-root/bin/netcfg-auto-quiet << 'NETCFG_AUTO_WRAPPER'
+              #!/bin/ion
+              /bin/netcfg-auto > /var/log/netcfg.log
+              NETCFG_AUTO_WRAPPER
+                            chmod +x redoxfs-root/bin/netcfg-auto-quiet
+
+                            cat > redoxfs-root/etc/init.d/16_netcfg << 'INIT_NETCFG_AUTO'
+                            echo "Running network auto-configuration..."
+                            nowait /bin/netcfg-auto-quiet
               INIT_NETCFG_AUTO
             ''}
 
