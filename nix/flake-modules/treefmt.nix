@@ -47,7 +47,6 @@
             "vendor-combined/*"
             "result*"
             ".git/*"
-            "redox-src/*"
           ];
         };
       };

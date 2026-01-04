@@ -30,6 +30,9 @@
         redoxTarget
         ;
 
+      # Get patched sources from the sources module
+      inherit (config._module.args) patchedSources;
+
       # Import modular library for cross-compilation utilities
       redoxLib = import ../lib {
         inherit pkgs lib rustToolchain;
@@ -40,6 +43,7 @@
       sysrootVendor = redoxLib.sysroot.vendor;
 
       # Source inputs for modular packages
+      # Use patchedSources.base for base (includes Cloud Hypervisor patches)
       srcInputs = {
         inherit (inputs)
           relibc-src
@@ -58,7 +62,6 @@
           fdt-src
           bootloader-src
           uefi-src
-          base-src
           liblibc-src
           orbclient-src
           rustix-redox-src
@@ -72,7 +75,16 @@
           uutils-src
           filetime-src
           libredox-src
+          # Orbital graphics packages
+          orbital-src
+          orbdata-src
+          orbterm-src
+          orbutils-src
+          orbfont-src
+          orbimage-src
           ;
+        # Use patched base source with Cloud Hypervisor support
+        base-src = patchedSources.base;
       };
 
       # Import modular packages
@@ -102,10 +114,54 @@
         inherit (inputs) sodium-src orbclient-src;
       };
 
-      # Create initfs using modular mkInitfs factory function
+      # Import orbdata (data-only package, no compilation)
+      orbdata = import ../pkgs/userspace/orbdata.nix {
+        inherit pkgs lib;
+        inherit (inputs) orbdata-src;
+      };
+
+      # Import orbital (display server) - vendor hash needs computation
+      orbital = import ../pkgs/userspace/orbital.nix {
+        inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+        inherit (modularPkgs.system) relibc;
+        inherit (redoxLib) stubLibs vendor;
+        inherit (inputs)
+          orbital-src
+          orbclient-src
+          libredox-src
+          relibc-src
+          ;
+        # Use patched base source with Cloud Hypervisor support
+        base-src = patchedSources.base;
+      };
+
+      # Import orbterm (terminal emulator) - vendor hash needs computation
+      orbterm = import ../pkgs/userspace/orbterm.nix {
+        inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+        inherit (modularPkgs.system) relibc;
+        inherit (redoxLib) stubLibs vendor;
+        inherit (inputs)
+          orbterm-src
+          orbclient-src
+          orbfont-src
+          orbimage-src
+          libredox-src
+          relibc-src
+          ;
+      };
+
+      # Create initfs using modular mkInitfs factory function (headless)
       initfs = modularPkgs.infrastructure.mkInitfs {
         inherit (modularPkgs.system) base;
         inherit (modularPkgs.userspace) ion redoxfsTarget netutils;
+        enableGraphics = false;
+      };
+
+      # Graphical initfs with display drivers
+      initfsGraphical = modularPkgs.infrastructure.mkInitfs {
+        inherit (modularPkgs.system) base;
+        inherit (modularPkgs.userspace) ion redoxfsTarget netutils;
+        enableGraphics = true;
       };
 
       # Create disk image using modular mkDiskImage factory function
@@ -147,9 +203,43 @@
         };
       };
 
+      # Graphical disk image with Orbital desktop
+      # Includes graphics drivers and orbdata (fonts, icons)
+      # NOTE: orbital and orbterm packages are currently blocked due to
+      # complex nested dependencies. The graphical initfs includes graphics
+      # drivers (vesad, inputd, bgad, virtio-gpud) but no desktop will appear.
+      diskImageGraphical = modularPkgs.infrastructure.mkDiskImage {
+        inherit (modularPkgs.system) kernel bootloader base;
+        initfs = initfsGraphical;
+        inherit sodium orbdata;
+        inherit (modularPkgs.userspace)
+          ion
+          uutils
+          helix
+          binutils
+          extrautils
+          netutils
+          ;
+        redoxfs = modularPkgs.host.redoxfs;
+        networkMode = "auto";
+        enableGraphics = true;
+        # orbital and orbterm are blocked - not passed
+        # When resolved, add:
+        # orbital = orbital;
+        # orbterm = orbterm;
+      };
+
       # QEMU runners from modular infrastructure
       qemuRunners = modularPkgs.infrastructure.mkQemuRunners {
         inherit diskImage;
+        inherit (modularPkgs.system) bootloader;
+      };
+
+      # Graphical QEMU runners using diskImageGraphical
+      # Note: Without orbital/orbterm, this shows graphics drivers initializing
+      # but no desktop appears. Useful for testing graphics driver boot.
+      qemuRunnersGraphical = modularPkgs.infrastructure.mkQemuRunners {
+        diskImage = diskImageGraphical;
         inherit (modularPkgs.system) bootloader;
       };
 
@@ -198,14 +288,22 @@
           ;
         inherit sodium;
 
+        # Orbital graphics packages
+        inherit orbdata orbital orbterm;
+
         # Infrastructure
         inherit (modularPkgs.infrastructure) initfsTools bootstrap;
-        inherit initfs diskImage diskImageCloudHypervisor;
+        inherit initfs initfsGraphical diskImage diskImageCloudHypervisor diskImageGraphical;
 
         # QEMU runners
         runQemu = qemuRunners.headless;
         runQemuGraphical = qemuRunners.graphical;
         bootTest = qemuRunners.bootTest;
+
+        # Graphical QEMU runners (uses diskImageGraphical with graphics drivers)
+        # Note: orbital/orbterm are blocked, so no desktop appears yet
+        runQemuGraphicalDrivers = qemuRunnersGraphical.graphical;
+        runQemuGraphicalDriversHeadless = qemuRunnersGraphical.headless;
 
         # Cloud Hypervisor runners
         runCloudHypervisor = cloudHypervisorRunners.headless;

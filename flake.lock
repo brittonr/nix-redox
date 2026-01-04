@@ -3,17 +3,20 @@
     "base-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1767468443,
-        "narHash": "sha256-vjycLE5WgThWuEjEBVJ+pheZJiYgCmdsepJDCCKV3Wc=",
-        "ref": "refs/heads/main",
-        "rev": "9331c9ebde79c021b601e8ba202543639422e1a7",
-        "revCount": 2584,
-        "type": "git",
-        "url": "file:./redox-src/recipes/core/base/source"
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1767202099,
+        "narHash": "sha256-OaCAXM9yEO61wVzmi4m9X7PQ4mII8rdrhWL4jDYfM3M=",
+        "owner": "redox-os",
+        "repo": "base",
+        "rev": "1cd9ff91038230c9713821d1c9b9fc8200209f80",
+        "type": "gitlab"
       },
       "original": {
-        "type": "git",
-        "url": "file:./redox-src/recipes/core/base/source"
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "main",
+        "repo": "base",
+        "type": "gitlab"
       }
     },
     "binutils-src": {
@@ -633,11 +636,11 @@
       "flake": false,
       "locked": {
         "host": "gitlab.redox-os.org",
-        "lastModified": 1767474444,
-        "narHash": "sha256-HOuWfeVMm6kCFm9p6Sx64WEVtdQFbp5dPH30v/xGyJs=",
+        "lastModified": 1767492070,
+        "narHash": "sha256-KHAuKiQH+vzdQHgmyFDIW7XlnJnRny8N4f3PwZk/0RE=",
         "owner": "redox-os",
         "repo": "redox",
-        "rev": "eae1524558443b38c5658bea595956e221b5b13c",
+        "rev": "1cf1ffabc17c11c91f4690e21a7ef3aa0eb3c6dc",
         "type": "gitlab"
       },
       "original": {
@@ -690,11 +693,11 @@
       "flake": false,
       "locked": {
         "host": "gitlab.redox-os.org",
-        "lastModified": 1767390404,
-        "narHash": "sha256-5w2KGJzp5gJq2dx4RHH/AIOLJDX3INiQWtWxkz6WwwU=",
+        "lastModified": 1767492096,
+        "narHash": "sha256-P0LnLwyh8D4utaW4qRsj9e3Y1n3nC0LdCqLmtNn/hoY=",
         "owner": "redox-os",
         "repo": "relibc",
-        "rev": "7f1bbc7426797476d281a27db5607052d5c39396",
+        "rev": "79f88ab6ada49e60508167754c40fe609aed2273",
         "type": "gitlab"
       },
       "original": {

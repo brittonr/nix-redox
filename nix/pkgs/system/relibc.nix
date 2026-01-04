@@ -133,6 +133,12 @@ let
           let size = read_header(base);
           (*ALLOCATOR.get()).lock().free(base, size + HEADER_SIZE, MIN_ALIGN)
       }
+
+      pub unsafe fn alloc_usable_size(ptr: *mut c_void) -> size_t {
+          if ptr.is_null() { return 0; }
+          let base = (ptr as *mut u8).sub(HEADER_SIZE);
+          read_header(base)
+      }
       PATCH
 
             # Remove old C API functions and add new ones
@@ -140,6 +146,7 @@ let
             sed -i '/^pub unsafe fn alloc_align/,/^}$/d' src/platform/allocator/mod.rs
             sed -i '/^pub unsafe fn realloc/,/^}$/d' src/platform/allocator/mod.rs
             sed -i '/^pub unsafe fn free/,/^}$/d' src/platform/allocator/mod.rs
+            sed -i '/^pub unsafe fn alloc_usable_size/,/^}$/d' src/platform/allocator/mod.rs
             cat /tmp/c_api_patch.txt >> src/platform/allocator/mod.rs
 
             # Fix alloc_zeroed and constructor

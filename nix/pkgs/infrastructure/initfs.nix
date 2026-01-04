@@ -23,6 +23,8 @@
   # Optional: netutils for network testing commands (ping, ifconfig)
   # Note: netutils binaries are copied if available for network testing
   netutils ? null,
+  # Enable graphics support (vesad, inputd, fbbootlogd, etc.)
+  enableGraphics ? false,
 }:
 
 pkgs.stdenv.mkDerivation {
@@ -46,13 +48,26 @@ pkgs.stdenv.mkDerivation {
             # init.d scripts where /dev/urandom -> /scheme/rand symlink exists.
             mkdir -p initfs/bin initfs/lib/drivers initfs/etc/pcid initfs/usr/bin
 
-            # Copy core binaries to bin/ (no graphics: removed vesad, fbbootlogd, fbcond, inputd)
+            # Copy core binaries to bin/
             # Added: ipcd (IPC daemon), smolnetd (network stack)
             for bin in init logd ramfs randd zerod pcid pcid-spawner lived acpid hwd rtcd ps2d ptyd ipcd smolnetd; do
               if [ -f ${base}/bin/$bin ]; then
                 cp ${base}/bin/$bin initfs/bin/
               fi
             done
+
+            # Copy graphics daemons if graphics mode is enabled
+            ${lib.optionalString enableGraphics ''
+              echo "=== Copying graphics daemons ==="
+              for bin in vesad inputd fbbootlogd fbcond; do
+                if [ -f ${base}/bin/$bin ]; then
+                  echo "Copying $bin..."
+                  cp -v ${base}/bin/$bin initfs/bin/
+                else
+                  echo "WARNING: $bin not found in ${base}/bin"
+                fi
+              done
+            ''}
 
             # Copy nulld (copy of zerod)
             cp ${base}/bin/zerod initfs/bin/nulld
@@ -77,7 +92,7 @@ pkgs.stdenv.mkDerivation {
               fi
             ''}
 
-            # Copy driver binaries to lib/drivers/ (no graphics: removed virtio-gpud)
+            # Copy driver binaries to lib/drivers/
             # Added: e1000d (Intel network, QEMU default), virtio-netd (VirtIO network)
             echo "=== Copying drivers from ${base}/bin to initfs/lib/drivers ==="
             for drv in ahcid ided nvmed virtio-blkd e1000d virtio-netd; do
@@ -88,6 +103,20 @@ pkgs.stdenv.mkDerivation {
                 echo "WARNING: $drv not found in ${base}/bin"
               fi
             done
+
+            # Copy graphics drivers if graphics mode is enabled
+            ${lib.optionalString enableGraphics ''
+              echo "=== Copying graphics drivers ==="
+              for drv in virtio-gpud bgad; do
+                if [ -f ${base}/bin/$drv ]; then
+                  echo "Copying $drv..."
+                  cp -v ${base}/bin/$drv initfs/lib/drivers/
+                else
+                  echo "WARNING: $drv not found in ${base}/bin"
+                fi
+              done
+            ''}
+
             echo "=== Drivers in initfs/lib/drivers ==="
             ls -la initfs/lib/drivers/
 
@@ -165,16 +194,43 @@ pkgs.stdenv.mkDerivation {
     command = ["/scheme/initfs/lib/drivers/virtio-netd"]
     EOF
 
+            # Add graphics driver entries to pcid config if enabled
+            ${lib.optionalString enableGraphics ''
+              cat >> initfs/etc/pcid/initfs.toml << 'EOF_GRAPHICS'
+
+    # Graphics drivers - VirtIO GPU (QEMU with virtio-vga)
+    [[drivers]]
+    name = "VirtIO GPU"
+    class = 0x03
+    vendor = 0x1AF4
+    device = 0x1050
+    command = ["/scheme/initfs/lib/drivers/virtio-gpud"]
+
+    # Graphics drivers - Bochs Graphics Adapter (QEMU with -vga std)
+    [[drivers]]
+    name = "Bochs VGA"
+    class = 0x03
+    vendor = 0x1234
+    device = 0x1111
+    command = ["/scheme/initfs/lib/drivers/bgad"]
+    EOF_GRAPHICS
+            ''}
+
             # Create Ion shell configuration with simple prompt (no subprocess expansion)
             mkdir -p initfs/etc/ion
             echo '# Simple Ion shell configuration for headless Redox' > initfs/etc/ion/initrc
             echo '# Use a simple prompt without subprocess expansion' >> initfs/etc/ion/initrc
             echo 'let PROMPT = "ion> "' >> initfs/etc/ion/initrc
 
-            # Create headless init.rc (no graphics daemons)
+            # Create init.rc based on graphics mode
             # NOTE: Content must NOT be indented - init.rc format is line-by-line commands
-            cat > initfs/etc/init.rc << 'EOF'
+            ${if enableGraphics then ''
+              cat > initfs/etc/init.rc << 'EOF'
+    # Redox init with graphics support
+            '' else ''
+              cat > initfs/etc/init.rc << 'EOF'
     # Headless Redox init - no graphics support
+            ''}
     export PATH /scheme/initfs/bin
     export RUST_BACKTRACE 1
     rtcd
@@ -205,6 +261,22 @@ pkgs.stdenv.mkDerivation {
     echo "Loading drivers..."
     run /scheme/initfs/etc/init_drivers.rc
     unset RSDP_ADDR RSDP_SIZE
+    EOF
+
+            # Add graphics daemons startup if enabled
+            ${lib.optionalString enableGraphics ''
+              cat >> initfs/etc/init.rc << 'EOF_GRAPHICS'
+
+    # Graphics support - start display and input daemons
+    echo "Starting graphics daemons..."
+    vesad
+    inputd
+    fbbootlogd
+    EOF_GRAPHICS
+            ''}
+
+            # Continue with rest of init.rc
+            cat >> initfs/etc/init.rc << 'EOF'
 
     # Note: ipcd requires /dev/urandom which only exists after rootfs mounts
     # It will be started from /usr/lib/init.d/00_base after rootfs transition

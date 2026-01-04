@@ -101,6 +101,7 @@ in
       netutils ? null,
       kernel ? null,
       bootloader ? null,
+      enableGraphics ? false,
     }:
     import ./initfs.nix {
       inherit
@@ -108,6 +109,7 @@ in
         lib
         initfsTools
         bootstrap
+        enableGraphics
         ;
       inherit
         base
@@ -130,6 +132,11 @@ in
       sodium ? null,
       netutils ? null,
       uutils ? null,
+      # Orbital graphics packages
+      orbdata ? null,
+      orbital ? null,
+      orbterm ? null,
+      enableGraphics ? false,
       # Allow caller to override redoxfs if needed
       redoxfs ? redoxfs,
       # Network configuration mode: "auto" | "dhcp" | "static" | "none"
@@ -154,6 +161,10 @@ in
         sodium
         netutils
         uutils
+        orbdata
+        orbital
+        orbterm
+        enableGraphics
         networkMode
         staticNetworkConfig
         ;

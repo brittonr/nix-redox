@@ -33,7 +33,6 @@
             "^vendor/"
             "^vendor-combined/"
             "^result.*/"
-            "^redox-src/"
           ];
 
           hooks = {

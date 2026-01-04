@@ -32,6 +32,12 @@
   extrautils ? null,
   sodium ? null,
   netutils ? null,
+  # Orbital graphics packages (optional)
+  orbdata ? null,
+  orbital ? null,
+  orbterm ? null,
+  # Enable graphics support (Orbital desktop)
+  enableGraphics ? false,
   # Network configuration mode:
   # - "auto": Try DHCP first, fallback to static config if no IP assigned (default)
   # - "dhcp": DHCP only, no static fallback (for QEMU user-mode networking)
@@ -71,7 +77,10 @@ pkgs.stdenv.mkDerivation {
   ++ lib.optional (binutils != null) binutils
   ++ lib.optional (extrautils != null) extrautils
   ++ lib.optional (sodium != null) sodium
-  ++ lib.optional (netutils != null) netutils;
+  ++ lib.optional (netutils != null) netutils
+  ++ lib.optional (orbdata != null) orbdata
+  ++ lib.optional (orbital != null) orbital
+  ++ lib.optional (orbterm != null) orbterm;
 
   # Use a fixed timestamp for reproducible builds
   # This ensures identical inputs produce identical outputs
@@ -259,6 +268,43 @@ pkgs.stdenv.mkDerivation {
           fi
         ''}
 
+        # Copy Orbital graphics packages
+        ${lib.optionalString (orbdata != null) ''
+          echo "Copying Orbital data files (fonts, icons, cursors)..."
+          # orbdata contains: backgrounds/, cursors/, fonts/, icons/
+          # These go to /ui/ directory in Redox
+          mkdir -p redoxfs-root/ui
+          for dir in backgrounds cursors fonts icons; do
+            if [ -d "${orbdata}/$dir" ]; then
+              cp -rv ${orbdata}/$dir redoxfs-root/ui/
+            fi
+          done
+          echo "Copied orbdata to /ui/"
+        ''}
+
+        ${lib.optionalString (orbital != null) ''
+          echo "Copying Orbital display server..."
+          if [ -f "${orbital}/bin/orbital" ]; then
+            cp -v ${orbital}/bin/orbital redoxfs-root/bin/
+            echo "Copied orbital display server"
+          else
+            echo "WARNING: orbital not found at ${orbital}/bin"
+          fi
+        ''}
+
+        ${lib.optionalString (orbterm != null) ''
+          echo "Copying Orbital terminal emulator..."
+          if [ -f "${orbterm}/bin/orbterm" ]; then
+            cp -v ${orbterm}/bin/orbterm redoxfs-root/bin/
+            echo "Copied orbterm terminal"
+          fi
+          # Copy UI app configs if present
+          if [ -d "${orbterm}/ui/apps" ]; then
+            mkdir -p redoxfs-root/ui/apps
+            cp -rv ${orbterm}/ui/apps/* redoxfs-root/ui/apps/
+          fi
+        ''}
+
         # Create network configuration directory and files
         echo "Creating network configuration..."
         mkdir -p redoxfs-root/etc/net
@@ -321,6 +367,17 @@ pkgs.stdenv.mkDerivation {
           echo "Running network auto-configuration..."
           nowait /bin/netcfg-auto
           INIT_NETCFG_AUTO
+        ''}
+
+        # Orbital display server startup (if graphics enabled)
+        ${lib.optionalString (enableGraphics && orbital != null) ''
+          cat > redoxfs-root/usr/lib/init.d/20_orbital << 'INIT_ORBITAL'
+    # Start Orbital display server and login manager
+    # vesad, inputd, and graphics drivers are already started from initfs
+    echo "Starting Orbital..."
+    nowait orbital orbterm
+    INIT_ORBITAL
+          echo "Created Orbital init script at /usr/lib/init.d/20_orbital"
         ''}
 
         # Network configuration helper for Cloud Hypervisor

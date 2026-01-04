@@ -1,0 +1,570 @@
+From 8004f3f1cd0f61c4132d2af5f1f9b40ef41269eb Mon Sep 17 00:00:00 2001
+From: brittonr <b@robitzs.ch>
+Date: Sat, 3 Jan 2026 13:05:58 -0500
+Subject: [PATCH 1/7] fix: skip BAR size probing for virtio devices on Cloud
+ Hypervisor
+
+Cloud Hypervisor's minimal MMIO allocator cannot handle BAR relocation
+requests that occur during standard PCI BAR size detection. When pcid
+writes 0xFFFFFFFF to a BAR register to determine its size, Cloud Hypervisor
+interprets this as a relocation request and fails with:
+"Failed moving device BAR: failed allocating new MMIO range"
+
+This fix adds read_bar_no_probe() which reads BAR values directly without
+writing to config space, and uses it for virtio devices (vendor 0x1AF4).
+---
+ drivers/pcid/src/main.rs | 113 +++++++++++++++++++++++++++++++--------
+ 1 file changed, 92 insertions(+), 21 deletions(-)
+
+diff --git a/drivers/pcid/src/main.rs b/drivers/pcid/src/main.rs
+index b49e68df..5c432e4f 100644
+--- a/drivers/pcid/src/main.rs
++++ b/drivers/pcid/src/main.rs
+@@ -27,6 +27,53 @@ pub struct Func {
+     enabled: bool,
+ }
+ 
++/// Read BAR address without size probing (for hypervisors that don't support BAR relocation).
++/// This reads the BAR value directly from config space without writing to it.
++/// Returns (bar_value, is_64bit) where is_64bit indicates if this BAR consumes two slots.
++fn read_bar_no_probe(pcie: &Pcie, pci_address: PciAddress, bar_index: u8) -> Option<(PciBar, bool)> {
++    use pci_types::ConfigRegionAccess;
++
++    let offset = 0x10 + u16::from(bar_index) * 4;
++    let bar_low = unsafe { pcie.read(pci_address, offset) };
++
++    // BAR not implemented
++    if bar_low == 0 {
++        return None;
++    }
++
++    // Check if I/O or Memory BAR
++    if bar_low & 1 == 1 {
++        // I/O BAR
++        let port = (bar_low & !0x3) as u16;
++        // Use a default I/O size of 256 bytes
++        Some((PciBar::Port(port), false))
++    } else {
++        // Memory BAR - check type (bits 1-2)
++        let bar_type = (bar_low >> 1) & 0x3;
++        let addr_low = bar_low & !0xF;
++
++        if bar_type == 0x2 {
++            // 64-bit BAR - read high part
++            let bar_high = unsafe { pcie.read(pci_address, offset + 4) };
++            let address = (u64::from(bar_high) << 32) | u64::from(addr_low);
++            // Use default size of 4KB for virtio capability structures
++            Some((PciBar::Memory64 { addr: address, size: 0x1000 }, true))
++        } else {
++            // 32-bit BAR
++            let address = u32::from(addr_low);
++            // Use default size of 4KB for virtio capability structures
++            Some((PciBar::Memory32 { addr: address, size: 0x1000 }, false))
++        }
++    }
++}
++
++/// Check if this is a virtio device (vendor ID 0x1AF4).
++/// Virtio devices should use no-probe BAR reading on hypervisors like Cloud Hypervisor
++/// that don't support BAR relocation during size detection.
++fn is_virtio_device(vendor_id: u16) -> bool {
++    vendor_id == 0x1AF4
++}
++
+ fn handle_parsed_header(
+     pcie: &Pcie,
+     tree: &mut BTreeMap<PciAddress, Func>,
+@@ -35,35 +82,54 @@ fn handle_parsed_header(
+ ) {
+     let mut bars = [PciBar::None; 6];
+     let mut skip = false;
++
++    // For virtio devices, avoid BAR size probing which writes to config space.
++    // Cloud Hypervisor and similar minimal hypervisors interpret these writes as
++    // BAR relocation requests and fail with "Failed moving device BAR" errors.
++    let use_no_probe = is_virtio_device(full_device_id.vendor_id);
++
+     for i in 0..6 {
+         if skip {
+             skip = false;
+             continue;
+         }
+-        match endpoint_header.bar(i, pcie) {
+-            Some(TyBar::Io { port }) => bars[i as usize] = PciBar::Port(port.try_into().unwrap()),
+-            Some(TyBar::Memory32 {
+-                address,
+-                size,
+-                prefetchable: _,
+-            }) => {
+-                bars[i as usize] = PciBar::Memory32 {
+-                    addr: address,
+-                    size,
++
++        if use_no_probe {
++            // Read BAR without size probing
++            match read_bar_no_probe(pcie, endpoint_header.header().address(), i) {
++                Some((bar, is_64bit)) => {
++                    bars[i as usize] = bar;
++                    skip = is_64bit;
+                 }
++                None => bars[i as usize] = PciBar::None,
+             }
+-            Some(TyBar::Memory64 {
+-                address,
+-                size,
+-                prefetchable: _,
+-            }) => {
+-                bars[i as usize] = PciBar::Memory64 {
+-                    addr: address,
++        } else {
++            // Normal BAR probing for non-virtio devices
++            match endpoint_header.bar(i, pcie) {
++                Some(TyBar::Io { port }) => bars[i as usize] = PciBar::Port(port.try_into().unwrap()),
++                Some(TyBar::Memory32 {
++                    address,
++                    size,
++                    prefetchable: _,
++                }) => {
++                    bars[i as usize] = PciBar::Memory32 {
++                        addr: address,
++                        size,
++                    }
++                }
++                Some(TyBar::Memory64 {
++                    address,
+                     size,
+-                };
+-                skip = true; // Each 64bit memory BAR occupies two slots
++                    prefetchable: _,
++                }) => {
++                    bars[i as usize] = PciBar::Memory64 {
++                        addr: address,
++                        size,
++                    };
++                    skip = true; // Each 64bit memory BAR occupies two slots
++                }
++                None => bars[i as usize] = PciBar::None,
+             }
+-            None => bars[i as usize] = PciBar::None,
+         }
+     }
+ 
+@@ -116,7 +182,12 @@ fn handle_parsed_header(
+         })
+     };
+ 
+-    let rom = get_rom(endpoint_header.header().address(), 0x30);
++    // Skip ROM probing for virtio devices (they don't have ROMs and probing writes to config space)
++    let rom = if use_no_probe {
++        None
++    } else {
++        get_rom(endpoint_header.header().address(), 0x30)
++    };
+     if let Some(rom) = rom {
+         debug!("    ROM={:08X}", rom.addr);
+     }
+-- 
+2.51.2
+
+
+From 0832f328cfb04046f7ebe0ac87be49e6a98448a5 Mon Sep 17 00:00:00 2001
+From: brittonr <b@robitzs.ch>
+Date: Sat, 3 Jan 2026 13:13:46 -0500
+Subject: [PATCH 2/7] feat: add modern virtio-blk device ID for Cloud
+ Hypervisor
+
+Cloud Hypervisor and modern QEMU use the modern virtio device ID 0x1042
+for virtio-blk instead of the legacy 0x1001. Add a driver entry to match
+the modern device ID to virtio-blkd.
+---
+ drivers/initfs.toml | 9 +++++++++
+ 1 file changed, 9 insertions(+)
+
+diff --git a/drivers/initfs.toml b/drivers/initfs.toml
+index 12290f9b..cf336994 100644
+--- a/drivers/initfs.toml
++++ b/drivers/initfs.toml
+@@ -29,6 +29,15 @@ vendor = 0x1AF4
+ device = 0x1001
+ command = ["/scheme/initfs/lib/drivers/virtio-blkd"]
+ 
++# Modern virtio-blk (used by Cloud Hypervisor and modern QEMU)
++[[drivers]]
++name = "virtio-blk-modern"
++class = 1
++subclass = 0
++vendor = 0x1AF4
++device = 0x1042
++command = ["/scheme/initfs/lib/drivers/virtio-blkd"]
++
+ [[drivers]]
+ name = "virtio-gpu"
+ class = 3
+-- 
+2.51.2
+
+
+From 9b99fc700252e4065a0e869ea348e7ab2a287c07 Mon Sep 17 00:00:00 2001
+From: brittonr <b@robitzs.ch>
+Date: Sat, 3 Jan 2026 13:22:04 -0500
+Subject: [PATCH 3/7] feat: support modern virtio device IDs in virtio drivers
+
+Cloud Hypervisor uses modern virtio device IDs:
+- virtio-blk: 0x1042 (instead of legacy 0x1001)
+- virtio-net: 0x1041 (instead of legacy 0x1000)
+
+Update the device ID assertions in virtio-blkd and virtio-netd to
+accept both legacy and modern device IDs, enabling RedoxOS to boot
+on Cloud Hypervisor.
+---
+ drivers/net/virtio-netd/src/main.rs     | 10 ++++++++--
+ drivers/storage/virtio-blkd/src/main.rs | 10 ++++++++--
+ 2 files changed, 16 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/net/virtio-netd/src/main.rs b/drivers/net/virtio-netd/src/main.rs
+index 17d168ef..12bd4e42 100644
+--- a/drivers/net/virtio-netd/src/main.rs
++++ b/drivers/net/virtio-netd/src/main.rs
+@@ -49,10 +49,16 @@ fn deamon(
+ 
+     // Double check that we have the right device.
+     //
+-    // 0x1000 - virtio-net
++    // 0x1000 - virtio-net (legacy)
++    // 0x1041 - virtio-net (modern, used by Cloud Hypervisor)
+     let pci_config = pcid_handle.config();
++    let device_id = pci_config.func.full_device_id.device_id;
+ 
+-    assert_eq!(pci_config.func.full_device_id.device_id, 0x1000);
++    assert!(
++        device_id == 0x1000 || device_id == 0x1041,
++        "unexpected virtio-net device ID: {:#x} (expected 0x1000 or 0x1041)",
++        device_id
++    );
+     log::info!("virtio-net: initiating startup sequence :^)");
+ 
+     let device = virtio_core::probe_device(&mut pcid_handle)?;
+diff --git a/drivers/storage/virtio-blkd/src/main.rs b/drivers/storage/virtio-blkd/src/main.rs
+index d21236b3..ee55ae37 100644
+--- a/drivers/storage/virtio-blkd/src/main.rs
++++ b/drivers/storage/virtio-blkd/src/main.rs
+@@ -118,10 +118,16 @@ fn daemon(daemon: daemon::Daemon, mut pcid_handle: PciFunctionHandle) -> anyhow:
+ 
+     // Double check that we have the right device.
+     //
+-    // 0x1001 - virtio-blk
++    // 0x1001 - virtio-blk (legacy)
++    // 0x1042 - virtio-blk (modern, used by Cloud Hypervisor)
+     let pci_config = pcid_handle.config();
++    let device_id = pci_config.func.full_device_id.device_id;
+ 
+-    assert_eq!(pci_config.func.full_device_id.device_id, 0x1001);
++    assert!(
++        device_id == 0x1001 || device_id == 0x1042,
++        "unexpected virtio-blk device ID: {:#x} (expected 0x1001 or 0x1042)",
++        device_id
++    );
+     log::info!("virtio-blk: initiating startup sequence :^)");
+ 
+     let device = virtio_core::probe_device(&mut pcid_handle)?;
+-- 
+2.51.2
+
+
+From 892fd777d39ae5db5236077ddacfeaaeee62e947 Mon Sep 17 00:00:00 2001
+From: brittonr <b@robitzs.ch>
+Date: Sat, 3 Jan 2026 13:25:18 -0500
+Subject: [PATCH 4/7] fix: increase default BAR size for virtio devices to 64KB
+
+The MSI-X table in Cloud Hypervisor virtio devices is located at
+offset 0x8000, requiring at least 32KB BAR size. Increase the
+default no-probe BAR size from 4KB to 64KB to accommodate MSI-X
+tables and other virtio capability structures.
+---
+ drivers/pcid/src/main.rs | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/pcid/src/main.rs b/drivers/pcid/src/main.rs
+index 5c432e4f..0ac284b8 100644
+--- a/drivers/pcid/src/main.rs
++++ b/drivers/pcid/src/main.rs
+@@ -56,13 +56,15 @@ fn read_bar_no_probe(pcie: &Pcie, pci_address: PciAddress, bar_index: u8) -> Opt
+             // 64-bit BAR - read high part
+             let bar_high = unsafe { pcie.read(pci_address, offset + 4) };
+             let address = (u64::from(bar_high) << 32) | u64::from(addr_low);
+-            // Use default size of 4KB for virtio capability structures
+-            Some((PciBar::Memory64 { addr: address, size: 0x1000 }, true))
++            // Use default size of 64KB for virtio capability structures
++            // This needs to be large enough for MSI-X tables (typically at offset 0x8000+)
++            Some((PciBar::Memory64 { addr: address, size: 0x10000 }, true))
+         } else {
+             // 32-bit BAR
+             let address = u32::from(addr_low);
+-            // Use default size of 4KB for virtio capability structures
+-            Some((PciBar::Memory32 { addr: address, size: 0x1000 }, false))
++            // Use default size of 64KB for virtio capability structures
++            // This needs to be large enough for MSI-X tables (typically at offset 0x8000+)
++            Some((PciBar::Memory32 { addr: address, size: 0x10000 }, false))
+         }
+     }
+ }
+-- 
+2.51.2
+
+
+From a4f1fdbd82cffbaed0405872c96eabfa9229a6ca Mon Sep 17 00:00:00 2001
+From: brittonr <b@robitzs.ch>
+Date: Sat, 3 Jan 2026 13:28:23 -0500
+Subject: [PATCH 5/7] fix: increase BAR size to 1MB for Cloud Hypervisor PBA at
+ 0x48000
+
+---
+ drivers/pcid/src/main.rs | 16 ++++++++++------
+ 1 file changed, 10 insertions(+), 6 deletions(-)
+
+diff --git a/drivers/pcid/src/main.rs b/drivers/pcid/src/main.rs
+index 0ac284b8..8624b7dc 100644
+--- a/drivers/pcid/src/main.rs
++++ b/drivers/pcid/src/main.rs
+@@ -56,15 +56,19 @@ fn read_bar_no_probe(pcie: &Pcie, pci_address: PciAddress, bar_index: u8) -> Opt
+             // 64-bit BAR - read high part
+             let bar_high = unsafe { pcie.read(pci_address, offset + 4) };
+             let address = (u64::from(bar_high) << 32) | u64::from(addr_low);
+-            // Use default size of 64KB for virtio capability structures
+-            // This needs to be large enough for MSI-X tables (typically at offset 0x8000+)
+-            Some((PciBar::Memory64 { addr: address, size: 0x10000 }, true))
++            // Use default size of 1MB for virtio capability structures
++            // Cloud Hypervisor's virtio BARs can be quite large:
++            // - MSI-X table at offset 0x8000
++            // - PBA (Pending Bit Array) at offset 0x48000+
++            Some((PciBar::Memory64 { addr: address, size: 0x100000 }, true))
+         } else {
+             // 32-bit BAR
+             let address = u32::from(addr_low);
+-            // Use default size of 64KB for virtio capability structures
+-            // This needs to be large enough for MSI-X tables (typically at offset 0x8000+)
+-            Some((PciBar::Memory32 { addr: address, size: 0x10000 }, false))
++            // Use default size of 1MB for virtio capability structures
++            // Cloud Hypervisor's virtio BARs can be quite large:
++            // - MSI-X table at offset 0x8000
++            // - PBA (Pending Bit Array) at offset 0x48000+
++            Some((PciBar::Memory32 { addr: address, size: 0x100000 }, false))
+         }
+     }
+ }
+-- 
+2.51.2
+
+
+From 18457fe59dd562fea23eb7f3ae7fe2ae9d858fb3 Mon Sep 17 00:00:00 2001
+From: brittonr <b@robitzs.ch>
+Date: Sat, 3 Jan 2026 13:32:14 -0500
+Subject: [PATCH 6/7] fix: slice result buffer to match written bytes in
+ virtio-blkd
+
+---
+ drivers/storage/virtio-blkd/src/scheme.rs | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/storage/virtio-blkd/src/scheme.rs b/drivers/storage/virtio-blkd/src/scheme.rs
+index ec4ecf73..d98ed63d 100644
+--- a/drivers/storage/virtio-blkd/src/scheme.rs
++++ b/drivers/storage/virtio-blkd/src/scheme.rs
+@@ -35,11 +35,12 @@ impl BlkExtension for Queue<'_> {
+             .chain(Buffer::new(&status).flags(DescriptorFlags::WRITE_ONLY))
+             .build();
+ 
+-        // XXX: Subtract 1 because the of status byte.
++        // XXX: Subtract 1 because of the status byte.
+         let written = self.send(chain).await as usize - 1;
+         assert_eq!(*status, 0);
+ 
+-        target[..written].copy_from_slice(&result);
++        // Copy only the bytes that were written (may be less than result buffer size)
++        target[..written].copy_from_slice(&result[..written]);
+         written
+     }
+ 
+-- 
+2.51.2
+
+
+From 9331c9ebde79c021b601e8ba202543639422e1a7 Mon Sep 17 00:00:00 2001
+From: brittonr <b@robitzs.ch>
+Date: Sat, 3 Jan 2026 14:27:23 -0500
+Subject: [PATCH 7/7] fix: virtio byte count handling for Cloud Hypervisor
+ modern virtio
+
+Cloud Hypervisor uses modern virtio (device ID 0x1042) which returns
+only data bytes in the used ring len field, not data+status bytes
+like legacy virtio (QEMU).
+
+Use the is_modern flag to conditionally handle the byte count.
+---
+ drivers/storage/virtio-blkd/src/main.rs   | 11 +++++-
+ drivers/storage/virtio-blkd/src/scheme.rs | 42 ++++++++++++++++-------
+ drivers/virtio-core/src/lib.rs            | 11 ++++++
+ drivers/virtio-core/src/transport.rs      |  2 +-
+ 4 files changed, 51 insertions(+), 15 deletions(-)
+
+diff --git a/drivers/storage/virtio-blkd/src/main.rs b/drivers/storage/virtio-blkd/src/main.rs
+index ee55ae37..33a65a80 100644
+--- a/drivers/storage/virtio-blkd/src/main.rs
++++ b/drivers/storage/virtio-blkd/src/main.rs
+@@ -139,6 +139,15 @@ fn daemon(daemon: daemon::Daemon, mut pcid_handle: PciFunctionHandle) -> anyhow:
+ 
+     let device_space = BlockDeviceConfig::new(&device.transport);
+ 
++    // Detect if this is a modern virtio device (Cloud Hypervisor uses modern virtio)
++    let is_modern = virtio_core::is_modern_virtio(device_id);
++    log::info!("virtio-blk: device ID {:#x}, is_modern={}", device_id, is_modern);
++    if is_modern {
++        log::info!("virtio-blk: detected modern virtio device (Cloud Hypervisor compatible)");
++    } else {
++        log::info!("virtio-blk: detected legacy virtio device");
++    }
++
+     // At this point the device is alive!
+     device.transport.run_device();
+ 
+@@ -164,7 +173,7 @@ fn daemon(daemon: daemon::Daemon, mut pcid_handle: PciFunctionHandle) -> anyhow:
+     let mut scheme = DiskScheme::new(
+         Some(daemon),
+         scheme_name,
+-        BTreeMap::from([(0, VirtioDisk::new(queue, device_space))]),
++        BTreeMap::from([(0, VirtioDisk::new(queue, device_space, is_modern))]),
+         &driver_block::FuturesExecutor,
+     );
+ 
+diff --git a/drivers/storage/virtio-blkd/src/scheme.rs b/drivers/storage/virtio-blkd/src/scheme.rs
+index d98ed63d..9d5c252d 100644
+--- a/drivers/storage/virtio-blkd/src/scheme.rs
++++ b/drivers/storage/virtio-blkd/src/scheme.rs
+@@ -9,12 +9,12 @@ use crate::BlockRequestTy;
+ use crate::BlockVirtRequest;
+ 
+ trait BlkExtension {
+-    async fn read(&self, block: u64, target: &mut [u8]) -> usize;
+-    async fn write(&self, block: u64, target: &[u8]) -> usize;
++    async fn read(&self, block: u64, target: &mut [u8], is_modern: bool) -> usize;
++    async fn write(&self, block: u64, target: &[u8], is_modern: bool) -> usize;
+ }
+ 
+ impl BlkExtension for Queue<'_> {
+-    async fn read(&self, block: u64, target: &mut [u8]) -> usize {
++    async fn read(&self, block: u64, target: &mut [u8], is_modern: bool) -> usize {
+         let req = Dma::new(BlockVirtRequest {
+             ty: BlockRequestTy::In,
+             reserved: 0,
+@@ -35,16 +35,31 @@ impl BlkExtension for Queue<'_> {
+             .chain(Buffer::new(&status).flags(DescriptorFlags::WRITE_ONLY))
+             .build();
+ 
+-        // XXX: Subtract 1 because of the status byte.
+-        let written = self.send(chain).await as usize - 1;
++        let total_written = self.send(chain).await as usize;
++
++        // The virtio spec says the used ring element's len field should include all writable
++        // bytes written by the device. For reads, this is data bytes + status byte.
++        // However, different implementations vary:
++        // - QEMU (legacy): Returns data bytes + status byte (e.g., 513 for 512-byte read)
++        // - Cloud Hypervisor (modern): Returns only data bytes (e.g., 512 for 512-byte read)
++        // Use the is_modern flag to determine the correct adjustment.
++        let written = if is_modern {
++            // Modern virtio (Cloud Hypervisor) returns data bytes only
++            total_written
++        } else {
++            // Legacy virtio (QEMU) includes status byte in count
++            total_written.saturating_sub(1)
++        };
++
+         assert_eq!(*status, 0);
+ 
+         // Copy only the bytes that were written (may be less than result buffer size)
+-        target[..written].copy_from_slice(&result[..written]);
+-        written
++        let copy_len = written.min(target.len());
++        target[..copy_len].copy_from_slice(&result[..copy_len]);
++        copy_len
+     }
+ 
+-    async fn write(&self, block: u64, target: &[u8]) -> usize {
++    async fn write(&self, block: u64, target: &[u8], is_modern: bool) -> usize {
+         let req = Dma::new(BlockVirtRequest {
+             ty: BlockRequestTy::Out,
+             reserved: 0,
+@@ -67,7 +82,7 @@ impl BlkExtension for Queue<'_> {
+             .chain(Buffer::new(&status).flags(DescriptorFlags::WRITE_ONLY))
+             .build();
+ 
+-        self.send(chain).await as usize;
++        let _ = self.send(chain).await;
+         assert_eq!(*status, 0);
+ 
+         target.len()
+@@ -77,11 +92,12 @@ impl BlkExtension for Queue<'_> {
+ pub(crate) struct VirtioDisk<'a> {
+     queue: Arc<Queue<'a>>,
+     cfg: BlockDeviceConfig,
++    is_modern: bool,
+ }
+ 
+ impl<'a> VirtioDisk<'a> {
+-    pub(crate) fn new(queue: Arc<Queue<'a>>, cfg: BlockDeviceConfig) -> Self {
+-        Self { queue, cfg }
++    pub(crate) fn new(queue: Arc<Queue<'a>>, cfg: BlockDeviceConfig, is_modern: bool) -> Self {
++        Self { queue, cfg, is_modern }
+     }
+ }
+ 
+@@ -95,10 +111,10 @@ impl driver_block::Disk for VirtioDisk<'_> {
+     }
+ 
+     async fn read(&mut self, block: u64, buffer: &mut [u8]) -> syscall::Result<usize> {
+-        Ok(self.queue.read(block, buffer).await)
++        Ok(self.queue.read(block, buffer, self.is_modern).await)
+     }
+ 
+     async fn write(&mut self, block: u64, buffer: &[u8]) -> syscall::Result<usize> {
+-        Ok(self.queue.write(block, buffer).await)
++        Ok(self.queue.write(block, buffer, self.is_modern).await)
+     }
+ }
+diff --git a/drivers/virtio-core/src/lib.rs b/drivers/virtio-core/src/lib.rs
+index 2557d0b7..d4f84f5e 100644
+--- a/drivers/virtio-core/src/lib.rs
++++ b/drivers/virtio-core/src/lib.rs
+@@ -4,6 +4,17 @@ pub mod utils;
+ 
+ mod probe;
+ 
++/// Returns true if the device ID indicates a modern (non-transitional) virtio device.
++/// Modern devices use IDs in range 0x1040-0x107F (device type + 0x1040).
++/// Legacy/transitional devices use IDs in range 0x1000-0x103F.
++///
++/// Cloud Hypervisor uses modern virtio devices:
++/// - 0x1041: virtio-net (modern)
++/// - 0x1042: virtio-blk (modern)
++pub fn is_modern_virtio(device_id: u16) -> bool {
++    device_id >= 0x1040 && device_id <= 0x107F
++}
++
+ #[cfg(target_arch = "aarch64")]
+ #[path = "arch/aarch64.rs"]
+ mod arch;
+diff --git a/drivers/virtio-core/src/transport.rs b/drivers/virtio-core/src/transport.rs
+index 72376fe0..38402702 100644
+--- a/drivers/virtio-core/src/transport.rs
++++ b/drivers/virtio-core/src/transport.rs
+@@ -431,7 +431,7 @@ impl<'a> Used<'a> {
+             self.ring_mut()
+                 .elements
+                 .as_mut_slice(queue_size)
+-                .get_mut(index % 256)
++                .get_mut(index % queue_size)
+                 .expect("virtio-core::used: index out of bounds")
+         }
+     }
+-- 
+2.51.2
+

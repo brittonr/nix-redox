@@ -36,6 +36,14 @@
           program = "${self'.packages.runQemuGraphical}/bin/run-redox-graphical";
         };
 
+        # Graphical drivers runner (uses diskImageGraphical with graphics drivers)
+        # Note: orbital/orbterm are blocked, so no desktop appears yet
+        # This is useful for testing graphics driver initialization
+        run-redox-graphical-drivers = {
+          type = "app";
+          program = "${self'.packages.runQemuGraphicalDrivers}/bin/run-redox-graphical";
+        };
+
         # Cloud Hypervisor runners (virtio-only, Rust-based VMM)
         run-redox-cloud-hypervisor = {
           type = "app";

@@ -151,9 +151,8 @@
     };
 
     # base - essential system components (init, drivers, daemons)
-    # Using local git repo to pick up pcid fix for Cloud Hypervisor BAR handling
     base-src = {
-      url = "git+file:./redox-src/recipes/core/base/source";
+      url = "gitlab:redox-os/base/main?host=gitlab.redox-os.org";
       flake = false;
     };
 
@@ -219,6 +218,39 @@
       url = "gitlab:redox-os/netutils/master?host=gitlab.redox-os.org";
       flake = false;
     };
+
+    # Orbital ecosystem - graphical desktop support
+    orbital-src = {
+      url = "gitlab:redox-os/orbital/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    orbdata-src = {
+      url = "gitlab:redox-os/orbdata/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    orbterm-src = {
+      url = "gitlab:redox-os/orbterm/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    orbutils-src = {
+      url = "gitlab:redox-os/orbutils/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # orbfont - font rendering for Orbital
+    orbfont-src = {
+      url = "gitlab:redox-os/orbfont/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # orbimage - image loading for Orbital
+    orbimage-src = {
+      url = "gitlab:redox-os/orbimage/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
   };
 
   outputs =
@@ -239,6 +271,7 @@
       # Import all flake-parts modules
       imports = [
         ./nix/flake-modules/toolchain.nix
+        ./nix/flake-modules/sources.nix
         ./nix/flake-modules/packages.nix
         ./nix/flake-modules/devshells.nix
         ./nix/flake-modules/checks.nix

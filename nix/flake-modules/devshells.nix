@@ -212,7 +212,7 @@
             echo "Rust: $(rustc --version)"
             echo "Target: ${redoxTarget}"
             echo ""
-            echo "Quick start: cd redox-src && make all PODMAN_BUILD=0"
+            echo "Quick start: nix build .#diskImage"
           '';
         };
 
