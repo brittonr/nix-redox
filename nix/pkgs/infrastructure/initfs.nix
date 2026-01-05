@@ -354,9 +354,11 @@ pkgs.stdenv.mkDerivation {
     echo "Starting interactive shell..."
     echo "Type 'help' for commands, 'exit' to quit"
     echo ""
-    # Use getty to properly initialize terminal and spawn shell
-    # getty opens TTY, sets up terminal parameters, then execs login
-    # For headless serial console, use debug: scheme with -J to not clear
+    # Use getty to properly initialize terminal and spawn login
+    # -J: Don't clear the screen (useful for serial console)
+    # For headless serial console, use debug: scheme
+    # Note: login authentication is currently broken due to RedoxFS file ownership
+    # (redoxfs-ar sets default owner that doesn't match root UID)
     getty -J debug:
     EOF
 
