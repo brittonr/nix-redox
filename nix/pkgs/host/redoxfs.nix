@@ -15,7 +15,15 @@ craneLib.buildPackage {
   pname = "redoxfs";
   version = "unstable";
 
-  inherit src;
+  src = pkgs.applyPatches {
+    inherit src;
+    name = "redoxfs-src-patched";
+    patches = [
+      # Add --uid and --gid options to redoxfs-ar for overriding file ownership
+      # This is needed for Nix sandbox builds where files are not owned by root
+      ../../patches/redoxfs-uid-gid-override.patch
+    ];
+  };
 
   cargoExtraArgs = "--locked";
 

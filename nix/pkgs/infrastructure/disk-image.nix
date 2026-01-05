@@ -173,9 +173,9 @@ pkgs.stdenv.mkDerivation {
     root;
     user;
     SHADOW
-                # Note: Using 644 for testing - normally should be 600
-                # But redoxfs-ar may set default owner that prevents login from reading
-                chmod 644 redoxfs-root/etc/shadow
+                # Shadow file should only be readable by root (mode 600)
+                # With our patched redoxfs-ar using --uid 0 --gid 0, ownership is correct
+                chmod 600 redoxfs-root/etc/shadow
 
                 # Create home for root
                 mkdir -p redoxfs-root/root
@@ -679,11 +679,13 @@ pkgs.stdenv.mkDerivation {
 
                 # Create the RedoxFS partition image using redoxfs-ar
                 # redoxfs-ar creates a RedoxFS image from a directory
+                # Using --uid 0 --gid 0 to set all files as owned by root
+                # This is necessary because Nix sandbox builds files with non-root UIDs
                 echo "Contents of redoxfs-root before creating image:"
                 find redoxfs-root -type f 2>/dev/null | head -20 || true
                 echo "Total files: $(find redoxfs-root -type f 2>/dev/null | wc -l)"
                 truncate -s $REDOXFS_SIZE redoxfs.img
-                redoxfs-ar redoxfs.img redoxfs-root
+                redoxfs-ar --uid 0 --gid 0 redoxfs.img redoxfs-root
 
                 # Copy RedoxFS partition into disk image
                 dd if=redoxfs.img of=disk.img bs=512 seek=$REDOXFS_START conv=notrunc

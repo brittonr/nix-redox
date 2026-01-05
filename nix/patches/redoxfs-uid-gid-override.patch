@@ -1,0 +1,274 @@
+diff -ruN a/src/archive.rs b/src/archive.rs
+--- a/src/archive.rs	2026-01-04 22:00:24.284867691 -0500
++++ b/src/archive.rs	2026-01-04 22:01:56.900034609 -0500
+@@ -10,10 +10,16 @@
+     io::Error::from_raw_os_error(err.errno)
+ }
+
+-pub fn archive_at<D: Disk, P: AsRef<Path>>(
++/// Archive a directory into a RedoxFS transaction.
++///
++/// If `uid_override` or `gid_override` are provided, all files will be
++/// archived with those ownership values instead of the source file's metadata.
++pub fn archive_at_with_owner<D: Disk, P: AsRef<Path>>(
+     tx: &mut Transaction<D>,
+     parent_path: P,
+     parent_ptr: TreePtr<Node>,
++    uid_override: Option<u32>,
++    gid_override: Option<u32>,
+ ) -> io::Result<()> {
+     for entry_res in fs::read_dir(parent_path)? {
+         let entry = entry_res?;
+@@ -53,16 +59,20 @@
+
+             node_ptr = node.ptr();
+
+-            if node.data().uid() != metadata.uid() || node.data().gid() != metadata.gid() {
+-                node.data_mut().set_uid(metadata.uid());
+-                node.data_mut().set_gid(metadata.gid());
++            // Use override values if provided, otherwise use source file metadata
++            let target_uid = uid_override.unwrap_or(metadata.uid());
++            let target_gid = gid_override.unwrap_or(metadata.gid());
++
++            if node.data().uid() != target_uid || node.data().gid() != target_gid {
++                node.data_mut().set_uid(target_uid);
++                node.data_mut().set_gid(target_gid);
+                 tx.sync_tree(node).map_err(syscall_err)?;
+             }
+         }
+
+         let path = entry.path();
+         if file_type.is_dir() {
+-            archive_at(tx, path, node_ptr)?;
++            archive_at_with_owner(tx, path, node_ptr, uid_override, gid_override)?;
+         } else if file_type.is_file() {
+             let data = fs::read(path)?;
+             let count = tx
+@@ -103,11 +113,25 @@
+     Ok(())
+ }
+
+-pub fn archive<D: Disk, P: AsRef<Path>>(fs: &mut FileSystem<D>, parent_path: P) -> io::Result<u64> {
++/// Archive a directory into a RedoxFS transaction (backwards compatible).
++pub fn archive_at<D: Disk, P: AsRef<Path>>(
++    tx: &mut Transaction<D>,
++    parent_path: P,
++    parent_ptr: TreePtr<Node>,
++) -> io::Result<()> {
++    archive_at_with_owner(tx, parent_path, parent_ptr, None, None)
++}
++
++/// Archive a directory into a RedoxFS filesystem with optional ownership overrides.
++pub fn archive_with_owner<D: Disk, P: AsRef<Path>>(
++    fs: &mut FileSystem<D>,
++    parent_path: P,
++    uid_override: Option<u32>,
++    gid_override: Option<u32>,
++) -> io::Result<u64> {
+     let end_block = fs
+         .tx(|tx| {
+-            // Archive_at root node
+-            archive_at(tx, parent_path, TreePtr::root())
++            archive_at_with_owner(tx, parent_path, TreePtr::root(), uid_override, gid_override)
+                 .map_err(|err| syscall::Error::new(err.raw_os_error().unwrap()))?;
+
+             // Squash alloc log
+@@ -144,3 +168,8 @@
+
+     Ok((fs.block + end_block) * BLOCK_SIZE)
+ }
++
++/// Archive a directory into a RedoxFS filesystem (backwards compatible).
++pub fn archive<D: Disk, P: AsRef<Path>>(fs: &mut FileSystem<D>, parent_path: P) -> io::Result<u64> {
++    archive_with_owner(fs, parent_path, None, None)
++}
+diff -ruN a/src/bin/ar.rs b/src/bin/ar.rs
+--- a/src/bin/ar.rs	2026-01-04 22:00:24.284880716 -0500
++++ b/src/bin/ar.rs	2026-01-04 22:02:27.047409282 -0500
+@@ -6,47 +6,110 @@
+ use std::time::{SystemTime, UNIX_EPOCH};
+ use std::{env, fs, process};
+
+-use redoxfs::{archive, DiskFile, FileSystem};
++use redoxfs::{archive_with_owner, DiskFile, FileSystem};
+ use uuid::Uuid;
+
++fn print_usage() {
++    eprintln!("redoxfs-ar: create RedoxFS archive from directory");
++    eprintln!();
++    eprintln!("Usage: redoxfs-ar [OPTIONS] DISK FOLDER [BOOTLOADER]");
++    eprintln!();
++    eprintln!("Arguments:");
++    eprintln!("  DISK        Path to disk image file");
++    eprintln!("  FOLDER      Path to source directory to archive");
++    eprintln!("  BOOTLOADER  Optional path to bootloader binary");
++    eprintln!();
++    eprintln!("Options:");
++    eprintln!("  --uid <N>   Override file owner UID for all files");
++    eprintln!("  --gid <N>   Override file group GID for all files");
++    eprintln!("  --help      Show this help message");
++}
++
+ fn main() {
+     env_logger::init();
+
+-    let mut args = env::args().skip(1);
++    let args: Vec<String> = env::args().skip(1).collect();
++    let mut uid_override: Option<u32> = None;
++    let mut gid_override: Option<u32> = None;
++    let mut positional_args: Vec<String> = Vec::new();
++
++    let mut i = 0;
++    while i < args.len() {
++        match args[i].as_str() {
++            "--uid" => {
++                i += 1;
++                uid_override = Some(
++                    args.get(i)
++                        .expect("--uid requires a value")
++                        .parse()
++                        .expect("--uid must be a number"),
++                );
++            }
++            "--gid" => {
++                i += 1;
++                gid_override = Some(
++                    args.get(i)
++                        .expect("--gid requires a value")
++                        .parse()
++                        .expect("--gid must be a number"),
++                );
++            }
++            "--help" | "-h" => {
++                print_usage();
++                process::exit(0);
++            }
++            arg if arg.starts_with('-') => {
++                eprintln!("redoxfs-ar: unknown option: {}", arg);
++                print_usage();
++                process::exit(1);
++            }
++            _ => positional_args.push(args[i].clone()),
++        }
++        i += 1;
++    }
+
+-    let disk_path = if let Some(path) = args.next() {
+-        path
+-    } else {
+-        println!("redoxfs-ar: no disk image provided");
+-        println!("redoxfs-ar DISK FOLDER [BOOTLOADER]");
+-        process::exit(1);
++    let disk_path = match positional_args.get(0) {
++        Some(path) => path.clone(),
++        None => {
++            eprintln!("redoxfs-ar: no disk image provided");
++            print_usage();
++            process::exit(1);
++        }
+     };
+
+-    let folder_path = if let Some(path) = args.next() {
+-        path
+-    } else {
+-        println!("redoxfs-ar: no folder provided");
+-        println!("redoxfs-ar DISK FOLDER [BOOTLOADER]");
+-        process::exit(1);
++    let folder_path = match positional_args.get(1) {
++        Some(path) => path.clone(),
++        None => {
++            eprintln!("redoxfs-ar: no folder provided");
++            print_usage();
++            process::exit(1);
++        }
+     };
+
+-    let bootloader_path_opt = args.next();
++    let bootloader_path_opt = positional_args.get(2);
++
++    if uid_override.is_some() || gid_override.is_some() {
++        eprintln!(
++            "redoxfs-ar: using ownership override uid={:?} gid={:?}",
++            uid_override, gid_override
++        );
++    }
+
+     let disk = match DiskFile::open(&disk_path) {
+         Ok(disk) => disk,
+         Err(err) => {
+-            println!("redoxfs-ar: failed to open image {}: {}", disk_path, err);
++            eprintln!("redoxfs-ar: failed to open image {}: {}", disk_path, err);
+             process::exit(1);
+         }
+     };
+
+     let mut bootloader = vec![];
+     if let Some(bootloader_path) = bootloader_path_opt {
+-        match fs::File::open(&bootloader_path) {
++        match fs::File::open(bootloader_path) {
+             Ok(mut file) => match file.read_to_end(&mut bootloader) {
+                 Ok(_) => (),
+                 Err(err) => {
+-                    println!(
++                    eprintln!(
+                         "redoxfs-ar: failed to read bootloader {}: {}",
+                         bootloader_path, err
+                     );
+@@ -54,14 +117,14 @@
+                 }
+             },
+             Err(err) => {
+-                println!(
++                eprintln!(
+                     "redoxfs-ar: failed to open bootloader {}: {}",
+                     bootloader_path, err
+                 );
+                 process::exit(1);
+             }
+         }
+-    };
++    }
+
+     let ctime = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+     match FileSystem::create_reserved(
+@@ -72,16 +135,16 @@
+         ctime.subsec_nanos(),
+     ) {
+         Ok(mut fs) => {
+-            let size = match archive(&mut fs, &folder_path) {
++            let size = match archive_with_owner(&mut fs, &folder_path, uid_override, gid_override) {
+                 Ok(ok) => ok,
+                 Err(err) => {
+-                    println!("redoxfs-ar: failed to archive {}: {}", folder_path, err);
++                    eprintln!("redoxfs-ar: failed to archive {}: {}", folder_path, err);
+                     process::exit(1);
+                 }
+             };
+
+             if let Err(err) = fs.disk.file.set_len(size) {
+-                println!(
++                eprintln!(
+                     "redoxfs-ar: failed to truncate {} to {}: {}",
+                     disk_path, size, err
+                 );
+@@ -98,7 +161,7 @@
+             );
+         }
+         Err(err) => {
+-            println!(
++            eprintln!(
+                 "redoxfs-ar: failed to create filesystem on {}: {}",
+                 disk_path, err
+             );
+diff -ruN a/src/lib.rs b/src/lib.rs
+--- a/src/lib.rs	2026-01-04 22:00:24.284992758 -0500
++++ b/src/lib.rs	2026-01-04 22:02:43.455605510 -0500
+@@ -23,7 +23,7 @@
+
+ pub use self::allocator::{AllocEntry, AllocList, Allocator, ReleaseList, ALLOC_LIST_ENTRIES};
+ #[cfg(feature = "std")]
+-pub use self::archive::{archive, archive_at};
++pub use self::archive::{archive, archive_at, archive_at_with_owner, archive_with_owner};
+ pub use self::block::{
+     BlockAddr, BlockData, BlockLevel, BlockList, BlockMeta, BlockPtr, BlockRaw, BlockTrait,
+ };
