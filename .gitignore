@@ -4,3 +4,5 @@ result-*
 
 # Temporary build artifacts
 wrappers/
+target/
+.pre-commit-config.yaml
