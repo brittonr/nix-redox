@@ -321,16 +321,36 @@ pkgs.stdenv.mkDerivation {
 
                 # Copy Orbital graphics packages
                 ${lib.optionalString (orbdata != null) ''
-                  echo "Copying Orbital data files (fonts, icons, cursors)..."
-                  # orbdata contains: backgrounds/, cursors/, fonts/, icons/
-                  # These go to /ui/ directory in Redox
-                  mkdir -p redoxfs-root/ui
-                  for dir in backgrounds cursors fonts icons; do
-                    if [ -d "${orbdata}/$dir" ]; then
-                      cp -rv ${orbdata}/$dir redoxfs-root/ui/
-                    fi
-                  done
-                  echo "Copied orbdata to /ui/"
+                  echo "Copying Orbital data files (fonts, icons, cursors, config)..."
+                  # orbdata structure (from gitlab.redox-os.org/redox-os/orbdata):
+                  #   /ui/orbital.toml       - Orbital configuration
+                  #   /ui/fonts/             - Fonts (Mono/Fira, Sans/Fira subdirs)
+                  #   /ui/icons/             - Application icons
+                  #   /ui/*.png              - Cursor images, window decorations
+                  #   /ui/background.jpg     - Default background
+                  #   /usr/share/applications/ - MIME type associations
+
+                  # Copy /ui directory (contains orbital.toml, fonts, icons, cursors, background)
+                  if [ -d "${orbdata}/ui" ]; then
+                    mkdir -p redoxfs-root/ui
+                    cp -rv ${orbdata}/ui/* redoxfs-root/ui/
+                    echo "Copied orbdata/ui/ to /ui/"
+                  fi
+
+                  # Copy /usr directory (contains share/applications/mimeapps.list)
+                  if [ -d "${orbdata}/usr" ]; then
+                    mkdir -p redoxfs-root/usr
+                    cp -rv ${orbdata}/usr/* redoxfs-root/usr/
+                    echo "Copied orbdata/usr/ to /usr/"
+                  fi
+
+                  # List what we have for debugging
+                  echo "=== Contents of /ui after orbdata copy ==="
+                  ls -la redoxfs-root/ui/ || true
+                  echo "=== orbital.toml ==="
+                  cat redoxfs-root/ui/orbital.toml 2>/dev/null || echo "orbital.toml not found!"
+                  echo "=== Fonts ==="
+                  find redoxfs-root/ui/fonts -type f -name "*.ttf" 2>/dev/null | head -10 || echo "No fonts found"
                 ''}
 
                 ${lib.optionalString (orbital != null) ''
@@ -341,6 +361,7 @@ pkgs.stdenv.mkDerivation {
                   else
                     echo "WARNING: orbital not found at ${orbital}/bin"
                   fi
+                  # Note: orbital.toml is provided by orbdata package, not created here
                 ''}
 
                 ${lib.optionalString (orbterm != null) ''
@@ -437,16 +458,13 @@ pkgs.stdenv.mkDerivation {
                 ''}
 
                 # Orbital display server startup (if graphics enabled)
-                # Note: Orbital requires proper display initialization from vesad
-                # The current build includes orbital and orbterm binaries
-                # To start Orbital after boot, run: orbital &
+                # Note: Orbital requires VT environment variable and proper display initialization
+                # VT 1 is assigned by inputd when vesad registers its display handle
+                # TODO: orblogin (from orbutils) is not yet packaged, using login from userutils
                 ${lib.optionalString (enableGraphics && orbital != null) ''
                                     cat > redoxfs-root/usr/lib/init.d/20_orbital << 'INIT_ORBITAL'
-                  # Orbital display server startup
-                  # Note: Orbital may need display: scheme to be fully initialized
-                  # This requires vesad and inputd to be running
-                  echo "Starting Orbital..."
-                  orbital
+                  export VT 1
+                  nowait /bin/orbital /bin/login
                   INIT_ORBITAL
                                     chmod +x redoxfs-root/usr/lib/init.d/20_orbital
                                     echo "Created Orbital init script at /usr/lib/init.d/20_orbital"

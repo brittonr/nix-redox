@@ -1,0 +1,120 @@
+--- a/drivers/graphics/vesad/src/scheme.rs
++++ b/drivers/graphics/vesad/src/scheme.rs
+@@ -1,6 +1,6 @@
+ use std::alloc::{self, Layout};
+ use std::convert::TryInto;
+-use std::ptr::{self, NonNull};
++use std::ptr;
+
+ use driver_graphics::objects::{DrmConnectorStatus, DrmObjectId, DrmObjects};
+ use driver_graphics::{
+@@ -10,6 +10,8 @@ use driver_graphics::{
+ use drm_sys::DRM_MODE_DPMS_ON;
+ use graphics_ipc::v1::Damage;
+ use graphics_ipc::v2::ipc::{DRM_CAP_DUMB_BUFFER, DRM_CLIENT_CAP_CURSOR_PLANE_HOTSPOT};
++use libredox::call::{mmap, munmap, MmapArgs};
++use libredox::flag::{MAP_ANONYMOUS, MAP_PRIVATE, PROT_READ, PROT_WRITE};
+ use syscall::{EINVAL, PAGE_SIZE};
+
+ #[derive(Debug)]
+@@ -182,39 +184,60 @@ impl FrameBuffer {
+ pub struct GraphicScreen {
+     width: usize,
+     height: usize,
+-    ptr: NonNull<[u32]>,
++    ptr: *mut u32,
++    len: usize,
++    size: usize,
+ }
+
+ impl GraphicScreen {
+     fn new(width: usize, height: usize) -> GraphicScreen {
+-        let len = width * height;
+-        let layout = Self::layout(len);
+-        let ptr = unsafe { alloc::alloc_zeroed(layout) };
+-        let ptr = ptr::slice_from_raw_parts_mut(ptr.cast(), len);
+-        let ptr = NonNull::new(ptr).unwrap_or_else(|| alloc::handle_alloc_error(layout));
+-
+-        GraphicScreen { width, height, ptr }
+-    }
+-
+-    #[inline]
+-    fn layout(len: usize) -> Layout {
+-        // optimizes to an integer mul
+-        Layout::array::<u32>(len)
+-            .unwrap()
+-            .align_to(PAGE_SIZE)
+-            .unwrap()
++        let len = width * height;
++        let byte_size = len * std::mem::size_of::<u32>();
++        // Round up to page boundary for mmap
++        let size = (byte_size + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
++
++        // Use anonymous mmap to get page-aligned memory
++        // This is critical for kernel fmap to work - it requires page-aligned addresses
++        let ptr = unsafe {
++            mmap(MmapArgs {
++                fd: !0, // Anonymous mapping (no file)
++                offset: 0,
++                length: size,
++                prot: PROT_READ | PROT_WRITE,
++                flags: MAP_PRIVATE | MAP_ANONYMOUS,
++                addr: std::ptr::null_mut(),
++            })
++        };
++
++        let ptr = match ptr {
++            Ok(p) => p as *mut u32,
++            Err(e) => {
++                panic!("GraphicScreen mmap failed: {:?}", e);
++            }
++        };
++
++        log::info!(
++            "GraphicScreen: mmap addr={:#x}, size={}, page_aligned={}",
++            ptr as usize, size, (ptr as usize) % PAGE_SIZE == 0
++        );
++
++        GraphicScreen { width, height, ptr, len, size }
+     }
+ }
+
+ impl Drop for GraphicScreen {
+     fn drop(&mut self) {
+-        let layout = Self::layout(self.ptr.len());
+-        unsafe { alloc::dealloc(self.ptr.as_ptr().cast(), layout) };
++        unsafe {
++            if let Err(e) = munmap(self.ptr as *mut (), self.size) {
++                log::error!("GraphicScreen munmap failed: {:?}", e);
++            }
++        }
+     }
+ }
+
+ impl Framebuffer for GraphicScreen {
+     fn width(&self) -> u32 {
+         self.width as u32
+@@ -224,6 +247,14 @@ impl Framebuffer for GraphicScreen {
+     fn height(&self) -> u32 {
+         self.height as u32
+     }
++
++    fn data(&self) -> &[u32] {
++        unsafe { std::slice::from_raw_parts(self.ptr, self.len) }
++    }
++
++    fn data_mut(&mut self) -> &mut [u32] {
++        unsafe { std::slice::from_raw_parts_mut(self.ptr, self.len) }
++    }
+ }
+
+ impl GraphicScreen {
+@@ -234,7 +265,7 @@ impl GraphicScreen {
+         let w: usize = sync_rect.width.try_into().unwrap();
+         let h: usize = sync_rect.height.try_into().unwrap();
+
+-        let offscreen_ptr = self.ptr.as_ptr() as *mut u32;
++        let offscreen_ptr = self.ptr;
+         let onscreen_ptr = framebuffer.onscreen as *mut u32; // FIXME use as_mut_ptr once stable
+
+         for row in start_y..start_y + h {

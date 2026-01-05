@@ -305,6 +305,8 @@ pkgs.stdenv.mkDerivation {
               nowait inputd
               echo "Starting display daemon..."
               vesad
+              echo "Activating virtual terminal 1..."
+              inputd -A 1
               echo "Starting PS/2 input driver..."
               ps2d us
               echo "Starting framebuffer boot logger..."

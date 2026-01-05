@@ -80,33 +80,9 @@
           # Library functions for advanced use
           lib = import ../lib {
             inherit pkgs lib;
-            redoxTarget = "x86_64-unknown-redox";
+            redoxTarget = config.redox._computed.redoxTarget;
           };
         };
       };
     };
-
-  flake = {
-    overlays = {
-      # Minimal overlay - just the rust toolchain
-      toolchain =
-        final: prev:
-        let
-          pkgsWithRustOverlay = import inputs.nixpkgs {
-            inherit (prev) system;
-            overlays = [ inputs.rust-overlay.overlays.default ];
-          };
-        in
-        {
-          redox-toolchain = pkgsWithRustOverlay.rust-bin.nightly."2025-10-03".default.override {
-            extensions = [
-              "rust-src"
-              "rustfmt"
-              "clippy"
-            ];
-            targets = [ "x86_64-unknown-redox" ];
-          };
-        };
-    };
-  };
 }
