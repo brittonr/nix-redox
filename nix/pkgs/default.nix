@@ -390,28 +390,7 @@ let
         CTRLC_EOF
                   # Regenerate checksum for patched ctrlc
                   ${pkgs.python3}/bin/python3 << 'PYTHON_PATCH'
-        import json
-        import hashlib
-        from pathlib import Path
-
-        crate_dir = Path("vendor-combined/ctrlc")
-        checksum_file = crate_dir / ".cargo-checksum.json"
-        if checksum_file.exists():
-            with open(checksum_file) as f:
-                existing = json.load(f)
-            pkg_hash = existing.get("package")
-            files = {}
-            for file_path in sorted(crate_dir.rglob("*")):
-                if file_path.is_file() and file_path.name != ".cargo-checksum.json":
-                    rel_path = str(file_path.relative_to(crate_dir))
-                    with open(file_path, "rb") as f:
-                        sha = hashlib.sha256(f.read()).hexdigest()
-                    files[rel_path] = sha
-            new_data = {"files": files}
-            if pkg_hash:
-                new_data["package"] = pkg_hash
-            with open(checksum_file, "w") as f:
-                json.dump(new_data, f)
+        ${vendor.regenerateSingleCrateChecksum { crateDir = "vendor-combined/ctrlc"; }}
         PYTHON_PATCH
                 fi
       '';

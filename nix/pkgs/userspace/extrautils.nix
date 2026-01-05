@@ -43,6 +43,52 @@ let
     useCrane = true;
   };
 
+  # Git source mappings for cargo config
+  gitSources = [
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/arg_parser.git";
+      git = "https://gitlab.redox-os.org/redox-os/arg_parser.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/libextra.git";
+      git = "https://gitlab.redox-os.org/redox-os/libextra.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/libredox.git";
+      git = "https://gitlab.redox-os.org/redox-os/libredox.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/pager.git";
+      git = "https://gitlab.redox-os.org/redox-os/pager.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/nicholasbishop/os_release.git?rev=bb0b7bd";
+      git = "https://gitlab.redox-os.org/nicholasbishop/os_release.git";
+      rev = "bb0b7bd";
+    }
+    {
+      url = "git+https://github.com/tea/cc-rs?branch=riscv-abi-arch-fix";
+      git = "https://github.com/tea/cc-rs";
+      branch = "riscv-abi-arch-fix";
+    }
+    {
+      url = "git+https://github.com/jackpot51/filetime.git";
+      git = "https://github.com/jackpot51/filetime.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/libpager.git";
+      git = "https://gitlab.redox-os.org/redox-os/libpager.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/termion.git";
+      git = "https://gitlab.redox-os.org/redox-os/termion.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/arg-parser.git";
+      git = "https://gitlab.redox-os.org/redox-os/arg-parser.git";
+    }
+  ];
+
 in
 pkgs.stdenv.mkDerivation {
   pname = "redox-extrautils";
@@ -92,66 +138,12 @@ pkgs.stdenv.mkDerivation {
 
     mkdir -p .cargo
     cat > .cargo/config.toml << 'CARGOCONF'
-    [source.crates-io]
-    replace-with = "vendored-sources"
-
-    [source.vendored-sources]
-    directory = "vendor-combined"
-
-    # Git dependencies for extrautils
-    [source."git+https://gitlab.redox-os.org/redox-os/arg_parser.git"]
-    git = "https://gitlab.redox-os.org/redox-os/arg_parser.git"
-    replace-with = "vendored-sources"
-
-    [source."git+https://gitlab.redox-os.org/redox-os/libextra.git"]
-    git = "https://gitlab.redox-os.org/redox-os/libextra.git"
-    replace-with = "vendored-sources"
-
-    [source."git+https://gitlab.redox-os.org/redox-os/libredox.git"]
-    git = "https://gitlab.redox-os.org/redox-os/libredox.git"
-    replace-with = "vendored-sources"
-
-    [source."git+https://gitlab.redox-os.org/redox-os/pager.git"]
-    git = "https://gitlab.redox-os.org/redox-os/pager.git"
-    replace-with = "vendored-sources"
-
-    [source."git+https://gitlab.redox-os.org/nicholasbishop/os_release.git?rev=bb0b7bd"]
-    git = "https://gitlab.redox-os.org/nicholasbishop/os_release.git"
-    rev = "bb0b7bd"
-    replace-with = "vendored-sources"
-
-    [source."git+https://github.com/tea/cc-rs?branch=riscv-abi-arch-fix"]
-    git = "https://github.com/tea/cc-rs"
-    branch = "riscv-abi-arch-fix"
-    replace-with = "vendored-sources"
-
-    [source."git+https://github.com/jackpot51/filetime.git"]
-    git = "https://github.com/jackpot51/filetime.git"
-    replace-with = "vendored-sources"
-
-    [source."git+https://gitlab.redox-os.org/redox-os/libpager.git"]
-    git = "https://gitlab.redox-os.org/redox-os/libpager.git"
-    replace-with = "vendored-sources"
-
-    [source."git+https://gitlab.redox-os.org/redox-os/termion.git"]
-    git = "https://gitlab.redox-os.org/redox-os/termion.git"
-    replace-with = "vendored-sources"
-
-    [source."git+https://gitlab.redox-os.org/redox-os/arg-parser.git"]
-    git = "https://gitlab.redox-os.org/redox-os/arg-parser.git"
-    replace-with = "vendored-sources"
-
-    [net]
-    offline = true
-
-    [build]
-    target = "${redoxTarget}"
-
-    [target.${redoxTarget}]
-    linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
-
-    [profile.release]
-    panic = "abort"
+    ${vendor.mkCargoConfig {
+      inherit gitSources;
+      target = redoxTarget;
+      linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
+      panic = "abort";
+    }}
     CARGOCONF
 
     runHook postConfigure

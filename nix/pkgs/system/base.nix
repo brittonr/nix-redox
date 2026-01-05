@@ -150,35 +150,6 @@ let
     }
   ];
 
-  # Generate cargo config content
-  cargoConfigContent = ''
-    [source.crates-io]
-    replace-with = "vendored-sources"
-
-    [source.vendored-sources]
-    directory = "vendor-combined"
-
-    ${lib.concatMapStringsSep "\n" (src: ''
-      [source."${src.url}"]
-      git = "${src.git}"
-      ${lib.optionalString (src ? branch) "branch = \"${src.branch}\""}
-      ${lib.optionalString (src ? rev) "rev = \"${src.rev}\""}
-      replace-with = "vendored-sources"
-    '') gitSources}
-
-    [net]
-    offline = true
-
-    [build]
-    target = "${redoxTarget}"
-
-    [target.${redoxTarget}]
-    linker = "ld.lld"
-
-    [profile.release]
-    panic = "abort"
-  '';
-
 in
 pkgs.stdenv.mkDerivation {
   pname = "redox-base";
@@ -216,7 +187,12 @@ pkgs.stdenv.mkDerivation {
     # Create cargo config
     mkdir -p .cargo
     cat > .cargo/config.toml << 'CARGOCONF'
-    ${cargoConfigContent}
+    ${vendor.mkCargoConfig {
+      inherit gitSources;
+      target = redoxTarget;
+      linker = "ld.lld";
+      panic = "abort";
+    }}
     CARGOCONF
 
     runHook postConfigure

@@ -82,6 +82,38 @@ let
     useCrane = true;
   };
 
+  # Git source mappings for cargo config
+  gitSources = [
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/libredox.git";
+      git = "https://gitlab.redox-os.org/redox-os/libredox.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/termion.git";
+      git = "https://gitlab.redox-os.org/redox-os/termion.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/orbclient.git";
+      git = "https://gitlab.redox-os.org/redox-os/orbclient.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/users.git";
+      git = "https://gitlab.redox-os.org/redox-os/users.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/libextra.git";
+      git = "https://gitlab.redox-os.org/redox-os/libextra.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/liner.git";
+      git = "https://gitlab.redox-os.org/redox-os/liner.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/redox-scheme.git";
+      git = "https://gitlab.redox-os.org/redox-os/redox-scheme.git";
+    }
+  ];
+
 in
 pkgs.stdenv.mkDerivation {
   pname = "redox-userutils";
@@ -113,52 +145,12 @@ pkgs.stdenv.mkDerivation {
 
     mkdir -p .cargo
     cat > .cargo/config.toml << 'CARGOCONF'
-    [source.crates-io]
-    replace-with = "vendored-sources"
-
-    [source.vendored-sources]
-    directory = "vendor-combined"
-
-    # Git dependencies for userutils
-    [source."git+https://gitlab.redox-os.org/redox-os/libredox.git"]
-    git = "https://gitlab.redox-os.org/redox-os/libredox.git"
-    replace-with = "vendored-sources"
-
-    [source."git+https://gitlab.redox-os.org/redox-os/termion.git"]
-    git = "https://gitlab.redox-os.org/redox-os/termion.git"
-    replace-with = "vendored-sources"
-
-    [source."git+https://gitlab.redox-os.org/redox-os/orbclient.git"]
-    git = "https://gitlab.redox-os.org/redox-os/orbclient.git"
-    replace-with = "vendored-sources"
-
-    [source."git+https://gitlab.redox-os.org/redox-os/users.git"]
-    git = "https://gitlab.redox-os.org/redox-os/users.git"
-    replace-with = "vendored-sources"
-
-    [source."git+https://gitlab.redox-os.org/redox-os/libextra.git"]
-    git = "https://gitlab.redox-os.org/redox-os/libextra.git"
-    replace-with = "vendored-sources"
-
-    [source."git+https://gitlab.redox-os.org/redox-os/liner.git"]
-    git = "https://gitlab.redox-os.org/redox-os/liner.git"
-    replace-with = "vendored-sources"
-
-    [source."git+https://gitlab.redox-os.org/redox-os/redox-scheme.git"]
-    git = "https://gitlab.redox-os.org/redox-os/redox-scheme.git"
-    replace-with = "vendored-sources"
-
-    [net]
-    offline = true
-
-    [build]
-    target = "${redoxTarget}"
-
-    [target.${redoxTarget}]
-    linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
-
-    [profile.release]
-    panic = "abort"
+    ${vendor.mkCargoConfig {
+      inherit gitSources;
+      target = redoxTarget;
+      linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
+      panic = "abort";
+    }}
     CARGOCONF
 
     runHook postConfigure

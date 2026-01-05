@@ -141,23 +141,11 @@ pkgs.stdenv.mkDerivation {
 
     mkdir -p .cargo
     cat > .cargo/config.toml << 'CARGOCONF'
-    [source.crates-io]
-    replace-with = "vendored-sources"
-
-    [source.vendored-sources]
-    directory = "vendor-combined"
-
-    [net]
-    offline = true
-
-    [build]
-    target = "${redoxTarget}"
-
-    [target.${redoxTarget}]
-    linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
-
-    [profile.release]
-    panic = "abort"
+    ${vendor.mkCargoConfig {
+      target = redoxTarget;
+      linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
+      panic = "abort";
+    }}
     CARGOCONF
 
     runHook postConfigure

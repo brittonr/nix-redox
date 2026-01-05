@@ -39,6 +39,70 @@ rec {
             json.dump(new_data, f)
   '';
 
+  # Parameterized checksum regeneration for a vendor directory
+  # Usage: ${regenerateChecksums { vendorDir = "vendor"; }}
+  regenerateChecksums =
+    {
+      vendorDir ? "vendor-combined",
+    }:
+    ''
+      import json
+      import hashlib
+      from pathlib import Path
+
+      vendor = Path("${vendorDir}")
+      for crate_dir in vendor.iterdir():
+          if not crate_dir.is_dir():
+              continue
+          checksum_file = crate_dir / ".cargo-checksum.json"
+          pkg_hash = None
+          if checksum_file.exists():
+              with open(checksum_file) as f:
+                  existing = json.load(f)
+              pkg_hash = existing.get("package")
+          files = {}
+          for file_path in sorted(crate_dir.rglob("*")):
+              if file_path.is_file() and file_path.name != ".cargo-checksum.json":
+                  rel_path = str(file_path.relative_to(crate_dir))
+                  with open(file_path, "rb") as f:
+                      sha = hashlib.sha256(f.read()).hexdigest()
+                  files[rel_path] = sha
+          new_data = {"files": files}
+          if pkg_hash:
+              new_data["package"] = pkg_hash
+          with open(checksum_file, "w") as f:
+              json.dump(new_data, f)
+    '';
+
+  # Regenerate checksum for a single crate (after patching)
+  # Usage: ${regenerateSingleCrateChecksum { crateDir = "vendor-combined/ctrlc"; }}
+  regenerateSingleCrateChecksum =
+    { crateDir }:
+    ''
+      import json
+      import hashlib
+      from pathlib import Path
+
+      crate_dir = Path("${crateDir}")
+      checksum_file = crate_dir / ".cargo-checksum.json"
+      if checksum_file.exists():
+          with open(checksum_file) as f:
+              existing = json.load(f)
+          pkg_hash = existing.get("package")
+          files = {}
+          for file_path in sorted(crate_dir.rglob("*")):
+              if file_path.is_file() and file_path.name != ".cargo-checksum.json":
+                  rel_path = str(file_path.relative_to(crate_dir))
+                  with open(file_path, "rb") as f:
+                      sha = hashlib.sha256(f.read()).hexdigest()
+                  files[rel_path] = sha
+          new_data = {"files": files}
+          if pkg_hash:
+              new_data["package"] = pkg_hash
+          with open(checksum_file, "w") as f:
+              json.dump(new_data, f)
+    '';
+
   # Shell script for merging project vendor with sysroot vendor
   # Handles version conflicts by keeping both versions with suffixes
   mergeVendorsScript =
@@ -98,13 +162,13 @@ rec {
   # Parameters:
   #   name: Name prefix for the derivation
   #   projectVendor: Vendored dependencies from the project (fetchCargoVendor or crane)
-  #   sysrootVendor: Vendored dependencies from sysroot (for -Z build-std)
+  #   sysrootVendor: Vendored dependencies from sysroot (for -Z build-std), optional for host tools
   #   useCrane: Set to true if projectVendor is from crane (has nested hash-link structure)
   mkMergedVendor =
     {
       name,
       projectVendor,
-      sysrootVendor,
+      sysrootVendor ? null,
       useCrane ? false,
     }:
     pkgs.runCommand "${name}-merged-vendor"
@@ -167,26 +231,28 @@ rec {
         }
         chmod -R u+w vendor-combined/
 
-        # Merge sysroot vendor with version conflict resolution
-        for crate in ${sysrootVendor}/*/; do
-          crate_name=$(basename "$crate")
-          if [ ! -d "$crate" ]; then
-            continue
-          fi
-          if [ -d "vendor-combined/$crate_name" ]; then
-            base_version=$(get_version "vendor-combined/$crate_name")
-            sysroot_version=$(get_version "$crate")
-            if [ "$base_version" != "$sysroot_version" ]; then
-              versioned_name="$crate_name-$sysroot_version"
-              if [ ! -d "vendor-combined/$versioned_name" ]; then
-                cp -rL "$crate" "vendor-combined/$versioned_name"
-              fi
+        ${lib.optionalString (sysrootVendor != null) ''
+          # Merge sysroot vendor with version conflict resolution
+          for crate in ${sysrootVendor}/*/; do
+            crate_name=$(basename "$crate")
+            if [ ! -d "$crate" ]; then
+              continue
             fi
-          else
-            cp -rL "$crate" "vendor-combined/$crate_name"
-          fi
-        done
-        chmod -R u+w vendor-combined/
+            if [ -d "vendor-combined/$crate_name" ]; then
+              base_version=$(get_version "vendor-combined/$crate_name")
+              sysroot_version=$(get_version "$crate")
+              if [ "$base_version" != "$sysroot_version" ]; then
+                versioned_name="$crate_name-$sysroot_version"
+                if [ ! -d "vendor-combined/$versioned_name" ]; then
+                  cp -rL "$crate" "vendor-combined/$versioned_name"
+                fi
+              fi
+            else
+              cp -rL "$crate" "vendor-combined/$crate_name"
+            fi
+          done
+          chmod -R u+w vendor-combined/
+        ''}
 
         # Regenerate checksums
         ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
@@ -197,21 +263,34 @@ rec {
       '';
 
   # Generate Cargo config.toml for vendored builds
+  # All packages use standardized source name "vendored-sources"
+  #
+  # Parameters:
+  #   vendorDir: Path to vendor directory (default: "vendor-combined")
+  #   gitSources: List of git source mappings [{url, git, branch?, rev?}]
+  #   target: Build target triple (e.g., "x86_64-unknown-redox")
+  #   linker: Linker path or name (e.g., "ld.lld" or full path)
+  #   panic: Panic strategy (e.g., "abort")
+  #   lto: LTO setting (e.g., "fat", "thin", true, false)
   mkCargoConfig =
     {
       vendorDir ? "vendor-combined",
       gitSources ? [ ],
+      target ? null,
+      linker ? null,
+      panic ? null,
+      lto ? null,
     }:
     ''
       [source.crates-io]
-      replace-with = "combined-vendor"
+      replace-with = "vendored-sources"
 
-      [source.combined-vendor]
+      [source.vendored-sources]
       directory = "${vendorDir}"
 
       ${lib.concatMapStringsSep "\n" (src: ''
         [source."${src.url}"]
-        replace-with = "combined-vendor"
+        replace-with = "vendored-sources"
         git = "${src.git}"
         ${lib.optionalString (src ? branch) "branch = \"${src.branch}\""}
         ${lib.optionalString (src ? rev) "rev = \"${src.rev}\""}
@@ -219,5 +298,21 @@ rec {
 
       [net]
       offline = true
+      ${lib.optionalString (target != null) ''
+
+        [build]
+        target = "${target}"
+        ${lib.optionalString (linker != null) ''
+
+          [target.${target}]
+          linker = "${linker}"
+        ''}
+      ''}
+      ${lib.optionalString (panic != null || lto != null) ''
+
+        [profile.release]
+        ${lib.optionalString (panic != null) "panic = \"${panic}\""}
+        ${lib.optionalString (lto != null) "lto = \"${lto}\""}
+      ''}
     '';
 }

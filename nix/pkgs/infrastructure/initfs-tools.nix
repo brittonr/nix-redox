@@ -9,6 +9,7 @@
   lib,
   rustToolchain,
   base-src,
+  vendor,
 }:
 
 let
@@ -44,6 +45,13 @@ let
     hash = "sha256-MHt/Nh/2TEy3W55OVYsLGBGUxhpvzKOSHk6kqMkpA2s=";
   };
 
+  # Create vendor directory (no sysroot merge needed for host tools)
+  mergedVendor = vendor.mkMergedVendor {
+    name = "initfs-tools";
+    projectVendor = initfsToolsVendor;
+    # sysrootVendor not needed for host tools
+  };
+
 in
 pkgs.stdenv.mkDerivation {
   pname = "redox-initfs-tools";
@@ -53,7 +61,6 @@ pkgs.stdenv.mkDerivation {
 
   nativeBuildInputs = [
     rustToolchain
-    pkgs.python3
   ];
 
   buildPhase = ''
@@ -63,58 +70,14 @@ pkgs.stdenv.mkDerivation {
     cp -r ${base-src}/initfs/* .
     chmod -R u+w .
 
-    # Copy vendored deps (skip .cargo and Cargo.lock from fetchCargoVendor)
-    mkdir -p vendor
-    for crate in ${initfsToolsVendor}/*/; do
-      crate_name=$(basename "$crate")
-      if [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
-        continue
-      fi
-      cp -rL "$crate" "vendor/$crate_name"
-    done
-    chmod -R u+w vendor/
-
-    # Regenerate checksums
-    ${pkgs.python3}/bin/python3 << 'PYTHON_CHECKSUM'
-    import json
-    import hashlib
-    from pathlib import Path
-
-    vendor_dir = Path("vendor")
-    for crate_dir in vendor_dir.iterdir():
-        if not crate_dir.is_dir():
-            continue
-        checksum_file = crate_dir / ".cargo-checksum.json"
-        if not checksum_file.exists():
-            continue
-        with open(checksum_file) as f:
-            existing = json.load(f)
-        pkg_hash = existing.get("package")
-        files = {}
-        for file_path in sorted(crate_dir.rglob("*")):
-            if file_path.is_file() and file_path.name != ".cargo-checksum.json":
-                rel_path = str(file_path.relative_to(crate_dir))
-                with open(file_path, "rb") as f:
-                    sha = hashlib.sha256(f.read()).hexdigest()
-                files[rel_path] = sha
-        new_data = {"files": files}
-        if pkg_hash:
-            new_data["package"] = pkg_hash
-        with open(checksum_file, "w") as f:
-            json.dump(new_data, f)
-    PYTHON_CHECKSUM
+    # Use pre-merged vendor directory
+    cp -rL ${mergedVendor} vendor-combined
+    chmod -R u+w vendor-combined
 
     # Set up cargo config
     mkdir -p .cargo
     cat > .cargo/config.toml << 'EOF'
-    [source.crates-io]
-    replace-with = "vendored-sources"
-
-    [source.vendored-sources]
-    directory = "vendor"
-
-    [net]
-    offline = true
+    ${vendor.mkCargoConfig { }}
     EOF
 
     # Copy lockfile from the initfsToolsSrc which has the generated lock

@@ -153,21 +153,11 @@ pkgs.stdenv.mkDerivation {
     cd $BOOTSTRAP_DIR
     mkdir -p .cargo
     cat > .cargo/config.toml << 'CARGOCONF'
-    [source.crates-io]
-    replace-with = "vendored-sources"
-
-    [source.vendored-sources]
-    directory = "vendor-combined"
-
-    [net]
-    offline = true
-
-    [build]
-    target = "${redoxTarget}"
-
-    [profile.release]
-    panic = "abort"
-    lto = "fat"
+    ${vendor.mkCargoConfig {
+      target = redoxTarget;
+      panic = "abort";
+      lto = "fat";
+    }}
     CARGOCONF
 
     runHook postConfigure

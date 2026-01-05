@@ -188,6 +188,24 @@ let
     useCrane = true;
   };
 
+  # Git source mappings for cargo config
+  gitSources = [
+    {
+      url = "https://github.com/tea/cc-rs?branch=riscv-abi-arch-fix";
+      git = "https://github.com/tea/cc-rs";
+      branch = "riscv-abi-arch-fix";
+    }
+    {
+      url = "https://gitlab.redox-os.org/andypython/object";
+      git = "https://gitlab.redox-os.org/andypython/object";
+    }
+    {
+      url = "https://gitlab.redox-os.org/redox-os/syscall.git?branch=master";
+      git = "https://gitlab.redox-os.org/redox-os/syscall.git";
+      branch = "master";
+    }
+  ];
+
 in
 pkgs.stdenv.mkDerivation {
   pname = "relibc";
@@ -221,28 +239,7 @@ pkgs.stdenv.mkDerivation {
     # Set up cargo config
     mkdir -p .cargo
     cat > .cargo/config.toml << 'EOF'
-    [source.crates-io]
-    replace-with = "combined-vendor"
-
-    [source.combined-vendor]
-    directory = "vendor-combined"
-
-    [source."https://github.com/tea/cc-rs?branch=riscv-abi-arch-fix"]
-    replace-with = "combined-vendor"
-    git = "https://github.com/tea/cc-rs"
-    branch = "riscv-abi-arch-fix"
-
-    [source."https://gitlab.redox-os.org/andypython/object"]
-    replace-with = "combined-vendor"
-    git = "https://gitlab.redox-os.org/andypython/object"
-
-    [source."https://gitlab.redox-os.org/redox-os/syscall.git?branch=master"]
-    replace-with = "combined-vendor"
-    git = "https://gitlab.redox-os.org/redox-os/syscall.git"
-    branch = "master"
-
-    [net]
-    offline = true
+    ${vendor.mkCargoConfig { inherit gitSources; }}
     EOF
 
     substituteInPlace Makefile \

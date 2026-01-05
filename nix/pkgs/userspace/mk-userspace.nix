@@ -49,39 +49,6 @@ let
     pkgs.llvmPackages.lld
   ];
 
-  # Generate cargo config content
-  mkCargoConfigContent =
-    {
-      gitSources ? [ ],
-    }:
-    ''
-      [source.crates-io]
-      replace-with = "vendored-sources"
-
-      [source.vendored-sources]
-      directory = "vendor-combined"
-
-      ${lib.concatMapStringsSep "\n" (src: ''
-        [source."${src.url}"]
-        git = "${src.git}"
-        ${lib.optionalString (src ? branch) "branch = \"${src.branch}\""}
-        ${lib.optionalString (src ? rev) "rev = \"${src.rev}\""}
-        replace-with = "vendored-sources"
-      '') gitSources}
-
-      [net]
-      offline = true
-
-      [build]
-      target = "${redoxTarget}"
-
-      [target.${redoxTarget}]
-      linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
-
-      [profile.release]
-      panic = "abort"
-    '';
-
 in
 rec {
   # Build a generic Rust package for Redox
@@ -144,7 +111,12 @@ rec {
         # Create cargo config
         mkdir -p .cargo
         cat > .cargo/config.toml << 'CARGOCONF'
-        ${mkCargoConfigContent { inherit gitSources; }}
+        ${vendor.mkCargoConfig {
+          inherit gitSources;
+          target = redoxTarget;
+          linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
+          panic = "abort";
+        }}
         CARGOCONF
 
         ${postConfigure}

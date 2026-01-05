@@ -102,14 +102,7 @@ pkgs.stdenv.mkDerivation {
 
     mkdir -p .cargo
     cat > .cargo/config.toml << 'EOF'
-    [source.crates-io]
-    replace-with = "combined-vendor"
-
-    [source.combined-vendor]
-    directory = "vendor-combined"
-
-    [net]
-    offline = true
+    ${vendor.mkCargoConfig { }}
     EOF
 
     # Use llvm-objcopy instead of target-prefixed objcopy
