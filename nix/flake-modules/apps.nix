@@ -45,6 +45,7 @@
         };
 
         # Cloud Hypervisor runners (virtio-only, Rust-based VMM)
+        # Performance optimized with direct I/O, CPU topology, and multi-queue networking
         run-redox-cloud-hypervisor = {
           type = "app";
           program = "${self'.packages.runCloudHypervisor}/bin/run-redox-cloud-hypervisor";
@@ -55,10 +56,42 @@
           program = "${self'.packages.runCloudHypervisorNet}/bin/run-redox-cloud-hypervisor-net";
         };
 
+        # Development mode with API socket for runtime control
+        run-redox-cloud-hypervisor-dev = {
+          type = "app";
+          program = "${self'.packages.runCloudHypervisorDev}/bin/run-redox-cloud-hypervisor-dev";
+        };
+
         # Helper script to set up TAP networking for Cloud Hypervisor
         setup-cloud-hypervisor-network = {
           type = "app";
           program = "${self'.packages.setupCloudHypervisorNetwork}/bin/setup-cloud-hypervisor-network";
+        };
+
+        # ch-remote wrapper scripts for runtime VM control
+        pause-redox = {
+          type = "app";
+          program = "${self'.packages.pauseRedox}/bin/pause-redox";
+        };
+
+        resume-redox = {
+          type = "app";
+          program = "${self'.packages.resumeRedox}/bin/resume-redox";
+        };
+
+        snapshot-redox = {
+          type = "app";
+          program = "${self'.packages.snapshotRedox}/bin/snapshot-redox";
+        };
+
+        info-redox = {
+          type = "app";
+          program = "${self'.packages.infoRedox}/bin/info-redox";
+        };
+
+        resize-memory-redox = {
+          type = "app";
+          program = "${self'.packages.resizeMemoryRedox}/bin/resize-memory-redox";
         };
 
         build-cookbook = {

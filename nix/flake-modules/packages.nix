@@ -360,7 +360,15 @@
         # Cloud Hypervisor runners
         runCloudHypervisor = cloudHypervisorRunners.headless;
         runCloudHypervisorNet = cloudHypervisorRunners.withNetwork;
+        runCloudHypervisorDev = cloudHypervisorRunners.withDev;
         setupCloudHypervisorNetwork = cloudHypervisorRunners.setupNetwork;
+
+        # Cloud Hypervisor ch-remote wrapper scripts
+        pauseRedox = cloudHypervisorRunners.pauseVm;
+        resumeRedox = cloudHypervisorRunners.resumeVm;
+        snapshotRedox = cloudHypervisorRunners.snapshotVm;
+        infoRedox = cloudHypervisorRunners.infoVm;
+        resizeMemoryRedox = cloudHypervisorRunners.resizeMemory;
 
         # Default package
         default = modularPkgs.host.fstools;

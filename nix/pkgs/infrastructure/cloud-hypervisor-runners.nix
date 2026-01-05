@@ -3,14 +3,22 @@
 # Provides scripts for running Redox in Cloud Hypervisor:
 # - headless: Serial console mode (no networking)
 # - withNetwork: TAP networking mode with full connectivity + DHCP
+# - withDev: Development mode with API socket for runtime control
 # - setupNetwork: Helper script for host TAP/NAT configuration
+# - pauseVm/resumeVm/snapshotVm/restoreVm: ch-remote wrapper scripts
 #
 # Cloud Hypervisor is a Rust-based VMM using virtio devices:
-# - virtio-blk for storage
-# - virtio-net for networking
+# - virtio-blk for storage (with direct I/O for performance)
+# - virtio-net for networking (multi-queue for throughput)
 # - CLOUDHV.fd firmware
 #
 # RedoxOS boots fully in Cloud Hypervisor with modern virtio support.
+#
+# Performance Features (v50+):
+# - direct=on: Bypasses host page cache for better I/O performance
+# - num_queues=4: Multi-queue networking for parallel packet processing
+# - topology: CPU topology for better guest scheduler decisions
+# - hugepages: Optional huge page support for memory performance
 #
 # Network Configuration:
 # - Host TAP interface: 172.16.0.1/24
@@ -38,6 +46,21 @@ let
   netmask = "24";
   subnet = "172.16.0.0/24";
   guestMac = "52:54:00:12:34:56";
+
+  # Performance configuration
+  # CPU topology: threads_per_core:cores_per_die:dies_per_package:packages
+  # 1:2:1:2 = 1 thread per core, 2 cores per die, 1 die per package, 2 packages = 4 vCPUs
+  # This presents to guest as 2 sockets with 2 cores each (common server topology)
+  cpuTopology = "1:2:1:2";
+  defaultCpus = "4";
+  defaultMemory = "2048M";
+
+  # Network performance: multi-queue for parallel packet processing
+  netQueues = "4";
+  netQueueSize = "256";
+
+  # Default API socket path for development mode
+  defaultApiSocket = "/tmp/cloud-hypervisor-redox.sock";
 
   # Use default disk image (with DHCP client) - DHCP server is provided by NixOS service
   networkDiskImage = diskImage;
@@ -143,8 +166,15 @@ in
   '';
 
   # Headless Cloud Hypervisor runner with serial console (no networking)
+  # Performance optimized with direct I/O and CPU topology
   headless = pkgs.writeShellScriptBin "run-redox-cloud-hypervisor" ''
     set -e
+
+    # Environment variable overrides for customization
+    CH_CPUS="''${CH_CPUS:-${defaultCpus}}"
+    CH_MEMORY="''${CH_MEMORY:-${defaultMemory}}"
+    CH_HUGEPAGES="''${CH_HUGEPAGES:-}"
+    CH_DIRECT_IO="''${CH_DIRECT_IO:-on}"
 
     # Create writable copies
     WORK_DIR=$(mktemp -d)
@@ -157,36 +187,59 @@ in
     cp ${diskImage}/redox.img "$IMAGE"
     chmod +w "$IMAGE"
 
+    # Build disk options
+    DISK_OPTS="path=$IMAGE"
+    if [ "$CH_DIRECT_IO" = "on" ]; then
+      DISK_OPTS="$DISK_OPTS,direct=on"
+    fi
+
+    # Build memory options
+    MEMORY_OPTS="size=$CH_MEMORY"
+    if [ -n "$CH_HUGEPAGES" ]; then
+      MEMORY_OPTS="$MEMORY_OPTS,hugepages=on"
+    fi
+
     echo "Starting Redox OS with Cloud Hypervisor..."
     echo ""
     echo "Firmware: $FIRMWARE"
     echo "Disk: $IMAGE"
     echo ""
+    echo "Configuration:"
+    echo "  CPUs: $CH_CPUS (topology: ${cpuTopology})"
+    echo "  Memory: $CH_MEMORY''${CH_HUGEPAGES:+ (hugepages enabled)}"
+    echo "  Direct I/O: $CH_DIRECT_IO"
+    echo ""
     echo "Requirements:"
     echo "  - KVM enabled (/dev/kvm accessible)"
+    echo "  ''${CH_HUGEPAGES:+- Huge pages allocated on host}"
+    echo ""
+    echo "Environment overrides:"
+    echo "  CH_CPUS=N       - Number of vCPUs (default: ${defaultCpus})"
+    echo "  CH_MEMORY=SIZE  - Memory size (default: ${defaultMemory})"
+    echo "  CH_HUGEPAGES=1  - Enable huge pages"
+    echo "  CH_DIRECT_IO=on|off - Direct I/O bypass (default: on)"
     echo ""
     echo "Controls:"
     echo "  Ctrl+C: Quit Cloud Hypervisor"
     echo ""
     echo "Network: Disabled (use run-redox-cloud-hypervisor-net for networking)"
-    echo "Storage: virtio-blk"
-    echo ""
-    echo "Note: Cloud Hypervisor's UEFI boot expects the bootloader to be"
-    echo "      on the disk's ESP partition, not passed via --kernel."
+    echo "Storage: virtio-blk with direct I/O"
     echo ""
 
-    # Cloud Hypervisor UEFI boot:
+    # Cloud Hypervisor UEFI boot with performance tuning:
     # - --firmware: CLOUDHV.fd for UEFI
-    # - --disk: virtio-blk disk with GPT/ESP containing bootloader
+    # - --disk: virtio-blk with direct=on for bypassing host page cache
+    # - --cpus: boot count + topology for better guest scheduler decisions
+    # - --memory: size + optional hugepages
     # - --platform: Configure PCI segments
     # - --pci-segment: Increase 32-bit MMIO aperture weight
     # - --serial: serial console to tty
     # - --console: disable virtio-console (we use serial)
     ${cloudHypervisor}/bin/cloud-hypervisor \
       --firmware "$FIRMWARE" \
-      --disk path="$IMAGE" \
-      --cpus boot=4 \
-      --memory size=2048M \
+      --disk "$DISK_OPTS" \
+      --cpus boot="$CH_CPUS",topology=${cpuTopology} \
+      --memory "$MEMORY_OPTS" \
       --platform num_pci_segments=1 \
       --pci-segment pci_segment=0,mmio32_aperture_weight=4 \
       --serial tty \
@@ -197,6 +250,7 @@ in
   # Cloud Hypervisor runner with TAP networking
   # Requires: NixOS cloud-hypervisor-host tag or manual TAP setup
   # DHCP server (dnsmasq) should be configured on the host
+  # Performance optimized with direct I/O, CPU topology, and multi-queue networking
   withNetwork = pkgs.writeShellScriptBin "run-redox-cloud-hypervisor-net" ''
     set -e
 
@@ -205,6 +259,14 @@ in
     HOST_IP="''${HOST_IP:-${hostIp}}"
     GUEST_IP="''${GUEST_IP:-${guestIp}}"
     GUEST_MAC="''${GUEST_MAC:-${guestMac}}"
+
+    # Environment variable overrides for customization
+    CH_CPUS="''${CH_CPUS:-${defaultCpus}}"
+    CH_MEMORY="''${CH_MEMORY:-${defaultMemory}}"
+    CH_HUGEPAGES="''${CH_HUGEPAGES:-}"
+    CH_DIRECT_IO="''${CH_DIRECT_IO:-on}"
+    CH_NET_QUEUES="''${CH_NET_QUEUES:-${netQueues}}"
+    CH_NET_QUEUE_SIZE="''${CH_NET_QUEUE_SIZE:-${netQueueSize}}"
 
     # Create work directory
     WORK_DIR=$(mktemp -d)
@@ -216,6 +278,18 @@ in
     echo "Copying disk image to $WORK_DIR..."
     cp ${networkDiskImage}/redox.img "$IMAGE"
     chmod +w "$IMAGE"
+
+    # Build disk options
+    DISK_OPTS="path=$IMAGE"
+    if [ "$CH_DIRECT_IO" = "on" ]; then
+      DISK_OPTS="$DISK_OPTS,direct=on"
+    fi
+
+    # Build memory options
+    MEMORY_OPTS="size=$CH_MEMORY"
+    if [ -n "$CH_HUGEPAGES" ]; then
+      MEMORY_OPTS="$MEMORY_OPTS,hugepages=on"
+    fi
 
     # Check for TAP interface
     if ! ip link show "$TAP_NAME" &>/dev/null; then
@@ -239,6 +313,12 @@ in
     echo "Firmware: $FIRMWARE"
     echo "Disk: $IMAGE"
     echo ""
+    echo "Configuration:"
+    echo "  CPUs: $CH_CPUS (topology: ${cpuTopology})"
+    echo "  Memory: $CH_MEMORY''${CH_HUGEPAGES:+ (hugepages enabled)}"
+    echo "  Direct I/O: $CH_DIRECT_IO"
+    echo "  Network queues: $CH_NET_QUEUES (queue size: $CH_NET_QUEUE_SIZE)"
+    echo ""
     echo "Network Configuration:"
     echo "  TAP interface: $TAP_NAME"
     echo "  Guest MAC: $GUEST_MAC"
@@ -246,25 +326,204 @@ in
     echo "  Gateway: $HOST_IP"
     echo "  DNS: 1.1.1.1, 8.8.8.8"
     echo ""
+    echo "Environment overrides:"
+    echo "  CH_CPUS=N            - Number of vCPUs (default: ${defaultCpus})"
+    echo "  CH_MEMORY=SIZE       - Memory size (default: ${defaultMemory})"
+    echo "  CH_HUGEPAGES=1       - Enable huge pages"
+    echo "  CH_DIRECT_IO=on|off  - Direct I/O bypass (default: on)"
+    echo "  CH_NET_QUEUES=N      - Network queues (default: ${netQueues})"
+    echo "  CH_NET_QUEUE_SIZE=N  - Queue size (default: ${netQueueSize})"
+    echo ""
     echo "Network will be automatically configured at boot via DHCP."
     echo ""
     echo "Controls:"
     echo "  Ctrl+C: Quit Cloud Hypervisor"
     echo ""
 
-    # Cloud Hypervisor with virtio-net:
-    # - --net: TAP interface with explicit MAC address
+    # Cloud Hypervisor with virtio-net (multi-queue for parallel packet processing):
+    # - --disk: virtio-blk with direct=on for bypassing host page cache
+    # - --cpus: boot count + topology for better guest scheduler decisions
+    # - --memory: size + optional hugepages
+    # - --net: TAP with multi-queue (num_queues + queue_size) for throughput
     # - MAC address helps guest identify the interface
     ${cloudHypervisor}/bin/cloud-hypervisor \
       --firmware "$FIRMWARE" \
-      --disk path="$IMAGE" \
-      --cpus boot=4 \
-      --memory size=2048M \
+      --disk "$DISK_OPTS" \
+      --cpus boot="$CH_CPUS",topology=${cpuTopology} \
+      --memory "$MEMORY_OPTS" \
       --platform num_pci_segments=1 \
       --pci-segment pci_segment=0,mmio32_aperture_weight=4 \
-      --net tap="$TAP_NAME",mac="$GUEST_MAC" \
+      --net tap="$TAP_NAME",mac="$GUEST_MAC",num_queues="$CH_NET_QUEUES",queue_size="$CH_NET_QUEUE_SIZE" \
       --serial tty \
       --console off \
       "$@"
+  '';
+
+  # Development mode runner with API socket for runtime control
+  # Enables pause/resume, snapshot/restore, and runtime monitoring
+  withDev = pkgs.writeShellScriptBin "run-redox-cloud-hypervisor-dev" ''
+    set -e
+
+    # Environment variable overrides for customization
+    CH_CPUS="''${CH_CPUS:-${defaultCpus}}"
+    CH_MEMORY="''${CH_MEMORY:-${defaultMemory}}"
+    CH_HUGEPAGES="''${CH_HUGEPAGES:-}"
+    CH_DIRECT_IO="''${CH_DIRECT_IO:-on}"
+    CH_API_SOCKET="''${CH_API_SOCKET:-${defaultApiSocket}}"
+
+    # Create writable copies
+    WORK_DIR=$(mktemp -d)
+    trap "rm -rf $WORK_DIR; rm -f $CH_API_SOCKET" EXIT
+
+    IMAGE="$WORK_DIR/redox.img"
+    FIRMWARE="${cloudhvFirmware}/FV/CLOUDHV.fd"
+
+    echo "Copying disk image to $WORK_DIR..."
+    cp ${diskImage}/redox.img "$IMAGE"
+    chmod +w "$IMAGE"
+
+    # Build disk options
+    DISK_OPTS="path=$IMAGE"
+    if [ "$CH_DIRECT_IO" = "on" ]; then
+      DISK_OPTS="$DISK_OPTS,direct=on"
+    fi
+
+    # Build memory options with hotplug support for development
+    MEMORY_OPTS="size=$CH_MEMORY,hotplug_method=virtio-mem,hotplug_size=2048M"
+    if [ -n "$CH_HUGEPAGES" ]; then
+      MEMORY_OPTS="size=$CH_MEMORY,hugepages=on,hotplug_method=virtio-mem,hotplug_size=2048M"
+    fi
+
+    echo "Starting Redox OS with Cloud Hypervisor (development mode)..."
+    echo ""
+    echo "Firmware: $FIRMWARE"
+    echo "Disk: $IMAGE"
+    echo "API Socket: $CH_API_SOCKET"
+    echo ""
+    echo "Configuration:"
+    echo "  CPUs: $CH_CPUS (topology: ${cpuTopology})"
+    echo "  Memory: $CH_MEMORY + 2048M hotplug''${CH_HUGEPAGES:+ (hugepages enabled)}"
+    echo "  Direct I/O: $CH_DIRECT_IO"
+    echo ""
+    echo "Requirements:"
+    echo "  - KVM enabled (/dev/kvm accessible)"
+    echo "  ''${CH_HUGEPAGES:+- Huge pages allocated on host}"
+    echo ""
+    echo "Runtime control via ch-remote:"
+    echo "  Pause:    ch-remote --api-socket=$CH_API_SOCKET pause"
+    echo "  Resume:   ch-remote --api-socket=$CH_API_SOCKET resume"
+    echo "  Snapshot: ch-remote --api-socket=$CH_API_SOCKET snapshot file:///path"
+    echo "  Info:     ch-remote --api-socket=$CH_API_SOCKET info"
+    echo ""
+    echo "Or use the wrapper scripts:"
+    echo "  nix run .#pause-redox"
+    echo "  nix run .#resume-redox"
+    echo "  nix run .#snapshot-redox -- /path/to/snapshot"
+    echo ""
+    echo "Controls:"
+    echo "  Ctrl+C: Quit Cloud Hypervisor"
+    echo ""
+
+    # Cloud Hypervisor with API socket for runtime control:
+    # - --api-socket: Enables pause/resume, snapshot/restore, hotplug
+    # - --memory: Includes virtio-mem hotplug for dynamic memory
+    ${cloudHypervisor}/bin/cloud-hypervisor \
+      --firmware "$FIRMWARE" \
+      --disk "$DISK_OPTS" \
+      --cpus boot="$CH_CPUS",topology=${cpuTopology} \
+      --memory "$MEMORY_OPTS" \
+      --platform num_pci_segments=1 \
+      --pci-segment pci_segment=0,mmio32_aperture_weight=4 \
+      --api-socket path="$CH_API_SOCKET" \
+      --serial tty \
+      --console off \
+      "$@"
+  '';
+
+  # ch-remote wrapper: Pause VM
+  pauseVm = pkgs.writeShellScriptBin "pause-redox" ''
+    CH_API_SOCKET="''${CH_API_SOCKET:-${defaultApiSocket}}"
+    if [ ! -S "$CH_API_SOCKET" ]; then
+      echo "API socket not found: $CH_API_SOCKET"
+      echo "Make sure the VM is running with: nix run .#run-redox-cloud-hypervisor-dev"
+      exit 1
+    fi
+    echo "Pausing VM..."
+    ${cloudHypervisor}/bin/ch-remote --api-socket="$CH_API_SOCKET" pause
+    echo "VM paused."
+  '';
+
+  # ch-remote wrapper: Resume VM
+  resumeVm = pkgs.writeShellScriptBin "resume-redox" ''
+    CH_API_SOCKET="''${CH_API_SOCKET:-${defaultApiSocket}}"
+    if [ ! -S "$CH_API_SOCKET" ]; then
+      echo "API socket not found: $CH_API_SOCKET"
+      echo "Make sure the VM is running with: nix run .#run-redox-cloud-hypervisor-dev"
+      exit 1
+    fi
+    echo "Resuming VM..."
+    ${cloudHypervisor}/bin/ch-remote --api-socket="$CH_API_SOCKET" resume
+    echo "VM resumed."
+  '';
+
+  # ch-remote wrapper: Snapshot VM
+  snapshotVm = pkgs.writeShellScriptBin "snapshot-redox" ''
+    CH_API_SOCKET="''${CH_API_SOCKET:-${defaultApiSocket}}"
+    SNAPSHOT_DIR="''${1:-/tmp/redox-snapshot}"
+
+    if [ ! -S "$CH_API_SOCKET" ]; then
+      echo "API socket not found: $CH_API_SOCKET"
+      echo "Make sure the VM is running with: nix run .#run-redox-cloud-hypervisor-dev"
+      exit 1
+    fi
+
+    echo "Creating snapshot directory: $SNAPSHOT_DIR"
+    mkdir -p "$SNAPSHOT_DIR"
+
+    echo "Pausing VM..."
+    ${cloudHypervisor}/bin/ch-remote --api-socket="$CH_API_SOCKET" pause
+
+    echo "Taking snapshot to $SNAPSHOT_DIR..."
+    ${cloudHypervisor}/bin/ch-remote --api-socket="$CH_API_SOCKET" snapshot "file://$SNAPSHOT_DIR"
+
+    echo "Snapshot saved to: $SNAPSHOT_DIR"
+    echo ""
+    echo "To restore, start a new Cloud Hypervisor instance and run:"
+    echo "  ch-remote --api-socket=<socket> restore source_url=file://$SNAPSHOT_DIR"
+    echo ""
+    echo "VM is still paused. Resume with: nix run .#resume-redox"
+  '';
+
+  # ch-remote wrapper: VM info
+  infoVm = pkgs.writeShellScriptBin "info-redox" ''
+    CH_API_SOCKET="''${CH_API_SOCKET:-${defaultApiSocket}}"
+    if [ ! -S "$CH_API_SOCKET" ]; then
+      echo "API socket not found: $CH_API_SOCKET"
+      echo "Make sure the VM is running with: nix run .#run-redox-cloud-hypervisor-dev"
+      exit 1
+    fi
+    ${cloudHypervisor}/bin/ch-remote --api-socket="$CH_API_SOCKET" info
+  '';
+
+  # ch-remote wrapper: Resize memory (virtio-mem hotplug)
+  resizeMemory = pkgs.writeShellScriptBin "resize-memory-redox" ''
+    CH_API_SOCKET="''${CH_API_SOCKET:-${defaultApiSocket}}"
+    NEW_SIZE="''${1:-}"
+
+    if [ -z "$NEW_SIZE" ]; then
+      echo "Usage: resize-memory-redox <size_in_bytes>"
+      echo "Example: resize-memory-redox 3221225472  # 3GB"
+      exit 1
+    fi
+
+    if [ ! -S "$CH_API_SOCKET" ]; then
+      echo "API socket not found: $CH_API_SOCKET"
+      echo "Make sure the VM is running with: nix run .#run-redox-cloud-hypervisor-dev"
+      exit 1
+    fi
+
+    echo "Resizing VM memory to $NEW_SIZE bytes..."
+    ${cloudHypervisor}/bin/ch-remote --api-socket="$CH_API_SOCKET" resize --memory "$NEW_SIZE"
+    echo "Memory resize requested. Guest OS must support virtio-mem."
   '';
 }
