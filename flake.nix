@@ -115,6 +115,14 @@
       flake = false;
     };
 
+    # redox-scheme for orbital/inputd (0.8.3 required)
+    # NOTE: Currently blocked due to syscall 0.6.0 API incompatibility
+    # See nix/pkgs/userspace/orbital.nix for details
+    redox-scheme-src = {
+      url = "gitlab:redox-os/redox-scheme/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
     # kernel git dependency (for aarch64/riscv64)
     fdt-src = {
       url = "github:repnop/fdt/2fb1409edd1877c714a0aa36b6a7c5351004be54";
@@ -153,6 +161,13 @@
     # base - essential system components (init, drivers, daemons)
     base-src = {
       url = "gitlab:redox-os/base/main?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # base pinned to the commit that orbital's Cargo.lock references
+    # This older version of graphics-ipc uses drm-sys 0.8.0 and is compatible with syscall 0.5
+    base-orbital-compat-src = {
+      url = "gitlab:redox-os/base/620b4bd80c4f437adcaeec570b6cbba0487506d3?host=gitlab.redox-os.org";
       flake = false;
     };
 
@@ -249,6 +264,16 @@
     # orbimage - image loading for Orbital
     orbimage-src = {
       url = "gitlab:redox-os/orbimage/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # Note: inputd and graphics-ipc are subdirectories of base-src:
+    # - base-src/drivers/inputd
+    # - base-src/drivers/graphics/graphics-ipc
+
+    # redox-log - logging library for Redox
+    redox-log-src = {
+      url = "gitlab:redox-os/redox-log/master?host=gitlab.redox-os.org";
       flake = false;
     };
 

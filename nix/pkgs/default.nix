@@ -154,6 +154,9 @@ let
     }
   );
 
+  # Get vendor from redoxLib for use in userspace packages
+  inherit (redoxLib) vendor;
+
   # Userspace applications - cross-compiled for Redox target
   userspace = {
     ion = mkUserspace.mkBinary {

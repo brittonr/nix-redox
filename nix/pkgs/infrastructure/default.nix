@@ -41,6 +41,7 @@ let
       lib
       rustToolchain
       base-src
+      vendor
       ;
   };
 

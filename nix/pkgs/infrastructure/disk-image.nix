@@ -437,14 +437,19 @@ pkgs.stdenv.mkDerivation {
                 ''}
 
                 # Orbital display server startup (if graphics enabled)
+                # Note: Orbital requires proper display initialization from vesad
+                # The current build includes orbital and orbterm binaries
+                # To start Orbital after boot, run: orbital &
                 ${lib.optionalString (enableGraphics && orbital != null) ''
-                                cat > redoxfs-root/usr/lib/init.d/20_orbital << 'INIT_ORBITAL'
-                  # Start Orbital display server and login manager
-                  # vesad, inputd, and graphics drivers are already started from initfs
+                                    cat > redoxfs-root/usr/lib/init.d/20_orbital << 'INIT_ORBITAL'
+                  # Orbital display server startup
+                  # Note: Orbital may need display: scheme to be fully initialized
+                  # This requires vesad and inputd to be running
                   echo "Starting Orbital..."
-                  nowait orbital orbterm
+                  orbital
                   INIT_ORBITAL
-                                echo "Created Orbital init script at /usr/lib/init.d/20_orbital"
+                                    chmod +x redoxfs-root/usr/lib/init.d/20_orbital
+                                    echo "Created Orbital init script at /usr/lib/init.d/20_orbital"
                 ''}
 
                 # Network configuration helper for Cloud Hypervisor

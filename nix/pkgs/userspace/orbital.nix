@@ -1,60 +1,193 @@
 # Orbital - Display Server and Window Manager for Redox OS
 #
-# STATUS: BLOCKED - Complex nested dependencies not yet resolved
+# Orbital is the graphical display server for Redox OS, providing:
+# - Window management and compositing
+# - Input handling (via inputd)
+# - Graphics IPC for applications
 #
-# Orbital is the windowing system and compositor for Redox OS. It provides:
-# - Display management (resolution, multiple monitors)
-# - Window management (tiling, floating windows)
-# - Input event handling (keyboard, mouse)
-# - Compositing and rendering
+# Dependencies: The vendoring approach creates a synthetic deps package that includes
+# all transitive dependencies including those from graphics-ipc and inputd.
 #
-# Dependencies that need resolution:
-# - graphics-ipc: From base package, has redox-ioctl git dependency
-# - inputd: From base package, depends on daemon and redox-scheme 0.8.3
-# - daemon: From base package, needed by inputd
-# - drm/drm-sys: Transitive dependencies of graphics-ipc
-# - redox-scheme: Version conflict (0.8.3 required by inputd, 0.8.2 in vendor)
-#
-# The vendor hash computed for orbital's own deps is:
-#   sha256-Bz+sB+G+DO9TavMpI7zS5O4a6Bktg0mNXQRRQnyJfTA=
-#
-# TODO: To complete this package:
-# 1. Pin redox-scheme 0.8.3 in the dependency tree
-# 2. Create a unified workspace including all path deps from base
-# 3. Vendor all transitive dependencies together
-# 4. Or: wait for upstream to publish crates to crates.io
-#
-# For now, use the graphical disk image without orbital binary.
-# The initfs still includes graphics drivers (vesad, inputd, bgad, virtio-gpud).
+# Key deps from upstream:
+# - redox-scheme = "0.6", redox_syscall = "0.5", libredox = "0.1.3"
+# - orbclient, orbfont, orbimage (crates.io versions)
+# - graphics-ipc, inputd (from base subdirectories)
 
 {
   pkgs,
   lib,
+  craneLib ? null, # Not used currently
+  rustToolchain,
+  sysrootVendor,
+  redoxTarget,
+  relibc,
+  stubLibs,
+  vendor,
+  orbital-src,
+  # Use the orbital-compatible base-src (commit 620b4bd) which has graphics-ipc
+  # using drm-sys 0.8.0 instead of drm 0.14, and doesn't require syscall 0.6
+  base-orbital-compat-src,
+  # Optional/unused inputs accepted for compatibility
+  orbclient-src ? null,
+  orbfont-src ? null,
+  orbimage-src ? null,
+  libredox-src ? null,
+  liblibc-src ? null,
+  rustix-redox-src ? null,
+  drm-rs-src ? null,
+  relibc-src ? null,
+  redox-syscall-src ? null,
+  redox-scheme-src ? null,
   ...
 }:
 
-# Return a placeholder derivation that documents the blocked status
-pkgs.runCommand "orbital-blocked" { } ''
-    mkdir -p $out
-    cat > $out/README << 'EOF'
-  Orbital package is currently blocked due to complex nested dependencies.
+let
+  # Create patched source with all path dependencies resolved
+  patchedSrc = pkgs.stdenv.mkDerivation {
+    name = "orbital-src-patched";
+    src = orbital-src;
 
-  The following issues need resolution:
-  - redox-scheme version conflict (0.8.3 required, 0.8.2 available)
-  - Nested path dependencies from base package (graphics-ipc, inputd, daemon)
-  - Git dependencies that need path conversion (redox-ioctl from relibc)
+    phases = [
+      "unpackPhase"
+      "patchPhase"
+      "installPhase"
+    ];
 
-  Graphics drivers ARE included in the graphical initfs:
-  - vesad (VESA display driver)
-  - inputd (input device daemon)
-  - bgad (Bochs Graphics Adapter)
-  - virtio-gpud (VirtIO GPU driver)
+    patchPhase = ''
+      runHook prePatch
 
-  To test graphics without Orbital:
-  1. Build: nix build .#diskImageGraphical
-  2. Run: nix run .#runQemuGraphical
-  3. Graphics drivers will initialize but no desktop will appear
+      # Create local copies of base subdirectories needed
+      # Use orbital-compatible base commit (620b4bd) which has drm-sys 0.8.0
+      mkdir -p base/drivers/graphics base/drivers/common
+      cp -r ${base-orbital-compat-src}/drivers/inputd base/drivers/
+      cp -r ${base-orbital-compat-src}/drivers/graphics/graphics-ipc base/drivers/graphics/
+      cp -r ${base-orbital-compat-src}/drivers/common base/drivers/
+      # inputd depends on daemon
+      cp -r ${base-orbital-compat-src}/daemon base/
 
-  The orbdata package (fonts, icons, cursors) IS available and included.
-  EOF
-''
+      # Make base writable for any needed patches
+      chmod -R u+w base/
+
+      # The orbital-compatible base commit (620b4bd) has graphics-ipc using:
+      # - drm-sys = "0.8.0" (from crates.io, will be vendored)
+      # - No redox-ioctl dependency (that was added later)
+      # - common = { path = "../../common" } (already correct)
+      # So no patching needed for graphics-ipc at this commit
+
+      # Patch orbital Cargo.toml to use local paths for git deps
+      substituteInPlace Cargo.toml \
+        --replace-quiet 'inputd = { git = "https://gitlab.redox-os.org/redox-os/base.git" }' \
+                       'inputd = { path = "base/drivers/inputd" }' \
+        --replace-quiet 'graphics-ipc = { git = "https://gitlab.redox-os.org/redox-os/base.git" }' \
+                       'graphics-ipc = { path = "base/drivers/graphics/graphics-ipc" }'
+
+      runHook postPatch
+    '';
+
+    installPhase = ''
+      cp -r . $out
+    '';
+  };
+
+  # Vendor orbital's dependencies (now includes graphics-ipc with local drm-rs path)
+  orbitalVendor = pkgs.rustPlatform.fetchCargoVendor {
+    name = "orbital-cargo-vendor";
+    src = patchedSrc;
+    hash = "sha256-Bz+sB+G+DO9TavMpI7zS5O4a6Bktg0mNXQRRQnyJfTA=";
+  };
+
+  # Create merged vendor directory (project + sysroot)
+  mergedVendor = vendor.mkMergedVendor {
+    name = "orbital";
+    projectVendor = orbitalVendor;
+    inherit sysrootVendor;
+  };
+
+  # Git source mappings for cargo config
+  gitSources = [
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/base.git";
+      git = "https://gitlab.redox-os.org/redox-os/base.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/orbclient.git";
+      git = "https://gitlab.redox-os.org/redox-os/orbclient.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/relibc.git";
+      git = "https://gitlab.redox-os.org/redox-os/relibc.git";
+    }
+  ];
+
+in
+pkgs.stdenv.mkDerivation {
+  pname = "orbital";
+  version = "unstable";
+
+  dontUnpack = true;
+
+  nativeBuildInputs = [
+    rustToolchain
+    pkgs.llvmPackages.clang
+    pkgs.llvmPackages.bintools
+    pkgs.llvmPackages.lld
+  ];
+
+  buildInputs = [ relibc ];
+
+  TARGET = redoxTarget;
+  RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+
+  configurePhase = ''
+    runHook preConfigure
+
+    cp -r ${patchedSrc}/* .
+    chmod -R u+w .
+
+    # Use pre-merged vendor directory
+    cp -rL ${mergedVendor} vendor-combined
+    chmod -R u+w vendor-combined
+
+    mkdir -p .cargo
+    cat > .cargo/config.toml << 'CARGOCONF'
+    ${vendor.mkCargoConfig {
+      inherit gitSources;
+      target = redoxTarget;
+      linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
+      panic = "abort";
+    }}
+    CARGOCONF
+
+    runHook postConfigure
+  '';
+
+  buildPhase = ''
+    runHook preBuild
+
+    export HOME=$(mktemp -d)
+
+    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+
+    cargo build \
+      --bin orbital \
+      --target ${redoxTarget} \
+      --release \
+      -Z build-std=core,alloc,std,panic_abort \
+      -Z build-std-features=compiler-builtins-mem
+
+    runHook postBuild
+  '';
+
+  installPhase = ''
+    runHook preInstall
+    mkdir -p $out/bin
+    cp target/${redoxTarget}/release/orbital $out/bin/
+    runHook postInstall
+  '';
+
+  meta = with lib; {
+    description = "Orbital: Display Server and Window Manager for Redox OS";
+    homepage = "https://gitlab.redox-os.org/redox-os/orbital";
+    license = licenses.mit;
+  };
+}

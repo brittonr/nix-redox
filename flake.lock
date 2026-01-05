@@ -1,5 +1,24 @@
 {
   "nodes": {
+    "base-orbital-compat-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1765748613,
+        "narHash": "sha256-np5hnvfNlYsgFPqxZ7wVYQEci6dYglHeCoNhLr5dPF4=",
+        "owner": "redox-os",
+        "repo": "base",
+        "rev": "620b4bd80c4f437adcaeec570b6cbba0487506d3",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "repo": "base",
+        "rev": "620b4bd80c4f437adcaeec570b6cbba0487506d3",
+        "type": "gitlab"
+      }
+    },
     "base-src": {
       "flake": false,
       "locked": {
@@ -632,6 +651,25 @@
         "type": "gitlab"
       }
     },
+    "redox-log-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1723987405,
+        "narHash": "sha256-P+d3HZmUSEx08KesQbTQY6SANggOhvluRSqYHJEJSnw=",
+        "owner": "redox-os",
+        "repo": "redox-log",
+        "rev": "e5e9c5db8fdd8c5272c8126a9c59dfc6e2d3a7e0",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "redox-log",
+        "type": "gitlab"
+      }
+    },
     "redox-path-src": {
       "flake": false,
       "locked": {
@@ -648,6 +686,25 @@
         "owner": "redox-os",
         "ref": "main",
         "repo": "redox-path",
+        "type": "gitlab"
+      }
+    },
+    "redox-scheme-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1765897579,
+        "narHash": "sha256-WJXimDrLp/XB2l2WHPtJ4ucEId0TGSQLQ7YGSBTHrOA=",
+        "owner": "redox-os",
+        "repo": "redox-scheme",
+        "rev": "4c73b8b4aef2eddc726eefbf3303c412a7fb9d60",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "redox-scheme",
         "type": "gitlab"
       }
     },
@@ -767,6 +824,7 @@
     },
     "root": {
       "inputs": {
+        "base-orbital-compat-src": "base-orbital-compat-src",
         "base-src": "base-src",
         "binutils-src": "binutils-src",
         "bootloader-src": "bootloader-src",
@@ -799,7 +857,9 @@
         "orbutils-src": "orbutils-src",
         "pkgutils-src": "pkgutils-src",
         "redox-liner-src": "redox-liner-src",
+        "redox-log-src": "redox-log-src",
         "redox-path-src": "redox-path-src",
+        "redox-scheme-src": "redox-scheme-src",
         "redox-src": "redox-src",
         "redox-syscall-src": "redox-syscall-src",
         "redox-users-src": "redox-users-src",

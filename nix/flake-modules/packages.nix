@@ -56,6 +56,7 @@
           dlmalloc-rs-src
           cc-rs-src
           redox-syscall-src
+          redox-scheme-src
           object-src
           rmm-src
           redox-path-src
@@ -123,11 +124,12 @@
         inherit (inputs) orbdata-src;
       };
 
-      # Import orbital (display server) - vendor hash needs computation
+      # Import orbital (display server)
       orbital = import ../pkgs/userspace/orbital.nix {
         inherit
           pkgs
           lib
+          craneLib
           rustToolchain
           sysrootVendor
           redoxTarget
@@ -137,11 +139,19 @@
         inherit (inputs)
           orbital-src
           orbclient-src
+          orbfont-src
+          orbimage-src
           libredox-src
           relibc-src
+          liblibc-src
+          rustix-redox-src
+          drm-rs-src
+          redox-syscall-src
+          redox-scheme-src
+          # Use orbital-compatible base commit (620b4bd) for graphics-ipc/inputd
+          # This version uses drm-sys 0.8.0 and is compatible with syscall 0.5
+          base-orbital-compat-src
           ;
-        # Use patched base source with Cloud Hypervisor support
-        base-src = patchedSources.base;
       };
 
       # Import orbterm (terminal emulator) - vendor hash needs computation
@@ -241,14 +251,17 @@
       };
 
       # Graphical disk image with Orbital desktop
-      # Includes graphics drivers and orbdata (fonts, icons)
-      # NOTE: orbital and orbterm packages are currently blocked due to
-      # complex nested dependencies. The graphical initfs includes graphics
-      # drivers (vesad, inputd, bgad, virtio-gpud) but no desktop will appear.
+      # Includes graphics drivers, orbdata (fonts, icons), orbital, and orbterm
       diskImageGraphical = modularPkgs.infrastructure.mkDiskImage {
         inherit (modularPkgs.system) kernel bootloader base;
         initfs = initfsGraphical;
-        inherit sodium orbdata userutils;
+        inherit
+          sodium
+          orbdata
+          userutils
+          orbital
+          orbterm
+          ;
         inherit (modularPkgs.userspace)
           ion
           uutils
@@ -260,10 +273,6 @@
         redoxfs = modularPkgs.host.redoxfs;
         networkMode = "auto";
         enableGraphics = true;
-        # orbital and orbterm are blocked - not passed
-        # When resolved, add:
-        # orbital = orbital;
-        # orbterm = orbterm;
       };
 
       # QEMU runners from modular infrastructure
@@ -273,8 +282,7 @@
       };
 
       # Graphical QEMU runners using diskImageGraphical
-      # Note: Without orbital/orbterm, this shows graphics drivers initializing
-      # but no desktop appears. Useful for testing graphics driver boot.
+      # Includes Orbital desktop environment and orbterm terminal emulator
       qemuRunnersGraphical = modularPkgs.infrastructure.mkQemuRunners {
         diskImage = diskImageGraphical;
         inherit (modularPkgs.system) bootloader;
