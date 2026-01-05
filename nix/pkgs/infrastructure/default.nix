@@ -141,6 +141,7 @@ in
       orbdata ? null,
       orbital ? null,
       orbterm ? null,
+      orbutils ? null, # orblogin (graphical login) and background
       enableGraphics ? false,
       # Allow caller to override redoxfs if needed
       redoxfs ? redoxfs,
@@ -170,6 +171,7 @@ in
         orbdata
         orbital
         orbterm
+        orbutils
         enableGraphics
         networkMode
         staticNetworkConfig

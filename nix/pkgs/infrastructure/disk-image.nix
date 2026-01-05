@@ -38,6 +38,7 @@
   orbdata ? null,
   orbital ? null,
   orbterm ? null,
+  orbutils ? null, # orblogin (graphical login) and background
   # Enable graphics support (Orbital desktop)
   enableGraphics ? false,
   # Network configuration mode:
@@ -83,7 +84,8 @@ pkgs.stdenv.mkDerivation {
   ++ lib.optional (userutils != null) userutils
   ++ lib.optional (orbdata != null) orbdata
   ++ lib.optional (orbital != null) orbital
-  ++ lib.optional (orbterm != null) orbterm;
+  ++ lib.optional (orbterm != null) orbterm
+  ++ lib.optional (orbutils != null) orbutils;
 
   # Use a fixed timestamp for reproducible builds
   # This ensures identical inputs produce identical outputs
@@ -377,6 +379,18 @@ pkgs.stdenv.mkDerivation {
                   fi
                 ''}
 
+                ${lib.optionalString (orbutils != null) ''
+                  echo "Copying Orbital utilities (orblogin, background)..."
+                  if [ -f "${orbutils}/bin/orblogin" ]; then
+                    cp -v ${orbutils}/bin/orblogin redoxfs-root/bin/
+                    echo "Copied orblogin graphical login manager"
+                  fi
+                  if [ -f "${orbutils}/bin/background" ]; then
+                    cp -v ${orbutils}/bin/background redoxfs-root/bin/
+                    echo "Copied background desktop manager"
+                  fi
+                ''}
+
                 # Create network configuration directory and files
                 echo "Creating network configuration..."
                 mkdir -p redoxfs-root/etc/net
@@ -460,14 +474,37 @@ pkgs.stdenv.mkDerivation {
                 # Orbital display server startup (if graphics enabled)
                 # Note: Orbital requires VT environment variable and proper display initialization
                 # VT 1 is assigned by inputd when vesad registers its display handle
-                # TODO: orblogin (from orbutils) is not yet packaged, using login from userutils
+                #
+                # Usage with orblogin (graphical login manager):
+                #   orbital orblogin orbterm
+                #   - Orbital spawns orblogin with orbterm as the launcher command
+                #   - orblogin shows a graphical login window
+                #   - On successful authentication, orblogin spawns orbterm as the user
+                #   - When orbterm exits, orblogin returns to the login screen
+                #
+                # Fallback with /bin/login (text-based, may have PTY issues):
+                #   orbital /bin/login
                 ${lib.optionalString (enableGraphics && orbital != null) ''
-                                    cat > redoxfs-root/usr/lib/init.d/20_orbital << 'INIT_ORBITAL'
-                  export VT 1
-                  nowait /bin/orbital /bin/login
-                  INIT_ORBITAL
-                                    chmod +x redoxfs-root/usr/lib/init.d/20_orbital
-                                    echo "Created Orbital init script at /usr/lib/init.d/20_orbital"
+                  ${
+                    if orbutils != null then
+                      ''
+                                            cat > redoxfs-root/usr/lib/init.d/20_orbital << 'INIT_ORBITAL'
+                        export VT 1
+                        nowait /bin/orbital orblogin orbterm
+                        INIT_ORBITAL
+                                            echo "Created Orbital init script with orblogin at /usr/lib/init.d/20_orbital"
+                      ''
+                    else
+                      ''
+                                            cat > redoxfs-root/usr/lib/init.d/20_orbital << 'INIT_ORBITAL'
+                        export VT 1
+                        nowait /bin/orbital /bin/login
+                        INIT_ORBITAL
+                                            echo "WARNING: orbutils not available, using /bin/login (may have PTY issues)"
+                                            echo "Created Orbital init script at /usr/lib/init.d/20_orbital"
+                      ''
+                  }
+                  chmod +x redoxfs-root/usr/lib/init.d/20_orbital
                 ''}
 
                 # Network configuration helper for Cloud Hypervisor

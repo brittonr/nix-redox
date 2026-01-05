@@ -175,6 +175,20 @@
           ;
       };
 
+      # Import orbutils (graphical utilities: orblogin, background)
+      orbutils = import ../pkgs/userspace/orbutils.nix {
+        inherit
+          pkgs
+          lib
+          rustToolchain
+          sysrootVendor
+          redoxTarget
+          ;
+        inherit (modularPkgs.system) relibc;
+        inherit (redoxLib) stubLibs vendor;
+        inherit (inputs) orbutils-src;
+      };
+
       # Import userutils (getty, login, passwd, su, sudo)
       userutils = import ../pkgs/userspace/userutils.nix {
         inherit
@@ -261,6 +275,7 @@
           userutils
           orbital
           orbterm
+          orbutils
           ;
         inherit (modularPkgs.userspace)
           ion
@@ -334,7 +349,12 @@
         inherit sodium;
 
         # Orbital graphics packages
-        inherit orbdata orbital orbterm;
+        inherit
+          orbdata
+          orbital
+          orbterm
+          orbutils
+          ;
 
         # Userutils - user management (getty, login, passwd, su, sudo)
         inherit userutils;
