@@ -9,7 +9,7 @@
 # orblogin is the key component - it provides graphical authentication
 # for Orbital, replacing the text-based /bin/login workaround.
 #
-# Usage: orbital orblogin orbterm
+# Usage: orbital /bin/orblogin /bin/orbterm
 #   - Orbital spawns orblogin with orbterm as the launcher command
 #   - orblogin shows a graphical login window
 #   - On successful authentication, orblogin spawns orbterm as the user
@@ -79,6 +79,13 @@ let
       # The calculate crate will be vendored but not compiled since we removed
       # the dependency from Cargo.toml
 
+      # Update orbclient to 0.3.49 to match orbital's version
+      # This prevents protocol mismatches between orbclient and orbital
+      # Original: 0.3.48 checksum ba0b26cec2e24f08ed8bb31519a9333140a6599b867dac464bb150bdb796fd43
+      # New: 0.3.49 checksum 247ad146e19b9437f8604c21f8652423595cf710ad108af40e77d3ae6e96b827
+      sed -i '/name = "orbclient"/{n;s/version = "0.3.48"/version = "0.3.49"/}' Cargo.lock
+      sed -i 's/checksum = "ba0b26cec2e24f08ed8bb31519a9333140a6599b867dac464bb150bdb796fd43"/checksum = "247ad146e19b9437f8604c21f8652423595cf710ad108af40e77d3ae6e96b827"/' Cargo.lock
+
       runHook postPatch
     '';
 
@@ -91,7 +98,7 @@ let
   orbutilsVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "orbutils-cargo-vendor";
     src = patchedSrc;
-    hash = "sha256-OmQs5ALIC77Bo9Mu/ssOL6JXSeuObJtGkJozPElTNlo=";
+    hash = "sha256-AFDG8/6sOgtHxpP7f6gWHrSge6tKJJu454gFH8oHYW4=";
   };
 
   # Create merged vendor directory (project + sysroot)

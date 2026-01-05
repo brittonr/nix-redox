@@ -476,7 +476,7 @@ pkgs.stdenv.mkDerivation {
                 # VT 1 is assigned by inputd when vesad registers its display handle
                 #
                 # Usage with orblogin (graphical login manager):
-                #   orbital orblogin orbterm
+                #   orbital /bin/orblogin /bin/orbterm
                 #   - Orbital spawns orblogin with orbterm as the launcher command
                 #   - orblogin shows a graphical login window
                 #   - On successful authentication, orblogin spawns orbterm as the user
@@ -490,7 +490,7 @@ pkgs.stdenv.mkDerivation {
                       ''
                                             cat > redoxfs-root/usr/lib/init.d/20_orbital << 'INIT_ORBITAL'
                         export VT 1
-                        nowait /bin/orbital orblogin orbterm
+                        nowait /bin/orbital /bin/orblogin /bin/orbterm
                         INIT_ORBITAL
                                             echo "Created Orbital init script with orblogin at /usr/lib/init.d/20_orbital"
                       ''
