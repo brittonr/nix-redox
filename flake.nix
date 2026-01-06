@@ -7,10 +7,13 @@
 
     Quick start:
       nix build .#diskImage     - Build complete bootable image
-      nix run .#run-redox       - Run in QEMU (headless)
-      nix run .#run-redox-graphical - Run with display
-      nix run .#run-redox-cloud-hypervisor - Run in Cloud Hypervisor
+      nix run .#run-redox       - Run in Cloud Hypervisor (default)
+      nix run .#run-redox-graphical - Run in QEMU with display
+      nix run .#run-redox-qemu  - Run in QEMU headless (legacy)
       nix develop               - Enter development shell
+
+    Cloud Hypervisor is the default VMM for its lower overhead and Rust-based
+    security. QEMU is used for graphical mode due to better input handling.
 
     Host tools: cookbook, redoxfs, installer
     System: relibc, kernel, bootloader, base
