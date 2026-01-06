@@ -18,6 +18,7 @@
     Host tools: cookbook, redoxfs, installer
     System: relibc, kernel, bootloader, base
     Userspace: ion, helix, binutils, extrautils, uutils, sodium, netutils
+    CLI tools: ripgrep (rg), fd, bat, hexyl, tokei, zoxide, dust, difft
   '';
 
   inputs = {
@@ -313,6 +314,42 @@
     # fd - fast find alternative (upstream, has Redox support via libc)
     fd-src = {
       url = "github:sharkdp/fd/v10.2.0";
+      flake = false;
+    };
+
+    # bat - cat(1) clone with syntax highlighting (upstream, available in Redox pkg repo)
+    bat-src = {
+      url = "github:sharkdp/bat/v0.24.0";
+      flake = false;
+    };
+
+    # hexyl - command-line hex viewer (upstream, available in Redox pkg repo)
+    hexyl-src = {
+      url = "github:sharkdp/hexyl/v0.14.0";
+      flake = false;
+    };
+
+    # tokei - code statistics tool (upstream, available in Redox pkg repo)
+    tokei-src = {
+      url = "github:XAMPPRocky/tokei/v12.1.2";
+      flake = false;
+    };
+
+    # zoxide - smarter cd command (upstream, available in Redox pkg repo)
+    zoxide-src = {
+      url = "github:ajeetdsouza/zoxide/v0.9.4";
+      flake = false;
+    };
+
+    # dust - intuitive disk usage analyzer (upstream)
+    dust-src = {
+      url = "github:bootandy/dust/v1.0.0";
+      flake = false;
+    };
+
+    # difftastic - structural diff tool (upstream)
+    difft-src = {
+      url = "github:Wilfred/difftastic/0.59.0";
       flake = false;
     };
   };

@@ -38,6 +38,23 @@
         "type": "gitlab"
       }
     },
+    "bat-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1697044452,
+        "narHash": "sha256-1RjlJEmY/jMf0IYQbrWrT1CHFyiqgarOl72u9xjjQiQ=",
+        "owner": "sharkdp",
+        "repo": "bat",
+        "rev": "fc9546854f5a7b38823f4990453c6cde386bfd3b",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sharkdp",
+        "ref": "v0.24.0",
+        "repo": "bat",
+        "type": "github"
+      }
+    },
     "binutils-src": {
       "flake": false,
       "locked": {
@@ -127,6 +144,23 @@
         "type": "github"
       }
     },
+    "difft-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1721516984,
+        "narHash": "sha256-cy5IBovU/TDYK6UGlSn3s7MQ9LnX/d0eUJlNdaibG44=",
+        "owner": "Wilfred",
+        "repo": "difftastic",
+        "rev": "ffe27c575ee222647cec98ba52f1c03a19055372",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Wilfred",
+        "ref": "0.59.0",
+        "repo": "difftastic",
+        "type": "github"
+      }
+    },
     "dlmalloc-rs-src": {
       "flake": false,
       "locked": {
@@ -159,6 +193,23 @@
       "original": {
         "owner": "Smithay",
         "repo": "drm-rs",
+        "type": "github"
+      }
+    },
+    "dust-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1711404085,
+        "narHash": "sha256-HAd7UgIZBEEm2/R+5gmGuha8p5Bjg6SoJRh+bbLN3SU=",
+        "owner": "bootandy",
+        "repo": "dust",
+        "rev": "082f15a0e2a5e8a573a2a42a65f146e755b982ed",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bootandy",
+        "ref": "v1.0.0",
+        "repo": "dust",
         "type": "github"
       }
     },
@@ -327,6 +378,23 @@
         "ref": "redox",
         "repo": "helix",
         "type": "gitlab"
+      }
+    },
+    "hexyl-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1702333877,
+        "narHash": "sha256-di7SBuB4LsnqlP3BdMcsSLj4zpyKA/ninVpRyR9AJaI=",
+        "owner": "sharkdp",
+        "repo": "hexyl",
+        "rev": "7a9234c182b19070f8707468c572b5a0e6e704d4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sharkdp",
+        "ref": "v0.14.0",
+        "repo": "hexyl",
+        "type": "github"
       }
     },
     "installer-src": {
@@ -860,13 +928,16 @@
       "inputs": {
         "base-orbital-compat-src": "base-orbital-compat-src",
         "base-src": "base-src",
+        "bat-src": "bat-src",
         "binutils-src": "binutils-src",
         "bootloader-src": "bootloader-src",
         "cc-rs-src": "cc-rs-src",
         "compiler-builtins-src": "compiler-builtins-src",
         "crane": "crane",
+        "difft-src": "difft-src",
         "dlmalloc-rs-src": "dlmalloc-rs-src",
         "drm-rs-src": "drm-rs-src",
+        "dust-src": "dust-src",
         "extrautils-src": "extrautils-src",
         "fd-src": "fd-src",
         "fdt-src": "fdt-src",
@@ -874,6 +945,7 @@
         "flake-parts": "flake-parts",
         "git-hooks": "git-hooks",
         "helix-src": "helix-src",
+        "hexyl-src": "hexyl-src",
         "installer-src": "installer-src",
         "ion-src": "ion-src",
         "kernel-src": "kernel-src",
@@ -906,10 +978,12 @@
         "rustix-redox-src": "rustix-redox-src",
         "sodium-src": "sodium-src",
         "termion-src": "termion-src",
+        "tokei-src": "tokei-src",
         "treefmt-nix": "treefmt-nix",
         "uefi-src": "uefi-src",
         "userutils-src": "userutils-src",
-        "uutils-src": "uutils-src"
+        "uutils-src": "uutils-src",
+        "zoxide-src": "zoxide-src"
       }
     },
     "rust-overlay": {
@@ -987,6 +1061,23 @@
         "type": "gitlab"
       }
     },
+    "tokei-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1610484482,
+        "narHash": "sha256-jqDsxUAMD/MCCI0hamkGuCYa8rEXNZIR8S+84S8FbgI=",
+        "owner": "XAMPPRocky",
+        "repo": "tokei",
+        "rev": "7e0b30ff4c1fe78fe2cc615d1f0f52c7ce6cb761",
+        "type": "github"
+      },
+      "original": {
+        "owner": "XAMPPRocky",
+        "ref": "v12.1.2",
+        "repo": "tokei",
+        "type": "github"
+      }
+    },
     "treefmt-nix": {
       "inputs": {
         "nixpkgs": [
@@ -1059,6 +1150,23 @@
         "owner": "uutils",
         "ref": "0.0.27",
         "repo": "coreutils",
+        "type": "github"
+      }
+    },
+    "zoxide-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1708470368,
+        "narHash": "sha256-Yp7uLoFEDkb0TztcDCeAkt+EHQRt56ncPqkBtd/zzzI=",
+        "owner": "ajeetdsouza",
+        "repo": "zoxide",
+        "rev": "418a78d348445ddca0e15b1e95c4f17e4c628b19",
+        "type": "github"
+      },
+      "original": {
+        "owner": "ajeetdsouza",
+        "ref": "v0.9.4",
+        "repo": "zoxide",
         "type": "github"
       }
     }

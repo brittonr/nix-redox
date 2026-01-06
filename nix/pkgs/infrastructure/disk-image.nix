@@ -41,6 +41,13 @@
   orbutils ? null, # orblogin (graphical login) and background
   # Enable graphics support (Orbital desktop)
   enableGraphics ? false,
+  # New developer tools (optional)
+  bat ? null,
+  hexyl ? null,
+  tokei ? null,
+  zoxide ? null,
+  dust ? null,
+  difft ? null,
   # Network configuration mode:
   # - "auto": Try DHCP first, fallback to static config if no IP assigned (default)
   # - "dhcp": DHCP only, no static fallback (for QEMU user-mode networking)
@@ -85,7 +92,13 @@ pkgs.stdenv.mkDerivation {
   ++ lib.optional (orbdata != null) orbdata
   ++ lib.optional (orbital != null) orbital
   ++ lib.optional (orbterm != null) orbterm
-  ++ lib.optional (orbutils != null) orbutils;
+  ++ lib.optional (orbutils != null) orbutils
+  ++ lib.optional (bat != null) bat
+  ++ lib.optional (hexyl != null) hexyl
+  ++ lib.optional (tokei != null) tokei
+  ++ lib.optional (zoxide != null) zoxide
+  ++ lib.optional (dust != null) dust
+  ++ lib.optional (difft != null) difft;
 
   # Use a fixed timestamp for reproducible builds
   # This ensures identical inputs produce identical outputs
@@ -388,6 +401,68 @@ pkgs.stdenv.mkDerivation {
                   if [ -f "${orbutils}/bin/background" ]; then
                     cp -v ${orbutils}/bin/background redoxfs-root/bin/
                     echo "Copied background desktop manager"
+                  fi
+                ''}
+
+                # Copy new developer tools
+                ${lib.optionalString (bat != null) ''
+                  echo "Copying bat (syntax highlighting cat)..."
+                  if [ -f "${bat}/bin/bat" ]; then
+                    cp -v ${bat}/bin/bat redoxfs-root/bin/
+                    cp -v ${bat}/bin/bat redoxfs-root/usr/bin/
+                    echo "Copied bat successfully"
+                  fi
+                ''}
+
+                ${lib.optionalString (hexyl != null) ''
+                  echo "Copying hexyl (hex viewer)..."
+                  if [ -f "${hexyl}/bin/hexyl" ]; then
+                    cp -v ${hexyl}/bin/hexyl redoxfs-root/bin/
+                    cp -v ${hexyl}/bin/hexyl redoxfs-root/usr/bin/
+                    echo "Copied hexyl successfully"
+                  fi
+                ''}
+
+                ${lib.optionalString (tokei != null) ''
+                  echo "Copying tokei (code statistics)..."
+                  if [ -f "${tokei}/bin/tokei" ]; then
+                    cp -v ${tokei}/bin/tokei redoxfs-root/bin/
+                    cp -v ${tokei}/bin/tokei redoxfs-root/usr/bin/
+                    echo "Copied tokei successfully"
+                  fi
+                ''}
+
+                ${lib.optionalString (zoxide != null) ''
+                    echo "Copying zoxide (smart cd)..."
+                    if [ -f "${zoxide}/bin/zoxide" ]; then
+                      cp -v ${zoxide}/bin/zoxide redoxfs-root/bin/
+                      cp -v ${zoxide}/bin/zoxide redoxfs-root/usr/bin/
+                      # Create 'z' alias script for convenience
+                      cat > redoxfs-root/bin/z << 'ZOXIDE_ALIAS'
+                  #!/bin/ion
+                  # z - quick directory jump using zoxide
+                  zoxide query -- $@args && cd $(zoxide query -- $@args)
+                  ZOXIDE_ALIAS
+                      chmod +x redoxfs-root/bin/z
+                      echo "Copied zoxide and created 'z' alias"
+                    fi
+                ''}
+
+                ${lib.optionalString (dust != null) ''
+                  echo "Copying dust (disk usage analyzer)..."
+                  if [ -f "${dust}/bin/dust" ]; then
+                    cp -v ${dust}/bin/dust redoxfs-root/bin/
+                    cp -v ${dust}/bin/dust redoxfs-root/usr/bin/
+                    echo "Copied dust successfully"
+                  fi
+                ''}
+
+                ${lib.optionalString (difft != null) ''
+                  echo "Copying difft (structural diff)..."
+                  if [ -f "${difft}/bin/difft" ]; then
+                    cp -v ${difft}/bin/difft redoxfs-root/bin/
+                    cp -v ${difft}/bin/difft redoxfs-root/usr/bin/
+                    echo "Copied difft successfully"
                   fi
                 ''}
 

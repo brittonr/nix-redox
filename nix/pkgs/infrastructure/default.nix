@@ -142,6 +142,13 @@ in
       orbital ? null,
       orbterm ? null,
       orbutils ? null, # orblogin (graphical login) and background
+      # New developer tools
+      bat ? null,
+      hexyl ? null,
+      tokei ? null,
+      zoxide ? null,
+      dust ? null,
+      difft ? null,
       enableGraphics ? false,
       # Allow caller to override redoxfs if needed
       redoxfs ? redoxfs,
@@ -172,6 +179,13 @@ in
         orbital
         orbterm
         orbutils
+        # New developer tools
+        bat
+        hexyl
+        tokei
+        zoxide
+        dust
+        difft
         enableGraphics
         networkMode
         staticNetworkConfig
