@@ -13,7 +13,7 @@
 }:
 
 {
-  # Graphical QEMU runner with serial logging
+  # Graphical QEMU runner with serial logging and auto-resolution selection
   graphical = pkgs.writeShellScriptBin "run-redox-graphical" ''
     # Create writable copies
     WORK_DIR=$(mktemp -d)
@@ -29,46 +29,60 @@
     chmod +w "$IMAGE" "$OVMF"
 
     echo "Starting Redox OS (graphical mode)..."
-    echo "Serial output will be logged to: $LOG_FILE"
     echo ""
-    echo "A QEMU window will open. Use the graphical interface to:"
-    echo "  - Select display resolution when prompted"
-    echo "  - Interact with the system"
-    echo "  - Close the window to quit"
+    echo "A QEMU window will open with the Redox desktop."
+    echo "Resolution will be auto-selected in 2 seconds."
     echo ""
-    echo "To view errors in another terminal, run:"
-    echo "  tail -f $LOG_FILE"
+    echo "Serial output logged to: $LOG_FILE"
+    echo "In another terminal: tail -f $LOG_FILE"
+    echo ""
+    echo "Close the QEMU window to quit."
     echo ""
 
-    ${pkgs.qemu}/bin/qemu-system-x86_64 \
-      -M pc \
-      -cpu host \
-      -m 2048 \
-      -smp 4 \
-      -enable-kvm \
-      -bios "$OVMF" \
-      -kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI \
-      -drive file="$IMAGE",format=raw,if=ide \
-      -netdev user,id=net0,hostfwd=tcp::8022-:22,hostfwd=tcp::8080-:80 \
-      -device e1000,netdev=net0 \
-      -vga std \
-      -display gtk \
-      -device qemu-xhci,id=xhci \
-      -device usb-kbd \
-      -device usb-tablet \
-      -serial file:"$LOG_FILE" \
-      "$@"
+    # Use expect to auto-select resolution via serial while GTK window displays graphics
+    ${pkgs.expect}/bin/expect -c "
+      log_file -a $LOG_FILE
+      set timeout 120
+
+      spawn ${pkgs.qemu}/bin/qemu-system-x86_64 \
+        -M pc \
+        -cpu host \
+        -m 2048 \
+        -smp 4 \
+        -enable-kvm \
+        -bios $OVMF \
+        -kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI \
+        -drive file=$IMAGE,format=raw,if=ide \
+        -netdev user,id=net0,hostfwd=tcp::8022-:22,hostfwd=tcp::8080-:80 \
+        -device e1000,netdev=net0 \
+        -vga std \
+        -display gtk \
+        -device qemu-xhci,id=xhci \
+        -device usb-kbd \
+        -device usb-tablet \
+        -serial mon:stdio
+
+      # Wait for the resolution selection screen and automatically select
+      expect {
+        \"Arrow keys and enter select mode\" {
+          sleep 2
+          send \"\r\"
+          exp_continue
+        }
+        timeout {
+          # Continue without intervention
+        }
+      }
+      interact
+    "
 
     echo ""
     echo "Network: e1000 with user-mode NAT (ports: 8022->22, 8080->80)"
     echo "QEMU has exited. Serial log saved to: $LOG_FILE"
     echo "Displaying last 50 lines of log:"
     echo "----------------------------------------"
-    tail -n 50 "$LOG_FILE"
+    tail -n 50 "$LOG_FILE" 2>/dev/null || echo "(no log available)"
     echo "----------------------------------------"
-    echo "Full log available at: $LOG_FILE (will be deleted on shell exit)"
-    echo "Press Enter to continue and clean up..."
-    read
   '';
 
   # Headless QEMU runner with serial console

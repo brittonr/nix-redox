@@ -49,7 +49,7 @@ pkgs.stdenv.mkDerivation {
             # Programs needing random during initfs should use /scheme/rand directly.
             # ipcd and other daemons that use getrandom crate are started from rootfs
             # init.d scripts where /dev/urandom -> /scheme/rand symlink exists.
-            mkdir -p initfs/bin initfs/lib/drivers initfs/etc/pcid initfs/usr/bin
+            mkdir -p initfs/bin initfs/lib/drivers initfs/etc/pcid initfs/usr/bin initfs/usr/lib/drivers
 
             # Copy core binaries to bin/
             # Added: ipcd (IPC daemon), smolnetd (network stack)
@@ -130,6 +130,41 @@ pkgs.stdenv.mkDerivation {
                   cp -v ${base}/bin/$drv initfs/lib/drivers/
                 else
                   echo "WARNING: $drv not found in ${base}/bin"
+                fi
+              done
+
+              echo "=== Copying USB stack for graphics input ==="
+              # xhcid: USB 3.0 host controller driver (detects QEMU's qemu-xhci)
+              # usbhubd: USB hub driver (enumerates devices on the bus)
+              # usbhidd: USB HID driver (handles usb-kbd and usb-tablet from QEMU)
+              #
+              # xhcid spawns usbhubd/usbhidd when it discovers devices. It looks for them
+              # in /usr/lib/drivers/ (standard Redox path) or possibly relative paths.
+              # We copy to both lib/drivers (for xhcid lookup) and bin (for PATH).
+              for drv in xhcid usbhubd usbhidd; do
+                if [ -f ${base}/bin/$drv ]; then
+                  echo "Copying $drv to lib/drivers..."
+                  cp -v ${base}/bin/$drv initfs/lib/drivers/
+                else
+                  echo "WARNING: $drv not found in ${base}/bin"
+                fi
+              done
+              # Also copy to bin for PATH-based lookup
+              for bin in usbhubd usbhidd; do
+                if [ -f ${base}/bin/$bin ]; then
+                  echo "Copying $bin to bin..."
+                  cp -v ${base}/bin/$bin initfs/bin/
+                else
+                  echo "WARNING: $bin not found in ${base}/bin"
+                fi
+              done
+              # Copy to /usr/lib/drivers/ (standard Redox driver path used by xhcid)
+              echo "Copying USB drivers to /usr/lib/drivers/..."
+              for drv in usbhubd usbhidd; do
+                if [ -f ${base}/bin/$drv ]; then
+                  cp -v ${base}/bin/$drv initfs/usr/lib/drivers/
+                else
+                  echo "WARNING: $drv not found for /usr/lib/drivers"
                 fi
               done
             ''}
@@ -230,6 +265,14 @@ pkgs.stdenv.mkDerivation {
               vendor = 0x1234
               device = 0x1111
               command = ["/scheme/initfs/lib/drivers/bgad"]
+
+              # USB xHCI Controller (USB 3.0) - QEMU qemu-xhci device
+              # Class 0x0C = Serial Bus Controller, Subclass 0x03 = USB, Prog-IF 0x30 = xHCI
+              [[drivers]]
+              name = "USB xHCI"
+              class = 0x0C
+              subclass = 0x03
+              command = ["/scheme/initfs/lib/drivers/xhcid"]
               EOF_GRAPHICS
             ''}
 
@@ -290,12 +333,19 @@ pkgs.stdenv.mkDerivation {
             # 1. inputd (no -A) - creates input: scheme, but don't activate VT yet
             # 2. vesad - creates display.vesa scheme, registers DisplayHandle with inputd
             # 3. inputd -A 1 - now activate VT 1 (vesad is ready to receive it)
-            # 4. ps2d - acts as input producer, needs inputd running
-            # 5. fbbootlogd - uses display scheme created by vesad
+            # 4. USB stack: xhcid (via pcid), then usbhubd (enumerate), then usbhidd (HID)
+            # 5. ps2d - PS/2 fallback input (may fail if no PS/2 hardware - that's OK)
+            # 6. fbbootlogd - uses display scheme created by vesad
             #
             # Note: The -A flag tells inputd to activate a VT, which requires a display
             # handle to be available. So we start inputd first WITHOUT -A, then vesad
             # creates the display scheme, then we activate the VT.
+            #
+            # USB Input Chain:
+            # xhcid is started by pcid-spawner when it detects USB controller (class 0x0C)
+            # xhcid creates usb:N scheme for each controller
+            # usbhubd enumerates devices on the bus, creates device entries
+            # usbhidd handles HID devices (keyboard, mouse, tablet), registers with inputd
             ${lib.optionalString enableGraphics ''
                       cat >> initfs/etc/init.rc << 'EOF_GRAPHICS'
 
@@ -307,8 +357,17 @@ pkgs.stdenv.mkDerivation {
               vesad
               echo "Activating virtual terminal 1..."
               inputd -A 1
-              echo "Starting PS/2 input driver..."
+
+              # USB input stack - xhcid was started by pcid-spawner
+              # Note: usbhubd and usbhidd are spawned BY xhcid when it discovers devices
+              # They require arguments: <scheme> <port> <interface>
+              # xhcid looks for them in the PATH, so they must be in /bin or /scheme/initfs/bin
+              echo "USB stack ready - xhcid will spawn usbhubd/usbhidd for discovered devices"
+
+              # PS/2 fallback - may fail if no PS/2 hardware (that's OK in QEMU graphical mode)
+              echo "Starting PS/2 input driver (fallback)..."
               ps2d us
+
               echo "Starting framebuffer boot logger..."
               nowait fbbootlogd
               EOF_GRAPHICS
