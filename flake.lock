@@ -181,6 +181,23 @@
         "type": "gitlab"
       }
     },
+    "fd-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1724354860,
+        "narHash": "sha256-B+lOohoPH7UkRxRNTzSVt0SDrqEwh4hIvBF3uWliDEI=",
+        "owner": "sharkdp",
+        "repo": "fd",
+        "rev": "b19136871310b01500b4f09eadd7387b8476be47",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sharkdp",
+        "ref": "v10.2.0",
+        "repo": "fd",
+        "type": "github"
+      }
+    },
     "fdt-src": {
       "flake": false,
       "locked": {
@@ -803,6 +820,23 @@
         "type": "gitlab"
       }
     },
+    "ripgrep-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1725848100,
+        "narHash": "sha256-gyWnahj1A+iXUQlQ1O1H1u7K5euYQOld9qWm99Vjaeg=",
+        "owner": "BurntSushi",
+        "repo": "ripgrep",
+        "rev": "4649aa9700619f94cf9c66876e9549d83420e16c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "BurntSushi",
+        "ref": "14.1.1",
+        "repo": "ripgrep",
+        "type": "github"
+      }
+    },
     "rmm-src": {
       "flake": false,
       "locked": {
@@ -834,6 +868,7 @@
         "dlmalloc-rs-src": "dlmalloc-rs-src",
         "drm-rs-src": "drm-rs-src",
         "extrautils-src": "extrautils-src",
+        "fd-src": "fd-src",
         "fdt-src": "fdt-src",
         "filetime-src": "filetime-src",
         "flake-parts": "flake-parts",
@@ -865,6 +900,7 @@
         "redox-users-src": "redox-users-src",
         "redoxfs-src": "redoxfs-src",
         "relibc-src": "relibc-src",
+        "ripgrep-src": "ripgrep-src",
         "rmm-src": "rmm-src",
         "rust-overlay": "rust-overlay",
         "rustix-redox-src": "rustix-redox-src",

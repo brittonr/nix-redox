@@ -303,6 +303,18 @@
       url = "gitlab:redox-os/liner/master?host=gitlab.redox-os.org";
       flake = false;
     };
+
+    # ripgrep - fast regex search tool (upstream with Redox support via libc)
+    ripgrep-src = {
+      url = "github:BurntSushi/ripgrep/14.1.1";
+      flake = false;
+    };
+
+    # fd - fast find alternative (upstream, has Redox support via libc)
+    fd-src = {
+      url = "github:sharkdp/fd/v10.2.0";
+      flake = false;
+    };
   };
 
   outputs =

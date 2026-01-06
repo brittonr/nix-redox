@@ -86,6 +86,9 @@
           # Userutils - user management (getty, login, passwd, su, sudo)
           userutils-src
           termion-src
+          # CLI tools
+          ripgrep-src
+          fd-src
           ;
         # Use patched base source with Cloud Hypervisor support
         base-src = patchedSources.base;
@@ -207,6 +210,34 @@
           orbclient-src
           libredox-src
           ;
+      };
+
+      # Import ripgrep (fast regex search tool)
+      ripgrep = import ../pkgs/userspace/ripgrep.nix {
+        inherit
+          pkgs
+          lib
+          rustToolchain
+          sysrootVendor
+          redoxTarget
+          ;
+        inherit (modularPkgs.system) relibc;
+        inherit (redoxLib) stubLibs vendor;
+        inherit (inputs) ripgrep-src;
+      };
+
+      # Import fd (fast find alternative)
+      fd = import ../pkgs/userspace/fd.nix {
+        inherit
+          pkgs
+          lib
+          rustToolchain
+          sysrootVendor
+          redoxTarget
+          ;
+        inherit (modularPkgs.system) relibc;
+        inherit (redoxLib) stubLibs vendor;
+        inherit (inputs) fd-src;
       };
 
       # Create initfs using modular mkInitfs factory function (headless)
@@ -358,6 +389,9 @@
 
         # Userutils - user management (getty, login, passwd, su, sudo)
         inherit userutils;
+
+        # CLI tools
+        inherit ripgrep fd;
 
         # Infrastructure
         inherit (modularPkgs.infrastructure) initfsTools bootstrap;
