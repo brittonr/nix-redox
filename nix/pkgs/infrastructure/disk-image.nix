@@ -41,13 +41,11 @@
   orbutils ? null, # orblogin (graphical login) and background
   # Enable graphics support (Orbital desktop)
   enableGraphics ? false,
-  # New developer tools (optional)
+  # New developer tools (optional) - tokei and difft excluded due to build issues
   bat ? null,
   hexyl ? null,
-  tokei ? null,
   zoxide ? null,
   dust ? null,
-  difft ? null,
   # Network configuration mode:
   # - "auto": Try DHCP first, fallback to static config if no IP assigned (default)
   # - "dhcp": DHCP only, no static fallback (for QEMU user-mode networking)
@@ -95,10 +93,8 @@ pkgs.stdenv.mkDerivation {
   ++ lib.optional (orbutils != null) orbutils
   ++ lib.optional (bat != null) bat
   ++ lib.optional (hexyl != null) hexyl
-  ++ lib.optional (tokei != null) tokei
   ++ lib.optional (zoxide != null) zoxide
-  ++ lib.optional (dust != null) dust
-  ++ lib.optional (difft != null) difft;
+  ++ lib.optional (dust != null) dust;
 
   # Use a fixed timestamp for reproducible builds
   # This ensures identical inputs produce identical outputs
@@ -423,15 +419,6 @@ pkgs.stdenv.mkDerivation {
                   fi
                 ''}
 
-                ${lib.optionalString (tokei != null) ''
-                  echo "Copying tokei (code statistics)..."
-                  if [ -f "${tokei}/bin/tokei" ]; then
-                    cp -v ${tokei}/bin/tokei redoxfs-root/bin/
-                    cp -v ${tokei}/bin/tokei redoxfs-root/usr/bin/
-                    echo "Copied tokei successfully"
-                  fi
-                ''}
-
                 ${lib.optionalString (zoxide != null) ''
                     echo "Copying zoxide (smart cd)..."
                     if [ -f "${zoxide}/bin/zoxide" ]; then
@@ -454,15 +441,6 @@ pkgs.stdenv.mkDerivation {
                     cp -v ${dust}/bin/dust redoxfs-root/bin/
                     cp -v ${dust}/bin/dust redoxfs-root/usr/bin/
                     echo "Copied dust successfully"
-                  fi
-                ''}
-
-                ${lib.optionalString (difft != null) ''
-                  echo "Copying difft (structural diff)..."
-                  if [ -f "${difft}/bin/difft" ]; then
-                    cp -v ${difft}/bin/difft redoxfs-root/bin/
-                    cp -v ${difft}/bin/difft redoxfs-root/usr/bin/
-                    echo "Copied difft successfully"
                   fi
                 ''}
 

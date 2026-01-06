@@ -62,12 +62,12 @@ mkUserspace.mkBinary {
 
   # Vendor hash for bat dependencies
   # This will need to be computed on first build
-  vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+  vendorHash = "sha256-FUfmai1q5Rrwcoca5xJZijBKm85DF7BM4MweKnVD11E=";
 
   # Build bat with minimal features for Redox compatibility
-  # Disable git integration (requires libgit2) and paging (requires fork)
-  # Enable core features: syntax highlighting, line numbers, etc.
-  cargoBuildFlags = "--bin bat --no-default-features --features regex-onig,build-assets";
+  # Use regex-fancy (pure Rust) instead of regex-onig (requires C library with glibc fortify)
+  # Include clap for CLI, paging for shell-words, etcetera for directories, build-assets for syntax
+  cargoBuildFlags = "--bin bat --no-default-features --features clap,paging,regex-fancy,wild,etcetera,build-assets";
 
   # Apply Redox compatibility patches after vendor directory is set up
   postConfigure = redoxPatches;

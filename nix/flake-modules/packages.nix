@@ -89,13 +89,11 @@
           # CLI tools
           ripgrep-src
           fd-src
-          # New developer tools
+          # New developer tools (tokei and difft excluded due to build issues)
           bat-src
           hexyl-src
-          tokei-src
           zoxide-src
           dust-src
-          difft-src
           ;
         # Use patched base source with Cloud Hypervisor support
         base-src = patchedSources.base;
@@ -275,20 +273,6 @@
         inherit (inputs) hexyl-src;
       };
 
-      # Import tokei (code statistics)
-      tokei = import ../pkgs/userspace/tokei.nix {
-        inherit
-          pkgs
-          lib
-          rustToolchain
-          sysrootVendor
-          redoxTarget
-          ;
-        inherit (modularPkgs.system) relibc;
-        inherit (redoxLib) stubLibs vendor;
-        inherit (inputs) tokei-src;
-      };
-
       # Import zoxide (smart cd)
       zoxide = import ../pkgs/userspace/zoxide.nix {
         inherit
@@ -315,20 +299,6 @@
         inherit (modularPkgs.system) relibc;
         inherit (redoxLib) stubLibs vendor;
         inherit (inputs) dust-src;
-      };
-
-      # Import difftastic (structural diff)
-      difft = import ../pkgs/userspace/difft.nix {
-        inherit
-          pkgs
-          lib
-          rustToolchain
-          sysrootVendor
-          redoxTarget
-          ;
-        inherit (modularPkgs.system) relibc;
-        inherit (redoxLib) stubLibs vendor;
-        inherit (inputs) difft-src;
       };
 
       # Create initfs using modular mkInitfs factory function (headless)
@@ -364,10 +334,8 @@
         inherit
           bat
           hexyl
-          tokei
           zoxide
           dust
-          difft
           ;
         redoxfs = modularPkgs.host.redoxfs;
         networkMode = "auto";
@@ -390,10 +358,8 @@
         inherit
           bat
           hexyl
-          tokei
           zoxide
           dust
-          difft
           ;
         redoxfs = modularPkgs.host.redoxfs;
         networkMode = "static";
@@ -429,10 +395,8 @@
         inherit
           bat
           hexyl
-          tokei
           zoxide
           dust
-          difft
           ;
         redoxfs = modularPkgs.host.redoxfs;
         networkMode = "auto";
@@ -511,14 +475,12 @@
         # CLI tools
         inherit ripgrep fd;
 
-        # New developer tools
+        # New developer tools (bat, hexyl, zoxide, dust work; tokei and difft excluded)
         inherit
           bat
           hexyl
-          tokei
           zoxide
           dust
-          difft
           ;
 
         # Infrastructure

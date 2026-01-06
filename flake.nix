@@ -18,7 +18,7 @@
     Host tools: cookbook, redoxfs, installer
     System: relibc, kernel, bootloader, base
     Userspace: ion, helix, binutils, extrautils, uutils, sodium, netutils
-    CLI tools: ripgrep (rg), fd, bat, hexyl, tokei, zoxide, dust, difft
+    CLI tools: ripgrep (rg), fd, bat, hexyl, zoxide, dust
   '';
 
   inputs = {
