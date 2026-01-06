@@ -44,7 +44,7 @@ mkUserspace.mkBinary {
 
   # Vendor hash for hexyl dependencies
   # This will need to be computed on first build
-  vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+  vendorHash = "sha256-MbRTnw7Vb9Lg/aHNXNg6Ziq7hF9lReqBtUVTCHvHOD8=";
 
   # hexyl has minimal features, build with defaults
   cargoBuildFlags = "--bin hexyl";

@@ -44,7 +44,7 @@ mkUserspace.mkBinary {
 
   # Vendor hash for dust dependencies
   # This will need to be computed on first build
-  vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+  vendorHash = "sha256-aPZx76k4tfV4c2UCDjZC7Cz4DFrp3CtXv7XXcfRsQ1g=";
 
   # Build dust with default features
   cargoBuildFlags = "--bin dust";

@@ -44,7 +44,7 @@ mkUserspace.mkBinary {
 
   # Vendor hash for zoxide dependencies
   # This will need to be computed on first build
-  vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
+  vendorHash = "sha256-8R8Lb4GMdm1ek31/jqE/1eNLZykuYL5LtaDv3hVfCJo=";
 
   # Build zoxide with default features
   cargoBuildFlags = "--bin zoxide";
