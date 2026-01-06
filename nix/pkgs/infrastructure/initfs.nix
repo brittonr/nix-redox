@@ -28,6 +28,8 @@
   userutils ? null,
   # Enable graphics support (vesad, inputd, fbbootlogd, etc.)
   enableGraphics ? false,
+  # Enable audio support (audiod, ihdad for Intel HD Audio)
+  enableAudio ? false,
 }:
 
 pkgs.stdenv.mkDerivation {
@@ -70,6 +72,17 @@ pkgs.stdenv.mkDerivation {
                   echo "WARNING: $bin not found in ${base}/bin"
                 fi
               done
+            ''}
+
+            # Copy audio daemon if audio mode is enabled
+            ${lib.optionalString enableAudio ''
+              echo "=== Copying audio daemon ==="
+              if [ -f ${base}/bin/audiod ]; then
+                echo "Copying audiod..."
+                cp -v ${base}/bin/audiod initfs/bin/
+              else
+                echo "WARNING: audiod not found in ${base}/bin"
+              fi
             ''}
 
             # Copy nulld (copy of zerod)
@@ -165,6 +178,22 @@ pkgs.stdenv.mkDerivation {
                   cp -v ${base}/bin/$drv initfs/usr/lib/drivers/
                 else
                   echo "WARNING: $drv not found for /usr/lib/drivers"
+                fi
+              done
+            ''}
+
+            # Copy audio drivers if audio mode is enabled
+            ${lib.optionalString enableAudio ''
+              echo "=== Copying audio drivers ==="
+              # ihdad: Intel HD Audio driver (QEMU intel-hda device)
+              # ac97d: AC'97 audio driver (QEMU AC97 device)
+              # sb16d: Sound Blaster 16 driver (QEMU sb16 device)
+              for drv in ihdad ac97d sb16d; do
+                if [ -f ${base}/bin/$drv ]; then
+                  echo "Copying $drv..."
+                  cp -v ${base}/bin/$drv initfs/lib/drivers/
+                else
+                  echo "WARNING: $drv not found in ${base}/bin"
                 fi
               done
             ''}
@@ -276,6 +305,46 @@ pkgs.stdenv.mkDerivation {
               EOF_GRAPHICS
             ''}
 
+            # Add audio driver entries to pcid config if enabled
+            ${lib.optionalString enableAudio ''
+                          cat >> initfs/etc/pcid/initfs.toml << 'EOF_AUDIO'
+
+              # Audio drivers - Intel HD Audio (QEMU intel-hda / ich9-intel-hda)
+              # Class 0x04 = Multimedia, Subclass 0x03 = HD Audio
+              # ICH6: vendor 0x8086, device 0x2668
+              [[drivers]]
+              name = "Intel HD Audio ICH6"
+              class = 0x04
+              subclass = 0x03
+              vendor = 0x8086
+              device = 0x2668
+              command = ["/scheme/initfs/lib/drivers/ihdad"]
+
+              # ICH9: vendor 0x8086, device 0x293e
+              [[drivers]]
+              name = "Intel HD Audio ICH9"
+              class = 0x04
+              subclass = 0x03
+              vendor = 0x8086
+              device = 0x293e
+              command = ["/scheme/initfs/lib/drivers/ihdad"]
+
+              # Audio drivers - AC'97 (QEMU AC97 device)
+              # Class 0x04 = Multimedia, Subclass 0x01 = Audio
+              # Intel 82801AA AC'97: vendor 0x8086, device 0x2415
+              [[drivers]]
+              name = "AC97 Audio"
+              class = 0x04
+              subclass = 0x01
+              vendor = 0x8086
+              device = 0x2415
+              command = ["/scheme/initfs/lib/drivers/ac97d"]
+
+              # Audio drivers - Sound Blaster 16 (QEMU sb16 device)
+              # ISA device, no PCI - started manually if needed
+              EOF_AUDIO
+            ''}
+
             # Create Ion shell configuration with simple prompt (no subprocess expansion)
             mkdir -p initfs/etc/ion
             echo '# Simple Ion shell configuration for headless Redox' > initfs/etc/ion/initrc
@@ -371,6 +440,19 @@ pkgs.stdenv.mkDerivation {
               echo "Starting framebuffer boot logger..."
               nowait fbbootlogd
               EOF_GRAPHICS
+            ''}
+
+            # Add audio daemon startup if enabled
+            # audiod creates the audio: scheme and manages audio output
+            # It must start after pcid-spawner loads the audio driver (ihdad/ac97d)
+            ${lib.optionalString enableAudio ''
+                      cat >> initfs/etc/init.rc << 'EOF_AUDIO'
+
+              # Audio support - start audio daemon after drivers loaded
+              # audiod creates audio: scheme for applications to use
+              echo "Starting audio daemon..."
+              audiod
+              EOF_AUDIO
             ''}
 
             # Continue with rest of init.rc

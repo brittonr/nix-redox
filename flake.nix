@@ -329,12 +329,6 @@
       flake = false;
     };
 
-    # tokei - code statistics tool (upstream, available in Redox pkg repo)
-    tokei-src = {
-      url = "github:XAMPPRocky/tokei/v12.1.2";
-      flake = false;
-    };
-
     # zoxide - smarter cd command (upstream, available in Redox pkg repo)
     zoxide-src = {
       url = "github:ajeetdsouza/zoxide/v0.9.4";
@@ -344,12 +338,6 @@
     # dust - intuitive disk usage analyzer (upstream)
     dust-src = {
       url = "github:bootandy/dust/v1.0.0";
-      flake = false;
-    };
-
-    # difftastic - structural diff tool (upstream)
-    difft-src = {
-      url = "github:Wilfred/difftastic/0.59.0";
       flake = false;
     };
   };

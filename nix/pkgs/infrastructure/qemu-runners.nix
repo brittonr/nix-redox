@@ -60,6 +60,8 @@
         -device qemu-xhci,id=xhci \
         -device usb-kbd \
         -device usb-tablet \
+        -device intel-hda \
+        -device hda-duplex \
         -serial mon:stdio
 
       # Wait for the resolution selection screen and automatically select

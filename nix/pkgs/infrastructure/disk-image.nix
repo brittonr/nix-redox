@@ -41,7 +41,9 @@
   orbutils ? null, # orblogin (graphical login) and background
   # Enable graphics support (Orbital desktop)
   enableGraphics ? false,
-  # New developer tools (optional) - tokei and difft excluded due to build issues
+  # Enable audio support (audiod, ihdad for Intel HD Audio)
+  enableAudio ? false,
+  # New developer tools (optional)
   bat ? null,
   hexyl ? null,
   zoxide ? null,

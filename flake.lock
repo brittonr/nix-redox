@@ -144,23 +144,6 @@
         "type": "github"
       }
     },
-    "difft-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1721516984,
-        "narHash": "sha256-cy5IBovU/TDYK6UGlSn3s7MQ9LnX/d0eUJlNdaibG44=",
-        "owner": "Wilfred",
-        "repo": "difftastic",
-        "rev": "ffe27c575ee222647cec98ba52f1c03a19055372",
-        "type": "github"
-      },
-      "original": {
-        "owner": "Wilfred",
-        "ref": "0.59.0",
-        "repo": "difftastic",
-        "type": "github"
-      }
-    },
     "dlmalloc-rs-src": {
       "flake": false,
       "locked": {
@@ -934,7 +917,6 @@
         "cc-rs-src": "cc-rs-src",
         "compiler-builtins-src": "compiler-builtins-src",
         "crane": "crane",
-        "difft-src": "difft-src",
         "dlmalloc-rs-src": "dlmalloc-rs-src",
         "drm-rs-src": "drm-rs-src",
         "dust-src": "dust-src",
@@ -978,7 +960,6 @@
         "rustix-redox-src": "rustix-redox-src",
         "sodium-src": "sodium-src",
         "termion-src": "termion-src",
-        "tokei-src": "tokei-src",
         "treefmt-nix": "treefmt-nix",
         "uefi-src": "uefi-src",
         "userutils-src": "userutils-src",
@@ -1059,23 +1040,6 @@
         "ref": "master",
         "repo": "termion",
         "type": "gitlab"
-      }
-    },
-    "tokei-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1610484482,
-        "narHash": "sha256-jqDsxUAMD/MCCI0hamkGuCYa8rEXNZIR8S+84S8FbgI=",
-        "owner": "XAMPPRocky",
-        "repo": "tokei",
-        "rev": "7e0b30ff4c1fe78fe2cc615d1f0f52c7ce6cb761",
-        "type": "github"
-      },
-      "original": {
-        "owner": "XAMPPRocky",
-        "ref": "v12.1.2",
-        "repo": "tokei",
-        "type": "github"
       }
     },
     "treefmt-nix": {

@@ -104,6 +104,7 @@ in
       kernel ? null,
       bootloader ? null,
       enableGraphics ? false,
+      enableAudio ? false,
     }:
     import ./initfs.nix {
       inherit
@@ -112,6 +113,7 @@ in
         initfsTools
         bootstrap
         enableGraphics
+        enableAudio
         ;
       inherit
         base
@@ -142,12 +144,14 @@ in
       orbital ? null,
       orbterm ? null,
       orbutils ? null, # orblogin (graphical login) and background
-      # New developer tools (tokei and difft excluded due to build issues)
+      # New developer tools
       bat ? null,
       hexyl ? null,
       zoxide ? null,
       dust ? null,
       enableGraphics ? false,
+      # Enable audio support (audiod, ihdad for Intel HD Audio)
+      enableAudio ? false,
       # Allow caller to override redoxfs if needed
       redoxfs ? redoxfs,
       # Network configuration mode: "auto" | "dhcp" | "static" | "none"
@@ -183,6 +187,7 @@ in
         zoxide
         dust
         enableGraphics
+        enableAudio
         networkMode
         staticNetworkConfig
         ;

@@ -89,7 +89,7 @@
           # CLI tools
           ripgrep-src
           fd-src
-          # New developer tools (tokei and difft excluded due to build issues)
+          # New developer tools
           bat-src
           hexyl-src
           zoxide-src
@@ -309,12 +309,13 @@
         enableGraphics = false;
       };
 
-      # Graphical initfs with display drivers
+      # Graphical initfs with display and audio drivers
       initfsGraphical = modularPkgs.infrastructure.mkInitfs {
         inherit (modularPkgs.system) base;
         inherit (modularPkgs.userspace) ion redoxfsTarget netutils;
         inherit userutils;
         enableGraphics = true;
+        enableAudio = true;
       };
 
       # Create disk image using modular mkDiskImage factory function
@@ -401,6 +402,7 @@
         redoxfs = modularPkgs.host.redoxfs;
         networkMode = "auto";
         enableGraphics = true;
+        enableAudio = true;
       };
 
       # QEMU runners from modular infrastructure
@@ -475,7 +477,7 @@
         # CLI tools
         inherit ripgrep fd;
 
-        # New developer tools (bat, hexyl, zoxide, dust work; tokei and difft excluded)
+        # New developer tools
         inherit
           bat
           hexyl
