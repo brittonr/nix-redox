@@ -38,7 +38,7 @@
         # Cloud Hypervisor is preferred for its lower overhead and Rust-based security
         run-redox = {
           type = "app";
-          program = "${self'.packages.runCloudHypervisor}/bin/run-redox-cloud-hypervisor";
+          program = "${self'.packages.run-redox-default}/bin/run-redox-cloud-hypervisor";
           meta.description = "Run Redox OS in Cloud Hypervisor (default, headless with serial console)";
         };
 
@@ -46,14 +46,14 @@
         # QEMU is used for graphical mode due to better input device support
         run-redox-graphical = {
           type = "app";
-          program = "${self'.packages.runQemuGraphical}/bin/run-redox-graphical";
+          program = "${self'.packages.run-redox-graphical-desktop}/bin/run-redox-graphical";
           meta.description = "Run Redox OS in QEMU with GTK graphical display";
         };
 
         # QEMU headless mode (legacy, for compatibility)
         run-redox-qemu = {
           type = "app";
-          program = "${self'.packages.runQemu}/bin/run-redox";
+          program = "${self'.packages.run-redox-default-qemu}/bin/run-redox";
           meta.description = "Run Redox OS in QEMU headless mode (legacy)";
         };
 
@@ -62,13 +62,13 @@
         # This is useful for testing graphics driver initialization
         run-redox-graphical-drivers = {
           type = "app";
-          program = "${self'.packages.runQemuGraphicalHeadless}/bin/run-redox";
-          meta.description = "Run Redox OS graphical image headless (test graphics drivers without display)";
+          program = "${self'.packages.run-redox-graphical-headless}/bin/run-redox-cloud-hypervisor";
+          meta.description = "Run Redox OS graphical image headless (test graphics drivers)";
         };
 
         run-redox-cloud-hypervisor-net = {
           type = "app";
-          program = "${self'.packages.runCloudHypervisorNet}/bin/run-redox-cloud-hypervisor-net";
+          program = "${self'.packages.run-redox-cloud-net}/bin/run-redox-cloud-hypervisor-net";
           meta.description = "Run Redox OS in Cloud Hypervisor with TAP networking";
         };
 

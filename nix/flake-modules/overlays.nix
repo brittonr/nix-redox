@@ -66,12 +66,19 @@
             redoxfsTarget
             ;
 
-          # Infrastructure
+          # Disk images (from module system profiles)
           inherit (config.packages)
-            initfs
-            diskImage
-            runQemu
-            runQemuGraphical
+            redox-default
+            redox-minimal
+            redox-graphical
+            redox-cloud
+            ;
+
+          # Runners (from module system)
+          inherit (config.packages)
+            run-redox-default
+            run-redox-default-qemu
+            run-redox-graphical-desktop
             ;
 
           # Rust toolchain for Redox

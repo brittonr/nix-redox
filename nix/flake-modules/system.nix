@@ -1,11 +1,12 @@
 # Flake-parts module for RedoxOS System Configurations
 #
 # Integrates the RedoxOS module system (nix/redox-system/) with the existing
-# flake-parts build infrastructure. Adds declarative system configurations
-# as a new layer on top of the existing package-based outputs.
+# flake-parts build infrastructure. This is the primary module for all
+# RedoxOS system outputs — declarative profiles, disk images, and runners.
 #
-# The existing packages (diskImage, etc.) continue to work unchanged.
-# This adds: redoxConfigurations, redoxSystem builder, and profile-based images.
+# All disk images, runners, and infrastructure outputs are built through
+# the module system. Backward-compatible aliases ensure existing commands
+# (nix build .#diskImage, nix run .#run-redox, etc.) continue to work.
 #
 # Usage in flake.nix:
 #   imports = [ ./nix/flake-modules/system.nix ];
@@ -173,6 +174,38 @@
           # Graphical profile
           run-redox-graphical-desktop = graphicalQemuRunners.graphical;
           run-redox-graphical-headless = graphicalCHRunners.headless;
+
+          # === Backward-compatible aliases ===
+          # These map the old package names to module system equivalents
+          # so existing commands (nix build .#diskImage) continue to work
+
+          # Disk images (old names → module system profiles)
+          diskImage = systems.default.diskImage;
+          diskImageCloudHypervisor = systems.cloud-hypervisor.diskImage;
+          diskImageGraphical = systems.graphical.diskImage;
+
+          # Initfs (from module system)
+          initfs = systems.default.initfs;
+          initfsGraphical = systems.graphical.initfs;
+
+          # QEMU runners (old names → module system runners)
+          runQemu = defaultQemuRunners.headless;
+          runQemuGraphical = graphicalQemuRunners.graphical;
+          runQemuGraphicalHeadless = graphicalQemuRunners.headless;
+          bootTest = defaultQemuRunners.bootTest;
+
+          # Cloud Hypervisor runners (old names → module system runners)
+          runCloudHypervisor = defaultRunners.headless;
+          runCloudHypervisorNet = cloudRunners.withNetwork;
+          runCloudHypervisorDev = defaultRunners.withDev;
+          setupCloudHypervisorNetwork = defaultRunners.setupNetwork;
+
+          # VM control utilities (from default profile CH runners)
+          pauseRedox = defaultRunners.pauseVm;
+          resumeRedox = defaultRunners.resumeVm;
+          snapshotRedox = defaultRunners.snapshotVm;
+          infoRedox = defaultRunners.infoVm;
+          resizeMemoryRedox = defaultRunners.resizeMemory;
         };
 
         # Expose the system builder and evaluated configs for advanced use

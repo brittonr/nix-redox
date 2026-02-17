@@ -8,7 +8,7 @@
 #
 # Access via:
 #   self.packages.${system}.cookbook
-#   self.packages.${system}.diskImage
+#   self.packages.${system}.relibc
 
 { self, inputs, ... }:
 
@@ -303,131 +303,6 @@
         inherit (inputs) dust-src;
       };
 
-      # Create initfs using modular mkInitfs factory function (headless)
-      initfs = modularPkgs.infrastructure.mkInitfs {
-        inherit (modularPkgs.system) base;
-        inherit (modularPkgs.userspace) ion redoxfsTarget netutils;
-        inherit userutils;
-        enableGraphics = false;
-      };
-
-      # Graphical initfs with display and audio drivers
-      initfsGraphical = modularPkgs.infrastructure.mkInitfs {
-        inherit (modularPkgs.system) base;
-        inherit (modularPkgs.userspace) ion redoxfsTarget netutils;
-        inherit userutils;
-        enableGraphics = true;
-        enableAudio = true;
-      };
-
-      # Create disk image using modular mkDiskImage factory function
-      # Default: auto mode (DHCP with static fallback)
-      diskImage = modularPkgs.infrastructure.mkDiskImage {
-        inherit (modularPkgs.system) kernel bootloader base;
-        inherit initfs sodium userutils;
-        inherit (modularPkgs.userspace)
-          ion
-          uutils
-          helix
-          binutils
-          extrautils
-          netutils
-          ;
-        # Include new developer tools
-        inherit
-          bat
-          hexyl
-          zoxide
-          dust
-          ;
-        redoxfs = modularPkgs.host.redoxfs;
-        networkMode = "auto";
-      };
-
-      # Cloud Hypervisor optimized disk image with static networking
-      # Skips DHCP, applies static config immediately for faster boot
-      diskImageCloudHypervisor = modularPkgs.infrastructure.mkDiskImage {
-        inherit (modularPkgs.system) kernel bootloader base;
-        inherit initfs sodium userutils;
-        inherit (modularPkgs.userspace)
-          ion
-          uutils
-          helix
-          binutils
-          extrautils
-          netutils
-          ;
-        # Include new developer tools
-        inherit
-          bat
-          hexyl
-          zoxide
-          dust
-          ;
-        redoxfs = modularPkgs.host.redoxfs;
-        networkMode = "static";
-        staticNetworkConfig = {
-          ip = "172.16.0.2";
-          netmask = "255.255.255.0";
-          gateway = "172.16.0.1";
-        };
-      };
-
-      # Graphical disk image with Orbital desktop
-      # Includes graphics drivers, orbdata (fonts, icons), orbital, and orbterm
-      diskImageGraphical = modularPkgs.infrastructure.mkDiskImage {
-        inherit (modularPkgs.system) kernel bootloader base;
-        initfs = initfsGraphical;
-        inherit
-          sodium
-          orbdata
-          userutils
-          orbital
-          orbterm
-          orbutils
-          ;
-        inherit (modularPkgs.userspace)
-          ion
-          uutils
-          helix
-          binutils
-          extrautils
-          netutils
-          ;
-        # Include new developer tools
-        inherit
-          bat
-          hexyl
-          zoxide
-          dust
-          ;
-        redoxfs = modularPkgs.host.redoxfs;
-        networkMode = "auto";
-        enableGraphics = true;
-        enableAudio = true;
-      };
-
-      # QEMU runners from modular infrastructure
-      qemuRunners = modularPkgs.infrastructure.mkQemuRunners {
-        inherit diskImage;
-        inherit (modularPkgs.system) bootloader;
-      };
-
-      # Graphical QEMU runners using diskImageGraphical
-      # Includes Orbital desktop environment and orbterm terminal emulator
-      qemuRunnersGraphical = modularPkgs.infrastructure.mkQemuRunners {
-        diskImage = diskImageGraphical;
-        inherit (modularPkgs.system) bootloader;
-      };
-
-      # Cloud Hypervisor runners from modular infrastructure
-      # headless uses default diskImage (auto network mode)
-      # withNetwork uses diskImageCloudHypervisor (static network mode for TAP)
-      cloudHypervisorRunners = modularPkgs.infrastructure.mkCloudHypervisorRunners {
-        inherit diskImage;
-        diskImageNet = diskImageCloudHypervisor;
-      };
-
       # Combined sysroot
       sysroot = pkgs.symlinkJoin {
         name = "redox-sysroot";
@@ -487,36 +362,8 @@
           dust
           ;
 
-        # Infrastructure
+        # Infrastructure (needed by module system)
         inherit (modularPkgs.infrastructure) initfsTools bootstrap;
-        inherit
-          initfs
-          initfsGraphical
-          diskImage
-          diskImageCloudHypervisor
-          diskImageGraphical
-          ;
-
-        # QEMU runners
-        runQemu = qemuRunners.headless;
-        runQemuGraphical = qemuRunnersGraphical.graphical;
-        bootTest = qemuRunners.bootTest;
-
-        # Headless runner with graphical disk image (for testing graphics drivers without display)
-        runQemuGraphicalHeadless = qemuRunnersGraphical.headless;
-
-        # Cloud Hypervisor runners
-        runCloudHypervisor = cloudHypervisorRunners.headless;
-        runCloudHypervisorNet = cloudHypervisorRunners.withNetwork;
-        runCloudHypervisorDev = cloudHypervisorRunners.withDev;
-        setupCloudHypervisorNetwork = cloudHypervisorRunners.setupNetwork;
-
-        # Cloud Hypervisor ch-remote wrapper scripts
-        pauseRedox = cloudHypervisorRunners.pauseVm;
-        resumeRedox = cloudHypervisorRunners.resumeVm;
-        snapshotRedox = cloudHypervisorRunners.snapshotVm;
-        infoRedox = cloudHypervisorRunners.infoVm;
-        resizeMemoryRedox = cloudHypervisorRunners.resizeMemory;
 
         # Default package
         default = modularPkgs.host.fstools;

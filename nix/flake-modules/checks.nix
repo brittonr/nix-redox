@@ -64,8 +64,8 @@
         sodium-build = packages.sodium;
         netutils-build = packages.netutils;
 
-        # Complete system image
-        diskImage-build = packages.diskImage;
+        # Complete system images (from module system profiles)
+        redox-default-build = packages.redox-default;
 
         # Boot test - verifies the complete system boots successfully
         # Note: Requires sandbox = false or relaxed due to QEMU

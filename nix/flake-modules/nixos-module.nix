@@ -37,7 +37,7 @@
           config = lib.mkIf config.programs.redox.enable {
             environment.systemPackages = [
               self.packages.${pkgs.system}.fstools
-              self.packages.${pkgs.system}.runQemu
+              self.packages.${pkgs.system}.run-redox-default-qemu
             ];
 
             # Enable FUSE for redoxfs
@@ -64,8 +64,8 @@
               self.packages.${pkgs.system}.fstools
 
               # Development tools
-              self.packages.${pkgs.system}.runQemu
-              self.packages.${pkgs.system}.runQemuGraphical
+              self.packages.${pkgs.system}.run-redox-default-qemu
+              self.packages.${pkgs.system}.run-redox-graphical-desktop
 
               # Additional useful tools
               qemu

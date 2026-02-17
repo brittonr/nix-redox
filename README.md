@@ -104,11 +104,73 @@ nix build .#ripgrep        # search
 nix build .#bat            # cat with highlighting
 # ... and more (see: nix flake show)
 
-# Disk images
-nix build .#diskImage                 # headless (auto network)
-nix build .#diskImageCloudHypervisor  # static networking for TAP
-nix build .#diskImageGraphical        # with Orbital desktop
+# Disk images (via module system profiles)
+nix build .#redox-default             # development profile (auto network)
+nix build .#redox-cloud               # cloud profile (static networking for TAP)
+nix build .#redox-graphical           # graphical profile (Orbital desktop)
+nix build .#diskImage                 # alias for redox-default
 ```
+
+## Module System (NixOS-style Profiles)
+
+All disk images and runners are built through a NixOS-style module system.
+Pre-built profiles provide ready-to-use configurations:
+
+| Command | Profile | Description |
+|---|---|---|
+| `nix build .#redox-default` | Development | CLI tools, auto networking, remote shell |
+| `nix build .#redox-minimal` | Minimal | Ion + uutils only, no network |
+| `nix build .#redox-graphical` | Graphical | Orbital desktop, audio, full CLI |
+| `nix build .#redox-cloud` | Cloud | Static IP, virtio-only drivers |
+
+Each profile has matching runners:
+
+```bash
+nix run .#run-redox-default           # Development in Cloud Hypervisor
+nix run .#run-redox-default-qemu      # Development in QEMU
+nix run .#run-redox-minimal           # Minimal in Cloud Hypervisor
+nix run .#run-redox-cloud             # Cloud profile headless
+nix run .#run-redox-cloud-net         # Cloud profile with TAP networking
+nix run .#run-redox-graphical-desktop # Graphical with QEMU GTK display
+nix run .#run-redox-graphical-headless # Graphical headless (test drivers)
+```
+
+### Custom Configurations
+
+Create your own system by writing a NixOS-style module:
+
+```nix
+# my-system.nix
+{ config, lib, pkgs, ... }:
+{
+  imports = [ ./nix/redox-system/modules/profiles/development.nix ];
+
+  redox.users.users.admin = {
+    uid = 1001; gid = 1001;
+    home = "/home/admin";
+    shell = "/bin/ion";
+  };
+
+  redox.networking.mode = "static";
+  redox.networking.interfaces.eth0 = {
+    address = "10.0.0.5";
+    gateway = "10.0.0.1";
+  };
+
+  redox.environment.systemPackages = with pkgs;
+    [ ripgrep fd bat ];
+
+  redox.environment.shellAliases.ll = "ls -la";
+}
+```
+
+Build it via the `mkRedoxSystem` helper exposed in `legacyPackages`:
+
+```bash
+nix eval .#legacyPackages.x86_64-linux.mkRedoxSystem
+```
+
+See `nix/redox-system/examples/configuration.nix` for a complete example.
 
 ## Development
 
@@ -151,6 +213,7 @@ nix/
 ├── flake-modules/
 │   ├── packages.nix               # all package exports
 │   ├── apps.nix                   # runnable apps
+│   ├── system.nix                  # module system integration (disk images, runners)
 │   ├── devshells.nix              # development shells
 │   ├── checks.nix                 # CI checks
 │   ├── toolchain.nix              # Rust toolchain setup
@@ -170,6 +233,17 @@ nix/
 │   ├── system/                    # core OS (relibc, kernel, bootloader, base)
 │   ├── userspace/                 # user programs (ion, helix, ripgrep, ...)
 │   └── infrastructure/            # initfs, disk image, VM runners
+├── redox-system/                   # NixOS-style module system
+│   ├── default.nix                 # redoxSystem entry point
+│   ├── eval.nix                    # module evaluator
+│   ├── lib.nix                     # Redox-specific helpers
+│   ├── module-list.nix             # base module list
+│   ├── modules/
+│   │   ├── config/                 # option modules (boot, users, networking, ...)
+│   │   ├── build/                  # build modules (initfs, disk-image, toplevel)
+│   │   ├── profiles/               # pre-built profiles (minimal, dev, graphical, cloud)
+│   │   └── system/                 # activation and setup
+│   └── examples/                   # example configurations
 └── patches/                       # source patches
 ```
 
