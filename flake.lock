@@ -814,25 +814,6 @@
         "type": "gitlab"
       }
     },
-    "redox-users-src": {
-      "flake": false,
-      "locked": {
-        "host": "gitlab.redox-os.org",
-        "lastModified": 1753974000,
-        "narHash": "sha256-Q63+xcgYR5OwIhZI3DNPsROvfml6fCGLyHvzcg1OwJ8=",
-        "owner": "redox-os",
-        "repo": "users",
-        "rev": "ea740b2b98ec081695c3c5a72671c0b9290bb8a3",
-        "type": "gitlab"
-      },
-      "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
-        "ref": "master",
-        "repo": "users",
-        "type": "gitlab"
-      }
-    },
     "redoxfs-src": {
       "flake": false,
       "locked": {
@@ -951,7 +932,6 @@
         "redox-scheme-src": "redox-scheme-src",
         "redox-src": "redox-src",
         "redox-syscall-src": "redox-syscall-src",
-        "redox-users-src": "redox-users-src",
         "redoxfs-src": "redoxfs-src",
         "relibc-src": "relibc-src",
         "ripgrep-src": "ripgrep-src",
