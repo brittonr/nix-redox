@@ -287,12 +287,6 @@
       flake = false;
     };
 
-    # redox_users - user/group management library
-    redox-users-src = {
-      url = "gitlab:redox-os/users/master?host=gitlab.redox-os.org";
-      flake = false;
-    };
-
     # termion - terminal I/O library for Redox
     termion-src = {
       url = "gitlab:redox-os/termion/master?host=gitlab.redox-os.org";
