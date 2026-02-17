@@ -141,6 +141,8 @@ let
           rustix-redox-src
           drm-rs-src
           relibc-src
+          redox-log-src
+          fdt-src
           ;
       }
     );
@@ -201,7 +203,7 @@ let
       cargoBuildFlags = "--bin hx --manifest-path helix-term/Cargo.toml";
       preBuild = ''
         export HELIX_DISABLE_AUTO_GRAMMAR_BUILD=1
-        export CFLAGS_x86_64_unknown_redox="-U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -I${system.relibc}/${redoxTarget}/include"
+        export CFLAGS_x86_64_unknown_redox="--target=${redoxTarget} -D__redox__ -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -I${system.relibc}/${redoxTarget}/include --sysroot=${system.relibc}/${redoxTarget}"
         export CC_x86_64_unknown_redox="${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
       '';
       installPhase = ''
@@ -316,7 +318,7 @@ let
     redoxfsTarget = mkUserspace.mkPackage {
       pname = "redoxfs-target";
       src = inputs.redoxfs-src;
-      vendorHash = "sha256-gQnEcZsQow/WDiHI1KompzyFWy+Uco4uqwAAJzwoxe8=";
+      vendorHash = "sha256-BXxNEwDIeMEpUFGBhSk1Q2lNG6h0n7/Kqm5RCsI8k0I=";
       cargoBuildFlags = "--bin redoxfs";
       installPhase = ''
         runHook preInstall

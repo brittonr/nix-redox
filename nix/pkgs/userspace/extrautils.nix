@@ -156,6 +156,10 @@ pkgs.stdenv.mkDerivation {
 
     export ${rustFlags.cargoEnvVar}="${rustFlags.userRustFlags} -L ${stubLibs}/lib"
 
+    # Set C compiler flags for cross-compilation (bzip2-sys needs relibc headers, not glibc)
+    export CFLAGS_x86_64_unknown_redox="--target=${redoxTarget} -D__redox__ -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -I${relibc}/${redoxTarget}/include --sysroot=${relibc}/${redoxTarget}"
+    export CC_x86_64_unknown_redox="${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
+
     # Build all extrautils binaries (tar excluded via Cargo.toml patch)
     cargo build \
       --target ${redoxTarget} \

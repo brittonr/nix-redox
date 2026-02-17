@@ -35,6 +35,14 @@ let
         --replace-quiet 'redox-rt = { git = "https://gitlab.redox-os.org/redox-os/relibc.git", default-features = false }' \
                        'redox-rt = { path = "${relibc-src}/redox-rt", default-features = false }'
 
+      # Replace workspace-inherited dependencies with explicit versions.
+      # The initfs crates now use anyhow.workspace = true and log.workspace = true
+      # inherited from the base root Cargo.toml, but we only copy bootstrap/ and initfs/.
+      find initfs -name Cargo.toml -exec sed -i \
+        -e 's/anyhow.workspace = true/anyhow = "1"/g' \
+        -e 's/log.workspace = true/log = "0.4"/g' \
+        {} +
+
       # Fix linker script for page alignment (mprotect requires aligned addresses)
       cat > bootstrap/src/x86_64.ld << 'LINKERSCRIPT'
       ENTRY(_start)
@@ -105,7 +113,7 @@ let
     name = "bootstrap-cargo-vendor";
     src = patchedSrc;
     sourceRoot = "bootstrap-src-patched/bootstrap";
-    hash = "sha256-mZ2joQC+831fSEfWAtH4paQJp28MMHnb61KuTYsGV/A=";
+    hash = "sha256-Pw+r2ephGdxri5VskRi8pdE/c5UfsJ15fHoMB0HNA/c=";
   };
 
   # Create merged vendor directory (cached as separate derivation)

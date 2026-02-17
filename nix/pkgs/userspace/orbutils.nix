@@ -98,7 +98,7 @@ let
   orbutilsVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "orbutils-cargo-vendor";
     src = patchedSrc;
-    hash = "sha256-AFDG8/6sOgtHxpP7f6gWHrSge6tKJJu454gFH8oHYW4=";
+    hash = "sha256-D00tFiBhe9rkM5HrucibncdVUv2bWBQ/kqC79dJhys0=";
   };
 
   # Create merged vendor directory (project + sysroot)

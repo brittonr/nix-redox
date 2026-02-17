@@ -14,6 +14,11 @@
 
 let
   # Extract initfs tools source with generated Cargo.lock (FOD)
+  #
+  # The upstream initfs crates now use workspace-inherited dependencies
+  # (anyhow.workspace = true, log.workspace = true) from the base root
+  # Cargo.toml. Since we only copy the initfs/ subdirectory, we need to
+  # replace these with explicit versions.
   initfsToolsSrc =
     pkgs.runCommand "initfs-tools-src"
       {
@@ -33,6 +38,14 @@ let
         # Copy entire initfs directory to include archive-common
         cp -r ${base-src}/initfs/* $out/
         chmod -R u+w $out
+
+        # Replace workspace-inherited dependencies with explicit versions.
+        # These values come from the base root Cargo.toml [workspace.dependencies].
+        find $out -name Cargo.toml -exec sed -i \
+          -e 's/anyhow.workspace = true/anyhow = "1"/g' \
+          -e 's/log.workspace = true/log = "0.4"/g' \
+          {} +
+
         cd $out/tools
         cargo generate-lockfile
       '';
@@ -69,6 +82,12 @@ pkgs.stdenv.mkDerivation {
     # Copy initfs source
     cp -r ${base-src}/initfs/* .
     chmod -R u+w .
+
+    # Replace workspace-inherited dependencies with explicit versions
+    find . -name Cargo.toml -exec sed -i \
+      -e 's/anyhow.workspace = true/anyhow = "1"/g' \
+      -e 's/log.workspace = true/log = "0.4"/g' \
+      {} +
 
     # Use pre-merged vendor directory
     cp -rL ${mergedVendor} vendor-combined

@@ -23,6 +23,8 @@
   rustix-redox-src,
   drm-rs-src,
   relibc-src,
+  redox-log-src,
+  fdt-src,
   # Accept but ignore extra args from commonArgs
   craneLib ? null,
   ...
@@ -74,19 +76,23 @@ let
               --replace-quiet 'drm-sys = { git = "https://github.com/Smithay/drm-rs.git" }' \
                              'drm-sys = { path = "${drm-rs-src}/drm-ffi/drm-sys" }'
 
+            # Replace redox-log git dependency with local path
+            substituteInPlace Cargo.toml \
+              --replace-quiet 'redox-log = { git = "https://gitlab.redox-os.org/redox-os/redox-log.git" }' \
+                             'redox-log = { path = "${redox-log-src}" }'
+
             # Add patch for redox-rt from relibc (used by individual crates)
             # Append to the [patch.crates-io] section
             echo "" >> Cargo.toml
             echo '# Added by Nix build' >> Cargo.toml
             echo 'redox-rt = { path = "${relibc-src}/redox-rt" }' >> Cargo.toml
 
-            # Also patch individual crate Cargo.toml files that use git deps
-            for crate_toml in */Cargo.toml; do
-              if [ -f "$crate_toml" ]; then
-                # Replace redox-rt git dependency with our relibcSrc path
-                sed -i 's|redox-rt = { git = "https://gitlab.redox-os.org/redox-os/relibc.git".*}|redox-rt = { path = "${relibc-src}/redox-rt", default-features = false }|g' "$crate_toml"
-              fi
-            done
+            # Patch all git dependencies across ALL Cargo.toml files in the workspace
+            find . -name Cargo.toml -exec sed -i \
+              -e 's|redox-rt = { git = "https://gitlab.redox-os.org/redox-os/relibc.git"[^}]*}|redox-rt = { path = "${relibc-src}/redox-rt", default-features = false }|g' \
+              -e 's|redox-log = { git = "https://gitlab.redox-os.org/redox-os/redox-log.git"[^}]*}|redox-log = { path = "${redox-log-src}" }|g' \
+              -e 's|fdt = { git = "https://github.com/repnop/fdt.git"[^}]*}|fdt = { path = "${fdt-src}" }|g' \
+              {} +
 
             # Apply GraphicScreen page-aligned allocation patch
             # This fixes the "Invalid argument" error when Orbital tries to mmap the display
@@ -255,7 +261,7 @@ let
   baseVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "base-cargo-vendor";
     src = patchedSrc;
-    hash = "sha256-/qhjJPlJWxRNkyzOyfSSBp8zrOVrVRvQ0ltKlFu4Pf4=";
+    hash = "sha256-k+52eNbx1T6E+gMI9wx2R+1zcwjnjGrvMA8VglTXxTo=";
   };
 
   # Create merged vendor directory (cached as separate derivation)

@@ -67,6 +67,7 @@
           orbclient-src
           rustix-redox-src
           drm-rs-src
+          redox-log-src
           ion-src
           helix-src
           binutils-src
@@ -154,6 +155,7 @@
           liblibc-src
           rustix-redox-src
           drm-rs-src
+          redox-log-src
           redox-syscall-src
           redox-scheme-src
           # Use orbital-compatible base commit (620b4bd) for graphics-ipc/inputd

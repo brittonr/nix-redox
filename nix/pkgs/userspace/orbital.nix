@@ -33,8 +33,9 @@
   orbimage-src ? null,
   libredox-src ? null,
   liblibc-src ? null,
-  rustix-redox-src ? null,
-  drm-rs-src ? null,
+  rustix-redox-src,
+  drm-rs-src,
+  redox-log-src ? null,
   relibc-src ? null,
   redox-syscall-src ? null,
   redox-scheme-src ? null,
@@ -44,7 +45,7 @@
 let
   # Create patched source with all path dependencies resolved
   patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "orbital-src-patched-v2"; # v2: Fix ImageAligned page alignment
+    name = "orbital-src-patched-v9"; # v9: Fix table-format dep version bumps
     src = orbital-src;
 
     phases = [
@@ -70,6 +71,18 @@ let
             # Make base writable for any needed patches
             chmod -R u+w base/
 
+            # Broadly update version requirements in base subdirectories to match vendored versions.
+            # The base-orbital-compat-src is pinned to an older commit with older dep versions,
+            # while the orbital Cargo.lock has newer versions vendored.
+            # Handle both simple ("X.Y") and table ({ version = "X.Y", ... }) formats.
+            find base/ -name Cargo.toml -exec sed -i \
+              -e 's|redox-scheme = "0\.[0-8][^"]*"|redox-scheme = "0.9"|g' \
+              -e 's|redox_syscall = "0\.[0-5][^"]*"|redox_syscall = "0.7"|g' \
+              -e '/redox_syscall/s|version = "0\.[0-5][^"]*"|version = "0.7"|g' \
+              -e 's|libredox = "0\.1\.[0-9]*"|libredox = "0.1"|g' \
+              -e '/libredox/s|version = "0\.1\.[0-9]*"|version = "0.1"|g' \
+              {} +
+
             # The orbital-compatible base commit (620b4bd) has graphics-ipc using:
             # - drm-sys = "0.8.0" (from crates.io, will be vendored)
             # - No redox-ioctl dependency (that was added later)
@@ -82,6 +95,32 @@ let
                              'inputd = { path = "base/drivers/inputd" }' \
               --replace-quiet 'graphics-ipc = { git = "https://gitlab.redox-os.org/redox-os/base.git" }' \
                              'graphics-ipc = { path = "base/drivers/graphics/graphics-ipc" }'
+
+            # Patch [patch.crates-io] git deps to use local paths
+            substituteInPlace Cargo.toml \
+              --replace-quiet 'drm = { git = "https://github.com/Smithay/drm-rs.git" }' \
+                             'drm = { path = "${drm-rs-src}" }' \
+              --replace-quiet 'drm-sys = { git = "https://github.com/Smithay/drm-rs.git" }' \
+                             'drm-sys = { path = "${drm-rs-src}/drm-ffi/drm-sys" }' \
+              --replace-quiet 'rustix = { git = "https://github.com/jackpot51/rustix.git", branch = "redox-ioctl" }' \
+                             'rustix = { path = "${rustix-redox-src}" }' \
+              --replace-quiet 'redox-log = { git = "https://gitlab.redox-os.org/redox-os/redox-log.git" }' \
+                             'redox-log = { path = "${redox-log-src}" }'
+
+            # Remove orbclient git override from [patch.crates-io] since the git version
+            # and crates.io version now have the same version number (0.3.50), causing
+            # conflicts in the vendor directory. The crates.io version works fine.
+            sed -i '/orbclient = { git = "https:\/\/gitlab.redox-os.org\/redox-os\/orbclient.git"/d' Cargo.toml
+
+            # Also remove relibc git override from [patch.crates-io] if present
+            sed -i '/^relibc = { git = /d' Cargo.toml
+
+            # Strip orbclient git source from Cargo.lock to prevent fetchCargoVendor
+            # from downloading both crates.io and git versions (same version number collision)
+            # Remove any source lines referencing orbclient git
+            sed -i '/^source = "git+https:\/\/gitlab.redox-os.org\/redox-os\/orbclient.git/d' Cargo.lock
+            # Remove any source lines referencing relibc git in Cargo.lock
+            sed -i '/^source = "git+https:\/\/gitlab.redox-os.org\/redox-os\/relibc.git/d' Cargo.lock
 
             # Fix ImageAligned to use manual page alignment instead of libc::memalign
             # The libc::memalign in relibc may not properly page-align allocations,
@@ -227,7 +266,7 @@ let
   orbitalVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "orbital-cargo-vendor";
     src = patchedSrc;
-    hash = "sha256-Bz+sB+G+DO9TavMpI7zS5O4a6Bktg0mNXQRRQnyJfTA=";
+    hash = "sha256-ME5/M62yhh6D6pfw+PfKsnSzD0fQxntxGfM2meE3i3Y=";
   };
 
   # Create merged vendor directory (project + sysroot)

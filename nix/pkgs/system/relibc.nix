@@ -6,7 +6,7 @@
 # - CRT startup files (crt0.o, crti.o, crtn.o)
 #
 # The build process:
-# 1. Patches dlmalloc dependency to use crates.io version
+# 1. Copies dlmalloc-rs fork submodule (provides DlmallocCApi with c_api feature)
 # 2. Merges project vendor with sysroot vendor for -Z build-std
 # 3. Builds with LLVM/Clang cross-compilation toolchain
 
@@ -56,118 +56,19 @@ let
     '';
 
     patchPhase = ''
-            runHook prePatch
+      runHook prePatch
 
-            # Use crates.io dlmalloc 0.2 instead of the outdated local fork
-            substituteInPlace Cargo.toml \
-              --replace-fail 'path = "dlmalloc-rs"' 'version = "0.2"'
+      # Fix shell script interpreters for Nix sandbox
+      patchShebangs .
 
-            # Remove c_api feature since crates.io dlmalloc doesn't have it
-            sed -i '/features = \["c_api"\]/d' Cargo.toml
+      # Use LLVM tools instead of target-prefixed GNU tools
+      sed -i 's/export CC=x86_64-unknown-redox-gcc/export CC=clang/g' config.mk
+      sed -i 's/export LD=x86_64-unknown-redox-ld/export LD=ld.lld/g' config.mk
+      sed -i 's/export AR=x86_64-unknown-redox-ar/export AR=llvm-ar/g' config.mk
+      sed -i 's/export NM=x86_64-unknown-redox-nm/export NM=llvm-nm/g' config.mk
+      sed -i 's/export OBJCOPY=x86_64-unknown-redox-objcopy/export OBJCOPY=llvm-objcopy/g' config.mk
 
-            # Fix relibc to use dlmalloc::Dlmalloc instead of DlmallocCApi
-            substituteInPlace src/platform/allocator/mod.rs \
-              --replace-fail 'use dlmalloc::DlmallocCApi;' 'use dlmalloc::Dlmalloc as DlmallocCApi;'
-
-            # crates.io dlmalloc 0.2 API changes - update allocator calls
-            sed -i 's/\.lock()\.malloc(layout\.size())/\.lock()\.malloc(layout.size(), layout.align())/g' \
-              src/platform/allocator/mod.rs
-            sed -i 's/\.lock()\.free(ptr)$/\.lock()\.free(ptr, layout.size(), layout.align())/g' \
-              src/platform/allocator/mod.rs
-            sed -i 's/\.lock()\.realloc(ptr, new_size)/\.lock()\.realloc(ptr, layout.size(), layout.align(), new_size)/g' \
-              src/platform/allocator/mod.rs
-            sed -i 's/\.lock()\.free(ptr);/\.lock()\.free(ptr, old_size, old_align);/g' \
-              src/platform/allocator/mod.rs
-            sed -i 's/\.lock()\.memalign(layout\.align(), layout\.size())/\.lock()\.malloc(layout.size(), layout.align())/g' \
-              src/platform/allocator/mod.rs
-
-            # Replace C API functions with size-tracking versions
-            cat > /tmp/c_api_patch.txt << 'PATCH'
-      // Size-tracking C API for dlmalloc 0.2
-      const HEADER_SIZE: usize = 16;
-      const MIN_ALIGN: usize = 16;
-
-      #[inline]
-      fn write_header(ptr: *mut u8, size: usize) {
-          unsafe { *(ptr as *mut usize) = size; }
-      }
-
-      #[inline]
-      fn read_header(ptr: *const u8) -> usize {
-          unsafe { *(ptr as *const usize) }
-      }
-
-      pub unsafe fn alloc(size: size_t) -> *mut c_void {
-          let total = size + HEADER_SIZE;
-          let ptr = (*ALLOCATOR.get()).lock().malloc(total, MIN_ALIGN);
-          if ptr.is_null() { return ptr.cast(); }
-          write_header(ptr, size);
-          ptr.add(HEADER_SIZE).cast()
-      }
-
-      pub unsafe fn alloc_align(size: size_t, alignment: size_t) -> *mut c_void {
-          let align = if alignment < MIN_ALIGN { MIN_ALIGN } else { alignment };
-          let total = size + HEADER_SIZE;
-          let ptr = (*ALLOCATOR.get()).lock().malloc(total, align);
-          if ptr.is_null() { return ptr.cast(); }
-          write_header(ptr, size);
-          ptr.add(HEADER_SIZE).cast()
-      }
-
-      pub unsafe fn realloc(ptr: *mut c_void, size: size_t) -> *mut c_void {
-          if ptr.is_null() {
-              return alloc(size);
-          }
-          let base = (ptr as *mut u8).sub(HEADER_SIZE);
-          let old_size = read_header(base);
-          let total = size + HEADER_SIZE;
-          let new_base = (*ALLOCATOR.get()).lock().realloc(base, old_size + HEADER_SIZE, MIN_ALIGN, total);
-          if new_base.is_null() { return new_base.cast(); }
-          write_header(new_base, size);
-          new_base.add(HEADER_SIZE).cast()
-      }
-
-      pub unsafe fn free(ptr: *mut c_void) {
-          if ptr.is_null() { return; }
-          let base = (ptr as *mut u8).sub(HEADER_SIZE);
-          let size = read_header(base);
-          (*ALLOCATOR.get()).lock().free(base, size + HEADER_SIZE, MIN_ALIGN)
-      }
-
-      pub unsafe fn alloc_usable_size(ptr: *mut c_void) -> size_t {
-          if ptr.is_null() { return 0; }
-          let base = (ptr as *mut u8).sub(HEADER_SIZE);
-          read_header(base)
-      }
-      PATCH
-
-            # Remove old C API functions and add new ones
-            sed -i '/^pub unsafe fn alloc(size: size_t)/,/^}$/d' src/platform/allocator/mod.rs
-            sed -i '/^pub unsafe fn alloc_align/,/^}$/d' src/platform/allocator/mod.rs
-            sed -i '/^pub unsafe fn realloc/,/^}$/d' src/platform/allocator/mod.rs
-            sed -i '/^pub unsafe fn free/,/^}$/d' src/platform/allocator/mod.rs
-            sed -i '/^pub unsafe fn alloc_usable_size/,/^}$/d' src/platform/allocator/mod.rs
-            cat /tmp/c_api_patch.txt >> src/platform/allocator/mod.rs
-
-            # Fix alloc_zeroed and constructor
-            sed -i 's/let ptr = self\.alloc(layout);/let ptr = unsafe { (*self.get()).lock().calloc(layout.size(), layout.align()) };/g' \
-              src/platform/allocator/mod.rs
-            sed -i 's/if !ptr\.is_null() && (\*self\.get())\.lock()\.calloc_must_clear(ptr) {/if false {/g' \
-              src/platform/allocator/mod.rs
-            sed -i 's/Dlmalloc::new(/Dlmalloc::new_with_allocator(/g' \
-              src/platform/allocator/mod.rs
-
-            # Fix shell script interpreters for Nix sandbox
-            patchShebangs .
-
-            # Use LLVM tools instead of target-prefixed GNU tools
-            sed -i 's/export CC=x86_64-unknown-redox-gcc/export CC=clang/g' config.mk
-            sed -i 's/export LD=x86_64-unknown-redox-ld/export LD=ld.lld/g' config.mk
-            sed -i 's/export AR=x86_64-unknown-redox-ar/export AR=llvm-ar/g' config.mk
-            sed -i 's/export NM=x86_64-unknown-redox-nm/export NM=llvm-nm/g' config.mk
-            sed -i 's/export OBJCOPY=x86_64-unknown-redox-objcopy/export OBJCOPY=llvm-objcopy/g' config.mk
-
-            runHook postPatch
+      runHook postPatch
     '';
 
     installPhase = ''

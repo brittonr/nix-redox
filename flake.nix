@@ -104,7 +104,7 @@
     };
 
     dlmalloc-rs-src = {
-      url = "gitlab:redox-os/dlmalloc-rs/master?host=gitlab.redox-os.org";
+      url = "gitlab:redox-os/dlmalloc-rs/main?host=gitlab.redox-os.org";
       flake = false;
     };
 
