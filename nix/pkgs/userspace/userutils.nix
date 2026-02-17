@@ -25,6 +25,17 @@
 }:
 
 let
+  # Import centralized rust-flags (derived from target, not hardcoded)
+  rustFlags = import ../../lib/rust-flags.nix {
+    inherit
+      lib
+      pkgs
+      redoxTarget
+      relibc
+      stubLibs
+      ;
+  };
+
   # Python script to clean Cargo.lock (stored as separate file to avoid Nix escaping issues)
   cleanLockScript = pkgs.writeText "clean-cargo-lock.py" ''
     import re
@@ -161,7 +172,7 @@ pkgs.stdenv.mkDerivation {
 
     export HOME=$(mktemp -d)
 
-    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C panic=abort -C linker=${pkgs.llvmPackages.clang-unwrapped}/bin/clang -C link-arg=-nostdlib -C link-arg=-static -C link-arg=--target=${redoxTarget} -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=-Wl,--allow-multiple-definition"
+    export ${rustFlags.cargoEnvVar}="${rustFlags.userRustFlags} -L ${stubLibs}/lib"
 
     # Build userutils binaries (excluding sudo which needs redox-rt)
     # The key binaries we need: getty (terminal login), login, passwd, id

@@ -229,7 +229,7 @@
               set boot_complete 1
               exp_continue
             }
-            -re "(Starting shell|Minimal Redox Shell|Welcome to Redox)" {
+            -re "(Starting interactive shell|Starting shell|Minimal Redox Shell|Welcome to Redox)" {
               puts "\n>>> MILESTONE: Shell started successfully!"
               set shell_started 1
 

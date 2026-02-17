@@ -416,8 +416,11 @@ pkgs.stdenv.mkDerivation {
 
     export HOME=$(mktemp -d)
 
-    # Set RUSTFLAGS for cross-linking with relibc
-    export CARGO_TARGET_X86_64_UNKNOWN_REDOX_RUSTFLAGS="-C target-cpu=x86-64 -L ${relibc}/${redoxTarget}/lib -L ${stubLibs}/lib -C link-arg=-nostdlib -C link-arg=-static -C link-arg=${relibc}/${redoxTarget}/lib/crt0.o -C link-arg=${relibc}/${redoxTarget}/lib/crti.o -C link-arg=${relibc}/${redoxTarget}/lib/crtn.o -C link-arg=--allow-multiple-definition"
+    # Set RUSTFLAGS for cross-linking with relibc.
+    # base uses ld.lld directly (via .cargo/config.toml), not clang as linker
+    # driver, so systemRustFlags omits -C linker=clang and --target, and uses
+    # --allow-multiple-definition without the -Wl, prefix.
+    export ${rustFlags.cargoEnvVar}="${rustFlags.systemRustFlags} -L ${stubLibs}/lib"
 
     # Build all workspace members for Redox target
     cargo build \

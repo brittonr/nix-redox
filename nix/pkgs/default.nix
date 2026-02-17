@@ -201,10 +201,9 @@ let
       src = inputs.helix-src;
       vendorHash = "sha256-p82CxDgI6SNSfN1BTY/s8hLh7/nhg4UHFHA2b5vQZf0=";
       cargoBuildFlags = "--bin hx --manifest-path helix-term/Cargo.toml";
+      # CC/CFLAGS are already set by mkPackage; only helix-specific env needed
       preBuild = ''
         export HELIX_DISABLE_AUTO_GRAMMAR_BUILD=1
-        export CFLAGS_x86_64_unknown_redox="--target=${redoxTarget} -D__redox__ -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -I${system.relibc}/${redoxTarget}/include --sysroot=${system.relibc}/${redoxTarget}"
-        export CC_x86_64_unknown_redox="${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
       '';
       installPhase = ''
         runHook preInstall

@@ -136,8 +136,8 @@ rec {
 
         # Set C compiler flags for cross-compilation so cc-rs uses relibc headers
         # instead of glibc (which has unsupported __float128 on newer glibc versions)
-        export CC_x86_64_unknown_redox="${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
-        export CFLAGS_x86_64_unknown_redox="--target=${redoxTarget} -D__redox__ -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=0 -I${relibc}/${redoxTarget}/include --sysroot=${relibc}/${redoxTarget}"
+        export ${rustFlags.ccEnvVar}="${rustFlags.ccBin}"
+        export ${rustFlags.cflagsEnvVar}="${rustFlags.cFlags}"
 
         # Build the package
         cargo build \

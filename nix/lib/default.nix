@@ -2,10 +2,9 @@
 #
 # This module aggregates all the shared utilities for building RedoxOS:
 # - stub-libs: Unwinding stub libraries for panic=abort builds
-# - rust-flags: Centralized RUSTFLAGS configuration
+# - rust-flags: Centralized RUSTFLAGS and CC/CFLAGS configuration
 # - vendor: Cargo vendor merging utilities
 # - sysroot: Rust sysroot vendor management
-# - cross-compile: High-level package building helpers
 #
 # Usage in flake.nix:
 #   redoxLib = import ./nix/lib {
@@ -21,12 +20,6 @@
 #
 #   # Get RUSTFLAGS (after relibc is built)
 #   rustFlags = redoxLib.mkRustFlags { inherit relibc; };
-#
-#   # Build a cross-compiled package (after all deps are ready)
-#   crossCompile = redoxLib.mkCrossCompile {
-#     inherit relibc sysrootVendor rustToolchain;
-#   };
-#   ion = crossCompile.mkRedoxBinary { ... };
 #
 # For package definitions, see ../pkgs/default.nix
 
@@ -53,9 +46,11 @@ rec {
 
   # RUSTFLAGS configuration factory (requires relibc to be passed in)
   # Returns an attrset with:
-  # - userRustFlags: The complete RUSTFLAGS string
-  # - cargoEnvVar: The correct env var name for Cargo
-  # - buildStdArgs: Arguments for -Z build-std
+  # - userRustFlags / systemRustFlags: RUSTFLAGS strings
+  # - cargoEnvVar / ccEnvVar / cflagsEnvVar: Env var names (derived from target)
+  # - ccBin / cFlags: C compiler configuration for cc-rs
+  # - mkRustFlagsString: Composable flag builder
+  # - mkCrossEnvScript: Shell snippet that exports all cross-compilation env vars
   mkRustFlags =
     { relibc }:
     import ./rust-flags.nix {
@@ -64,30 +59,6 @@ rec {
         pkgs
         redoxTarget
         relibc
-        ;
-      stubLibs = stubLibsModule;
-    };
-
-  # Cross-compilation helpers factory (requires all deps to be passed in)
-  # Returns an attrset with:
-  # - mkRedoxPackage: Full control over package building
-  # - mkRedoxBinary: Simple single-binary packages
-  # - mkRedoxMultiBinary: Packages with multiple named binaries
-  # - mkRedoxAllBinaries: Packages where all executables should be installed
-  mkCrossCompile =
-    {
-      relibc,
-      sysrootVendor,
-      rustToolchain,
-    }:
-    import ./cross-compile.nix {
-      inherit
-        pkgs
-        lib
-        redoxTarget
-        relibc
-        sysrootVendor
-        rustToolchain
         ;
       stubLibs = stubLibsModule;
     };
