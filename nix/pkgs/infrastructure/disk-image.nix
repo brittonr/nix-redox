@@ -472,14 +472,14 @@ pkgs.stdenv.mkDerivation {
                 mkdir -p redoxfs-root/usr/lib/init.d
 
                 # Base daemons (ipcd needs /dev/urandom -> /scheme/rand)
-                # Note: ptyd is already started in initfs, don't start again
+                # Uses 'notify' prefix for daemons that use daemon crate's readiness protocol
                 cat > redoxfs-root/usr/lib/init.d/00_base << 'INIT_BASE'
-    /bin/ipcd
+    notify /bin/ipcd
     INIT_BASE
 
                 # Network daemons
                 cat > redoxfs-root/etc/init.d/10_net << 'INIT_NET'
-    /bin/smolnetd
+    notify /bin/smolnetd
     INIT_NET
 
                 # DHCP daemon (skip for static-only mode)

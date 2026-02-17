@@ -202,13 +202,11 @@ pkgs.stdenv.mkDerivation {
             ls -la initfs/lib/drivers/
 
             # Create init_drivers.rc
-            # NOTE: ps2d is moved to graphics startup section because it needs inputd to be running
+            # Uses 'notify' prefix for daemons that use the daemon crate's readiness protocol
             cat > initfs/etc/init_drivers.rc << 'DRIVERS_RC'
-    echo "Starting hwd..."
-    hwd
-    echo "hwd completed, starting pcid-spawner..."
+    ${lib.optionalString enableGraphics "notify ps2d"}
+    notify hwd
     pcid-spawner /scheme/initfs/etc/pcid/initfs.toml
-    echo "pcid-spawner completed"
     DRIVERS_RC
 
             # Verify drivers are actually copied
@@ -352,6 +350,9 @@ pkgs.stdenv.mkDerivation {
             echo 'let PROMPT = "ion> "' >> initfs/etc/ion/initrc
 
             # Create init.rc based on graphics mode
+            # Uses 'notify' prefix for daemons that use the daemon crate's readiness protocol.
+            # The 'notify' command calls daemon::Daemon::spawn() which sets INIT_NOTIFY env var
+            # with a pipe fd, then waits for the daemon to signal readiness before continuing.
             # NOTE: Content must NOT be indented - init.rc format is line-by-line commands
             ${
               if enableGraphics then
@@ -368,113 +369,54 @@ pkgs.stdenv.mkDerivation {
     export PATH /scheme/initfs/bin
     export RUST_BACKTRACE 1
     rtcd
-    nulld
-    zerod
-    echo "Starting random daemon..."
-    randd
-    echo "."
-    echo "."
-    echo "."
-    echo "."
-    echo "."
-    echo "Random daemon ready"
-
-    # PTY daemon - needed for interactive shells
-    ptyd
+    notify nulld
+    notify zerod
+    notify randd
 
     # Logging
-    logd
+    notify logd
     stdio /scheme/log
-    ramfs logging
+    notify ramfs logging
 
-    # Live disk
-    lived
-
-    # Drivers (pcid-spawner will start e1000d when it detects the network card)
-    # Note: pcid is started by hwd
-    echo "Loading drivers..."
-    run /scheme/initfs/etc/init_drivers.rc
-    unset RSDP_ADDR RSDP_SIZE
+    # PTY daemon (needed for getty/interactive shells)
+    notify ptyd
     EOF
 
-            # Add graphics daemons startup AFTER drivers if enabled
-            # CORRECT ORDER (based on scheme dependencies):
-            # 1. inputd (no -A) - creates input: scheme, but don't activate VT yet
-            # 2. vesad - creates display.vesa scheme, registers DisplayHandle with inputd
-            # 3. inputd -A 1 - now activate VT 1 (vesad is ready to receive it)
-            # 4. USB stack: xhcid (via pcid), then usbhubd (enumerate), then usbhidd (HID)
-            # 5. ps2d - PS/2 fallback input (may fail if no PS/2 hardware - that's OK)
-            # 6. fbbootlogd - uses display scheme created by vesad
-            #
-            # Note: The -A flag tells inputd to activate a VT, which requires a display
-            # handle to be available. So we start inputd first WITHOUT -A, then vesad
-            # creates the display scheme, then we activate the VT.
-            #
-            # USB Input Chain:
-            # xhcid is started by pcid-spawner when it detects USB controller (class 0x0C)
-            # xhcid creates usb:N scheme for each controller
-            # usbhubd enumerates devices on the bus, creates device entries
-            # usbhidd handles HID devices (keyboard, mouse, tablet), registers with inputd
+            # Graphics infrastructure BEFORE drivers (matching upstream order)
+            # inputd/vesad must be ready before pcid-spawner starts xhcid,
+            # so usbhidd can register with the input: scheme
             ${lib.optionalString enableGraphics ''
-                      cat >> initfs/etc/init.rc << 'EOF_GRAPHICS'
+                                cat >> initfs/etc/init.rc << 'EOF_GRAPHICS'
 
-              # Graphics support - start display and input daemons AFTER drivers loaded
-              # inputd creates input: scheme, vesad registers display handle with it
-              echo "Starting input daemon (background, no VT activation)..."
-              nowait inputd
-              echo "Starting display daemon..."
-              vesad
-              echo "Activating virtual terminal 1..."
+              # Graphics infrastructure
+              notify inputd
+              notify vesad
+              unset FRAMEBUFFER_ADDR FRAMEBUFFER_VIRT FRAMEBUFFER_WIDTH FRAMEBUFFER_HEIGHT FRAMEBUFFER_STRIDE
+              notify fbbootlogd
+              # Activate framebuffer log VT, which disables kernel graphical debug
               inputd -A 1
-
-              # USB input stack - xhcid was started by pcid-spawner
-              # Note: usbhubd and usbhidd are spawned BY xhcid when it discovers devices
-              # They require arguments: <scheme> <port> <interface>
-              # xhcid looks for them in the PATH, so they must be in /bin or /scheme/initfs/bin
-              echo "USB stack ready - xhcid will spawn usbhubd/usbhidd for discovered devices"
-
-              # PS/2 fallback - may fail if no PS/2 hardware (that's OK in QEMU graphical mode)
-              echo "Starting PS/2 input driver (fallback)..."
-              ps2d us
-
-              echo "Starting framebuffer boot logger..."
-              nowait fbbootlogd
+              notify fbcond 2
               EOF_GRAPHICS
             ''}
 
-            # Add audio daemon startup if enabled
-            # audiod creates the audio: scheme and manages audio output
-            # It must start after pcid-spawner loads the audio driver (ihdad/ac97d)
-            ${lib.optionalString enableAudio ''
-                      cat >> initfs/etc/init.rc << 'EOF_AUDIO'
-
-              # Audio support - start audio daemon after drivers loaded
-              # audiod creates audio: scheme for applications to use
-              echo "Starting audio daemon..."
-              audiod
-              EOF_AUDIO
-            ''}
-
-            # Continue with rest of init.rc
+            # Continue with lived, drivers, rootfs mount
             cat >> initfs/etc/init.rc << 'EOF'
 
-    # Note: ipcd requires /dev/urandom which only exists after rootfs mounts
-    # It will be started from /usr/lib/init.d/00_base after rootfs transition
+    # Live disk (before drivers so it gets priority for disk search)
+    notify lived
+
+    # Drivers
+    run /scheme/initfs/etc/init_drivers.rc
+    unset RSDP_ADDR RSDP_SIZE
 
     # Mount rootfs
-    # Note: init.rc is executed line-by-line by init, not by a shell, so we can't use if/then/else
-    echo "Mounting RedoxFS..."
-    # Use the UUID directly if available, otherwise let redoxfs find it
     redoxfs --uuid $REDOXFS_UUID file $REDOXFS_BLOCK
     unset REDOXFS_UUID REDOXFS_BLOCK REDOXFS_PASSWORD_ADDR REDOXFS_PASSWORD_SIZE
 
     # Exit initfs
-    echo "Transitioning from initfs to root filesystem..."
     cd /
-    export PATH "/bin:/usr/bin"
-    echo "PATH set to: $PATH"
-    echo "Running init scripts..."
-    # run.d is a subcommand of init - just use run.d directly since it's part of init
+    export PATH /usr/bin
+    unset LD_LIBRARY_PATH
     run.d /usr/lib/init.d /etc/init.d
 
     # Boot complete
@@ -484,22 +426,15 @@ pkgs.stdenv.mkDerivation {
     echo "=========================================="
     echo ""
 
-    # Set environment for shell
+    # Start interactive shell
     export TERM xterm
     export XDG_CONFIG_HOME /etc
     export HOME /home/user
     export USER user
     export PATH /bin:/usr/bin
-
-    # Start interactive shell using PTY for proper terminal support
-    # The ptyd daemon creates /scheme/pty which provides proper termios support
-    # that liner/termion needs for line editing (raw mode, etc.)
     echo "Starting interactive shell..."
     echo "Type 'help' for commands, 'exit' to quit"
     echo ""
-    # Use getty to properly initialize terminal and spawn login
-    # -J: Don't clear the screen (useful for serial console)
-    # For headless serial console, use debug: scheme
     getty -J debug:
     EOF
 
