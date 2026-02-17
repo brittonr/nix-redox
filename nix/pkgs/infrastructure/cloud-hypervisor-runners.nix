@@ -55,15 +55,16 @@ let
   defaultCpus = "4";
   defaultMemory = "2048M";
 
-  # Network performance: multi-queue for parallel packet processing
-  netQueues = "4";
+  # Network queues: 2 = 1 RX + 1 TX (compatible with standard TAP interfaces)
+  # Multi-queue (4+) requires TAP created with IFF_MULTI_QUEUE flag
+  netQueues = "2";
   netQueueSize = "256";
 
   # Default API socket path for development mode
   defaultApiSocket = "/tmp/cloud-hypervisor-redox.sock";
 
-  # Use default disk image (with DHCP client) - DHCP server is provided by NixOS service
-  networkDiskImage = diskImage;
+  # Use network-optimized disk image if provided, otherwise fall back to default
+  networkDiskImage = if diskImageNet != null then diskImageNet else diskImage;
 in
 {
   # Helper script to set up TAP networking on the host
@@ -249,7 +250,7 @@ in
 
   # Cloud Hypervisor runner with TAP networking
   # Requires: NixOS cloud-hypervisor-host tag or manual TAP setup
-  # DHCP server (dnsmasq) should be configured on the host
+  # Uses static IP configuration for fast boot (no DHCP dependency)
   # Performance optimized with direct I/O, CPU topology, and multi-queue networking
   withNetwork = pkgs.writeShellScriptBin "run-redox-cloud-hypervisor-net" ''
     set -e
@@ -292,7 +293,7 @@ in
     fi
 
     # Check for TAP interface
-    if ! ip link show "$TAP_NAME" &>/dev/null; then
+    if ! ${pkgs.iproute2}/bin/ip link show "$TAP_NAME" &>/dev/null; then
       echo "TAP interface $TAP_NAME not found!"
       echo ""
       echo "This runner requires the NixOS cloud-hypervisor-host tag, which provides:"
@@ -306,6 +307,21 @@ in
       echo "Then rebuild: clan machines update <machine>"
       echo ""
       exit 1
+    fi
+
+    # Verify TAP interface has an IP address (required for guest connectivity)
+    if ! ${pkgs.iproute2}/bin/ip addr show "$TAP_NAME" | ${pkgs.gnugrep}/bin/grep -q "inet "; then
+      echo "WARNING: TAP interface $TAP_NAME has no IP address assigned!"
+      echo ""
+      echo "Assigning $HOST_IP/${netmask} to $TAP_NAME..."
+      if ${pkgs.iproute2}/bin/ip addr add "$HOST_IP/${netmask}" dev "$TAP_NAME" 2>/dev/null; then
+        echo "IP assigned successfully."
+      else
+        echo "Failed to assign IP. Try running manually:"
+        echo "  sudo ip addr add $HOST_IP/${netmask} dev $TAP_NAME"
+        echo ""
+        echo "The guest will not have network connectivity without this."
+      fi
     fi
 
     echo "Starting Redox OS with Cloud Hypervisor (networked)..."
@@ -322,7 +338,7 @@ in
     echo "Network Configuration:"
     echo "  TAP interface: $TAP_NAME"
     echo "  Guest MAC: $GUEST_MAC"
-    echo "  Guest IP: $GUEST_IP/${netmask} (via DHCP)"
+    echo "  Guest IP: $GUEST_IP/${netmask} (static config)"
     echo "  Gateway: $HOST_IP"
     echo "  DNS: 1.1.1.1, 8.8.8.8"
     echo ""
@@ -334,7 +350,7 @@ in
     echo "  CH_NET_QUEUES=N      - Network queues (default: ${netQueues})"
     echo "  CH_NET_QUEUE_SIZE=N  - Queue size (default: ${netQueueSize})"
     echo ""
-    echo "Network will be automatically configured at boot via DHCP."
+    echo "Network will be configured at boot with static IP."
     echo ""
     echo "Controls:"
     echo "  Ctrl+C: Quit Cloud Hypervisor"

@@ -699,7 +699,8 @@ pkgs.stdenv.mkDerivation {
                   # Used when networkMode="static" for Cloud Hypervisor TAP networking
                   # where no DHCP server is available.
                   #
-                  # Uses pipes with cat since direct redirection may not work with /scheme files
+                  # Uses direct echo redirection to /scheme/netcfg paths.
+                  # The smolnetd scheme handler commits writes on file close.
 
                   echo "netcfg-static: Configuring network..."
 
@@ -718,6 +719,8 @@ pkgs.stdenv.mkDerivation {
                   end
 
                   echo "netcfg-static: Found eth0 interface"
+                  let mac = $(/bin/cat /scheme/netcfg/ifaces/eth0/mac)
+                  echo "netcfg-static: MAC address: $mac"
 
                   # Read static configuration
                   let ip = $(/bin/cat /etc/net/cloud-hypervisor/ip)
@@ -726,22 +729,32 @@ pkgs.stdenv.mkDerivation {
                   let addr = "$ip/$prefix"
                   let route = "default via $gateway"
 
+                  # Set IP address (write directly, smolnetd commits on close)
                   echo "netcfg-static: Setting IP $addr"
-                  echo "$addr" | /bin/cat - > /scheme/netcfg/ifaces/eth0/addr/set
-                  let actual_ip = $(/bin/cat /scheme/netcfg/ifaces/eth0/addr/list 2>/dev/null)
+                  echo "$addr" > /scheme/netcfg/ifaces/eth0/addr/set
+
+                  # Verify IP was set
+                  let actual_ip = $(/bin/cat /scheme/netcfg/ifaces/eth0/addr/list)
                   echo "netcfg-static: Verified IP: $actual_ip"
 
+                  # Set default route (requires IP to be set first for route lookup)
                   echo "netcfg-static: Setting default route: $route"
-                  echo "$route" | /bin/cat - > /scheme/netcfg/route/add
-                  let actual_route = $(/bin/cat /scheme/netcfg/route/list 2>/dev/null)
+                  echo "$route" > /scheme/netcfg/route/add
+
+                  # Verify route
+                  let actual_route = $(/bin/cat /scheme/netcfg/route/list)
                   echo "netcfg-static: Verified route: $actual_route"
 
-                  echo "netcfg-static: Setting DNS servers"
-                  echo "1.1.1.1" | /bin/cat - > /scheme/netcfg/resolv/nameserver
-                  let actual_dns = $(/bin/cat /scheme/netcfg/resolv/nameserver 2>/dev/null)
+                  # Set DNS servers
+                  echo "netcfg-static: Setting DNS to 1.1.1.1"
+                  echo "1.1.1.1" > /scheme/netcfg/resolv/nameserver
+
+                  # Verify DNS
+                  let actual_dns = $(/bin/cat /scheme/netcfg/resolv/nameserver)
                   echo "netcfg-static: Verified DNS: $actual_dns"
 
                   echo "netcfg-static: Network configuration complete"
+                  echo "netcfg-static: Test with: ping 172.16.0.1"
                   NETCFG_STATIC
                                 chmod +x redoxfs-root/bin/netcfg-static
                 ''}
