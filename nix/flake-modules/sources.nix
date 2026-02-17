@@ -24,6 +24,7 @@
           src = inputs.base-src;
           patches = [
             ../patches/base/0001-cloud-hypervisor-support.patch
+            ../patches/base/0002-usb-initfs-driver-paths.patch
           ];
         };
       };

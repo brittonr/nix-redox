@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: brittonr <b@robitzs.ch>
+Date: Mon, 16 Feb 2026 00:00:00 -0500
+Subject: [PATCH] fix: use absolute initfs paths for USB sub-driver spawning
+
+xhcid embeds drivers.toml at compile time and prepends /usr/lib/drivers/
+to relative command paths. During initfs boot, that path doesn't exist --
+binaries live at /scheme/initfs/lib/drivers/. By using absolute paths,
+xhcid's starts_with('/') check preserves them as-is, allowing usbhubd
+and usbhidd to be found correctly during early boot.
+---
+ drivers/usb/xhcid/drivers.toml | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/usb/xhcid/drivers.toml b/drivers/usb/xhcid/drivers.toml
+index 1234567..abcdefg 100644
+--- a/drivers/usb/xhcid/drivers.toml
++++ b/drivers/usb/xhcid/drivers.toml
+@@ -8,10 +8,10 @@
+ [[drivers]]
+ name = "USB HUB"
+ class = 9 # HUB class
+ subclass = -1
+-command = ["usbhubd", "$SCHEME", "$PORT", "$IF_NUM"]
++command = ["/scheme/initfs/lib/drivers/usbhubd", "$SCHEME", "$PORT", "$IF_NUM"]
+
+ [[drivers]]
+ name = "USB HID"
+ class = 3 # HID class
+ subclass = -1
+-command = ["usbhidd", "$SCHEME", "$PORT", "$IF_NUM"]
++command = ["/scheme/initfs/lib/drivers/usbhidd", "$SCHEME", "$PORT", "$IF_NUM"]
