@@ -53,7 +53,7 @@ let
 
   # Prepare source with patched dependencies
   patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "base-src-patched-v9"; # v9: Fix virtio-netd RX buffer recycling
+    name = "base-src-patched-v10"; # v10: Fix ihdad CORB/RIRB timeout
     src = base-src;
 
     nativeBuildInputs = [ pkgs.gnupatch ];
@@ -293,6 +293,29 @@ let
               echo "Patching virtio-netd IRQ wakeup..."
               ${pkgs.python3}/bin/python3 ${virtioNetIrqPatch} drivers/net/virtio-netd/src/main.rs
               echo "Done patching virtio-netd IRQ wakeup"
+            fi
+
+            # Fix ihdad: use Immediate Command Interface for all HDA controllers
+            #
+            # The CORB/RIRB (DMA-based) command interface times out on QEMU's ICH6
+            # intel-hda controller (vendor:device 0x8086:0x2668). The DMA ring buffers
+            # are properly allocated but the hardware emulation never writes responses
+            # to the RIRB, causing a 1-second timeout that panics the driver with
+            # "ihdad: failed to allocate device: I/O error".
+            #
+            # The root cause: ihdad forces CORB/RIRB mode only for device 0x2668
+            # (originally a VirtualBox workaround), while all other devices use the
+            # simpler Immediate Command Interface (ICI). QEMU's intel-hda happens to
+            # use the same device ID as VirtualBox, triggering the broken path.
+            #
+            # Fix: Always use ICI. The Immediate Command Interface is simpler (no DMA
+            # ring buffers needed), works on all tested controllers, and is what the
+            # driver already uses for every device except 0x2668.
+            if [ -f drivers/audio/ihdad/src/hda/device.rs ]; then
+              echo "Patching ihdad: always use Immediate Command Interface..."
+              sed -i 's/0x8086_2668 => false/0x8086_2668 => true/' \
+                drivers/audio/ihdad/src/hda/device.rs
+              echo "Done patching ihdad"
             fi
 
             runHook postPatch

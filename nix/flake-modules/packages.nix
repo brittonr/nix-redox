@@ -311,16 +311,13 @@
         enableGraphics = false;
       };
 
-      # Graphical initfs with display drivers
-      # Audio disabled: ihdad crashes with "Invalid opcode fault" during initfs
-      # boot, blocking pcid-spawner and preventing boot from completing.
-      # TODO: Fix ihdad crash (likely LLVM codegen issue, similar to bootloader AES bug)
+      # Graphical initfs with display and audio drivers
       initfsGraphical = modularPkgs.infrastructure.mkInitfs {
         inherit (modularPkgs.system) base;
         inherit (modularPkgs.userspace) ion redoxfsTarget netutils;
         inherit userutils;
         enableGraphics = true;
-        enableAudio = false;
+        enableAudio = true;
       };
 
       # Create disk image using modular mkDiskImage factory function
