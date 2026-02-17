@@ -193,17 +193,15 @@ let
     echo "=========================================="
     echo ""
 
-    # Start interactive shell on serial console
-    stdio debug:
+    # Start interactive shell on serial console via getty
+    # getty opens a PTY and spawns login, providing proper terminal
+    # setup so Ion runs in interactive mode with prompts
     export TERM ${config.redox.environment.variables.TERM or "xterm-256color"}
     export XDG_CONFIG_HOME /etc
     export HOME ${defaultUser.home}
     export USER ${defaultUser.name}
     export PATH ${config.redox.environment.variables.PATH or "/bin:/usr/bin"}
-    echo "Starting interactive shell on serial console..."
-    echo "Type 'help' for commands, 'exit' to quit"
-    echo ""
-    /bin/ion
+    /bin/getty debug:
   '';
 
   # Generate init_drivers.rc
@@ -287,7 +285,7 @@ in
               map (driver: ''
                 if [ -f ${pkgs.base}/bin/${driver} ]; then
                   echo "  ${driver}"
-                  cp ${pkgs.base}/bin/${driver} initfs/lib/drivers/
+                  cp -f ${pkgs.base}/bin/${driver} initfs/lib/drivers/
                 else
                   echo "  WARNING: ${driver} not found"
                 fi
@@ -299,14 +297,14 @@ in
               echo "Copying USB stack..."
               for drv in xhcid usbhubd usbhidd; do
                 if [ -f ${pkgs.base}/bin/$drv ]; then
-                  cp ${pkgs.base}/bin/$drv initfs/lib/drivers/
+                  cp -f ${pkgs.base}/bin/$drv initfs/lib/drivers/
                 fi
               done
               # Also copy to bin and /usr/lib/drivers
               for bin in usbhubd usbhidd; do
                 if [ -f ${pkgs.base}/bin/$bin ]; then
-                  cp ${pkgs.base}/bin/$bin initfs/bin/
-                  cp ${pkgs.base}/bin/$bin initfs/usr/lib/drivers/
+                  cp -f ${pkgs.base}/bin/$bin initfs/bin/
+                  cp -f ${pkgs.base}/bin/$bin initfs/usr/lib/drivers/
                 fi
               done
             ''}

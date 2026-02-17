@@ -160,5 +160,17 @@ in
       text = profileContent;
       mode = "0644";
     };
+
+    # Generate /etc/ion/initrc (Ion shell startup file)
+    # Ion sources $XDG_CONFIG_HOME/ion/initrc on startup.
+    # The initfs init.rc sets XDG_CONFIG_HOME=/etc, so this file
+    # is sourced when the interactive shell starts on the rootfs.
+    redox.generatedFiles."etc/ion/initrc" = {
+      text = ''
+        # Ion shell initialization - keep minimal to avoid startup crashes
+        let PROMPT = "ion> "
+      '';
+      mode = "0644";
+    };
   };
 }

@@ -30,8 +30,8 @@
 rec {
   # Generate Redox-format /etc/passwd line
   #
-  # Redox passwd format: username;password;uid;gid;realname;home;shell
-  # (differs from Unix: uses semicolons, not colons)
+  # Redox passwd format: username;uid;gid;realname;home;shell
+  # (differs from Unix: uses semicolons, not colons; no password field)
   #
   # Example:
   #   mkPasswdEntry {
@@ -41,11 +41,11 @@ rec {
   #     home = "/home/user";
   #     shell = "/bin/ion";
   #   }
-  #   => "user;;1000;1000;user;/home/user;/bin/ion"
+  #   => "user;1000;1000;user;/home/user;/bin/ion"
   mkPasswdEntry =
     {
       name,
-      password ? "", # Empty = no password, "!" = locked
+      password ? "", # Unused - kept for option compatibility
       uid,
       gid,
       realname ? name, # Defaults to username if not provided
@@ -53,7 +53,7 @@ rec {
       shell,
       ...
     }:
-    "${name};${password};${toString uid};${toString gid};${realname};${home};${shell}";
+    "${name};${toString uid};${toString gid};${realname};${home};${shell}";
 
   # Generate Redox-format /etc/group line
   #

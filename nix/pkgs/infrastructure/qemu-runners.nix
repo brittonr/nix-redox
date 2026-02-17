@@ -52,7 +52,8 @@
         -enable-kvm \
         -bios $OVMF \
         -kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI \
-        -drive file=$IMAGE,format=raw,if=ide \
+        -drive file=$IMAGE,format=raw,if=none,id=disk0 \
+        -device virtio-blk-pci,drive=disk0 \
         -netdev user,id=net0,hostfwd=tcp::8022-:22,hostfwd=tcp::8080-:80 \
         -device e1000,netdev=net0 \
         -vga std \
@@ -128,7 +129,8 @@
       -enable-kvm \
       -bios $OVMF \
       -kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI \
-      -drive file=$IMAGE,format=raw,if=ide \
+      -drive file=$IMAGE,format=raw,if=none,id=disk0 \
+      -device virtio-blk-pci,drive=disk0 \
       -netdev user,id=net0,hostfwd=tcp::8022-:22,hostfwd=tcp::8080-:80 \
       -device e1000,netdev=net0 \
       -nographic
@@ -202,7 +204,8 @@
             -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
             -bios '"$OVMF"' \
             -kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI \
-            -drive file='"$IMAGE"',format=raw,if=ide \
+            -drive file='"$IMAGE"',format=raw,if=none,id=disk0 \
+            -device virtio-blk-pci,drive=disk0 \
             -nographic \
             -no-reboot
 

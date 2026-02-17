@@ -139,15 +139,21 @@ in
       text = mkOption {
         type = types.lines;
         default = ''
+          export PATH /bin:/usr/bin
+          export HOME /root
+          export USER root
+          export SHELL /bin/ion
+          export TERM xterm-256color
+          export XDG_CONFIG_HOME /etc
           echo ""
           echo "=========================================="
           echo "  Redox OS Boot Complete!"
           echo "=========================================="
           echo ""
-          echo "Starting interactive shell on serial console..."
+          echo "Starting interactive shell..."
           echo "Type 'help' for commands, 'exit' to quit"
           echo ""
-          exec /bin/ion
+          /bin/ion
         '';
         description = "Content of /startup.sh (executed by init as the main service)";
       };
