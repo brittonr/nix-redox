@@ -1,20 +1,12 @@
 # Infrastructure packages for RedoxOS
 #
-# This module provides boot infrastructure components:
+# This module provides:
 # - initfs-tools: Host tools for creating initfs archives
 # - bootstrap: Minimal loader prepended to initfs
-# - initfs: Complete initial RAM filesystem image
-# - disk-image: Bootable UEFI disk image
+# - mkQemuRunners: QEMU runner script factory
+# - mkCloudHypervisorRunners: Cloud Hypervisor runner script factory
 #
-# Usage:
-#   infrastructure = import ./nix/pkgs/infrastructure {
-#     inherit pkgs lib rustToolchain sysrootVendor redoxTarget vendor;
-#     inherit base-src relibc-src;
-#     systemPkgs = { inherit kernel bootloader base; };
-#     userspacePkgs = { inherit ion helix binutils extrautils sodium netutils uutils redoxfsTarget; };
-#   };
-#
-#   inherit (infrastructure) initfsTools bootstrap initfs diskImage;
+# Disk images and initfs are built by the module system (nix/redox-system/).
 
 {
   pkgs,
@@ -90,107 +82,5 @@ in
         diskImage
         diskImageNet
         ;
-    };
-
-  # initfs and diskImage require system and userspace packages
-  # They're built on-demand when those packages are available
-  mkInitfs =
-    {
-      base,
-      ion,
-      redoxfsTarget,
-      netutils ? null,
-      userutils ? null,
-      kernel ? null,
-      bootloader ? null,
-      enableGraphics ? false,
-      enableAudio ? false,
-    }:
-    import ./initfs.nix {
-      inherit
-        pkgs
-        lib
-        initfsTools
-        bootstrap
-        enableGraphics
-        enableAudio
-        ;
-      inherit
-        base
-        ion
-        redoxfsTarget
-        netutils
-        userutils
-        ;
-    };
-
-  mkDiskImage =
-    {
-      kernel,
-      bootloader,
-      initfs,
-      base,
-      ion,
-      helix ? null,
-      binutils ? null,
-      extrautils ? null,
-      sodium ? null,
-      netutils ? null,
-      uutils ? null,
-      # User management utilities (getty, login, passwd)
-      userutils ? null,
-      # Orbital graphics packages
-      orbdata ? null,
-      orbital ? null,
-      orbterm ? null,
-      orbutils ? null, # orblogin (graphical login) and background
-      # New developer tools
-      bat ? null,
-      hexyl ? null,
-      zoxide ? null,
-      dust ? null,
-      enableGraphics ? false,
-      # Enable audio support (audiod, ihdad for Intel HD Audio)
-      enableAudio ? false,
-      # Allow caller to override redoxfs if needed
-      redoxfs ? redoxfs,
-      # Network configuration mode: "auto" | "dhcp" | "static" | "none"
-      networkMode ? "auto",
-      # Static IP configuration (for "static" or "auto" fallback)
-      staticNetworkConfig ? {
-        ip = "172.16.0.2";
-        netmask = "255.255.255.0";
-        gateway = "172.16.0.1";
-      },
-    }@args:
-    assert args.redoxfs != null;
-    import ./disk-image.nix {
-      inherit pkgs lib;
-      inherit kernel bootloader initfs;
-      inherit
-        base
-        ion
-        helix
-        binutils
-        extrautils
-        sodium
-        netutils
-        uutils
-        userutils
-        orbdata
-        orbital
-        orbterm
-        orbutils
-        # New developer tools
-        bat
-        hexyl
-        zoxide
-        dust
-        enableGraphics
-        enableAudio
-        networkMode
-        staticNetworkConfig
-        ;
-      inherit (args) redoxfs;
     };
 }

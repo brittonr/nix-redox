@@ -715,7 +715,7 @@ let
     };
   };
 
-  # Infrastructure packages (initfs-tools, bootstrap, mkInitfs, mkDiskImage)
+  # Infrastructure packages (initfs-tools, bootstrap, runner factories)
   infrastructure = import ./infrastructure {
     inherit
       pkgs
