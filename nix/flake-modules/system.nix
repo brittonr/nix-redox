@@ -115,15 +115,64 @@
           };
         };
 
+        # Runner factory functions from the infrastructure module
+        mkCHRunners = redoxConfig.modularPkgs.infrastructure.mkCloudHypervisorRunners;
+        mkQemuRunners = redoxConfig.modularPkgs.infrastructure.mkQemuRunners;
+
+        # Bootloader package (needed for QEMU runners which pass -kernel)
+        bootloader = redoxConfig.modularPkgs.system.bootloader;
+
+        # === Runners for each profile ===
+
+        # Default profile: CH headless + CH with networking + QEMU headless
+        defaultRunners = mkCHRunners { diskImage = systems.default.diskImage; };
+        defaultQemuRunners = mkQemuRunners {
+          diskImage = systems.default.diskImage;
+          inherit bootloader;
+        };
+
+        # Minimal profile: CH headless only (no networking, no graphics)
+        minimalRunners = mkCHRunners { diskImage = systems.minimal.diskImage; };
+
+        # Cloud profile: CH headless + CH with TAP networking (static IP)
+        cloudRunners = mkCHRunners {
+          diskImage = systems.cloud-hypervisor.diskImage;
+          diskImageNet = systems.cloud-hypervisor.diskImage;
+        };
+
+        # Graphical profile: QEMU graphical (GTK) + CH headless for testing
+        graphicalQemuRunners = mkQemuRunners {
+          diskImage = systems.graphical.diskImage;
+          inherit bootloader;
+        };
+        graphicalCHRunners = mkCHRunners { diskImage = systems.graphical.diskImage; };
+
       in
       {
         # Expose profile-based disk images as packages
         # These use the module system and can be customized
         packages = {
+          # Disk images
           redox-default = systems.default.diskImage;
           redox-minimal = systems.minimal.diskImage;
           redox-graphical = systems.graphical.diskImage;
           redox-cloud = systems.cloud-hypervisor.diskImage;
+
+          # Runner scripts for module profiles
+          # Default profile (development)
+          run-redox-default = defaultRunners.headless;
+          run-redox-default-qemu = defaultQemuRunners.headless;
+
+          # Minimal profile
+          run-redox-minimal = minimalRunners.headless;
+
+          # Cloud Hypervisor profile (static networking)
+          run-redox-cloud = cloudRunners.headless;
+          run-redox-cloud-net = cloudRunners.withNetwork;
+
+          # Graphical profile
+          run-redox-graphical-desktop = graphicalQemuRunners.graphical;
+          run-redox-graphical-headless = graphicalCHRunners.headless;
         };
 
         # Expose the system builder and evaluated configs for advanced use

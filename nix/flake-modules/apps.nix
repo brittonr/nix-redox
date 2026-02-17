@@ -117,6 +117,58 @@
           meta.description = "Resize memory of a running Redox VM (Cloud Hypervisor dev mode)";
         };
 
+        # === Module System Profile Runners ===
+        # These use the NixOS-style module system images
+
+        # Default profile (development) - headless Cloud Hypervisor
+        run-redox-default = {
+          type = "app";
+          program = "${self'.packages.run-redox-default}/bin/run-redox-cloud-hypervisor";
+          meta.description = "Run Redox OS default (development) profile in Cloud Hypervisor";
+        };
+
+        # Default profile - QEMU headless
+        run-redox-default-qemu = {
+          type = "app";
+          program = "${self'.packages.run-redox-default-qemu}/bin/run-redox";
+          meta.description = "Run Redox OS default profile in QEMU headless mode";
+        };
+
+        # Minimal profile - headless Cloud Hypervisor
+        run-redox-minimal = {
+          type = "app";
+          program = "${self'.packages.run-redox-minimal}/bin/run-redox-cloud-hypervisor";
+          meta.description = "Run Redox OS minimal profile in Cloud Hypervisor";
+        };
+
+        # Cloud Hypervisor profile - headless (no TAP)
+        run-redox-cloud = {
+          type = "app";
+          program = "${self'.packages.run-redox-cloud}/bin/run-redox-cloud-hypervisor";
+          meta.description = "Run Redox OS cloud profile in Cloud Hypervisor (no networking)";
+        };
+
+        # Cloud Hypervisor profile - with TAP networking
+        run-redox-cloud-net = {
+          type = "app";
+          program = "${self'.packages.run-redox-cloud-net}/bin/run-redox-cloud-hypervisor-net";
+          meta.description = "Run Redox OS cloud profile with TAP networking";
+        };
+
+        # Graphical profile - QEMU with GTK display (Orbital desktop)
+        run-redox-graphical-desktop = {
+          type = "app";
+          program = "${self'.packages.run-redox-graphical-desktop}/bin/run-redox-graphical";
+          meta.description = "Run Redox OS graphical profile with QEMU GTK display";
+        };
+
+        # Graphical profile - headless Cloud Hypervisor (test graphics drivers)
+        run-redox-graphical-headless = {
+          type = "app";
+          program = "${self'.packages.run-redox-graphical-headless}/bin/run-redox-cloud-hypervisor";
+          meta.description = "Run Redox OS graphical profile headless (test drivers)";
+        };
+
         build-cookbook = {
           type = "app";
           program = "${self'.packages.cookbook}/bin/repo";
