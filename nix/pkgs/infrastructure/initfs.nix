@@ -426,16 +426,20 @@ pkgs.stdenv.mkDerivation {
     echo "=========================================="
     echo ""
 
-    # Start interactive shell
+    # Start interactive shell on serial console
+    # Use stdio debug: to redirect init's stdin/stdout/stderr back to serial
+    # (it was redirected to /scheme/log earlier for daemon startup)
+    # Then run ion directly - bypasses PTY layer to diagnose serial input
+    stdio debug:
     export TERM xterm
     export XDG_CONFIG_HOME /etc
     export HOME /home/user
     export USER user
     export PATH /bin:/usr/bin
-    echo "Starting interactive shell..."
+    echo "Starting interactive shell on serial console..."
     echo "Type 'help' for commands, 'exit' to quit"
     echo ""
-    getty -J debug:
+    /bin/ion
     EOF
 
             # Create initfs image

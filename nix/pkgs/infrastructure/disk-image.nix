@@ -526,6 +526,15 @@ pkgs.stdenv.mkDerivation {
                   INIT_NETCFG_AUTO
                 ''}
 
+                # Remote shell access via nc -e (listen mode)
+                # Guest listens on port 8023; from host: nc 172.16.0.2 8023
+                ${lib.optionalString (netutils != null) ''
+                                cat > redoxfs-root/etc/init.d/17_remote_shell << 'INIT_REMOTE'
+                  echo "Starting remote shell listener on port 8023..."
+                  nowait /bin/nc -l -e /bin/sh 0.0.0.0:8023
+                  INIT_REMOTE
+                ''}
+
                 # Orbital display server startup (if graphics enabled)
                 # Note: Orbital requires VT environment variable and proper display initialization
                 # VT 1 is assigned by inputd when vesad registers its display handle
@@ -754,7 +763,11 @@ pkgs.stdenv.mkDerivation {
                   echo "netcfg-static: Verified DNS: $actual_dns"
 
                   echo "netcfg-static: Network configuration complete"
-                  echo "netcfg-static: Test with: ping 172.16.0.1"
+
+                  # Test connectivity (gateway only - internet ping has no timeout and would block boot)
+                  echo "netcfg-static: Ping gateway (172.16.0.1)..."
+                  /bin/ping -c 1 172.16.0.1
+                  echo "netcfg-static: Network ready"
                   NETCFG_STATIC
                                 chmod +x redoxfs-root/bin/netcfg-static
                 ''}

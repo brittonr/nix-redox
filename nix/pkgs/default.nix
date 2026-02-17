@@ -297,6 +297,300 @@ let
       pname = "netutils";
       src = inputs.netutils-src;
       vendorHash = "sha256-bXjd6oVEl4GmxgNtGqYpAIvNH1u3to31jzlQlYKWD9Y=";
+      preConfigure = ''
+        # Patch nc to add -e/--exec support for spawning commands on connections
+        cat > src/nc/main.rs << 'NC_MAIN'
+        use std::env;
+        use std::io::{self, Write};
+
+        mod modes;
+        use modes::*;
+
+        static MAN_PAGE: &str = /* @MANSTART{nc} */
+            r#"
+        NAME
+            nc - Concatenate and redirect sockets
+        SYNOPSIS
+            nc [[-h | --help] | [-u | --udp] | [-l | --listen] | [-e program | --exec program]] [hostname:port]
+        DESCRIPTION
+            Netcat (nc) is command line utility which can read and write data across network. Currently
+            it only works with IPv4 and does not support any encryption.
+        OPTIONS
+            -h
+            --help
+                Print this manual page.
+            -u
+            --udp
+                Use UDP instead of default TCP.
+
+            -l
+            --listen
+                Listen for incoming connections.
+
+            -e program
+            --exec program
+                Execute the specified program on accepted connections, with stdin/stdout/stderr
+                connected to the network socket.
+        AUTHOR
+            Written by Sehny.
+        "#; /* @MANEND */
+
+        enum TransportProtocol {
+            Tcp,
+            Udp,
+        }
+
+        enum NcMode {
+            Connect,
+            Listen,
+        }
+
+        fn main() {
+            let args: Vec<String> = env::args().skip(1).collect();
+            let mut hostname = "".to_string();
+            let mut exec_program: Option<String> = None;
+            let mut proto = TransportProtocol::Tcp;
+            let mut mode = NcMode::Connect;
+            let mut stdout = io::stdout();
+            let mut expect_exec = false;
+
+            for arg in &args {
+                if expect_exec {
+                    exec_program = Some(arg.clone());
+                    expect_exec = false;
+                } else if arg.starts_with('-') {
+                    match arg.as_str() {
+                        "-h" | "--help" => {
+                            stdout.write_all(MAN_PAGE.as_bytes()).unwrap();
+                            return;
+                        }
+                        "-u" | "--udp" => proto = TransportProtocol::Udp,
+                        "-l" | "--listen" => {
+                            mode = NcMode::Listen;
+                        }
+                        "-e" | "--exec" => {
+                            expect_exec = true;
+                        }
+                        _ => {
+                            println!("Invalid argument!");
+                            return;
+                        }
+                    }
+                } else {
+                    hostname = arg.clone();
+                }
+            }
+
+            match (mode, proto) {
+                (NcMode::Connect, TransportProtocol::Tcp) => {
+                    connect_tcp(&hostname, exec_program.as_deref()).unwrap_or_else(|e| {
+                        println!("nc error: {e}");
+                    });
+                }
+                (NcMode::Listen, TransportProtocol::Tcp) => {
+                    listen_tcp(&hostname, exec_program.as_deref()).unwrap_or_else(|e| {
+                        println!("nc error: {e}");
+                    });
+                }
+                (NcMode::Connect, TransportProtocol::Udp) => {
+                    connect_udp(&hostname).unwrap_or_else(|e| {
+                        println!("nc error: {e}");
+                    });
+                }
+                (NcMode::Listen, TransportProtocol::Udp) => {
+                    listen_udp(&hostname).unwrap_or_else(|e| {
+                        println!("nc error: {e}");
+                    });
+                }
+            }
+        }
+        NC_MAIN
+
+        cat > src/nc/modes.rs << 'NC_MODES'
+        use std::io::{stdin, Read, Write};
+        use std::net::{TcpListener, TcpStream, UdpSocket};
+        use std::os::fd::{AsRawFd, FromRawFd};
+        use std::process::{exit, Command, Stdio};
+        use std::str;
+        use std::thread;
+
+        macro_rules! print_err {
+            ($($arg:tt)*) => (
+                {
+                    use std::io::prelude::*;
+                    if let Err(e) = write!(&mut ::std::io::stderr(), "{}\n", format_args!($($arg)*)) {
+                        panic!("Failed to write to stderr.\
+                            \nOriginal error output: {}\
+                            \nSecondary error writing to stderr: {}", format!($($arg)*), e);
+                    }
+                }
+                )
+        }
+
+        const BUFFER_SIZE: usize = 65636;
+
+        /// Read from the input file into a buffer in an infinite loop.
+        /// Handle the buffer content with handler function.
+        fn rw_loop<R, F>(input: &mut R, mut handler: F) -> !
+        where
+            R: Read,
+            F: FnMut(&[u8], usize),
+        {
+            loop {
+                let mut buffer = [0u8; BUFFER_SIZE];
+                let count = match input.read(&mut buffer) {
+                    Ok(0) => {
+                        print_err!("End of input file/socket.");
+                        exit(0);
+                    }
+                    Ok(c) => c,
+                    Err(_) => {
+                        print_err!("Error occurred while reading from file/socket.");
+                        exit(1);
+                    }
+                };
+                handler(&buffer, count);
+            }
+        }
+
+        /// Use the rw_loop in both direction (TCP connection)
+        fn both_dir_rw_loop(mut stream_read: TcpStream, mut stream_write: TcpStream) -> Result<(), String> {
+            // Read loop
+            thread::spawn(move || {
+                rw_loop(&mut stream_read, |buffer, count| {
+                    print!("{}", unsafe { str::from_utf8_unchecked(&buffer[..count]) });
+                });
+            });
+
+            // Write loop
+            let mut stdin = stdin();
+            rw_loop(&mut stdin, |buffer, count| {
+                let _ = stream_write.write(&buffer[..count]).unwrap_or_else(|e| {
+                    print_err!("Error occurred while writing into socket: {e} ");
+                    exit(1);
+                });
+            });
+        }
+
+        /// Spawn a program with the TCP stream as stdin/stdout/stderr
+        fn exec_on_stream(program: &str, stream: TcpStream) -> Result<(), String> {
+            let fd = stream.as_raw_fd();
+            let stdin = unsafe { Stdio::from_raw_fd(fd) };
+            let stdout_stream = stream.try_clone()
+                .map_err(|e| format!("exec error: cannot clone stream for stdout ({e})"))?;
+            let stdout = unsafe { Stdio::from_raw_fd(stdout_stream.as_raw_fd()) };
+            let stderr_stream = stream.try_clone()
+                .map_err(|e| format!("exec error: cannot clone stream for stderr ({e})"))?;
+            let stderr = unsafe { Stdio::from_raw_fd(stderr_stream.as_raw_fd()) };
+
+            let mut child = Command::new(program)
+                .stdin(stdin)
+                .stdout(stdout)
+                .stderr(stderr)
+                .spawn()
+                .map_err(|e| format!("exec error: cannot spawn {program} ({e})"))?;
+
+            // Forget the cloned streams so they aren't double-closed
+            std::mem::forget(stdout_stream);
+            std::mem::forget(stderr_stream);
+            // Don't drop the original stream - fd is now owned by stdin Stdio
+            std::mem::forget(stream);
+
+            let status = child.wait()
+                .map_err(|e| format!("exec error: wait failed ({e})"))?;
+
+            if !status.success() {
+                eprintln!("exec: {program} exited with {status}");
+            }
+
+            Ok(())
+        }
+
+        /// Connect to listening TCP socket
+        pub fn connect_tcp(host: &str, exec_program: Option<&str>) -> Result<(), String> {
+            let stream_read = TcpStream::connect(host)
+                .map_err(|e| format!("connect_tcp error: cannot create socket ({e})"))?;
+
+            let stream_write = stream_read
+                .try_clone()
+                .map_err(|e| format!("connect_tcp error: cannot create socket clone ({e})"))?;
+
+            println!("Remote host: {host}");
+
+            if let Some(program) = exec_program {
+                return exec_on_stream(program, stream_read);
+            }
+
+            both_dir_rw_loop(stream_read, stream_write)
+        }
+
+        /// Listen on specified port and accept the first incoming connection
+        pub fn listen_tcp(host: &str, exec_program: Option<&str>) -> Result<(), String> {
+            let listener = TcpListener::bind(host)
+                .map_err(|e| format!("listen_tcp error: cannot bind to specified port ({e})"))?;
+
+            let (stream_read, socketaddr) = listener
+                .accept()
+                .map_err(|e| format!("listen_tcp error: cannot establish connection ({e})"))?;
+
+            let stream_write = stream_read
+                .try_clone()
+                .map_err(|e| format!("listen_tcp error: cannot create socket clone ({e})"))?;
+
+            eprintln!("Incoming connection from: {socketaddr}");
+
+            if let Some(program) = exec_program {
+                return exec_on_stream(program, stream_read);
+            }
+
+            both_dir_rw_loop(stream_read, stream_write)
+        }
+
+        pub fn connect_udp(host: &str) -> Result<(), String> {
+            let socket = UdpSocket::bind("localhost:30000")
+                .map_err(|e| format!("connect_udp error: could not bind to local socket ({e})"))?;
+
+            socket
+                .connect(host)
+                .map_err(|e| format!("connect_udp error: could not set up remote socket ({e})"))?;
+
+            let mut stdin = stdin();
+            rw_loop(&mut stdin, |buffer, count| {
+                socket.send(&buffer[..count]).unwrap_or_else(|e| {
+                    eprintln!("Error occurred while writing into socket: {e}");
+                    exit(1);
+                });
+            });
+        }
+
+        /// Listen for UDP datagrams on the specified socket
+        pub fn listen_udp(host: &str) -> Result<(), String> {
+            let socket = UdpSocket::bind(host)
+                .map_err(|e| format!("connect_udp error: could not bind to local socket ({e})"))?;
+            loop {
+                let mut buffer = [0u8; BUFFER_SIZE];
+                let count = match socket.recv_from(&mut buffer) {
+                    Ok((0, _)) => {
+                        print_err!("End of input file/socket.");
+                        exit(0);
+                    }
+                    Ok((c, _)) => c,
+                    Err(_) => {
+                        print_err!("Error occurred while reading from file/socket.");
+                        exit(1);
+                    }
+                };
+                print!("{}", unsafe { str::from_utf8_unchecked(&buffer[..count]) });
+            }
+        }
+
+        #[cfg(test)]
+        mod tests {
+            #[test]
+            fn pass() {}
+        }
+        NC_MODES
+      '';
       installPhase = ''
         runHook preInstall
         mkdir -p $out/bin

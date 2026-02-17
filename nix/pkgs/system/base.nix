@@ -46,9 +46,14 @@ let
   # Version: 2 - Fixed patch format
   graphicscreenPatch = ../patches/graphicscreen-mmap.patch;
 
+  # Patches for virtio-netd RX buffer recycling and IRQ wakeup
+  virtioNetPatch = ../patches/virtio-netd-rx-recycle.py;
+  virtioCorePatch = ../patches/virtio-core-repost-buffer.py;
+  virtioNetIrqPatch = ../patches/virtio-netd-irq-wakeup.py;
+
   # Prepare source with patched dependencies
   patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "base-src-patched-v8"; # v8: Also fix framebuffer.ptr.as_ptr() usage
+    name = "base-src-patched-v9"; # v9: Fix virtio-netd RX buffer recycling
     src = base-src;
 
     nativeBuildInputs = [ pkgs.gnupatch ];
@@ -259,6 +264,35 @@ let
               sed -i 's/\.stdin(process::Stdio::null())/.stdin(process::Stdio::inherit())/' \
                 drivers/usb/xhcid/src/xhci/mod.rs
               echo "Done patching xhcid"
+            fi
+
+            # Add Queue::repost_buffer() to virtio-core for RX buffer recycling
+            if [ -f drivers/virtio-core/src/transport.rs ]; then
+              echo "Patching virtio-core: adding Queue::repost_buffer()..."
+              ${pkgs.python3}/bin/python3 ${virtioCorePatch} drivers/virtio-core/src/transport.rs
+              echo "Done patching virtio-core"
+            fi
+
+            # Fix virtio-netd RX buffer recycling and used ring tracking
+            # Bug 1: try_recv() never re-posts consumed buffers to the available ring.
+            #   After ~256 packets, all RX buffers are exhausted and inbound packets are dropped.
+            # Bug 2: try_recv() reads only the last used ring element (idx-1) and jumps recv_head
+            #   to head_index(), skipping any intermediate packets.
+            # Fix: Process one entry at recv_head per call, re-post the buffer after reading.
+            if [ -f drivers/net/virtio-netd/src/scheme.rs ]; then
+              echo "Patching virtio-netd RX buffer recycling..."
+              ${pkgs.python3}/bin/python3 ${virtioNetPatch} drivers/net/virtio-netd/src/scheme.rs
+              echo "Done patching virtio-netd"
+            fi
+
+            # Fix virtio-netd main loop to wake on IRQ events
+            # Without this, the main loop only wakes on scheme requests from smolnetd.
+            # When smolnetd's timer goes idle (no active sockets), nobody reads incoming
+            # packets from the device, causing all inbound traffic to be ignored.
+            if [ -f drivers/net/virtio-netd/src/main.rs ]; then
+              echo "Patching virtio-netd IRQ wakeup..."
+              ${pkgs.python3}/bin/python3 ${virtioNetIrqPatch} drivers/net/virtio-netd/src/main.rs
+              echo "Done patching virtio-netd IRQ wakeup"
             fi
 
             runHook postPatch
