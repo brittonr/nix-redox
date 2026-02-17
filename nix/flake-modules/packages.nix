@@ -520,17 +520,6 @@
 
         # Default package
         default = modularPkgs.host.fstools;
-
-        # Legacy image builders (for backwards compatibility)
-        image-desktop = pkgs.runCommand "redox-desktop-image" { } ''
-          mkdir -p $out
-          echo "Use 'nix build .#diskImage' for a complete bootable image" > $out/README
-        '';
-
-        image-server = pkgs.runCommand "redox-server-image" { } ''
-          mkdir -p $out
-          echo "Use 'nix build .#diskImage' for a complete bootable image" > $out/README
-        '';
       };
 
       # Expose configuration for other modules

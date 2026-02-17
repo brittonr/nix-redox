@@ -66,14 +66,6 @@
           meta.description = "Run Redox OS graphical image headless (test graphics drivers without display)";
         };
 
-        # Cloud Hypervisor headless (explicit name, same as run-redox)
-        # Kept for backwards compatibility and explicitness
-        run-redox-cloud-hypervisor = {
-          type = "app";
-          program = "${self'.packages.runCloudHypervisor}/bin/run-redox-cloud-hypervisor";
-          meta.description = "Run Redox OS in Cloud Hypervisor (explicit, same as run-redox)";
-        };
-
         run-redox-cloud-hypervisor-net = {
           type = "app";
           program = "${self'.packages.runCloudHypervisorNet}/bin/run-redox-cloud-hypervisor-net";
