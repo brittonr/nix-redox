@@ -24,8 +24,17 @@
           src = inputs.base-src;
           patches = [
             ../patches/base/0001-cloud-hypervisor-support.patch
-            ../patches/base/0002-usb-initfs-driver-paths.patch
           ];
+          postPatch = ''
+            # Fix USB sub-driver paths for initfs boot.
+            # xhcid embeds drivers.toml at compile time via include_bytes! and prepends
+            # /usr/lib/drivers/ to relative command paths. During initfs boot that path
+            # doesn't exist -- binaries live at /scheme/initfs/lib/drivers/.
+            # Using absolute paths makes xhcid's starts_with('/') check preserve them.
+            substituteInPlace drivers/usb/xhcid/drivers.toml \
+              --replace-fail 'command = ["usbhubd"' 'command = ["/scheme/initfs/lib/drivers/usbhubd"' \
+              --replace-fail 'command = ["usbhidd"' 'command = ["/scheme/initfs/lib/drivers/usbhidd"'
+          '';
         };
       };
     };

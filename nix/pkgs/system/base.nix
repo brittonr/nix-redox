@@ -249,6 +249,18 @@ let
               echo "GraphicScreen page-aligned allocation patch applied"
             fi
 
+            # Fix xhcid sub-driver spawning during initfs boot
+            # Problem: .stdin(Stdio::null()) tries to open /dev/null which goes through
+            # the file: scheme. During initfs boot, file: scheme doesn't exist yet,
+            # causing ENODEV errors when spawning usbhubd/usbhidd.
+            # Fix: Use Stdio::inherit() instead so stdin is inherited from parent.
+            if [ -f drivers/usb/xhcid/src/xhci/mod.rs ]; then
+              echo "Patching xhcid Stdio::null() -> Stdio::inherit() for initfs boot..."
+              sed -i 's/\.stdin(process::Stdio::null())/.stdin(process::Stdio::inherit())/' \
+                drivers/usb/xhcid/src/xhci/mod.rs
+              echo "Done patching xhcid"
+            fi
+
             runHook postPatch
     '';
 
