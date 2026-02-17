@@ -365,6 +365,8 @@
         ./nix/flake-modules/nixos-module.nix
         ./nix/flake-modules/flake-modules.nix
         ./nix/flake-modules/config.nix
+        # RedoxOS module system integration (declarative system configurations)
+        ./nix/flake-modules/system.nix
       ];
 
       # Legacy packages interface (for backwards compatibility)
