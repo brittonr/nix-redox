@@ -14,9 +14,8 @@
 }:
 
 {
-  redox.environment.systemPackages = lib.mkDefault (
-    lib.optional (pkgs ? ion) pkgs.ion ++ lib.optional (pkgs ? uutils) pkgs.uutils
-  );
+  redox.environment.systemPackages =
+    lib.optional (pkgs ? ion) pkgs.ion ++ lib.optional (pkgs ? uutils) pkgs.uutils;
 
   redox.networking.enable = lib.mkDefault false;
   redox.graphics.enable = lib.mkDefault false;

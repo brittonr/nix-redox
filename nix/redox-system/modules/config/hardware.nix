@@ -77,6 +77,8 @@ let
     (lib.optionals cfg.graphics.enable [
       "vesad" # VESA framebuffer daemon
       "inputd" # Input device daemon
+      "fbbootlogd" # Framebuffer boot log daemon
+      "fbcond" # Framebuffer console daemon
     ])
     ++ (lib.optionals cfg.usb.enable [
       "usbd" # USB host controller daemon

@@ -141,19 +141,13 @@ in
         default = ''
           echo ""
           echo "=========================================="
-          echo "  Welcome to Redox OS"
+          echo "  Redox OS Boot Complete!"
           echo "=========================================="
           echo ""
-          echo "Available programs:"
-          echo "  /bin/ion   - Ion shell (full-featured)"
+          echo "Starting interactive shell on serial console..."
+          echo "Type 'help' for commands, 'exit' to quit"
           echo ""
-          if [ -x /bin/ion ]; then
-              echo "Starting Ion shell..."
-              exec /bin/ion
-          else
-              echo "Starting minimal shell..."
-              exec /bin/sh -i
-          fi
+          exec /bin/ion
         '';
         description = "Content of /startup.sh (executed by init as the main service)";
       };
@@ -161,6 +155,10 @@ in
   };
 
   config = {
+    # The base package provides core daemons (ipcd, smolnetd, etc.)
+    # needed by init scripts. Include it when available.
+    redox.environment.systemPackages = lib.optional (pkgs ? base) pkgs.base;
+
     # Default init scripts (base daemons)
     redox.services.initScripts."00_base" = {
       text = "notify /bin/ipcd";
