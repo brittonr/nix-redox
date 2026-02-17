@@ -101,8 +101,12 @@ in
   config.system.build.rootTree =
     hostPkgs.runCommand "redox-root-tree"
       {
-        # Pass packages as build inputs so Nix tracks dependencies
-        buildInputs = cfg.environment.systemPackages;
+        # Note: Do NOT use buildInputs for cross-compiled Redox packages!
+        # buildInputs adds packages to $PATH, and Redox binaries (e.g. mkdir
+        # from uutils) would shadow host tools, causing "Illegal instruction"
+        # when the build tries to run them on Linux.
+        # Packages are referenced by store path in the script below, so Nix
+        # automatically tracks them as dependencies.
       }
       ''
         # Create base directory structure
