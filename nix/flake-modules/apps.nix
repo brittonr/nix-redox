@@ -59,7 +59,7 @@
         # This is useful for testing graphics driver initialization
         run-redox-graphical-drivers = {
           type = "app";
-          program = "${self'.packages.runQemuGraphicalDrivers}/bin/run-redox-graphical";
+          program = "${self'.packages.runQemuGraphicalHeadless}/bin/run-redox";
         };
 
         # Cloud Hypervisor headless (explicit name, same as run-redox)
