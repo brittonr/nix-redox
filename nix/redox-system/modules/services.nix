@@ -1,51 +1,47 @@
 # Services Configuration (/services)
 #
-# Init scripts and startup script configuration.
-# The /build module generates init.toml, startup.sh, and init.d scripts.
+# Init scripts and startup configuration.
 
 adios:
+
+let
+  t = adios.types;
+
+  initScriptType = t.struct "InitScript" {
+    text = t.string;
+    directory = t.string;
+  };
+in
 
 {
   name = "services";
 
   options = {
     initScripts = {
-      type = adios.types.attrs;
+      type = t.attrsOf initScriptType;
       default = {
         "00_base" = {
           text = "notify /bin/ipcd";
           directory = "usr/lib/init.d";
         };
       };
-      description = "Init scripts: { name = { text, directory }; }";
+      description = "Init scripts to run during boot";
     };
-
     startupScriptEnable = {
-      type = adios.types.bool;
+      type = t.bool;
       default = true;
-      description = "Whether to generate /startup.sh";
+      description = "Enable startup script";
     };
-
     startupScriptText = {
-      type = adios.types.string;
+      type = t.string;
       default = ''
-        export PATH /bin:/usr/bin
-        export HOME /root
-        export USER root
-        export SHELL /bin/ion
-        export TERM xterm-256color
-        export XDG_CONFIG_HOME /etc
+        #!/bin/sh
         echo ""
-        echo "=========================================="
-        echo "  Redox OS Boot Complete!"
-        echo "=========================================="
-        echo ""
-        echo "Starting interactive shell..."
-        echo "Type 'help' for commands, 'exit' to quit"
+        echo "Welcome to Redox OS!"
         echo ""
         /bin/ion
       '';
-      description = "Content of /startup.sh";
+      description = "Content of the startup script";
     };
   };
 

@@ -1,31 +1,32 @@
 # Environment Configuration (/environment)
 #
-# System packages, environment variables, shell aliases, and init commands.
-# The /build module generates /etc/profile and /etc/ion/initrc from these.
+# System packages, shell aliases, environment variables.
 
 adios:
+
+let
+  t = adios.types;
+in
 
 {
   name = "environment";
 
   options = {
     systemPackages = {
-      type = adios.types.list;
+      type = t.listOf t.derivation;
       default = [ ];
       description = "System-wide packages (binaries in /bin and /usr/bin)";
     };
-
     shellAliases = {
-      type = adios.types.attrs;
+      type = t.attrsOf t.string;
       default = {
         ls = "ls --color=auto";
         grep = "grep --color=auto";
       };
-      description = "Ion shell aliases for /etc/profile";
+      description = "Shell aliases for /etc/profile";
     };
-
     variables = {
-      type = adios.types.attrs;
+      type = t.attrsOf t.string;
       default = {
         PATH = "/bin:/usr/bin";
         HOME = "/root";
@@ -33,13 +34,12 @@ adios:
         SHELL = "/bin/ion";
         TERM = "xterm-256color";
       };
-      description = "Environment variables exported in /etc/profile";
+      description = "Environment variables for /etc/profile";
     };
-
     shellInit = {
-      type = adios.types.string;
+      type = t.string;
       default = "";
-      description = "Extra Ion shell commands for /etc/profile";
+      description = "Extra shell initialization commands";
     };
   };
 

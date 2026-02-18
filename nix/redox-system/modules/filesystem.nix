@@ -1,16 +1,19 @@
 # Filesystem Configuration (/filesystem)
 #
-# Directory layout, device symlinks, and special symlinks.
-# The /build module creates these in the root filesystem.
+# Directory layout, device symlinks, special symlinks.
 
 adios:
+
+let
+  t = adios.types;
+in
 
 {
   name = "filesystem";
 
   options = {
     extraDirectories = {
-      type = adios.types.list;
+      type = t.listOf t.string;
       default = [
         "/root"
         "/home"
@@ -31,9 +34,8 @@ adios:
       ];
       description = "Directories to create in the root filesystem";
     };
-
     devSymlinks = {
-      type = adios.types.attrs;
+      type = t.attrsOf t.string;
       default = {
         urandom = "/scheme/rand";
         random = "/scheme/rand";
@@ -41,15 +43,14 @@ adios:
         zero = "/scheme/zero";
         full = "/scheme/zero";
       };
-      description = "Symlinks in /dev (Redox scheme compatibility)";
+      description = "/dev symlinks (name → target)";
     };
-
     specialSymlinks = {
-      type = adios.types.attrs;
+      type = t.attrsOf t.string;
       default = {
         "bin/sh" = "/bin/ion";
       };
-      description = "Special symlinks in the filesystem";
+      description = "Special symlinks (path → target)";
     };
   };
 

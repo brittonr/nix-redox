@@ -1,17 +1,40 @@
 # Hardware Configuration (/hardware)
 #
 # Driver selection for storage, network, graphics, audio, USB.
-# The /build module computes derived values (allDrivers, pcidDrivers, etc.)
-# from these options.
 
 adios:
+
+let
+  t = adios.types;
+
+  storageDriver = t.enum "StorageDriver" [
+    "ahcid"
+    "nvmed"
+    "ided"
+    "virtio-blkd"
+  ];
+  networkDriver = t.enum "NetworkDriver" [
+    "e1000d"
+    "virtio-netd"
+    "rtl8168d"
+  ];
+  graphicsDriver = t.enum "GraphicsDriver" [
+    "virtio-gpud"
+    "bgad"
+  ];
+  audioDriver = t.enum "AudioDriver" [
+    "ihdad"
+    "ac97d"
+    "sb16d"
+  ];
+in
 
 {
   name = "hardware";
 
   options = {
     storageDrivers = {
-      type = adios.types.list;
+      type = t.listOf storageDriver;
       default = [
         "ahcid"
         "nvmed"
@@ -19,49 +42,43 @@ adios:
       ];
       description = "Storage controller drivers";
     };
-
     networkDrivers = {
-      type = adios.types.list;
+      type = t.listOf networkDriver;
       default = [
         "e1000d"
         "virtio-netd"
       ];
       description = "Network interface drivers";
     };
-
     graphicsEnable = {
-      type = adios.types.bool;
+      type = t.bool;
       default = false;
-      description = "Enable graphics support";
+      description = "Enable graphics drivers";
     };
-
     graphicsDrivers = {
-      type = adios.types.list;
+      type = t.listOf graphicsDriver;
       default = [
         "virtio-gpud"
         "bgad"
       ];
-      description = "Graphics drivers (when graphics enabled)";
+      description = "Graphics drivers";
     };
-
     audioEnable = {
-      type = adios.types.bool;
+      type = t.bool;
       default = false;
-      description = "Enable audio support";
+      description = "Enable audio drivers";
     };
-
     audioDrivers = {
-      type = adios.types.list;
+      type = t.listOf audioDriver;
       default = [
         "ihdad"
         "ac97d"
         "sb16d"
       ];
-      description = "Audio drivers (when audio enabled)";
+      description = "Audio drivers";
     };
-
     usbEnable = {
-      type = adios.types.bool;
+      type = t.bool;
       default = false;
       description = "Enable USB support";
     };

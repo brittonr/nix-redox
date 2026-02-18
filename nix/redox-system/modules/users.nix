@@ -6,12 +6,31 @@
 
 adios:
 
+let
+  t = adios.types;
+
+  userType = t.struct "User" {
+    uid = t.int;
+    gid = t.int;
+    home = t.string;
+    shell = t.string;
+    password = t.string;
+    realname = t.optionalAttr t.string;
+    createHome = t.optionalAttr t.bool;
+  };
+
+  groupType = t.struct "Group" {
+    gid = t.int;
+    members = t.listOf t.string;
+  };
+in
+
 {
   name = "users";
 
   options = {
     users = {
-      type = adios.types.attrs;
+      type = t.attrsOf userType;
       default = {
         root = {
           uid = 0;
@@ -36,7 +55,7 @@ adios:
     };
 
     groups = {
-      type = adios.types.attrs;
+      type = t.attrsOf groupType;
       default = {
         root = {
           gid = 0;

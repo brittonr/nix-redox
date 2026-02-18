@@ -1,58 +1,65 @@
 # Networking Configuration (/networking)
 #
-# Network mode, DNS, interfaces, and remote shell.
-# The /build module generates networking scripts, config files,
-# and init scripts from these options.
+# Network mode, DNS, interface configuration.
 
 adios:
+
+let
+  t = adios.types;
+
+  interfaceType = t.struct "Interface" {
+    address = t.string;
+    netmask = t.optionalAttr t.string;
+    gateway = t.string;
+  };
+in
 
 {
   name = "networking";
 
   options = {
     enable = {
-      type = adios.types.bool;
+      type = t.bool;
       default = true;
       description = "Enable networking";
     };
-
     mode = {
-      type = adios.types.string;
+      type = t.enum "NetworkMode" [
+        "auto"
+        "dhcp"
+        "static"
+        "none"
+      ];
       default = "auto";
-      description = "Network mode: auto, dhcp, static, none";
+      description = "Network configuration mode";
     };
-
     dns = {
-      type = adios.types.list;
+      type = t.listOf t.string;
       default = [
         "1.1.1.1"
         "8.8.8.8"
       ];
-      description = "DNS servers";
+      description = "DNS server addresses";
     };
-
     defaultRouter = {
-      type = adios.types.string;
+      type = t.string;
       default = "10.0.2.2";
-      description = "Default router IP";
+      description = "Default gateway/router IP";
     };
-
     interfaces = {
-      type = adios.types.attrs;
+      type = t.attrsOf interfaceType;
       default = { };
-      description = "Per-interface static config: { name = { address, netmask, gateway }; }";
+      description = "Network interface configurations";
     };
-
     remoteShellEnable = {
-      type = adios.types.bool;
+      type = t.bool;
       default = false;
-      description = "Enable nc-based remote shell";
+      description = "Enable remote shell listener";
     };
-
     remoteShellPort = {
-      type = adios.types.int;
+      type = t.int;
       default = 8023;
-      description = "Remote shell listen port";
+      description = "Remote shell port";
     };
   };
 
