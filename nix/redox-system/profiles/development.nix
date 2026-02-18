@@ -1,0 +1,47 @@
+# Development RedoxOS Profile
+#
+# Full CLI: editors, utilities, networking with remote shell.
+# Usage: redoxSystem { modules = [ ./profiles/development.nix ]; ... }
+
+{ pkgs, lib }:
+
+let
+  opt = name: if pkgs ? ${name} then [ pkgs.${name} ] else [ ];
+in
+{
+  "/environment" = {
+    systemPackages =
+      opt "ion"
+      ++ opt "uutils"
+      ++ opt "helix"
+      ++ opt "binutils"
+      ++ opt "extrautils"
+      ++ opt "sodium"
+      ++ opt "netutils"
+      ++ opt "userutils"
+      ++ opt "bat"
+      ++ opt "hexyl"
+      ++ opt "zoxide"
+      ++ opt "dust";
+
+    shellAliases = {
+      ls = "ls --color=auto";
+      grep = "grep --color=auto";
+      z = "zoxide query -- $@args && cd $(zoxide query -- $@args)";
+    };
+  };
+
+  "/networking" = {
+    enable = true;
+    mode = "auto";
+    remoteShellEnable = true;
+  };
+
+  "/filesystem" = {
+    specialSymlinks = {
+      "bin/sh" = "/bin/ion";
+      "bin/dash" = "/bin/ion";
+      "bin/vi" = "/bin/sodium";
+    };
+  };
+}

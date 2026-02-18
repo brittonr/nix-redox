@@ -1,100 +1,127 @@
-# RedoxOS Module System - Top-Level Entry Point
+# RedoxOS Module System - Adios-Based Entry Point
 #
-# This is the main entry point for the RedoxOS module system, inspired by NixOS modules.
-# It provides a declarative interface for configuring RedoxOS systems.
+# Uses the adios module system with korora types.
 #
 # Architecture:
-#   1. redoxSystem function takes modules and packages
-#   2. eval.nix evaluates modules using lib.evalModules
-#   3. Base modules from module-list.nix provide core options and defaults
-#   4. User modules override and extend base configuration
-#   5. Final config includes build outputs (diskImage, initfs, toplevel)
+#   1. adios loads a tree of typed modules from ./modules/
+#   2. Each module declares options (korora-typed), inputs (explicit deps), and impl
+#   3. Profiles are option presets applied via initial options or .override
+#   4. The /build module reads all config and produces diskImage, initfs, rootTree
 #
-# Inspired by:
-#   - NixOS modules: Declarative configuration with options and config
-#   - Disko: Filesystem/disk configuration patterns
-#   - Wrappers pattern: Chainable extension via .extend
+# Adios calling convention:
+#   loadFn = adios moduleDefinition;     # Returns a load function
+#   treeNode = loadFn { options = {...}; };  # Evaluate tree with options
+#   result = treeNode {};                 # Call root impl → get output
+#   updated = treeNode.override { options = {...}; };  # Change options
 #
-# Example usage in flake.nix:
-#   redoxSystem = import ./nix/redox-system { inherit lib; };
-#
-#   mySystem = redoxSystem.redoxSystem {
-#     modules = [
-#       ./my-redox-config.nix
-#       { config.system.hostname = "myredox"; }
-#     ];
-#     pkgs = crossPackages;  # All Redox cross-compiled packages
-#     hostPkgs = pkgs;        # nixpkgs for build machine
-#   };
-#
-#   # Access outputs:
-#   diskImage = mySystem.diskImage;
-#   config = mySystem.config;
-#
-#   # Chain additional modules (wrappers pattern):
-#   withGraphics = mySystem.extend { config.graphics.enable = true; };
+# Example:
+#   factory = import ./nix/redox-system { inherit lib; };
+#   sys = factory.redoxSystem { modules = [ ./profiles/dev.nix ]; pkgs = ...; hostPkgs = ...; };
+#   sys.diskImage  # the disk image derivation
 
 { lib }:
 
 let
-  # Import the module evaluator
-  evaluator = import ./eval.nix { inherit lib; };
+  # Import the adios module system (vendored)
+  adios = import ../vendor/adios;
+
+  # Root module definition
+  rootModule = adios: {
+    name = "redox-system";
+
+    # Auto-import all modules from ./modules/
+    # Creates: /pkgs, /boot, /hardware, /networking, /environment,
+    #          /filesystem, /graphics, /services, /users, /build
+    modules = adios.lib.importModules ./modules;
+
+    # Root depends on the build module
+    inputs = {
+      build = {
+        path = "/build";
+      };
+    };
+
+    # Root impl: call the build module and return its outputs
+    # (inputs.build gives us /build's OPTIONS, but /build has no user-facing options,
+    #  so we need to call the build module node via __functor to get the impl output)
+    impl =
+      { inputs }:
+      {
+        # These are placeholders — actual derivations come from calling the
+        # build module node in redoxSystem below
+      };
+  };
 
   # The main redoxSystem builder
-  # Takes user modules and package sets, returns evaluated system
   redoxSystem =
     {
-      # List of module files or attrsets
-      modules,
+      # List of profile paths, functions, or override attrsets
+      modules ? [ ],
       # Flat attrset of all cross-compiled Redox packages
-      # Expected: { kernel, bootloader, base, ion, helix, ... }
       pkgs,
-      # nixpkgs for the build machine (for host tools like redoxfs)
+      # nixpkgs for the build machine
       hostPkgs,
-      # Extra arguments passed to all modules (via specialArgs)
-      # Useful for passing custom values like sourceInfo, version, etc.
+      # Extra arguments (kept for API compat)
       extraSpecialArgs ? { },
     }:
     let
-      # Evaluate the module system
-      evaluated = evaluator.evalRedoxModules {
-        inherit modules pkgs hostPkgs;
-        specialArgs = extraSpecialArgs;
-      };
+      # Resolve a profile module to an override attrset
+      resolveProfile =
+        mod:
+        if builtins.isAttrs mod then
+          mod
+        else if builtins.isFunction mod then
+          mod { inherit pkgs lib; }
+        else if builtins.isPath mod || builtins.isString mod then
+          import mod { inherit pkgs lib; }
+        else
+          throw "redoxSystem: module must be an attrset, function, or path";
 
-      # Extract the evaluated configuration
-      inherit (evaluated) config options;
+      # Merge all profile overrides (later wins on conflict)
+      mergedProfiles = builtins.foldl' (acc: mod: acc // (resolveProfile mod)) { } modules;
 
-      # Build outputs - these are defined by modules but exposed at top level
-      # for convenience (following NixOS pattern)
-      diskImage = config.system.build.diskImage;
-      initfs = config.system.build.initfs;
-      toplevel = config.system.build.toplevel;
+      # Build the initial options: package injection + profile overrides
+      initialOptions = {
+        "/pkgs" = {
+          inherit pkgs hostPkgs;
+          nixpkgsLib = lib;
+        };
+      }
+      // mergedProfiles;
+
+      # Load the adios tree with all options
+      loadFn = adios (rootModule adios);
+      treeNode = loadFn { options = initialOptions; };
+
+      # Call the build module to get derivations
+      # The build module's impl produces { rootTree, initfs, diskImage }
+      buildOutput = treeNode.modules.build { };
 
     in
     {
       # Core outputs
-      inherit
-        config
-        options
-        diskImage
-        initfs
-        toplevel
-        ;
+      diskImage = buildOutput.diskImage;
+      initfs = buildOutput.initfs;
+      toplevel = buildOutput.rootTree;
 
       # Wrappers-style chainable extension
-      # Allows adding modules after initial evaluation:
-      #   system.extend { config.services.enable = true; }
-      # This creates a new system with the additional module
       extend =
         extraModule:
+        let
+          overrides =
+            if builtins.isAttrs extraModule then
+              extraModule
+            else if builtins.isFunction extraModule then
+              extraModule { inherit pkgs lib; }
+            else
+              import extraModule { inherit pkgs lib; };
+        in
         redoxSystem {
-          modules = modules ++ [ extraModule ];
-          inherit pkgs hostPkgs;
-          extraSpecialArgs = extraSpecialArgs;
+          modules = modules ++ [ overrides ];
+          inherit pkgs hostPkgs extraSpecialArgs;
         };
 
-      # Type metadata (useful for debugging and introspection)
+      # Type metadata
       _type = "redox-system";
       _module = {
         inherit modules pkgs hostPkgs;
@@ -104,10 +131,5 @@ let
 in
 {
   inherit redoxSystem;
-
-  # Version info (for compatibility checking)
-  version = "0.1.0";
-
-  # Re-export evaluator for advanced use cases
-  inherit (evaluator) evalRedoxModules;
+  version = "0.2.0";
 }

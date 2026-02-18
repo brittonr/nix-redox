@@ -96,22 +96,22 @@
         # Pre-built system configurations using profiles
         systems = {
           default = mkSystem {
-            modules = [ ../redox-system/modules/profiles/development.nix ];
+            modules = [ ../redox-system/profiles/development.nix ];
             inherit extraPkgs;
           };
 
           minimal = mkSystem {
-            modules = [ ../redox-system/modules/profiles/minimal.nix ];
+            modules = [ ../redox-system/profiles/minimal.nix ];
             inherit extraPkgs;
           };
 
           graphical = mkSystem {
-            modules = [ ../redox-system/modules/profiles/graphical.nix ];
+            modules = [ ../redox-system/profiles/graphical.nix ];
             inherit extraPkgs;
           };
 
           cloud-hypervisor = mkSystem {
-            modules = [ ../redox-system/modules/profiles/cloud-hypervisor.nix ];
+            modules = [ ../redox-system/profiles/cloud-hypervisor.nix ];
             inherit extraPkgs;
           };
         };
