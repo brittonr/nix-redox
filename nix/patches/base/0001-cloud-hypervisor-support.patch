@@ -23,7 +23,7 @@ index b49e68df..5c432e4f 100644
 @@ -27,6 +27,53 @@ pub struct Func {
      enabled: bool,
  }
- 
+
 +/// Read BAR address without size probing (for hypervisors that don't support BAR relocation).
 +/// This reads the BAR value directly from config space without writing to it.
 +/// Returns (bar_value, is_64bit) where is_64bit indicates if this BAR consumes two slots.
@@ -148,11 +148,11 @@ index b49e68df..5c432e4f 100644
 -            None => bars[i as usize] = PciBar::None,
          }
      }
- 
+
 @@ -116,7 +182,12 @@ fn handle_parsed_header(
          })
      };
- 
+
 -    let rom = get_rom(endpoint_header.header().address(), 0x30);
 +    // Skip ROM probing for virtio devices (they don't have ROMs and probing writes to config space)
 +    let rom = if use_no_probe {
@@ -163,7 +163,7 @@ index b49e68df..5c432e4f 100644
      if let Some(rom) = rom {
          debug!("    ROM={:08X}", rom.addr);
      }
--- 
+--
 2.51.2
 
 
@@ -187,7 +187,7 @@ index 12290f9b..cf336994 100644
 @@ -29,6 +29,15 @@ vendor = 0x1AF4
  device = 0x1001
  command = ["/scheme/initfs/lib/drivers/virtio-blkd"]
- 
+
 +# Modern virtio-blk (used by Cloud Hypervisor and modern QEMU)
 +[[drivers]]
 +name = "virtio-blk-modern"
@@ -200,7 +200,7 @@ index 12290f9b..cf336994 100644
  [[drivers]]
  name = "virtio-gpu"
  class = 3
--- 
+--
 2.51.2
 
 
@@ -226,7 +226,7 @@ index 17d168ef..12bd4e42 100644
 --- a/drivers/net/virtio-netd/src/main.rs
 +++ b/drivers/net/virtio-netd/src/main.rs
 @@ -49,10 +49,16 @@ fn deamon(
- 
+
      // Double check that we have the right device.
      //
 -    // 0x1000 - virtio-net
@@ -234,7 +234,7 @@ index 17d168ef..12bd4e42 100644
 +    // 0x1041 - virtio-net (modern, used by Cloud Hypervisor)
      let pci_config = pcid_handle.config();
 +    let device_id = pci_config.func.full_device_id.device_id;
- 
+
 -    assert_eq!(pci_config.func.full_device_id.device_id, 0x1000);
 +    assert!(
 +        device_id == 0x1000 || device_id == 0x1041,
@@ -242,14 +242,14 @@ index 17d168ef..12bd4e42 100644
 +        device_id
 +    );
      log::info!("virtio-net: initiating startup sequence :^)");
- 
+
      let device = virtio_core::probe_device(&mut pcid_handle)?;
 diff --git a/drivers/storage/virtio-blkd/src/main.rs b/drivers/storage/virtio-blkd/src/main.rs
 index d21236b3..ee55ae37 100644
 --- a/drivers/storage/virtio-blkd/src/main.rs
 +++ b/drivers/storage/virtio-blkd/src/main.rs
 @@ -118,10 +118,16 @@ fn daemon(daemon: daemon::Daemon, mut pcid_handle: PciFunctionHandle) -> anyhow:
- 
+
      // Double check that we have the right device.
      //
 -    // 0x1001 - virtio-blk
@@ -257,7 +257,7 @@ index d21236b3..ee55ae37 100644
 +    // 0x1042 - virtio-blk (modern, used by Cloud Hypervisor)
      let pci_config = pcid_handle.config();
 +    let device_id = pci_config.func.full_device_id.device_id;
- 
+
 -    assert_eq!(pci_config.func.full_device_id.device_id, 0x1001);
 +    assert!(
 +        device_id == 0x1001 || device_id == 0x1042,
@@ -265,9 +265,9 @@ index d21236b3..ee55ae37 100644
 +        device_id
 +    );
      log::info!("virtio-blk: initiating startup sequence :^)");
- 
+
      let device = virtio_core::probe_device(&mut pcid_handle)?;
--- 
+--
 2.51.2
 
 
@@ -308,7 +308,7 @@ index 5c432e4f..0ac284b8 100644
          }
      }
  }
--- 
+--
 2.51.2
 
 
@@ -352,7 +352,7 @@ index 0ac284b8..8624b7dc 100644
          }
      }
  }
--- 
+--
 2.51.2
 
 
@@ -373,19 +373,19 @@ index ec4ecf73..d98ed63d 100644
 @@ -35,11 +35,12 @@ impl BlkExtension for Queue<'_> {
              .chain(Buffer::new(&status).flags(DescriptorFlags::WRITE_ONLY))
              .build();
- 
+
 -        // XXX: Subtract 1 because the of status byte.
 +        // XXX: Subtract 1 because of the status byte.
          let written = self.send(chain).await as usize - 1;
          assert_eq!(*status, 0);
- 
+
 -        target[..written].copy_from_slice(&result);
 +        // Copy only the bytes that were written (may be less than result buffer size)
 +        target[..written].copy_from_slice(&result[..written]);
          written
      }
- 
--- 
+
+--
 2.51.2
 
 
@@ -412,9 +412,9 @@ index ee55ae37..33a65a80 100644
 --- a/drivers/storage/virtio-blkd/src/main.rs
 +++ b/drivers/storage/virtio-blkd/src/main.rs
 @@ -139,6 +139,15 @@ fn daemon(daemon: daemon::Daemon, mut pcid_handle: PciFunctionHandle) -> anyhow:
- 
+
      let device_space = BlockDeviceConfig::new(&device.transport);
- 
+
 +    // Detect if this is a modern virtio device (Cloud Hypervisor uses modern virtio)
 +    let is_modern = virtio_core::is_modern_virtio(device_id);
 +    log::info!("virtio-blk: device ID {:#x}, is_modern={}", device_id, is_modern);
@@ -426,7 +426,7 @@ index ee55ae37..33a65a80 100644
 +
      // At this point the device is alive!
      device.transport.run_device();
- 
+
 @@ -164,7 +173,7 @@ fn daemon(daemon: daemon::Daemon, mut pcid_handle: PciFunctionHandle) -> anyhow:
      let mut scheme = DiskScheme::new(
          Some(daemon),
@@ -435,21 +435,21 @@ index ee55ae37..33a65a80 100644
 +        BTreeMap::from([(0, VirtioDisk::new(queue, device_space, is_modern))]),
          &driver_block::FuturesExecutor,
      );
- 
+
 diff --git a/drivers/storage/virtio-blkd/src/scheme.rs b/drivers/storage/virtio-blkd/src/scheme.rs
 index d98ed63d..9d5c252d 100644
 --- a/drivers/storage/virtio-blkd/src/scheme.rs
 +++ b/drivers/storage/virtio-blkd/src/scheme.rs
 @@ -9,12 +9,12 @@ use crate::BlockRequestTy;
  use crate::BlockVirtRequest;
- 
+
  trait BlkExtension {
 -    async fn read(&self, block: u64, target: &mut [u8]) -> usize;
 -    async fn write(&self, block: u64, target: &[u8]) -> usize;
 +    async fn read(&self, block: u64, target: &mut [u8], is_modern: bool) -> usize;
 +    async fn write(&self, block: u64, target: &[u8], is_modern: bool) -> usize;
  }
- 
+
  impl BlkExtension for Queue<'_> {
 -    async fn read(&self, block: u64, target: &mut [u8]) -> usize {
 +    async fn read(&self, block: u64, target: &mut [u8], is_modern: bool) -> usize {
@@ -459,7 +459,7 @@ index d98ed63d..9d5c252d 100644
 @@ -35,16 +35,31 @@ impl BlkExtension for Queue<'_> {
              .chain(Buffer::new(&status).flags(DescriptorFlags::WRITE_ONLY))
              .build();
- 
+
 -        // XXX: Subtract 1 because of the status byte.
 -        let written = self.send(chain).await as usize - 1;
 +        let total_written = self.send(chain).await as usize;
@@ -479,7 +479,7 @@ index d98ed63d..9d5c252d 100644
 +        };
 +
          assert_eq!(*status, 0);
- 
+
          // Copy only the bytes that were written (may be less than result buffer size)
 -        target[..written].copy_from_slice(&result[..written]);
 -        written
@@ -487,7 +487,7 @@ index d98ed63d..9d5c252d 100644
 +        target[..copy_len].copy_from_slice(&result[..copy_len]);
 +        copy_len
      }
- 
+
 -    async fn write(&self, block: u64, target: &[u8]) -> usize {
 +    async fn write(&self, block: u64, target: &[u8], is_modern: bool) -> usize {
          let req = Dma::new(BlockVirtRequest {
@@ -496,11 +496,11 @@ index d98ed63d..9d5c252d 100644
 @@ -67,7 +82,7 @@ impl BlkExtension for Queue<'_> {
              .chain(Buffer::new(&status).flags(DescriptorFlags::WRITE_ONLY))
              .build();
- 
+
 -        self.send(chain).await as usize;
 +        let _ = self.send(chain).await;
          assert_eq!(*status, 0);
- 
+
          target.len()
 @@ -77,11 +92,12 @@ impl BlkExtension for Queue<'_> {
  pub(crate) struct VirtioDisk<'a> {
@@ -508,7 +508,7 @@ index d98ed63d..9d5c252d 100644
      cfg: BlockDeviceConfig,
 +    is_modern: bool,
  }
- 
+
  impl<'a> VirtioDisk<'a> {
 -    pub(crate) fn new(queue: Arc<Queue<'a>>, cfg: BlockDeviceConfig) -> Self {
 -        Self { queue, cfg }
@@ -516,15 +516,15 @@ index d98ed63d..9d5c252d 100644
 +        Self { queue, cfg, is_modern }
      }
  }
- 
+
 @@ -95,10 +111,10 @@ impl driver_block::Disk for VirtioDisk<'_> {
      }
- 
+
      async fn read(&mut self, block: u64, buffer: &mut [u8]) -> syscall::Result<usize> {
 -        Ok(self.queue.read(block, buffer).await)
 +        Ok(self.queue.read(block, buffer, self.is_modern).await)
      }
- 
+
      async fn write(&mut self, block: u64, buffer: &[u8]) -> syscall::Result<usize> {
 -        Ok(self.queue.write(block, buffer).await)
 +        Ok(self.queue.write(block, buffer, self.is_modern).await)
@@ -535,9 +535,9 @@ index 2557d0b7..d4f84f5e 100644
 --- a/drivers/virtio-core/src/lib.rs
 +++ b/drivers/virtio-core/src/lib.rs
 @@ -4,6 +4,17 @@ pub mod utils;
- 
+
  mod probe;
- 
+
 +/// Returns true if the device ID indicates a modern (non-transitional) virtio device.
 +/// Modern devices use IDs in range 0x1040-0x107F (device type + 0x1040).
 +/// Legacy/transitional devices use IDs in range 0x1000-0x103F.
@@ -565,6 +565,5 @@ index 72376fe0..38402702 100644
                  .expect("virtio-core::used: index out of bounds")
          }
      }
--- 
+--
 2.51.2
-

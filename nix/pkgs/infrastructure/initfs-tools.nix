@@ -72,11 +72,16 @@ pkgs.stdenv.mkDerivation {
 
   dontUnpack = true;
 
+  # Disable automatic cargo build phase
+  dontBuild = false;
+
   nativeBuildInputs = [
     rustToolchain
   ];
 
   buildPhase = ''
+    runHook preBuild
+
     export HOME=$(mktemp -d)
 
     # Copy initfs source
@@ -99,11 +104,19 @@ pkgs.stdenv.mkDerivation {
     ${vendor.mkCargoConfig { }}
     EOF
 
+    # Ensure tools directory exists and is writable before copying lockfile
+    mkdir -p tools
+    chmod -R u+w tools
+
     # Copy lockfile from the initfsToolsSrc which has the generated lock
     cp ${initfsToolsSrc}/tools/Cargo.lock tools/
+    # Make the lockfile writable so cargo can update it if needed
+    chmod u+w tools/Cargo.lock
 
     # Build tools
     cargo build --manifest-path tools/Cargo.toml --release
+
+    runHook postBuild
   '';
 
   installPhase = ''

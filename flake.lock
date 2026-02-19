@@ -23,11 +23,11 @@
       "flake": false,
       "locked": {
         "host": "gitlab.redox-os.org",
-        "lastModified": 1771251464,
-        "narHash": "sha256-bO29kxJ3fHpXOp19ojRZQkw/Aa4Deb2S9YsYJLdCBls=",
+        "lastModified": 1771451229,
+        "narHash": "sha256-fOslza9C4nBskoIAgUGVewciTPOcseBVxuwW2cliZbQ=",
         "owner": "redox-os",
         "repo": "base",
-        "rev": "4c8727ed40dfd54264c590e4d8a5d3407c5df650",
+        "rev": "fc162ac4cfb840ab096585474ea6e6780c4338ab",
         "type": "gitlab"
       },
       "original": {
@@ -131,11 +131,11 @@
     },
     "crane": {
       "locked": {
-        "lastModified": 1771121070,
-        "narHash": "sha256-aIlv7FRXF9q70DNJPI237dEDAznSKaXmL5lfK/Id/bI=",
+        "lastModified": 1771438068,
+        "narHash": "sha256-nGBbXvEZVe/egCPVPFcu89RFtd8Rf6J+4RFoVCFec0A=",
         "owner": "ipetkov",
         "repo": "crane",
-        "rev": "a2812c19f1ed2e5ed5ce2ef7109798b575c180e1",
+        "rev": "b5090e53e9d68c523a4bb9ad42b4737ee6747597",
         "type": "github"
       },
       "original": {
@@ -422,11 +422,11 @@
       "flake": false,
       "locked": {
         "host": "gitlab.redox-os.org",
-        "lastModified": 1770902683,
-        "narHash": "sha256-68HW4R2goK52aA1R0VSRVqQPu1TI1QIh8++3d1MPJP4=",
+        "lastModified": 1771507607,
+        "narHash": "sha256-339qodZ/UhbisFOz51RBv3Gy5MFIcSV9I57V2SPb5/c=",
         "owner": "redox-os",
         "repo": "kernel",
-        "rev": "5a8858ff8172ac9da6f3c3b69b77e98e449da053",
+        "rev": "b85c2d7889449dfff05802f65187e7d5e2c546ad",
         "type": "gitlab"
       },
       "original": {
@@ -496,11 +496,11 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1771008912,
-        "narHash": "sha256-gf2AmWVTs8lEq7z/3ZAsgnZDhWIckkb+ZnAo5RzSxJg=",
+        "lastModified": 1771369470,
+        "narHash": "sha256-0NBlEBKkN3lufyvFegY4TYv5mCNHbi5OmBDrzihbBMQ=",
         "owner": "NixOS",
         "repo": "nixpkgs",
-        "rev": "a82ccc39b39b621151d6732718e3e250109076fa",
+        "rev": "0182a361324364ae3f436a63005877674cf45efb",
         "type": "github"
       },
       "original": {
@@ -780,11 +780,11 @@
       "flake": false,
       "locked": {
         "host": "gitlab.redox-os.org",
-        "lastModified": 1771288158,
-        "narHash": "sha256-AS5MWRCTwrEfb2RRp8g7ap+S6+pNCNyxsJeNs2AVhC4=",
+        "lastModified": 1771510716,
+        "narHash": "sha256-TYvwgOf6iUa4FGQR0DF9ljCE6QcaBBq9y5JFDbIzLTo=",
         "owner": "redox-os",
         "repo": "redox",
-        "rev": "613fc9f3e3676a5db16231424d06b03dd58226da",
+        "rev": "16663ddb3269ea2b7a12b5ed9193ed735fa21aac",
         "type": "gitlab"
       },
       "original": {
@@ -837,11 +837,11 @@
       "flake": false,
       "locked": {
         "host": "gitlab.redox-os.org",
-        "lastModified": 1771266976,
-        "narHash": "sha256-go+OWzBEqlfV06g6WhUyqX+Ry+1e2E8erPSmjthk0Bw=",
+        "lastModified": 1771508219,
+        "narHash": "sha256-0At43bmi3cjoapU4Tb7RY9BvJLaudca91LijYxuZFic=",
         "owner": "redox-os",
         "repo": "relibc",
-        "rev": "ba75b5c9dbf912b804772b30960a75418cf29f0c",
+        "rev": "28ffabebf629172a6c0c00ca56f73d72f25f7c6e",
         "type": "gitlab"
       },
       "original": {
@@ -873,11 +873,11 @@
       "flake": false,
       "locked": {
         "host": "gitlab.redox-os.org",
-        "lastModified": 1765286924,
-        "narHash": "sha256-Wcp6SdJEIcwKVATvnqTM3JVuVUdHhQktnAA9Ye7DAMU=",
+        "lastModified": 1771507419,
+        "narHash": "sha256-nfm7BT1nhNDkvj3oUuUmD5SlFD09gOvLxxxVPhZkd5M=",
         "owner": "redox-os",
         "repo": "rmm",
-        "rev": "d33fc3b5b0894ed46d0c98e96ad690e6b95c9e42",
+        "rev": "e543cbe621b21875549c9d12a73810633f3d0c63",
         "type": "gitlab"
       },
       "original": {
@@ -954,11 +954,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1771211437,
-        "narHash": "sha256-lcNK438i4DGtyA+bPXXyVLHVmJjYpVKmpux9WASa3ro=",
+        "lastModified": 1771470520,
+        "narHash": "sha256-PvytHcaYN5cPUll7FB70mXv1rRsIBRmu47fFfq3haxA=",
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "c62195b3d6e1bb11e0c2fb2a494117d3b55d410f",
+        "rev": "a1d4cc1f264c45d3745af0d2ca5e59d460e58777",
         "type": "github"
       },
       "original": {

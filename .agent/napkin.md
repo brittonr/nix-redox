@@ -42,3 +42,12 @@
 - Type validation catches invalid enums, missing struct fields, and wrong types
 - Artifact tests verify file content (semicolon-delimited passwd, init scripts, etc.)
 - Automated boot test passes in ~3s using Cloud Hypervisor with KVM
+
+### base-src init rework (fc162ac, Feb 18 2026)
+- base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc
+- SchemeDaemon API: nulld/zerod/randd/logd/ramfs use `scheme <name> <cmd>` not `notify`
+- pcid-spawner now uses `--initfs` flag (shared config locator crate)
+- pcid config moved from etc/pcid/ to etc/pcid.d/
+- ipcd, ptyd, USB daemons are rootfs services — do NOT put in initfs init scripts
+- acpid is spawned by pcid-spawner — do NOT notify it directly (causes "File exists" crash)
+- Boot test bisecting caught the regression — exactly what it was built for
