@@ -106,6 +106,17 @@
 - When adding conditional config files, use `lib.optionalAttrs` pattern to gate on enable flags
 - Duplicate attrset keys (e.g., two `etc/ion/initrc` entries) — later one silently wins; remove the old one explicitly
 
+### redox-rebuild CLI (Feb 19 2026)
+- `ls -1v "$DIR"/system-*-link` follows symlinks to directories and lists CONTENTS, not the links themselves
+  - Fix: use a glob in a for loop with `[ -L "$link" ]` guard, pipe through `sort -t- -k2 -n`
+- Worker subagents AGAIN claimed success but didn't persist the file — ALWAYS verify with `ls`/`cat` after delegate_task
+- nix-darwin heredoc `cat <<EOF` DOES expand `$VAR` but NOT `$'\033'` syntax — use variables set with `$'...'` before the heredoc
+- Color codes should be conditional on terminal: `if [ -t 2 ]; then RED=$'\033[1;31m'; else RED=""; fi`
+- `nix eval .#package.version` doesn't work for an attrset inside a derivation's output — use legacyPackages path instead
+- Generation dir `.redox-generations/` must be in `.gitignore` (flakes sees tracked files only)
+- New Nix files MUST be `git add`ed before `nix build` (flake readDir limitation)
+- `nix run .#app -- subcommand` requires `--` to separate nix args from app args
+
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc
 - SchemeDaemon API: nulld/zerod/randd/logd/ramfs use `scheme <name> <cmd>` not `notify`

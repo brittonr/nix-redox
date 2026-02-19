@@ -155,6 +155,11 @@
           inherit bootloader;
         };
 
+        # redox-rebuild CLI tool
+        redoxRebuild = import ../pkgs/infrastructure/redox-rebuild.nix {
+          inherit pkgs lib;
+        };
+
       in
       {
         # Expose profile-based disk images as packages
@@ -220,6 +225,9 @@
           snapshotRedox = defaultRunners.snapshotVm;
           infoRedox = defaultRunners.infoVm;
           resizeMemoryRedox = defaultRunners.resizeMemory;
+
+          # redox-rebuild CLI
+          redox-rebuild = redoxRebuild;
         };
 
         # Expose the system builder and evaluated configs for advanced use

@@ -176,6 +176,13 @@
           meta.description = "Run automated boot test (Cloud Hypervisor with KVM, or QEMU TCG fallback)";
         };
 
+        # RedoxOS system configuration manager (like nixos-rebuild / darwin-rebuild)
+        redox-rebuild = {
+          type = "app";
+          program = "${self'.packages.redox-rebuild}/bin/redox-rebuild";
+          meta.description = "Manage RedoxOS system configurations (build, run, test, diff, generations)";
+        };
+
         build-cookbook = {
           type = "app";
           program = "${self'.packages.cookbook}/bin/repo";

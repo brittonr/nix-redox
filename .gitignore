@@ -2,6 +2,9 @@
 result
 result-*
 
+# redox-rebuild generation tracking
+.redox-generations/
+
 # Temporary build artifacts
 wrappers/
 target/
