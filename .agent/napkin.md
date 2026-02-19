@@ -95,6 +95,17 @@
 - versionInfo is a plain attrset (not a derivation) — can be accessed without building
 - The `valid-network-mode-static` type test needed an interface added after assertions were introduced
 
+### New config modules (5 modules, v0.3.0, Feb 19 2026)
+- Added /security, /time, /programs, /logging, /power modules
+- New .nix files in modules/ MUST be `git add`ed for flakes to see them (readDir only sees tracked files)
+- ALL option fields must be accessed somewhere in the build module — Nix is lazy, unread fields skip type validation
+  - `hwclock` field was not accessed → `type-invalid-hwclock` test passed when it should have failed
+  - Fixed by generating /etc/hwclock file that reads the field
+- The build module `/build` is the only consumer — new modules add inputs there + generate files in allGeneratedFiles
+- `or` defaults (e.g., `inputs.time.hwclock or "utc"`) DO still validate if the attribute exists — the type check fires on access
+- When adding conditional config files, use `lib.optionalAttrs` pattern to gate on enable flags
+- Duplicate attrset keys (e.g., two `etc/ion/initrc` entries) — later one silently wins; remove the old one explicitly
+
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc
 - SchemeDaemon API: nulld/zerod/randd/logd/ramfs use `scheme <name> <cmd>` not `notify`

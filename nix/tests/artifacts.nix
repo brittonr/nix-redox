@@ -676,4 +676,282 @@ in
       { file = "checks"; }
     ];
   };
+
+  # === New Module Artifact Tests ===
+
+  # Test: rootTree has hostname file from /time module
+  rootTree-has-hostname = mkArtifactTest {
+    name = "rootTree-has-hostname";
+    description = "Verifies rootTree contains /etc/hostname from /time module";
+    modules = [
+      {
+        "/time" = {
+          hostname = "test-machine";
+          timezone = "Europe/Berlin";
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/hostname";
+        contains = "test-machine";
+      }
+      {
+        file = "etc/timezone";
+        contains = "Europe/Berlin";
+      }
+    ];
+  };
+
+  # Test: rootTree has hostname in profile
+  rootTree-has-hostname-in-profile = mkArtifactTest {
+    name = "rootTree-has-hostname-in-profile";
+    description = "Verifies /etc/profile exports HOSTNAME and TZ";
+    modules = [
+      {
+        "/time" = {
+          hostname = "myhost";
+          timezone = "UTC";
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/profile";
+        contains = "export HOSTNAME myhost";
+      }
+      {
+        file = "etc/profile";
+        contains = "export TZ UTC";
+      }
+    ];
+  };
+
+  # Test: rootTree has security policy files
+  rootTree-has-security-policy = mkArtifactTest {
+    name = "rootTree-has-security-policy";
+    description = "Verifies rootTree contains /etc/security/ from /security module";
+    modules = [
+      {
+        "/security" = {
+          protectKernelSchemes = true;
+          allowRemoteRoot = false;
+          namespaceAccess = {
+            "file" = "full";
+            "sys" = "none";
+          };
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/security/policy";
+        contains = "protect_kernel_schemes=true";
+      }
+      {
+        file = "etc/security/policy";
+        contains = "allow_remote_root=false";
+      }
+      {
+        file = "etc/security/namespaces";
+        contains = "file=full";
+      }
+      {
+        file = "etc/security/namespaces";
+        contains = "sys=none";
+      }
+    ];
+  };
+
+  # Test: rootTree has ion initrc from /programs module
+  rootTree-has-ion-config = mkArtifactTest {
+    name = "rootTree-has-ion-config";
+    description = "Verifies rootTree contains /etc/ion/initrc from /programs module";
+    modules = [
+      {
+        "/programs" = {
+          ion = {
+            enable = true;
+            prompt = "mybox$ ";
+            initExtra = "";
+          };
+          editor = "/bin/hx";
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/ion/initrc";
+        contains = "mybox$";
+      }
+      {
+        file = "etc/ion/initrc";
+        contains = "export EDITOR /bin/hx";
+      }
+    ];
+  };
+
+  # Test: rootTree has helix config when enabled
+  rootTree-has-helix-config = mkArtifactTest {
+    name = "rootTree-has-helix-config";
+    description = "Verifies rootTree contains /etc/helix/config.toml when helix is enabled";
+    modules = [
+      {
+        "/programs" = {
+          helix = {
+            enable = true;
+            theme = "onedark";
+          };
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/helix/config.toml";
+        contains = ''theme = "onedark"'';
+      }
+    ];
+  };
+
+  # Test: rootTree has logging config
+  rootTree-has-logging-config = mkArtifactTest {
+    name = "rootTree-has-logging-config";
+    description = "Verifies rootTree contains /etc/logging.conf from /logging module";
+    modules = [
+      {
+        "/logging" = {
+          level = "debug";
+          kernelLogLevel = "error";
+          maxLogSizeMB = 50;
+          persistAcrossBoot = true;
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/logging.conf";
+        contains = "level=debug";
+      }
+      {
+        file = "etc/logging.conf";
+        contains = "kernel_level=error";
+      }
+      {
+        file = "etc/logging.conf";
+        contains = "max_size_mb=50";
+      }
+      {
+        file = "etc/logging.conf";
+        contains = "persist=true";
+      }
+    ];
+  };
+
+  # Test: rootTree has ACPI config when enabled
+  rootTree-has-acpi-config = mkArtifactTest {
+    name = "rootTree-has-acpi-config";
+    description = "Verifies rootTree contains /etc/acpi/config from /power module";
+    modules = [
+      {
+        "/power" = {
+          acpiEnable = true;
+          powerAction = "reboot";
+          idleAction = "suspend";
+          idleTimeoutMinutes = 15;
+          rebootOnPanic = true;
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/acpi/config";
+        contains = "power_action=reboot";
+      }
+      {
+        file = "etc/acpi/config";
+        contains = "idle_action=suspend";
+      }
+      {
+        file = "etc/acpi/config";
+        contains = "idle_timeout_minutes=15";
+      }
+      {
+        file = "etc/acpi/config";
+        contains = "reboot_on_panic=true";
+      }
+    ];
+  };
+
+  # Test: No ACPI config when disabled
+  rootTree-no-acpi-when-disabled = mkArtifactTest {
+    name = "rootTree-no-acpi-when-disabled";
+    description = "Verifies rootTree omits /etc/acpi/ when power.acpiEnable is false";
+    modules = [
+      {
+        "/power" = {
+          acpiEnable = false;
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/acpi/config";
+        notExists = true;
+      }
+    ];
+  };
+
+  # Test: No helix config when disabled
+  rootTree-no-helix-when-disabled = mkArtifactTest {
+    name = "rootTree-no-helix-when-disabled";
+    description = "Verifies rootTree omits /etc/helix/ when helix is not enabled";
+    modules = [
+      {
+        "/programs" = {
+          helix = {
+            enable = false;
+            theme = "default";
+          };
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/helix/config.toml";
+        notExists = true;
+      }
+    ];
+  };
+
+  # Test: Version JSON includes new module fields
+  toplevel-has-new-version-fields = mkArtifactTest {
+    name = "toplevel-has-new-version-fields";
+    description = "Verifies version.json includes hostname, timezone, and new module state";
+    artifact = "toplevel";
+    modules = [
+      {
+        "/time" = {
+          hostname = "version-test";
+          timezone = "Asia/Tokyo";
+        };
+        "/logging" = {
+          level = "warn";
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "version.json";
+        contains = "version-test";
+      }
+      {
+        file = "version.json";
+        contains = "Asia/Tokyo";
+      }
+      {
+        file = "version.json";
+        contains = "0.3.0";
+      }
+    ];
+  };
 }

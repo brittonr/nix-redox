@@ -566,4 +566,204 @@ in
       }
     ];
   };
+
+  # === Security Module Enum Tests ===
+
+  # Test 19: Invalid namespace access should fail
+  invalid-namespace-access = mkTypeFailTest {
+    name = "invalid-namespace-access";
+    description = "Verifies that an invalid namespace access level is rejected";
+    modules = [
+      {
+        "/security" = {
+          namespaceAccess = {
+            "file" = "rw"; # Invalid: not in enum ["full" "read-only" "none"]
+          };
+        };
+      }
+    ];
+  };
+
+  # Test 20: Valid namespace access should pass
+  valid-namespace-access = mkTypePassTest {
+    name = "valid-namespace-access";
+    description = "Verifies all valid namespace access levels are accepted";
+    modules = [
+      {
+        "/security" = {
+          namespaceAccess = {
+            "file" = "full";
+            "net" = "read-only";
+            "sys" = "none";
+          };
+        };
+      }
+    ];
+  };
+
+  # === Time Module Enum Tests ===
+
+  # Test 21: Invalid hwclock should fail
+  invalid-hwclock = mkTypeFailTest {
+    name = "invalid-hwclock";
+    description = "Verifies that an invalid hwclock mode is rejected";
+    modules = [
+      {
+        "/time" = {
+          hwclock = "gmt"; # Invalid: not in enum ["utc" "localtime"]
+        };
+      }
+    ];
+  };
+
+  # Test 22: Valid hwclock should pass
+  valid-hwclock = mkTypePassTest {
+    name = "valid-hwclock";
+    description = "Verifies valid hwclock modes are accepted";
+    modules = [
+      {
+        "/time" = {
+          hwclock = "localtime";
+          hostname = "myhost";
+          timezone = "America/New_York";
+        };
+      }
+    ];
+  };
+
+  # === Logging Module Enum Tests ===
+
+  # Test 23: Invalid log level should fail
+  invalid-log-level = mkTypeFailTest {
+    name = "invalid-log-level";
+    description = "Verifies that an invalid log level is rejected";
+    modules = [
+      {
+        "/logging" = {
+          level = "verbose"; # Invalid: not in enum
+        };
+      }
+    ];
+  };
+
+  # Test 24: Valid log levels should pass
+  valid-log-levels = mkTypePassTest {
+    name = "valid-log-levels";
+    description = "Verifies all valid log levels are accepted";
+    modules = [
+      {
+        "/logging" = {
+          level = "debug";
+          kernelLogLevel = "error";
+        };
+      }
+    ];
+  };
+
+  # === Power Module Enum Tests ===
+
+  # Test 25: Invalid power action should fail
+  invalid-power-action = mkTypeFailTest {
+    name = "invalid-power-action";
+    description = "Verifies that an invalid power action is rejected";
+    modules = [
+      {
+        "/power" = {
+          powerAction = "hibernate"; # Invalid: not in enum
+        };
+      }
+    ];
+  };
+
+  # Test 26: Invalid idle action should fail
+  invalid-idle-action = mkTypeFailTest {
+    name = "invalid-idle-action";
+    description = "Verifies that an invalid idle action is rejected";
+    modules = [
+      {
+        "/power" = {
+          idleAction = "hibernate"; # Invalid: not in enum
+        };
+      }
+    ];
+  };
+
+  # Test 27: Valid power config should pass
+  valid-power-config = mkTypePassTest {
+    name = "valid-power-config";
+    description = "Verifies valid power configuration is accepted";
+    modules = [
+      {
+        "/power" = {
+          acpiEnable = true;
+          powerAction = "reboot";
+          idleAction = "suspend";
+          idleTimeoutMinutes = 15;
+          rebootOnPanic = true;
+        };
+      }
+    ];
+  };
+
+  # === Programs Module Struct Tests ===
+
+  # Test 28: Invalid ion config missing required field should fail
+  invalid-ion-config = mkTypeFailTest {
+    name = "invalid-ion-config";
+    description = "Verifies that ion config missing required 'enable' field is rejected";
+    modules = [
+      {
+        "/programs" = {
+          ion = {
+            # enable = true;  # Missing!
+            prompt = "$ ";
+            initExtra = "";
+          };
+        };
+      }
+    ];
+  };
+
+  # Test 29: Invalid helix config wrong type should fail
+  invalid-helix-config = mkTypeFailTest {
+    name = "invalid-helix-config";
+    description = "Verifies that helix config with wrong type is rejected";
+    modules = [
+      {
+        "/programs" = {
+          helix = {
+            enable = "yes"; # Should be bool
+            theme = "default";
+          };
+        };
+      }
+    ];
+  };
+
+  # Test 30: Valid programs config should pass
+  valid-programs-config = mkTypePassTest {
+    name = "valid-programs-config";
+    description = "Verifies valid programs configuration is accepted";
+    modules = [
+      {
+        "/programs" = {
+          ion = {
+            enable = true;
+            prompt = "$ ";
+            initExtra = "alias ll = \"ls -la\"";
+          };
+          helix = {
+            enable = true;
+            theme = "onedark";
+          };
+          editor = "/bin/hx";
+          httpd = {
+            enable = true;
+            port = 9090;
+            rootDir = "/srv/www";
+          };
+        };
+      }
+    ];
+  };
 }

@@ -425,7 +425,7 @@ in
         echo "Users: $userCount"
         echo "Drivers: $driverCount"
 
-        [ "$ver" = "0.2.0" ] || { echo "FAIL: unexpected version"; exit 1; }
+        [ "$ver" = "0.3.0" ] || { echo "FAIL: unexpected version"; exit 1; }
         [ "$target" = "x86_64-unknown-redox" ] || { echo "FAIL: unexpected target"; exit 1; }
 
         echo "✓ Version metadata correct"
@@ -480,4 +480,229 @@ in
       }
     ];
   };
+
+  # === New Module Evaluation Tests ===
+
+  # Test 12: Security module configuration
+  security-config = mkEvalTest {
+    name = "security-config";
+    description = "Verifies security module options are applied";
+    modules = [
+      {
+        "/security" = {
+          namespaceAccess = {
+            "file" = "full";
+            "net" = "read-only";
+            "sys" = "none";
+          };
+          protectKernelSchemes = true;
+          requirePasswords = false;
+          setuidPrograms = [
+            "su"
+            "login"
+          ];
+        };
+      }
+    ];
+  };
+
+  # Test 13: Time module configuration
+  time-config = mkEvalTest {
+    name = "time-config";
+    description = "Verifies time/hostname module options are applied";
+    modules = [
+      {
+        "/time" = {
+          hostname = "redox-dev";
+          timezone = "America/New_York";
+          hwclock = "utc";
+        };
+      }
+    ];
+  };
+
+  # Test 14: Programs module configuration
+  programs-config = mkEvalTest {
+    name = "programs-config";
+    description = "Verifies programs module options are applied";
+    modules = [
+      {
+        "/programs" = {
+          ion = {
+            enable = true;
+            prompt = "$ ";
+            initExtra = ''alias ll = "ls -la"'';
+          };
+          helix = {
+            enable = true;
+            theme = "onedark";
+          };
+          editor = "/bin/hx";
+        };
+      }
+    ];
+  };
+
+  # Test 15: Logging module configuration
+  logging-config = mkEvalTest {
+    name = "logging-config";
+    description = "Verifies logging module options are applied";
+    modules = [
+      {
+        "/logging" = {
+          level = "debug";
+          kernelLogLevel = "error";
+          logToFile = true;
+          logPath = "/var/log";
+          maxLogSizeMB = 50;
+          persistAcrossBoot = true;
+        };
+      }
+    ];
+  };
+
+  # Test 16: Power module configuration
+  power-config = mkEvalTest {
+    name = "power-config";
+    description = "Verifies power module options are applied";
+    modules = [
+      {
+        "/power" = {
+          acpiEnable = true;
+          powerAction = "reboot";
+          idleAction = "suspend";
+          idleTimeoutMinutes = 15;
+          rebootOnPanic = true;
+        };
+      }
+    ];
+  };
+
+  # Test 17: All new modules together
+  all-new-modules = mkEvalTest {
+    name = "all-new-modules";
+    description = "Verifies all 5 new modules work together with existing modules";
+    modules = [
+      {
+        "/time" = {
+          hostname = "test-box";
+          timezone = "Europe/Berlin";
+        };
+        "/security" = {
+          protectKernelSchemes = true;
+          namespaceAccess."custom" = "read-only";
+        };
+        "/programs" = {
+          editor = "/bin/hx";
+          helix = {
+            enable = true;
+            theme = "catppuccin";
+          };
+        };
+        "/logging" = {
+          level = "warn";
+          persistAcrossBoot = true;
+        };
+        "/power" = {
+          powerAction = "shutdown";
+          rebootOnPanic = false;
+        };
+        "/networking" = {
+          enable = true;
+          mode = "dhcp";
+        };
+      }
+    ];
+  };
+
+  # Test 18: NTP requires networking assertion
+  assertion-ntp-without-networking =
+    let
+      redoxSystemFactory = import ../redox-system { inherit lib; };
+      result = builtins.tryEval (
+        let
+          system = redoxSystemFactory.redoxSystem {
+            modules = [
+              {
+                "/time" = {
+                  ntpEnable = true;
+                };
+                "/networking" = {
+                  enable = false;
+                };
+              }
+            ];
+            pkgs = mockPkgs.all;
+            hostPkgs = pkgs;
+          };
+        in
+        builtins.deepSeq system.rootTree.outPath "ok"
+      );
+    in
+    pkgs.runCommand "test-eval-assertion-ntp-without-networking"
+      {
+        preferLocalBuild = true;
+        succeeded = if result.success or false then "true" else "false";
+      }
+      ''
+        if [ "$succeeded" = "true" ]; then
+          echo "FAIL: Should have rejected NTP without networking"
+          exit 1
+        fi
+        echo "✓ Assertion correctly rejects NTP without networking"
+        touch $out
+      '';
+
+  # Test 19: Require passwords assertion
+  assertion-require-passwords =
+    let
+      redoxSystemFactory = import ../redox-system { inherit lib; };
+      result = builtins.tryEval (
+        let
+          system = redoxSystemFactory.redoxSystem {
+            modules = [
+              {
+                "/security" = {
+                  requirePasswords = true;
+                };
+                "/users" = {
+                  users = {
+                    root = {
+                      uid = 0;
+                      gid = 0;
+                      home = "/root";
+                      shell = "/bin/ion";
+                      password = "";
+                    };
+                    user = {
+                      uid = 1000;
+                      gid = 1000;
+                      home = "/home/user";
+                      shell = "/bin/ion";
+                      password = ""; # Empty! Should fail
+                    };
+                  };
+                };
+              }
+            ];
+            pkgs = mockPkgs.all;
+            hostPkgs = pkgs;
+          };
+        in
+        builtins.deepSeq system.rootTree.outPath "ok"
+      );
+    in
+    pkgs.runCommand "test-eval-assertion-require-passwords"
+      {
+        preferLocalBuild = true;
+        succeeded = if result.success or false then "true" else "false";
+      }
+      ''
+        if [ "$succeeded" = "true" ]; then
+          echo "FAIL: Should have rejected empty passwords"
+          exit 1
+        fi
+        echo "✓ Assertion correctly rejects empty passwords when required"
+        touch $out
+      '';
 }

@@ -46,6 +46,21 @@ adios:
     virtualisation = {
       path = "/virtualisation";
     };
+    security = {
+      path = "/security";
+    };
+    time = {
+      path = "/time";
+    };
+    programs = {
+      path = "/programs";
+    };
+    logging = {
+      path = "/logging";
+    };
+    power = {
+      path = "/power";
+    };
   };
 
   impl =
@@ -67,6 +82,58 @@ adios:
       usbEnabled = (inputs.hardware.usbEnable or false) || graphicsEnabled;
       audioEnabled = inputs.hardware.audioEnable or false;
       initfsEnableGraphics = (inputs.boot.initfsEnableGraphics or false) || graphicsEnabled;
+
+      # ===== NEW MODULE OPTIONS =====
+
+      # /time
+      hostname = inputs.time.hostname or "redox";
+      timezone = inputs.time.timezone or "UTC";
+      ntpEnabled = inputs.time.ntpEnable or false;
+      ntpServers = inputs.time.ntpServers or [ "pool.ntp.org" ];
+      hwclock = inputs.time.hwclock or "utc";
+
+      # /logging
+      logLevel = inputs.logging.level or "info";
+      kernelLogLevel = inputs.logging.kernelLogLevel or "warn";
+      logToFile = inputs.logging.logToFile or true;
+      logPath = inputs.logging.logPath or "/var/log";
+
+      # /security
+      protectKernelSchemes = inputs.security.protectKernelSchemes or true;
+      requirePasswords = inputs.security.requirePasswords or false;
+      allowRemoteRoot = inputs.security.allowRemoteRoot or false;
+      setuidPrograms =
+        inputs.security.setuidPrograms or [
+          "su"
+          "sudo"
+          "login"
+          "passwd"
+        ];
+
+      # /programs
+      ionConfig =
+        inputs.programs.ion or {
+          enable = true;
+          prompt = "\\$USER@\\$HOSTNAME \\$PWD# ";
+          initExtra = "";
+        };
+      helixConfig =
+        inputs.programs.helix or {
+          enable = false;
+          theme = "default";
+        };
+      defaultEditor = inputs.programs.editor or "/bin/sodium";
+      httpdConfig =
+        inputs.programs.httpd or {
+          enable = false;
+          port = 8080;
+          rootDir = "/var/www";
+        };
+
+      # /power
+      acpiEnabled = inputs.power.acpiEnable or true;
+      powerAction = inputs.power.powerAction or "shutdown";
+      rebootOnPanic = inputs.power.rebootOnPanic or false;
 
       # Compute all drivers
       allDrivers = lib.unique (
@@ -257,7 +324,12 @@ adios:
       allDirectories =
         (inputs.filesystem.extraDirectories or [ ])
         ++ homeDirectories
-        ++ (lib.optional networkingEnabled "/var/log");
+        ++ (lib.optional networkingEnabled "/var/log")
+        ++ (lib.optional logToFile logPath)
+        ++ [ "/etc/security" ]
+        ++ (lib.optional acpiEnabled "/etc/acpi")
+        ++ (lib.optional (helixConfig.enable or false) "/etc/helix")
+        ++ (lib.optional (httpdConfig.enable or false) (httpdConfig.rootDir or "/var/www"));
 
       # User for serial console
       nonRootUsers = lib.filterAttrs (name: user: (user.uid or 0) > 0) (inputs.users.users or { });
@@ -308,6 +380,27 @@ adios:
           assertion = builtins.all (user: (user.uid or 0) >= 0) (lib.attrValues (inputs.users.users or { }));
           message = "All user UIDs must be non-negative.";
         }
+        # New module assertions
+        {
+          assertion = !(ntpEnabled && !networkingEnabled);
+          message = "time.ntpEnable requires networking.enable = true.";
+        }
+        {
+          assertion =
+            !requirePasswords
+            || builtins.all (user: (user.uid or 0) == 0 || (user.password or "") != "") (
+              lib.attrValues (inputs.users.users or { })
+            );
+          message = "security.requirePasswords is set but some non-root users have empty passwords.";
+        }
+        {
+          assertion = (inputs.logging.maxLogSizeMB or 10) > 0;
+          message = "logging.maxLogSizeMB must be positive.";
+        }
+        {
+          assertion = (inputs.power.idleTimeoutMinutes or 30) > 0;
+          message = "power.idleTimeoutMinutes must be positive.";
+        }
       ];
 
       # Warnings: non-fatal notices traced during evaluation
@@ -316,6 +409,15 @@ adios:
           "Graphics is enabled but audio is not. Consider setting hardware.audioEnable = true for a complete desktop experience."
         )
         (lib.optionalString (diskSizeMB < 256) "Disk size is less than 256MB. Some packages may not fit.")
+        (lib.optionalString (
+          ntpEnabled && (inputs.time.ntpServers or [ ]) == [ ]
+        ) "NTP is enabled but no NTP servers configured.")
+        (lib.optionalString (
+          !protectKernelSchemes
+        ) "Kernel scheme protection is disabled. This may expose system internals to userspace.")
+        (lib.optionalString (
+          allowRemoteRoot && networkingEnabled
+        ) "Remote root login is allowed with networking enabled. Consider disabling for production.")
       ];
 
       # Process assertions — throw at eval time if any fail
@@ -352,6 +454,9 @@ adios:
       '';
       profileContent = ''
         # RedoxOS System Profile (generated by adios module system)
+        export HOSTNAME ${hostname}
+        export TZ ${timezone}
+        export EDITOR ${defaultEditor}
         ${varLines}
         ${graphicsVarLines}
         ${aliasLines}
@@ -474,10 +579,6 @@ adios:
           text = profileContent;
           mode = "0644";
         };
-        "etc/ion/initrc" = {
-          text = ''let PROMPT = "ion> "'';
-          mode = "0644";
-        };
         "etc/passwd" = {
           text = passwdContent;
           mode = "0644";
@@ -535,6 +636,126 @@ adios:
           };
         }) (inputs.networking.interfaces or { })
       ))
+      # ===== NEW MODULE GENERATED FILES =====
+
+      # /time: hostname, timezone
+      // {
+        "etc/hostname" = {
+          text = hostname;
+          mode = "0644";
+        };
+        "etc/timezone" = {
+          text = timezone;
+          mode = "0644";
+        };
+        "etc/hwclock" = {
+          text = hwclock;
+          mode = "0644";
+        };
+      }
+      // (lib.optionalAttrs ntpEnabled {
+        "etc/ntp.conf" = {
+          text =
+            "# NTP configuration (generated by adios module system)\n"
+            + lib.concatMapStringsSep "\n" (server: "server ${server}") ntpServers
+            + "\n";
+          mode = "0644";
+        };
+      })
+
+      # /logging: log config
+      // (lib.optionalAttrs logToFile {
+        "etc/logging.conf" = {
+          text = lib.concatStringsSep "\n" [
+            "# RedoxOS Logging Configuration (generated by adios module system)"
+            "level=${logLevel}"
+            "kernel_level=${kernelLogLevel}"
+            "log_path=${logPath}"
+            "max_size_mb=${toString (inputs.logging.maxLogSizeMB or 10)}"
+            "persist=${if inputs.logging.persistAcrossBoot or false then "true" else "false"}"
+          ];
+          mode = "0644";
+        };
+      })
+
+      # /security: namespace access, security policy
+      // {
+        "etc/security/namespaces" = {
+          text =
+            "# Scheme namespace access policy (generated by adios module system)\n"
+            + lib.concatStringsSep "\n" (
+              lib.mapAttrsToList (scheme: access: "${scheme}=${access}") (inputs.security.namespaceAccess or { })
+            )
+            + "\n";
+          mode = "0644";
+        };
+        "etc/security/policy" = {
+          text = lib.concatStringsSep "\n" [
+            "# Security policy (generated by adios module system)"
+            "protect_kernel_schemes=${if protectKernelSchemes then "true" else "false"}"
+            "require_passwords=${if requirePasswords then "true" else "false"}"
+            "allow_remote_root=${if allowRemoteRoot then "true" else "false"}"
+          ];
+          mode = "0644";
+        };
+        "etc/security/setuid" = {
+          text =
+            "# Setuid programs (generated by adios module system)\n"
+            + lib.concatStringsSep "\n" setuidPrograms
+            + "\n";
+          mode = "0644";
+        };
+      }
+
+      # /programs: ion initrc, helix config, editor
+      // {
+        "etc/ion/initrc" = {
+          text =
+            let
+              ion = ionConfig;
+            in
+            lib.concatStringsSep "\n" (
+              [ ''let PROMPT = "${ion.prompt or "ion> "}"'' ]
+              ++ [ "export EDITOR ${defaultEditor}" ]
+              ++ lib.optional (ion.initExtra or "" != "") (ion.initExtra)
+            );
+          mode = "0644";
+        };
+      }
+      // (lib.optionalAttrs (helixConfig.enable or false) {
+        "etc/helix/config.toml" = {
+          text = ''
+            # Helix editor config (generated by adios module system)
+            theme = "${helixConfig.theme or "default"}"
+          '';
+          mode = "0644";
+        };
+      })
+      // (lib.optionalAttrs (httpdConfig.enable or false) {
+        "etc/httpd.conf" = {
+          text = lib.concatStringsSep "\n" [
+            "# HTTP server config (generated by adios module system)"
+            "port=${toString (httpdConfig.port or 8080)}"
+            "root_dir=${httpdConfig.rootDir or "/var/www"}"
+          ];
+          mode = "0644";
+        };
+      })
+
+      # /power: ACPI config
+      // (lib.optionalAttrs acpiEnabled {
+        "etc/acpi/config" = {
+          text = lib.concatStringsSep "\n" [
+            "# ACPI power management (generated by adios module system)"
+            "power_action=${powerAction}"
+            "idle_action=${inputs.power.idleAction or "none"}"
+            "idle_timeout_minutes=${toString (inputs.power.idleTimeoutMinutes or 30)}"
+            "reboot_on_panic=${if rebootOnPanic then "true" else "false"}"
+          ];
+          mode = "0644";
+        };
+      })
+
       # Init script files (raw initScripts + rendered structured services)
       // (builtins.listToAttrs (
         lib.mapAttrsToList (
@@ -822,13 +1043,27 @@ adios:
           echo "  ✓ Graphics configuration present"
         ''}
 
-        # Check 6: Init scripts directory should have content
+        # Check 6: Hostname file exists
+        if [ ! -e "${rootTree}/etc/hostname" ]; then
+          echo "FAIL: Missing /etc/hostname"
+          exit 1
+        fi
+        echo "  ✓ hostname present ($(cat ${rootTree}/etc/hostname))"
+
+        # Check 7: Security policy exists
+        if [ ! -e "${rootTree}/etc/security/policy" ]; then
+          echo "FAIL: Missing /etc/security/policy"
+          exit 1
+        fi
+        echo "  ✓ security policy present"
+
+        # Check 9: Init scripts directory should have content
         if [ -d "${rootTree}/etc/init.d" ]; then
           count=$(find "${rootTree}/etc/init.d" -type f | wc -l)
           echo "  ✓ Init scripts present ($count scripts)"
         fi
 
-        # Check 7: startup.sh should be executable (Nix adjusts to 555)
+        # Check 10: startup.sh should be executable (Nix adjusts to 555)
         if [ -e "${rootTree}/startup.sh" ]; then
           mode=$(stat -c '%a' "${rootTree}/startup.sh")
           if [ "$mode" != "555" ]; then
@@ -953,12 +1188,17 @@ adios:
       # Structured metadata embedded in the system for inspection.
       systemName = "redox";
       versionInfo = {
-        redoxSystemVersion = "0.2.0";
+        redoxSystemVersion = "0.3.0";
         target = "x86_64-unknown-redox";
         profile = systemName;
+        inherit hostname timezone;
         graphicsEnabled = graphicsEnabled;
         networkingEnabled = networkingEnabled;
         networkMode = inputs.networking.mode or "auto";
+        ntpEnabled = ntpEnabled;
+        inherit logLevel;
+        acpiEnabled = acpiEnabled;
+        inherit protectKernelSchemes;
         diskSizeMB = diskSizeMB;
         espSizeMB = espSizeMB;
         userCount = builtins.length (builtins.attrNames (inputs.users.users or { }));
