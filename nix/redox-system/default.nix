@@ -109,6 +109,10 @@ let
       espImage = buildOutput.espImage;
       redoxfsImage = buildOutput.redoxfsImage;
 
+      # Validation & metadata
+      systemChecks = buildOutput.systemChecks;
+      version = buildOutput.version;
+
       # Wrappers-style chainable extension
       extend =
         extraModule:

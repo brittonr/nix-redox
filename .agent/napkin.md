@@ -82,6 +82,19 @@
 - `usr/lib/init.d` scripts are for rootfs-only services (e.g., orbital)
 - Mock packages in `nix/tests/mock-pkgs.nix` must include ALL packages that build module references via `pkgs ? name`
 
+### nix-darwin inspired features (a00a050, Feb 19 2026)
+- Worker subagents claimed success but changes WEREN'T PERSISTED — always `git status` / `grep` to verify
+- Three features added: assertions, systemChecks, version tracking
+- Assertions go in the `/build` module (only place with cross-module visibility in adios)
+- Must guard assertions with enable flags: `!(networkingEnabled && mode == "static")` not just `!(mode == "static")`
+  because networking.enable defaults to `true` — type tests that set `mode = "static"` without interfaces will fail
+- `nix eval --impure` caches aggressively; use `--no-eval-cache` or rebuild to see changes
+- `assert` chains: `rootTree = assert assertionCheck; assert warningCheck; hostPkgs.runCommand ...`
+- Warnings use `builtins.trace` via `lib.foldr` — they show during eval, not build
+- systemChecks is a derivation that inspects rootTree at build time (separate from eval-time assertions)
+- versionInfo is a plain attrset (not a derivation) — can be accessed without building
+- The `valid-network-mode-static` type test needed an interface added after assertions were introduced
+
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc
 - SchemeDaemon API: nulld/zerod/randd/logd/ramfs use `scheme <name> <cmd>` not `notify`

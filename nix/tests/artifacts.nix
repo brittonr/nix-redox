@@ -663,6 +663,17 @@ in
         file = "nix-support/build-info";
         contains = "rootTree:";
       }
+      # Version tracking (nix-darwin inspired)
+      {
+        file = "version.json";
+        contains = "redoxSystemVersion";
+      }
+      {
+        file = "version.json";
+        contains = "x86_64-unknown-redox";
+      }
+      # System checks link
+      { file = "checks"; }
     ];
   };
 }

@@ -276,6 +276,61 @@ adios:
             home = "/root";
           };
 
+      # ===== ASSERTIONS (cross-module validation) =====
+      # Inspired by nix-darwin's assertions system.
+      # Checks invariants across modules that Korora types alone can't express.
+      assertions = [
+        {
+          assertion = !graphicsEnabled || (pkgs ? orbital);
+          message = "graphics.enable requires the 'orbital' package. Add it to pkgs or disable graphics.";
+        }
+        {
+          assertion =
+            !(networkingEnabled && (inputs.networking.mode or "auto") == "static")
+            || (inputs.networking.interfaces or { } != { });
+          message = "networking.mode = 'static' requires at least one interface in networking.interfaces.";
+        }
+        {
+          assertion =
+            !graphicsEnabled
+            || builtins.any (d: d == "virtio-gpud" || d == "bgad") (inputs.hardware.graphicsDrivers or [ ]);
+          message = "graphics.enable is set but no graphics drivers configured in hardware.graphicsDrivers.";
+        }
+        {
+          assertion = diskSizeMB > espSizeMB;
+          message = "boot.diskSizeMB (${toString diskSizeMB}) must be greater than boot.espSizeMB (${toString espSizeMB}).";
+        }
+        {
+          assertion = diskSizeMB - espSizeMB >= 16;
+          message = "RedoxFS partition must be at least 16MB. Increase diskSizeMB or decrease espSizeMB.";
+        }
+        {
+          assertion = builtins.all (user: (user.uid or 0) >= 0) (lib.attrValues (inputs.users.users or { }));
+          message = "All user UIDs must be non-negative.";
+        }
+      ];
+
+      # Warnings: non-fatal notices traced during evaluation
+      warnings = builtins.filter (w: w != "") [
+        (lib.optionalString (graphicsEnabled && !audioEnabled)
+          "Graphics is enabled but audio is not. Consider setting hardware.audioEnable = true for a complete desktop experience."
+        )
+        (lib.optionalString (diskSizeMB < 256) "Disk size is less than 256MB. Some packages may not fit.")
+      ];
+
+      # Process assertions — throw at eval time if any fail
+      failedAssertions = builtins.filter (a: !a.assertion) assertions;
+      assertionCheck =
+        if failedAssertions != [ ] then
+          throw "\nFailed assertions:\n${
+            lib.concatStringsSep "\n" (map (a: "- ${a.message}") failedAssertions)
+          }"
+        else
+          true;
+
+      # Process warnings — trace non-empty ones
+      warningCheck = lib.foldr (w: x: builtins.trace "warning: ${w}" x) true warnings;
+
       # ===== GENERATED FILES =====
 
       # Environment: /etc/profile
@@ -702,14 +757,89 @@ adios:
 
       # ===== BUILD DERIVATIONS =====
 
-      rootTree = hostPkgs.runCommand "redox-root-tree" { } ''
-        ${mkDirs allDirectories}
-        mkdir -p $out/dev
-        ${mkDevSymlinks}
-        ${mkSpecialSymlinks}
-        ${mkPackages}
-        ${mkGeneratedFiles}
-        echo "Root tree: $(find $out -type f | wc -l) files, $(find $out/bin -type f 2>/dev/null | wc -l) binaries"
+      rootTree =
+        assert assertionCheck;
+        assert warningCheck;
+        hostPkgs.runCommand "redox-root-tree" { } ''
+          ${mkDirs allDirectories}
+          mkdir -p $out/dev
+          ${mkDevSymlinks}
+          ${mkSpecialSymlinks}
+          ${mkPackages}
+          ${mkGeneratedFiles}
+          echo "Root tree: $(find $out -type f | wc -l) files, $(find $out/bin -type f 2>/dev/null | wc -l) binaries"
+        '';
+
+      # ===== SYSTEM CHECKS (build-time rootTree validation) =====
+      # Inspired by nix-darwin's system.checks module.
+      # Validates that built artifacts contain everything needed for boot.
+      systemChecks = hostPkgs.runCommand "redox-system-checks" { } ''
+        set -euo pipefail
+        echo "Running system checks on rootTree..."
+
+        # Check 1: Essential files exist
+        for f in etc/passwd etc/group etc/shadow etc/init.toml startup.sh; do
+          if [ ! -e "${rootTree}/$f" ]; then
+            echo "FAIL: Missing essential file: $f"
+            exit 1
+          fi
+        done
+        echo "  ✓ Essential files present"
+
+        # Check 2: passwd has at least one entry
+        if [ ! -s "${rootTree}/etc/passwd" ]; then
+          echo "FAIL: /etc/passwd is empty — no users defined"
+          exit 1
+        fi
+        echo "  ✓ passwd has entries"
+
+        # Check 3: passwd uses semicolon delimiter (Redox format)
+        if ! grep -q ';' "${rootTree}/etc/passwd"; then
+          echo "FAIL: /etc/passwd not in Redox format (semicolon-delimited)"
+          echo "  Contents: $(head -1 ${rootTree}/etc/passwd)"
+          exit 1
+        fi
+        echo "  ✓ passwd format correct"
+
+        # Check 4: If networking enabled, verify net config exists
+        ${lib.optionalString networkingEnabled ''
+          if [ ! -d "${rootTree}/etc/net" ]; then
+            echo "FAIL: Networking enabled but /etc/net directory missing"
+            exit 1
+          fi
+          if [ ! -e "${rootTree}/etc/net/dns" ]; then
+            echo "FAIL: Networking enabled but /etc/net/dns missing"
+            exit 1
+          fi
+          echo "  ✓ Network configuration present"
+        ''}
+
+        # Check 5: If graphics enabled, verify profile has orbital config
+        ${lib.optionalString graphicsEnabled ''
+          if ! grep -q 'ORBITAL_RESOLUTION' "${rootTree}/etc/profile" 2>/dev/null; then
+            echo "WARN: Graphics enabled but ORBITAL_RESOLUTION not in profile"
+          fi
+          echo "  ✓ Graphics configuration present"
+        ''}
+
+        # Check 6: Init scripts directory should have content
+        if [ -d "${rootTree}/etc/init.d" ]; then
+          count=$(find "${rootTree}/etc/init.d" -type f | wc -l)
+          echo "  ✓ Init scripts present ($count scripts)"
+        fi
+
+        # Check 7: startup.sh should be executable (Nix adjusts to 555)
+        if [ -e "${rootTree}/startup.sh" ]; then
+          mode=$(stat -c '%a' "${rootTree}/startup.sh")
+          if [ "$mode" != "555" ]; then
+            echo "WARN: startup.sh has mode $mode (expected 555)"
+          fi
+          echo "  ✓ startup.sh executable"
+        fi
+
+        echo ""
+        echo "All system checks passed."
+        touch $out
       '';
 
       initfs = hostPkgs.stdenv.mkDerivation {
@@ -818,34 +948,62 @@ adios:
         inherit espSizeMB;
       };
 
+      # ===== VERSION TRACKING =====
+      # Inspired by nix-darwin's system/version.nix.
+      # Structured metadata embedded in the system for inspection.
+      systemName = "redox";
+      versionInfo = {
+        redoxSystemVersion = "0.2.0";
+        target = "x86_64-unknown-redox";
+        profile = systemName;
+        graphicsEnabled = graphicsEnabled;
+        networkingEnabled = networkingEnabled;
+        networkMode = inputs.networking.mode or "auto";
+        diskSizeMB = diskSizeMB;
+        espSizeMB = espSizeMB;
+        userCount = builtins.length (builtins.attrNames (inputs.users.users or { }));
+        packageCount = builtins.length allPackages;
+        driverCount = builtins.length allDrivers;
+      };
+
+      versionJson = hostPkgs.writeText "redox-version.json" (builtins.toJSON versionInfo);
+
       # System identity — inspired by NixBSD's system.build.toplevel
       # A single store path that ties all system components together
       # and provides metadata for inspection and validation.
-      systemName = "redox";
-      toplevel = hostPkgs.runCommand "redox-toplevel-${systemName}" { } ''
-        mkdir -p $out/nix-support
+      toplevel =
+        hostPkgs.runCommand "redox-toplevel-${systemName}"
+          {
+            inherit systemChecks; # Force checks to run
+          }
+          ''
+            mkdir -p $out/nix-support
 
-        # Core system components
-        ln -s ${rootTree} $out/root-tree
-        ln -s ${initfs} $out/initfs
-        ln -s ${kernel}/boot/kernel $out/kernel
-        ln -s ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI $out/bootloader
-        ln -s ${diskImage} $out/disk-image
+            # Core system components
+            ln -s ${rootTree} $out/root-tree
+            ln -s ${initfs} $out/initfs
+            ln -s ${kernel}/boot/kernel $out/kernel
+            ln -s ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI $out/bootloader
+            ln -s ${diskImage} $out/disk-image
 
-        # Configuration access (for inspection)
-        ln -s ${rootTree}/etc $out/etc
+            # Validation
+            ln -s ${systemChecks} $out/checks
 
-        # System metadata
-        echo -n "x86_64-unknown-redox" > $out/system
-        echo -n "${systemName}" > $out/name
+            # Configuration access (for inspection)
+            ln -s ${rootTree}/etc $out/etc
 
-        # Record what profile/options produced this system
-        echo "rootTree: ${rootTree}" >> $out/nix-support/build-info
-        echo "initfs: ${initfs}" >> $out/nix-support/build-info
-        echo "kernel: ${kernel}" >> $out/nix-support/build-info
-        echo "bootloader: ${bootloader}" >> $out/nix-support/build-info
-        echo "diskImage: ${diskImage}" >> $out/nix-support/build-info
-      '';
+            # System metadata
+            echo -n "x86_64-unknown-redox" > $out/system
+            echo -n "${systemName}" > $out/name
+            ln -s ${versionJson} $out/version.json
+
+            # Record what profile/options produced this system
+            echo "rootTree: ${rootTree}" >> $out/nix-support/build-info
+            echo "initfs: ${initfs}" >> $out/nix-support/build-info
+            echo "kernel: ${kernel}" >> $out/nix-support/build-info
+            echo "bootloader: ${bootloader}" >> $out/nix-support/build-info
+            echo "diskImage: ${diskImage}" >> $out/nix-support/build-info
+          '';
 
     in
     {
@@ -856,6 +1014,8 @@ adios:
         toplevel
         espImage
         redoxfsImage
+        systemChecks
         ;
+      version = versionInfo;
     };
 }

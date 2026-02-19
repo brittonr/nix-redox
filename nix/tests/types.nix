@@ -182,6 +182,10 @@ in
       {
         "/networking" = {
           mode = "static";
+          interfaces.eth0 = {
+            address = "10.0.0.5";
+            gateway = "10.0.0.1";
+          };
         };
       }
     ];

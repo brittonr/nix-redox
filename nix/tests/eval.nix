@@ -301,6 +301,150 @@ in
     ];
   };
 
+  # === Assertion Tests ===
+  # Inspired by nix-darwin: assertions catch cross-module invariants at eval time
+
+  # Test: Assertions fire when graphics enabled without orbital
+  assertion-graphics-no-orbital =
+    let
+      redoxSystemFactory = import ../redox-system { inherit lib; };
+      pkgsNoOrbital = builtins.removeAttrs mockPkgs.all [ "orbital" ];
+      result = builtins.tryEval (
+        let
+          system = redoxSystemFactory.redoxSystem {
+            modules = [
+              {
+                "/graphics" = {
+                  enable = true;
+                };
+              }
+            ];
+            pkgs = pkgsNoOrbital;
+            hostPkgs = pkgs;
+          };
+        in
+        builtins.deepSeq system.rootTree.outPath "ok"
+      );
+    in
+    pkgs.runCommand "test-eval-assertion-graphics-no-orbital"
+      {
+        preferLocalBuild = true;
+        succeeded = if result.success or false then "true" else "false";
+      }
+      ''
+        if [ "$succeeded" = "true" ]; then
+          echo "FAIL: Should have rejected graphics without orbital package"
+          exit 1
+        fi
+        echo "✓ Assertion correctly rejects graphics.enable without orbital"
+        touch $out
+      '';
+
+  # Test: Assertions fire when diskSizeMB < espSizeMB
+  assertion-disk-size-invalid =
+    let
+      redoxSystemFactory = import ../redox-system { inherit lib; };
+      result = builtins.tryEval (
+        let
+          system = redoxSystemFactory.redoxSystem {
+            modules = [
+              {
+                "/boot" = {
+                  diskSizeMB = 100;
+                  espSizeMB = 200;
+                };
+              }
+            ];
+            pkgs = mockPkgs.all;
+            hostPkgs = pkgs;
+          };
+        in
+        builtins.deepSeq system.rootTree.outPath "ok"
+      );
+    in
+    pkgs.runCommand "test-eval-assertion-disk-size-invalid"
+      {
+        preferLocalBuild = true;
+        succeeded = if result.success or false then "true" else "false";
+      }
+      ''
+        if [ "$succeeded" = "true" ]; then
+          echo "FAIL: Should have rejected diskSizeMB < espSizeMB"
+          exit 1
+        fi
+        echo "✓ Assertion correctly rejects invalid disk sizes"
+        touch $out
+      '';
+
+  # Test: Valid config passes all assertions
+  assertion-valid-config = mkEvalTest {
+    name = "assertion-valid-config";
+    description = "Verifies a valid config passes all assertions and system checks";
+    modules = [
+      {
+        "/graphics" = {
+          enable = false;
+        };
+        "/networking" = {
+          enable = true;
+          mode = "dhcp";
+        };
+        "/boot" = {
+          diskSizeMB = 512;
+          espSizeMB = 200;
+        };
+      }
+    ];
+  };
+
+  # === Version Tracking Tests ===
+
+  # Test: Version metadata is accessible
+  version-metadata =
+    let
+      redoxSystemFactory = import ../redox-system { inherit lib; };
+      system = redoxSystemFactory.redoxSystem {
+        modules = [ ../redox-system/profiles/minimal.nix ];
+        pkgs = mockPkgs.all;
+        hostPkgs = pkgs;
+      };
+      v = system.version;
+    in
+    pkgs.runCommand "test-eval-version-metadata"
+      {
+        preferLocalBuild = true;
+        ver = v.redoxSystemVersion;
+        target = v.target;
+        userCount = toString v.userCount;
+        driverCount = toString v.driverCount;
+      }
+      ''
+        set -euo pipefail
+        echo "Version: $ver"
+        echo "Target: $target"
+        echo "Users: $userCount"
+        echo "Drivers: $driverCount"
+
+        [ "$ver" = "0.2.0" ] || { echo "FAIL: unexpected version"; exit 1; }
+        [ "$target" = "x86_64-unknown-redox" ] || { echo "FAIL: unexpected target"; exit 1; }
+
+        echo "✓ Version metadata correct"
+        touch $out
+      '';
+
+  # Test: System checks derivation exists
+  system-checks-exist = mkEvalTest {
+    name = "system-checks-exist";
+    description = "Verifies systemChecks derivation is produced";
+    modules = [ ];
+    checkOutputs = [
+      "diskImage"
+      "initfs"
+      "toplevel"
+      "systemChecks"
+    ];
+  };
+
   # Test 11: Multiple module merge
   multi-module-merge = mkEvalTest {
     name = "multi-module-merge";
