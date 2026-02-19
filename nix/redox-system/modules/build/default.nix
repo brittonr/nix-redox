@@ -803,6 +803,7 @@ adios:
       redoxfsImage = mkRedoxfsImage {
         redoxfs = pkgs.redoxfs;
         inherit rootTree kernel initfs;
+        sizeMB = diskSizeMB - espSizeMB - 4; # 4MB for GPT headers
       };
 
       diskImage = mkDiskImage {

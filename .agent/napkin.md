@@ -70,6 +70,18 @@
   - Use "Redox OS Bootloader" for bootloader, "Redox OS starting" for kernel
 - 1-second polling can't distinguish boot phases; use 100ms + ms timestamps
 
+### redoxfs-ar requires pre-allocated image file (Feb 19 2026)
+- `redoxfs-ar` opens an existing file — it does NOT create one from scratch
+- Must `dd if=/dev/zero of=redoxfs.img bs=1M count=$SIZE` before calling `redoxfs-ar`
+- Size = diskSizeMB - espSizeMB - 4 (GPT overhead)
+- Fixed in `nix/redox-system/lib/make-redoxfs-image.nix`
+
+### Test artifact paths: rootTree uses usr/bin/ and etc/init.d/
+- Build module copies package binaries to `usr/bin/`, not `bin/`
+- init.d scripts with `directory = "init.d"` map to `etc/init.d` in rootTree
+- `usr/lib/init.d` scripts are for rootfs-only services (e.g., orbital)
+- Mock packages in `nix/tests/mock-pkgs.nix` must include ALL packages that build module references via `pkgs ? name`
+
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc
 - SchemeDaemon API: nulld/zerod/randd/logd/ramfs use `scheme <name> <cmd>` not `notify`

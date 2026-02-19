@@ -317,21 +317,22 @@ in
       }
     ];
     checks = [
+      # The netcfg-setup binary should be present (from netcfg-setup package)
       {
-        file = "bin/netcfg-static";
-        contains = "10.0.0.5/24";
-        mode = "555";
+        file = "usr/bin/netcfg-setup";
+      }
+      # The init.d script should call netcfg-setup with static config
+      # directory = "init.d" maps to etc/init.d in rootTree
+      {
+        file = "etc/init.d/15_netcfg";
+        contains = "netcfg-setup static";
       }
       {
-        file = "bin/netcfg-static";
-        contains = "10.0.0.1";
-      }
-      {
-        file = "etc/net/eth0/ip";
+        file = "etc/init.d/15_netcfg";
         contains = "10.0.0.5";
       }
       {
-        file = "etc/net/eth0/gateway";
+        file = "etc/init.d/15_netcfg";
         contains = "10.0.0.1";
       }
     ];

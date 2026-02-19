@@ -349,6 +349,13 @@ rec {
     ];
   };
 
+  # === Network Configuration ===
+
+  netcfg-setup = mkMockPackageWithBins {
+    name = "netcfg-setup";
+    binaries = [ "netcfg-setup" ];
+  };
+
   # === Library Components ===
 
   # Relibc (Redox C library)
@@ -371,6 +378,7 @@ rec {
       ion
       uutils
       netutils
+      netcfg-setup
       userutils
       helix
       sodium
