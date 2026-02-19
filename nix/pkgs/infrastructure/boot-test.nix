@@ -210,16 +210,21 @@ pkgs.writeShellScriptBin "boot-test" ''
         echo "  ✓ [''${ELAPSED}s] Shell ready"
       fi
 
-      # Success: boot complete is the primary goal
-      if [ "$M_BOOT" = "1" ]; then
-        # Wait a couple seconds to see if shell appears too
-        sleep 2
-        # Re-check for shell in the full log
-        if [ "$M_SHELL" = "0" ] && ${pkgs.gnugrep}/bin/grep -qE "(ion>|Welcome to Redox)" "$SERIAL_LOG" 2>/dev/null; then
-          M_SHELL=1
-          echo "  ✓ [$(( $(date +%s) - START_TIME ))s] Shell ready"
-        fi
+      # After boot complete, wait for shell to appear
+      if [ "$M_BOOT" = "1" ] && [ "$M_SHELL" = "1" ]; then
         break
+      fi
+
+      # If boot is complete, keep polling for shell (up to 10s extra)
+      if [ "$M_BOOT" = "1" ] && [ "$M_SHELL" = "0" ]; then
+        BOOT_ELAPSED=$(( $(date +%s) - START_TIME ))
+        if [ -z "''${BOOT_TIME:-}" ]; then
+          BOOT_TIME=$BOOT_ELAPSED
+        fi
+        # Give shell up to 10s after boot complete
+        if [ "$((BOOT_ELAPSED - BOOT_TIME))" -ge 10 ]; then
+          break
+        fi
       fi
     fi
 
@@ -239,16 +244,26 @@ pkgs.writeShellScriptBin "boot-test" ''
   [ "$M_FIRMWARE" = "1" ] && echo "    ✓ firmware"  || echo "    ✗ firmware"
   [ "$M_INITFS" = "1" ]   && echo "    ✓ initfs"    || echo "    ✗ initfs"
   [ "$M_BOOT" = "1" ]     && echo "    ✓ boot"      || echo "    ✗ boot"
-  [ "$M_SHELL" = "1" ]    && echo "    ✓ shell"     || echo "    - shell (not reached)"
+  [ "$M_SHELL" = "1" ]    && echo "    ✓ shell"     || echo "    ✗ shell"
   echo ""
   echo "  Total time: ''${ELAPSED}s"
   echo ""
 
-  if [ "$M_BOOT" = "1" ]; then
+  if [ "$M_BOOT" = "1" ] && [ "$M_SHELL" = "1" ]; then
     echo "  ╔══════════════════════════════════════════╗"
     echo "  ║            BOOT TEST PASSED              ║"
     echo "  ╚══════════════════════════════════════════╝"
     exit 0
+  elif [ "$M_BOOT" = "1" ]; then
+    echo "  ╔══════════════════════════════════════════╗"
+    echo "  ║     BOOT TEST PARTIAL (no shell)         ║"
+    echo "  ╚══════════════════════════════════════════╝"
+    echo ""
+    echo "  Last 15 lines of serial output:"
+    echo "  ────────────────────────────────────────"
+    tail -15 "$SERIAL_LOG" 2>/dev/null | sed 's/^/  /'
+    echo "  ────────────────────────────────────────"
+    exit 1
   else
     echo "  ╔══════════════════════════════════════════╗"
     echo "  ║            BOOT TEST FAILED              ║"

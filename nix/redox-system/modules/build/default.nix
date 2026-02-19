@@ -230,6 +230,15 @@ adios:
           ++ lib.optional (pkgs ? orbutils) pkgs.orbutils
         ));
 
+      # Check if userutils (getty, login) is installed on rootFS
+      # This determines whether init.rc can use getty for serial console login
+      # or must fall back to running the shell directly via startup.sh
+      userutilsInstalled =
+        let
+          uu = pkgs.userutils or null;
+        in
+        uu != null && builtins.any (p: p == uu) allPackages;
+
       # Collect all directories
       homeDirectories = lib.filter (d: d != null) (
         lib.mapAttrsToList (name: user: if user.createHome or false then user.home else null) (
@@ -716,7 +725,7 @@ adios:
         export HOME ${defaultUser.home}
         export USER ${defaultUser.name}
         export PATH ${inputs.environment.variables.PATH or "/bin:/usr/bin"}
-        /bin/getty debug:
+        ${if userutilsInstalled then "/bin/getty debug:" else "/startup.sh"}
       '';
 
       initDriversRc = ''

@@ -29,11 +29,12 @@
 - **Solution**: Run VM with `--serial file=path` (Cloud Hypervisor) or `-serial file:path` (QEMU), then poll the log file with grep from a shell script. This completely avoids Tcl/expect complexity and works reliably
 - Cloud Hypervisor boots in ~1s wall time; full test including setup takes ~3s
 
-### Minimal profile missing getty
+### Minimal profile getty fallback
 - The minimal profile doesn't include `userutils` (which provides `getty` and `login`)
-- init.rc ends with `/bin/getty debug:` which fails with "No such file or directory"
-- Boot still succeeds (the "Boot Complete" message prints before getty runs)
-- Not a blocker for boot testing, but the shell prompt milestone won't fire
+- init.rc used to hardcode `/bin/getty debug:` which failed on minimal
+- Fixed: init.rc now conditionally uses `/startup.sh` when userutils is not in `allPackages`
+- The check uses derivation reference equality: `builtins.any (p: p == uu) allPackages`
+- Profiles WITH userutils still use getty for proper login
 
 ## What Works
 - 68 module system tests across 4 layers all pass
