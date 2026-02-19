@@ -41,7 +41,11 @@
 - Mock packages build in seconds, enabling fast iteration
 - Type validation catches invalid enums, missing struct fields, and wrong types
 - Artifact tests verify file content (semicolon-delimited passwd, init scripts, etc.)
-- Automated boot test passes in ~3s using Cloud Hypervisor with KVM
+- Automated boot test passes in ~500ms using Cloud Hypervisor with KVM
+- Boot test milestones must match actual boot phases, not just any string:
+  - "initfs" matched bootloader progress download, NOT kernel/initfs execution
+  - Use "Redox OS Bootloader" for bootloader, "Redox OS starting" for kernel
+- 1-second polling can't distinguish boot phases; use 100ms + ms timestamps
 
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc

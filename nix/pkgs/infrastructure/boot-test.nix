@@ -8,14 +8,14 @@
 # pty/expect buffering complexity.
 #
 # Supports two VMM backends:
-#   - Cloud Hypervisor (default): Requires KVM, fast boot (~5-10s)
+#   - Cloud Hypervisor (default): Requires KVM, fast boot (~1-2s)
 #   - QEMU TCG (fallback): No KVM needed, slower (~60-120s)
 #
-# Milestones tracked on serial console:
-#   1. Any output         → firmware/bootloader started
-#   2. "initfs"           → kernel booted, initfs executing
-#   3. "Boot Complete"    → full system boot (SUCCESS)
-#   4. "ion>"             → shell prompt ready (bonus)
+# Milestones tracked on serial console (in boot order):
+#   1. "Redox OS Bootloader"   → UEFI loaded our bootloader
+#   2. "Redox OS starting"     → kernel is executing
+#   3. "Boot Complete"         → rootfs mounted, init.d scripts ran
+#   4. "ion>" or "Welcome"     → shell/login prompt ready
 #
 # Usage:
 #   nix run .#boot-test              # Auto-detect (CH if KVM, else QEMU)
@@ -83,12 +83,10 @@ pkgs.writeShellScriptBin "boot-test" ''
   # === Setup ===
   WORK_DIR=$(mktemp -d)
   cleanup() {
-    # Kill VM if still running
     if [ -n "''${VM_PID:-}" ] && kill -0 "$VM_PID" 2>/dev/null; then
       kill "$VM_PID" 2>/dev/null || true
       wait "$VM_PID" 2>/dev/null || true
     fi
-    # Kill tail if running
     if [ -n "''${TAIL_PID:-}" ] && kill -0 "$TAIL_PID" 2>/dev/null; then
       kill "$TAIL_PID" 2>/dev/null || true
     fi
@@ -156,79 +154,88 @@ pkgs.writeShellScriptBin "boot-test" ''
   fi
 
   # === Poll serial log for milestones ===
-  M_FIRMWARE=0
-  M_INITFS=0
+  # Each milestone has a specific pattern that matches exactly one boot phase.
+  # We scan the full log each poll — on CH+KVM the entire boot completes in <1s
+  # so incremental reads add complexity without value. On QEMU TCG, the full
+  # scan is still fast (serial log is small).
+  M_BOOTLOADER=0
+  M_KERNEL=0
   M_BOOT=0
   M_SHELL=0
-  START_TIME=$(date +%s)
-  LAST_SIZE=0
+
+  # Use millisecond timestamps for accurate boot timing.
+  # date +%s%N gives nanoseconds; we divide to get milliseconds.
+  ms_now() { echo $(( $(date +%s%N) / 1000000 )); }
+  fmt_ms() {
+    local ms=$1
+    echo "$(( ms / 1000 )).$(printf '%03d' $(( ms % 1000 )))s"
+  }
+
+  START_MS=$(ms_now)
 
   while true; do
-    ELAPSED=$(( $(date +%s) - START_TIME ))
+    NOW_MS=$(ms_now)
+    ELAPSED_MS=$(( NOW_MS - START_MS ))
+    ELAPSED_S=$(( ELAPSED_MS / 1000 ))
 
-    # Check timeout
-    if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
+    if [ "$ELAPSED_S" -ge "$TIMEOUT" ]; then
       break
     fi
 
-    # Check if VM died
     if ! kill -0 "$VM_PID" 2>/dev/null; then
-      # Give a moment for final log output to flush
-      sleep 1
+      sleep 0.2  # let final output flush
       break
     fi
 
-    # Read the serial log
-    CURRENT_SIZE=$(${pkgs.coreutils}/bin/stat -c%s "$SERIAL_LOG" 2>/dev/null || echo 0)
+    LOG_CONTENT=$(cat "$SERIAL_LOG" 2>/dev/null || true)
 
-    if [ "$CURRENT_SIZE" -gt "$LAST_SIZE" ]; then
-      # New output available — read the new portion
-      NEW_OUTPUT=$(${pkgs.coreutils}/bin/tail -c +"$((LAST_SIZE + 1))" "$SERIAL_LOG" 2>/dev/null || true)
-      LAST_SIZE="$CURRENT_SIZE"
+    if [ -z "$LOG_CONTENT" ]; then
+      sleep 0.1
+      continue
+    fi
 
-      # Check firmware (any output at all)
-      if [ "$M_FIRMWARE" = "0" ] && [ "$CURRENT_SIZE" -gt 0 ]; then
-        M_FIRMWARE=1
-        echo "  ✓ [''${ELAPSED}s] Firmware/bootloader started"
-      fi
+    # Milestone 1: Bootloader — our bootloader binary is running
+    # Pattern: "Redox OS Bootloader" (printed by bootloader on startup)
+    if [ "$M_BOOTLOADER" = "0" ] && echo "$LOG_CONTENT" | ${pkgs.gnugrep}/bin/grep -q "Redox OS Bootloader"; then
+      M_BOOTLOADER=1
+      echo "  ✓ [$(fmt_ms $ELAPSED_MS)] Bootloader started"
+    fi
 
-      # Check initfs
-      if [ "$M_INITFS" = "0" ] && echo "$NEW_OUTPUT" | ${pkgs.gnugrep}/bin/grep -q "initfs"; then
-        M_INITFS=1
-        echo "  ✓ [''${ELAPSED}s] InitFS reached"
-      fi
+    # Milestone 2: Kernel — the Redox kernel is executing
+    # Pattern: "Redox OS starting" (first kernel log line after handoff from bootloader)
+    if [ "$M_KERNEL" = "0" ] && echo "$LOG_CONTENT" | ${pkgs.gnugrep}/bin/grep -q "Redox OS starting"; then
+      M_KERNEL=1
+      echo "  ✓ [$(fmt_ms $ELAPSED_MS)] Kernel running"
+    fi
 
-      # Check boot complete
-      if [ "$M_BOOT" = "0" ] && echo "$NEW_OUTPUT" | ${pkgs.gnugrep}/bin/grep -q "Boot Complete"; then
-        M_BOOT=1
-        echo "  ✓ [''${ELAPSED}s] Boot complete"
-      fi
+    # Milestone 3: Boot complete — rootfs mounted, init.d scripts ran, userspace ready
+    # Pattern: "Boot Complete" (echo'd by 90_exit_initfs init script)
+    if [ "$M_BOOT" = "0" ] && echo "$LOG_CONTENT" | ${pkgs.gnugrep}/bin/grep -q "Boot Complete"; then
+      M_BOOT=1
+      BOOT_MS=$ELAPSED_MS
+      echo "  ✓ [$(fmt_ms $ELAPSED_MS)] Boot complete"
+    fi
 
-      # Check shell
-      if [ "$M_SHELL" = "0" ] && echo "$NEW_OUTPUT" | ${pkgs.gnugrep}/bin/grep -qE "(ion>|Welcome to Redox)"; then
-        M_SHELL=1
-        echo "  ✓ [''${ELAPSED}s] Shell ready"
-      fi
+    # Milestone 4: Shell — interactive prompt is ready
+    # Pattern: "ion>" (ion shell prompt) or "Welcome to Redox" (login banner)
+    if [ "$M_SHELL" = "0" ] && echo "$LOG_CONTENT" | ${pkgs.gnugrep}/bin/grep -qE "(ion>|Welcome to Redox)"; then
+      M_SHELL=1
+      echo "  ✓ [$(fmt_ms $ELAPSED_MS)] Shell ready"
+    fi
 
-      # After boot complete, wait for shell to appear
-      if [ "$M_BOOT" = "1" ] && [ "$M_SHELL" = "1" ]; then
+    # All milestones reached
+    if [ "$M_BOOT" = "1" ] && [ "$M_SHELL" = "1" ]; then
+      break
+    fi
+
+    # After boot complete, give shell up to 10s to appear
+    if [ "$M_BOOT" = "1" ] && [ "$M_SHELL" = "0" ]; then
+      if [ "$(( (ELAPSED_MS - BOOT_MS) / 1000 ))" -ge 10 ]; then
         break
       fi
-
-      # If boot is complete, keep polling for shell (up to 10s extra)
-      if [ "$M_BOOT" = "1" ] && [ "$M_SHELL" = "0" ]; then
-        BOOT_ELAPSED=$(( $(date +%s) - START_TIME ))
-        if [ -z "''${BOOT_TIME:-}" ]; then
-          BOOT_TIME=$BOOT_ELAPSED
-        fi
-        # Give shell up to 10s after boot complete
-        if [ "$((BOOT_ELAPSED - BOOT_TIME))" -ge 10 ]; then
-          break
-        fi
-      fi
     fi
 
-    sleep 1
+    sleep 0.1
   done
 
   # Stop verbose tail
@@ -236,17 +243,17 @@ pkgs.writeShellScriptBin "boot-test" ''
     kill "$TAIL_PID" 2>/dev/null || true
   fi
 
-  ELAPSED=$(( $(date +%s) - START_TIME ))
+  FINAL_MS=$(( $(ms_now) - START_MS ))
 
   # === Report results ===
   echo ""
   echo "  Milestones:"
-  [ "$M_FIRMWARE" = "1" ] && echo "    ✓ firmware"  || echo "    ✗ firmware"
-  [ "$M_INITFS" = "1" ]   && echo "    ✓ initfs"    || echo "    ✗ initfs"
-  [ "$M_BOOT" = "1" ]     && echo "    ✓ boot"      || echo "    ✗ boot"
-  [ "$M_SHELL" = "1" ]    && echo "    ✓ shell"     || echo "    ✗ shell"
+  [ "$M_BOOTLOADER" = "1" ] && echo "    ✓ bootloader"  || echo "    ✗ bootloader"
+  [ "$M_KERNEL" = "1" ]     && echo "    ✓ kernel"      || echo "    ✗ kernel"
+  [ "$M_BOOT" = "1" ]       && echo "    ✓ boot"        || echo "    ✗ boot"
+  [ "$M_SHELL" = "1" ]      && echo "    ✓ shell"       || echo "    ✗ shell"
   echo ""
-  echo "  Total time: ''${ELAPSED}s"
+  echo "  Total time: $(fmt_ms $FINAL_MS)"
   echo ""
 
   if [ "$M_BOOT" = "1" ] && [ "$M_SHELL" = "1" ]; then
