@@ -854,8 +854,8 @@ adios:
         let
           kernel = inputs.boot.kernel;
           bootloader = inputs.boot.bootloader;
-          diskSizeMB = 512;
-          espSizeMB = 200;
+          diskSizeMB = inputs.boot.diskSizeMB or 512;
+          espSizeMB = inputs.boot.espSizeMB or 200;
         in
         hostPkgs.stdenv.mkDerivation {
           pname = "redox-disk-image";

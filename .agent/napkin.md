@@ -36,6 +36,18 @@
 - The check uses derivation reference equality: `builtins.any (p: p == uu) allPackages`
 - Profiles WITH userutils still use getty for proper login
 
+### Graphical profile disk size overflow
+- 512MB disk (200MB ESP + 312MB RedoxFS) was too small for graphical profile
+- Orbital + orbdata + orbterm + orbutils + audio drivers exceed ~312MB
+- Fixed by adding `diskSizeMB` and `espSizeMB` options to `/boot` module
+- Graphical profile now sets `diskSizeMB = 1024`
+- Build module reads `inputs.boot.diskSizeMB or 512` for backward compatibility
+
+### Test script conditionals with grep
+- `if nix build ... 2>&1 | grep -v 'warning:'; then` breaks the conditional
+- grep -v eats all output, causing the if to fail even on success
+- Always redirect stderr to /dev/null for clean conditionals: `if nix build ... 2>/dev/null; then`
+
 ## What Works
 - 68 module system tests across 4 layers all pass
 - Mock packages build in seconds, enabling fast iteration

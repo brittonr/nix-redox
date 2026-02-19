@@ -10,6 +10,10 @@ let
 in
 dev
 // {
+  "/boot" = (dev."/boot" or { }) // {
+    diskSizeMB = 1024;
+  };
+
   "/graphics" = (dev."/graphics" or { }) // {
     enable = true;
   };

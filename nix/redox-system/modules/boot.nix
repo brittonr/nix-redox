@@ -45,6 +45,16 @@ in
       default = false;
       description = "Enable graphics in initfs (vesad, inputd, ps2d)";
     };
+    diskSizeMB = {
+      type = t.int;
+      default = 512;
+      description = "Disk image size in megabytes";
+    };
+    espSizeMB = {
+      type = t.int;
+      default = 200;
+      description = "EFI System Partition size in megabytes";
+    };
   };
 
   impl = { options }: options;
