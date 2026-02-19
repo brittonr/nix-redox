@@ -84,7 +84,8 @@
         redox-default-build = packages.redox-default;
 
         # Boot test - verifies the complete system boots successfully
-        # Note: Requires sandbox = false or relaxed due to QEMU
+        # This is the script package; run interactively with: nix run .#boot-test
+        # For CI, run outside the sandbox with KVM access
         boot-test = packages.bootTest;
       };
     };

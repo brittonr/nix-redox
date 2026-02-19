@@ -23,8 +23,21 @@
 - `ion` is in the `ion` package, not `base` — it must be explicitly added via `systemPackages` for tests
 - `base` contains daemons (init, logd, pcid, etc.), not shells or user tools
 
+### Expect pty buffering vs file-based serial logging
+- Expect's `-re ".+"` pattern with `string match` fails on VM serial output because ANSI escape codes contain `[` which Tcl interprets as character class brackets
+- Switching to `string first` didn't fully resolve it — pty buffering still caused milestones to be missed
+- **Solution**: Run VM with `--serial file=path` (Cloud Hypervisor) or `-serial file:path` (QEMU), then poll the log file with grep from a shell script. This completely avoids Tcl/expect complexity and works reliably
+- Cloud Hypervisor boots in ~1s wall time; full test including setup takes ~3s
+
+### Minimal profile missing getty
+- The minimal profile doesn't include `userutils` (which provides `getty` and `login`)
+- init.rc ends with `/bin/getty debug:` which fails with "No such file or directory"
+- Boot still succeeds (the "Boot Complete" message prints before getty runs)
+- Not a blocker for boot testing, but the shell prompt milestone won't fire
+
 ## What Works
 - 68 module system tests across 4 layers all pass
 - Mock packages build in seconds, enabling fast iteration
 - Type validation catches invalid enums, missing struct fields, and wrong types
 - Artifact tests verify file content (semicolon-delimited passwd, init scripts, etc.)
+- Automated boot test passes in ~3s using Cloud Hypervisor with KVM

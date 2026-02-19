@@ -169,6 +169,13 @@
           meta.description = "Run Redox OS graphical profile headless (test drivers)";
         };
 
+        # Automated boot test — boots minimal image and verifies milestones
+        boot-test = {
+          type = "app";
+          program = "${self'.packages.bootTest}/bin/boot-test";
+          meta.description = "Run automated boot test (Cloud Hypervisor with KVM, or QEMU TCG fallback)";
+        };
+
         build-cookbook = {
           type = "app";
           program = "${self'.packages.cookbook}/bin/repo";

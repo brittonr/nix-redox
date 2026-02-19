@@ -83,4 +83,17 @@ in
         diskImageNet
         ;
     };
+
+  # Boot test factory - requires diskImage and bootloader
+  # Produces a script that boots the image and verifies milestones
+  mkBootTest =
+    { diskImage, bootloader }:
+    import ./boot-test.nix {
+      inherit
+        pkgs
+        lib
+        diskImage
+        bootloader
+        ;
+    };
 }

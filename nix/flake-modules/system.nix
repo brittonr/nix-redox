@@ -119,6 +119,7 @@
         # Runner factory functions from the infrastructure module
         mkCHRunners = redoxConfig.modularPkgs.infrastructure.mkCloudHypervisorRunners;
         mkQemuRunners = redoxConfig.modularPkgs.infrastructure.mkQemuRunners;
+        mkBootTest = redoxConfig.modularPkgs.infrastructure.mkBootTest;
 
         # Bootloader package (needed for QEMU runners which pass -kernel)
         bootloader = redoxConfig.modularPkgs.system.bootloader;
@@ -147,6 +148,12 @@
           inherit bootloader;
         };
         graphicalCHRunners = mkCHRunners { diskImage = systems.graphical.diskImage; };
+
+        # Boot test: uses minimal profile (fastest boot)
+        bootTest = mkBootTest {
+          diskImage = systems.minimal.diskImage;
+          inherit bootloader;
+        };
 
       in
       {
@@ -192,7 +199,7 @@
           runQemu = defaultQemuRunners.headless;
           runQemuGraphical = graphicalQemuRunners.graphical;
           runQemuGraphicalHeadless = graphicalQemuRunners.headless;
-          bootTest = defaultQemuRunners.bootTest;
+          bootTest = bootTest;
 
           # Cloud Hypervisor runners (old names → module system runners)
           runCloudHypervisor = defaultRunners.headless;
