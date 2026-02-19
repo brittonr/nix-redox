@@ -607,6 +607,14 @@ let
       };
     };
 
+    # netcfg-setup - network configuration tool (replaces Ion scripts)
+    netcfg-setup = import ./userspace/netcfg-setup.nix (
+      commonArgs
+      // {
+        relibc = resolvedRelibc;
+      }
+    );
+
     # redoxfs compiled for Redox target (goes into initfs)
     redoxfsTarget = mkUserspace.mkPackage {
       pname = "redoxfs-target";

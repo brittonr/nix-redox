@@ -1,0 +1,13 @@
+[package]
+name = "netcfg-setup"
+version = "0.1.0"
+edition = "2021"
+authors = ["Redox OS Developers"]
+description = "Network configuration utility for Redox OS"
+
+[dependencies]
+# No dependencies - std only for cross-compilation simplicity
+
+[[bin]]
+name = "netcfg-setup"
+path = "src/main.rs"

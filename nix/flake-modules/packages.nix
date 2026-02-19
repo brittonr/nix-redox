@@ -334,6 +334,7 @@
           helix
           binutils
           netutils
+          netcfg-setup
           uutils
           redoxfsTarget
           extrautils

@@ -230,6 +230,7 @@ adios:
         (inputs.environment.systemPackages or [ ])
         ++ (lib.optional (pkgs ? base) pkgs.base)
         ++ (lib.optional (networkingEnabled && pkgs ? netutils) pkgs.netutils)
+        ++ (lib.optional (networkingEnabled && pkgs ? netcfg-setup) pkgs.netcfg-setup)
         ++ (lib.optionals graphicsEnabled (
           lib.optional (pkgs ? orbital) pkgs.orbital
           ++ lib.optional (pkgs ? orbdata) pkgs.orbdata
@@ -351,66 +352,7 @@ adios:
 
       startupContent = "#!/bin/sh\n" + (inputs.services.startupScriptText or "/bin/ion\n");
 
-      # Networking scripts
-      netcfgChScript = ''
-        #!/bin/ion
-        echo "Configuring network for Cloud Hypervisor..."
-        if not exists -f /scheme/netcfg/ifaces/eth0/mac
-            echo "Error: eth0 not found"
-            exit 1
-        end
-        let ip = $(/bin/cat /etc/net/cloud-hypervisor/ip)
-        let gateway = $(/bin/cat /etc/net/cloud-hypervisor/gateway)
-        echo "$ip/24" > /scheme/netcfg/ifaces/eth0/addr/set
-        echo "default via $gateway" > /scheme/netcfg/route/add
-        echo "1.1.1.1" > /scheme/netcfg/resolv/nameserver
-        echo "Network configured: $ip/24 via $gateway"
-      '';
-
-      netcfgAutoScript = ''
-        #!/bin/ion
-        let i:int = 0
-        while test $i -lt 30
-            if exists -f /scheme/netcfg/ifaces/eth0/mac
-                break
-            end
-            let i += 1
-        end
-        if not exists -f /scheme/netcfg/ifaces/eth0/mac
-            echo "netcfg-auto: eth0 not found"
-            exit 0
-        end
-        echo "netcfg-auto: Waiting for DHCP..."
-        let has_network = 0
-        let check:int = 0
-        while test $check -lt 15
-            let wait:int = 0
-            while test $wait -lt 500000
-                let wait += 1
-            end
-            let ip_content = $(/bin/cat /scheme/netcfg/ifaces/eth0/addr/list 2>/dev/null)
-            if not test "$ip_content" = ""
-                echo "netcfg-auto: DHCP configured: $ip_content"
-                let has_network = 1
-                break
-            end
-            let check += 1
-        end
-        if test $has_network -eq 0
-            if exists -f /etc/net/cloud-hypervisor/ip
-                echo "netcfg-auto: No DHCP, applying static..."
-                let ip = $(/bin/cat /etc/net/cloud-hypervisor/ip)
-                let gateway = $(/bin/cat /etc/net/cloud-hypervisor/gateway)
-                echo "$ip/24" > /scheme/netcfg/ifaces/eth0/addr/set
-                echo "default via $gateway" > /scheme/netcfg/route/add
-                echo "1.1.1.1" > /scheme/netcfg/resolv/nameserver
-                echo "netcfg-auto: Static config applied ($ip)"
-            else
-                echo "netcfg-auto: No static config available"
-            end
-        end
-      '';
-
+      # Network interface resolution (for static config)
       firstIfaceName =
         let
           names = builtins.attrNames (inputs.networking.interfaces or { });
@@ -418,34 +360,6 @@ adios:
         if names != [ ] then builtins.head names else null;
       firstIface =
         if firstIfaceName != null then inputs.networking.interfaces.${firstIfaceName} else null;
-
-      netcfgStaticScript =
-        if firstIface != null then
-          ''
-            #!/bin/ion
-            echo "netcfg-static: Configuring..."
-            let i:int = 0
-            while test $i -lt 30
-                if exists -f /scheme/netcfg/ifaces/eth0/mac
-                    break
-                end
-                let i += 1
-            end
-            if not exists -f /scheme/netcfg/ifaces/eth0/mac
-                echo "netcfg-static: eth0 not found"
-                exit 1
-            end
-            echo "${firstIface.address}/24" > /scheme/netcfg/ifaces/eth0/addr/set
-            echo "default via ${firstIface.gateway}" > /scheme/netcfg/route/add
-            echo "1.1.1.1" > /scheme/netcfg/resolv/nameserver
-            echo "netcfg-static: Network ready (${firstIface.address})"
-            /bin/ping -c 1 ${firstIface.gateway}
-          ''
-        else
-          ''
-            #!/bin/ion
-            echo "netcfg-static: No interfaces configured"
-          '';
 
       # Collect all init scripts
       allInitScripts =
@@ -465,13 +379,15 @@ adios:
           })
           // (lib.optionalAttrs (inputs.networking.mode == "auto") {
             "16_netcfg" = {
-              text = "echo \"Running network auto-configuration...\"\nnowait /bin/netcfg-auto-quiet";
+              text = "nowait /bin/netcfg-setup auto";
               directory = "init.d";
             };
           })
-          // (lib.optionalAttrs (inputs.networking.mode == "static" && inputs.networking.interfaces != { }) {
+          // (lib.optionalAttrs (inputs.networking.mode == "static" && firstIface != null) {
             "15_netcfg" = {
-              text = "/bin/netcfg-static";
+              # Interface config names (e.g. "cloud-hypervisor") are labels —
+              # the actual Redox device is always eth0.
+              text = "/bin/netcfg-setup static --interface eth0 --address ${firstIface.address} --gateway ${firstIface.gateway}";
               directory = "init.d";
             };
           })
@@ -537,10 +453,6 @@ adios:
           text = inputs.networking.defaultRouter or "10.0.2.2";
           mode = "0644";
         };
-        "bin/netcfg-ch" = {
-          text = netcfgChScript;
-          mode = "0755";
-        };
       })
       // (lib.optionalAttrs
         (networkingEnabled && (inputs.networking.mode == "dhcp" || inputs.networking.mode == "auto"))
@@ -551,22 +463,6 @@ adios:
           };
         }
       )
-      // (lib.optionalAttrs (networkingEnabled && inputs.networking.mode == "auto") {
-        "bin/netcfg-auto" = {
-          text = netcfgAutoScript;
-          mode = "0755";
-        };
-        "bin/netcfg-auto-quiet" = {
-          text = "#!/bin/ion\n/bin/netcfg-auto > /var/log/netcfg.log";
-          mode = "0755";
-        };
-      })
-      // (lib.optionalAttrs (networkingEnabled && inputs.networking.mode == "static") {
-        "bin/netcfg-static" = {
-          text = netcfgStaticScript;
-          mode = "0755";
-        };
-      })
       # Per-interface files
       // (builtins.foldl' (acc: entry: acc // entry) { } (
         lib.mapAttrsToList (name: iface: {
