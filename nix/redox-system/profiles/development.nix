@@ -44,4 +44,11 @@ in
       "bin/vi" = "/bin/sodium";
     };
   };
+
+  # VM runner defaults for development
+  "/virtualisation" = {
+    vmm = "cloud-hypervisor";
+    memorySize = 2048;
+    cpus = 4;
+  };
 }

@@ -24,7 +24,7 @@ let
       name,
       description,
       modules,
-      artifact ? "toplevel", # "toplevel" (rootTree), "initfs", or "diskImage"
+      artifact ? "rootTree", # "rootTree", "toplevel", "initfs", or "diskImage"
       checks, # List of { file, contains ? null, mode ? null }
     }:
     let
@@ -627,6 +627,40 @@ in
       {
         file = "etc/net/eth1/ip";
         contains = "192.168.2.100";
+      }
+    ];
+  };
+
+  # ===== Toplevel structure tests =====
+  # Verify the new toplevel derivation has expected metadata and symlinks
+  toplevel-has-structure = mkArtifactTest {
+    name = "toplevel-has-structure";
+    description = "Verifies toplevel has system metadata and component symlinks";
+    modules = [ ];
+    artifact = "toplevel";
+    checks = [
+      # Metadata files
+      {
+        file = "system";
+        contains = "x86_64-unknown-redox";
+      }
+      {
+        file = "name";
+        contains = "redox";
+      }
+      # Component symlinks
+      { file = "root-tree"; }
+      { file = "initfs"; }
+      { file = "kernel"; }
+      { file = "bootloader"; }
+      { file = "disk-image"; }
+      # Configuration access
+      { file = "etc"; }
+      { file = "etc/passwd"; }
+      # Build info
+      {
+        file = "nix-support/build-info";
+        contains = "rootTree:";
       }
     ];
   };

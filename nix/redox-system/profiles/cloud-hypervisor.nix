@@ -25,4 +25,11 @@ dev
     storageDrivers = [ "virtio-blkd" ];
     networkDrivers = [ "virtio-netd" ];
   };
+
+  # Cloud Hypervisor specific VM config
+  "/virtualisation" = (dev."/virtualisation" or { }) // {
+    vmm = "cloud-hypervisor";
+    tapNetworking = true;
+    directIO = true;
+  };
 }

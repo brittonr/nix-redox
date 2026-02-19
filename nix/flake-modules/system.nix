@@ -166,6 +166,13 @@
           redox-graphical = systems.graphical.diskImage;
           redox-cloud = systems.cloud-hypervisor.diskImage;
 
+          # System identity (toplevel) — inspired by NixBSD
+          redox-default-toplevel = systems.default.toplevel;
+          redox-minimal-toplevel = systems.minimal.toplevel;
+          redox-graphical-toplevel = systems.graphical.toplevel;
+          redox-cloud-toplevel = systems.cloud-hypervisor.toplevel;
+          toplevel = systems.default.toplevel;
+
           # Runner scripts for module profiles
           # Default profile (development)
           run-redox-default = defaultRunners.headless;

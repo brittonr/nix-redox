@@ -48,6 +48,17 @@
 - grep -v eats all output, causing the if to fail even on success
 - Always redirect stderr to /dev/null for clean conditionals: `if nix build ... 2>/dev/null; then`
 
+### NixBSD-inspired improvements (fdf0692, Feb 19 2026)
+- Worker subagents may claim success but not persist files — always verify with `git status`/`ls`
+- When changing `toplevel` semantics in default.nix, must update artifact test defaults too
+  - Old: `artifact ? "toplevel"` → `system.toplevel` → rootTree
+  - New: `artifact ? "rootTree"` → `system.rootTree` (toplevel is now metadata derivation)
+- Composable disk image: ESP image outputs a single file (`$out`), not a directory
+- `adios.lib.importModules` auto-discovers `.nix` files in modules/ — new module files are picked up automatically
+- The `prefixTests` function in tests/default.nix adds a prefix — don't double-prefix test attrnames
+- Korora types: `t.int` (not `t.integer`), `t.bool`, `t.string`, `t.enum "Name" [...]`, `t.struct "Name" {...}`
+- Structured services: `renderService` must handle missing `enable` field with `svc.enable or true`
+
 ## What Works
 - 68 module system tests across 4 layers all pass
 - Mock packages build in seconds, enabling fast iteration

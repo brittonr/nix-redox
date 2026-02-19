@@ -102,7 +102,12 @@ let
       # Core outputs
       diskImage = buildOutput.diskImage;
       initfs = buildOutput.initfs;
-      toplevel = buildOutput.rootTree;
+      toplevel = buildOutput.toplevel;
+      rootTree = buildOutput.rootTree;
+
+      # Composable partition images (for debugging/reuse)
+      espImage = buildOutput.espImage;
+      redoxfsImage = buildOutput.redoxfsImage;
 
       # Wrappers-style chainable extension
       extend =

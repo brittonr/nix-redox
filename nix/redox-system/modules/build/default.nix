@@ -2,7 +2,11 @@
 #
 # Single consolidated build module that produces all build outputs.
 # In adios, inputs give module OPTIONS (not impl outputs), so this
-# module reads all config and produces rootTree, initfs, diskImage.
+# module reads all config and produces rootTree, initfs, diskImage,
+# toplevel, espImage, redoxfsImage.
+#
+# Composable disk image building inspired by NixBSD's
+# make-disk-image.nix + make-partition-image.nix architecture.
 
 adios:
 
@@ -38,6 +42,9 @@ adios:
     };
     users = {
       path = "/users";
+    };
+    virtualisation = {
+      path = "/virtualisation";
     };
   };
 
@@ -577,7 +584,7 @@ adios:
           };
         }) (inputs.networking.interfaces or { })
       ))
-      # Init script files
+      # Init script files (raw initScripts + rendered structured services)
       // (builtins.listToAttrs (
         lib.mapAttrsToList (
           name: script:
@@ -591,7 +598,7 @@ adios:
               mode = "0755";
             };
           }
-        ) allInitScripts
+        ) allInitScriptsWithServices
       ));
 
       # Shell helpers for rootTree
@@ -761,6 +768,42 @@ adios:
         '';
       };
 
+      # ===== STRUCTURED SERVICE RENDERING =====
+      # Render typed Service structs (from /services.services) into init script entries
+      # These get merged with raw initScripts from /services.initScripts
+      renderService =
+        name: svc:
+        if !(svc.enable or true) then
+          null
+        else
+          {
+            inherit name;
+            value = {
+              text =
+                if svc.type == "scheme" then
+                  "# ${svc.description}\nscheme ${svc.args} ${svc.command}"
+                else if svc.type == "daemon" then
+                  "# ${svc.description}\nnotify ${svc.command}${lib.optionalString (svc.args != "") " ${svc.args}"}"
+                else if svc.type == "nowait" then
+                  "# ${svc.description}\nnowait ${svc.command}${lib.optionalString (svc.args != "") " ${svc.args}"}"
+                else
+                  "# ${svc.description}\n${svc.command}${lib.optionalString (svc.args != "") " ${svc.args}"}";
+              directory = if (svc.wantedBy or "rootfs") == "initfs" then "etc/init.d" else "usr/lib/init.d";
+            };
+          };
+
+      renderedServices = builtins.listToAttrs (
+        builtins.filter (x: x != null) (lib.mapAttrsToList renderService (inputs.services.services or { }))
+      );
+
+      # Merge raw initScripts with rendered structured services
+      allInitScriptsWithServices = allInitScripts // renderedServices;
+
+      # ===== COMPOSABLE DISK IMAGE BUILDERS =====
+      mkEspImage = import ../../lib/make-esp-image.nix { inherit hostPkgs lib; };
+      mkRedoxfsImage = import ../../lib/make-redoxfs-image.nix { inherit hostPkgs lib; };
+      mkDiskImage = import ../../lib/make-disk-image.nix { inherit hostPkgs lib; };
+
       # ===== BUILD DERIVATIONS =====
 
       rootTree = hostPkgs.runCommand "redox-root-tree" { } ''
@@ -850,77 +893,72 @@ adios:
         '';
       };
 
-      diskImage =
-        let
-          kernel = inputs.boot.kernel;
-          bootloader = inputs.boot.bootloader;
-          diskSizeMB = inputs.boot.diskSizeMB or 512;
-          espSizeMB = inputs.boot.espSizeMB or 200;
-        in
-        hostPkgs.stdenv.mkDerivation {
-          pname = "redox-disk-image";
-          version = "unstable";
-          dontUnpack = true;
-          dontPatchELF = true;
-          dontFixup = true;
-          nativeBuildInputs = with hostPkgs; [
-            parted
-            mtools
-            dosfstools
-            pkgs.redoxfs
-          ];
-          SOURCE_DATE_EPOCH = "1";
-          buildPhase = ''
-            runHook preBuild
-            IMAGE_SIZE=$((${toString diskSizeMB} * 1024 * 1024))
-            ESP_SIZE=$((${toString espSizeMB} * 1024 * 1024))
-            ESP_SECTORS=$((ESP_SIZE / 512))
-            REDOXFS_START=$((2048 + ESP_SECTORS))
-            REDOXFS_END=$(($(($IMAGE_SIZE / 512)) - 34))
-            REDOXFS_SECTORS=$((REDOXFS_END - REDOXFS_START))
-            REDOXFS_SIZE=$((REDOXFS_SECTORS * 512))
+      # Composable partition images (buildable/inspectable independently)
+      kernel = inputs.boot.kernel;
+      bootloader = inputs.boot.bootloader;
+      diskSizeMB = inputs.boot.diskSizeMB or 512;
+      espSizeMB = inputs.boot.espSizeMB or 200;
 
-            truncate -s $IMAGE_SIZE disk.img
-            parted -s disk.img mklabel gpt
-            parted -s disk.img mkpart ESP fat32 1MiB ${toString (espSizeMB + 1)}MiB
-            parted -s disk.img set 1 boot on
-            parted -s disk.img set 1 esp on
-            parted -s disk.img mkpart RedoxFS ${toString (espSizeMB + 1)}MiB 100%
+      espImage = mkEspImage {
+        inherit bootloader kernel initfs;
+        sizeMB = espSizeMB;
+      };
 
-            truncate -s $ESP_SIZE esp.img
-            mkfs.vfat -F 32 -n "EFI" esp.img
-            mmd -i esp.img ::EFI ::EFI/BOOT
-            mcopy -i esp.img ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI ::EFI/BOOT/
-            mcopy -i esp.img ${kernel}/boot/kernel ::EFI/BOOT/kernel
-            mcopy -i esp.img ${initfs}/boot/initfs ::EFI/BOOT/initfs
-            echo '\EFI\BOOT\BOOTX64.EFI' > startup.nsh
-            mcopy -i esp.img startup.nsh ::
-            dd if=esp.img of=disk.img bs=512 seek=2048 conv=notrunc
+      redoxfsImage = mkRedoxfsImage {
+        redoxfs = pkgs.redoxfs;
+        inherit rootTree kernel initfs;
+      };
 
-            mkdir -p redoxfs-root
-            cp -r ${rootTree}/* redoxfs-root/
-            mkdir -p redoxfs-root/boot
-            cp ${kernel}/boot/kernel redoxfs-root/boot/kernel
-            cp ${initfs}/boot/initfs redoxfs-root/boot/initfs
+      diskImage = mkDiskImage {
+        inherit
+          espImage
+          redoxfsImage
+          bootloader
+          kernel
+          initfs
+          ;
+        totalSizeMB = diskSizeMB;
+        inherit espSizeMB;
+      };
 
-            truncate -s $REDOXFS_SIZE redoxfs.img
-            redoxfs-ar --uid 0 --gid 0 redoxfs.img redoxfs-root
-            dd if=redoxfs.img of=disk.img bs=512 seek=$REDOXFS_START conv=notrunc
-            runHook postBuild
-          '';
-          installPhase = ''
-            runHook preInstall
-            mkdir -p $out $out/boot
-            cp disk.img $out/redox.img
-            cp ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI $out/boot/
-            cp ${kernel}/boot/kernel $out/boot/
-            cp ${initfs}/boot/initfs $out/boot/
-            runHook postInstall
-          '';
-        };
+      # System identity — inspired by NixBSD's system.build.toplevel
+      # A single store path that ties all system components together
+      # and provides metadata for inspection and validation.
+      systemName = "redox";
+      toplevel = hostPkgs.runCommand "redox-toplevel-${systemName}" { } ''
+        mkdir -p $out/nix-support
+
+        # Core system components
+        ln -s ${rootTree} $out/root-tree
+        ln -s ${initfs} $out/initfs
+        ln -s ${kernel}/boot/kernel $out/kernel
+        ln -s ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI $out/bootloader
+        ln -s ${diskImage} $out/disk-image
+
+        # Configuration access (for inspection)
+        ln -s ${rootTree}/etc $out/etc
+
+        # System metadata
+        echo -n "x86_64-unknown-redox" > $out/system
+        echo -n "${systemName}" > $out/name
+
+        # Record what profile/options produced this system
+        echo "rootTree: ${rootTree}" >> $out/nix-support/build-info
+        echo "initfs: ${initfs}" >> $out/nix-support/build-info
+        echo "kernel: ${kernel}" >> $out/nix-support/build-info
+        echo "bootloader: ${bootloader}" >> $out/nix-support/build-info
+        echo "diskImage: ${diskImage}" >> $out/nix-support/build-info
+      '';
 
     in
     {
-      inherit rootTree initfs diskImage;
+      inherit
+        rootTree
+        initfs
+        diskImage
+        toplevel
+        espImage
+        redoxfsImage
+        ;
     };
 }
