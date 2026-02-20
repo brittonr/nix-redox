@@ -1,0 +1,46 @@
+[package]
+name = "snix-redox"
+version = "0.1.0"
+edition = "2021"
+description = "Nix evaluator and binary cache client for Redox OS"
+
+[[bin]]
+name = "snix"
+path = "src/main.rs"
+
+[dependencies]
+# === SNIX crates ===
+
+# Nix language evaluator — bytecode VM, pure Rust
+snix-eval = { git = "https://git.snix.dev/snix/snix.git", default-features = false, features = ["impure"] }
+
+# Nix compatibility — local fork with mimalloc removed (C atomics incompatible with relibc)
+# Original: git = "https://git.snix.dev/snix/snix.git"
+# Changes: removed mimalloc dep (only used in benchmarks), pinned versions, no async
+nix-compat = { path = "nix-compat-redox", default-features = false, features = ["serde"] }
+
+# === Sync HTTP client (no tokio!) ===
+# Start with no TLS (HTTP only) to avoid ring C compilation.
+# For production: switch to features = ["rustls"] and build with mkUserspace.
+ureq = { version = "3", default-features = false }
+
+# === Compression for NAR files (pure Rust — no C cross-compile issues) ===
+ruzstd = "0.8"
+lzma-rs = "0.3"
+bzip2-rs = "0.1"
+
+# === Standard utilities ===
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+data-encoding = "2"
+thiserror = "2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = "s"
+lto = true
+panic = "abort"

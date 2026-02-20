@@ -117,6 +117,25 @@
 - New Nix files MUST be `git add`ed before `nix build` (flake readDir limitation)
 - `nix run .#app -- subcommand` requires `--` to separate nix args from app args
 
+### snix-redox: Nix on Redox (Feb 19 2026) — 50 tests, 0 warnings
+- snix-eval (Nix bytecode VM) cross-compiles clean to x86_64-unknown-redox — ZERO platform-specific code
+- nix-compat sync features (NAR, store paths, narinfo, derivations) also compile clean
+- mimalloc-sys hard dep in upstream nix-compat — only used in benchmarks, not library code
+  - relibc's stdatomic.h incompatible with mimalloc's C atomics (_Atomic types)
+  - Fix: local nix-compat fork with mimalloc removed from [dependencies]
+- ureq v3 with rustls → ring → C compilation issues with cross-compile
+  - Fix: `default-features = false` (HTTP only, no TLS) for initial prototype
+  - Production: add rustls back once integrated into mkUserspace (proper CC/CFLAGS)
+- Pure Rust decompression: ruzstd, lzma-rs, bzip2-rs — no C code, compiles clean
+- Release binary: 76KB statically linked ELF for x86_64-unknown-redox
+- Debug binary: 58MB (mostly debug symbols)
+- IMPORTANT: tokio/tonic-dependent snix crates (castore, store, build, glue) are NOT portable
+  - Use only: snix-eval, nix-compat (sync), snix-serde
+- dirs-sys (via snix-eval → dirs) is fine — thin libc wrapper, no C code
+- snix's `EvalIO` trait needs only: path_exists, open, file_type, read_dir, import_path, get_env
+  - All use std::fs which maps to relibc on Redox
+  - The `StdIO` impl uses `#[cfg(target_family = "unix")]` — Redox is unix family ✓
+
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc
 - SchemeDaemon API: nulld/zerod/randd/logd/ramfs use `scheme <name> <cmd>` not `notify`
