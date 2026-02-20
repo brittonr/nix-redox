@@ -431,7 +431,7 @@ in
         echo "Users: $userCount"
         echo "Drivers: $driverCount"
 
-        [ "$ver" = "0.3.0" ] || { echo "FAIL: unexpected version"; exit 1; }
+        [ "$ver" = "0.5.0" ] || { echo "FAIL: unexpected version"; exit 1; }
         [ "$target" = "x86_64-unknown-redox" ] || { echo "FAIL: unexpected target"; exit 1; }
 
         echo "✓ Version metadata correct"

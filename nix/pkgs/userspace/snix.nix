@@ -37,12 +37,12 @@ let
 in
 mkUserspace.mkBinary {
   pname = "snix-redox";
-  version = "0.1.0";
+  version = "0.2.0";
   src = snix-redox-src;
   binaryName = "snix";
 
   # Vendor hash — includes git dependency on snix-eval from git.snix.dev
-  vendorHash = "sha256-5z6bgOxzGBoP/lKu8xkbxqC19xGnCg4f5p9N+sKwww4=";
+  vendorHash = "sha256-I3FkNitdYBQnw5TPZeI4Ej1FTJQnMDGLtle3Ya8DwSI=";
 
   # snix-eval is fetched from git (along with snix-eval-builtin-macros)
   gitSources = [
