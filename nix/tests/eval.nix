@@ -705,4 +705,76 @@ in
         echo "✓ Assertion correctly rejects empty passwords when required"
         touch $out
       '';
+
+  # Test: vmConfig is exposed and reflects virtualisation options
+  vmconfig-defaults =
+    let
+      redoxSystemFactory = import ../redox-system { inherit lib; };
+      system = redoxSystemFactory.redoxSystem {
+        modules = [ ];
+        pkgs = mockPkgs.all;
+        hostPkgs = pkgs;
+      };
+      vm = system.vmConfig;
+    in
+    pkgs.runCommand "test-eval-vmconfig-defaults"
+      {
+        preferLocalBuild = true;
+        vmm = vm.vmm;
+        cpus = toString vm.cpus;
+        memorySize = toString vm.memorySize;
+        graphics = if vm.graphics then "true" else "false";
+        tapNetworking = if vm.tapNetworking then "true" else "false";
+      }
+      ''
+        set -euo pipefail
+        [ "$vmm" = "cloud-hypervisor" ] || { echo "FAIL: expected vmm=cloud-hypervisor, got $vmm"; exit 1; }
+        [ "$cpus" = "4" ] || { echo "FAIL: expected cpus=4, got $cpus"; exit 1; }
+        [ "$memorySize" = "2048" ] || { echo "FAIL: expected memorySize=2048, got $memorySize"; exit 1; }
+        [ "$graphics" = "false" ] || { echo "FAIL: expected graphics=false, got $graphics"; exit 1; }
+        [ "$tapNetworking" = "false" ] || { echo "FAIL: expected tapNetworking=false, got $tapNetworking"; exit 1; }
+        echo "✓ vmConfig defaults correct"
+        touch $out
+      '';
+
+  # Test: vmConfig reflects profile overrides
+  vmconfig-profile-override =
+    let
+      redoxSystemFactory = import ../redox-system { inherit lib; };
+      system = redoxSystemFactory.redoxSystem {
+        modules = [
+          {
+            "/virtualisation" = {
+              vmm = "qemu";
+              memorySize = 4096;
+              cpus = 8;
+              graphics = true;
+              tapNetworking = true;
+            };
+          }
+        ];
+        pkgs = mockPkgs.all;
+        hostPkgs = pkgs;
+      };
+      vm = system.vmConfig;
+    in
+    pkgs.runCommand "test-eval-vmconfig-profile-override"
+      {
+        preferLocalBuild = true;
+        vmm = vm.vmm;
+        cpus = toString vm.cpus;
+        memorySize = toString vm.memorySize;
+        graphics = if vm.graphics then "true" else "false";
+        tapNetworking = if vm.tapNetworking then "true" else "false";
+      }
+      ''
+        set -euo pipefail
+        [ "$vmm" = "qemu" ] || { echo "FAIL: expected vmm=qemu, got $vmm"; exit 1; }
+        [ "$cpus" = "8" ] || { echo "FAIL: expected cpus=8, got $cpus"; exit 1; }
+        [ "$memorySize" = "4096" ] || { echo "FAIL: expected memorySize=4096, got $memorySize"; exit 1; }
+        [ "$graphics" = "true" ] || { echo "FAIL: expected graphics=true, got $graphics"; exit 1; }
+        [ "$tapNetworking" = "true" ] || { echo "FAIL: expected tapNetworking=true, got $tapNetworking"; exit 1; }
+        echo "✓ vmConfig profile overrides correct"
+        touch $out
+      '';
 }

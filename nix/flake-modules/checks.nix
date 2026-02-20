@@ -80,6 +80,9 @@
         sodium-build = packages.sodium;
         netutils-build = packages.netutils;
 
+        # snix - Nix evaluator for Redox OS
+        snix-build = packages.snix;
+
         # Complete system images (from module system profiles)
         redox-default-build = packages.redox-default;
 
