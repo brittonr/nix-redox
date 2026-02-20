@@ -756,6 +756,14 @@ adios:
         };
       })
 
+      # System manifest (base — file hashes merged at rootTree build time)
+      // {
+        "etc/redox-system/manifest.json" = {
+          source = manifestJson;
+          mode = "0644";
+        };
+      }
+
       # Init script files (raw initScripts + rendered structured services)
       // (builtins.listToAttrs (
         lib.mapAttrsToList (
@@ -816,7 +824,11 @@ adios:
           path: file:
           let
             dir = builtins.dirOf path;
-            storeFile = hostPkgs.writeText (builtins.replaceStrings [ "/" ] [ "-" ] path) file.text;
+            storeFile =
+              if file ? source then
+                file.source # Pre-built store file (e.g., manifest.json)
+              else
+                hostPkgs.writeText (builtins.replaceStrings [ "/" ] [ "-" ] path) file.text;
           in
           ''
             ${lib.optionalString (dir != "." && dir != "/") "mkdir -p $out/${dir}"}
@@ -981,15 +993,71 @@ adios:
       rootTree =
         assert assertionCheck;
         assert warningCheck;
-        hostPkgs.runCommand "redox-root-tree" { } ''
-          ${mkDirs allDirectories}
-          mkdir -p $out/dev
-          ${mkDevSymlinks}
-          ${mkSpecialSymlinks}
-          ${mkPackages}
-          ${mkGeneratedFiles}
-          echo "Root tree: $(find $out -type f | wc -l) files, $(find $out/bin -type f 2>/dev/null | wc -l) binaries"
-        '';
+        hostPkgs.runCommand "redox-root-tree"
+          {
+            nativeBuildInputs = [ hostPkgs.python3 ];
+          }
+          ''
+            ${mkDirs allDirectories}
+            mkdir -p $out/dev
+            ${mkDevSymlinks}
+            ${mkSpecialSymlinks}
+            ${mkPackages}
+            ${mkGeneratedFiles}
+
+            # Compute file hashes and merge into manifest.json.
+            # The base manifest was written above; now we add the "files" key
+            # containing SHA256 hashes of every file in the rootTree (except
+            # manifest.json itself, to avoid a circular dependency).
+            python3 - <<'HASH_SCRIPT'
+            import hashlib, json, os, stat
+
+            root = os.environ["out"]
+            manifest_rel = "etc/redox-system/manifest.json"
+            manifest_path = os.path.join(root, manifest_rel)
+
+            # Read base manifest
+            with open(manifest_path) as f:
+                manifest = json.load(f)
+
+            # Walk tree and compute SHA256 hashes
+            inventory = {}
+            for dirpath, dirs, files in os.walk(root):
+                dirs.sort()
+                for name in sorted(files):
+                    path = os.path.join(dirpath, name)
+                    relpath = os.path.relpath(path, root)
+
+                    # Skip the manifest itself (self-referential)
+                    if relpath == manifest_rel:
+                        continue
+
+                    # Skip symlinks — they point outside the tree
+                    if os.path.islink(path):
+                        continue
+
+                    st = os.stat(path)
+                    with open(path, "rb") as f:
+                        h = hashlib.sha256(f.read()).hexdigest()
+
+                    inventory[relpath] = {
+                        "sha256": h,
+                        "size": st.st_size,
+                        "mode": oct(stat.S_IMODE(st.st_mode))[2:],
+                    }
+
+            # Merge file inventory into manifest
+            manifest["files"] = inventory
+
+            # Write final manifest
+            with open(manifest_path, "w") as f:
+                json.dump(manifest, f, indent=2, sort_keys=True)
+
+            HASH_SCRIPT
+
+            echo "Root tree: $(find $out -type f | wc -l) files, $(find $out/bin -type f 2>/dev/null | wc -l) binaries"
+            echo "Manifest: $(python3 -c "import json; m=json.load(open('$out/etc/redox-system/manifest.json')); print(len(m.get('files',{})),'tracked files')")"
+          '';
 
       # ===== SYSTEM CHECKS (build-time rootTree validation) =====
       # Inspired by nix-darwin's system.checks module.
@@ -1188,7 +1256,7 @@ adios:
       # Structured metadata embedded in the system for inspection.
       systemName = "redox";
       versionInfo = {
-        redoxSystemVersion = "0.3.0";
+        redoxSystemVersion = "0.4.0";
         target = "x86_64-unknown-redox";
         profile = systemName;
         inherit hostname timezone;
@@ -1207,6 +1275,87 @@ adios:
       };
 
       versionJson = hostPkgs.writeText "redox-version.json" (builtins.toJSON versionInfo);
+
+      # ===== SYSTEM MANIFEST =====
+      # Embedded at /etc/redox-system/manifest.json in rootTree.
+      # Provides live system introspection via `snix system info/verify/diff`.
+      # File hashes are computed post-build (see rootTree derivation).
+      manifestData = {
+        manifestVersion = 1; # Schema version for forward compatibility
+
+        system = {
+          inherit (versionInfo) redoxSystemVersion target;
+          inherit hostname timezone;
+          profile = systemName;
+        };
+
+        configuration = {
+          boot = {
+            inherit diskSizeMB espSizeMB;
+          };
+          hardware = {
+            storageDrivers = inputs.hardware.storageDrivers or [ ];
+            networkDrivers = inputs.hardware.networkDrivers or [ ];
+            graphicsDrivers = lib.optionals graphicsEnabled (inputs.hardware.graphicsDrivers or [ ]);
+            audioDrivers = lib.optionals audioEnabled (inputs.hardware.audioDrivers or [ ]);
+            inherit usbEnabled;
+          };
+          networking = {
+            enabled = networkingEnabled;
+            mode = inputs.networking.mode or "auto";
+            dns = inputs.networking.dns or [ ];
+          };
+          graphics = {
+            enabled = graphicsEnabled;
+            resolution = inputs.graphics.resolution or "1024x768";
+          };
+          security = {
+            inherit protectKernelSchemes requirePasswords allowRemoteRoot;
+          };
+          logging = {
+            inherit logLevel kernelLogLevel logToFile;
+            maxLogSizeMB = inputs.logging.maxLogSizeMB or 10;
+          };
+          power = {
+            inherit acpiEnabled powerAction rebootOnPanic;
+          };
+        };
+
+        packages = builtins.map (pkg: {
+          name = pkg.pname or (builtins.parseDrvName pkg.name).name;
+          version = pkg.version or (builtins.parseDrvName pkg.name).version;
+        }) allPackages;
+
+        drivers = {
+          all = allDrivers;
+          initfs = initfsDaemons;
+          core = coreDaemons;
+        };
+
+        users = builtins.mapAttrs (name: user: {
+          uid = user.uid;
+          gid = user.gid;
+          home = user.home;
+          shell = user.shell;
+        }) (inputs.users.users or { });
+
+        groups = builtins.mapAttrs (name: group: {
+          gid = group.gid;
+          members = group.members or [ ];
+        }) (inputs.users.groups or { });
+
+        services = {
+          initScripts = builtins.attrNames allInitScriptsWithServices;
+          startupScript = "/startup.sh";
+        };
+
+        # File hashes are computed at build time and merged into this manifest.
+        # The key "files" is populated by the rootTree derivation (see below).
+        # This avoids a circular dependency: manifest.json is written first,
+        # then file hashes are computed and merged in.
+      };
+
+      manifestJson = hostPkgs.writeText "redox-manifest-base.json" (builtins.toJSON manifestData);
 
       # System identity — inspired by NixBSD's system.build.toplevel
       # A single store path that ties all system components together

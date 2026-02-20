@@ -7,6 +7,7 @@ mod eval;
 mod cache;
 mod store;
 mod nar;
+mod system;
 
 use clap::{Parser, Subcommand};
 
@@ -61,6 +62,39 @@ enum Command {
 
     /// Interactive REPL for Nix expressions
     Repl,
+
+    /// System introspection (info, verify, diff)
+    System {
+        #[command(subcommand)]
+        command: SystemCommand,
+    },
+}
+
+#[derive(Subcommand)]
+enum SystemCommand {
+    /// Display system information from the embedded manifest
+    Info {
+        /// Path to manifest file (default: /etc/redox-system/manifest.json)
+        #[arg(short, long)]
+        manifest: Option<String>,
+    },
+
+    /// Verify all tracked files against manifest hashes
+    Verify {
+        /// Show each verified file
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Path to manifest file (default: /etc/redox-system/manifest.json)
+        #[arg(short, long)]
+        manifest: Option<String>,
+    },
+
+    /// Compare current system manifest with another
+    Diff {
+        /// Path to the other manifest.json to compare against
+        path: String,
+    },
 }
 
 fn main() {
@@ -79,6 +113,15 @@ fn main() {
         } => cache::path_info(&store_path, &cache_url),
         Command::StoreVerify => store::verify(),
         Command::Repl => eval::repl(),
+        Command::System { command } => match command {
+            SystemCommand::Info { manifest } => {
+                system::info(manifest.as_deref())
+            }
+            SystemCommand::Verify { verbose, manifest } => {
+                system::verify(manifest.as_deref(), verbose)
+            }
+            SystemCommand::Diff { path } => system::diff(&path),
+        },
     };
 
     if let Err(e) = result {

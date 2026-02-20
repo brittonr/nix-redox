@@ -145,6 +145,21 @@
 - delegate_task workers STILL don't persist changes — 3 more failed attempts this session. ALWAYS implement directly.
 - snix cross-compiles to a 3.5MB static ELF for x86_64-unknown-redox
 
+### System manifest & snix introspection (Feb 19 2026)
+- `rename_all = "camelCase"` in serde converts `disk_size_mb` → `diskSizeMb` (lowercase m)
+  but Nix attrsets use `diskSizeMB` (uppercase MB) — need explicit `#[serde(rename = "diskSizeMB")]`
+- File hash inventory has circular dependency: manifest.json can't include own hash
+  Solution: compute hashes at end of rootTree build, skip manifest.json itself in the walk
+- The `source` attribute in allGeneratedFiles (for pre-built store files) needs mkGeneratedFiles
+  to check `if file ? source then file.source else writeText ...`
+- Default disk size 512MB was too small once snix (3.6MB) + manifest was added — bumped to 768MB
+  The default lives in boot.nix (module options), NOT the build module's fallback
+- Functional test profile MUST NOT include userutils — when present, init runs getty not /startup.sh
+- Ion shell redirect: `>` for stdout, `^>` for stderr — NOT `1>` / `2>` (bash syntax)
+  The `1` in `1>/tmp/file` gets passed as an argument to the command!
+- `grep -c` returns "0" AND exits 1 on no match; `$(grep -c ... || echo 0)` produces "0\n0"
+  Fix: `VAR=$(grep -c ...) || VAR=0` (assignment-then-fallback, not subshell-with-fallback)
+
 ### Wiring virtualisation module (bb4c172, Feb 19 2026)
 - Build module returns vmConfig attrset; redoxSystem factory exposes it; system.nix passes to runner factories
 - Runner factories accept `vmConfig ? {}` with `or` defaults for backward compatibility

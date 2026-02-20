@@ -284,6 +284,74 @@ let
         echo "FUNC_TEST:run-snix:SKIP"
     end
 
+    # ── System Manifest Introspection ─────────────────────────
+    # These verify `snix system` reads the embedded manifest.
+    # NOTE: Ion shell has different redirection syntax from bash.
+    # Use simple patterns — avoid complex command substitution + redirect combos.
+
+    # Test: manifest.json exists on disk
+    if exists -f /etc/redox-system/manifest.json
+        echo "FUNC_TEST:manifest-exists:PASS"
+    else
+        echo "FUNC_TEST:manifest-exists:FAIL"
+    end
+
+    if exists -f /bin/snix
+        # Test: snix system info runs successfully
+        # Ion: > for stdout, ^> for stderr (NOT 1> / 2> like bash)
+        /bin/snix system info -m /etc/redox-system/manifest.json > /tmp/sys_info ^> /tmp/sys_err
+        if test $? = 0
+            echo "FUNC_TEST:snix-system-info:PASS"
+        else
+            echo "FUNC_TEST:snix-system-info:FAIL"
+        end
+
+        # Test: info output contains Hostname
+        grep -q Hostname /tmp/sys_info
+        if test $? = 0
+            echo "FUNC_TEST:snix-info-hostname:PASS"
+        else
+            echo "FUNC_TEST:snix-info-hostname:FAIL"
+        end
+
+        # Test: info output contains Packages
+        grep -q Packages /tmp/sys_info
+        if test $? = 0
+            echo "FUNC_TEST:snix-info-packages:PASS"
+        else
+            echo "FUNC_TEST:snix-info-packages:FAIL"
+        end
+
+        # Test: info output shows tracked files
+        grep -q tracked /tmp/sys_info
+        if test $? = 0
+            echo "FUNC_TEST:snix-info-files:PASS"
+        else
+            echo "FUNC_TEST:snix-info-files:FAIL"
+        end
+
+        rm /tmp/sys_info
+        rm /tmp/sys_err
+
+        # Test: snix system verify runs (may find modified files from runtime changes)
+        /bin/snix system verify -m /etc/redox-system/manifest.json > /tmp/sys_verify ^> /tmp/sys_verr
+        # Even if verify fails (runtime changes), it should produce "Verifying" output
+        grep -q Verifying /tmp/sys_verify
+        if test $? = 0
+            echo "FUNC_TEST:snix-system-verify:PASS"
+        else
+            echo "FUNC_TEST:snix-system-verify:FAIL"
+        end
+        rm /tmp/sys_verify
+        rm /tmp/sys_verr
+    else
+        echo "FUNC_TEST:snix-system-info:SKIP"
+        echo "FUNC_TEST:snix-info-hostname:SKIP"
+        echo "FUNC_TEST:snix-info-packages:SKIP"
+        echo "FUNC_TEST:snix-info-files:SKIP"
+        echo "FUNC_TEST:snix-system-verify:SKIP"
+    end
+
     echo ""
     echo "FUNC_TESTS_COMPLETE"
     echo ""
@@ -291,6 +359,9 @@ let
 in
 {
   "/environment" = {
+    # NOTE: Do NOT include "userutils" here.
+    # When userutils (getty, login) is installed, init runs getty instead of
+    # /startup.sh, which means the test script never executes.
     systemPackages =
       opt "ion"
       ++ opt "uutils"
@@ -299,7 +370,6 @@ in
       ++ opt "extrautils"
       ++ opt "sodium"
       ++ opt "netutils"
-      ++ opt "userutils"
       ++ opt "bat"
       ++ opt "hexyl"
       ++ opt "zoxide"

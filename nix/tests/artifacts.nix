@@ -950,7 +950,7 @@ in
       }
       {
         file = "version.json";
-        contains = "0.3.0";
+        contains = "0.4.0";
       }
     ];
   };
@@ -1052,6 +1052,120 @@ in
         contains = "smolnetd";
       }
       { file = "etc/net/dns"; }
+    ];
+  };
+
+  # ===== System Manifest Tests =====
+
+  # Test: Manifest exists with correct schema
+  rootTree-has-manifest = mkArtifactTest {
+    name = "rootTree-has-manifest";
+    description = "Verifies rootTree has /etc/redox-system/manifest.json with required fields";
+    modules = [
+      {
+        "/time" = {
+          hostname = "test-manifest";
+        };
+      }
+    ];
+    checks = [
+      { file = "etc/redox-system/manifest.json"; }
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = "manifestVersion";
+      }
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = "test-manifest";
+      }
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = "redoxSystemVersion";
+      }
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = "configuration";
+      }
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = "packages";
+      }
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = "drivers";
+      }
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = "files";
+      }
+    ];
+  };
+
+  # Test: Manifest file inventory has hashes
+  rootTree-manifest-has-file-hashes = mkArtifactTest {
+    name = "rootTree-manifest-has-file-hashes";
+    description = "Verifies manifest.json contains SHA256 file hashes";
+    modules = [ ];
+    checks = [
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = "sha256";
+      }
+      {
+        # Verify the manifest tracks passwd
+        file = "etc/redox-system/manifest.json";
+        contains = "etc/passwd";
+      }
+      {
+        # Verify the manifest tracks profile
+        file = "etc/redox-system/manifest.json";
+        contains = "etc/profile";
+      }
+    ];
+  };
+
+  # Test: Manifest reflects networking configuration
+  rootTree-manifest-networking = mkArtifactTest {
+    name = "rootTree-manifest-networking";
+    description = "Verifies manifest captures networking config";
+    modules = [
+      {
+        "/networking" = {
+          enable = true;
+          mode = "static";
+          interfaces.eth0 = {
+            address = "10.0.0.5";
+            gateway = "10.0.0.1";
+          };
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = ''"mode": "static"'';
+      }
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = ''"enabled": true'';
+      }
+    ];
+  };
+
+  # Test: Manifest version matches module system version
+  rootTree-manifest-version = mkArtifactTest {
+    name = "rootTree-manifest-version";
+    description = "Verifies manifest contains current version";
+    modules = [ ];
+    checks = [
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = ''"redoxSystemVersion": "0.4.0"'';
+      }
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = ''"manifestVersion": 1'';
+      }
     ];
   };
 }

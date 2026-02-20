@@ -275,10 +275,13 @@ pkgs.writeShellScriptBin "functional-test" ''
   FINAL_MS=$(( $(ms_now) - START_MS ))
 
   # === Parse final results ===
+  PASS_COUNT=0
+  FAIL_COUNT=0
+  SKIP_COUNT=0
   if [ -f "$SERIAL_LOG" ]; then
-    PASS_COUNT=$(${pkgs.gnugrep}/bin/grep -c "^FUNC_TEST:.*:PASS" "$SERIAL_LOG" 2>/dev/null || echo 0)
-    FAIL_COUNT=$(${pkgs.gnugrep}/bin/grep -c "^FUNC_TEST:.*:FAIL" "$SERIAL_LOG" 2>/dev/null || echo 0)
-    SKIP_COUNT=$(${pkgs.gnugrep}/bin/grep -c "^FUNC_TEST:.*:SKIP" "$SERIAL_LOG" 2>/dev/null || echo 0)
+    PASS_COUNT=$(${pkgs.gnugrep}/bin/grep -c "^FUNC_TEST:.*:PASS" "$SERIAL_LOG" 2>/dev/null) || PASS_COUNT=0
+    FAIL_COUNT=$(${pkgs.gnugrep}/bin/grep -c "^FUNC_TEST:.*:FAIL" "$SERIAL_LOG" 2>/dev/null) || FAIL_COUNT=0
+    SKIP_COUNT=$(${pkgs.gnugrep}/bin/grep -c "^FUNC_TEST:.*:SKIP" "$SERIAL_LOG" 2>/dev/null) || SKIP_COUNT=0
   fi
 
   TOTAL_COUNT=$((PASS_COUNT + FAIL_COUNT + SKIP_COUNT))
