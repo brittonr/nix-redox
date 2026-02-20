@@ -136,6 +136,21 @@
   - All use std::fs which maps to relibc on Redox
   - The `StdIO` impl uses `#[cfg(target_family = "unix")]` — Redox is unix family ✓
 
+### Packaging snix-redox (bb4c172, Feb 19 2026)
+- nix-compat-derive had `workspace = true` references but no workspace root in snix-redox/Cargo.toml
+  - Fix: Replace `proc-macro2 = { workspace = true }` with `proc-macro2 = { version = "1" }` etc.
+  - Remove dev-dependencies entirely (not needed for cross-compilation with panic=abort)
+- `gitSources` in mk-userspace expects `[{ url = "git+https://..."; git = "https://..."; }]` NOT `["crate-name"]`
+- In-tree source (snix-redox/) referenced as `../../snix-redox` from packages.nix (relative path works in flakes)
+- delegate_task workers STILL don't persist changes — 3 more failed attempts this session. ALWAYS implement directly.
+- snix cross-compiles to a 3.5MB static ELF for x86_64-unknown-redox
+
+### Wiring virtualisation module (bb4c172, Feb 19 2026)
+- Build module returns vmConfig attrset; redoxSystem factory exposes it; system.nix passes to runner factories
+- Runner factories accept `vmConfig ? {}` with `or` defaults for backward compatibility
+- Cloud profile correctly flows `tapNetworking = true` through the entire chain
+- QEMU runners: replace hardcoded `-m 2048 -smp 4` with `${defaultMemory}` `${defaultCpus}` from vmConfig
+
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc
 - SchemeDaemon API: nulld/zerod/randd/logd/ramfs use `scheme <name> <cmd>` not `notify`
