@@ -37,6 +37,10 @@ enum Command {
         /// File to evaluate
         #[arg(short, long)]
         file: Option<String>,
+
+        /// Print raw string value (strip quotes, no escaping)
+        #[arg(long)]
+        raw: bool,
     },
 
     /// Show a derivation in human-readable form
@@ -250,7 +254,7 @@ fn main() {
     let cli = Cli::parse();
 
     let result = match cli.command {
-        Command::Eval { expr, file } => eval::run(expr, file),
+        Command::Eval { expr, file, raw } => eval::run(expr, file, raw),
         Command::ShowDerivation { path } => eval::show_derivation(&path),
         Command::Fetch {
             store_path,

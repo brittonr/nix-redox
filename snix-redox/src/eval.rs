@@ -5,7 +5,11 @@ use std::io::{self, BufRead, Write};
 use snix_eval::Evaluation;
 
 /// Evaluate a Nix expression from --expr or --file
-pub fn run(expr: Option<String>, file: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(
+    expr: Option<String>,
+    file: Option<String>,
+    raw: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let source = match (expr, file) {
         (Some(e), _) => e,
         (_, Some(f)) => std::fs::read_to_string(&f)?,
@@ -13,7 +17,24 @@ pub fn run(expr: Option<String>, file: Option<String>) -> Result<(), Box<dyn std
     };
 
     let result = evaluate(&source)?;
-    println!("{result}");
+    if raw {
+        // Strip surrounding quotes from string values (e.g. "hello" → hello)
+        let s = result.to_string();
+        if s.starts_with('"') && s.ends_with('"') && s.len() >= 2 {
+            // Unescape the inner string (handle \" → " and \\ → \ etc.)
+            let inner = &s[1..s.len() - 1];
+            let unescaped = inner
+                .replace("\\\"", "\"")
+                .replace("\\\\", "\\")
+                .replace("\\n", "\n")
+                .replace("\\t", "\t");
+            print!("{unescaped}");
+        } else {
+            print!("{s}");
+        }
+    } else {
+        println!("{result}");
+    }
     Ok(())
 }
 

@@ -293,7 +293,7 @@ adios:
       allDaemons = lib.unique (coreDaemons ++ initfsDaemons ++ (inputs.boot.initfsExtraBinaries or [ ]));
 
       # Collect all system packages
-      allPackages =
+      allPackages = lib.unique (
         (inputs.environment.systemPackages or [ ])
         ++ (lib.optional (pkgs ? base) pkgs.base)
         ++ (lib.optional (networkingEnabled && pkgs ? netutils) pkgs.netutils)
@@ -303,7 +303,47 @@ adios:
           ++ lib.optional (pkgs ? orbdata) pkgs.orbdata
           ++ lib.optional (pkgs ? orbterm) pkgs.orbterm
           ++ lib.optional (pkgs ? orbutils) pkgs.orbutils
-        ));
+        ))
+      );
+
+      # ===== STORE-BASED PACKAGE MANAGEMENT =====
+      # Inspired by NixOS's /run/current-system/sw model.
+      # Packages live in /nix/store/<hash>-<name>/ and are symlinked into
+      # /nix/system/profile/bin/ (the "system profile").  Generation switching
+      # rebuilds these symlinks so binaries actually appear/disappear in PATH.
+
+      # Get Nix store path basename for a package (e.g. "abc123-ripgrep-unstable")
+      pkgStoreName = pkg: builtins.baseNameOf (toString pkg);
+
+      # Boot-essential packages: flat-copied to /bin/ for init scripts and early boot.
+      # These survive generation switches — they're always available.
+      # NOTE: names must match pkg.pname (not the flake attribute name).
+      bootEssentialNames = [
+        "redox-base" # init, drivers, core daemons
+        "ion-shell" # shell for init scripts
+        "redox-uutils" # basic unix tools (ls, cp, cat — used in scripts)
+        "redox-userutils" # getty, login for console
+        "netutils" # networking (if enabled)
+        "netcfg-setup" # network configuration
+        "snix-redox" # system management (must always be available)
+        "orbital" # window manager (if graphics)
+        "orbdata" # orbital data
+        "orbterm" # orbital terminal
+        "orbutils" # orbital utilities
+      ];
+
+      isBootEssential =
+        pkg:
+        let
+          name = pkg.pname or (builtins.parseDrvName pkg.name).name;
+        in
+        builtins.elem name bootEssentialNames;
+
+      bootPackages = builtins.filter isBootEssential allPackages;
+
+      # Managed packages: everything NOT boot-essential goes in the system profile.
+      # These appear/disappear when switching generations.
+      managedPackages = builtins.filter (pkg: !isBootEssential pkg) allPackages;
 
       # Check if userutils (getty, login) is installed on rootFS
       # This determines whether init.rc can use getty for serial console login
@@ -329,6 +369,8 @@ adios:
         ++ [ "/etc/security" ]
         ++ [
           "/nix/store"
+          "/nix/system/profile/bin"
+          "/nix/system/generations"
           "/nix/var/snix/profiles/default/bin"
           "/nix/var/snix/pathinfo"
           "/nix/var/snix/gcroots"
@@ -467,8 +509,10 @@ adios:
         ${graphicsVarLines}
         ${aliasLines}
         ${graphicsAliasLines}
+        # System profile — packages managed by the module system (generation-switchable)
+        export PATH /nix/system/profile/bin:$PATH
         ${lib.optionalString hasBinaryCache ''
-          # snix profile — packages installed via `snix install`
+          # snix user profile — packages installed via `snix install`
           export PATH /nix/var/snix/profiles/default/bin:$PATH
         ''}
         ${inputs.environment.shellInit or ""}
@@ -817,7 +861,8 @@ adios:
         ) (inputs.filesystem.specialSymlinks or { })
       );
 
-      mkPackages = lib.concatStringsSep "\n" (
+      # Boot-essential packages: flat-copied to /bin/ for init scripts and early boot
+      mkBootPackages = lib.concatStringsSep "\n" (
         builtins.map (pkg: ''
           if [ -d "${pkg}/bin" ]; then
             for f in ${pkg}/bin/*; do
@@ -826,8 +871,41 @@ adios:
               cp "$f" $out/usr/bin/$(basename "$f") 2>/dev/null || true
             done
           fi
+        '') bootPackages
+      );
+
+      # All packages: stored in /nix/store/<hash>-<name>/ with content-addressed paths
+      mkStorePackages = lib.concatStringsSep "\n" (
+        builtins.map (pkg: ''
+          pkg_store="$out/nix/store/${pkgStoreName pkg}"
+          mkdir -p "$pkg_store"
+          if [ -d "${pkg}/bin" ]; then
+            mkdir -p "$pkg_store/bin"
+            for f in ${pkg}/bin/*; do
+              [ -e "$f" ] || continue
+              cp "$f" "$pkg_store/bin/$(basename "$f")"
+            done
+          fi
         '') allPackages
       );
+
+      # System profile: /nix/system/profile/bin/ with symlinks to store paths.
+      # This is what gets rebuilt on generation switch — binaries appear/disappear.
+      mkSystemProfile = ''
+        mkdir -p $out/nix/system/profile/bin
+        ${lib.concatStringsSep "\n" (
+          builtins.map (pkg: ''
+            if [ -d "$out/nix/store/${pkgStoreName pkg}/bin" ]; then
+              for f in $out/nix/store/${pkgStoreName pkg}/bin/*; do
+                [ -e "$f" ] || continue
+                bin_name=$(basename "$f")
+                ln -sf "/nix/store/${pkgStoreName pkg}/bin/$bin_name" \
+                  "$out/nix/system/profile/bin/$bin_name"
+              done
+            fi
+          '') managedPackages
+        )}
+      '';
 
       mkGeneratedFiles = lib.concatStringsSep "\n" (
         lib.mapAttrsToList (
@@ -957,7 +1035,7 @@ adios:
           export XDG_CONFIG_HOME /etc
           export HOME ${defaultUser.home}
           export USER ${defaultUser.name}
-          export PATH ${inputs.environment.variables.PATH or "/bin:/usr/bin"}
+          export PATH /nix/system/profile/bin:${inputs.environment.variables.PATH or "/bin:/usr/bin"}
           ${if userutilsInstalled then "/bin/getty debug:" else "/startup.sh"}
         '';
       };
@@ -1025,7 +1103,15 @@ adios:
             mkdir -p $out/dev
             ${mkDevSymlinks}
             ${mkSpecialSymlinks}
-            ${mkPackages}
+            # Boot-essential packages in /bin/ (survive generation switches)
+            ${mkBootPackages}
+
+            # All packages in /nix/store/ with content-addressed paths
+            ${mkStorePackages}
+
+            # System profile with symlinks to managed (non-boot) packages
+            ${mkSystemProfile}
+
             ${mkGeneratedFiles}
 
             # Include local binary cache if configured
@@ -1066,6 +1152,10 @@ adios:
 
                     # Skip generation copies (they're copies of this manifest)
                     if relpath.startswith("etc/redox-system/generations/"):
+                        continue
+
+                    # Skip store packages (content-addressed, tracked via manifest storePath)
+                    if relpath.startswith("nix/store/"):
                         continue
 
                     # Skip symlinks — they point outside the tree
@@ -1378,7 +1468,11 @@ adios:
         packages = builtins.map (pkg: {
           name = pkg.pname or (builtins.parseDrvName pkg.name).name;
           version = pkg.version or (builtins.parseDrvName pkg.name).version;
+          storePath = "/nix/store/${pkgStoreName pkg}";
         }) allPackages;
+
+        # System profile path (for generation switching)
+        systemProfile = "/nix/system/profile";
 
         drivers = {
           all = allDrivers;

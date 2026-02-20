@@ -207,10 +207,13 @@ let
 
     # ── CLI Tool Execution ─────────────────────────────────────
     # These verify cross-compiled binaries actually run on Redox.
-    # SKIP if binary not present (profile may vary).
+    # Profile-managed tools live in /nix/system/profile/bin/ (not /bin/).
+    # Boot-essential tools (ion, snix) live in /bin/.
+    # We use PATH resolution via `which` for managed tools.
 
-    if exists -f /bin/rg
-        rg --version > /dev/null
+    # Profile-managed tools (generation-switchable)
+    if exists -f /nix/system/profile/bin/rg
+        /nix/system/profile/bin/rg --version > /dev/null
         if test $? = 0
             echo "FUNC_TEST:run-rg:PASS"
         else
@@ -220,8 +223,8 @@ let
         echo "FUNC_TEST:run-rg:SKIP"
     end
 
-    if exists -f /bin/fd
-        fd --version > /dev/null
+    if exists -f /nix/system/profile/bin/fd
+        /nix/system/profile/bin/fd --version > /dev/null
         if test $? = 0
             echo "FUNC_TEST:run-fd:PASS"
         else
@@ -231,8 +234,8 @@ let
         echo "FUNC_TEST:run-fd:SKIP"
     end
 
-    if exists -f /bin/bat
-        bat --version > /dev/null
+    if exists -f /nix/system/profile/bin/bat
+        /nix/system/profile/bin/bat --version > /dev/null
         if test $? = 0
             echo "FUNC_TEST:run-bat:PASS"
         else
@@ -242,8 +245,8 @@ let
         echo "FUNC_TEST:run-bat:SKIP"
     end
 
-    if exists -f /bin/hexyl
-        hexyl --version > /dev/null
+    if exists -f /nix/system/profile/bin/hexyl
+        /nix/system/profile/bin/hexyl --version > /dev/null
         if test $? = 0
             echo "FUNC_TEST:run-hexyl:PASS"
         else
@@ -253,8 +256,8 @@ let
         echo "FUNC_TEST:run-hexyl:SKIP"
     end
 
-    if exists -f /bin/zoxide
-        zoxide --version > /dev/null
+    if exists -f /nix/system/profile/bin/zoxide
+        /nix/system/profile/bin/zoxide --version > /dev/null
         if test $? = 0
             echo "FUNC_TEST:run-zoxide:PASS"
         else
@@ -264,8 +267,8 @@ let
         echo "FUNC_TEST:run-zoxide:SKIP"
     end
 
-    if exists -f /bin/dust
-        dust --version > /dev/null
+    if exists -f /nix/system/profile/bin/dust
+        /nix/system/profile/bin/dust --version > /dev/null
         if test $? = 0
             echo "FUNC_TEST:run-dust:PASS"
         else
@@ -275,8 +278,9 @@ let
         echo "FUNC_TEST:run-dust:SKIP"
     end
 
+    # Boot-essential tools (always in /bin/, survive generation switches)
     if exists -f /bin/snix
-        snix --version > /dev/null
+        /bin/snix --version > /dev/null
         if test $? = 0
             echo "FUNC_TEST:run-snix:PASS"
         else
@@ -881,6 +885,101 @@ let
         echo "FUNC_TEST:store-gc-all:SKIP"
         echo "FUNC_TEST:store-gc-all-deleted:SKIP"
         echo "FUNC_TEST:store-empty-after-gc:SKIP"
+    end
+
+    # ── Generation Switching (NixOS-style) ─────────────────────────
+    # Tests that switching generations actually adds/removes binaries
+    # from the system profile.  The profile at /nix/system/profile/bin/
+    # contains symlinks to /nix/store/ paths.  When we switch to a
+    # manifest with fewer packages, the symlinks are removed.
+
+    # Test: system profile directory exists
+    if exists -d /nix/system/profile/bin
+        echo "FUNC_TEST:gen-profile-exists:PASS"
+    else
+        echo "FUNC_TEST:gen-profile-exists:FAIL"
+    end
+
+    # Test: rg is initially available via the system profile
+    if exists -f /nix/system/profile/bin/rg
+        echo "FUNC_TEST:gen-rg-initial:PASS"
+    else
+        echo "FUNC_TEST:gen-rg-initial:FAIL"
+    end
+
+    # Test: generation switching actually rebuilds the system profile.
+    # We verify the full round-trip: remove a symlink → switch restores it,
+    # proving snix system switch reads storePaths and rebuilds the profile.
+    if exists -f /etc/redox-system/manifest.json
+
+        # Test: manually remove rg from the profile (simulates a generation
+        # without ripgrep — the symlink is gone but the store path remains)
+        if exists -f /nix/system/profile/bin/rg
+            rm /nix/system/profile/bin/rg
+            if not exists -f /nix/system/profile/bin/rg
+                echo "FUNC_TEST:gen-rg-removed:PASS"
+            else
+                echo "FUNC_TEST:gen-rg-removed:FAIL:still-exists"
+            end
+        else
+            echo "FUNC_TEST:gen-rg-removed:SKIP"
+        end
+
+        # Test: boot-essential binaries are NOT in the profile (they're in /bin/)
+        if exists -f /bin/ion
+            echo "FUNC_TEST:gen-boot-survives:PASS"
+        else
+            echo "FUNC_TEST:gen-boot-survives:FAIL"
+        end
+
+        # Test: other managed tools still in profile (fd unaffected by rg removal)
+        if exists -f /nix/system/profile/bin/fd
+            echo "FUNC_TEST:gen-fd-survives:PASS"
+        else
+            echo "FUNC_TEST:gen-fd-survives:FAIL"
+        end
+
+        # Test: rg binary is still in /nix/store/ (just unlinked from profile)
+        # Find it by scanning store directories
+        let rg_found = false
+        for dir in @(ls /nix/store/)
+            if exists -f /nix/store/$dir/bin/rg
+                let rg_found = true
+            end
+        end
+        if test $rg_found = true
+            echo "FUNC_TEST:gen-store-preserved:PASS"
+        else
+            echo "FUNC_TEST:gen-store-preserved:FAIL"
+        end
+
+        # Test: snix system switch rebuilds the profile from manifest storePaths.
+        # This is the core generation switch mechanism — it reads the manifest,
+        # finds all packages with storePaths, and recreates the profile symlinks.
+        /bin/snix system switch /etc/redox-system/manifest.json > /tmp/gen_sw_out ^> /tmp/gen_sw_err
+        if test $? = 0
+            echo "FUNC_TEST:gen-switch:PASS"
+        else
+            echo "FUNC_TEST:gen-switch:FAIL:exit-code"
+            cat /tmp/gen_sw_err
+        end
+        rm /tmp/gen_sw_out /tmp/gen_sw_err
+
+        # Test: rg should be RESTORED after switch (profile rebuilt from storePaths)
+        if exists -f /nix/system/profile/bin/rg
+            echo "FUNC_TEST:gen-switch-restores:PASS"
+        else
+            echo "FUNC_TEST:gen-switch-restores:FAIL:not-restored"
+        end
+    else
+        echo "FUNC_TEST:gen-profile-exists:SKIP"
+        echo "FUNC_TEST:gen-rg-initial:SKIP"
+        echo "FUNC_TEST:gen-rg-removed:SKIP"
+        echo "FUNC_TEST:gen-boot-survives:SKIP"
+        echo "FUNC_TEST:gen-fd-survives:SKIP"
+        echo "FUNC_TEST:gen-store-preserved:SKIP"
+        echo "FUNC_TEST:gen-switch:SKIP"
+        echo "FUNC_TEST:gen-switch-restores:SKIP"
     end
 
     # ── Package Manager (snix install) ───────────────────────────

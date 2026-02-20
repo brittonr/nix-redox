@@ -33,6 +33,7 @@ hostPkgs.runCommand "redox-redoxfs"
   ''
     mkdir -p root
     cp -r ${rootTree}/* root/
+    chmod -R u+w root/
     mkdir -p root/boot
     cp ${kernel}/boot/kernel root/boot/kernel
     cp ${initfs}/boot/initfs root/boot/initfs

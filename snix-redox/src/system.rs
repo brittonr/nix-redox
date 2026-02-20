@@ -42,7 +42,12 @@ pub struct Manifest {
     pub services: Services,
     #[serde(default)]
     pub files: BTreeMap<String, FileInfo>,
+    #[serde(default, rename = "systemProfile")]
+    pub system_profile: String,
 }
+
+/// System profile directory (managed by generation switching)
+const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
@@ -153,6 +158,8 @@ pub struct PowerConfig {
 pub struct Package {
     pub name: String,
     pub version: String,
+    #[serde(default, rename = "storePath")]
+    pub store_path: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -735,6 +742,12 @@ pub fn switch(
     // Install as current manifest
     fs::write(mpath, &new_json)?;
 
+    // Rebuild system profile symlinks for the new package set
+    if let Err(e) = rebuild_system_profile(&new_manifest) {
+        eprintln!("warning: failed to rebuild system profile: {e}");
+        eprintln!("  Binaries in /nix/system/profile/bin/ may be stale.");
+    }
+
     println!("Switched to generation {next_id}");
 
     // Show brief diff
@@ -847,12 +860,80 @@ pub fn rollback(
     // Install as current
     fs::write(mpath, &new_json)?;
 
+    // Rebuild system profile symlinks for the rolled-back package set
+    if let Err(e) = rebuild_system_profile(&rolled_back) {
+        eprintln!("warning: failed to rebuild system profile: {e}");
+        eprintln!("  Binaries in /nix/system/profile/bin/ may be stale.");
+    }
+
     println!();
     println!("Rolled back to generation {} (saved as generation {next_id})", target.id);
     println!();
-    println!("Note: This updates the manifest only. File contents are not");
-    println!("changed — rebuild and redeploy for a full rollback.");
+    println!("Note: Boot-essential binaries in /bin/ are unchanged.");
+    println!("Profile binaries in /nix/system/profile/bin/ have been updated.");
 
+    Ok(())
+}
+
+/// Rebuild the system profile by re-symlinking package binaries from /nix/store/.
+/// This is what makes generation switching actually change which binaries are in PATH.
+fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+    let profile_bin = Path::new(SYSTEM_PROFILE_BIN);
+
+    // Ensure directory is writable (Nix store outputs have mode 555)
+    if profile_bin.exists() {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = std::fs::Permissions::from_mode(0o755);
+            fs::set_permissions(profile_bin, perms)?;
+        }
+
+        // Clear existing profile symlinks
+        for entry in fs::read_dir(profile_bin)? {
+            let entry = entry?;
+            if entry.path().symlink_metadata()?.file_type().is_symlink() {
+                fs::remove_file(entry.path())?;
+            }
+        }
+    } else {
+        fs::create_dir_all(profile_bin)?;
+    }
+
+    // Recreate symlinks from store paths listed in the manifest
+    let mut linked = 0u32;
+    for pkg in &manifest.packages {
+        if pkg.store_path.is_empty() {
+            continue;
+        }
+        let bin_dir = Path::new(&pkg.store_path).join("bin");
+        if !bin_dir.exists() {
+            eprintln!("warning: store path missing for {}: {}", pkg.name, pkg.store_path);
+            continue;
+        }
+        for entry in fs::read_dir(&bin_dir)? {
+            let entry = entry?;
+            if !entry.file_type()?.is_file() {
+                continue;
+            }
+            let name = entry.file_name();
+            let link_path = profile_bin.join(&name);
+            let target = entry.path();
+
+            if link_path.symlink_metadata().is_ok() {
+                fs::remove_file(&link_path)?;
+            }
+
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(&target, &link_path)?;
+            #[cfg(not(unix))]
+            fs::copy(&target, &link_path)?;
+
+            linked += 1;
+        }
+    }
+
+    println!("System profile rebuilt: {linked} binaries linked");
     Ok(())
 }
 
@@ -974,10 +1055,12 @@ mod tests {
                 Package {
                     name: "ion".to_string(),
                     version: "1.0.0".to_string(),
+                    store_path: String::new(),
                 },
                 Package {
                     name: "uutils".to_string(),
                     version: "0.0.1".to_string(),
+                    store_path: String::new(),
                 },
             ],
             drivers: Drivers {
@@ -1395,7 +1478,7 @@ mod tests {
 
         // Write new manifest (with different packages)
         let mut new_m = sample_manifest();
-        new_m.packages.push(Package { name: "ripgrep".to_string(), version: "14.0".to_string() });
+        new_m.packages.push(Package { name: "ripgrep".to_string(), version: "14.0".to_string(), store_path: String::new() });
         std::fs::write(&new_manifest_file, serde_json::to_string_pretty(&new_m).unwrap()).unwrap();
 
         // Switch
@@ -1440,7 +1523,7 @@ mod tests {
         let mut gen2 = sample_manifest();
         gen2.generation.id = 2;
         gen2.generation.description = "added extra package".to_string();
-        gen2.packages.push(Package { name: "ripgrep".to_string(), version: "14.0".to_string() });
+        gen2.packages.push(Package { name: "ripgrep".to_string(), version: "14.0".to_string(), store_path: String::new() });
         std::fs::write(gen2_dir.join("manifest.json"), serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
         std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
 
