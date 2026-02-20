@@ -582,115 +582,305 @@ let
         echo "FUNC_TEST:switch-creates-new-gen:SKIP"
     end
 
-    # ── Store Layer (snix store) ─────────────────────────────
-    # These verify the new local store management layer:
-    #   - PathInfo database (JSON-backed, /nix/var/snix/pathinfo/)
-    #   - GC roots (symlinks in /nix/var/snix/gcroots/)
-    #   - Closure computation (BFS over references)
-    #   - Garbage collection (mark-and-sweep)
-    # NOTE: These are local operations (no network needed).
+    # ── Store Layer Integration (snix store) ────────────────
+    # Full end-to-end test of the local store layer:
+    #   1. Create fake store paths on the filesystem
+    #   2. Write PathInfo JSON to register them in the database
+    #   3. Test closure computation (BFS over references)
+    #   4. Add GC roots and verify they protect paths
+    #   5. Run garbage collection and verify dead paths are deleted
+    #
+    # This exercises real filesystem I/O on Redox — not mocks.
+    # Uses valid nixbase32 store path hashes throughout.
 
     if exists -f /bin/snix
-        # Test: snix store verify runs (may report no store at /nix/store)
-        /bin/snix store verify > /tmp/store_verify ^> /tmp/store_verr
+        # ── Setup: create 3 fake store paths on disk ──────────
+        # app depends on lib, orphan has no dependents
+        # Valid nixbase32 hashes (alphabet: 0123456789abcdfghijklmnpqrsvwxyz)
+        mkdir -p /nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-testapp-1.0/bin
+        echo '#!/bin/sh' > /nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-testapp-1.0/bin/testapp
+        mkdir -p /nix/store/2c8kzfrjzhi7jkmz3fxcsyj7c5n2sp5s-testlib-1.0/lib
+        echo 'libtest' > /nix/store/2c8kzfrjzhi7jkmz3fxcsyj7c5n2sp5s-testlib-1.0/lib/libtest.so
+        mkdir -p /nix/store/3d7lxgskakh8klnz4gydrzk8d6p3rq6r-orphan-1.0/bin
+        echo 'orphan' > /nix/store/3d7lxgskakh8klnz4gydrzk8d6p3rq6r-orphan-1.0/bin/orphan
+
+        # ── Setup: register PathInfo for each path ────────────
+        mkdir -p /nix/var/snix/pathinfo
+        mkdir -p /nix/var/snix/gcroots
+
+        # testapp depends on testlib (and itself, as Nix paths commonly do)
+        echo '{"storePath":"/nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-testapp-1.0","narHash":"aaa","narSize":100,"references":["/nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-testapp-1.0","/nix/store/2c8kzfrjzhi7jkmz3fxcsyj7c5n2sp5s-testlib-1.0"],"registrationTime":"2026-01-01T00:00:00Z"}' > /nix/var/snix/pathinfo/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r.json
+
+        # testlib has no dependencies
+        echo '{"storePath":"/nix/store/2c8kzfrjzhi7jkmz3fxcsyj7c5n2sp5s-testlib-1.0","narHash":"bbb","narSize":50,"references":[],"registrationTime":"2026-01-01T00:00:00Z"}' > /nix/var/snix/pathinfo/2c8kzfrjzhi7jkmz3fxcsyj7c5n2sp5s.json
+
+        # orphan has no dependencies and no dependents
+        echo '{"storePath":"/nix/store/3d7lxgskakh8klnz4gydrzk8d6p3rq6r-orphan-1.0","narHash":"ccc","narSize":25,"references":[],"registrationTime":"2026-01-01T00:00:00Z"}' > /nix/var/snix/pathinfo/3d7lxgskakh8klnz4gydrzk8d6p3rq6r.json
+
+        # ── Test: store list shows all 3 registered paths ─────
+        /bin/snix store list > /tmp/sl_out ^> /tmp/sl_err
         if test $? = 0
-            echo "FUNC_TEST:snix-store-verify:PASS"
-        else
-            echo "FUNC_TEST:snix-store-verify:FAIL"
-        end
-        rm /tmp/store_verify
-        rm /tmp/store_verr
-
-        # Test: snix store list runs (empty store is fine)
-        /bin/snix store list > /tmp/store_list ^> /tmp/store_lerr
-        if test $? = 0
-            echo "FUNC_TEST:snix-store-list:PASS"
-        else
-            echo "FUNC_TEST:snix-store-list:FAIL"
-        end
-        rm /tmp/store_list
-        rm /tmp/store_lerr
-
-        # Test: snix store roots runs (empty is fine)
-        /bin/snix store roots > /tmp/store_roots ^> /tmp/store_rerr
-        if test $? = 0
-            echo "FUNC_TEST:snix-store-roots:PASS"
-        else
-            echo "FUNC_TEST:snix-store-roots:FAIL"
-        end
-        rm /tmp/store_roots
-        rm /tmp/store_rerr
-
-        # Test: snix store gc --dry-run works with no roots
-        /bin/snix store gc --dry-run > /tmp/store_gc ^> /tmp/store_gerr
-        if test $? = 0
-            echo "FUNC_TEST:snix-store-gc-dryrun:PASS"
-        else
-            echo "FUNC_TEST:snix-store-gc-dryrun:FAIL"
-        end
-        rm /tmp/store_gc
-        rm /tmp/store_gerr
-
-        # Test: snix store info on nonexistent path gives an error (expected)
-        /bin/snix store info /nix/store/5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r-nonexistent-1.0 > /tmp/store_info ^> /tmp/store_ierr
-        if test $? = 1
-            echo "FUNC_TEST:snix-store-info-missing:PASS"
-        else
-            echo "FUNC_TEST:snix-store-info-missing:FAIL:expected-error"
-        end
-        rm /tmp/store_info
-        rm /tmp/store_ierr
-
-        # Test: snix store closure on nonexistent path gives an error (expected)
-        /bin/snix store closure /nix/store/5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r-nonexistent-1.0 > /tmp/store_clo ^> /tmp/store_cerr
-        if test $? = 1
-            echo "FUNC_TEST:snix-store-closure-missing:PASS"
-        else
-            echo "FUNC_TEST:snix-store-closure-missing:FAIL:expected-error"
-        end
-        rm /tmp/store_clo
-        rm /tmp/store_cerr
-
-        # Test: snix --help includes "store" subcommand
-        /bin/snix --help > /tmp/snix_help ^> /tmp/snix_herr
-        grep -q 'store' /tmp/snix_help
-        if test $? = 0
-            echo "FUNC_TEST:snix-help-has-store:PASS"
-        else
-            echo "FUNC_TEST:snix-help-has-store:FAIL"
-        end
-        rm /tmp/snix_help
-        rm /tmp/snix_herr
-
-        # Test: snix store --help shows all subcommands
-        /bin/snix store --help > /tmp/store_help ^> /tmp/store_herr
-        grep -q 'gc' /tmp/store_help
-        if test $? = 0
-            grep -q 'closure' /tmp/store_help
+            grep -q 'testapp' /tmp/sl_out
             if test $? = 0
-                grep -q 'add-root' /tmp/store_help
+                grep -q 'testlib' /tmp/sl_out
                 if test $? = 0
-                    echo "FUNC_TEST:snix-store-help-complete:PASS"
+                    grep -q 'orphan' /tmp/sl_out
+                    if test $? = 0
+                        grep -q '3 paths' /tmp/sl_out
+                        if test $? = 0
+                            echo "FUNC_TEST:store-list-3-paths:PASS"
+                        else
+                            echo "FUNC_TEST:store-list-3-paths:FAIL:count"
+                        end
+                    else
+                        echo "FUNC_TEST:store-list-3-paths:FAIL:no-orphan"
+                    end
                 else
-                    echo "FUNC_TEST:snix-store-help-complete:FAIL:missing-add-root"
+                    echo "FUNC_TEST:store-list-3-paths:FAIL:no-testlib"
                 end
             else
-                echo "FUNC_TEST:snix-store-help-complete:FAIL:missing-closure"
+                echo "FUNC_TEST:store-list-3-paths:FAIL:no-testapp"
             end
         else
-            echo "FUNC_TEST:snix-store-help-complete:FAIL:missing-gc"
+            echo "FUNC_TEST:store-list-3-paths:FAIL:exit-code"
         end
-        rm /tmp/store_help
-        rm /tmp/store_herr
+        rm /tmp/sl_out
+        rm /tmp/sl_err
+
+        # ── Test: store info shows metadata for testapp ───────
+        /bin/snix store info /nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-testapp-1.0 > /tmp/si_out ^> /tmp/si_err
+        if test $? = 0
+            grep -q 'testapp' /tmp/si_out
+            if test $? = 0
+                grep -q 'References' /tmp/si_out
+                if test $? = 0
+                    grep -q 'testlib' /tmp/si_out
+                    if test $? = 0
+                        echo "FUNC_TEST:store-info-metadata:PASS"
+                    else
+                        echo "FUNC_TEST:store-info-metadata:FAIL:no-ref-to-testlib"
+                    end
+                else
+                    echo "FUNC_TEST:store-info-metadata:FAIL:no-references"
+                end
+            else
+                echo "FUNC_TEST:store-info-metadata:FAIL:no-testapp"
+            end
+        else
+            echo "FUNC_TEST:store-info-metadata:FAIL:exit-code"
+        end
+        rm /tmp/si_out
+        rm /tmp/si_err
+
+        # ── Test: closure of testapp includes testlib ─────────
+        /bin/snix store closure /nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-testapp-1.0 > /tmp/sc_out ^> /tmp/sc_err
+        if test $? = 0
+            grep -q 'testapp' /tmp/sc_out
+            if test $? = 0
+                grep -q 'testlib' /tmp/sc_out
+                if test $? = 0
+                    grep -q '2 paths' /tmp/sc_out
+                    if test $? = 0
+                        echo "FUNC_TEST:store-closure-deps:PASS"
+                    else
+                        echo "FUNC_TEST:store-closure-deps:FAIL:count"
+                    end
+                else
+                    echo "FUNC_TEST:store-closure-deps:FAIL:no-testlib"
+                end
+            else
+                echo "FUNC_TEST:store-closure-deps:FAIL:no-testapp"
+            end
+        else
+            echo "FUNC_TEST:store-closure-deps:FAIL:exit-code"
+        end
+        rm /tmp/sc_out
+        rm /tmp/sc_err
+
+        # ── Test: closure does NOT include orphan ─────────────
+        /bin/snix store closure /nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-testapp-1.0 > /tmp/sc2_out ^> /tmp/sc2_err
+        grep -q 'orphan' /tmp/sc2_out
+        if test $? = 1
+            echo "FUNC_TEST:store-closure-excludes-orphan:PASS"
+        else
+            echo "FUNC_TEST:store-closure-excludes-orphan:FAIL:orphan-in-closure"
+        end
+        rm /tmp/sc2_out
+        rm /tmp/sc2_err
+
+        # ── Test: add a GC root for testapp ───────────────────
+        /bin/snix store add-root myapp /nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-testapp-1.0 > /tmp/ar_out ^> /tmp/ar_err
+        if test $? = 0
+            echo "FUNC_TEST:store-add-root:PASS"
+        else
+            echo "FUNC_TEST:store-add-root:FAIL"
+        end
+        rm /tmp/ar_out
+        rm /tmp/ar_err
+
+        # ── Test: roots lists the GC root we just added ───────
+        /bin/snix store roots > /tmp/sr_out ^> /tmp/sr_err
+        if test $? = 0
+            grep -q 'myapp' /tmp/sr_out
+            if test $? = 0
+                grep -q 'testapp' /tmp/sr_out
+                if test $? = 0
+                    echo "FUNC_TEST:store-roots-listed:PASS"
+                else
+                    echo "FUNC_TEST:store-roots-listed:FAIL:no-target"
+                end
+            else
+                echo "FUNC_TEST:store-roots-listed:FAIL:no-myapp"
+            end
+        else
+            echo "FUNC_TEST:store-roots-listed:FAIL:exit-code"
+        end
+        rm /tmp/sr_out
+        rm /tmp/sr_err
+
+        # ── Test: GC dry-run reports orphan as collectible ────
+        /bin/snix store gc --dry-run > /tmp/gd_out ^> /tmp/gd_err
+        if test $? = 0
+            grep -q 'orphan' /tmp/gd_err
+            if test $? = 0
+                grep -q '1 paths' /tmp/gd_out
+                if test $? = 0
+                    echo "FUNC_TEST:store-gc-dryrun-orphan:PASS"
+                else
+                    echo "FUNC_TEST:store-gc-dryrun-orphan:FAIL:count"
+                end
+            else
+                echo "FUNC_TEST:store-gc-dryrun-orphan:FAIL:no-orphan-in-stderr"
+            end
+        else
+            echo "FUNC_TEST:store-gc-dryrun-orphan:FAIL:exit-code"
+        end
+        rm /tmp/gd_out
+        rm /tmp/gd_err
+
+        # ── Test: verify orphan still exists after dry run ────
+        if exists -d /nix/store/3d7lxgskakh8klnz4gydrzk8d6p3rq6r-orphan-1.0
+            echo "FUNC_TEST:store-gc-dryrun-preserves:PASS"
+        else
+            echo "FUNC_TEST:store-gc-dryrun-preserves:FAIL"
+        end
+
+        # ── Test: actual GC deletes orphan ────────────────────
+        /bin/snix store gc > /tmp/gc_out ^> /tmp/gc_err
+        if test $? = 0
+            echo "FUNC_TEST:store-gc-runs:PASS"
+        else
+            echo "FUNC_TEST:store-gc-runs:FAIL"
+        end
+        rm /tmp/gc_out
+        rm /tmp/gc_err
+
+        # ── Test: orphan is gone from filesystem after GC ─────
+        if exists -d /nix/store/3d7lxgskakh8klnz4gydrzk8d6p3rq6r-orphan-1.0
+            echo "FUNC_TEST:store-gc-deleted-orphan:FAIL:still-exists"
+        else
+            echo "FUNC_TEST:store-gc-deleted-orphan:PASS"
+        end
+
+        # ── Test: orphan is gone from pathinfo DB after GC ────
+        if exists -f /nix/var/snix/pathinfo/3d7lxgskakh8klnz4gydrzk8d6p3rq6r.json
+            echo "FUNC_TEST:store-gc-deleted-pathinfo:FAIL:json-still-exists"
+        else
+            echo "FUNC_TEST:store-gc-deleted-pathinfo:PASS"
+        end
+
+        # ── Test: testapp survived GC (protected by root) ─────
+        if exists -d /nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-testapp-1.0
+            echo "FUNC_TEST:store-gc-kept-app:PASS"
+        else
+            echo "FUNC_TEST:store-gc-kept-app:FAIL"
+        end
+
+        # ── Test: testlib survived GC (transitive dep of root)─
+        if exists -d /nix/store/2c8kzfrjzhi7jkmz3fxcsyj7c5n2sp5s-testlib-1.0
+            echo "FUNC_TEST:store-gc-kept-lib:PASS"
+        else
+            echo "FUNC_TEST:store-gc-kept-lib:FAIL"
+        end
+
+        # ── Test: list now shows 2 paths (orphan gone) ────────
+        /bin/snix store list > /tmp/sl2_out ^> /tmp/sl2_err
+        if test $? = 0
+            grep -q '2 paths' /tmp/sl2_out
+            if test $? = 0
+                echo "FUNC_TEST:store-list-after-gc:PASS"
+            else
+                echo "FUNC_TEST:store-list-after-gc:FAIL:count"
+            end
+        else
+            echo "FUNC_TEST:store-list-after-gc:FAIL:exit-code"
+        end
+        rm /tmp/sl2_out
+        rm /tmp/sl2_err
+
+        # ── Test: remove root and GC again → everything gone ──
+        /bin/snix store remove-root myapp > /tmp/rr_out ^> /tmp/rr_err
+        if test $? = 0
+            echo "FUNC_TEST:store-remove-root:PASS"
+        else
+            echo "FUNC_TEST:store-remove-root:FAIL"
+        end
+        rm /tmp/rr_out
+        rm /tmp/rr_err
+
+        /bin/snix store gc > /tmp/gc2_out ^> /tmp/gc2_err
+        if test $? = 0
+            echo "FUNC_TEST:store-gc-all:PASS"
+        else
+            echo "FUNC_TEST:store-gc-all:FAIL"
+        end
+        rm /tmp/gc2_out
+        rm /tmp/gc2_err
+
+        # Everything should be gone now
+        if exists -d /nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-testapp-1.0
+            echo "FUNC_TEST:store-gc-all-deleted:FAIL:app-still-exists"
+        else
+            if exists -d /nix/store/2c8kzfrjzhi7jkmz3fxcsyj7c5n2sp5s-testlib-1.0
+                echo "FUNC_TEST:store-gc-all-deleted:FAIL:lib-still-exists"
+            else
+                echo "FUNC_TEST:store-gc-all-deleted:PASS"
+            end
+        end
+
+        # List should show 0 paths
+        /bin/snix store list > /tmp/sl3_out ^> /tmp/sl3_err
+        if test $? = 0
+            grep -q 'No registered' /tmp/sl3_out
+            if test $? = 0
+                echo "FUNC_TEST:store-empty-after-gc:PASS"
+            else
+                echo "FUNC_TEST:store-empty-after-gc:FAIL:not-empty"
+            end
+        else
+            echo "FUNC_TEST:store-empty-after-gc:FAIL:exit-code"
+        end
+        rm /tmp/sl3_out
+        rm /tmp/sl3_err
     else
-        echo "FUNC_TEST:snix-store-verify:SKIP"
-        echo "FUNC_TEST:snix-store-list:SKIP"
-        echo "FUNC_TEST:snix-store-roots:SKIP"
-        echo "FUNC_TEST:snix-store-gc-dryrun:SKIP"
-        echo "FUNC_TEST:snix-store-info-missing:SKIP"
-        echo "FUNC_TEST:snix-store-closure-missing:SKIP"
-        echo "FUNC_TEST:snix-help-has-store:SKIP"
-        echo "FUNC_TEST:snix-store-help-complete:SKIP"
+        echo "FUNC_TEST:store-list-3-paths:SKIP"
+        echo "FUNC_TEST:store-info-metadata:SKIP"
+        echo "FUNC_TEST:store-closure-deps:SKIP"
+        echo "FUNC_TEST:store-closure-excludes-orphan:SKIP"
+        echo "FUNC_TEST:store-add-root:SKIP"
+        echo "FUNC_TEST:store-roots-listed:SKIP"
+        echo "FUNC_TEST:store-gc-dryrun-orphan:SKIP"
+        echo "FUNC_TEST:store-gc-dryrun-preserves:SKIP"
+        echo "FUNC_TEST:store-gc-runs:SKIP"
+        echo "FUNC_TEST:store-gc-deleted-orphan:SKIP"
+        echo "FUNC_TEST:store-gc-deleted-pathinfo:SKIP"
+        echo "FUNC_TEST:store-gc-kept-app:SKIP"
+        echo "FUNC_TEST:store-gc-kept-lib:SKIP"
+        echo "FUNC_TEST:store-list-after-gc:SKIP"
+        echo "FUNC_TEST:store-remove-root:SKIP"
+        echo "FUNC_TEST:store-gc-all:SKIP"
+        echo "FUNC_TEST:store-gc-all-deleted:SKIP"
+        echo "FUNC_TEST:store-empty-after-gc:SKIP"
     end
 
     echo ""
