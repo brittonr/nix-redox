@@ -19,6 +19,8 @@ in
       ++ opt "sodium"
       ++ opt "netutils"
       ++ opt "userutils"
+      ++ opt "ripgrep"
+      ++ opt "fd"
       ++ opt "bat"
       ++ opt "hexyl"
       ++ opt "zoxide"
@@ -31,15 +33,10 @@ in
       z = "zoxide query -- $@args && cd $(zoxide query -- $@args)";
     };
 
-    # Include CLI tools in the local binary cache.
-    # Users can install additional tools at runtime via `snix install <name>`.
-    binaryCachePackages =
-      lib.optionalAttrs (pkgs ? ripgrep) { ripgrep = pkgs.ripgrep; }
-      // lib.optionalAttrs (pkgs ? fd) { fd = pkgs.fd; }
-      // lib.optionalAttrs (pkgs ? bat) { bat = pkgs.bat; }
-      // lib.optionalAttrs (pkgs ? hexyl) { hexyl = pkgs.hexyl; }
-      // lib.optionalAttrs (pkgs ? zoxide) { zoxide = pkgs.zoxide; }
-      // lib.optionalAttrs (pkgs ? dust) { dust = pkgs.dust; };
+    # Include extra CLI tools in the local binary cache.
+    # These are packages NOT in systemPackages that users can install
+    # at runtime via `snix install <name>`.
+    binaryCachePackages = { };
   };
 
   "/networking" = {

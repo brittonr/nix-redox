@@ -67,11 +67,9 @@ dev
   };
 
   # Extend environment from dev profile
+  # ripgrep and fd are already in the development profile's systemPackages
   "/environment" = (dev."/environment" or { }) // {
-    systemPackages =
-      (dev."/environment".systemPackages or [ ])
-      ++ (if pkgs ? ripgrep then [ pkgs.ripgrep ] else [ ])
-      ++ (if pkgs ? fd then [ pkgs.fd ] else [ ]);
+    systemPackages = (dev."/environment".systemPackages or [ ]);
 
     shellAliases = (dev."/environment".shellAliases or { }) // {
       ll = "ls -la";
