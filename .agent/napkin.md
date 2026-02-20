@@ -251,7 +251,13 @@
 - `lib.optionalString` for conditional bash in Nix derivations; `lib.optionalAttrs` for conditional attrsets
 - Include `/nix/store` and `/nix/var/snix/` dirs in rootTree so snix doesn't need to create them at runtime
 - Profile bin added to PATH via /etc/profile when binary cache is enabled
-- 119 host unit tests + 72 artifact tests + 10 new functional tests for install pipeline
+- 119 host unit tests + 76 artifact tests + 10 new functional tests for install pipeline
+- CRITICAL: nix-compat NarInfo parser uses nixbase32 for FileHash (not hex!)
+  - NarHash accepts BOTH hex (64 chars) and nixbase32 (52 chars)
+  - FileHash ONLY accepts nixbase32 (calls `nixbase32::decode_fixed::<32>`)
+  - Error message: "unable to decode FileHash: invalid length at 52"
+  - Solution: nixbase32_encode() in Python — processes bytes MSB-first, 5 bits per char
+  - Verified: Python nixbase32 matches `nix-hash --to-base32` exactly
 
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc
