@@ -210,6 +210,28 @@ nix/
 └── patches/               # Source patches
 ```
 
+## Testing
+
+```bash
+# Automated boot test (verifies system boots to shell prompt)
+nix run .#boot-test
+
+# Functional test (boots VM, runs ~40 in-guest tests, reports results)
+nix run .#functional-test
+
+# Module system tests (fast, no cross-compilation)
+nix build .#checks.x86_64-linux.eval-profile-default  # profile evaluates
+nix build .#checks.x86_64-linux.type-valid-user-complete  # type checking
+nix build .#checks.x86_64-linux.artifact-rootTree-has-passwd  # build output
+```
+
+The functional test suite builds a test-enabled disk image with a modified
+startup script. Instead of launching an interactive shell, it runs an Ion
+test suite that validates: shell fundamentals, system identity, filesystem
+operations, config file presence, CLI tool availability, and device files.
+Results are written to serial as structured `FUNC_TEST:name:PASS/FAIL` lines
+parsed by the host-side runner.
+
 ## Development
 
 ```bash

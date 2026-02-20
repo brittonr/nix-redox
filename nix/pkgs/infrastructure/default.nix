@@ -105,4 +105,17 @@ in
         bootloader
         ;
     };
+
+  # Functional test factory - requires diskImage with test startup script
+  # Produces a script that boots the image, watches for FUNC_TEST results
+  mkFunctionalTest =
+    { diskImage, bootloader }:
+    import ./functional-test.nix {
+      inherit
+        pkgs
+        lib
+        diskImage
+        bootloader
+        ;
+    };
 }

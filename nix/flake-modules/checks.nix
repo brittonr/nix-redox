@@ -90,6 +90,10 @@
         # This is the script package; run interactively with: nix run .#boot-test
         # For CI, run outside the sandbox with KVM access
         boot-test = packages.bootTest;
+
+        # Functional test - runs ~40 in-guest tests after boot
+        # Run interactively with: nix run .#functional-test
+        functional-test = packages.functionalTest;
       };
     };
 }

@@ -113,6 +113,12 @@ in
     profile = ../redox-system/profiles/cloud-hypervisor.nix;
   };
 
+  # Test 5: Functional test profile (development + test runner)
+  profile-functional-test = mkProfileTest {
+    name = "functional-test";
+    profile = ../redox-system/profiles/functional-test.nix;
+  };
+
   # === Extension Tests ===
 
   # Test 5: .extend works and produces new system with merged options

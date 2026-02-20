@@ -176,6 +176,13 @@
           meta.description = "Run automated boot test (Cloud Hypervisor with KVM, or QEMU TCG fallback)";
         };
 
+        # Functional test — boots test image, runs ~40 in-guest tests, reports results
+        functional-test = {
+          type = "app";
+          program = "${self'.packages.functionalTest}/bin/functional-test";
+          meta.description = "Run functional tests inside Redox OS (shell, filesystem, tools, config)";
+        };
+
         # RedoxOS system configuration manager (like nixos-rebuild / darwin-rebuild)
         redox-rebuild = {
           type = "app";

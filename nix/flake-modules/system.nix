@@ -169,6 +169,17 @@
           inherit bootloader;
         };
 
+        # Functional test: uses development profile with test runner startup script
+        mkFunctionalTest = redoxConfig.modularPkgs.infrastructure.mkFunctionalTest;
+        functionalTestSystem = mkSystem {
+          modules = [ ../redox-system/profiles/functional-test.nix ];
+          inherit extraPkgs;
+        };
+        functionalTest = mkFunctionalTest {
+          diskImage = functionalTestSystem.diskImage;
+          inherit bootloader;
+        };
+
         # redox-rebuild CLI tool
         redoxRebuild = import ../pkgs/infrastructure/redox-rebuild.nix {
           inherit pkgs lib;
@@ -239,6 +250,10 @@
           snapshotRedox = defaultRunners.snapshotVm;
           infoRedox = defaultRunners.infoVm;
           resizeMemoryRedox = defaultRunners.resizeMemory;
+
+          # Functional test (disk image + runner)
+          redox-functional-test = functionalTestSystem.diskImage;
+          functionalTest = functionalTest;
 
           # redox-rebuild CLI
           redox-rebuild = redoxRebuild;

@@ -151,6 +151,17 @@
 - Cloud profile correctly flows `tapNetworking = true` through the entire chain
 - QEMU runners: replace hardcoded `-m 2048 -smp 4` with `${defaultMemory}` `${defaultCpus}` from vmConfig
 
+### Functional test suite design (Feb 19 2026)
+- In-guest test approach: modify startupScriptText to run tests, avoids pty/expect entirely
+- Tests output `FUNC_TEST:name:PASS/FAIL` to serial; host script polls the file (same pattern as boot test)
+- Ion shell (not bash) runs the test script — `let var = val`, `if test ... end`, `exists -f`
+- Startup script gets `#!/bin/sh` prepended by build module (sh→ion symlink on Redox)
+- No `echo -e` in Ion — use separate echo statements or file writes for multi-line
+- No `$$` in Ion for PID — use static test file names with fixed suffixes
+- New profile `functional-test.nix` extends development with test runner
+- `mkFunctionalTest` factory in infrastructure alongside `mkBootTest`
+- Eval test for functional-test profile added to CI fast-checks tier
+
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc
 - SchemeDaemon API: nulld/zerod/randd/logd/ramfs use `scheme <name> <cmd>` not `notify`

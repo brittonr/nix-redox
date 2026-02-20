@@ -61,7 +61,8 @@ jobs:
             .#checks.x86_64-linux.eval-logging-config \
             .#checks.x86_64-linux.eval-security-config \
             .#checks.x86_64-linux.eval-programs-config \
-            .#checks.x86_64-linux.eval-power-config
+            .#checks.x86_64-linux.eval-power-config \
+            .#checks.x86_64-linux.eval-profile-functional-test
 
       - name: "Type validation tests"
         run: |
