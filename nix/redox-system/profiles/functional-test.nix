@@ -330,6 +330,14 @@ let
             echo "FUNC_TEST:snix-info-files:FAIL"
         end
 
+        # Test: info output shows generation info
+        grep -q Generation /tmp/sys_info
+        if test $? = 0
+            echo "FUNC_TEST:snix-info-generation:PASS"
+        else
+            echo "FUNC_TEST:snix-info-generation:FAIL"
+        end
+
         rm /tmp/sys_info
         rm /tmp/sys_err
 
@@ -344,12 +352,93 @@ let
         end
         rm /tmp/sys_verify
         rm /tmp/sys_verr
+
+        # ── Generation Management ─────────────────────────────
+        # Test: generations directory exists and has generation 1
+        if exists -d /etc/redox-system/generations/1
+            echo "FUNC_TEST:generation-dir-exists:PASS"
+        else
+            echo "FUNC_TEST:generation-dir-exists:FAIL"
+        end
+
+        if exists -f /etc/redox-system/generations/1/manifest.json
+            echo "FUNC_TEST:generation-1-manifest:PASS"
+        else
+            echo "FUNC_TEST:generation-1-manifest:FAIL"
+        end
+
+        # Test: snix system generations lists at least one generation
+        /bin/snix system generations > /tmp/sys_gens ^> /tmp/sys_gens_err
+        if test $? = 0
+            echo "FUNC_TEST:snix-system-generations:PASS"
+        else
+            echo "FUNC_TEST:snix-system-generations:FAIL"
+        end
+
+        # Test: generations output contains header
+        grep -q "System Generations" /tmp/sys_gens
+        if test $? = 0
+            echo "FUNC_TEST:snix-generations-header:PASS"
+        else
+            echo "FUNC_TEST:snix-generations-header:FAIL"
+        end
+
+        # Test: generations output shows at least 1 stored generation
+        grep -q "Generations stored" /tmp/sys_gens
+        if test $? = 0
+            echo "FUNC_TEST:snix-generations-count:PASS"
+        else
+            echo "FUNC_TEST:snix-generations-count:FAIL"
+        end
+
+        rm /tmp/sys_gens
+        rm /tmp/sys_gens_err
+
+        # Test: snix system switch works (create a modified manifest, switch to it)
+        cp /etc/redox-system/manifest.json /tmp/new_manifest.json
+        /bin/snix system switch /tmp/new_manifest.json -D "test switch" --gen-dir /tmp/test_gens --manifest /tmp/switch_test.json ^> /tmp/switch_err
+        # This will fail because /tmp/switch_test.json doesn't exist yet as "current"
+        # Instead, test switch with a proper setup:
+        cp /etc/redox-system/manifest.json /tmp/switch_current.json
+        /bin/snix system switch /tmp/new_manifest.json -D "test switch" --gen-dir /tmp/test_gens --manifest /tmp/switch_current.json > /tmp/switch_out ^> /tmp/switch_err
+        if test $? = 0
+            echo "FUNC_TEST:snix-system-switch:PASS"
+        else
+            echo "FUNC_TEST:snix-system-switch:FAIL"
+        end
+
+        # Verify switch created generation entries
+        if exists -d /tmp/test_gens/1
+            echo "FUNC_TEST:switch-saves-old-gen:PASS"
+        else
+            echo "FUNC_TEST:switch-saves-old-gen:FAIL"
+        end
+
+        if exists -d /tmp/test_gens/2
+            echo "FUNC_TEST:switch-creates-new-gen:PASS"
+        else
+            echo "FUNC_TEST:switch-creates-new-gen:FAIL"
+        end
+
+        rm /tmp/new_manifest.json
+        rm /tmp/switch_current.json
+        rm /tmp/switch_out
+        rm /tmp/switch_err
     else
         echo "FUNC_TEST:snix-system-info:SKIP"
         echo "FUNC_TEST:snix-info-hostname:SKIP"
         echo "FUNC_TEST:snix-info-packages:SKIP"
         echo "FUNC_TEST:snix-info-files:SKIP"
+        echo "FUNC_TEST:snix-info-generation:SKIP"
         echo "FUNC_TEST:snix-system-verify:SKIP"
+        echo "FUNC_TEST:generation-dir-exists:SKIP"
+        echo "FUNC_TEST:generation-1-manifest:SKIP"
+        echo "FUNC_TEST:snix-system-generations:SKIP"
+        echo "FUNC_TEST:snix-generations-header:SKIP"
+        echo "FUNC_TEST:snix-generations-count:SKIP"
+        echo "FUNC_TEST:snix-system-switch:SKIP"
+        echo "FUNC_TEST:switch-saves-old-gen:SKIP"
+        echo "FUNC_TEST:switch-creates-new-gen:SKIP"
     end
 
     echo ""

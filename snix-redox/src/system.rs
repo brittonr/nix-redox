@@ -1,13 +1,16 @@
-//! System introspection commands for RedoxOS.
+//! System introspection and generation management for RedoxOS.
 //!
 //! Reads `/etc/redox-system/manifest.json` embedded at build time and
-//! provides commands for querying, verifying, and diffing the running
-//! system configuration.
+//! provides commands for querying, verifying, diffing, and managing
+//! system generations.
 //!
 //! Commands:
-//!   - `snix system info`   — display system metadata and configuration
-//!   - `snix system verify` — check all tracked files against manifest hashes
-//!   - `snix system diff`   — compare current manifest with another
+//!   - `snix system info`        — display system metadata and configuration
+//!   - `snix system verify`      — check all tracked files against manifest hashes
+//!   - `snix system diff`        — compare current manifest with another
+//!   - `snix system generations` — list all tracked system generations
+//!   - `snix system switch`      — save current generation and activate a new manifest
+//!   - `snix system rollback`    — revert to the previous generation
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -20,6 +23,9 @@ use sha2::{Digest, Sha256};
 /// Default manifest path on the running Redox system
 const MANIFEST_PATH: &str = "/etc/redox-system/manifest.json";
 
+/// Directory holding generation snapshots
+const GENERATIONS_DIR: &str = "/etc/redox-system/generations";
+
 // ===== Manifest Schema =====
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -27,6 +33,8 @@ const MANIFEST_PATH: &str = "/etc/redox-system/manifest.json";
 pub struct Manifest {
     pub manifest_version: u32,
     pub system: SystemInfo,
+    #[serde(default)]
+    pub generation: GenerationInfo,
     pub configuration: Configuration,
     pub packages: Vec<Package>,
     pub drivers: Drivers,
@@ -35,6 +43,33 @@ pub struct Manifest {
     pub services: Services,
     #[serde(default)]
     pub files: BTreeMap<String, FileInfo>,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct GenerationInfo {
+    /// Monotonically increasing generation number
+    pub id: u32,
+    /// Content hash of the rootTree (for deduplication)
+    #[serde(default)]
+    pub build_hash: String,
+    /// Optional description (e.g. "added ripgrep", "switched to static networking")
+    #[serde(default)]
+    pub description: String,
+    /// ISO 8601 timestamp set at switch time (not build time, for reproducibility)
+    #[serde(default)]
+    pub timestamp: String,
+}
+
+impl Default for GenerationInfo {
+    fn default() -> Self {
+        Self {
+            id: 1,
+            build_hash: String::new(),
+            description: "initial build".to_string(),
+            timestamp: String::new(),
+        }
+    }
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -190,6 +225,12 @@ pub fn info(manifest_path: Option<&str>) -> Result<(), Box<dyn std::error::Error
     println!("  Profile:    {}", manifest.system.profile);
     println!("  Hostname:   {}", manifest.system.hostname);
     println!("  Timezone:   {}", manifest.system.timezone);
+    println!("  Generation: {} {}", manifest.generation.id,
+        if manifest.generation.description.is_empty() { "" }
+        else { &manifest.generation.description });
+    if !manifest.generation.timestamp.is_empty() {
+        println!("  Built:      {}", manifest.generation.timestamp);
+    }
     println!();
 
     let cfg = &manifest.configuration;
@@ -342,17 +383,32 @@ pub fn diff(other_path: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut has_diff = false;
 
+    // Generation metadata
+    if current.generation.id != other.generation.id {
+        println!("Generation: {} -> {}", other.generation.id, current.generation.id);
+        has_diff = true;
+    }
+    if current.generation.build_hash != other.generation.build_hash
+        && !current.generation.build_hash.is_empty()
+        && !other.generation.build_hash.is_empty()
+    {
+        println!("Build hash: {}… -> {}…",
+            &other.generation.build_hash[..12.min(other.generation.build_hash.len())],
+            &current.generation.build_hash[..12.min(current.generation.build_hash.len())]);
+        has_diff = true;
+    }
+
     // System metadata
     if current.system.redox_system_version != other.system.redox_system_version {
-        println!("Version: {} -> {}", current.system.redox_system_version, other.system.redox_system_version);
+        println!("Version: {} -> {}", other.system.redox_system_version, current.system.redox_system_version);
         has_diff = true;
     }
     if current.system.profile != other.system.profile {
-        println!("Profile: {} -> {}", current.system.profile, other.system.profile);
+        println!("Profile: {} -> {}", other.system.profile, current.system.profile);
         has_diff = true;
     }
     if current.system.hostname != other.system.hostname {
-        println!("Hostname: {} -> {}", current.system.hostname, other.system.hostname);
+        println!("Hostname: {} -> {}", other.system.hostname, current.system.hostname);
         has_diff = true;
     }
 
@@ -514,6 +570,332 @@ pub fn diff(other_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// ===== Generation Management =====
+
+/// A discovered generation on disk
+#[derive(Debug)]
+struct Generation {
+    id: u32,
+    manifest: Manifest,
+    #[allow(dead_code)]
+    path: std::path::PathBuf,
+}
+
+/// Scan the generations directory and return sorted generations
+fn scan_generations(gen_dir: &str) -> Result<Vec<Generation>, Box<dyn std::error::Error>> {
+    let dir = Path::new(gen_dir);
+    if !dir.exists() {
+        return Ok(Vec::new());
+    }
+
+    let mut gens = Vec::new();
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+
+        // Generation dirs are named by number: 1/, 2/, 3/...
+        if let Ok(id) = name_str.parse::<u32>() {
+            let manifest_path = entry.path().join("manifest.json");
+            if manifest_path.exists() {
+                match load_manifest_from(manifest_path.to_str().unwrap_or("")) {
+                    Ok(manifest) => {
+                        gens.push(Generation {
+                            id,
+                            manifest,
+                            path: manifest_path,
+                        });
+                    }
+                    Err(e) => {
+                        eprintln!("warning: skipping generation {id}: {e}");
+                    }
+                }
+            }
+        }
+    }
+
+    gens.sort_by_key(|g| g.id);
+    Ok(gens)
+}
+
+/// Find the highest generation ID across stored generations and current manifest
+fn next_generation_id(gen_dir: &str, current: &Manifest) -> u32 {
+    let max_stored = scan_generations(gen_dir)
+        .unwrap_or_default()
+        .iter()
+        .map(|g| g.id)
+        .max()
+        .unwrap_or(0);
+    let max_id = std::cmp::max(max_stored, current.generation.id);
+    max_id + 1
+}
+
+/// List all system generations
+pub fn generations(gen_dir: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = gen_dir.unwrap_or(GENERATIONS_DIR);
+    let gens = scan_generations(dir)?;
+
+    // Also load current system manifest
+    let current = load_manifest().ok();
+
+    if gens.is_empty() && current.is_none() {
+        println!("No generations found.");
+        println!("Hint: generations are created when you run 'snix system switch'.");
+        return Ok(());
+    }
+
+    println!("System Generations");
+    println!("==================");
+    println!();
+    println!("{:>4}  {:>6}  {:>4}  {:>4}  {:20}  {}",
+        "Gen", "Ver", "Pkgs", "Drvs", "Timestamp", "Description");
+    println!("{}", "-".repeat(72));
+
+    for gen in &gens {
+        let m = &gen.manifest;
+        let is_current = current.as_ref()
+            .map(|c| c.generation.id == gen.id)
+            .unwrap_or(false);
+        let marker = if is_current { " *" } else { "" };
+
+        println!("{:>4}{:2}  {:>6}  {:>4}  {:>4}  {:20}  {}",
+            gen.id,
+            marker,
+            m.system.redox_system_version,
+            m.packages.len(),
+            m.drivers.all.len(),
+            if m.generation.timestamp.is_empty() { "-" } else { &m.generation.timestamp },
+            m.generation.description,
+        );
+    }
+
+    // Show current if it's not in the generations dir
+    if let Some(ref cur) = current {
+        let cur_in_gens = gens.iter().any(|g| g.id == cur.generation.id);
+        if !cur_in_gens {
+            println!("{:>4} *  {:>6}  {:>4}  {:>4}  {:20}  {} (current, not yet saved)",
+                cur.generation.id,
+                cur.system.redox_system_version,
+                cur.packages.len(),
+                cur.drivers.all.len(),
+                if cur.generation.timestamp.is_empty() { "-" } else { &cur.generation.timestamp },
+                cur.generation.description,
+            );
+        }
+    }
+
+    println!();
+    if let Some(ref cur) = current {
+        println!("Current generation: {}", cur.generation.id);
+    }
+    println!("Generations stored: {}", gens.len());
+
+    Ok(())
+}
+
+/// Switch to a new manifest, saving the current one as a generation
+pub fn switch(
+    new_manifest_path: &str,
+    description: Option<&str>,
+    gen_dir: Option<&str>,
+    manifest_path: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = gen_dir.unwrap_or(GENERATIONS_DIR);
+    let mpath = manifest_path.unwrap_or(MANIFEST_PATH);
+
+    // Load current manifest
+    let current = load_manifest_from(mpath)?;
+
+    // Load new manifest
+    let mut new_manifest = load_manifest_from(new_manifest_path)?;
+
+    // Assign next generation ID
+    let next_id = next_generation_id(dir, &current);
+    new_manifest.generation.id = next_id;
+    new_manifest.generation.timestamp = current_timestamp();
+    if let Some(desc) = description {
+        new_manifest.generation.description = desc.to_string();
+    }
+
+    // Save current manifest as a generation (if not already saved)
+    let current_gen_dir = Path::new(dir).join(current.generation.id.to_string());
+    if !current_gen_dir.exists() {
+        fs::create_dir_all(&current_gen_dir)?;
+        let current_json = serde_json::to_string_pretty(&current)?;
+        fs::write(current_gen_dir.join("manifest.json"), current_json)?;
+        println!("Saved current system as generation {}", current.generation.id);
+    }
+
+    // Save new manifest as a generation
+    let new_gen_dir = Path::new(dir).join(next_id.to_string());
+    fs::create_dir_all(&new_gen_dir)?;
+    let new_json = serde_json::to_string_pretty(&new_manifest)?;
+    fs::write(new_gen_dir.join("manifest.json"), &new_json)?;
+
+    // Install as current manifest
+    fs::write(mpath, &new_json)?;
+
+    println!("Switched to generation {next_id}");
+
+    // Show brief diff
+    let cur_pkgs: std::collections::BTreeSet<_> = current.packages.iter()
+        .map(|p| &p.name).collect();
+    let new_pkgs: std::collections::BTreeSet<_> = new_manifest.packages.iter()
+        .map(|p| &p.name).collect();
+    let added: Vec<_> = new_pkgs.difference(&cur_pkgs).collect();
+    let removed: Vec<_> = cur_pkgs.difference(&new_pkgs).collect();
+
+    if !added.is_empty() || !removed.is_empty() {
+        println!();
+        if !added.is_empty() {
+            println!("Packages added:   {}", added.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+        }
+        if !removed.is_empty() {
+            println!("Packages removed: {}", removed.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+        }
+    }
+
+    if current.system.redox_system_version != new_manifest.system.redox_system_version {
+        println!("Version: {} -> {}", current.system.redox_system_version, new_manifest.system.redox_system_version);
+    }
+
+    Ok(())
+}
+
+/// Rollback to the previous generation (or a specific one)
+pub fn rollback(
+    target_id: Option<u32>,
+    gen_dir: Option<&str>,
+    manifest_path: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = gen_dir.unwrap_or(GENERATIONS_DIR);
+    let mpath = manifest_path.unwrap_or(MANIFEST_PATH);
+
+    let current = load_manifest_from(mpath)?;
+    let gens = scan_generations(dir)?;
+
+    if gens.is_empty() {
+        return Err("No previous generations found. Nothing to roll back to.".into());
+    }
+
+    // Find target generation
+    let target = match target_id {
+        Some(id) => {
+            gens.iter().find(|g| g.id == id)
+                .ok_or_else(|| format!("Generation {id} not found. Available: {}",
+                    gens.iter().map(|g| g.id.to_string()).collect::<Vec<_>>().join(", ")))?
+        }
+        None => {
+            // Find the most recent generation BEFORE the current one
+            gens.iter()
+                .rev()
+                .find(|g| g.id < current.generation.id)
+                .or_else(|| gens.last()) // fallback to latest stored
+                .ok_or("No previous generation found to roll back to.")?
+        }
+    };
+
+    if target.id == current.generation.id {
+        println!("Already at generation {}. Nothing to do.", target.id);
+        return Ok(());
+    }
+
+    println!("Rolling back from generation {} to generation {}...",
+        current.generation.id, target.id);
+    println!();
+
+    // Show what changes
+    let cur_pkgs: std::collections::BTreeSet<_> = current.packages.iter()
+        .map(|p| &p.name).collect();
+    let tgt_pkgs: std::collections::BTreeSet<_> = target.manifest.packages.iter()
+        .map(|p| &p.name).collect();
+    let added: Vec<_> = tgt_pkgs.difference(&cur_pkgs).collect();
+    let removed: Vec<_> = cur_pkgs.difference(&tgt_pkgs).collect();
+
+    if !added.is_empty() {
+        println!("Packages restored: {}", added.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+    }
+    if !removed.is_empty() {
+        println!("Packages removed:  {}", removed.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+    }
+
+    if current.system.redox_system_version != target.manifest.system.redox_system_version {
+        println!("Version: {} -> {}", current.system.redox_system_version, target.manifest.system.redox_system_version);
+    }
+
+    // Save current as a generation if not already saved
+    let current_gen_dir = Path::new(dir).join(current.generation.id.to_string());
+    if !current_gen_dir.exists() {
+        fs::create_dir_all(&current_gen_dir)?;
+        let current_json = serde_json::to_string_pretty(&current)?;
+        fs::write(current_gen_dir.join("manifest.json"), current_json)?;
+    }
+
+    // Write the target manifest as current (update generation metadata)
+    let mut rolled_back = target.manifest.clone();
+    let next_id = next_generation_id(dir, &current);
+    rolled_back.generation.id = next_id;
+    rolled_back.generation.timestamp = current_timestamp();
+    rolled_back.generation.description = format!("rollback to generation {}", target.id);
+
+    // Save rolled-back state as new generation
+    let new_gen_dir = Path::new(dir).join(next_id.to_string());
+    fs::create_dir_all(&new_gen_dir)?;
+    let new_json = serde_json::to_string_pretty(&rolled_back)?;
+    fs::write(new_gen_dir.join("manifest.json"), &new_json)?;
+
+    // Install as current
+    fs::write(mpath, &new_json)?;
+
+    println!();
+    println!("Rolled back to generation {} (saved as generation {next_id})", target.id);
+    println!();
+    println!("Note: This updates the manifest only. File contents are not");
+    println!("changed — rebuild and redeploy for a full rollback.");
+
+    Ok(())
+}
+
+/// Get current timestamp as ISO 8601 string
+/// On Redox, this reads the system clock. Falls back gracefully.
+fn current_timestamp() -> String {
+    // Try to read /scheme/time/now or use a simple epoch-based approach
+    // For portability, use a basic approach that works on both Linux and Redox
+    match std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH) {
+        Ok(d) => {
+            let secs = d.as_secs();
+            // Simple UTC timestamp without pulling in chrono
+            let days = secs / 86400;
+            let remaining = secs % 86400;
+            let hours = remaining / 3600;
+            let minutes = (remaining % 3600) / 60;
+            let seconds = remaining % 60;
+
+            // Days since 1970-01-01 → approximate date
+            // Good enough for generation tracking
+            let (year, month, day) = days_to_date(days);
+            format!("{year:04}-{month:02}-{day:02}T{hours:02}:{minutes:02}:{seconds:02}Z")
+        }
+        Err(_) => String::new(),
+    }
+}
+
+/// Convert days since epoch to (year, month, day)
+fn days_to_date(days: u64) -> (u64, u64, u64) {
+    // Civil days algorithm (Howard Hinnant)
+    let z = days + 719468;
+    let era = z / 146097;
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = if m <= 2 { y + 1 } else { y };
+    (y, m, d)
+}
+
 // ===== Helpers =====
 
 fn hash_file(path: &Path) -> std::io::Result<String> {
@@ -544,6 +926,12 @@ mod tests {
                 profile: "redox".to_string(),
                 hostname: "test-host".to_string(),
                 timezone: "UTC".to_string(),
+            },
+            generation: GenerationInfo {
+                id: 1,
+                build_hash: "abc123".to_string(),
+                description: "initial build".to_string(),
+                timestamp: "2026-02-19T10:00:00Z".to_string(),
             },
             configuration: Configuration {
                 boot: BootConfig {
@@ -817,5 +1205,317 @@ mod tests {
         // the manifest loading path. Full verification requires running on Redox.
         let loaded = load_manifest_from(manifest_path.to_str().unwrap()).unwrap();
         assert_eq!(loaded.files.len(), 1);
+    }
+
+    // ===== Generation Tests =====
+
+    #[test]
+    fn generation_default_values() {
+        let gen = GenerationInfo::default();
+        assert_eq!(gen.id, 1);
+        assert_eq!(gen.description, "initial build");
+        assert!(gen.build_hash.is_empty());
+        assert!(gen.timestamp.is_empty());
+    }
+
+    #[test]
+    fn manifest_generation_field_serializes() {
+        let manifest = sample_manifest();
+        let json = serde_json::to_string(&manifest).unwrap();
+        assert!(json.contains("\"generation\""));
+        assert!(json.contains("\"buildHash\""));
+        assert!(json.contains("\"description\""));
+        assert!(json.contains("initial build"));
+    }
+
+    #[test]
+    fn manifest_generation_deserializes() {
+        let json = r#"{
+            "manifestVersion": 1,
+            "system": {
+                "redoxSystemVersion": "0.4.0",
+                "target": "x86_64-unknown-redox",
+                "profile": "test",
+                "hostname": "myhost",
+                "timezone": "UTC"
+            },
+            "generation": {
+                "id": 3,
+                "buildHash": "deadbeef",
+                "description": "added ripgrep",
+                "timestamp": "2026-02-19T12:00:00Z"
+            },
+            "configuration": {
+                "boot": { "diskSizeMB": 512, "espSizeMB": 200 },
+                "hardware": {
+                    "storageDrivers": [], "networkDrivers": [],
+                    "graphicsDrivers": [], "audioDrivers": [], "usbEnabled": false
+                },
+                "networking": { "enabled": false, "mode": "none", "dns": [] },
+                "graphics": { "enabled": false, "resolution": "1024x768" },
+                "security": { "protectKernelSchemes": true, "requirePasswords": false, "allowRemoteRoot": false },
+                "logging": { "logLevel": "info", "kernelLogLevel": "warn", "logToFile": true, "maxLogSizeMB": 10 },
+                "power": { "acpiEnabled": true, "powerAction": "shutdown", "rebootOnPanic": false }
+            },
+            "packages": [],
+            "drivers": { "all": [], "initfs": [], "core": [] },
+            "users": {},
+            "groups": {},
+            "services": { "initScripts": [], "startupScript": "/startup.sh" },
+            "files": {}
+        }"#;
+
+        let manifest: Manifest = serde_json::from_str(json).unwrap();
+        assert_eq!(manifest.generation.id, 3);
+        assert_eq!(manifest.generation.build_hash, "deadbeef");
+        assert_eq!(manifest.generation.description, "added ripgrep");
+        assert_eq!(manifest.generation.timestamp, "2026-02-19T12:00:00Z");
+    }
+
+    #[test]
+    fn manifest_without_generation_uses_defaults() {
+        // Old manifests won't have the generation field — should use Default
+        let json = r#"{
+            "manifestVersion": 1,
+            "system": {
+                "redoxSystemVersion": "0.3.0",
+                "target": "x86_64-unknown-redox",
+                "profile": "test",
+                "hostname": "old-host",
+                "timezone": "UTC"
+            },
+            "configuration": {
+                "boot": { "diskSizeMB": 512, "espSizeMB": 200 },
+                "hardware": {
+                    "storageDrivers": [], "networkDrivers": [],
+                    "graphicsDrivers": [], "audioDrivers": [], "usbEnabled": false
+                },
+                "networking": { "enabled": false, "mode": "none", "dns": [] },
+                "graphics": { "enabled": false, "resolution": "1024x768" },
+                "security": { "protectKernelSchemes": true, "requirePasswords": false, "allowRemoteRoot": false },
+                "logging": { "logLevel": "info", "kernelLogLevel": "warn", "logToFile": true, "maxLogSizeMB": 10 },
+                "power": { "acpiEnabled": true, "powerAction": "shutdown", "rebootOnPanic": false }
+            },
+            "packages": [],
+            "drivers": { "all": [], "initfs": [], "core": [] },
+            "users": {},
+            "groups": {},
+            "services": { "initScripts": [], "startupScript": "/startup.sh" },
+            "files": {}
+        }"#;
+
+        let manifest: Manifest = serde_json::from_str(json).unwrap();
+        assert_eq!(manifest.generation.id, 1);
+        assert_eq!(manifest.generation.description, "initial build");
+    }
+
+    #[test]
+    fn scan_generations_empty_dir() {
+        let dir = tempfile::tempdir().unwrap();
+        let gens = scan_generations(dir.path().to_str().unwrap()).unwrap();
+        assert!(gens.is_empty());
+    }
+
+    #[test]
+    fn scan_generations_nonexistent_dir() {
+        let gens = scan_generations("/nonexistent/path").unwrap();
+        assert!(gens.is_empty());
+    }
+
+    #[test]
+    fn scan_generations_finds_numbered_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // Create 3 generations
+        for i in 1..=3 {
+            let gen_dir = dir.path().join(i.to_string());
+            std::fs::create_dir_all(&gen_dir).unwrap();
+            let mut m = sample_manifest();
+            m.generation.id = i;
+            m.generation.description = format!("gen {i}");
+            let json = serde_json::to_string_pretty(&m).unwrap();
+            std::fs::write(gen_dir.join("manifest.json"), json).unwrap();
+        }
+
+        let gens = scan_generations(dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(gens.len(), 3);
+        assert_eq!(gens[0].id, 1);
+        assert_eq!(gens[1].id, 2);
+        assert_eq!(gens[2].id, 3);
+        assert_eq!(gens[0].manifest.generation.description, "gen 1");
+    }
+
+    #[test]
+    fn scan_generations_skips_non_numeric_dirs() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // Valid generation
+        let gen1 = dir.path().join("1");
+        std::fs::create_dir_all(&gen1).unwrap();
+        let m = sample_manifest();
+        std::fs::write(gen1.join("manifest.json"), serde_json::to_string(&m).unwrap()).unwrap();
+
+        // Non-numeric dir — should be skipped
+        let invalid = dir.path().join("latest");
+        std::fs::create_dir_all(&invalid).unwrap();
+        std::fs::write(invalid.join("manifest.json"), "{}").unwrap();
+
+        let gens = scan_generations(dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(gens.len(), 1);
+        assert_eq!(gens[0].id, 1);
+    }
+
+    #[test]
+    fn next_generation_id_increments() {
+        let dir = tempfile::tempdir().unwrap();
+
+        let m = sample_manifest(); // generation.id = 1
+        assert_eq!(next_generation_id(dir.path().to_str().unwrap(), &m), 2);
+
+        // Add generation 5
+        let gen5 = dir.path().join("5");
+        std::fs::create_dir_all(&gen5).unwrap();
+        let mut m5 = sample_manifest();
+        m5.generation.id = 5;
+        std::fs::write(gen5.join("manifest.json"), serde_json::to_string(&m5).unwrap()).unwrap();
+
+        assert_eq!(next_generation_id(dir.path().to_str().unwrap(), &m), 6);
+    }
+
+    #[test]
+    fn switch_creates_generations() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+        let new_manifest_file = dir.path().join("new.json");
+
+        // Write current manifest
+        let mut current = sample_manifest();
+        current.generation.id = 1;
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+
+        // Write new manifest (with different packages)
+        let mut new_m = sample_manifest();
+        new_m.packages.push(Package { name: "ripgrep".to_string(), version: "14.0".to_string() });
+        std::fs::write(&new_manifest_file, serde_json::to_string_pretty(&new_m).unwrap()).unwrap();
+
+        // Switch
+        switch(
+            new_manifest_file.to_str().unwrap(),
+            Some("added ripgrep"),
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        ).unwrap();
+
+        // Verify generation 1 was saved
+        assert!(gen_dir.join("1/manifest.json").exists());
+
+        // Verify generation 2 was created
+        assert!(gen_dir.join("2/manifest.json").exists());
+
+        // Verify current manifest was updated
+        let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
+        assert_eq!(active.generation.id, 2);
+        assert_eq!(active.generation.description, "added ripgrep");
+        assert_eq!(active.packages.len(), 3); // ion + uutils + ripgrep
+        assert!(!active.generation.timestamp.is_empty());
+    }
+
+    #[test]
+    fn rollback_restores_previous() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+
+        // Create generation 1
+        let gen1_dir = gen_dir.join("1");
+        std::fs::create_dir_all(&gen1_dir).unwrap();
+        let mut gen1 = sample_manifest();
+        gen1.generation.id = 1;
+        gen1.generation.description = "first".to_string();
+        std::fs::write(gen1_dir.join("manifest.json"), serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+
+        // Create generation 2 (current)
+        let gen2_dir = gen_dir.join("2");
+        std::fs::create_dir_all(&gen2_dir).unwrap();
+        let mut gen2 = sample_manifest();
+        gen2.generation.id = 2;
+        gen2.generation.description = "added extra package".to_string();
+        gen2.packages.push(Package { name: "ripgrep".to_string(), version: "14.0".to_string() });
+        std::fs::write(gen2_dir.join("manifest.json"), serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+
+        // Rollback to generation 1
+        rollback(
+            Some(1),
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        ).unwrap();
+
+        // Verify current manifest has gen1's packages but new generation ID
+        let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
+        assert_eq!(active.packages.len(), 2); // Back to ion + uutils only
+        assert_eq!(active.generation.id, 3); // New generation (3 = rollback)
+        assert!(active.generation.description.contains("rollback to generation 1"));
+    }
+
+    #[test]
+    fn rollback_no_generations_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("empty_gens");
+        let manifest_file = dir.path().join("current.json");
+
+        std::fs::create_dir_all(&gen_dir).unwrap();
+        let m = sample_manifest();
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&m).unwrap()).unwrap();
+
+        let result = rollback(
+            None,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn days_to_date_epoch() {
+        let (y, m, d) = days_to_date(0);
+        assert_eq!((y, m, d), (1970, 1, 1));
+    }
+
+    #[test]
+    fn days_to_date_known_date() {
+        // 2026-02-19 is day 20503 since epoch
+        let (y, m, d) = days_to_date(20503);
+        assert_eq!((y, m, d), (2026, 2, 19));
+    }
+
+    #[test]
+    fn current_timestamp_format() {
+        let ts = current_timestamp();
+        // Should be ISO 8601 format or empty
+        if !ts.is_empty() {
+            assert!(ts.contains('T'));
+            assert!(ts.ends_with('Z'));
+            assert!(ts.len() >= 19); // YYYY-MM-DDTHH:MM:SSZ
+        }
+    }
+
+    #[test]
+    fn generations_with_stored_gens() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+
+        // Create 2 generations
+        for i in 1..=2 {
+            let gd = gen_dir.join(i.to_string());
+            std::fs::create_dir_all(&gd).unwrap();
+            let mut m = sample_manifest();
+            m.generation.id = i;
+            std::fs::write(gd.join("manifest.json"), serde_json::to_string(&m).unwrap()).unwrap();
+        }
+
+        // Should not error (just prints to stdout)
+        generations(Some(gen_dir.to_str().unwrap())).unwrap();
     }
 }

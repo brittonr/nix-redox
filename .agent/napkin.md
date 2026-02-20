@@ -178,6 +178,19 @@
 - New profile `functional-test.nix` extends development with test runner
 - `mkFunctionalTest` factory in infrastructure alongside `mkBootTest`
 
+### Generation system (Feb 19 2026)
+- `#[serde(default)]` on struct fields with `impl Default` allows backward-compatible manifest evolution
+  - Old manifests without `generation` field deserialize cleanly using `GenerationInfo::default()`
+- `tempfile` v3.25.0 pulls rustix v1.1.3 which is broken on nightly 1.92.0 — pin to tempfile v3.14.0
+- Generation buildHash is computed from the sorted file inventory JSON (content-addressable)
+  - This avoids any Nix store path identity leaking into the hash
+- Generations dir in rootTree MUST be excluded from the file inventory walk to avoid self-reference
+- `days_to_date` uses Howard Hinnant's civil days algorithm — pure arithmetic, no deps
+- rollback creates a NEW generation (forward-moving counter), not an in-place revert
+  - This preserves the audit trail: gen 1 → gen 2 → gen 3 (rollback to 1)
+- Functional test for `switch`: must set up BOTH a current manifest file AND a new one
+  - First `cp` the real manifest, then call switch with `--manifest /tmp/copy.json`
+
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc
 - SchemeDaemon API: nulld/zerod/randd/logd/ramfs use `scheme <name> <cmd>` not `notify`

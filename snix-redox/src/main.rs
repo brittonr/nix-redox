@@ -95,6 +95,46 @@ enum SystemCommand {
         /// Path to the other manifest.json to compare against
         path: String,
     },
+
+    /// List all system generations
+    Generations {
+        /// Path to generations directory (default: /etc/redox-system/generations)
+        #[arg(short, long)]
+        dir: Option<String>,
+    },
+
+    /// Switch to a new system manifest, saving current as a generation
+    Switch {
+        /// Path to the new manifest.json to activate
+        path: String,
+
+        /// Description for this generation (e.g. "added ripgrep")
+        #[arg(short = 'D', long)]
+        description: Option<String>,
+
+        /// Path to generations directory
+        #[arg(short, long)]
+        gen_dir: Option<String>,
+
+        /// Path to current manifest file
+        #[arg(short, long)]
+        manifest: Option<String>,
+    },
+
+    /// Rollback to a previous generation
+    Rollback {
+        /// Generation number to roll back to (default: previous)
+        #[arg(short, long)]
+        generation: Option<u32>,
+
+        /// Path to generations directory
+        #[arg(short, long)]
+        dir: Option<String>,
+
+        /// Path to current manifest file
+        #[arg(short, long)]
+        manifest: Option<String>,
+    },
 }
 
 fn main() {
@@ -121,6 +161,15 @@ fn main() {
                 system::verify(manifest.as_deref(), verbose)
             }
             SystemCommand::Diff { path } => system::diff(&path),
+            SystemCommand::Generations { dir } => {
+                system::generations(dir.as_deref())
+            }
+            SystemCommand::Switch { path, description, gen_dir, manifest } => {
+                system::switch(&path, description.as_deref(), gen_dir.as_deref(), manifest.as_deref())
+            }
+            SystemCommand::Rollback { generation, dir, manifest } => {
+                system::rollback(generation, dir.as_deref(), manifest.as_deref())
+            }
         },
     };
 

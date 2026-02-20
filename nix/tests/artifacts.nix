@@ -950,7 +950,7 @@ in
       }
       {
         file = "version.json";
-        contains = "0.4.0";
+        contains = "0.5.0";
       }
     ];
   };
@@ -1160,11 +1160,102 @@ in
     checks = [
       {
         file = "etc/redox-system/manifest.json";
-        contains = ''"redoxSystemVersion": "0.4.0"'';
+        contains = ''"redoxSystemVersion": "0.5.0"'';
       }
       {
         file = "etc/redox-system/manifest.json";
         contains = ''"manifestVersion": 1'';
+      }
+    ];
+  };
+
+  # ===== Generation Tests =====
+
+  # Test: Manifest contains generation metadata
+  rootTree-has-generation-metadata = mkArtifactTest {
+    name = "rootTree-has-generation-metadata";
+    description = "Verifies manifest.json contains generation field with id, buildHash, description";
+    modules = [ ];
+    checks = [
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = ''"generation"'';
+      }
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = ''"id": 1'';
+      }
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = ''"buildHash"'';
+      }
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = ''"description": "initial build"'';
+      }
+    ];
+  };
+
+  # Test: Generation 1 directory seeded in rootTree
+  rootTree-has-generation-dir = mkArtifactTest {
+    name = "rootTree-has-generation-dir";
+    description = "Verifies rootTree has /etc/redox-system/generations/1/ with manifest copy";
+    modules = [ ];
+    checks = [
+      {
+        file = "etc/redox-system/generations/1/manifest.json";
+      }
+      {
+        file = "etc/redox-system/generations/1/manifest.json";
+        contains = ''"manifestVersion": 1'';
+      }
+      {
+        file = "etc/redox-system/generations/1/manifest.json";
+        contains = ''"id": 1'';
+      }
+      {
+        file = "etc/redox-system/generations/1/manifest.json";
+        contains = ''"buildHash"'';
+      }
+    ];
+  };
+
+  # Test: Generation buildHash is non-empty (computed from file inventory)
+  rootTree-generation-buildhash = mkArtifactTest {
+    name = "rootTree-generation-buildhash";
+    description = "Verifies buildHash in generation metadata is a non-empty SHA256 hex string";
+    modules = [ ];
+    checks = [
+      {
+        # buildHash should be a 64-char hex string, not empty
+        # This check verifies it's at least populated (Python computed it)
+        file = "etc/redox-system/manifest.json";
+        notContains = ''"buildHash": ""'';
+      }
+    ];
+  };
+
+  # Test: Generation manifest matches current manifest
+  rootTree-generation-matches-current = mkArtifactTest {
+    name = "rootTree-generation-matches-current";
+    description = "Verifies generation 1 manifest content matches the current system manifest";
+    modules = [
+      {
+        "/time" = {
+          hostname = "gen-test-host";
+        };
+      }
+    ];
+    checks = [
+      {
+        # Current manifest has the hostname
+        file = "etc/redox-system/manifest.json";
+        contains = "gen-test-host";
+      }
+      {
+        # Generation copy also has it
+        file = "etc/redox-system/generations/1/manifest.json";
+        contains = "gen-test-host";
       }
     ];
   };

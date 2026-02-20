@@ -1005,16 +1005,18 @@ adios:
             ${mkPackages}
             ${mkGeneratedFiles}
 
-            # Compute file hashes and merge into manifest.json.
-            # The base manifest was written above; now we add the "files" key
-            # containing SHA256 hashes of every file in the rootTree (except
-            # manifest.json itself, to avoid a circular dependency).
+            # Compute file hashes, generation buildHash, and seed generations dir.
+            # The base manifest was written above; now we add:
+            #   1. "files" key with SHA256 hashes of every rootTree file
+            #   2. "generation.buildHash" — SHA256 of the sorted file inventory
+            #   3. /etc/redox-system/generations/1/ with a copy of the manifest
             python3 - <<'HASH_SCRIPT'
             import hashlib, json, os, stat
 
             root = os.environ["out"]
             manifest_rel = "etc/redox-system/manifest.json"
             manifest_path = os.path.join(root, manifest_rel)
+            gen_dir = os.path.join(root, "etc/redox-system/generations/1")
 
             # Read base manifest
             with open(manifest_path) as f:
@@ -1032,6 +1034,10 @@ adios:
                     if relpath == manifest_rel:
                         continue
 
+                    # Skip generation copies (they're copies of this manifest)
+                    if relpath.startswith("etc/redox-system/generations/"):
+                        continue
+
                     # Skip symlinks — they point outside the tree
                     if os.path.islink(path):
                         continue
@@ -1046,11 +1052,22 @@ adios:
                         "mode": oct(stat.S_IMODE(st.st_mode))[2:],
                     }
 
-            # Merge file inventory into manifest
+            # Compute buildHash from the sorted file inventory
+            # This is a content-addressable fingerprint of the entire rootTree
+            inventory_json = json.dumps(inventory, sort_keys=True)
+            build_hash = hashlib.sha256(inventory_json.encode()).hexdigest()
+
+            # Merge file inventory and buildHash into manifest
             manifest["files"] = inventory
+            manifest["generation"]["buildHash"] = build_hash
 
             # Write final manifest
             with open(manifest_path, "w") as f:
+                json.dump(manifest, f, indent=2, sort_keys=True)
+
+            # Seed generation 1 — copy manifest to generations directory
+            os.makedirs(gen_dir, exist_ok=True)
+            with open(os.path.join(gen_dir, "manifest.json"), "w") as f:
                 json.dump(manifest, f, indent=2, sort_keys=True)
 
             HASH_SCRIPT
@@ -1256,7 +1273,7 @@ adios:
       # Structured metadata embedded in the system for inspection.
       systemName = "redox";
       versionInfo = {
-        redoxSystemVersion = "0.4.0";
+        redoxSystemVersion = "0.5.0";
         target = "x86_64-unknown-redox";
         profile = systemName;
         inherit hostname timezone;
@@ -1287,6 +1304,14 @@ adios:
           inherit (versionInfo) redoxSystemVersion target;
           inherit hostname timezone;
           profile = systemName;
+        };
+
+        # Generation tracking — seeded at build time, managed by `snix system switch`
+        generation = {
+          id = 1; # First build is generation 1
+          buildHash = ""; # Populated at rootTree build time (content hash)
+          description = "initial build";
+          timestamp = ""; # Set at switch/activation time (not build, for reproducibility)
         };
 
         configuration = {
