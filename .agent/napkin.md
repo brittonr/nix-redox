@@ -202,6 +202,21 @@
 - Ion redirect syntax: `>` for stdout, `^>` for stderr (NOT `2>`)
 - Cleanup `rm` at end not critical — VM is destroyed after test — but included for tidiness
 
+### snix-eval "Invalid opcode fault" on Redox — root cause (Feb 20 2026)
+- ALL `snix eval` commands crashed with "Invalid opcode fault" at RIP 0x632032 (ud2 instruction)
+- Non-eval commands (system info/verify/generations/switch) worked fine
+- Root cause chain:
+  1. `snix-eval` build.rs sets `SNIX_CURRENT_SYSTEM` = Cargo `TARGET` env → `x86_64-unknown-redox`
+  2. `builtins/mod.rs` reads it at compile time: `const CURRENT_PLATFORM = env!("SNIX_CURRENT_SYSTEM")`
+  3. `pure_builtins()` eagerly calls `llvm_triple_to_nix_double("x86_64-unknown-redox")`
+  4. `systems.rs::is_second_coordinate()` only matches `linux|darwin|netbsd|openbsd|freebsd` — NOT `redox`
+  5. Falls through to `panic!("unrecognized triple x86_64-unknown-redox")`
+  6. With `panic = "abort"`, panic handler emits `ud2` instruction → kernel kills process
+- Fix: patch vendored snix-eval's `is_second_coordinate` to include `"redox"` in the match
+- The `abort` function at 0x631f80 IS the panic handler — `ud2` is the intentional termination mechanism
+- Disassembly key: `testq %rax, %rax / je 0x632032` jumps to `ud2` when log level is 0 (no logging configured)
+- Must regenerate .cargo-checksum.json after patching vendored crates
+
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc
 - SchemeDaemon API: nulld/zerod/randd/logd/ramfs use `scheme <name> <cmd>` not `notify`

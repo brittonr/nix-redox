@@ -1,0 +1,11 @@
+--- a/snix-eval-0.1.0/src/systems.rs
++++ b/snix-eval-0.1.0/src/systems.rs
+@@ -1,7 +1,7 @@
+ /// true iff the argument is recognized by cppnix as the second
+ /// coordinate of a "nix double"
+ fn is_second_coordinate(x: &str) -> bool {
+-    matches!(x, "linux" | "darwin" | "netbsd" | "openbsd" | "freebsd")
++    matches!(x, "linux" | "darwin" | "netbsd" | "openbsd" | "freebsd" | "redox")
+ }
+
+ /// This function takes an llvm triple (which may have three or four
