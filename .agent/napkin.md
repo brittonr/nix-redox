@@ -191,6 +191,17 @@
 - Functional test for `switch`: must set up BOTH a current manifest file AND a new one
   - First `cp` the real manifest, then call switch with `--manifest /tmp/copy.json`
 
+### snix eval end-to-end tests (Feb 20 2026)
+- Added 8 `snix eval` tests to functional-test.nix profile (total ~46 tests now)
+- Tests exercise the snix bytecode VM inside a running Redox VM: arithmetic, let bindings, strings, builtins, functions, conditionals, attrsets, typeOf
+- Uses `--expr` for simple expressions (e.g., `"1 + 1"`), `--file` for complex ones (avoids Ion quoting issues)
+- Ion shell quoting: single quotes `'...'` prevent all expansion (safe for Nix expressions with `{}[]()`)
+- Inside Nix `''..''` strings, single quotes are literal — no escaping needed
+- Ion `$()` command substitution strips trailing newlines (same as bash) — exact value comparison works for integers
+- For string outputs (e.g., `"hello world"` with quotes), use `grep -q` pattern matching instead of exact comparison
+- Ion redirect syntax: `>` for stdout, `^>` for stderr (NOT `2>`)
+- Cleanup `rm` at end not critical — VM is destroyed after test — but included for tidiness
+
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc
 - SchemeDaemon API: nulld/zerod/randd/logd/ramfs use `scheme <name> <cmd>` not `notify`

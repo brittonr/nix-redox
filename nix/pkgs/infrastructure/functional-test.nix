@@ -3,6 +3,8 @@
 # Boots a test-enabled Redox disk image, watches serial output for:
 # 1. Boot milestones (same as boot-test)
 # 2. Functional test results (FUNC_TEST:name:PASS/FAIL)
+# Includes ~50 in-guest tests: shell, filesystem, CLI tools, Nix evaluator,
+# system manifest introspection, and generation management.
 #
 # The test image includes a modified startup script that runs an Ion shell
 # test suite instead of launching an interactive shell. This avoids all
@@ -45,7 +47,7 @@ pkgs.writeShellScriptBin "functional-test" ''
     echo "Usage: functional-test [OPTIONS]"
     echo ""
     echo "Automated functional test for Redox OS"
-    echo "Boots a test image, runs ~40 in-guest tests, reports results."
+    echo "Boots a test image, runs ~50 in-guest tests, reports results."
     echo ""
     echo "Options:"
     echo "  --qemu         Force QEMU TCG mode (no KVM required)"

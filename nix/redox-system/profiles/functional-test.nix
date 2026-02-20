@@ -29,6 +29,8 @@ let
   #   - Filesystem I/O works on a live RedoxFS
   #   - Cross-compiled binaries actually run
   #   - Device files are functional
+  #   - snix eval exercises the Nix bytecode VM end-to-end
+  #   - snix system commands read/verify the live manifest
   #
   # IMPORTANT: Ion shell syntax, NOT bash/POSIX.
   # ==========================================================================
@@ -282,6 +284,145 @@ let
         end
     else
         echo "FUNC_TEST:run-snix:SKIP"
+    end
+
+    # ── Nix Evaluator (snix eval) ─────────────────────────────
+    # These verify the snix bytecode VM evaluates Nix expressions correctly
+    # inside the running Redox OS — the full eval stack end-to-end.
+    # Uses --expr for the canonical test, --file for complex expressions
+    # to avoid Ion shell quoting issues.
+
+    if exists -f /bin/snix
+        # Test: arithmetic (the canonical "does it work" test)
+        /bin/snix eval --expr "1 + 1" > /tmp/eval_out ^> /tmp/eval_err
+        if test $? = 0
+            let result = $(cat /tmp/eval_out)
+            if test $result = "2"
+                echo "FUNC_TEST:snix-eval-arithmetic:PASS"
+            else
+                echo "FUNC_TEST:snix-eval-arithmetic:FAIL:expected 2 got $result"
+            end
+        else
+            echo "FUNC_TEST:snix-eval-arithmetic:FAIL:exit-code"
+        end
+
+        # Test: let binding
+        echo 'let x = 5; in x * 2' > /tmp/eval_let.nix
+        /bin/snix eval --file /tmp/eval_let.nix > /tmp/eval_out ^> /tmp/eval_err
+        if test $? = 0
+            let result = $(cat /tmp/eval_out)
+            if test $result = "10"
+                echo "FUNC_TEST:snix-eval-let:PASS"
+            else
+                echo "FUNC_TEST:snix-eval-let:FAIL:expected 10 got $result"
+            end
+        else
+            echo "FUNC_TEST:snix-eval-let:FAIL:exit-code"
+        end
+
+        # Test: string concatenation
+        echo '"hello" + " world"' > /tmp/eval_str.nix
+        /bin/snix eval --file /tmp/eval_str.nix > /tmp/eval_out ^> /tmp/eval_err
+        if test $? = 0
+            grep -q 'hello world' /tmp/eval_out
+            if test $? = 0
+                echo "FUNC_TEST:snix-eval-strings:PASS"
+            else
+                echo "FUNC_TEST:snix-eval-strings:FAIL:content"
+            end
+        else
+            echo "FUNC_TEST:snix-eval-strings:FAIL:exit-code"
+        end
+
+        # Test: builtins.length
+        echo 'builtins.length [1 2 3]' > /tmp/eval_bi.nix
+        /bin/snix eval --file /tmp/eval_bi.nix > /tmp/eval_out ^> /tmp/eval_err
+        if test $? = 0
+            let result = $(cat /tmp/eval_out)
+            if test $result = "3"
+                echo "FUNC_TEST:snix-eval-builtins:PASS"
+            else
+                echo "FUNC_TEST:snix-eval-builtins:FAIL:expected 3 got $result"
+            end
+        else
+            echo "FUNC_TEST:snix-eval-builtins:FAIL:exit-code"
+        end
+
+        # Test: function application (lambda)
+        echo '(x: x + 1) 5' > /tmp/eval_fn.nix
+        /bin/snix eval --file /tmp/eval_fn.nix > /tmp/eval_out ^> /tmp/eval_err
+        if test $? = 0
+            let result = $(cat /tmp/eval_out)
+            if test $result = "6"
+                echo "FUNC_TEST:snix-eval-functions:PASS"
+            else
+                echo "FUNC_TEST:snix-eval-functions:FAIL:expected 6 got $result"
+            end
+        else
+            echo "FUNC_TEST:snix-eval-functions:FAIL:exit-code"
+        end
+
+        # Test: conditional expression
+        echo 'if true then 42 else 0' > /tmp/eval_cond.nix
+        /bin/snix eval --file /tmp/eval_cond.nix > /tmp/eval_out ^> /tmp/eval_err
+        if test $? = 0
+            let result = $(cat /tmp/eval_out)
+            if test $result = "42"
+                echo "FUNC_TEST:snix-eval-conditional:PASS"
+            else
+                echo "FUNC_TEST:snix-eval-conditional:FAIL:expected 42 got $result"
+            end
+        else
+            echo "FUNC_TEST:snix-eval-conditional:FAIL:exit-code"
+        end
+
+        # Test: attribute set access
+        echo '{ a = 1; b = 2; }.a' > /tmp/eval_attr.nix
+        /bin/snix eval --file /tmp/eval_attr.nix > /tmp/eval_out ^> /tmp/eval_err
+        if test $? = 0
+            let result = $(cat /tmp/eval_out)
+            if test $result = "1"
+                echo "FUNC_TEST:snix-eval-attrset:PASS"
+            else
+                echo "FUNC_TEST:snix-eval-attrset:FAIL:expected 1 got $result"
+            end
+        else
+            echo "FUNC_TEST:snix-eval-attrset:FAIL:exit-code"
+        end
+
+        # Test: builtins.typeOf (verifies builtin dispatching)
+        echo 'builtins.typeOf 42' > /tmp/eval_type.nix
+        /bin/snix eval --file /tmp/eval_type.nix > /tmp/eval_out ^> /tmp/eval_err
+        if test $? = 0
+            grep -q 'int' /tmp/eval_out
+            if test $? = 0
+                echo "FUNC_TEST:snix-eval-typeof:PASS"
+            else
+                echo "FUNC_TEST:snix-eval-typeof:FAIL:content"
+            end
+        else
+            echo "FUNC_TEST:snix-eval-typeof:FAIL:exit-code"
+        end
+
+        # Cleanup eval temp files
+        rm /tmp/eval_out
+        rm /tmp/eval_err
+        rm /tmp/eval_let.nix
+        rm /tmp/eval_str.nix
+        rm /tmp/eval_bi.nix
+        rm /tmp/eval_fn.nix
+        rm /tmp/eval_cond.nix
+        rm /tmp/eval_attr.nix
+        rm /tmp/eval_type.nix
+    else
+        echo "FUNC_TEST:snix-eval-arithmetic:SKIP"
+        echo "FUNC_TEST:snix-eval-let:SKIP"
+        echo "FUNC_TEST:snix-eval-strings:SKIP"
+        echo "FUNC_TEST:snix-eval-builtins:SKIP"
+        echo "FUNC_TEST:snix-eval-functions:SKIP"
+        echo "FUNC_TEST:snix-eval-conditional:SKIP"
+        echo "FUNC_TEST:snix-eval-attrset:SKIP"
+        echo "FUNC_TEST:snix-eval-typeof:SKIP"
     end
 
     # ── System Manifest Introspection ─────────────────────────
