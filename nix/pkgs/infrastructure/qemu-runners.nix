@@ -9,7 +9,14 @@
   lib,
   diskImage,
   bootloader,
+  # VM configuration from the /virtualisation module
+  vmConfig ? { },
 }:
+
+let
+  defaultMemory = toString (vmConfig.memorySize or 2048);
+  defaultCpus = toString (vmConfig.cpus or 4);
+in
 
 {
   # Graphical QEMU runner with serial logging and auto-resolution selection
@@ -46,8 +53,8 @@
       spawn ${pkgs.qemu}/bin/qemu-system-x86_64 \
         -M pc \
         -cpu host \
-        -m 2048 \
-        -smp 4 \
+        -m ${defaultMemory} \
+        -smp ${defaultCpus} \
         -enable-kvm \
         -bios $OVMF \
         -kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI \
@@ -121,8 +128,8 @@
       spawn ${pkgs.qemu}/bin/qemu-system-x86_64 \
       -M pc \
       -cpu host \
-      -m 2048 \
-      -smp 4 \
+      -m ${defaultMemory} \
+      -smp ${defaultCpus} \
       -serial mon:stdio \
       -device isa-debug-exit \
       -enable-kvm \

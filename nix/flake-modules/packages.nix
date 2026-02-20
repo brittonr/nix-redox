@@ -303,6 +303,20 @@
         inherit (inputs) dust-src;
       };
 
+      # Import snix (Nix evaluator for Redox OS)
+      snix = import ../pkgs/userspace/snix.nix {
+        inherit
+          pkgs
+          lib
+          rustToolchain
+          sysrootVendor
+          redoxTarget
+          ;
+        inherit (modularPkgs.system) relibc;
+        inherit (redoxLib) stubLibs vendor;
+        snix-redox-src = ../../snix-redox;
+      };
+
       # Combined sysroot
       sysroot = pkgs.symlinkJoin {
         name = "redox-sysroot";
@@ -361,6 +375,7 @@
           hexyl
           zoxide
           dust
+          snix
           ;
 
         # Infrastructure (needed by module system)

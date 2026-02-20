@@ -109,6 +109,9 @@ let
       espImage = buildOutput.espImage;
       redoxfsImage = buildOutput.redoxfsImage;
 
+      # VM configuration (from /virtualisation module, for runner scripts)
+      vmConfig = buildOutput.vmConfig;
+
       # Validation & metadata
       systemChecks = buildOutput.systemChecks;
       version = buildOutput.version;

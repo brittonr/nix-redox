@@ -22,7 +22,8 @@ in
       ++ opt "bat"
       ++ opt "hexyl"
       ++ opt "zoxide"
-      ++ opt "dust";
+      ++ opt "dust"
+      ++ opt "snix";
 
     shellAliases = {
       ls = "ls --color=auto";

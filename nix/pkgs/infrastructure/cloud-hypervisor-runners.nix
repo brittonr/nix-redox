@@ -33,6 +33,8 @@
   # Optional: Network-optimized disk image with static IP config
   # If provided, used for withNetwork runner instead of diskImage
   diskImageNet ? null,
+  # VM configuration from the /virtualisation module
+  vmConfig ? { },
 }:
 
 let
@@ -47,13 +49,13 @@ let
   subnet = "172.16.0.0/24";
   guestMac = "52:54:00:12:34:56";
 
-  # Performance configuration
+  # Performance configuration — driven by /virtualisation module options
   # CPU topology: threads_per_core:cores_per_die:dies_per_package:packages
   # 1:2:1:2 = 1 thread per core, 2 cores per die, 1 die per package, 2 packages = 4 vCPUs
   # This presents to guest as 2 sockets with 2 cores each (common server topology)
   cpuTopology = "1:2:1:2";
-  defaultCpus = "4";
-  defaultMemory = "2048M";
+  defaultCpus = toString (vmConfig.cpus or 4);
+  defaultMemory = "${toString (vmConfig.memorySize or 2048)}M";
 
   # Network queues: 2 = 1 RX + 1 TX (compatible with standard TAP interfaces)
   # Multi-queue (4+) requires TAP created with IFF_MULTI_QUEUE flag

@@ -56,24 +56,32 @@ in
   inherit initfsTools bootstrap;
 
   # QEMU runners factory - requires diskImage and bootloader
+  # Optional vmConfig from /virtualisation module for resource defaults
   mkQemuRunners =
-    { diskImage, bootloader }:
+    {
+      diskImage,
+      bootloader,
+      vmConfig ? { },
+    }:
     import ./qemu-runners.nix {
       inherit
         pkgs
         lib
         diskImage
         bootloader
+        vmConfig
         ;
     };
 
   # Cloud Hypervisor runners factory - requires diskImage only
   # (bootloader is loaded from ESP partition on disk)
   # Optional diskImageNet for network-optimized image with static IP config
+  # Optional vmConfig from /virtualisation module for resource defaults
   mkCloudHypervisorRunners =
     {
       diskImage,
       diskImageNet ? null,
+      vmConfig ? { },
     }:
     import ./cloud-hypervisor-runners.nix {
       inherit
@@ -81,6 +89,7 @@ in
         lib
         diskImage
         diskImageNet
+        vmConfig
         ;
     };
 

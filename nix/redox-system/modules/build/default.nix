@@ -1257,5 +1257,19 @@ adios:
         systemChecks
         ;
       version = versionInfo;
+
+      # VM configuration for runner scripts (from /virtualisation module)
+      vmConfig = {
+        vmm = inputs.virtualisation.vmm or "cloud-hypervisor";
+        memorySize = inputs.virtualisation.memorySize or 2048;
+        cpus = inputs.virtualisation.cpus or 4;
+        graphics = inputs.virtualisation.graphics or false;
+        serialConsole = inputs.virtualisation.serialConsole or true;
+        hugepages = inputs.virtualisation.hugepages or false;
+        directIO = inputs.virtualisation.directIO or true;
+        apiSocket = inputs.virtualisation.apiSocket or false;
+        tapNetworking = inputs.virtualisation.tapNetworking or false;
+        qemuExtraArgs = inputs.virtualisation.qemuExtraArgs or [ ];
+      };
     };
 }

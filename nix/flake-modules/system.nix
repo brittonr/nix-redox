@@ -91,6 +91,7 @@
           hexyl = self'.packages.hexyl or null;
           zoxide = self'.packages.zoxide or null;
           dust = self'.packages.dust or null;
+          snix = self'.packages.snix or null;
         };
 
         # Pre-built system configurations using profiles
@@ -125,29 +126,42 @@
         bootloader = redoxConfig.modularPkgs.system.bootloader;
 
         # === Runners for each profile ===
+        # vmConfig flows from /virtualisation module → build output → runner scripts
 
         # Default profile: CH headless + CH with networking + QEMU headless
-        defaultRunners = mkCHRunners { diskImage = systems.default.diskImage; };
+        defaultRunners = mkCHRunners {
+          diskImage = systems.default.diskImage;
+          vmConfig = systems.default.vmConfig;
+        };
         defaultQemuRunners = mkQemuRunners {
           diskImage = systems.default.diskImage;
           inherit bootloader;
+          vmConfig = systems.default.vmConfig;
         };
 
         # Minimal profile: CH headless only (no networking, no graphics)
-        minimalRunners = mkCHRunners { diskImage = systems.minimal.diskImage; };
+        minimalRunners = mkCHRunners {
+          diskImage = systems.minimal.diskImage;
+          vmConfig = systems.minimal.vmConfig;
+        };
 
         # Cloud profile: CH headless + CH with TAP networking (static IP)
         cloudRunners = mkCHRunners {
           diskImage = systems.cloud-hypervisor.diskImage;
           diskImageNet = systems.cloud-hypervisor.diskImage;
+          vmConfig = systems.cloud-hypervisor.vmConfig;
         };
 
         # Graphical profile: QEMU graphical (GTK) + CH headless for testing
         graphicalQemuRunners = mkQemuRunners {
           diskImage = systems.graphical.diskImage;
           inherit bootloader;
+          vmConfig = systems.graphical.vmConfig;
         };
-        graphicalCHRunners = mkCHRunners { diskImage = systems.graphical.diskImage; };
+        graphicalCHRunners = mkCHRunners {
+          diskImage = systems.graphical.diskImage;
+          vmConfig = systems.graphical.vmConfig;
+        };
 
         # Boot test: uses minimal profile (fastest boot)
         bootTest = mkBootTest {
