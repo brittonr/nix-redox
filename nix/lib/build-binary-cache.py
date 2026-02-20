@@ -20,6 +20,29 @@ import sys
 import tempfile
 
 
+# ─── Nixbase32 Encoding ────────────────────────────────────────────────────
+
+NIX_CHARS = "0123456789abcdfghijklmnpqrsvwxyz"
+
+def nixbase32_encode(data: bytes) -> str:
+    """Encode bytes to nixbase32 (Nix's custom base32 alphabet).
+
+    Nix processes bytes in reverse order and packs 5 bits per character.
+    For 32 bytes (SHA-256), produces 52 characters.
+    """
+    n_chars = (len(data) * 8 + 4) // 5
+    result = []
+    for i in range(n_chars - 1, -1, -1):
+        bit_offset = i * 5
+        byte_idx = bit_offset // 8
+        bit_idx = bit_offset % 8
+        val = (data[byte_idx] >> bit_idx) & 0x1F
+        if bit_idx > 3 and byte_idx + 1 < len(data):
+            val |= (data[byte_idx + 1] << (8 - bit_idx)) & 0x1F
+        result.append(NIX_CHARS[val])
+    return "".join(result)
+
+
 # ─── NAR Serializer ────────────────────────────────────────────────────────
 
 def _write_str(f, s):
@@ -78,7 +101,7 @@ def _serialize_entry(f, path):
 
 
 def serialize_to_nar(store_path, output_path):
-    """Serialize a store path to a NAR file. Returns (nar_hash_hex, nar_size)."""
+    """Serialize a store path to a NAR file. Returns (nar_hash_bytes, nar_size)."""
     hasher = hashlib.sha256()
     size = 0
 
@@ -94,7 +117,7 @@ def serialize_to_nar(store_path, output_path):
         _write_str(hw, "nix-archive-1")
         _serialize_entry(hw, store_path)
 
-    return hasher.hexdigest(), size
+    return hasher.digest(), size
 
 
 # ─── Binary Cache Builder ──────────────────────────────────────────────────
@@ -115,15 +138,20 @@ def store_path_name(path):
     return basename[33:]  # skip hash + dash
 
 
-def build_narinfo(store_path, nar_hash_hex, nar_size, file_hash_hex, file_size, nar_url):
-    """Generate a narinfo file content."""
+def build_narinfo(store_path, nar_hash_bytes, nar_size, file_hash_bytes, file_size, nar_url):
+    """Generate a narinfo file content.
+
+    Uses nixbase32 for hashes (the canonical format for Nix binary caches).
+    """
+    nar_hash_nix32 = nixbase32_encode(nar_hash_bytes)
+    file_hash_nix32 = nixbase32_encode(file_hash_bytes)
     lines = [
         f"StorePath: {store_path}",
         f"URL: {nar_url}",
         f"Compression: zstd",
-        f"FileHash: sha256:{file_hash_hex}",
+        f"FileHash: sha256:{file_hash_nix32}",
         f"FileSize: {file_size}",
-        f"NarHash: sha256:{nar_hash_hex}",
+        f"NarHash: sha256:{nar_hash_nix32}",
         f"NarSize: {nar_size}",
         f"References: ",
     ]
@@ -166,7 +194,8 @@ def main():
             tmp_nar = tmp.name
 
         try:
-            nar_hash_hex, nar_size = serialize_to_nar(store_path, tmp_nar)
+            nar_hash_bytes, nar_size = serialize_to_nar(store_path, tmp_nar)
+            nar_hash_hex = nar_hash_bytes.hex()
             total_nar += nar_size
 
             # 2. Compress with zstd
@@ -188,13 +217,13 @@ def main():
                         break
                     file_hasher.update(chunk)
                     file_size += len(chunk)
-            file_hash_hex = file_hasher.hexdigest()
+            file_hash_bytes = file_hasher.digest()
             total_compressed += file_size
 
             # 4. Write narinfo
             nar_url = f"nar/{compressed_name}"
             narinfo_content = build_narinfo(
-                store_path, nar_hash_hex, nar_size, file_hash_hex, file_size, nar_url
+                store_path, nar_hash_bytes, nar_size, file_hash_bytes, file_size, nar_url
             )
             narinfo_path = os.path.join(out_dir, f"{sp_hash}.narinfo")
             with open(narinfo_path, "w") as nf:

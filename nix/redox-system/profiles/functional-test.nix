@@ -925,6 +925,10 @@ let
             echo "FUNC_TEST:snix-install:PASS"
         else
             echo "FUNC_TEST:snix-install:FAIL:exit-code"
+            echo "  install stdout:"
+            cat /tmp/install_out
+            echo "  install stderr:"
+            cat /tmp/install_err
         end
         rm /tmp/install_out /tmp/install_err
 
