@@ -18,7 +18,6 @@ use std::io::Read;
 use std::path::Path;
 
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 /// Default manifest path on the running Redox system
 const MANIFEST_PATH: &str = "/etc/redox-system/manifest.json";
@@ -186,7 +185,8 @@ pub struct Services {
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct FileInfo {
-    pub sha256: String,
+    /// BLAKE3 hash of file contents (hex-encoded, 64 chars)
+    pub blake3: String,
     pub size: u64,
     pub mode: String,
 }
@@ -328,7 +328,7 @@ pub fn verify(
 
         match hash_file(&full_path) {
             Ok(actual_hash) => {
-                if actual_hash == expected.sha256 {
+                if actual_hash == expected.blake3 {
                     verified += 1;
                     if verbose {
                         println!("  OK       {path}");
@@ -337,7 +337,7 @@ pub fn verify(
                     modified += 1;
                     errors.push(format!(
                         "  CHANGED  {path}  (expected {}…, got {}…)",
-                        &expected.sha256[..12],
+                        &expected.blake3[..12],
                         &actual_hash[..12]
                     ));
                 }
@@ -538,7 +538,7 @@ pub fn diff(other_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let removed_files: Vec<_> = oth_files.difference(&cur_files).collect();
     let changed_files: Vec<_> = cur_files
         .intersection(&oth_files)
-        .filter(|f| current.files[**f].sha256 != other.files[**f].sha256)
+        .filter(|f| current.files[**f].blake3 != other.files[**f].blake3)
         .collect();
 
     if !added_files.is_empty() || !removed_files.is_empty() || !changed_files.is_empty() {
@@ -900,8 +900,8 @@ fn days_to_date(days: u64) -> (u64, u64, u64) {
 
 fn hash_file(path: &Path) -> std::io::Result<String> {
     let mut file = fs::File::open(path)?;
-    let mut hasher = Sha256::new();
-    let mut buf = [0u8; 8192];
+    let mut hasher = blake3::Hasher::new();
+    let mut buf = [0u8; 16384]; // Larger buffer — BLAKE3 thrives on bulk
     loop {
         let n = file.read(&mut buf)?;
         if n == 0 {
@@ -909,8 +909,7 @@ fn hash_file(path: &Path) -> std::io::Result<String> {
         }
         hasher.update(&buf[..n]);
     }
-    let hash = hasher.finalize();
-    Ok(format!("{:x}", hash))
+    Ok(hasher.finalize().to_hex().to_string())
 }
 
 #[cfg(test)]
@@ -1045,13 +1044,13 @@ mod tests {
         manifest.files.insert(
             "etc/passwd".to_string(),
             FileInfo {
-                sha256: "abc123".to_string(),
+                blake3: "abc123".to_string(),
                 size: 42,
                 mode: "644".to_string(),
             },
         );
         assert_eq!(manifest.files.len(), 1);
-        assert_eq!(manifest.files["etc/passwd"].sha256, "abc123");
+        assert_eq!(manifest.files["etc/passwd"].blake3, "abc123");
     }
 
     #[test]
@@ -1062,10 +1061,10 @@ mod tests {
 
         let hash = hash_file(&path).unwrap();
 
-        // SHA256 of "hello world"
+        // BLAKE3 of "hello world"
         assert_eq!(
             hash,
-            "b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9"
+            "d74981efa70a0c880b8d8c1985d075dbcbf679b99a5f9914e5aaf96b831a9e24"
         );
     }
 
@@ -1077,10 +1076,10 @@ mod tests {
 
         let hash = hash_file(&path).unwrap();
 
-        // SHA256 of empty string
+        // BLAKE3 of empty input
         assert_eq!(
             hash,
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+            "af1349b9f5f9a1a6a0404dea36dcc9499bcb25c9adc112b7cc9a93cae41f3262"
         );
     }
 
@@ -1191,7 +1190,7 @@ mod tests {
         manifest.files.insert(
             "etc/hostname".to_string(),
             FileInfo {
-                sha256: hash,
+                blake3: hash,
                 size: 6,
                 mode: "644".to_string(),
             },

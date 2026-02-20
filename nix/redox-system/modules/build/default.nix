@@ -995,7 +995,9 @@ adios:
         assert warningCheck;
         hostPkgs.runCommand "redox-root-tree"
           {
-            nativeBuildInputs = [ hostPkgs.python3 ];
+            nativeBuildInputs = [
+              (hostPkgs.python3.withPackages (ps: [ ps.blake3 ]))
+            ];
           }
           ''
             ${mkDirs allDirectories}
@@ -1011,7 +1013,7 @@ adios:
             #   2. "generation.buildHash" — SHA256 of the sorted file inventory
             #   3. /etc/redox-system/generations/1/ with a copy of the manifest
             python3 - <<'HASH_SCRIPT'
-            import hashlib, json, os, stat
+            import blake3, json, os, stat
 
             root = os.environ["out"]
             manifest_rel = "etc/redox-system/manifest.json"
@@ -1022,7 +1024,7 @@ adios:
             with open(manifest_path) as f:
                 manifest = json.load(f)
 
-            # Walk tree and compute SHA256 hashes
+            # Walk tree and compute BLAKE3 hashes
             inventory = {}
             for dirpath, dirs, files in os.walk(root):
                 dirs.sort()
@@ -1043,19 +1045,18 @@ adios:
                         continue
 
                     st = os.stat(path)
-                    with open(path, "rb") as f:
-                        h = hashlib.sha256(f.read()).hexdigest()
+                    h = blake3.blake3(open(path, "rb").read()).hexdigest()
 
                     inventory[relpath] = {
-                        "sha256": h,
+                        "blake3": h,
                         "size": st.st_size,
                         "mode": oct(stat.S_IMODE(st.st_mode))[2:],
                     }
 
-            # Compute buildHash from the sorted file inventory
-            # This is a content-addressable fingerprint of the entire rootTree
+            # Compute buildHash from the sorted file inventory (BLAKE3)
+            # Content-addressable fingerprint of the entire rootTree
             inventory_json = json.dumps(inventory, sort_keys=True)
-            build_hash = hashlib.sha256(inventory_json.encode()).hexdigest()
+            build_hash = blake3.blake3(inventory_json.encode()).hexdigest()
 
             # Merge file inventory and buildHash into manifest
             manifest["files"] = inventory

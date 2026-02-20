@@ -1104,12 +1104,12 @@ in
   # Test: Manifest file inventory has hashes
   rootTree-manifest-has-file-hashes = mkArtifactTest {
     name = "rootTree-manifest-has-file-hashes";
-    description = "Verifies manifest.json contains SHA256 file hashes";
+    description = "Verifies manifest.json contains BLAKE3 file hashes";
     modules = [ ];
     checks = [
       {
         file = "etc/redox-system/manifest.json";
-        contains = "sha256";
+        contains = "blake3";
       }
       {
         # Verify the manifest tracks passwd
@@ -1223,7 +1223,7 @@ in
   # Test: Generation buildHash is non-empty (computed from file inventory)
   rootTree-generation-buildhash = mkArtifactTest {
     name = "rootTree-generation-buildhash";
-    description = "Verifies buildHash in generation metadata is a non-empty SHA256 hex string";
+    description = "Verifies buildHash in generation metadata is a non-empty BLAKE3 hex string";
     modules = [ ];
     checks = [
       {
