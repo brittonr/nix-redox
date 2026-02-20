@@ -327,6 +327,12 @@ adios:
         ++ (lib.optional networkingEnabled "/var/log")
         ++ (lib.optional logToFile logPath)
         ++ [ "/etc/security" ]
+        ++ [
+          "/nix/store"
+          "/nix/var/snix/profiles/default/bin"
+          "/nix/var/snix/pathinfo"
+          "/nix/var/snix/gcroots"
+        ]
         ++ (lib.optional acpiEnabled "/etc/acpi")
         ++ (lib.optional (helixConfig.enable or false) "/etc/helix")
         ++ (lib.optional (httpdConfig.enable or false) (httpdConfig.rootDir or "/var/www"));
@@ -461,6 +467,10 @@ adios:
         ${graphicsVarLines}
         ${aliasLines}
         ${graphicsAliasLines}
+        ${lib.optionalString hasBinaryCache ''
+          # snix profile — packages installed via `snix install`
+          export PATH /nix/var/snix/profiles/default/bin:$PATH
+        ''}
         ${inputs.environment.shellInit or ""}
       '';
 
@@ -983,6 +993,17 @@ adios:
       # Merge raw initScripts with rendered structured services
       allInitScriptsWithServices = allInitScripts // renderedServices;
 
+      # ===== BINARY CACHE =====
+      # Generate a local Nix binary cache from binaryCachePackages.
+      # Included in rootTree at /nix/cache/ when non-empty.
+      binaryCachePackages = inputs.environment.binaryCachePackages or { };
+      hasBinaryCache = binaryCachePackages != { };
+
+      mkBinaryCache = import ../../../lib/mk-binary-cache.nix { inherit hostPkgs lib; };
+      binaryCache = lib.optionalAttrs hasBinaryCache {
+        cache = mkBinaryCache { packages = binaryCachePackages; };
+      };
+
       # ===== COMPOSABLE DISK IMAGE BUILDERS =====
       mkEspImage = import ../../lib/make-esp-image.nix { inherit hostPkgs lib; };
       mkRedoxfsImage = import ../../lib/make-redoxfs-image.nix { inherit hostPkgs lib; };
@@ -1006,6 +1027,13 @@ adios:
             ${mkSpecialSymlinks}
             ${mkPackages}
             ${mkGeneratedFiles}
+
+            # Include local binary cache if configured
+            ${lib.optionalString hasBinaryCache ''
+              echo "Including binary cache (${toString (builtins.length (builtins.attrNames binaryCachePackages))} packages)..."
+              mkdir -p $out/nix/cache
+              cp -r ${binaryCache.cache}/* $out/nix/cache/
+            ''}
 
             # Compute file hashes, generation buildHash, and seed generations dir.
             # The base manifest was written above; now we add:

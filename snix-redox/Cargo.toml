@@ -1,6 +1,6 @@
 [package]
 name = "snix-redox"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2021"
 description = "Nix evaluator, store manager, and binary cache client for Redox OS"
 

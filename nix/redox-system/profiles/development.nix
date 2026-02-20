@@ -30,6 +30,16 @@ in
       grep = "grep --color=auto";
       z = "zoxide query -- $@args && cd $(zoxide query -- $@args)";
     };
+
+    # Include CLI tools in the local binary cache.
+    # Users can install additional tools at runtime via `snix install <name>`.
+    binaryCachePackages =
+      lib.optionalAttrs (pkgs ? ripgrep) { ripgrep = pkgs.ripgrep; }
+      // lib.optionalAttrs (pkgs ? fd) { fd = pkgs.fd; }
+      // lib.optionalAttrs (pkgs ? bat) { bat = pkgs.bat; }
+      // lib.optionalAttrs (pkgs ? hexyl) { hexyl = pkgs.hexyl; }
+      // lib.optionalAttrs (pkgs ? zoxide) { zoxide = pkgs.zoxide; }
+      // lib.optionalAttrs (pkgs ? dust) { dust = pkgs.dust; };
   };
 
   "/networking" = {

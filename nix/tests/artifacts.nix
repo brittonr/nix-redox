@@ -1259,4 +1259,107 @@ in
       }
     ];
   };
+
+  # ── Binary Cache Tests ──────────────────────────────────────────────
+
+  rootTree-has-binary-cache = mkArtifactTest {
+    name = "has-binary-cache";
+    description = "rootTree includes local binary cache when binaryCachePackages is set";
+    modules = [
+      {
+        "/environment" = {
+          systemPackages = [ mockPkgs.all.ion ];
+          binaryCachePackages = {
+            ripgrep = mockPkgs.all.ripgrep;
+            fd = mockPkgs.all.fd;
+          };
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "nix/cache/packages.json";
+        contains = "ripgrep";
+      }
+      {
+        file = "nix/cache/packages.json";
+        contains = "fd";
+      }
+      {
+        file = "nix/cache/nix-cache-info";
+        contains = "StoreDir: /nix/store";
+      }
+    ];
+  };
+
+  rootTree-binary-cache-has-narinfo = mkArtifactTest {
+    name = "binary-cache-has-narinfo";
+    description = "Binary cache contains narinfo files for cached packages";
+    modules = [
+      {
+        "/environment" = {
+          systemPackages = [ mockPkgs.all.ion ];
+          binaryCachePackages = {
+            ripgrep = mockPkgs.all.ripgrep;
+          };
+        };
+      }
+    ];
+    checks = [
+      {
+        # packages.json should list ripgrep with a store path
+        file = "nix/cache/packages.json";
+        contains = "storePath";
+      }
+      {
+        # nix/cache/nar/ directory should have compressed NARs
+        file = "nix/cache/nix-cache-info";
+        contains = "StoreDir";
+      }
+    ];
+  };
+
+  rootTree-no-cache-when-empty = mkArtifactTest {
+    name = "no-cache-when-empty";
+    description = "rootTree does NOT include binary cache when binaryCachePackages is empty";
+    modules = [
+      {
+        "/environment" = {
+          systemPackages = [ mockPkgs.all.ion ];
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "nix/cache/packages.json";
+        notExists = true;
+      }
+    ];
+  };
+
+  rootTree-nix-store-dirs = mkArtifactTest {
+    name = "nix-store-dirs";
+    description = "rootTree includes /nix/store and snix profile directories";
+    modules = [
+      {
+        "/environment" = {
+          systemPackages = [ mockPkgs.all.ion ];
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "nix/store";
+      }
+      {
+        file = "nix/var/snix/profiles/default/bin";
+      }
+      {
+        file = "nix/var/snix/pathinfo";
+      }
+      {
+        file = "nix/var/snix/gcroots";
+      }
+    ];
+  };
 }

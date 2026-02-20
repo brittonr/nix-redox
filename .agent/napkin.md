@@ -238,6 +238,21 @@
 - Disassembly key: `testq %rax, %rax / je 0x632032` jumps to `ud2` when log level is 0 (no logging configured)
 - Must regenerate .cargo-checksum.json after patching vendored crates
 
+### Binary cache bridge — snix install (Feb 20 2026)
+- NAR format serialization in Python: strings are 8-byte LE length + content + padding to 8-byte alignment
+- Symlinks must be handled BEFORE directory check (`os.path.islink` before `os.path.isdir`)
+- zstd -19 gives ~35% ratio on mock packages; real binaries will be larger
+- `builtins.unsafeDiscardStringContext` breaks Nix dependency tracking — use `"${drv}"` interpolation instead
+- `nar::extract` requires `Read + Send` trait bound — `Box<dyn Read>` must be `Box<dyn Read + Send>`
+- `t.attrsOf t.derivation` works in Korora for typed package maps
+- Binary cache at `/nix/cache/` in rootTree; profile at `/nix/var/snix/profiles/default/`
+- narinfo filename = first 32 chars of store path basename (nixbase32 hash)
+- NarHash uses hex encoding in narinfo (`sha256:abcdef...`) — nix-compat parser handles both hex and nix32
+- `lib.optionalString` for conditional bash in Nix derivations; `lib.optionalAttrs` for conditional attrsets
+- Include `/nix/store` and `/nix/var/snix/` dirs in rootTree so snix doesn't need to create them at runtime
+- Profile bin added to PATH via /etc/profile when binary cache is enabled
+- 119 host unit tests + 72 artifact tests + 10 new functional tests for install pipeline
+
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc
 - SchemeDaemon API: nulld/zerod/randd/logd/ramfs use `scheme <name> <cmd>` not `notify`

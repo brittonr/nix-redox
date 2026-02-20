@@ -10,6 +10,8 @@
 
 mod cache;
 mod eval;
+mod install;
+mod local_cache;
 mod nar;
 mod pathinfo;
 mod store;
@@ -73,6 +75,48 @@ enum Command {
         command: StoreCommand,
     },
 
+    /// Install a package from the local binary cache
+    Install {
+        /// Package name (as listed in `snix search`)
+        name: String,
+
+        /// Path to local binary cache
+        #[arg(short, long, default_value = "/nix/cache")]
+        cache_path: String,
+    },
+
+    /// Remove an installed package from the profile
+    Remove {
+        /// Package name to remove
+        name: String,
+    },
+
+    /// Search available packages in the local binary cache
+    Search {
+        /// Optional search pattern (substring match)
+        pattern: Option<String>,
+
+        /// Path to local binary cache
+        #[arg(short, long, default_value = "/nix/cache")]
+        cache_path: String,
+    },
+
+    /// Show detailed info about a cached package
+    Show {
+        /// Package name
+        name: String,
+
+        /// Path to local binary cache
+        #[arg(short, long, default_value = "/nix/cache")]
+        cache_path: String,
+    },
+
+    /// Manage installed package profiles
+    Profile {
+        #[command(subcommand)]
+        command: ProfileCommand,
+    },
+
     /// Interactive REPL for Nix expressions
     Repl,
 
@@ -127,6 +171,12 @@ enum StoreCommand {
 
     /// List all GC roots
     Roots,
+}
+
+#[derive(Subcommand)]
+enum ProfileCommand {
+    /// List installed packages
+    List,
 }
 
 #[derive(Subcommand)]
@@ -226,6 +276,16 @@ fn main() {
             StoreCommand::AddRoot { name, path } => store::add_root(&name, &path),
             StoreCommand::RemoveRoot { name } => store::remove_root(&name),
             StoreCommand::Roots => store::list_roots(),
+        },
+        Command::Install { name, cache_path } => install::install(&name, &cache_path),
+        Command::Remove { name } => install::remove(&name),
+        Command::Search {
+            pattern,
+            cache_path,
+        } => local_cache::search(&cache_path, pattern.as_deref()),
+        Command::Show { name, cache_path } => install::show(&name, &cache_path),
+        Command::Profile { command } => match command {
+            ProfileCommand::List => install::list_profile(),
         },
         Command::Repl => eval::repl(),
         Command::System { command } => match command {

@@ -41,6 +41,11 @@ in
       default = "";
       description = "Extra shell initialization commands";
     };
+    binaryCachePackages = {
+      type = t.attrsOf t.derivation;
+      default = { };
+      description = "Packages to include in the local binary cache for `snix install`";
+    };
   };
 
   impl = { options }: options;

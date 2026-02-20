@@ -883,6 +883,142 @@ let
         echo "FUNC_TEST:store-empty-after-gc:SKIP"
     end
 
+    # ── Package Manager (snix install) ───────────────────────────
+    # Tests the binary cache bridge: search → install → run → remove.
+    # The local cache at /nix/cache/ contains packages built by Nix on
+    # the host, NAR-serialized and compressed. snix extracts them to
+    # /nix/store/ and links binaries into the profile.
+
+    if exists -f /nix/cache/packages.json
+
+        # Test: snix search lists available packages
+        /bin/snix search > /tmp/search_out ^> /tmp/search_err
+        if test $? = 0
+            grep -q 'packages available' /tmp/search_out
+            if test $? = 0
+                echo "FUNC_TEST:snix-search:PASS"
+            else
+                echo "FUNC_TEST:snix-search:FAIL:no-packages-line"
+            end
+        else
+            echo "FUNC_TEST:snix-search:FAIL:exit-code"
+        end
+        rm /tmp/search_out /tmp/search_err
+
+        # Test: snix search with pattern filters results
+        /bin/snix search ripgrep > /tmp/search2_out ^> /tmp/search2_err
+        if test $? = 0
+            grep -q 'ripgrep' /tmp/search2_out
+            if test $? = 0
+                echo "FUNC_TEST:snix-search-filter:PASS"
+            else
+                echo "FUNC_TEST:snix-search-filter:FAIL:no-match"
+            end
+        else
+            echo "FUNC_TEST:snix-search-filter:FAIL:exit-code"
+        end
+        rm /tmp/search2_out /tmp/search2_err
+
+        # Test: snix install extracts package to /nix/store/ and links into profile
+        /bin/snix install ripgrep > /tmp/install_out ^> /tmp/install_err
+        if test $? = 0
+            echo "FUNC_TEST:snix-install:PASS"
+        else
+            echo "FUNC_TEST:snix-install:FAIL:exit-code"
+        end
+        rm /tmp/install_out /tmp/install_err
+
+        # Test: installed binary exists in profile
+        if exists -f /nix/var/snix/profiles/default/bin/rg
+            echo "FUNC_TEST:snix-install-binary:PASS"
+        else
+            echo "FUNC_TEST:snix-install-binary:FAIL:not-found"
+        end
+
+        # Test: installed binary actually runs
+        /nix/var/snix/profiles/default/bin/rg --version > /tmp/rg_out ^> /tmp/rg_err
+        if test $? = 0
+            grep -q 'ripgrep' /tmp/rg_out
+            if test $? = 0
+                echo "FUNC_TEST:snix-install-runs:PASS"
+            else
+                echo "FUNC_TEST:snix-install-runs:FAIL:no-version"
+            end
+        else
+            echo "FUNC_TEST:snix-install-runs:FAIL:exit-code"
+        end
+        rm /tmp/rg_out /tmp/rg_err
+
+        # Test: snix profile list shows the installed package
+        /bin/snix profile list > /tmp/prof_out ^> /tmp/prof_err
+        if test $? = 0
+            grep -q 'ripgrep' /tmp/prof_out
+            if test $? = 0
+                echo "FUNC_TEST:snix-profile-list:PASS"
+            else
+                echo "FUNC_TEST:snix-profile-list:FAIL:no-ripgrep"
+            end
+        else
+            echo "FUNC_TEST:snix-profile-list:FAIL:exit-code"
+        end
+        rm /tmp/prof_out /tmp/prof_err
+
+        # Test: snix show displays package details
+        /bin/snix show ripgrep > /tmp/show_out ^> /tmp/show_err
+        if test $? = 0
+            grep -q 'In store' /tmp/show_out
+            if test $? = 0
+                echo "FUNC_TEST:snix-show:PASS"
+            else
+                echo "FUNC_TEST:snix-show:FAIL:no-info"
+            end
+        else
+            echo "FUNC_TEST:snix-show:FAIL:exit-code"
+        end
+        rm /tmp/show_out /tmp/show_err
+
+        # Test: snix remove unlinks the package
+        /bin/snix remove ripgrep > /tmp/rm_out ^> /tmp/rm_err
+        if test $? = 0
+            echo "FUNC_TEST:snix-remove:PASS"
+        else
+            echo "FUNC_TEST:snix-remove:FAIL:exit-code"
+        end
+        rm /tmp/rm_out /tmp/rm_err
+
+        # Test: binary is gone from profile after remove
+        if not exists -f /nix/var/snix/profiles/default/bin/rg
+            echo "FUNC_TEST:snix-remove-unlinked:PASS"
+        else
+            echo "FUNC_TEST:snix-remove-unlinked:FAIL:still-exists"
+        end
+
+        # Test: install a second package to prove it's not a one-off
+        /bin/snix install fd > /tmp/inst2_out ^> /tmp/inst2_err
+        if test $? = 0
+            if exists -f /nix/var/snix/profiles/default/bin/fd
+                echo "FUNC_TEST:snix-install-second:PASS"
+            else
+                echo "FUNC_TEST:snix-install-second:FAIL:no-binary"
+            end
+        else
+            echo "FUNC_TEST:snix-install-second:FAIL:exit-code"
+        end
+        rm /tmp/inst2_out /tmp/inst2_err
+
+    else
+        echo "FUNC_TEST:snix-search:SKIP"
+        echo "FUNC_TEST:snix-search-filter:SKIP"
+        echo "FUNC_TEST:snix-install:SKIP"
+        echo "FUNC_TEST:snix-install-binary:SKIP"
+        echo "FUNC_TEST:snix-install-runs:SKIP"
+        echo "FUNC_TEST:snix-profile-list:SKIP"
+        echo "FUNC_TEST:snix-show:SKIP"
+        echo "FUNC_TEST:snix-remove:SKIP"
+        echo "FUNC_TEST:snix-remove-unlinked:SKIP"
+        echo "FUNC_TEST:snix-install-second:SKIP"
+    end
+
     echo ""
     echo "FUNC_TESTS_COMPLETE"
     echo ""
@@ -910,6 +1046,12 @@ in
     shellAliases = {
       ls = "ls --color=auto";
     };
+
+    # Include ripgrep and fd in the binary cache for install tests.
+    # These are NOT in systemPackages — they're only available via `snix install`.
+    binaryCachePackages =
+      lib.optionalAttrs (pkgs ? ripgrep) { ripgrep = pkgs.ripgrep; }
+      // lib.optionalAttrs (pkgs ? fd) { fd = pkgs.fd; };
   };
 
   "/networking" = {
