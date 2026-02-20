@@ -954,4 +954,104 @@ in
       }
     ];
   };
+
+  # ===== Development Profile Static Checks =====
+  # These validate config files, binaries, and symlinks that the functional
+  # test profile previously checked inside a VM. No VM needed — just inspect
+  # the rootTree derivation built with mock packages.
+
+  # Test: Development profile has all expected config files
+  rootTree-dev-config-files = mkArtifactTest {
+    name = "rootTree-dev-config-files";
+    description = "Verifies development profile rootTree has all config files";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      { file = "etc/passwd"; }
+      { file = "etc/group"; }
+      { file = "etc/shadow"; }
+      { file = "etc/profile"; }
+      { file = "etc/hostname"; }
+      { file = "etc/timezone"; }
+      { file = "etc/init.toml"; }
+      { file = "etc/logging.conf"; }
+      { file = "etc/security/policy"; }
+      { file = "etc/security/namespaces"; }
+      { file = "etc/security/setuid"; }
+      { file = "etc/acpi/config"; }
+      { file = "etc/ion/initrc"; }
+      { file = "etc/hwclock"; }
+      {
+        file = "startup.sh";
+        mode = "555";
+      }
+    ];
+  };
+
+  # Test: Development profile has expected binaries (from mock packages)
+  rootTree-dev-binaries = mkArtifactTest {
+    name = "rootTree-dev-binaries";
+    description = "Verifies development profile rootTree has expected binaries";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      { file = "bin/ion"; }
+      { file = "bin/init"; }
+      { file = "usr/bin/ion"; }
+      { file = "usr/bin/init"; }
+    ];
+  };
+
+  # Test: Development profile has sh symlink
+  # Note: bin/sh is a symlink to /bin/ion — dangling in the Nix store
+  # (target only exists inside the Redox VM), so we check with -L not -e.
+  rootTree-dev-sh-symlink =
+    let
+      system = redoxSystemFactory.redoxSystem {
+        modules = [ ../redox-system/profiles/development.nix ];
+        pkgs = mockPkgs.all;
+        hostPkgs = pkgs;
+      };
+    in
+    pkgs.runCommand "test-artifact-rootTree-dev-sh-symlink"
+      {
+        preferLocalBuild = true;
+        rootTree = system.rootTree;
+      }
+      ''
+        set -euo pipefail
+        echo "Checking bin/sh symlink (may be dangling in store)"
+        if [ -L "$rootTree/bin/sh" ]; then
+          target=$(readlink "$rootTree/bin/sh")
+          echo "  ✓ bin/sh -> $target"
+        else
+          echo "  ✗ bin/sh symlink missing"
+          ls -la "$rootTree/bin/" 2>/dev/null | head -20
+          exit 1
+        fi
+        echo "Test PASSED"
+        touch $out
+      '';
+
+  # Test: Development profile has home directory
+  rootTree-dev-home-dir = mkArtifactTest {
+    name = "rootTree-dev-home-dir";
+    description = "Verifies /home directory created for default user";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      { file = "home"; }
+    ];
+  };
+
+  # Test: Development profile networking init scripts present
+  rootTree-dev-net-scripts = mkArtifactTest {
+    name = "rootTree-dev-net-scripts";
+    description = "Verifies development profile has networking init scripts";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      {
+        file = "etc/init.d/10_net";
+        contains = "smolnetd";
+      }
+      { file = "etc/net/dns"; }
+    ];
+  };
 }

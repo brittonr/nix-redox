@@ -155,7 +155,12 @@ jobs:
             .#checks.x86_64-linux.artifact-rootTree-has-helix-config \
             .#checks.x86_64-linux.artifact-toplevel-has-structure \
             .#checks.x86_64-linux.artifact-toplevel-has-new-version-fields \
-            .#checks.x86_64-linux.artifact-drivers-all-types
+            .#checks.x86_64-linux.artifact-drivers-all-types \
+            .#checks.x86_64-linux.artifact-rootTree-dev-config-files \
+            .#checks.x86_64-linux.artifact-rootTree-dev-binaries \
+            .#checks.x86_64-linux.artifact-rootTree-dev-sh-symlink \
+            .#checks.x86_64-linux.artifact-rootTree-dev-home-dir \
+            .#checks.x86_64-linux.artifact-rootTree-dev-net-scripts
 
       - name: "Assertion tests"
         run: |

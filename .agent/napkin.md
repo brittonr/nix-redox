@@ -152,15 +152,16 @@
 - QEMU runners: replace hardcoded `-m 2048 -smp 4` with `${defaultMemory}` `${defaultCpus}` from vmConfig
 
 ### Functional test suite design (Feb 19 2026)
+- Split VM tests from static checks: config existence/format → artifact tests (no VM, seconds), runtime behavior → VM tests
+- Only things needing a VM: shell execution, filesystem I/O, binary execution, device files
+- Static checks (passwd, hostname, security policy, symlinks, binaries) → `artifact-rootTree-dev-*` tests
 - In-guest test approach: modify startupScriptText to run tests, avoids pty/expect entirely
 - Tests output `FUNC_TEST:name:PASS/FAIL` to serial; host script polls the file (same pattern as boot test)
 - Ion shell (not bash) runs the test script — `let var = val`, `if test ... end`, `exists -f`
 - Startup script gets `#!/bin/sh` prepended by build module (sh→ion symlink on Redox)
-- No `echo -e` in Ion — use separate echo statements or file writes for multi-line
-- No `$$` in Ion for PID — use static test file names with fixed suffixes
+- `specialSymlinks` (e.g., `bin/sh → /bin/ion`) are DANGLING in Nix store — use `[ -L ]` not `[ -e ]` in artifact tests
 - New profile `functional-test.nix` extends development with test runner
 - `mkFunctionalTest` factory in infrastructure alongside `mkBootTest`
-- Eval test for functional-test profile added to CI fast-checks tier
 
 ### base-src init rework (fc162ac, Feb 18 2026)
 - base-src fc162ac reworked init: numbered init.d/ scripts replace init.rc

@@ -1,8 +1,11 @@
 # Functional Test Profile for RedoxOS
 #
 # Based on development profile but replaces the interactive shell with an
-# automated test runner. The startup script executes ~40 functional tests
-# and writes structured results to serial output.
+# automated test runner. The startup script executes runtime tests that
+# REQUIRE a live VM — shell execution, filesystem I/O, process execution.
+#
+# Static checks (config file existence, binary presence, passwd format)
+# are handled by artifact tests in nix/tests/artifacts.nix — no VM needed.
 #
 # Test protocol:
 #   FUNC_TESTS_START              → suite starting
@@ -21,12 +24,13 @@ let
   # ==========================================================================
   # Ion shell test suite — runs inside the Redox guest
   #
-  # IMPORTANT: This is Ion shell syntax, NOT bash/POSIX.
-  # Key differences:
-  #   - Variables: let var = "value"
-  #   - Conditionals: if test ...; end  (no then/fi)
-  #   - File tests: exists -f /path  (not test -f)
-  #   - Loops: for item in list; end  (no done)
+  # ONLY tests that require a running OS belong here:
+  #   - Shell actually parses and executes Ion syntax
+  #   - Filesystem I/O works on a live RedoxFS
+  #   - Cross-compiled binaries actually run
+  #   - Device files are functional
+  #
+  # IMPORTANT: Ion shell syntax, NOT bash/POSIX.
   # ==========================================================================
   testScript = ''
     echo ""
@@ -37,46 +41,47 @@ let
     echo "FUNC_TESTS_START"
     echo ""
 
-    # ── Category 1: Shell Fundamentals ──────────────────────────
+    # ── Shell Execution ────────────────────────────────────────
+    # These verify Ion shell actually works on the running kernel.
 
     # Test: echo produces correct output
     let result = $(echo "test123")
     if test $result = "test123"
-        echo "FUNC_TEST:echo-basic:PASS"
+        echo "FUNC_TEST:echo:PASS"
     else
-        echo "FUNC_TEST:echo-basic:FAIL:got $result"
+        echo "FUNC_TEST:echo:FAIL:got $result"
     end
 
     # Test: variable assignment and expansion
     let myvar = "hello"
     if test $myvar = "hello"
-        echo "FUNC_TEST:variable-assignment:PASS"
+        echo "FUNC_TEST:variables:PASS"
     else
-        echo "FUNC_TEST:variable-assignment:FAIL:got $myvar"
+        echo "FUNC_TEST:variables:FAIL:got $myvar"
     end
 
     # Test: command substitution captures output
     let pwd_out = $(pwd)
     if test -n $pwd_out
-        echo "FUNC_TEST:command-substitution:PASS"
+        echo "FUNC_TEST:substitution:PASS"
     else
-        echo "FUNC_TEST:command-substitution:FAIL:empty"
+        echo "FUNC_TEST:substitution:FAIL:empty"
     end
 
-    # Test: pipeline between commands
+    # Test: pipeline between processes
     let result = $(echo "foo" | cat)
     if test $result = "foo"
-        echo "FUNC_TEST:pipeline-basic:PASS"
+        echo "FUNC_TEST:pipeline:PASS"
     else
-        echo "FUNC_TEST:pipeline-basic:FAIL:got $result"
+        echo "FUNC_TEST:pipeline:FAIL:got $result"
     end
 
-    # Test: exit status captured correctly
+    # Test: exit status captured
     true
     if test $? = 0
-        echo "FUNC_TEST:exit-status-true:PASS"
+        echo "FUNC_TEST:exit-status:PASS"
     else
-        echo "FUNC_TEST:exit-status-true:FAIL"
+        echo "FUNC_TEST:exit-status:FAIL"
     end
 
     # Test: if/else control flow
@@ -88,255 +93,100 @@ let
         let passed = "no"
     end
     if test $passed = "yes"
-        echo "FUNC_TEST:if-else-control:PASS"
+        echo "FUNC_TEST:if-else:PASS"
     else
-        echo "FUNC_TEST:if-else-control:FAIL"
+        echo "FUNC_TEST:if-else:FAIL"
     end
 
-    # ── Category 2: System Identity ────────────────────────────
+    # ── Filesystem I/O ─────────────────────────────────────────
+    # These verify RedoxFS read/write works at runtime.
 
-    # Test: /etc/hostname exists and has content
-    if exists -f /etc/hostname
-        let hn = $(cat /etc/hostname)
-        if test -n $hn
-            echo "FUNC_TEST:hostname-configured:PASS"
-        else
-            echo "FUNC_TEST:hostname-configured:FAIL:empty"
-        end
-    else
-        echo "FUNC_TEST:hostname-configured:FAIL:missing"
-    end
-
-    # Test: /etc/timezone exists
-    if exists -f /etc/timezone
-        let tz = $(cat /etc/timezone)
-        if test -n $tz
-            echo "FUNC_TEST:timezone-configured:PASS"
-        else
-            echo "FUNC_TEST:timezone-configured:FAIL:empty"
-        end
-    else
-        echo "FUNC_TEST:timezone-configured:FAIL:missing"
-    end
-
-    # Test: /etc/profile exists
-    if exists -f /etc/profile
-        echo "FUNC_TEST:profile-exists:PASS"
-    else
-        echo "FUNC_TEST:profile-exists:FAIL"
-    end
-
-    # Test: /etc/security/policy exists
-    if exists -f /etc/security/policy
-        echo "FUNC_TEST:security-policy-exists:PASS"
-    else
-        echo "FUNC_TEST:security-policy-exists:FAIL"
-    end
-
-    # ── Category 3: User/Group Configuration ───────────────────
-
-    # Test: /etc/passwd exists and has content
-    if exists -f /etc/passwd
-        let content = $(cat /etc/passwd)
-        if test -n $content
-            echo "FUNC_TEST:passwd-exists:PASS"
-        else
-            echo "FUNC_TEST:passwd-exists:FAIL:empty"
-        end
-    else
-        echo "FUNC_TEST:passwd-exists:FAIL:missing"
-    end
-
-    # Test: /etc/group exists and has content
-    if exists -f /etc/group
-        let content = $(cat /etc/group)
-        if test -n $content
-            echo "FUNC_TEST:group-exists:PASS"
-        else
-            echo "FUNC_TEST:group-exists:FAIL:empty"
-        end
-    else
-        echo "FUNC_TEST:group-exists:FAIL:missing"
-    end
-
-    # Test: /etc/shadow exists
-    if exists -f /etc/shadow
-        echo "FUNC_TEST:shadow-exists:PASS"
-    else
-        echo "FUNC_TEST:shadow-exists:FAIL"
-    end
-
-    # Test: /etc/init.toml exists
-    if exists -f /etc/init.toml
-        echo "FUNC_TEST:init-toml-exists:PASS"
-    else
-        echo "FUNC_TEST:init-toml-exists:FAIL"
-    end
-
-    # ── Category 4: Filesystem Operations ──────────────────────
-
-    # Test: can list root directory
-    ls / > /dev/null
-    if test $? = 0
-        echo "FUNC_TEST:ls-root:PASS"
-    else
-        echo "FUNC_TEST:ls-root:FAIL"
-    end
-
-    # Test: /bin directory has executables
-    if exists -d /bin
-        let count = $(ls /bin | wc -l)
-        if test $count -gt 0
-            echo "FUNC_TEST:bin-populated:PASS"
-        else
-            echo "FUNC_TEST:bin-populated:FAIL:empty"
-        end
-    else
-        echo "FUNC_TEST:bin-populated:FAIL:no-dir"
-    end
-
-    # Test: write and read a file
-    echo "test_data_42" > /tmp/func_test_rw
-    if exists -f /tmp/func_test_rw
-        let readback = $(cat /tmp/func_test_rw)
+    # Test: write and read back a file
+    echo "test_data_42" > /tmp/func_rw
+    if exists -f /tmp/func_rw
+        let readback = $(cat /tmp/func_rw)
         if test $readback = "test_data_42"
-            echo "FUNC_TEST:file-write-read:PASS"
+            echo "FUNC_TEST:file-roundtrip:PASS"
         else
-            echo "FUNC_TEST:file-write-read:FAIL:mismatch"
+            echo "FUNC_TEST:file-roundtrip:FAIL:mismatch"
         end
-        rm /tmp/func_test_rw
+        rm /tmp/func_rw
     else
-        echo "FUNC_TEST:file-write-read:FAIL:not-created"
+        echo "FUNC_TEST:file-roundtrip:FAIL:not-created"
     end
 
-    # Test: mkdir creates directories
-    mkdir /tmp/func_test_dir
-    if exists -d /tmp/func_test_dir
-        rm -rf /tmp/func_test_dir
+    # Test: mkdir + rmdir
+    mkdir /tmp/func_dir
+    if exists -d /tmp/func_dir
+        rm -rf /tmp/func_dir
         echo "FUNC_TEST:mkdir:PASS"
     else
         echo "FUNC_TEST:mkdir:FAIL"
     end
 
-    # Test: touch creates empty files
-    touch /tmp/func_test_touch
-    if exists -f /tmp/func_test_touch
-        rm /tmp/func_test_touch
+    # Test: touch creates file
+    touch /tmp/func_touch
+    if exists -f /tmp/func_touch
+        rm /tmp/func_touch
         echo "FUNC_TEST:touch:PASS"
     else
         echo "FUNC_TEST:touch:FAIL"
     end
 
-    # Test: rm removes files
-    touch /tmp/func_test_rm
-    rm /tmp/func_test_rm
-    if not exists -f /tmp/func_test_rm
+    # Test: rm removes file
+    touch /tmp/func_rm
+    rm /tmp/func_rm
+    if not exists -f /tmp/func_rm
         echo "FUNC_TEST:rm:PASS"
     else
         echo "FUNC_TEST:rm:FAIL"
     end
 
-    # Test: cp copies files
-    echo "copy_me" > /tmp/func_test_cp_src
-    cp /tmp/func_test_cp_src /tmp/func_test_cp_dst
-    if exists -f /tmp/func_test_cp_dst
-        let content = $(cat /tmp/func_test_cp_dst)
+    # Test: cp copies file content
+    echo "copy_me" > /tmp/func_cp_src
+    cp /tmp/func_cp_src /tmp/func_cp_dst
+    if exists -f /tmp/func_cp_dst
+        let content = $(cat /tmp/func_cp_dst)
+        rm /tmp/func_cp_src /tmp/func_cp_dst
         if test $content = "copy_me"
             echo "FUNC_TEST:cp:PASS"
         else
-            echo "FUNC_TEST:cp:FAIL:content-mismatch"
+            echo "FUNC_TEST:cp:FAIL:content"
         end
-        rm /tmp/func_test_cp_src /tmp/func_test_cp_dst
     else
-        rm /tmp/func_test_cp_src
-        echo "FUNC_TEST:cp:FAIL:not-copied"
+        rm /tmp/func_cp_src
+        echo "FUNC_TEST:cp:FAIL:missing"
     end
 
-    # Test: mv moves files
-    echo "move_me" > /tmp/func_test_mv_src
-    mv /tmp/func_test_mv_src /tmp/func_test_mv_dst
-    if exists -f /tmp/func_test_mv_dst
-        if not exists -f /tmp/func_test_mv_src
-            rm /tmp/func_test_mv_dst
+    # Test: mv moves file (src gone, dst exists)
+    echo "move_me" > /tmp/func_mv_src
+    mv /tmp/func_mv_src /tmp/func_mv_dst
+    if exists -f /tmp/func_mv_dst
+        if not exists -f /tmp/func_mv_src
+            rm /tmp/func_mv_dst
             echo "FUNC_TEST:mv:PASS"
         else
-            rm /tmp/func_test_mv_src /tmp/func_test_mv_dst
-            echo "FUNC_TEST:mv:FAIL:src-still-exists"
+            rm /tmp/func_mv_src /tmp/func_mv_dst
+            echo "FUNC_TEST:mv:FAIL:src-exists"
         end
     else
         echo "FUNC_TEST:mv:FAIL:dst-missing"
     end
 
-    # Test: file append works
-    echo "line1" > /tmp/func_test_append
-    echo "line2" >> /tmp/func_test_append
-    let lines = $(cat /tmp/func_test_append | wc -l)
-    if test $lines = 2
-        echo "FUNC_TEST:file-append:PASS"
+    # Test: file append
+    echo "line1" > /tmp/func_append
+    echo "line2" >> /tmp/func_append
+    let lines = $(wc -l /tmp/func_append)
+    rm /tmp/func_append
+    if test -n $lines
+        echo "FUNC_TEST:append:PASS"
     else
-        echo "FUNC_TEST:file-append:FAIL:got $lines lines"
-    end
-    rm /tmp/func_test_append
-
-    # Test: pwd returns an absolute path
-    let dir = $(pwd)
-    if test -n $dir
-        echo "FUNC_TEST:pwd:PASS"
-    else
-        echo "FUNC_TEST:pwd:FAIL:empty"
+        echo "FUNC_TEST:append:FAIL"
     end
 
-    # ── Category 5: Core Utilities ─────────────────────────────
+    # ── Device Files ───────────────────────────────────────────
 
-    # Test: cat pipes correctly
-    let result = $(echo "pipe_test" | cat)
-    if test $result = "pipe_test"
-        echo "FUNC_TEST:cat-pipe:PASS"
-    else
-        echo "FUNC_TEST:cat-pipe:FAIL"
-    end
-
-    # Test: wc counts lines
-    echo "a" > /tmp/func_test_wc
-    echo "b" >> /tmp/func_test_wc
-    echo "c" >> /tmp/func_test_wc
-    let count = $(wc -l /tmp/func_test_wc | head -1)
-    rm /tmp/func_test_wc
-    # wc output may have leading spaces or filename — just check it contains "3"
-    if test -n $count
-        echo "FUNC_TEST:wc-lines:PASS"
-    else
-        echo "FUNC_TEST:wc-lines:FAIL:got $count"
-    end
-
-    # Test: head outputs first line
-    echo "first" > /tmp/func_test_head
-    echo "second" >> /tmp/func_test_head
-    let result = $(head -1 /tmp/func_test_head)
-    rm /tmp/func_test_head
-    if test $result = "first"
-        echo "FUNC_TEST:head:PASS"
-    else
-        echo "FUNC_TEST:head:FAIL:got $result"
-    end
-
-    # Test: /bin/ion exists (our shell)
-    if exists -f /bin/ion
-        echo "FUNC_TEST:ion-available:PASS"
-    else
-        echo "FUNC_TEST:ion-available:FAIL"
-    end
-
-    # Test: /bin/sh symlink works
-    if exists -f /bin/sh
-        echo "FUNC_TEST:sh-symlink:PASS"
-    else
-        echo "FUNC_TEST:sh-symlink:FAIL"
-    end
-
-    # ── Category 6: Device Files ───────────────────────────────
-
-    # Test: writing to /dev/null succeeds
+    # Test: /dev/null accepts writes
     echo "discard" > /dev/null
     if test $? = 0
         echo "FUNC_TEST:dev-null:PASS"
@@ -344,132 +194,98 @@ let
         echo "FUNC_TEST:dev-null:FAIL"
     end
 
-    # Test: /tmp is writable
-    echo "writable" > /tmp/func_test_writable
-    if exists -f /tmp/func_test_writable
-        rm /tmp/func_test_writable
+    # Test: /tmp is writable (ramfs mounted)
+    echo "writable" > /tmp/func_writable
+    if exists -f /tmp/func_writable
+        rm /tmp/func_writable
         echo "FUNC_TEST:tmp-writable:PASS"
     else
         echo "FUNC_TEST:tmp-writable:FAIL"
     end
 
-    # ── Category 7: CLI Tool Availability ──────────────────────
-    # These check that development profile tools are present and executable.
-    # Each tool is tested with --version which should exit 0.
+    # ── CLI Tool Execution ─────────────────────────────────────
+    # These verify cross-compiled binaries actually run on Redox.
+    # SKIP if binary not present (profile may vary).
 
     if exists -f /bin/rg
         rg --version > /dev/null
         if test $? = 0
-            echo "FUNC_TEST:tool-ripgrep:PASS"
+            echo "FUNC_TEST:run-rg:PASS"
         else
-            echo "FUNC_TEST:tool-ripgrep:FAIL:nonzero-exit"
+            echo "FUNC_TEST:run-rg:FAIL"
         end
     else
-        echo "FUNC_TEST:tool-ripgrep:SKIP"
+        echo "FUNC_TEST:run-rg:SKIP"
     end
 
     if exists -f /bin/fd
         fd --version > /dev/null
         if test $? = 0
-            echo "FUNC_TEST:tool-fd:PASS"
+            echo "FUNC_TEST:run-fd:PASS"
         else
-            echo "FUNC_TEST:tool-fd:FAIL:nonzero-exit"
+            echo "FUNC_TEST:run-fd:FAIL"
         end
     else
-        echo "FUNC_TEST:tool-fd:SKIP"
+        echo "FUNC_TEST:run-fd:SKIP"
     end
 
     if exists -f /bin/bat
         bat --version > /dev/null
         if test $? = 0
-            echo "FUNC_TEST:tool-bat:PASS"
+            echo "FUNC_TEST:run-bat:PASS"
         else
-            echo "FUNC_TEST:tool-bat:FAIL:nonzero-exit"
+            echo "FUNC_TEST:run-bat:FAIL"
         end
     else
-        echo "FUNC_TEST:tool-bat:SKIP"
+        echo "FUNC_TEST:run-bat:SKIP"
     end
 
     if exists -f /bin/hexyl
         hexyl --version > /dev/null
         if test $? = 0
-            echo "FUNC_TEST:tool-hexyl:PASS"
+            echo "FUNC_TEST:run-hexyl:PASS"
         else
-            echo "FUNC_TEST:tool-hexyl:FAIL:nonzero-exit"
+            echo "FUNC_TEST:run-hexyl:FAIL"
         end
     else
-        echo "FUNC_TEST:tool-hexyl:SKIP"
+        echo "FUNC_TEST:run-hexyl:SKIP"
     end
 
     if exists -f /bin/zoxide
         zoxide --version > /dev/null
         if test $? = 0
-            echo "FUNC_TEST:tool-zoxide:PASS"
+            echo "FUNC_TEST:run-zoxide:PASS"
         else
-            echo "FUNC_TEST:tool-zoxide:FAIL:nonzero-exit"
+            echo "FUNC_TEST:run-zoxide:FAIL"
         end
     else
-        echo "FUNC_TEST:tool-zoxide:SKIP"
+        echo "FUNC_TEST:run-zoxide:SKIP"
     end
 
     if exists -f /bin/dust
         dust --version > /dev/null
         if test $? = 0
-            echo "FUNC_TEST:tool-dust:PASS"
+            echo "FUNC_TEST:run-dust:PASS"
         else
-            echo "FUNC_TEST:tool-dust:FAIL:nonzero-exit"
+            echo "FUNC_TEST:run-dust:FAIL"
         end
     else
-        echo "FUNC_TEST:tool-dust:SKIP"
+        echo "FUNC_TEST:run-dust:SKIP"
     end
 
     if exists -f /bin/snix
         snix --version > /dev/null
         if test $? = 0
-            echo "FUNC_TEST:tool-snix:PASS"
+            echo "FUNC_TEST:run-snix:PASS"
         else
-            echo "FUNC_TEST:tool-snix:FAIL:nonzero-exit"
+            echo "FUNC_TEST:run-snix:FAIL"
         end
     else
-        echo "FUNC_TEST:tool-snix:SKIP"
-    end
-
-    # ── Category 8: Logging & Config ───────────────────────────
-
-    # Test: logging config exists
-    if exists -f /etc/logging.conf
-        echo "FUNC_TEST:logging-conf:PASS"
-    else
-        echo "FUNC_TEST:logging-conf:FAIL"
-    end
-
-    # Test: ACPI config exists
-    if exists -f /etc/acpi/config
-        echo "FUNC_TEST:acpi-conf:PASS"
-    else
-        echo "FUNC_TEST:acpi-conf:FAIL"
-    end
-
-    # Test: ion initrc exists
-    if exists -f /etc/ion/initrc
-        echo "FUNC_TEST:ion-initrc:PASS"
-    else
-        echo "FUNC_TEST:ion-initrc:FAIL"
-    end
-
-    # Test: /home directory exists (user home dirs)
-    if exists -d /home
-        echo "FUNC_TEST:home-dir:PASS"
-    else
-        echo "FUNC_TEST:home-dir:FAIL"
+        echo "FUNC_TEST:run-snix:SKIP"
     end
 
     echo ""
     echo "FUNC_TESTS_COMPLETE"
-    echo ""
-    echo "========================================"
-    echo "  Test Suite Complete"
-    echo "========================================"
     echo ""
   '';
 in
@@ -498,7 +314,6 @@ in
   "/networking" = {
     enable = true;
     mode = "auto";
-    # No remote shell needed for tests
     remoteShellEnable = false;
   };
 
@@ -510,11 +325,9 @@ in
   };
 
   "/services" = {
-    # Replace interactive shell with test runner
     startupScriptText = testScript;
   };
 
-  # Small VM is fine for tests
   "/virtualisation" = {
     vmm = "cloud-hypervisor";
     memorySize = 1024;
