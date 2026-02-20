@@ -202,6 +202,27 @@
 - Ion redirect syntax: `>` for stdout, `^>` for stderr (NOT `2>`)
 - Cleanup `rm` at end not critical — VM is destroyed after test — but included for tidiness
 
+### snix store layer — nixbase32 test path pitfall (Feb 20 2026)
+- Nix store paths use nixbase32 alphabet: `0123456789abcdfghijklmnpqrsvwxyz` (32 chars)
+- Letters NOT in nixbase32: 'e', 'o', 't', 'u' — these are MISSING from the alphabet
+- Test paths like `/nix/store/ooooo...-orphan-1.0` FAIL with "Hash encoding is invalid"
+- Must use only valid nixbase32 characters in synthetic test store paths
+- All 32 hash characters must come from the valid set — one bad char = parse failure
+- The PathInfo database keys by the nixbase32 hash: same hash prefix → same JSON file
+  - Tests registering multiple paths MUST use paths with different hash components
+
+### snix store layer v0.3.0 (Feb 20 2026)
+- Added `pathinfo.rs`: JSON-based per-path metadata DB at `/nix/var/snix/pathinfo/{hash}.json`
+- Expanded `store.rs`: closure computation (BFS), GC roots, mark-and-sweep garbage collection
+- Expanded `cache.rs`: recursive closure fetching (`snix fetch --recursive`)
+- New CLI: `snix store {list,info,closure,gc,add-root,remove-root,roots,verify}`
+- PathInfoDb uses filesystem as database — each store path gets its own JSON file
+- GC roots are symlinks in `/nix/var/snix/gcroots/` pointing to store paths
+- Closure = BFS traversal over PathInfo references (handles diamonds, self-refs)
+- GC = compute live set from all roots' closures, delete everything else
+- Cross-compiles to 3.7MB static ELF for x86_64-unknown-redox (no new C deps)
+- 113 host unit tests + 53 VM functional tests (8 new store tests), all pass
+
 ### snix-eval "Invalid opcode fault" on Redox — root cause (Feb 20 2026)
 - ALL `snix eval` commands crashed with "Invalid opcode fault" at RIP 0x632032 (ud2 instruction)
 - Non-eval commands (system info/verify/generations/switch) worked fine

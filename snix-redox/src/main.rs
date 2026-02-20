@@ -1,12 +1,18 @@
-//! snix — Nix evaluator and binary cache client for Redox OS
+//! snix — Nix evaluator, binary cache client, and store manager for Redox OS
 //!
 //! Built on snix-eval (bytecode VM) and nix-compat (sync NAR/store path handling).
 //! Uses ureq for sync HTTP — no tokio runtime needed.
+//!
+//! Store layout:
+//!   /nix/store/              — store paths (the data)
+//!   /nix/var/snix/pathinfo/  — per-path metadata (JSON)
+//!   /nix/var/snix/gcroots/   — GC root symlinks
 
-mod eval;
 mod cache;
-mod store;
+mod eval;
 mod nar;
+mod pathinfo;
+mod store;
 mod system;
 
 use clap::{Parser, Subcommand};
@@ -45,6 +51,10 @@ enum Command {
         /// Binary cache URL
         #[arg(short, long, default_value = "https://cache.nixos.org")]
         cache_url: String,
+
+        /// Recursively fetch all dependencies (full closure)
+        #[arg(short, long)]
+        recursive: bool,
     },
 
     /// Show info about a store path from a binary cache
@@ -57,8 +67,11 @@ enum Command {
         cache_url: String,
     },
 
-    /// Verify the local Nix store
-    StoreVerify,
+    /// Local store operations
+    Store {
+        #[command(subcommand)]
+        command: StoreCommand,
+    },
 
     /// Interactive REPL for Nix expressions
     Repl,
@@ -68,6 +81,52 @@ enum Command {
         #[command(subcommand)]
         command: SystemCommand,
     },
+}
+
+#[derive(Subcommand)]
+enum StoreCommand {
+    /// Verify the local Nix store (check path names)
+    Verify,
+
+    /// List all registered store paths with sizes
+    List,
+
+    /// Show metadata for a registered store path
+    Info {
+        /// Store path to look up
+        path: String,
+    },
+
+    /// Show the transitive closure (all dependencies) of a store path
+    Closure {
+        /// Root store path
+        path: String,
+    },
+
+    /// Run garbage collection (delete unreferenced paths)
+    Gc {
+        /// Show what would be deleted without actually deleting
+        #[arg(long)]
+        dry_run: bool,
+    },
+
+    /// Add a GC root (protect a path from garbage collection)
+    AddRoot {
+        /// Symbolic name for the root (e.g. "my-app", "system")
+        name: String,
+
+        /// Store path to protect
+        path: String,
+    },
+
+    /// Remove a GC root
+    RemoveRoot {
+        /// Name of the root to remove
+        name: String,
+    },
+
+    /// List all GC roots
+    Roots,
 }
 
 #[derive(Subcommand)]
@@ -146,30 +205,52 @@ fn main() {
         Command::Fetch {
             store_path,
             cache_url,
-        } => cache::fetch(&store_path, &cache_url),
+            recursive,
+        } => {
+            if recursive {
+                cache::fetch_recursive(&store_path, &cache_url)
+            } else {
+                cache::fetch(&store_path, &cache_url)
+            }
+        }
         Command::PathInfo {
             store_path,
             cache_url,
         } => cache::path_info(&store_path, &cache_url),
-        Command::StoreVerify => store::verify(),
+        Command::Store { command } => match command {
+            StoreCommand::Verify => store::verify(),
+            StoreCommand::List => store::list_registered(),
+            StoreCommand::Info { path } => store::show_info(&path),
+            StoreCommand::Closure { path } => store::show_closure(&path),
+            StoreCommand::Gc { dry_run } => store::run_gc(dry_run),
+            StoreCommand::AddRoot { name, path } => store::add_root(&name, &path),
+            StoreCommand::RemoveRoot { name } => store::remove_root(&name),
+            StoreCommand::Roots => store::list_roots(),
+        },
         Command::Repl => eval::repl(),
         Command::System { command } => match command {
-            SystemCommand::Info { manifest } => {
-                system::info(manifest.as_deref())
-            }
+            SystemCommand::Info { manifest } => system::info(manifest.as_deref()),
             SystemCommand::Verify { verbose, manifest } => {
                 system::verify(manifest.as_deref(), verbose)
             }
             SystemCommand::Diff { path } => system::diff(&path),
-            SystemCommand::Generations { dir } => {
-                system::generations(dir.as_deref())
-            }
-            SystemCommand::Switch { path, description, gen_dir, manifest } => {
-                system::switch(&path, description.as_deref(), gen_dir.as_deref(), manifest.as_deref())
-            }
-            SystemCommand::Rollback { generation, dir, manifest } => {
-                system::rollback(generation, dir.as_deref(), manifest.as_deref())
-            }
+            SystemCommand::Generations { dir } => system::generations(dir.as_deref()),
+            SystemCommand::Switch {
+                path,
+                description,
+                gen_dir,
+                manifest,
+            } => system::switch(
+                &path,
+                description.as_deref(),
+                gen_dir.as_deref(),
+                manifest.as_deref(),
+            ),
+            SystemCommand::Rollback {
+                generation,
+                dir,
+                manifest,
+            } => system::rollback(generation, dir.as_deref(), manifest.as_deref()),
         },
     };
 

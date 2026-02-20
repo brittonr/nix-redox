@@ -582,6 +582,117 @@ let
         echo "FUNC_TEST:switch-creates-new-gen:SKIP"
     end
 
+    # ── Store Layer (snix store) ─────────────────────────────
+    # These verify the new local store management layer:
+    #   - PathInfo database (JSON-backed, /nix/var/snix/pathinfo/)
+    #   - GC roots (symlinks in /nix/var/snix/gcroots/)
+    #   - Closure computation (BFS over references)
+    #   - Garbage collection (mark-and-sweep)
+    # NOTE: These are local operations (no network needed).
+
+    if exists -f /bin/snix
+        # Test: snix store verify runs (may report no store at /nix/store)
+        /bin/snix store verify > /tmp/store_verify ^> /tmp/store_verr
+        if test $? = 0
+            echo "FUNC_TEST:snix-store-verify:PASS"
+        else
+            echo "FUNC_TEST:snix-store-verify:FAIL"
+        end
+        rm /tmp/store_verify
+        rm /tmp/store_verr
+
+        # Test: snix store list runs (empty store is fine)
+        /bin/snix store list > /tmp/store_list ^> /tmp/store_lerr
+        if test $? = 0
+            echo "FUNC_TEST:snix-store-list:PASS"
+        else
+            echo "FUNC_TEST:snix-store-list:FAIL"
+        end
+        rm /tmp/store_list
+        rm /tmp/store_lerr
+
+        # Test: snix store roots runs (empty is fine)
+        /bin/snix store roots > /tmp/store_roots ^> /tmp/store_rerr
+        if test $? = 0
+            echo "FUNC_TEST:snix-store-roots:PASS"
+        else
+            echo "FUNC_TEST:snix-store-roots:FAIL"
+        end
+        rm /tmp/store_roots
+        rm /tmp/store_rerr
+
+        # Test: snix store gc --dry-run works with no roots
+        /bin/snix store gc --dry-run > /tmp/store_gc ^> /tmp/store_gerr
+        if test $? = 0
+            echo "FUNC_TEST:snix-store-gc-dryrun:PASS"
+        else
+            echo "FUNC_TEST:snix-store-gc-dryrun:FAIL"
+        end
+        rm /tmp/store_gc
+        rm /tmp/store_gerr
+
+        # Test: snix store info on nonexistent path gives an error (expected)
+        /bin/snix store info /nix/store/5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r-nonexistent-1.0 > /tmp/store_info ^> /tmp/store_ierr
+        if test $? = 1
+            echo "FUNC_TEST:snix-store-info-missing:PASS"
+        else
+            echo "FUNC_TEST:snix-store-info-missing:FAIL:expected-error"
+        end
+        rm /tmp/store_info
+        rm /tmp/store_ierr
+
+        # Test: snix store closure on nonexistent path gives an error (expected)
+        /bin/snix store closure /nix/store/5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r-nonexistent-1.0 > /tmp/store_clo ^> /tmp/store_cerr
+        if test $? = 1
+            echo "FUNC_TEST:snix-store-closure-missing:PASS"
+        else
+            echo "FUNC_TEST:snix-store-closure-missing:FAIL:expected-error"
+        end
+        rm /tmp/store_clo
+        rm /tmp/store_cerr
+
+        # Test: snix --help includes "store" subcommand
+        /bin/snix --help > /tmp/snix_help ^> /tmp/snix_herr
+        grep -q 'store' /tmp/snix_help
+        if test $? = 0
+            echo "FUNC_TEST:snix-help-has-store:PASS"
+        else
+            echo "FUNC_TEST:snix-help-has-store:FAIL"
+        end
+        rm /tmp/snix_help
+        rm /tmp/snix_herr
+
+        # Test: snix store --help shows all subcommands
+        /bin/snix store --help > /tmp/store_help ^> /tmp/store_herr
+        grep -q 'gc' /tmp/store_help
+        if test $? = 0
+            grep -q 'closure' /tmp/store_help
+            if test $? = 0
+                grep -q 'add-root' /tmp/store_help
+                if test $? = 0
+                    echo "FUNC_TEST:snix-store-help-complete:PASS"
+                else
+                    echo "FUNC_TEST:snix-store-help-complete:FAIL:missing-add-root"
+                end
+            else
+                echo "FUNC_TEST:snix-store-help-complete:FAIL:missing-closure"
+            end
+        else
+            echo "FUNC_TEST:snix-store-help-complete:FAIL:missing-gc"
+        end
+        rm /tmp/store_help
+        rm /tmp/store_herr
+    else
+        echo "FUNC_TEST:snix-store-verify:SKIP"
+        echo "FUNC_TEST:snix-store-list:SKIP"
+        echo "FUNC_TEST:snix-store-roots:SKIP"
+        echo "FUNC_TEST:snix-store-gc-dryrun:SKIP"
+        echo "FUNC_TEST:snix-store-info-missing:SKIP"
+        echo "FUNC_TEST:snix-store-closure-missing:SKIP"
+        echo "FUNC_TEST:snix-help-has-store:SKIP"
+        echo "FUNC_TEST:snix-store-help-complete:SKIP"
+    end
+
     echo ""
     echo "FUNC_TESTS_COMPLETE"
     echo ""
