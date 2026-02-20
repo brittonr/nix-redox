@@ -1041,6 +1041,8 @@ in
       ++ opt "extrautils"
       ++ opt "sodium"
       ++ opt "netutils"
+      ++ opt "ripgrep"
+      ++ opt "fd"
       ++ opt "bat"
       ++ opt "hexyl"
       ++ opt "zoxide"
@@ -1051,8 +1053,8 @@ in
       ls = "ls --color=auto";
     };
 
-    # Include ripgrep and fd in the binary cache for install tests.
-    # These are NOT in systemPackages — they're only available via `snix install`.
+    # Also include ripgrep and fd in the binary cache so the snix
+    # install/remove tests can exercise the package manager flow.
     binaryCachePackages =
       lib.optionalAttrs (pkgs ? ripgrep) { ripgrep = pkgs.ripgrep; }
       // lib.optionalAttrs (pkgs ? fd) { fd = pkgs.fd; };
