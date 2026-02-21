@@ -21,12 +21,31 @@ use redox_scheme::scheme::SchemeSync;
 use redox_scheme::{CallerCtx, OpenResult};
 use syscall::data::{Stat, StatVfs};
 use syscall::dirent::{DirEntry as RedoxDirEntry, DirentBuf, DirentKind};
-use syscall::error::{Error, Result, EBADF, EISDIR, ENOENT, ENOTDIR};
-use syscall::flag::{EventFlags, O_ACCMODE, O_DIRECTORY, O_RDONLY, O_STAT};
+use syscall::error::{Error, Result, EBADF, EIO, EISDIR, ENOENT, ENOTDIR};
+use syscall::flag::{EventFlags, O_ACCMODE, O_DIRECTORY, O_RDONLY, O_STAT, O_WRONLY};
 use syscall::schemev2::NewFdFlags;
 
 use crate::fuse::{S_IFDIR, S_IFMT};
 use crate::session::{DirEntry, FuseSession};
+
+/// Convert Redox open flags to FUSE/Linux open flags.
+///
+/// Redox uses different flag values than Linux:
+///   Redox O_RDONLY = 0x0001_0000   Linux O_RDONLY = 0
+///   Redox O_WRONLY = 0x0002_0000   Linux O_WRONLY = 1
+///   Redox O_RDWR   = 0x0003_0000   Linux O_RDWR   = 2
+///
+/// FUSE passes these flags to the host virtiofsd which calls open() with
+/// Linux flags. Passing raw Redox flags causes EINVAL/ENOENT on the host.
+fn redox_to_fuse_flags(redox_flags: usize) -> u32 {
+    let mode = redox_flags & O_ACCMODE;
+    match mode {
+        _ if mode == O_RDONLY => 0,               // Linux O_RDONLY
+        _ if mode == O_WRONLY => 1,               // Linux O_WRONLY
+        _ if mode == (O_RDONLY | O_WRONLY) => 2,   // Linux O_RDWR
+        _ => 0,                                    // Default: read-only
+    }
+}
 
 /// An open file or directory handle.
 struct Handle {
@@ -218,9 +237,10 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                 return Err(Error::new(ENOTDIR));
             }
 
+            let fuse_flags = redox_to_fuse_flags(flags);
             let file_handle = self
                 .session
-                .open(nodeid, flags as u32)
+                .open(nodeid, fuse_flags)
                 .map_err(|_| Error::new(ENOENT))?;
 
             let id = self.next_id.fetch_add(1, Ordering::Relaxed);
@@ -264,7 +284,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         let data = self
             .session
             .read(nodeid, fh, offset, buf.len() as u32)
-            .map_err(|_| Error::new(EBADF))?;
+            .map_err(|_| Error::new(EIO))?;
 
         let copy_len = data.len().min(buf.len());
         buf[..copy_len].copy_from_slice(&data[..copy_len]);

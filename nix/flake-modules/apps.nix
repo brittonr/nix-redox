@@ -190,6 +190,13 @@
           meta.description = "Run functional tests inside Redox OS (shell, filesystem, tools, config)";
         };
 
+        # Bridge test — tests host→guest package delivery via virtio-fs shared filesystem
+        bridge-test = {
+          type = "app";
+          program = "${self'.packages.bridgeTest}/bin/bridge-test";
+          meta.description = "Test build bridge: push packages to VM via virtio-fs, install with snix";
+        };
+
         # RedoxOS system configuration manager (like nixos-rebuild / darwin-rebuild)
         redox-rebuild = {
           type = "app";

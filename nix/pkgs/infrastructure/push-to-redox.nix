@@ -106,20 +106,28 @@ let
 
 
     def merge_cache(src_dir, dst_dir):
-        """Merge a generated binary cache into the target shared cache."""
-        os.makedirs(os.path.join(dst_dir, "nar"), exist_ok=True)
+        """Merge a generated binary cache into the target shared cache.
 
-        # Copy narinfo files
+        Flattens the nar/ subdirectory: NARs are placed in the cache root
+        instead of nar/. The narinfo URL field is rewritten to match.
+        This works around virtio-fs subdirectory read issues.
+        """
+
+        # Copy narinfo files, rewriting URL to flatten nar/ subdirectory
         for f in os.listdir(src_dir):
             if f.endswith(".narinfo"):
-                shutil.copy2(os.path.join(src_dir, f), os.path.join(dst_dir, f))
+                with open(os.path.join(src_dir, f)) as fh:
+                    content = fh.read()
+                # Rewrite "URL: nar/foo.nar.zst" → "URL: foo.nar.zst"
+                content = content.replace("URL: nar/", "URL: ")
+                with open(os.path.join(dst_dir, f), "w") as fh:
+                    fh.write(content)
 
-        # Copy NAR files
+        # Copy NAR files into cache root (flat, no nar/ subdirectory)
         src_nar = os.path.join(src_dir, "nar")
-        dst_nar = os.path.join(dst_dir, "nar")
         if os.path.isdir(src_nar):
             for f in os.listdir(src_nar):
-                shutil.copy2(os.path.join(src_nar, f), os.path.join(dst_nar, f))
+                shutil.copy2(os.path.join(src_nar, f), os.path.join(dst_dir, f))
 
         # Merge packages.json
         src_index = {}
@@ -145,6 +153,13 @@ let
         if not os.path.exists(cache_info):
             with open(cache_info, "w") as f:
                 f.write("StoreDir: /nix/store\n")
+
+        # Ensure all cache files are world-readable (virtiofsd needs this)
+        for root, dirs, files in os.walk(dst_dir):
+            for d in dirs:
+                os.chmod(os.path.join(root, d), 0o755)
+            for f in files:
+                os.chmod(os.path.join(root, f), 0o644)
 
         return len(new_pkgs)
 

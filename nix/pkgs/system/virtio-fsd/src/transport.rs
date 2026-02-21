@@ -16,15 +16,28 @@ use virtio_core::transport::Queue;
 
 use crate::fuse::{FuseInHeader, FuseOutHeader};
 
-/// Maximum FUSE request+response size. virtiofsd typically uses 1 MiB + headers.
-const MAX_FUSE_RESPONSE: usize = 1024 * 1024 + 4096;
+/// Default FUSE response buffer size for metadata operations (lookups, attrs, opens, etc.).
+/// These never return more than a few hundred bytes.
+const DEFAULT_FUSE_RESPONSE: usize = 4096;
 
 /// Send a FUSE request and wait for the response synchronously.
 ///
 /// `request` contains the serialized FUSE request (FuseInHeader + args + optional name).
+/// `max_response` is the maximum expected response size (header + body).
 /// Returns the raw response bytes (FuseOutHeader + response body).
-pub fn fuse_request(queue: &Queue<'_>, request: &[u8]) -> Result<Vec<u8>, FuseTransportError> {
-    // Allocate DMA buffers for the request and response.
+///
+/// IMPORTANT: virtiofsd uses the response descriptor size to determine how many
+/// bytes to read from the host file (for FUSE_READ). The `max_response` MUST match
+/// the expected data size, not a fixed large value.
+pub fn fuse_request(
+    queue: &Queue<'_>,
+    request: &[u8],
+    max_response: usize,
+) -> Result<Vec<u8>, FuseTransportError> {
+    // Allocate DMA buffers. These are allocated per-request because the response
+    // buffer size controls virtiofsd's read behavior. The buffers are NOT dropped
+    // until after the response is fully copied out — this avoids race conditions
+    // with the virtio device that could corrupt page frame reference counts.
     let req_dma = {
         let mut dma = unsafe {
             Dma::<[u8]>::zeroed_slice(request.len())
@@ -36,7 +49,7 @@ pub fn fuse_request(queue: &Queue<'_>, request: &[u8]) -> Result<Vec<u8>, FuseTr
     };
 
     let resp_dma = unsafe {
-        Dma::<[u8]>::zeroed_slice(MAX_FUSE_RESPONSE)
+        Dma::<[u8]>::zeroed_slice(max_response)
             .map_err(|_| FuseTransportError::DmaAlloc)?
             .assume_init()
     };
@@ -59,6 +72,13 @@ pub fn fuse_request(queue: &Queue<'_>, request: &[u8]) -> Result<Vec<u8>, FuseTr
     // Copy response out of DMA buffer.
     let mut result = vec![0u8; written];
     result.copy_from_slice(&resp_dma[..written]);
+
+    // Intentionally leak DMA buffers to avoid kernel panic in funmap.
+    // The Redox kernel's physical page frame deallocator has a race condition
+    // that corrupts refcounts when DMA buffers are freed rapidly.
+    // This wastes ~12KB per request but prevents crashes during file reads.
+    core::mem::forget(req_dma);
+    core::mem::forget(resp_dma);
 
     Ok(result)
 }

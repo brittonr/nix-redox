@@ -203,6 +203,17 @@
           inherit bootloader;
         };
 
+        # Bridge test: virtio-fs shared filesystem package delivery
+        mkBridgeTest = redoxConfig.modularPkgs.infrastructure.mkBridgeTest;
+        bridgeTestSystem = mkSystem {
+          modules = [ ../redox-system/profiles/bridge-test.nix ];
+          inherit extraPkgs;
+        };
+        bridgeTest = mkBridgeTest {
+          diskImage = bridgeTestSystem.diskImage;
+          inherit pushToRedox;
+        };
+
         # redox-rebuild CLI tool
         redoxRebuild = import ../pkgs/infrastructure/redox-rebuild.nix {
           inherit pkgs lib;
@@ -289,6 +300,10 @@
           # Functional test (disk image + runner)
           redox-functional-test = functionalTestSystem.diskImage;
           functionalTest = functionalTest;
+
+          # Bridge test (disk image + runner)
+          redox-bridge-test = bridgeTestSystem.diskImage;
+          bridgeTest = bridgeTest;
 
           # redox-rebuild CLI
           redox-rebuild = redoxRebuild;

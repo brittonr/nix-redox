@@ -118,4 +118,20 @@ in
         bootloader
         ;
     };
+
+  # Bridge test factory - requires diskImage with virtio-fsd + test script
+  # Orchestrates host-side package push + guest-side snix install via virtio-fs
+  mkBridgeTest =
+    {
+      diskImage,
+      pushToRedox,
+    }:
+    import ./bridge-test.nix {
+      inherit
+        pkgs
+        lib
+        diskImage
+        pushToRedox
+        ;
+    };
 }

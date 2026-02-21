@@ -460,3 +460,31 @@
 - `build-bridge.nix` (host-side daemon) already existed — watches for request JSON files
   - It's the "full rebuild" workflow; push-to-redox is the "push individual packages" workflow
 - 198 host unit tests pass; snix cross-compiles to 4.0MB (unchanged)
+
+### Build bridge — virtio-fs FUSE_READ fix (Feb 21 2026)
+- **Root cause**: virtiofsd uses the response descriptor SIZE (not FuseReadIn.size) to determine
+  how many bytes to `preadv2()` from the host file. With a fixed 1MB response buffer, virtiofsd
+  would try to read 1MB even when only 8KB was requested.
+- **Solution**: Size the response DMA buffer to `sizeof(FuseOutHeader) + read_size` for FUSE_READ
+  and FUSE_READDIR. Use a small 4KB buffer for all metadata operations (LOOKUP, GETATTR, OPEN, etc.)
+- **DMA kernel panic**: Rapid DMA allocation/deallocation caused `expected frame to be free` kernel
+  panic in `deallocate_p2frame`. Workaround: `core::mem::forget()` the DMA buffers after use.
+  This leaks ~12KB per FUSE request but avoids the kernel bug. Long-term fix: pre-allocate and
+  reuse DMA buffers in the FuseSession.
+- **Flat cache layout**: NAR files placed in cache root (not `nar/` subdirectory). The narinfo
+  `URL:` field is rewritten from `nar/hash.nar.zst` to `hash.nar.zst` during merge. This avoids
+  subdirectory traversal overhead and simplifies the cache structure.
+- **Cache file permissions**: `build-binary-cache.py` creates files with umask 0077 → 600 perms.
+  `push-to-redox` merge step chmod's all files to 644 and dirs to 755 for virtiofsd access.
+- **Live push detection**: Guest polls with `snix search` (reads packages.json via FUSE) in a loop.
+  Need 200 iterations to give the host 4-5 seconds to complete the push. `cat /dev/null` is NOT
+  a real delay — use actual I/O operations (file reads) to introduce meaningful poll intervals.
+- **virtiofsd flags**:
+  - `--cache=never` required for live push detection (otherwise dir entries are cached)
+  - `--sandbox=none` needed (no file handle support warning, falls back to inode-based access)
+  - `FOPEN_KEEP_CACHE (0x2)` in open response is normal and benign
+- **strace debugging**: `strace -f -e trace=preadv2,openat,read` on virtiofsd was key to finding
+  the buffer size issue. Showed `iov_len=1052656` (full buffer) instead of `iov_len=8192` (requested)
+- **Redox flag translation**: Redox open flags (O_RDONLY=0x10000, O_ACCMODE=0x30000) must be
+  translated to Linux FUSE flags (O_RDONLY=0) in `redox_to_fuse_flags()` before FUSE_OPEN
+- **All 30 bridge tests pass**: filesystem access, snix search, install, remove, live push, reinstall

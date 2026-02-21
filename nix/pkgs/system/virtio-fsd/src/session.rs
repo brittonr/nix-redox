@@ -12,6 +12,10 @@ use virtio_core::transport::Queue;
 use crate::fuse::*;
 use crate::transport::*;
 
+/// Response buffer size for metadata operations (lookups, getattr, open, release, statfs).
+/// These return small fixed-size structs, never more than a few hundred bytes.
+const META_RESPONSE: usize = 4096;
+
 /// A FUSE session over a virtio-fs request queue.
 pub struct FuseSession<'a> {
     queue: Arc<Queue<'a>>,
@@ -48,7 +52,7 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_request(&session.queue, &req)?;
+        let resp = fuse_request(&session.queue, &req, META_RESPONSE)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -86,7 +90,7 @@ impl<'a> FuseSession<'a> {
             Some(name.as_bytes()),
         );
 
-        let resp = fuse_request(&self.queue, &req)?;
+        let resp = fuse_request(&self.queue, &req, META_RESPONSE)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -113,7 +117,7 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_request(&self.queue, &req)?;
+        let resp = fuse_request(&self.queue, &req, META_RESPONSE)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -139,7 +143,7 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_request(&self.queue, &req)?;
+        let resp = fuse_request(&self.queue, &req, META_RESPONSE)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -165,7 +169,7 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_request(&self.queue, &req)?;
+        let resp = fuse_request(&self.queue, &req, META_RESPONSE)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -202,10 +206,16 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_request(&self.queue, &req)?;
-        let _hdr = parse_response_header(&resp)?;
+        // Size the response buffer to exactly header + requested bytes.
+        // virtiofsd uses the response descriptor size to determine how many bytes
+        // to read from the host file — NOT the size field in FuseReadIn.
+        let read_response_size =
+            core::mem::size_of::<FuseOutHeader>() + size as usize;
+        let resp = fuse_request(&self.queue, &req, read_response_size)?;
+        let hdr = parse_response_header(&resp)?;
+        let body = response_body(&resp);
 
-        Ok(response_body(&resp).to_vec())
+        Ok(body.to_vec())
     }
 
     /// FUSE_READDIR: read directory entries.
@@ -234,7 +244,10 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_request(&self.queue, &req)?;
+        // Size response buffer for directory data
+        let readdir_response_size =
+            core::mem::size_of::<FuseOutHeader>() + size as usize;
+        let resp = fuse_request(&self.queue, &req, readdir_response_size)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -258,7 +271,7 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_request(&self.queue, &req)?;
+        let resp = fuse_request(&self.queue, &req, META_RESPONSE)?;
         let _hdr = parse_response_header(&resp)?;
         Ok(())
     }
@@ -280,7 +293,7 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_request(&self.queue, &req)?;
+        let resp = fuse_request(&self.queue, &req, META_RESPONSE)?;
         let _hdr = parse_response_header(&resp)?;
         Ok(())
     }
@@ -295,7 +308,7 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_request(&self.queue, &req)?;
+        let resp = fuse_request(&self.queue, &req, META_RESPONSE)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
