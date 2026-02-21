@@ -343,3 +343,31 @@
   - Verified: reverting to old code = 3 failures gone; old code always rebuilt unconditionally
   - After fix: 94/94 VM tests pass, 0 failures
 - Cross-compiled binary grew from 3.7MB to 3.9MB (activate module adds ~200KB)
+
+### QEMU test runner: -vga none required (Feb 20 2026)
+- QEMU with `-display none` still emulates a VGA card by default
+- The VGA card provides a GOP device to UEFI firmware
+- The Redox bootloader detects GOP → shows resolution selection screen → waits for keyboard
+- Cloud Hypervisor with `--console off` provides no display device → bootloader skips picker
+- Fix: add `-vga none` to all headless QEMU invocations (boot-test, functional-test)
+- Boot test: stuck forever → 2.2s with fix
+- Note: the graphical QEMU runner DOES need VGA (uses `-vga std -display gtk` + expect script)
+
+### Redox grep doesn't support \| alternation (Feb 20 2026)
+- `grep -qi 'pattern1\|pattern2'` silently matches nothing on Redox
+- Must use separate `grep` calls with if/else fallthrough
+- Same applies to extended regex (`grep -E`) — not reliably available
+- Pattern: check each alternative in nested if/else blocks
+
+### System upgrade pipeline — local channel testing (Feb 20 2026)
+- `snix system upgrade` works with local channels (no network needed)
+- Channel = directory with `url`, `manifest.json`, optionally `cache-url` and `packages.json`
+- For VM tests: create channel dir at runtime, use `snix eval` to transform current manifest
+  - `snix eval --raw --file /tmp/transform.nix` reads manifest JSON, overrides fields, outputs new JSON
+  - This is dogfooding: Nix bytecode VM running on Redox transforms its own system config
+  - Ion single quotes `'...'` prevent all expansion — safe for Nix expressions with `{}//()`
+- `sed` is NOT available on Redox (not in uutils) — cannot use it for text transformation
+- Channel `update()` gracefully handles fetch failure + falls back to cached manifest
+- `fetch_upgrade_packages()` tries 3 strategies: channel-local cache → /nix/cache/ → remote URL
+- Second upgrade with same manifest = "up to date" (detected by build hash comparison)
+- 102 VM functional tests, 178 host unit tests — all pass
