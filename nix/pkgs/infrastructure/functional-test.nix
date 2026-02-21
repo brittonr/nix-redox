@@ -238,11 +238,12 @@ pkgs.writeShellScriptBin "functional-test" ''
       echo ""
     fi
 
-    # Parse new FUNC_TEST lines incrementally
+    # Parse new FUNC_TEST lines incrementally.
+    # Serial console outputs \r\n — strip \r before parsing.
     if [ "$TESTS_STARTED" = "1" ]; then
-      CURRENT_LINES=$(echo "$LOG_CONTENT" | ${pkgs.gnugrep}/bin/grep "^FUNC_TEST:" 2>/dev/null | wc -l)
+      CURRENT_LINES=$(echo "$LOG_CONTENT" | tr -d '\r' | ${pkgs.gnugrep}/bin/grep "^FUNC_TEST:" 2>/dev/null | wc -l)
       if [ "$CURRENT_LINES" -gt "$LAST_PARSED_LINE" ]; then
-        echo "$LOG_CONTENT" | ${pkgs.gnugrep}/bin/grep "^FUNC_TEST:" 2>/dev/null | tail -n +"$((LAST_PARSED_LINE + 1))" | while IFS=: read -r _marker name result reason; do
+        echo "$LOG_CONTENT" | tr -d '\r' | ${pkgs.gnugrep}/bin/grep "^FUNC_TEST:" 2>/dev/null | tail -n +"$((LAST_PARSED_LINE + 1))" | while IFS=: read -r _marker name result reason; do
           case "$result" in
             PASS)
               echo "    ''${GREEN}✓''${RESET} $name"
