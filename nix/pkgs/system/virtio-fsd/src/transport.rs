@@ -103,6 +103,56 @@ pub fn fuse_data_request(
     fuse_request_inner(queue, request, resp_size)
 }
 
+/// Send a FUSE write request: header + FuseWriteIn + data in one request descriptor.
+///
+/// Unlike reads, writes pack the data INTO the request. The response is just
+/// a FuseOutHeader + FuseWriteOut (8 bytes) confirming how many bytes were written.
+pub fn fuse_write_request(
+    queue: &Queue<'_>,
+    request_with_data: &[u8],
+) -> Result<Vec<u8>, FuseTransportError> {
+    fuse_request_inner(queue, request_with_data, META_RESPONSE)
+}
+
+/// Build a FUSE request with typed args struct AND trailing data (for FUSE_WRITE).
+pub fn build_request_with_data<T: Sized>(
+    opcode: u32,
+    nodeid: u64,
+    unique: u64,
+    args: &T,
+    data: &[u8],
+) -> Vec<u8> {
+    let hdr_size = core::mem::size_of::<FuseInHeader>();
+    let args_size = core::mem::size_of::<T>();
+    let total_len = hdr_size + args_size + data.len();
+
+    let header = FuseInHeader {
+        len: total_len as u32,
+        opcode,
+        unique,
+        nodeid,
+        uid: 0,
+        gid: 0,
+        pid: 0,
+        total_extlen: 0,
+        padding: 0,
+    };
+
+    let mut buf = Vec::with_capacity(total_len);
+
+    let hdr_bytes =
+        unsafe { core::slice::from_raw_parts(&header as *const _ as *const u8, hdr_size) };
+    buf.extend_from_slice(hdr_bytes);
+
+    let args_bytes =
+        unsafe { core::slice::from_raw_parts(args as *const T as *const u8, args_size) };
+    buf.extend_from_slice(args_bytes);
+
+    buf.extend_from_slice(data);
+
+    buf
+}
+
 /// Parse a FUSE response header from raw bytes.
 pub fn parse_response_header(data: &[u8]) -> Result<FuseOutHeader, FuseTransportError> {
     if data.len() < core::mem::size_of::<FuseOutHeader>() {

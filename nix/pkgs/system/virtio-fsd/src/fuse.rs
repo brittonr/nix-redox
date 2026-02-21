@@ -19,18 +19,18 @@ pub enum FuseOpcode {
     Lookup = 1,
     Forget = 2,
     Getattr = 3,
-    // Setattr = 4,
+    Setattr = 4,
     // Readlink = 5,
     // Symlink = 6,
     // Mknod = 8,
-    // Mkdir = 9,
-    // Unlink = 10,
-    // Rmdir = 11,
+    Mkdir = 9,
+    Unlink = 10,
+    Rmdir = 11,
     // Rename = 12,
     // Link = 13,
     Open = 14,
     Read = 15,
-    // Write = 16,
+    Write = 16,
     Statfs = 17,
     Release = 18,
     // Fsync = 20,
@@ -45,7 +45,7 @@ pub enum FuseOpcode {
     Releasedir = 29,
     // Fsyncdir = 30,
     // Access = 34,
-    // Create = 35,
+    Create = 35,
     // Batchforget = 42,
     Readdirplus = 44,
     // Setupmapping = 48,
@@ -250,6 +250,71 @@ pub struct FuseDirent {
     pub typ: u32,
     // name bytes follow (variable length, padded to 8 bytes)
 }
+
+/// FUSE_WRITE request body (precedes the actual data).
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct FuseWriteIn {
+    pub fh: u64,
+    pub offset: u64,
+    pub size: u32,
+    pub write_flags: u32,
+    pub lock_owner: u64,
+    pub flags: u32,
+    pub padding: u32,
+}
+
+/// FUSE_WRITE response body.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct FuseWriteOut {
+    pub size: u32,
+    pub padding: u32,
+}
+
+/// FUSE_CREATE request body (followed by null-terminated filename).
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct FuseCreateIn {
+    pub flags: u32,
+    pub mode: u32,
+    pub umask: u32,
+    pub open_flags: u32,
+}
+
+/// FUSE_MKDIR request body (followed by null-terminated dirname).
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct FuseMkdirIn {
+    pub mode: u32,
+    pub umask: u32,
+}
+
+/// FUSE_SETATTR request body.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct FuseSetattrIn {
+    pub valid: u32,
+    pub padding: u32,
+    pub fh: u64,
+    pub size: u64,
+    pub lock_owner: u64,
+    pub atime: u64,
+    pub mtime: u64,
+    pub ctime: u64,
+    pub atimensec: u32,
+    pub mtimensec: u32,
+    pub ctimensec: u32,
+    pub mode: u32,
+    pub unused4: u32,
+    pub uid: u32,
+    pub gid: u32,
+    pub unused5: u32,
+}
+
+/// FUSE_SETATTR valid bits.
+pub const FATTR_SIZE: u32 = 1 << 3;
+pub const FATTR_FH: u32 = 1 << 6;
 
 // ============================================================================
 // FUSE constants

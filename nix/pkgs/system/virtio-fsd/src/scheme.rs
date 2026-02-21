@@ -21,12 +21,22 @@ use redox_scheme::scheme::SchemeSync;
 use redox_scheme::{CallerCtx, OpenResult};
 use syscall::data::{Stat, StatVfs};
 use syscall::dirent::{DirEntry as RedoxDirEntry, DirentBuf, DirentKind};
-use syscall::error::{Error, Result, EBADF, EIO, EISDIR, ENOENT, ENOTDIR};
-use syscall::flag::{EventFlags, O_ACCMODE, O_DIRECTORY, O_RDONLY, O_STAT, O_WRONLY};
+use syscall::error::{Error, Result, EBADF, EEXIST, EIO, EISDIR, ENOENT, ENOTDIR};
+use syscall::flag::{
+    EventFlags, O_ACCMODE, O_CREAT, O_DIRECTORY, O_EXCL, O_RDONLY, O_STAT, O_TRUNC, O_WRONLY,
+};
 use syscall::schemev2::NewFdFlags;
 
 use crate::fuse::{S_IFDIR, S_IFMT};
 use crate::session::{DirEntry, FuseSession};
+
+// Linux open flag values (for FUSE translation)
+const LINUX_O_WRONLY: u32 = 1;
+const LINUX_O_RDWR: u32 = 2;
+const LINUX_O_CREAT: u32 = 0o100;
+const LINUX_O_EXCL: u32 = 0o200;
+const LINUX_O_TRUNC: u32 = 0o1000;
+const LINUX_O_APPEND: u32 = 0o2000;
 
 /// Convert Redox open flags to FUSE/Linux open flags.
 ///
@@ -34,17 +44,36 @@ use crate::session::{DirEntry, FuseSession};
 ///   Redox O_RDONLY = 0x0001_0000   Linux O_RDONLY = 0
 ///   Redox O_WRONLY = 0x0002_0000   Linux O_WRONLY = 1
 ///   Redox O_RDWR   = 0x0003_0000   Linux O_RDWR   = 2
+///   Redox O_CREAT  = 0x0200_0000   Linux O_CREAT  = 0o100
+///   Redox O_EXCL   = 0x0800_0000   Linux O_EXCL   = 0o200
+///   Redox O_TRUNC  = 0x0400_0000   Linux O_TRUNC  = 0o1000
 ///
 /// FUSE passes these flags to the host virtiofsd which calls open() with
 /// Linux flags. Passing raw Redox flags causes EINVAL/ENOENT on the host.
 fn redox_to_fuse_flags(redox_flags: usize) -> u32 {
+    let mut fuse = 0u32;
+
+    // Access mode
     let mode = redox_flags & O_ACCMODE;
-    match mode {
-        _ if mode == O_RDONLY => 0,               // Linux O_RDONLY
-        _ if mode == O_WRONLY => 1,               // Linux O_WRONLY
-        _ if mode == (O_RDONLY | O_WRONLY) => 2,   // Linux O_RDWR
-        _ => 0,                                    // Default: read-only
+    if mode == O_WRONLY {
+        fuse |= LINUX_O_WRONLY;
+    } else if mode == (O_RDONLY | O_WRONLY) {
+        fuse |= LINUX_O_RDWR;
     }
+    // O_RDONLY = 0 in Linux, no bit to set
+
+    // Creation / truncation flags
+    if redox_flags & O_CREAT != 0 {
+        fuse |= LINUX_O_CREAT;
+    }
+    if redox_flags & O_EXCL != 0 {
+        fuse |= LINUX_O_EXCL;
+    }
+    if redox_flags & O_TRUNC != 0 {
+        fuse |= LINUX_O_TRUNC;
+    }
+
+    fuse
 }
 
 /// An open file or directory handle.
@@ -55,6 +84,8 @@ struct Handle {
     fh: u64,
     /// Is this a directory?
     is_dir: bool,
+    /// Whether this handle was opened with write access.
+    writable: bool,
     /// Cached path (for fpath).
     path: String,
     /// Cached file size.
@@ -140,6 +171,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                 nodeid: 1,
                 fh: dir_handle.fh,
                 is_dir: true,
+                writable: false,
                 path: String::new(),
                 size: attr_out.attr.size,
                 mode: attr_out.attr.mode,
@@ -179,6 +211,152 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
             format!("{}/{}", base_path, path)
         };
 
+        let access_mode = flags & O_ACCMODE;
+        let writable = access_mode == O_WRONLY || access_mode == (O_RDONLY | O_WRONLY);
+
+        // O_CREAT: create-if-not-exists
+        if flags & O_CREAT != 0 {
+            // Resolve parent directory and filename
+            let (parent_path, filename) = match full_path.rfind('/') {
+                Some(pos) => (&full_path[..pos], &full_path[pos + 1..]),
+                None => ("", full_path.as_str()),
+            };
+
+            let (parent_nodeid, _) = if parent_path.is_empty() {
+                let attr_out = self
+                    .session
+                    .getattr(1)
+                    .map_err(|_| Error::new(ENOENT))?;
+                (1u64, attr_out.attr)
+            } else {
+                self.resolve_path(parent_path)?
+            };
+
+            // Check if target already exists
+            let existing = self.resolve_path(&full_path);
+
+            if let Ok((nodeid, attr)) = existing {
+                if flags & O_EXCL != 0 {
+                    return Err(Error::new(EEXIST));
+                }
+
+                // File exists — open it (with O_TRUNC if requested)
+                let is_dir = (attr.mode & S_IFMT) == S_IFDIR;
+                if is_dir {
+                    let dir_handle = self
+                        .session
+                        .opendir(nodeid)
+                        .map_err(|_| Error::new(EIO))?;
+
+                    let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+                    self.handles.insert(
+                        id,
+                        Handle {
+                            nodeid,
+                            fh: dir_handle.fh,
+                            is_dir: true,
+                            writable: false,
+                            path: full_path,
+                            size: attr.size,
+                            mode: attr.mode,
+                            dir_entries: None,
+                        },
+                    );
+                    return Ok(OpenResult::ThisScheme {
+                        number: id,
+                        flags: NewFdFlags::POSITIONED,
+                    });
+                }
+
+                let fuse_flags = redox_to_fuse_flags(flags);
+                let file_handle = self
+                    .session
+                    .open(nodeid, fuse_flags)
+                    .map_err(|_| Error::new(EIO))?;
+
+                let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+                self.handles.insert(
+                    id,
+                    Handle {
+                        nodeid,
+                        fh: file_handle.fh,
+                        is_dir: false,
+                        writable,
+                        path: full_path,
+                        size: attr.size,
+                        mode: attr.mode,
+                        dir_entries: None,
+                    },
+                );
+                return Ok(OpenResult::ThisScheme {
+                    number: id,
+                    flags: NewFdFlags::POSITIONED,
+                });
+            }
+
+            // Target doesn't exist — create it
+            if flags & O_DIRECTORY != 0 {
+                // O_CREAT | O_DIRECTORY: create a directory (mkdir)
+                let entry = self
+                    .session
+                    .mkdir(parent_nodeid, filename, 0o755)
+                    .map_err(|_| Error::new(EIO))?;
+
+                let dir_handle = self
+                    .session
+                    .opendir(entry.nodeid)
+                    .map_err(|_| Error::new(EIO))?;
+
+                let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+                self.handles.insert(
+                    id,
+                    Handle {
+                        nodeid: entry.nodeid,
+                        fh: dir_handle.fh,
+                        is_dir: true,
+                        writable: false,
+                        path: full_path,
+                        size: entry.attr.size,
+                        mode: entry.attr.mode,
+                        dir_entries: None,
+                    },
+                );
+
+                return Ok(OpenResult::ThisScheme {
+                    number: id,
+                    flags: NewFdFlags::POSITIONED,
+                });
+            }
+
+            // Regular file creation: FUSE_CREATE (atomic create + open)
+            let fuse_flags = redox_to_fuse_flags(flags);
+            let (entry, open) = self
+                .session
+                .create(parent_nodeid, filename, fuse_flags, 0o644)
+                .map_err(|_| Error::new(EIO))?;
+
+            let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+            self.handles.insert(
+                id,
+                Handle {
+                    nodeid: entry.nodeid,
+                    fh: open.fh,
+                    is_dir: false,
+                    writable: true,
+                    path: full_path,
+                    size: entry.attr.size,
+                    mode: entry.attr.mode,
+                    dir_entries: None,
+                },
+            );
+
+            return Ok(OpenResult::ThisScheme {
+                number: id,
+                flags: NewFdFlags::POSITIONED,
+            });
+        }
+
+        // Regular open (no O_CREAT)
         let (nodeid, attr) = self.resolve_path(&full_path)?;
         let is_dir = (attr.mode & S_IFMT) == S_IFDIR;
 
@@ -191,6 +369,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                     nodeid,
                     fh: 0,
                     is_dir,
+                    writable: false,
                     path: full_path,
                     size: attr.size,
                     mode: attr.mode,
@@ -221,6 +400,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                     nodeid,
                     fh: dir_handle.fh,
                     is_dir: true,
+                    writable: false,
                     path: full_path,
                     size: attr.size,
                     mode: attr.mode,
@@ -250,6 +430,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                     nodeid,
                     fh: file_handle.fh,
                     is_dir: false,
+                    writable,
                     path: full_path,
                     size: attr.size,
                     mode: attr.mode,
@@ -289,6 +470,65 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         let copy_len = data.len().min(buf.len());
         buf[..copy_len].copy_from_slice(&data[..copy_len]);
         Ok(copy_len)
+    }
+
+    fn write(
+        &mut self,
+        id: usize,
+        buf: &[u8],
+        offset: u64,
+        _fcntl_flags: u32,
+        _ctx: &CallerCtx,
+    ) -> Result<usize> {
+        let handle = self.handles.get(&id).ok_or(Error::new(EBADF))?;
+
+        if handle.is_dir {
+            return Err(Error::new(EISDIR));
+        }
+        if !handle.writable {
+            return Err(Error::new(EBADF));
+        }
+
+        let nodeid = handle.nodeid;
+        let fh = handle.fh;
+
+        let written = self
+            .session
+            .write(nodeid, fh, offset, buf)
+            .map_err(|_| Error::new(EIO))?;
+
+        // Update cached size if write extends beyond current end
+        if let Some(h) = self.handles.get_mut(&id) {
+            let new_end = offset + written as u64;
+            if new_end > h.size {
+                h.size = new_end;
+            }
+        }
+
+        Ok(written as usize)
+    }
+
+    fn ftruncate(&mut self, id: usize, len: u64, _ctx: &CallerCtx) -> Result<()> {
+        let handle = self.handles.get(&id).ok_or(Error::new(EBADF))?;
+
+        if !handle.writable {
+            return Err(Error::new(EBADF));
+        }
+
+        let nodeid = handle.nodeid;
+        let fh = handle.fh;
+
+        let attr_out = self
+            .session
+            .truncate(nodeid, fh, len)
+            .map_err(|_| Error::new(EIO))?;
+
+        // Update cached size
+        if let Some(h) = self.handles.get_mut(&id) {
+            h.size = attr_out.attr.size;
+        }
+
+        Ok(())
     }
 
     fn fsize(&mut self, id: usize, _ctx: &CallerCtx) -> Result<u64> {
@@ -424,10 +664,70 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         Ok(buf)
     }
 
+    fn unlinkat(
+        &mut self,
+        fd: usize,
+        path: &str,
+        _flags: usize,
+        _ctx: &CallerCtx,
+    ) -> Result<()> {
+        let path = path.trim_matches('/');
+
+        // Resolve base directory from fd handle
+        let base_path = if let Some(handle) = self.handles.get(&fd) {
+            handle.path.clone()
+        } else {
+            String::new()
+        };
+
+        let full_path = if base_path.is_empty() {
+            path.to_string()
+        } else if path.is_empty() {
+            return Err(Error::new(ENOENT));
+        } else {
+            format!("{}/{}", base_path, path)
+        };
+
+        // Resolve parent + filename
+        let (parent_path, filename) = match full_path.rfind('/') {
+            Some(pos) => (&full_path[..pos], &full_path[pos + 1..]),
+            None => ("", full_path.as_str()),
+        };
+
+        let (parent_nodeid, _) = if parent_path.is_empty() {
+            let attr_out = self
+                .session
+                .getattr(1)
+                .map_err(|_| Error::new(ENOENT))?;
+            (1u64, attr_out.attr)
+        } else {
+            self.resolve_path(parent_path)?
+        };
+
+        // Check if target is a directory or file
+        let (_, attr) = self.resolve_path(&full_path)?;
+        let is_dir = (attr.mode & S_IFMT) == S_IFDIR;
+
+        if is_dir {
+            self.session
+                .rmdir(parent_nodeid, filename)
+                .map_err(|_| Error::new(EIO))?;
+        } else {
+            self.session
+                .unlink(parent_nodeid, filename)
+                .map_err(|_| Error::new(EIO))?;
+        }
+
+        Ok(())
+    }
+
     fn fevent(&mut self, id: usize, _flags: EventFlags, _ctx: &CallerCtx) -> Result<EventFlags> {
-        if self.handles.contains_key(&id) {
-            // Files are always readable (no async notification for virtio-fs)
-            Ok(EventFlags::EVENT_READ)
+        if let Some(handle) = self.handles.get(&id) {
+            let mut events = EventFlags::EVENT_READ;
+            if handle.writable {
+                events |= EventFlags::EVENT_WRITE;
+            }
+            Ok(events)
         } else {
             Err(Error::new(EBADF))
         }

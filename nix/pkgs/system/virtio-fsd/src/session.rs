@@ -288,6 +288,196 @@ impl<'a> FuseSession<'a> {
         Ok(())
     }
 
+    /// FUSE_WRITE: write data to an open file.
+    ///
+    /// Data is packed into the request descriptor (header + FuseWriteIn + data).
+    /// Returns the number of bytes actually written by the host.
+    pub fn write(
+        &self,
+        nodeid: u64,
+        fh: u64,
+        offset: u64,
+        data: &[u8],
+    ) -> Result<u32, FuseTransportError> {
+        let args = FuseWriteIn {
+            fh,
+            offset,
+            size: data.len() as u32,
+            write_flags: 0,
+            lock_owner: 0,
+            flags: 0,
+            padding: 0,
+        };
+
+        let req = build_request_with_data(
+            FuseOpcode::Write as u32,
+            nodeid,
+            self.next_unique(),
+            &args,
+            data,
+        );
+
+        let resp = fuse_write_request(&self.queue, &req)?;
+        let _hdr = parse_response_header(&resp)?;
+        let body = response_body(&resp);
+
+        if body.len() < core::mem::size_of::<FuseWriteOut>() {
+            return Err(FuseTransportError::UnexpectedSize);
+        }
+
+        let write_out = unsafe { *(body.as_ptr() as *const FuseWriteOut) };
+        Ok(write_out.size)
+    }
+
+    /// FUSE_CREATE: atomically create and open a file.
+    ///
+    /// Returns (FuseEntryOut, FuseOpenOut) — the new node's attributes and
+    /// file handle. On Redox, this is triggered by `openat` with O_CREAT.
+    pub fn create(
+        &self,
+        parent: u64,
+        name: &str,
+        flags: u32,
+        mode: u32,
+    ) -> Result<(FuseEntryOut, FuseOpenOut), FuseTransportError> {
+        let args = FuseCreateIn {
+            flags,
+            mode,
+            umask: 0o022,
+            open_flags: 0,
+        };
+
+        let req = build_request_with_args(
+            FuseOpcode::Create as u32,
+            parent,
+            self.next_unique(),
+            &args,
+            Some(name.as_bytes()),
+        );
+
+        let resp = fuse_meta_request(&self.queue, &req)?;
+        let _hdr = parse_response_header(&resp)?;
+        let body = response_body(&resp);
+
+        let entry_size = core::mem::size_of::<FuseEntryOut>();
+        let open_size = core::mem::size_of::<FuseOpenOut>();
+
+        if body.len() < entry_size + open_size {
+            return Err(FuseTransportError::UnexpectedSize);
+        }
+
+        let entry = unsafe { *(body.as_ptr() as *const FuseEntryOut) };
+        let open = unsafe { *(body[entry_size..].as_ptr() as *const FuseOpenOut) };
+
+        Ok((entry, open))
+    }
+
+    /// FUSE_MKDIR: create a directory.
+    pub fn mkdir(
+        &self,
+        parent: u64,
+        name: &str,
+        mode: u32,
+    ) -> Result<FuseEntryOut, FuseTransportError> {
+        let args = FuseMkdirIn {
+            mode,
+            umask: 0o022,
+        };
+
+        let req = build_request_with_args(
+            FuseOpcode::Mkdir as u32,
+            parent,
+            self.next_unique(),
+            &args,
+            Some(name.as_bytes()),
+        );
+
+        let resp = fuse_meta_request(&self.queue, &req)?;
+        let _hdr = parse_response_header(&resp)?;
+        let body = response_body(&resp);
+
+        if body.len() < core::mem::size_of::<FuseEntryOut>() {
+            return Err(FuseTransportError::UnexpectedSize);
+        }
+
+        Ok(unsafe { *(body.as_ptr() as *const FuseEntryOut) })
+    }
+
+    /// FUSE_UNLINK: remove a file.
+    pub fn unlink(&self, parent: u64, name: &str) -> Result<(), FuseTransportError> {
+        let req = build_request(
+            FuseOpcode::Unlink as u32,
+            parent,
+            self.next_unique(),
+            &[],
+            Some(name.as_bytes()),
+        );
+
+        let resp = fuse_meta_request(&self.queue, &req)?;
+        let _hdr = parse_response_header(&resp)?;
+        Ok(())
+    }
+
+    /// FUSE_RMDIR: remove a directory.
+    pub fn rmdir(&self, parent: u64, name: &str) -> Result<(), FuseTransportError> {
+        let req = build_request(
+            FuseOpcode::Rmdir as u32,
+            parent,
+            self.next_unique(),
+            &[],
+            Some(name.as_bytes()),
+        );
+
+        let resp = fuse_meta_request(&self.queue, &req)?;
+        let _hdr = parse_response_header(&resp)?;
+        Ok(())
+    }
+
+    /// FUSE_SETATTR with FATTR_SIZE: truncate a file to a given length.
+    pub fn truncate(
+        &self,
+        nodeid: u64,
+        fh: u64,
+        size: u64,
+    ) -> Result<FuseAttrOut, FuseTransportError> {
+        let args = FuseSetattrIn {
+            valid: FATTR_SIZE | FATTR_FH,
+            padding: 0,
+            fh,
+            size,
+            lock_owner: 0,
+            atime: 0,
+            mtime: 0,
+            ctime: 0,
+            atimensec: 0,
+            mtimensec: 0,
+            ctimensec: 0,
+            mode: 0,
+            unused4: 0,
+            uid: 0,
+            gid: 0,
+            unused5: 0,
+        };
+
+        let req = build_request_with_args(
+            FuseOpcode::Setattr as u32,
+            nodeid,
+            self.next_unique(),
+            &args,
+            None,
+        );
+
+        let resp = fuse_meta_request(&self.queue, &req)?;
+        let _hdr = parse_response_header(&resp)?;
+        let body = response_body(&resp);
+
+        if body.len() < core::mem::size_of::<FuseAttrOut>() {
+            return Err(FuseTransportError::UnexpectedSize);
+        }
+
+        Ok(unsafe { *(body.as_ptr() as *const FuseAttrOut) })
+    }
+
     /// FUSE_STATFS: get filesystem statistics.
     pub fn statfs(&self) -> Result<FuseStatfsOut, FuseTransportError> {
         let req = build_request(
