@@ -335,5 +335,11 @@
   - Redox has no service hot-restart — service changes always recommend reboot
 - 33 new unit tests in `activate::tests` covering plan computation, profile population, config diff, user diff, cleanup helpers
 - 3 new VM functional tests: `activate-dry-run`, `switch-dry-run-no-modify`, `activate-no-changes`
-- Pre-existing gen-switch-restores/rollback-works/gc-safe failures unchanged (store path content issue, not activation)
+- CRITICAL BUG: initial activate() only rebuilt profile when `plan.profile_needs_rebuild` was true
+  - Test: delete rg symlink, switch to SAME manifest → packages identical → plan says "no changes" → skip rebuild → rg stays deleted
+  - Fix: activation must be IDEMPOTENT — always rebuild profile and GC roots regardless of plan
+  - The plan is for DISPLAY (dry-run); execution must always converge to declared state
+  - This is exactly how NixOS switch-to-configuration works — always re-activate, don't skip
+  - Verified: reverting to old code = 3 failures gone; old code always rebuilt unconditionally
+  - After fix: 94/94 VM tests pass, 0 failures
 - Cross-compiled binary grew from 3.7MB to 3.9MB (activate module adds ~200KB)
