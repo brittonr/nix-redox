@@ -292,7 +292,7 @@ mod tests {
 
     #[test]
     fn test_run_no_args_error() {
-        let result = run(None, None);
+        let result = run(None, None, false);
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.to_string().contains("provide --expr or --file"));

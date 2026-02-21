@@ -1089,6 +1089,7 @@ mod tests {
                 startup_script: "/startup.sh".to_string(),
             },
             files: BTreeMap::new(),
+            system_profile: String::new(),
         }
     }
 
@@ -1599,5 +1600,341 @@ mod tests {
 
         // Should not error (just prints to stdout)
         generations(Some(gen_dir.to_str().unwrap())).unwrap();
+    }
+
+    // ===== Comprehensive Generation Switching Tests =====
+
+    #[test]
+    fn package_with_storepath_roundtrip() {
+        let pkg = Package {
+            name: "test".to_string(),
+            version: "1.0".to_string(),
+            store_path: "/nix/store/abc123-test".to_string(),
+        };
+
+        let json = serde_json::to_string(&pkg).unwrap();
+        let parsed: Package = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.name, "test");
+        assert_eq!(parsed.version, "1.0");
+        assert_eq!(parsed.store_path, "/nix/store/abc123-test");
+    }
+
+    #[test]
+    fn package_without_storepath_deserializes() {
+        let json = r#"{"name":"x","version":"1"}"#;
+        let pkg: Package = serde_json::from_str(json).unwrap();
+
+        assert_eq!(pkg.name, "x");
+        assert_eq!(pkg.version, "1");
+        assert_eq!(pkg.store_path, "");
+    }
+
+    #[test]
+    fn manifest_systemprofile_roundtrip() {
+        let mut manifest = sample_manifest();
+        manifest.system_profile = "/nix/store/xyz789-system-profile".to_string();
+
+        let json = serde_json::to_string_pretty(&manifest).unwrap();
+        let parsed: Manifest = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(parsed.system_profile, "/nix/store/xyz789-system-profile");
+    }
+
+    #[test]
+    fn manifest_without_systemprofile_defaults() {
+        // Old manifest JSON without systemProfile field
+        let json = r#"{
+            "manifestVersion": 1,
+            "system": {
+                "redoxSystemVersion": "0.4.0",
+                "target": "x86_64-unknown-redox",
+                "profile": "test",
+                "hostname": "old-host",
+                "timezone": "UTC"
+            },
+            "configuration": {
+                "boot": { "diskSizeMB": 512, "espSizeMB": 200 },
+                "hardware": {
+                    "storageDrivers": [], "networkDrivers": [],
+                    "graphicsDrivers": [], "audioDrivers": [], "usbEnabled": false
+                },
+                "networking": { "enabled": false, "mode": "none", "dns": [] },
+                "graphics": { "enabled": false, "resolution": "1024x768" },
+                "security": { "protectKernelSchemes": true, "requirePasswords": false, "allowRemoteRoot": false },
+                "logging": { "logLevel": "info", "kernelLogLevel": "warn", "logToFile": true, "maxLogSizeMB": 10 },
+                "power": { "acpiEnabled": true, "powerAction": "shutdown", "rebootOnPanic": false }
+            },
+            "packages": [],
+            "drivers": { "all": [], "initfs": [], "core": [] },
+            "users": {},
+            "groups": {},
+            "services": { "initScripts": [], "startupScript": "/startup.sh" },
+            "files": {}
+        }"#;
+
+        let manifest: Manifest = serde_json::from_str(json).unwrap();
+        assert_eq!(manifest.system_profile, "");
+    }
+
+    #[test]
+    fn switch_increments_generation_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+        let new_manifest_file = dir.path().join("new.json");
+
+        // Set up gen 1 in generations dir
+        let gen1_dir = gen_dir.join("1");
+        std::fs::create_dir_all(&gen1_dir).unwrap();
+        let mut gen1 = sample_manifest();
+        gen1.generation.id = 1;
+        std::fs::write(gen1_dir.join("manifest.json"), serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+
+        // Current manifest is gen 1
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+
+        // Create new manifest
+        let mut new_m = sample_manifest();
+        new_m.packages.push(Package {
+            name: "newpkg".to_string(),
+            version: "1.0".to_string(),
+            store_path: String::new(),
+        });
+        std::fs::write(&new_manifest_file, serde_json::to_string_pretty(&new_m).unwrap()).unwrap();
+
+        // Switch
+        switch(
+            new_manifest_file.to_str().unwrap(),
+            Some("test switch"),
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        ).unwrap();
+
+        // Verify current manifest has gen id 2
+        let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
+        assert_eq!(active.generation.id, 2);
+    }
+
+    #[test]
+    fn switch_saves_old_generation() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+        let new_manifest_file = dir.path().join("new.json");
+
+        // Current manifest is gen 1
+        let mut current = sample_manifest();
+        current.generation.id = 1;
+        current.generation.description = "original".to_string();
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+
+        // New manifest
+        let new_m = sample_manifest();
+        std::fs::write(&new_manifest_file, serde_json::to_string_pretty(&new_m).unwrap()).unwrap();
+
+        // Switch
+        switch(
+            new_manifest_file.to_str().unwrap(),
+            Some("new gen"),
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        ).unwrap();
+
+        // Verify generations/1/manifest.json exists with old content
+        let saved_path = gen_dir.join("1/manifest.json");
+        assert!(saved_path.exists());
+
+        let saved = load_manifest_from(saved_path.to_str().unwrap()).unwrap();
+        assert_eq!(saved.generation.id, 1);
+        assert_eq!(saved.generation.description, "original");
+    }
+
+    #[test]
+    fn switch_preserves_storepath() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+        let new_manifest_file = dir.path().join("new.json");
+
+        // Current manifest
+        let current = sample_manifest();
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+
+        // New manifest with store_path
+        let mut new_m = sample_manifest();
+        new_m.packages.push(Package {
+            name: "helix".to_string(),
+            version: "24.07".to_string(),
+            store_path: "/nix/store/abc123-helix-24.07".to_string(),
+        });
+        std::fs::write(&new_manifest_file, serde_json::to_string_pretty(&new_m).unwrap()).unwrap();
+
+        // Switch
+        switch(
+            new_manifest_file.to_str().unwrap(),
+            Some("test"),
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        ).unwrap();
+
+        // Verify the switched manifest preserves store_path
+        let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
+        let helix_pkg = active.packages.iter().find(|p| p.name == "helix").unwrap();
+        assert_eq!(helix_pkg.store_path, "/nix/store/abc123-helix-24.07");
+    }
+
+    #[test]
+    fn rollback_increments_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+
+        // Create generation 1
+        let gen1_dir = gen_dir.join("1");
+        std::fs::create_dir_all(&gen1_dir).unwrap();
+        let mut gen1 = sample_manifest();
+        gen1.generation.id = 1;
+        gen1.generation.description = "first".to_string();
+        std::fs::write(gen1_dir.join("manifest.json"), serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+
+        // Create generation 2 (current)
+        let gen2_dir = gen_dir.join("2");
+        std::fs::create_dir_all(&gen2_dir).unwrap();
+        let mut gen2 = sample_manifest();
+        gen2.generation.id = 2;
+        gen2.generation.description = "second".to_string();
+        std::fs::write(gen2_dir.join("manifest.json"), serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+
+        // Rollback to gen 1
+        rollback(
+            Some(1),
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        ).unwrap();
+
+        // Verify current manifest has gen id 3 (new gen, not reuse of 1)
+        let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
+        assert_eq!(active.generation.id, 3);
+        assert!(active.generation.description.contains("rollback"));
+        assert!(active.generation.description.contains("1"));
+    }
+
+    #[test]
+    fn rollback_same_id_noop() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+
+        // Create generation 2 (current)
+        let gen2_dir = gen_dir.join("2");
+        std::fs::create_dir_all(&gen2_dir).unwrap();
+        let mut gen2 = sample_manifest();
+        gen2.generation.id = 2;
+        std::fs::write(gen2_dir.join("manifest.json"), serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+
+        // Try to rollback to the same generation
+        let result = rollback(
+            Some(2),
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        );
+
+        // Should succeed with "Already at generation" message (no error)
+        assert!(result.is_ok());
+
+        // Verify no new generation was created
+        assert!(!gen_dir.join("3").exists());
+
+        // Verify manifest unchanged
+        let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
+        assert_eq!(active.generation.id, 2);
+    }
+
+    #[test]
+    fn scan_generations_sorted() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // Create generations in random order: 3, 1, 5, 2
+        for id in [3, 1, 5, 2] {
+            let gen_dir = dir.path().join(id.to_string());
+            std::fs::create_dir_all(&gen_dir).unwrap();
+            let mut m = sample_manifest();
+            m.generation.id = id;
+            std::fs::write(gen_dir.join("manifest.json"), serde_json::to_string(&m).unwrap()).unwrap();
+        }
+
+        let gens = scan_generations(dir.path().to_str().unwrap()).unwrap();
+
+        assert_eq!(gens.len(), 4);
+        assert_eq!(gens[0].id, 1);
+        assert_eq!(gens[1].id, 2);
+        assert_eq!(gens[2].id, 3);
+        assert_eq!(gens[3].id, 5);
+    }
+
+    #[test]
+    fn next_generation_id_with_gaps() {
+        let dir = tempfile::tempdir().unwrap();
+
+        // Create gens 1, 2, 7 (with gaps)
+        for id in [1, 2, 7] {
+            let gen_dir = dir.path().join(id.to_string());
+            std::fs::create_dir_all(&gen_dir).unwrap();
+            let mut m = sample_manifest();
+            m.generation.id = id;
+            std::fs::write(gen_dir.join("manifest.json"), serde_json::to_string(&m).unwrap()).unwrap();
+        }
+
+        // Current manifest has gen id 5
+        let mut current = sample_manifest();
+        current.generation.id = 5;
+
+        // Should return 8 (max of stored=7, current=5, then +1)
+        let next = next_generation_id(dir.path().to_str().unwrap(), &current);
+        assert_eq!(next, 8);
+    }
+
+    #[test]
+    fn manifest_extra_field_ignored() {
+        // Add an unknown field to manifest JSON
+        let json = r#"{
+            "manifestVersion": 1,
+            "unknownField": "should be ignored",
+            "system": {
+                "redoxSystemVersion": "0.4.0",
+                "target": "x86_64-unknown-redox",
+                "profile": "test",
+                "hostname": "myhost",
+                "timezone": "UTC"
+            },
+            "configuration": {
+                "boot": { "diskSizeMB": 512, "espSizeMB": 200 },
+                "hardware": {
+                    "storageDrivers": [], "networkDrivers": [],
+                    "graphicsDrivers": [], "audioDrivers": [], "usbEnabled": false
+                },
+                "networking": { "enabled": false, "mode": "none", "dns": [] },
+                "graphics": { "enabled": false, "resolution": "1024x768" },
+                "security": { "protectKernelSchemes": true, "requirePasswords": false, "allowRemoteRoot": false },
+                "logging": { "logLevel": "info", "kernelLogLevel": "warn", "logToFile": true, "maxLogSizeMB": 10 },
+                "power": { "acpiEnabled": true, "powerAction": "shutdown", "rebootOnPanic": false }
+            },
+            "packages": [],
+            "drivers": { "all": [], "initfs": [], "core": [] },
+            "users": {},
+            "groups": {},
+            "services": { "initScripts": [], "startupScript": "/startup.sh" },
+            "files": {}
+        }"#;
+
+        // Should deserialize successfully, ignoring the unknown field
+        let result = serde_json::from_str::<Manifest>(json);
+        assert!(result.is_ok());
+
+        let manifest = result.unwrap();
+        assert_eq!(manifest.system.hostname, "myhost");
     }
 }

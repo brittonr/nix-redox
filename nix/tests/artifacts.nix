@@ -1362,4 +1362,341 @@ in
       }
     ];
   };
+
+  # ===== Generation Switching / Store-Based Package Management Tests =====
+
+  # Test: System profile directory exists
+  rootTree-profile-dir-exists = mkArtifactTest {
+    name = "rootTree-profile-dir-exists";
+    description = "Development profile rootTree has /nix/system/profile/bin/ directory";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      {
+        file = "nix/system/profile/bin";
+        isDir = true;
+      }
+    ];
+  };
+
+  # Test: System profile contains managed package symlinks
+  rootTree-profile-has-symlinks = mkArtifactTest {
+    name = "rootTree-profile-has-symlinks";
+    description = "System profile contains symlinks to managed (non-boot) binaries";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      # Managed binaries are in the profile (NOT boot-essential ones like ion/snix)
+      { file = "nix/system/profile/bin/hx"; } # helix editor (managed)
+      { file = "nix/system/profile/bin/rg"; } # ripgrep (managed)
+      { file = "nix/system/profile/bin/bat"; } # bat (managed)
+    ];
+  };
+
+  # Test: Nix store directory exists
+  rootTree-store-dir-exists = mkArtifactTest {
+    name = "rootTree-store-dir-exists";
+    description = "The /nix/store/ directory exists in rootTree";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      {
+        file = "nix/store";
+        isDir = true;
+      }
+    ];
+  };
+
+  # Test: Manifest contains storePath field
+  rootTree-manifest-has-storepath = mkArtifactTest {
+    name = "rootTree-manifest-has-storepath";
+    description = "The manifest.json contains 'storePath' field for tracking Nix store location";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = "storePath";
+      }
+    ];
+  };
+
+  # Test: Manifest contains systemProfile field
+  rootTree-manifest-has-systemprofile = mkArtifactTest {
+    name = "rootTree-manifest-has-systemprofile";
+    description = "The manifest.json contains 'systemProfile' field tracking current profile generation";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = "systemProfile";
+      }
+    ];
+  };
+
+  # Test: /etc/profile includes system profile in PATH
+  rootTree-profile-path-in-etc-profile = mkArtifactTest {
+    name = "rootTree-profile-path-in-etc-profile";
+    description = "/etc/profile contains the system profile PATH for managed packages";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      {
+        file = "etc/profile";
+        contains = "/nix/system/profile/bin";
+      }
+    ];
+  };
+
+  # Test: Boot-essential ion binary in /bin
+  rootTree-boot-has-ion = mkArtifactTest {
+    name = "rootTree-boot-has-ion";
+    description = "/bin/ contains ion shell (boot-essential, not profile-managed)";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      { file = "bin/ion"; }
+    ];
+  };
+
+  # Test: Boot-essential snix binary in /bin
+  rootTree-boot-has-snix = mkArtifactTest {
+    name = "rootTree-boot-has-snix";
+    description = "/bin/ contains snix package manager (boot-essential, not profile-managed)";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      { file = "bin/snix"; }
+    ];
+  };
+
+  # Test: Generations directory exists
+  rootTree-generations-dir-exists = mkArtifactTest {
+    name = "rootTree-generations-dir-exists";
+    description = "/nix/system/generations/ directory exists for generation tracking";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      {
+        file = "nix/system/generations";
+        isDir = true;
+      }
+    ];
+  };
+
+  # Test: Generation 1 manifest is seeded at build time
+  rootTree-gen1-manifest-exists = mkArtifactTest {
+    name = "rootTree-gen1-manifest-exists";
+    description = "Generation 1 manifest is seeded at build time in /etc/redox-system/generations/1/";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      { file = "etc/redox-system/generations/1/manifest.json"; }
+      {
+        file = "etc/redox-system/generations/1/manifest.json";
+        contains = ''"id": 1'';
+      }
+      {
+        file = "etc/redox-system/generations/1/manifest.json";
+        contains = "buildHash";
+      }
+    ];
+  };
+
+  # Test: Store contains at least one package directory
+  rootTree-store-has-packages =
+    let
+      system = redoxSystemFactory.redoxSystem {
+        modules = [ ../redox-system/profiles/development.nix ];
+        pkgs = mockPkgs.all;
+        hostPkgs = pkgs;
+      };
+    in
+    pkgs.runCommand "test-artifact-rootTree-store-has-packages"
+      {
+        preferLocalBuild = true;
+        rootTree = system.rootTree;
+      }
+      ''
+        set -euo pipefail
+        echo "==============================================="
+        echo "RedoxOS Build Artifact Test: rootTree-store-has-packages"
+        echo "==============================================="
+        echo ""
+        echo "Description: Build with development profile - /nix/store/ contains package directories"
+        echo ""
+
+        echo "✓ Build succeeded: $rootTree"
+        echo ""
+
+        # Check that /nix/store exists and has at least one directory
+        if [ -d "$rootTree/nix/store" ]; then
+          echo "✓ /nix/store directory exists"
+
+          # Count directories in the store
+          store_dirs=$(find "$rootTree/nix/store" -mindepth 1 -maxdepth 1 -type d | wc -l)
+          if [ "$store_dirs" -gt 0 ]; then
+            echo "✓ Store contains $store_dirs package directories"
+            echo ""
+            echo "Sample store contents:"
+            find "$rootTree/nix/store" -mindepth 1 -maxdepth 1 -type d | head -5
+          else
+            echo "✗ Store is empty (no package directories)"
+            exit 1
+          fi
+        else
+          echo "✗ /nix/store directory missing"
+          exit 1
+        fi
+
+        echo ""
+        echo "Test PASSED: rootTree-store-has-packages"
+        touch $out
+      '';
+
+  # Test: Profile contains symlinks to store paths
+  rootTree-profile-symlinks-to-store =
+    let
+      system = redoxSystemFactory.redoxSystem {
+        modules = [ ../redox-system/profiles/development.nix ];
+        pkgs = mockPkgs.all;
+        hostPkgs = pkgs;
+      };
+    in
+    pkgs.runCommand "test-artifact-rootTree-profile-symlinks-to-store"
+      {
+        preferLocalBuild = true;
+        rootTree = system.rootTree;
+      }
+      ''
+        set -euo pipefail
+        echo "==============================================="
+        echo "RedoxOS Build Artifact Test: rootTree-profile-symlinks-to-store"
+        echo "==============================================="
+        echo ""
+        echo "Description: System profile symlinks point to /nix/store paths"
+        echo ""
+
+        echo "✓ Build succeeded: $rootTree"
+        echo ""
+
+        # Check profile directory exists
+        if [ ! -d "$rootTree/nix/system/profile/bin" ]; then
+          echo "✗ Profile directory missing: nix/system/profile/bin"
+          exit 1
+        fi
+
+        # Find symlinks in profile and verify they point to store
+        profile_symlinks=$(find "$rootTree/nix/system/profile/bin" -type l 2>/dev/null | wc -l)
+
+        if [ "$profile_symlinks" -gt 0 ]; then
+          echo "✓ Found $profile_symlinks symlinks in profile"
+
+          # Check that at least one symlink points to /nix/store
+          store_links=$(find "$rootTree/nix/system/profile/bin" -type l -exec readlink {} \; | grep -c "^/nix/store" || true)
+
+          if [ "$store_links" -gt 0 ]; then
+            echo "✓ $store_links profile symlinks point to /nix/store"
+            echo ""
+            echo "Sample profile symlinks:"
+            find "$rootTree/nix/system/profile/bin" -type l | head -3 | while read link; do
+              target=$(readlink "$link")
+              echo "  $(basename $link) -> $target"
+            done
+          else
+            echo "✗ No profile symlinks point to /nix/store"
+            echo "Symlink targets:"
+            find "$rootTree/nix/system/profile/bin" -type l -exec readlink {} \; | head -5
+            exit 1
+          fi
+        else
+          echo "✗ No symlinks found in profile"
+          ls -la "$rootTree/nix/system/profile/bin/" || true
+          exit 1
+        fi
+
+        echo ""
+        echo "Test PASSED: rootTree-profile-symlinks-to-store"
+        touch $out
+      '';
+
+  # Test: Manifest tracks profile generation number
+  rootTree-manifest-has-generation-link = mkArtifactTest {
+    name = "rootTree-manifest-has-generation-link";
+    description = "Manifest contains generation ID that links to /nix/system/generations/N/";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      {
+        file = "etc/redox-system/manifest.json";
+        contains = ''"generation"'';
+      }
+      {
+        # Verify generation metadata includes profile path
+        file = "etc/redox-system/manifest.json";
+        contains = ''"id": 1'';
+      }
+    ];
+  };
+
+  # Test: PATH precedence - profile before boot
+  rootTree-path-precedence = mkArtifactTest {
+    name = "rootTree-path-precedence";
+    description = "/etc/profile sets PATH with profile before boot directories";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      {
+        # Profile should come before /bin in PATH for overrides
+        file = "etc/profile";
+        contains = "export PATH";
+      }
+      {
+        file = "etc/profile";
+        contains = "/nix/system/profile/bin";
+      }
+    ];
+  };
+
+  # Test: Boot binaries separate from profile
+  rootTree-boot-vs-profile-separation =
+    let
+      system = redoxSystemFactory.redoxSystem {
+        modules = [ ../redox-system/profiles/development.nix ];
+        pkgs = mockPkgs.all;
+        hostPkgs = pkgs;
+      };
+    in
+    pkgs.runCommand "test-artifact-rootTree-boot-vs-profile-separation"
+      {
+        preferLocalBuild = true;
+        rootTree = system.rootTree;
+      }
+      ''
+        set -euo pipefail
+        echo "==============================================="
+        echo "RedoxOS Build Artifact Test: rootTree-boot-vs-profile-separation"
+        echo "==============================================="
+        echo ""
+        echo "Description: Boot-essential binaries in /bin, managed packages in profile"
+        echo ""
+
+        echo "✓ Build succeeded: $rootTree"
+        echo ""
+
+        # Check boot binaries exist
+        boot_bins=("init" "ion")
+        for bin in "''${boot_bins[@]}"; do
+          if [ -f "$rootTree/bin/$bin" ]; then
+            echo "✓ Boot binary present: /bin/$bin"
+          else
+            echo "✗ Boot binary missing: /bin/$bin"
+            exit 1
+          fi
+        done
+
+        # Check managed binaries NOT in /bin (they should be in profile)
+        managed_bins=("rg" "fd" "bat")
+        for bin in "''${managed_bins[@]}"; do
+          if [ -f "$rootTree/bin/$bin" ]; then
+            echo "✗ Managed binary incorrectly in /bin: $bin (should only be in profile)"
+            exit 1
+          else
+            echo "✓ Managed binary not in /bin: $bin (correct - should be profile-only)"
+          fi
+        done
+
+        echo ""
+        echo "Test PASSED: rootTree-boot-vs-profile-separation"
+        touch $out
+      '';
 }

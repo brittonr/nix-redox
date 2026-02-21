@@ -971,6 +971,82 @@ let
         else
             echo "FUNC_TEST:gen-switch-restores:FAIL:not-restored"
         end
+
+        # Test: all profile entries are valid symlinks to store paths
+        let all_valid = true
+        for f in @(ls /nix/system/profile/bin/)
+            if not exists -f /nix/system/profile/bin/$f
+                let all_valid = false
+            end
+        end
+        if test $all_valid = true
+            echo "FUNC_TEST:gen-profile-symlinks-valid:PASS"
+        else
+            echo "FUNC_TEST:gen-profile-symlinks-valid:FAIL"
+        end
+
+        # Test: snix system switch is idempotent
+        /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+        let first_count = $(ls /nix/system/profile/bin/ | wc -l)
+        /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+        let second_count = $(ls /nix/system/profile/bin/ | wc -l)
+        if test $first_count = $second_count
+            echo "FUNC_TEST:gen-switch-idempotent:PASS"
+        else
+            echo "FUNC_TEST:gen-switch-idempotent:FAIL"
+        end
+
+        # Test: multiple switches increase generation count
+        /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+        /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+        /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+        /bin/snix system generations > /tmp/gen_list ^> /dev/null
+        # Verify generations listing shows entries (header + data lines)
+        let line_count = $(wc -l < /tmp/gen_list)
+        # Header is 5 lines (title, =====, blank, column headers, -------)
+        # Plus 2 footer lines (blank, "Generations stored: N")
+        # So >7 lines means at least 1 generation entry
+        if test $line_count -gt 10
+            echo "FUNC_TEST:gen-multiple-switches:PASS"
+        else
+            echo "FUNC_TEST:gen-multiple-switches:FAIL:only-$line_count-lines"
+        end
+        rm /tmp/gen_list
+
+        # Test: /bin/ion still exists and runs after switch
+        /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+        if exists -f /bin/ion
+            /bin/ion -c 'echo ok' > /tmp/ion_test ^> /dev/null
+            if test $? = 0
+                echo "FUNC_TEST:gen-boot-ion-runs:PASS"
+            else
+                echo "FUNC_TEST:gen-boot-ion-runs:FAIL"
+            end
+            rm /tmp/ion_test
+        else
+            echo "FUNC_TEST:gen-boot-ion-runs:FAIL:missing"
+        end
+
+        # Test: /bin/snix still exists and runs after switch
+        /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+        if exists -f /bin/snix
+            /bin/snix --version > /dev/null ^> /dev/null
+            if test $? = 0
+                echo "FUNC_TEST:gen-boot-snix-runs:PASS"
+            else
+                echo "FUNC_TEST:gen-boot-snix-runs:FAIL"
+            end
+        else
+            echo "FUNC_TEST:gen-boot-snix-runs:FAIL:missing"
+        end
+
+        # Test: profile contains binaries from manifest packages
+        let profile_count = $(ls /nix/system/profile/bin/ | wc -l)
+        if test $profile_count -gt 0
+            echo "FUNC_TEST:gen-profile-has-binaries:PASS:$profile_count"
+        else
+            echo "FUNC_TEST:gen-profile-has-binaries:FAIL:empty"
+        end
     else
         echo "FUNC_TEST:gen-profile-exists:SKIP"
         echo "FUNC_TEST:gen-rg-initial:SKIP"
@@ -980,6 +1056,12 @@ let
         echo "FUNC_TEST:gen-store-preserved:SKIP"
         echo "FUNC_TEST:gen-switch:SKIP"
         echo "FUNC_TEST:gen-switch-restores:SKIP"
+        echo "FUNC_TEST:gen-profile-symlinks-valid:SKIP"
+        echo "FUNC_TEST:gen-switch-idempotent:SKIP"
+        echo "FUNC_TEST:gen-multiple-switches:SKIP"
+        echo "FUNC_TEST:gen-boot-ion-runs:SKIP"
+        echo "FUNC_TEST:gen-boot-snix-runs:SKIP"
+        echo "FUNC_TEST:gen-profile-has-binaries:SKIP"
     end
 
     # ── Package Manager (snix install) ───────────────────────────

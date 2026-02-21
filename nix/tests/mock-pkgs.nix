@@ -15,15 +15,20 @@
 let
   # Helper: create a package with binaries
   mkMockPackageWithBins =
-    { name, binaries }:
-    pkgs.runCommand "mock-${name}" { } ''
+    {
+      name,
+      binaries,
+      pname ? null,
+    }:
+    (pkgs.runCommand "mock-${name}" { } ''
       mkdir -p $out/bin
       ${lib.concatMapStringsSep "\n" (bin: ''
         echo '#!/bin/sh' > $out/bin/${bin}
         echo 'echo "Mock ${bin} (from ${name})"' >> $out/bin/${bin}
         chmod +x $out/bin/${bin}
       '') binaries}
-    '';
+    '')
+    // (lib.optionalAttrs (pname != null) { inherit pname; });
 
   # Helper: create a package with boot files
   mkMockBootPackage =
@@ -46,6 +51,7 @@ rec {
   # Base package: essential system daemons and utilities
   base = mkMockPackageWithBins {
     name = "base";
+    pname = "redox-base";
     binaries = [
       # Core daemons (required by initfs)
       "init"
@@ -180,6 +186,7 @@ rec {
   # Ion shell
   ion = mkMockPackageWithBins {
     name = "ion";
+    pname = "ion-shell";
     binaries = [
       "ion"
       "sh"
@@ -189,6 +196,7 @@ rec {
   # Uutils (coreutils replacement)
   uutils = mkMockPackageWithBins {
     name = "uutils";
+    pname = "redox-uutils";
     binaries = [
       "ls"
       "cat"
@@ -231,6 +239,7 @@ rec {
 
   userutils = mkMockPackageWithBins {
     name = "userutils";
+    pname = "redox-userutils";
     binaries = [
       "login"
       "getty"
@@ -314,6 +323,15 @@ rec {
     binaries = [ "dust" ];
   };
 
+  # === Package Management ===
+
+  # Snix package manager
+  snix = mkMockPackageWithBins {
+    name = "snix";
+    pname = "snix-redox";
+    binaries = [ "snix" ];
+  };
+
   # === Graphics Packages ===
 
   # Orbital desktop
@@ -390,6 +408,7 @@ rec {
       hexyl
       zoxide
       dust
+      snix
       orbital
       orbdata
       orbterm
