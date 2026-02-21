@@ -1089,6 +1089,49 @@ let
             echo "FUNC_TEST:gen-gc-dry-run:FAIL"
         end
         rm /tmp/gc_out ^> /dev/null
+
+        # ── Activation tests ──
+
+        # Test: `snix system activate --dry-run` shows plan without modifying
+        cp /etc/redox-system/manifest.json /tmp/activate-target.json
+        /bin/snix system activate /tmp/activate-target.json --dry-run > /tmp/activate_dry ^> /dev/null
+        if test $? = 0
+            echo "FUNC_TEST:activate-dry-run:PASS"
+        else
+            echo "FUNC_TEST:activate-dry-run:FAIL"
+        end
+        rm /tmp/activate_dry /tmp/activate-target.json ^> /dev/null
+
+        # Test: `snix system switch --dry-run` shows plan without creating generations
+        cp /etc/redox-system/manifest.json /tmp/switch-dry-target.json
+        let gen_count_before = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+        /bin/snix system switch /tmp/switch-dry-target.json --dry-run > /tmp/switch_dry ^> /dev/null
+        if test $? = 0
+            let gen_count_after = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+            if test $gen_count_before = $gen_count_after
+                echo "FUNC_TEST:switch-dry-run-no-modify:PASS"
+            else
+                echo "FUNC_TEST:switch-dry-run-no-modify:FAIL:generations-changed"
+            end
+        else
+            echo "FUNC_TEST:switch-dry-run-no-modify:FAIL:exit-code"
+        end
+        rm /tmp/switch_dry /tmp/switch-dry-target.json ^> /dev/null
+
+        # Test: activation with same manifest reports no changes
+        /bin/snix system activate /etc/redox-system/manifest.json --dry-run > /tmp/activate_same ^> /dev/null
+        if test $? = 0
+            grep -q 'No changes' /tmp/activate_same
+            if test $? = 0
+                echo "FUNC_TEST:activate-no-changes:PASS"
+            else
+                echo "FUNC_TEST:activate-no-changes:FAIL:no-message"
+            end
+        else
+            echo "FUNC_TEST:activate-no-changes:FAIL:exit-code"
+        end
+        rm /tmp/activate_same ^> /dev/null
+
     else
         echo "FUNC_TEST:gen-profile-exists:SKIP"
         echo "FUNC_TEST:gen-rg-initial:SKIP"
@@ -1108,6 +1151,9 @@ let
         echo "FUNC_TEST:gen-diff-runs:SKIP"
         echo "FUNC_TEST:gen-gc-safe:SKIP"
         echo "FUNC_TEST:gen-gc-dry-run:SKIP"
+        echo "FUNC_TEST:activate-dry-run:SKIP"
+        echo "FUNC_TEST:switch-dry-run-no-modify:SKIP"
+        echo "FUNC_TEST:activate-no-changes:SKIP"
     end
 
     # ── Package Manager (snix install) ───────────────────────────

@@ -577,6 +577,39 @@ pub fn diff(other_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+// ===== Activation Command =====
+
+/// Stand-alone activation command: show what would change between current
+/// system and a target manifest, optionally applying the changes.
+pub fn activate_cmd(
+    target_path: &str,
+    dry_run: bool,
+    manifest_path: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mpath = manifest_path.unwrap_or(MANIFEST_PATH);
+    let current = load_manifest_from(mpath)?;
+    let target = load_manifest_from(target_path)?;
+
+    let result = crate::activate::activate(&current, &target, dry_run)?;
+
+    if !dry_run {
+        // Show summary
+        if !result.warnings.is_empty() {
+            println!();
+            println!("Warnings:");
+            for w in &result.warnings {
+                println!("  ⚠ {w}");
+            }
+        }
+        if result.reboot_recommended {
+            println!();
+            println!("⚠ Reboot recommended: service or boot configuration changed.");
+        }
+    }
+
+    Ok(())
+}
+
 // ===== Generation Management =====
 
 /// A discovered generation on disk
@@ -700,10 +733,14 @@ pub fn generations(gen_dir: Option<&str>) -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
-/// Switch to a new manifest, saving the current one as a generation
+/// Switch to a new manifest, saving the current one as a generation.
+///
+/// If `dry_run` is true, computes and displays the activation plan without
+/// modifying anything on disk.
 pub fn switch(
     new_manifest_path: &str,
     description: Option<&str>,
+    dry_run: bool,
     gen_dir: Option<&str>,
     manifest_path: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -724,6 +761,16 @@ pub fn switch(
         new_manifest.generation.description = desc.to_string();
     }
 
+    // ── Dry-run mode: show plan and exit ──
+    if dry_run {
+        println!("Dry run: switch to generation {next_id}");
+        println!();
+        crate::activate::activate(&current, &new_manifest, true)?;
+        return Ok(());
+    }
+
+    // ── Save generations ──
+
     // Save current manifest as a generation (if not already saved)
     let current_gen_dir = Path::new(dir).join(current.generation.id.to_string());
     if !current_gen_dir.exists() {
@@ -742,20 +789,12 @@ pub fn switch(
     // Install as current manifest
     fs::write(mpath, &new_json)?;
 
-    // Rebuild system profile symlinks for the new package set
-    if let Err(e) = rebuild_system_profile(&new_manifest) {
-        eprintln!("warning: failed to rebuild system profile: {e}");
-        eprintln!("  Binaries in /nix/system/profile/bin/ may be stale.");
-    }
-
-    // Update GC roots to protect current generation's store paths
-    if let Err(e) = update_system_gc_roots(&new_manifest) {
-        eprintln!("warning: failed to update GC roots: {e}");
-    }
+    // ── Activate: atomic profile swap + config file updates ──
+    let activation = crate::activate::activate(&current, &new_manifest, false)?;
 
     println!("Switched to generation {next_id}");
 
-    // Show brief diff
+    // Show brief package diff
     let cur_pkgs: std::collections::BTreeSet<_> = current.packages.iter()
         .map(|p| &p.name).collect();
     let new_pkgs: std::collections::BTreeSet<_> = new_manifest.packages.iter()
@@ -775,6 +814,20 @@ pub fn switch(
 
     if current.system.redox_system_version != new_manifest.system.redox_system_version {
         println!("Version: {} -> {}", current.system.redox_system_version, new_manifest.system.redox_system_version);
+    }
+
+    // Show activation warnings
+    if !activation.warnings.is_empty() {
+        println!();
+        println!("Warnings:");
+        for w in &activation.warnings {
+            println!("  ⚠ {w}");
+        }
+    }
+
+    if activation.reboot_recommended {
+        println!();
+        println!("⚠ Reboot recommended: service or boot configuration changed.");
     }
 
     Ok(())
@@ -865,19 +918,30 @@ pub fn rollback(
     // Install as current
     fs::write(mpath, &new_json)?;
 
-    // Rebuild system profile symlinks for the rolled-back package set
-    if let Err(e) = rebuild_system_profile(&rolled_back) {
-        eprintln!("warning: failed to rebuild system profile: {e}");
-        eprintln!("  Binaries in /nix/system/profile/bin/ may be stale.");
-    }
-
-    // Update GC roots to protect rolled-back generation's store paths
-    if let Err(e) = update_system_gc_roots(&rolled_back) {
-        eprintln!("warning: failed to update GC roots: {e}");
-    }
+    // ── Activate: atomic profile swap + config file updates ──
+    let activation = crate::activate::activate(&current, &rolled_back, false)?;
 
     println!();
     println!("Rolled back to generation {} (saved as generation {next_id})", target.id);
+
+    if activation.binaries_linked > 0 {
+        println!("Profile rebuilt: {} binaries linked", activation.binaries_linked);
+    }
+
+    // Show activation warnings
+    if !activation.warnings.is_empty() {
+        println!();
+        println!("Warnings:");
+        for w in &activation.warnings {
+            println!("  ⚠ {w}");
+        }
+    }
+
+    if activation.reboot_recommended {
+        println!();
+        println!("⚠ Reboot recommended: service or boot configuration changed.");
+    }
+
     println!();
     println!("Note: Boot-essential binaries in /bin/ are unchanged.");
     println!("Profile binaries in /nix/system/profile/bin/ have been updated.");
@@ -984,6 +1048,11 @@ fn update_system_gc_roots(manifest: &Manifest) -> Result<(), Box<dyn std::error:
 /// Public accessor for current_timestamp (used by channel module).
 pub fn current_timestamp_pub() -> String {
     current_timestamp()
+}
+
+/// Public accessor for update_system_gc_roots (used by activate module).
+pub fn update_system_gc_roots_pub(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+    update_system_gc_roots(manifest)
 }
 
 /// Get current timestamp as ISO 8601 string
@@ -1535,6 +1604,7 @@ mod tests {
         switch(
             new_manifest_file.to_str().unwrap(),
             Some("added ripgrep"),
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
         ).unwrap();
@@ -1756,6 +1826,7 @@ mod tests {
         switch(
             new_manifest_file.to_str().unwrap(),
             Some("test switch"),
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
         ).unwrap();
@@ -1786,6 +1857,7 @@ mod tests {
         switch(
             new_manifest_file.to_str().unwrap(),
             Some("new gen"),
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
         ).unwrap();
@@ -1823,6 +1895,7 @@ mod tests {
         switch(
             new_manifest_file.to_str().unwrap(),
             Some("test"),
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
         ).unwrap();
@@ -2013,6 +2086,7 @@ mod tests {
         let result = switch(
             new_manifest_file.to_str().unwrap(),
             Some("test gc"),
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
         );
@@ -2059,6 +2133,74 @@ mod tests {
             Some(1),
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
+        );
+        assert!(result.is_ok());
+    }
+
+    // ===== Dry-run Switch Tests =====
+
+    #[test]
+    fn switch_dry_run_does_not_modify() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+        let new_manifest_file = dir.path().join("new.json");
+
+        // Current manifest
+        let mut current = sample_manifest();
+        current.generation.id = 1;
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+
+        // New manifest with extra package
+        let mut new_m = sample_manifest();
+        new_m.packages.push(Package {
+            name: "ripgrep".to_string(),
+            version: "14.0".to_string(),
+            store_path: String::new(),
+        });
+        std::fs::write(&new_manifest_file, serde_json::to_string_pretty(&new_m).unwrap()).unwrap();
+
+        // Dry-run switch
+        switch(
+            new_manifest_file.to_str().unwrap(),
+            Some("dry run test"),
+            true, // dry_run = true
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        ).unwrap();
+
+        // Verify NOTHING was modified:
+        // - No generations directory created
+        assert!(!gen_dir.exists());
+
+        // - Current manifest unchanged (still gen 1, 2 packages)
+        let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
+        assert_eq!(active.generation.id, 1);
+        assert_eq!(active.packages.len(), 2);
+    }
+
+    #[test]
+    fn activate_cmd_dry_run() {
+        let dir = tempfile::tempdir().unwrap();
+        let current_file = dir.path().join("current.json");
+        let target_file = dir.path().join("target.json");
+
+        let current = sample_manifest();
+        let mut target = sample_manifest();
+        target.packages.push(Package {
+            name: "fd".to_string(),
+            version: "9.0".to_string(),
+            store_path: String::new(),
+        });
+
+        std::fs::write(&current_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+        std::fs::write(&target_file, serde_json::to_string_pretty(&target).unwrap()).unwrap();
+
+        // Should succeed (dry-run, just displays plan)
+        let result = activate_cmd(
+            target_file.to_str().unwrap(),
+            true,
+            Some(current_file.to_str().unwrap()),
         );
         assert!(result.is_ok());
     }

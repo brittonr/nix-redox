@@ -8,6 +8,7 @@
 //!   /nix/var/snix/pathinfo/  — per-path metadata (JSON)
 //!   /nix/var/snix/gcroots/   — GC root symlinks
 
+mod activate;
 mod cache;
 mod channel;
 mod eval;
@@ -262,9 +263,27 @@ enum SystemCommand {
         #[arg(short = 'D', long)]
         description: Option<String>,
 
+        /// Only show what would change, don't modify anything
+        #[arg(long)]
+        dry_run: bool,
+
         /// Path to generations directory
         #[arg(short, long)]
         gen_dir: Option<String>,
+
+        /// Path to current manifest file
+        #[arg(short, long)]
+        manifest: Option<String>,
+    },
+
+    /// Show activation plan (dry-run: what would change on switch)
+    Activate {
+        /// Path to the new manifest.json to activate
+        path: String,
+
+        /// Only show what would change, don't modify anything
+        #[arg(long)]
+        dry_run: bool,
 
         /// Path to current manifest file
         #[arg(short, long)]
@@ -375,10 +394,16 @@ fn main() {
             }
             SystemCommand::Diff { path } => system::diff(&path),
             SystemCommand::Generations { dir } => system::generations(dir.as_deref()),
+            SystemCommand::Activate {
+                path,
+                dry_run,
+                manifest,
+            } => system::activate_cmd(&path, dry_run, manifest.as_deref()),
             SystemCommand::Switch {
                 path,
                 channel: channel_name,
                 description,
+                dry_run,
                 gen_dir,
                 manifest,
             } => {
@@ -395,6 +420,7 @@ fn main() {
                     Ok(p) => system::switch(
                         &p,
                         description.as_deref(),
+                        dry_run,
                         gen_dir.as_deref(),
                         manifest.as_deref(),
                     ),
