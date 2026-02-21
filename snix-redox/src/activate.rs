@@ -388,6 +388,12 @@ pub struct ActivationResult {
 ///   5. Run post-activation hooks
 ///
 /// If `dry_run` is true, computes and displays the plan without modifying anything.
+///
+/// **Idempotent**: activation ALWAYS rebuilds the profile and updates GC roots,
+/// even if the plan shows no package changes. This handles out-of-band
+/// modifications (e.g., a symlink was manually deleted) and ensures the system
+/// converges to the desired state. The plan is for display; execution always
+/// converges.
 pub fn activate(
     old: &Manifest,
     new: &Manifest,
@@ -405,45 +411,38 @@ pub fn activate(
         });
     }
 
-    if activation_plan.is_empty() {
-        println!("System already at target state. Nothing to activate.");
-        return Ok(ActivationResult {
-            binaries_linked: 0,
-            config_files_updated: 0,
-            warnings: Vec::new(),
-            reboot_recommended: false,
-        });
-    }
-
     let mut warnings = Vec::new();
 
     // ── Step 1: Pre-activation hooks ──
     // (Reserved for future use — custom scripts before activation)
 
-    // ── Step 2: Atomic profile swap ──
-    let binaries_linked = if activation_plan.profile_needs_rebuild {
-        match atomic_profile_swap(&new.packages) {
-            Ok(count) => {
+    // ── Step 2: Rebuild system profile (always, for idempotency) ──
+    // Even if the plan says packages didn't change, the on-disk profile
+    // may be out of sync (manual deletion, partial previous activation, etc.).
+    // Always rebuild to converge to the declared state.
+    let binaries_linked = match atomic_profile_swap(&new.packages) {
+        Ok(count) => {
+            if activation_plan.profile_needs_rebuild {
                 println!("Profile rebuilt: {count} binaries linked");
-                count
             }
-            Err(e) => {
-                // Fallback to non-atomic rebuild
-                warnings.push(format!("atomic profile swap failed, using fallback: {e}"));
-                match fallback_profile_rebuild(&new.packages) {
-                    Ok(count) => {
+            count
+        }
+        Err(e) => {
+            // Fallback to non-atomic rebuild
+            warnings.push(format!("atomic profile swap failed, using fallback: {e}"));
+            match fallback_profile_rebuild(&new.packages) {
+                Ok(count) => {
+                    if activation_plan.profile_needs_rebuild {
                         println!("Profile rebuilt (fallback): {count} binaries linked");
-                        count
                     }
-                    Err(e2) => {
-                        warnings.push(format!("profile rebuild failed: {e2}"));
-                        0
-                    }
+                    count
+                }
+                Err(e2) => {
+                    warnings.push(format!("profile rebuild failed: {e2}"));
+                    0
                 }
             }
         }
-    } else {
-        0
     };
 
     // ── Step 3: Update config files ──
@@ -455,7 +454,7 @@ pub fn activate(
         &mut warnings,
     );
 
-    // ── Step 4: Update GC roots ──
+    // ── Step 4: Update GC roots (always, for idempotency) ──
     if let Err(e) = crate::system::update_system_gc_roots_pub(new) {
         warnings.push(format!("GC root update failed: {e}"));
     }

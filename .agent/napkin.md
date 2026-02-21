@@ -319,3 +319,21 @@
 - These delegate to existing `install::install()`, `install::remove()`, `install::show()`
 - Top-level `snix install/remove/show` still works too (backward compat)
 - ProfileCommand::Install/Remove/Show mirror the top-level commands exactly
+
+### Atomic activation system (Feb 20 2026)
+- `activate.rs` implements NixOS-style `switch-to-configuration` for Redox
+- Atomic profile swap: build in staging dir (`/nix/system/.profile-staging/bin/`), then `rename()` to `/nix/system/profile/bin`
+  - Falls back to non-atomic clear+rebuild if `rename()` fails (e.g., cross-mount)
+  - Cleanup leftover staging/old dirs from previous failed activations
+- Activation plan computes full diff: packages, config files, services, users
+  - Uses `BTreeMap`/`BTreeSet` for deterministic ordering in diffs
+  - Config file changes detected by BLAKE3 hash comparison from manifest
+- `switch()` signature changed: added `dry_run: bool` parameter — ALL test callsites need updating
+- `update_system_gc_roots_pub()` added as public accessor for `activate` module to call
+- `activate_cmd()` is the standalone command handler; `activate()` is the core function called by both `switch()` and `rollback()`
+- Reboot detection: checks initfs driver changes, storage driver changes, disk layout changes
+  - Redox has no service hot-restart — service changes always recommend reboot
+- 33 new unit tests in `activate::tests` covering plan computation, profile population, config diff, user diff, cleanup helpers
+- 3 new VM functional tests: `activate-dry-run`, `switch-dry-run-no-modify`, `activate-no-changes`
+- Pre-existing gen-switch-restores/rollback-works/gc-safe failures unchanged (store path content issue, not activation)
+- Cross-compiled binary grew from 3.7MB to 3.9MB (activate module adds ~200KB)
