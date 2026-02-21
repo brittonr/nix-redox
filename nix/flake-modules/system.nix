@@ -208,6 +208,14 @@
           inherit pkgs lib;
         };
 
+        # Build bridge: host-side tools for live package push
+        pushToRedox = import ../pkgs/infrastructure/push-to-redox.nix {
+          inherit pkgs lib self;
+        };
+        buildBridge = import ../pkgs/infrastructure/build-bridge.nix {
+          inherit pkgs lib;
+        };
+
       in
       {
         # Expose profile-based disk images as packages
@@ -284,6 +292,10 @@
 
           # redox-rebuild CLI
           redox-rebuild = redoxRebuild;
+
+          # Build bridge tools
+          push-to-redox = pushToRedox;
+          build-bridge = buildBridge;
         };
 
         # Expose the system builder and evaluated configs for advanced use

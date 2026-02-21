@@ -197,6 +197,20 @@
           meta.description = "Manage RedoxOS system configurations (build, run, test, diff, generations)";
         };
 
+        # Build bridge: push packages to a running Redox VM via shared filesystem
+        push-to-redox = {
+          type = "app";
+          program = "${self'.packages.push-to-redox}/bin/push-to-redox";
+          meta.description = "Push cross-compiled packages to a running Redox VM via virtio-fs";
+        };
+
+        # Build bridge daemon: watch for build requests from the guest
+        build-bridge = {
+          type = "app";
+          program = "${self'.packages.build-bridge}/bin/redox-build-bridge";
+          meta.description = "Host-side build daemon for in-guest snix system rebuild";
+        };
+
         build-cookbook = {
           type = "app";
           program = "${self'.packages.cookbook}/bin/repo";

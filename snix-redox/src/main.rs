@@ -87,8 +87,8 @@ enum Command {
         /// Package name (as listed in `snix search`)
         name: String,
 
-        /// Path to local binary cache
-        #[arg(short, long, default_value = "/nix/cache")]
+        /// Path to local binary cache (also: SNIX_CACHE_PATH env var)
+        #[arg(short, long, default_value = "/nix/cache", env = "SNIX_CACHE_PATH")]
         cache_path: String,
     },
 
@@ -103,8 +103,8 @@ enum Command {
         /// Optional search pattern (substring match)
         pattern: Option<String>,
 
-        /// Path to local binary cache
-        #[arg(short, long, default_value = "/nix/cache")]
+        /// Path to local binary cache (also: SNIX_CACHE_PATH env var)
+        #[arg(short, long, default_value = "/nix/cache", env = "SNIX_CACHE_PATH")]
         cache_path: String,
     },
 
@@ -113,8 +113,8 @@ enum Command {
         /// Package name
         name: String,
 
-        /// Path to local binary cache
-        #[arg(short, long, default_value = "/nix/cache")]
+        /// Path to local binary cache (also: SNIX_CACHE_PATH env var)
+        #[arg(short, long, default_value = "/nix/cache", env = "SNIX_CACHE_PATH")]
         cache_path: String,
     },
 
@@ -196,8 +196,8 @@ enum ProfileCommand {
         /// Package name (as listed in `snix search`)
         name: String,
 
-        /// Path to local binary cache
-        #[arg(short, long, default_value = "/nix/cache")]
+        /// Path to local binary cache (also: SNIX_CACHE_PATH env var)
+        #[arg(short, long, default_value = "/nix/cache", env = "SNIX_CACHE_PATH")]
         cache_path: String,
     },
 
@@ -212,8 +212,8 @@ enum ProfileCommand {
         /// Package name
         name: String,
 
-        /// Path to local binary cache
-        #[arg(short, long, default_value = "/nix/cache")]
+        /// Path to local binary cache (also: SNIX_CACHE_PATH env var)
+        #[arg(short, long, default_value = "/nix/cache", env = "SNIX_CACHE_PATH")]
         cache_path: String,
     },
 }

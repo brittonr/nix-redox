@@ -442,3 +442,21 @@
 - `eprintln!` is critical for debugging drivers — `common::setup_logging` goes through
   the `log:` scheme which isn't visible on serial early in boot
 - Cloud Hypervisor `--serial file=path` + grep polling is the reliable test pattern
+
+### Build bridge — push-to-redox (Feb 21 2026)
+- `push-to-redox` host-side tool: build packages → serialize to binary cache → write to shared dir
+- Reuses `build-binary-cache.py` (Python NAR serializer) for cache generation
+- Incremental merge: new packages added to existing `packages.json`, narinfo/NAR files copied alongside
+- Store path version parsing: `rsplit("-", 1)` extracts last `-`-separated component as version
+  - "ripgrep-unstable" → version "unstable" (not "unknown")
+  - "fd-10.2.0" → version "10.2.0"
+- `SNIX_CACHE_PATH` env var added to snix (clap `env` attribute) — requires `features = ["env"]`
+  - Without this feature, `#[arg(env = "...")]` produces `no method named 'env' found for struct 'Arg'`
+- Guest workflow: `export SNIX_CACHE_PATH=/scheme/shared/cache` then `snix install <name>`
+- Relative path from `nix/pkgs/infrastructure/` to `nix/lib/` is `../../lib/` NOT `../../../lib/`
+  - Three `../` goes to repo root, but `nix/lib/` is one level down from there
+- `nix copy --to file://` is NOT used — it includes host dependency closures
+  - Python NAR serializer creates isolated per-package cache entries (no deps)
+- `build-bridge.nix` (host-side daemon) already existed — watches for request JSON files
+  - It's the "full rebuild" workflow; push-to-redox is the "push individual packages" workflow
+- 198 host unit tests pass; snix cross-compiles to 4.0MB (unchanged)
