@@ -26,11 +26,15 @@ const CHANNELS_DIR: &str = "/nix/var/snix/channels";
 pub struct Channel {
     pub name: String,
     pub url: String,
+    pub cache_url: Option<String>,
     pub last_fetched: Option<String>,
     pub manifest_path: PathBuf,
 }
 
 /// Add or update a channel registration.
+///
+/// The URL points to a manifest.json (system configuration).
+/// Optionally, the channel can have a binary cache URL for fetching packages.
 pub fn add(name: &str, url: &str) -> Result<(), Box<dyn std::error::Error>> {
     let channel_dir = Path::new(CHANNELS_DIR).join(name);
     fs::create_dir_all(&channel_dir)?;
@@ -40,6 +44,43 @@ pub fn add(name: &str, url: &str) -> Result<(), Box<dyn std::error::Error>> {
     println!("Channel '{name}' registered: {url}");
     println!("Run `snix channel update {name}` to fetch the manifest.");
     Ok(())
+}
+
+/// Set the binary cache URL for a channel.
+pub fn set_cache_url(name: &str, cache_url: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let channel_dir = Path::new(CHANNELS_DIR).join(name);
+    if !channel_dir.exists() {
+        return Err(format!("channel '{name}' not found").into());
+    }
+    fs::write(channel_dir.join("cache-url"), cache_url)?;
+    Ok(())
+}
+
+/// Get the binary cache URL for a channel, if set.
+pub fn get_cache_url(name: &str) -> Option<String> {
+    let path = Path::new(CHANNELS_DIR).join(name).join("cache-url");
+    fs::read_to_string(path).ok().map(|s| s.trim().to_string())
+}
+
+/// Get the first registered channel name (for default upgrade).
+pub fn default_channel() -> Result<String, Box<dyn std::error::Error>> {
+    let dir = Path::new(CHANNELS_DIR);
+    if !dir.exists() {
+        return Err("No channels registered. Add one with: snix channel add <name> <url>".into());
+    }
+
+    let mut names = Vec::new();
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            names.push(entry.file_name().to_string_lossy().to_string());
+        }
+    }
+
+    names.sort();
+    names.into_iter().next().ok_or_else(|| {
+        "No channels registered. Add one with: snix channel add <name> <url>".into()
+    })
 }
 
 /// Remove a channel registration.
@@ -77,8 +118,11 @@ pub fn list() -> Result<(), Box<dyn std::error::Error>> {
             .ok()
             .map(|s| s.trim().to_string());
         let has_manifest = entry.path().join("manifest.json").exists();
+        let cache_url = fs::read_to_string(entry.path().join("cache-url"))
+            .ok()
+            .map(|s| s.trim().to_string());
 
-        channels.push((name, url, last_fetched, has_manifest));
+        channels.push((name, url, cache_url, last_fetched, has_manifest));
     }
 
     if channels.is_empty() {
@@ -90,10 +134,13 @@ pub fn list() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("Registered channels:");
     println!();
-    for (name, url, fetched, has_manifest) in &channels {
+    for (name, url, cache_url, fetched, has_manifest) in &channels {
         let status = if *has_manifest { "✓" } else { "○" };
         println!("  {status} {name}");
         println!("    URL:     {url}");
+        if let Some(cu) = cache_url {
+            println!("    Cache:   {cu}");
+        }
         if let Some(ts) = fetched {
             println!("    Fetched: {ts}");
         } else {
@@ -148,13 +195,47 @@ pub fn update(name: &str) -> Result<(), Box<dyn std::error::Error>> {
     let timestamp = crate::system::current_timestamp_pub();
     fs::write(channel_dir.join("last-fetched"), &timestamp)?;
 
+    // Also try to fetch packages.json (binary cache index)
+    let packages_url = if url.ends_with('/') {
+        format!("{url}packages.json")
+    } else if url.ends_with(".json") {
+        // If manifest URL was explicit, derive packages URL from base
+        url.rsplit_once('/').map(|(base, _)| format!("{base}/packages.json"))
+            .unwrap_or_default()
+    } else {
+        format!("{url}/packages.json")
+    };
+
+    if !packages_url.is_empty() {
+        match ureq::get(&packages_url).call() {
+            Ok(resp) if resp.status() == 200 => {
+                if let Ok(pkg_body) = resp.into_body().read_to_string() {
+                    // Validate JSON
+                    if serde_json::from_str::<serde_json::Value>(&pkg_body).is_ok() {
+                        fs::write(channel_dir.join("packages.json"), &pkg_body)?;
+                        eprintln!("Fetched package index: {packages_url}");
+                    }
+                }
+            }
+            _ => {
+                // packages.json is optional — not all channels have one
+            }
+        }
+    }
+
     println!("Channel '{name}' updated from {url}");
     println!("Manifest saved to {}", channel_dir.join("manifest.json").display());
     println!();
-    println!("To switch to this channel:");
-    println!("  snix system switch {}", channel_dir.join("manifest.json").display());
+    println!("To upgrade to this channel:");
+    println!("  snix system upgrade {name}");
 
     Ok(())
+}
+
+/// Get the packages.json path for a named channel, if it exists.
+pub fn get_packages_index_path(name: &str) -> Option<PathBuf> {
+    let path = Path::new(CHANNELS_DIR).join(name).join("packages.json");
+    if path.exists() { Some(path) } else { None }
 }
 
 /// Update all registered channels.

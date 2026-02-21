@@ -290,6 +290,28 @@ enum SystemCommand {
         manifest: Option<String>,
     },
 
+    /// Upgrade the system from a channel (fetch manifest, install packages, activate)
+    Upgrade {
+        /// Channel name to upgrade from (default: first registered channel)
+        channel: Option<String>,
+
+        /// Only show what would change, don't apply
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Skip confirmation prompt (auto-accept)
+        #[arg(short = 'y', long)]
+        yes: bool,
+
+        /// Path to current manifest file
+        #[arg(short, long)]
+        manifest: Option<String>,
+
+        /// Path to generations directory
+        #[arg(short, long)]
+        gen_dir: Option<String>,
+    },
+
     /// Rollback to a previous generation
     Rollback {
         /// Generation number to roll back to (default: previous)
@@ -427,6 +449,19 @@ fn main() {
                     Err(e) => Err(e),
                 }
             }
+            SystemCommand::Upgrade {
+                channel: channel_name,
+                dry_run,
+                yes,
+                manifest,
+                gen_dir,
+            } => system::upgrade(
+                channel_name.as_deref(),
+                dry_run,
+                yes,
+                manifest.as_deref(),
+                gen_dir.as_deref(),
+            ),
             SystemCommand::Rollback {
                 generation,
                 dir,

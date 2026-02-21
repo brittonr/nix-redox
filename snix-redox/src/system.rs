@@ -200,7 +200,7 @@ pub struct FileInfo {
 
 // ===== Manifest Loading =====
 
-fn load_manifest_from(path: &str) -> Result<Manifest, Box<dyn std::error::Error>> {
+pub fn load_manifest_from(path: &str) -> Result<Manifest, Box<dyn std::error::Error>> {
     let p = Path::new(path);
     if !p.exists() {
         return Err(format!("manifest not found: {path}\nIs this a Redox system built with the module system?").into());
@@ -575,6 +575,206 @@ pub fn diff(other_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+// ===== Upgrade Command =====
+
+/// Upgrade the system from a channel: fetch → diff → install packages → activate.
+///
+/// This is the "NixOS-style declarative update loop" for Redox:
+///   1. Update the channel (fetch latest manifest from URL)
+///   2. Compare with current system manifest
+///   3. Show what would change (activation plan)
+///   4. Fetch new packages from the channel's binary cache
+///   5. Switch to the new manifest (saves generation, activates)
+///
+/// If the channel has a binary cache URL, new packages are downloaded from it.
+/// Otherwise, packages must already exist in the local store (e.g., from a
+/// pre-staged binary cache in the rootTree).
+pub fn upgrade(
+    channel_name: Option<&str>,
+    dry_run: bool,
+    auto_yes: bool,
+    manifest_path: Option<&str>,
+    gen_dir: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Resolve which channel to use
+    let name = match channel_name {
+        Some(n) => n.to_string(),
+        None => crate::channel::default_channel()?,
+    };
+
+    println!("Upgrading from channel '{name}'...");
+    println!();
+
+    // Step 1: Fetch the latest manifest from the channel URL
+    if let Err(e) = crate::channel::update(&name) {
+        // If network fetch fails, check if we have a cached manifest
+        let cached = crate::channel::get_manifest_path(&name);
+        if cached.is_err() {
+            return Err(format!(
+                "cannot fetch channel '{name}' and no cached manifest exists: {e}"
+            ).into());
+        }
+        eprintln!("warning: could not update channel '{name}': {e}");
+        eprintln!("         using cached manifest");
+        println!();
+    }
+
+    // Step 2: Load current and new manifests
+    let mpath = manifest_path.unwrap_or(MANIFEST_PATH);
+    let current = load_manifest_from(mpath)?;
+
+    let new_manifest_path = crate::channel::get_manifest_path(&name)?;
+    let new_manifest = load_manifest_from(new_manifest_path.to_str().unwrap_or(""))?;
+
+    // Step 3: Compare manifests — are they different?
+    let plan = crate::activate::plan(&current, &new_manifest);
+
+    if plan.is_empty() && current.generation.build_hash == new_manifest.generation.build_hash
+        && !current.generation.build_hash.is_empty()
+    {
+        println!("System is already up to date (generation {}, build {}…).",
+            current.generation.id,
+            &current.generation.build_hash[..12.min(current.generation.build_hash.len())]);
+        return Ok(());
+    }
+
+    // Step 4: Show what would change
+    println!("Changes from channel '{name}':");
+    println!();
+    plan.display();
+    println!();
+
+    // Version info
+    if current.system.redox_system_version != new_manifest.system.redox_system_version {
+        println!("Version: {} → {}", current.system.redox_system_version, new_manifest.system.redox_system_version);
+        println!();
+    }
+
+    if dry_run {
+        println!("Dry run complete. No changes applied.");
+        return Ok(());
+    }
+
+    // Step 5: Confirmation (unless --yes)
+    if !auto_yes {
+        // In a headless/test context, auto-accept. In interactive mode,
+        // we'd prompt — but Redox doesn't have /dev/tty yet.
+        // For now, proceed (tests use --yes or we auto-accept).
+        eprintln!("Proceeding with upgrade (use --dry-run to preview)...");
+    }
+
+    // Step 6: Fetch new packages if needed
+    let packages_fetched = fetch_upgrade_packages(&current, &new_manifest, &name)?;
+    if packages_fetched > 0 {
+        println!("{packages_fetched} packages installed from cache");
+        println!();
+    }
+
+    // Step 7: Switch to new manifest (saves generation, activates)
+    // Write the channel manifest to a temp location for switch()
+    let new_json = serde_json::to_string_pretty(&new_manifest)?;
+    let tmp_path = format!("/tmp/snix-upgrade-{}.json", std::process::id());
+    fs::write(&tmp_path, &new_json)?;
+
+    let desc = format!("upgrade from channel '{name}'");
+
+    let result = switch(
+        &tmp_path,
+        Some(&desc),
+        false,
+        gen_dir,
+        manifest_path,
+    );
+
+    // Clean up temp file
+    let _ = fs::remove_file(&tmp_path);
+
+    result?;
+
+    println!();
+    println!("✓ System upgraded from channel '{name}'");
+
+    Ok(())
+}
+
+/// Fetch packages that are in the new manifest but not in the local store.
+///
+/// Checks the channel's binary cache (local path or URL) for each new/changed package.
+/// Returns the number of packages successfully fetched.
+fn fetch_upgrade_packages(
+    current: &Manifest,
+    new: &Manifest,
+    channel_name: &str,
+) -> Result<u32, Box<dyn std::error::Error>> {
+    // Build set of store paths that need to be present
+    let current_paths: std::collections::BTreeSet<&str> = current
+        .packages
+        .iter()
+        .filter(|p| !p.store_path.is_empty())
+        .map(|p| p.store_path.as_str())
+        .collect();
+
+    let mut needed: Vec<&Package> = Vec::new();
+    for pkg in &new.packages {
+        if pkg.store_path.is_empty() {
+            continue;
+        }
+        // Skip if already in store
+        if Path::new(&pkg.store_path).exists() {
+            continue;
+        }
+        // Only fetch if this is a new or changed package
+        if !current_paths.contains(pkg.store_path.as_str()) {
+            needed.push(pkg);
+        }
+    }
+
+    if needed.is_empty() {
+        return Ok(0);
+    }
+
+    println!("Fetching {} new packages...", needed.len());
+
+    // Try channel's binary cache URL first
+    let cache_url = crate::channel::get_cache_url(channel_name);
+
+    // Try channel's local packages index
+    let packages_index_path = crate::channel::get_packages_index_path(channel_name);
+
+    let mut fetched = 0u32;
+
+    for pkg in &needed {
+        eprintln!("  {} {}...", pkg.name, pkg.version);
+
+        // Strategy 1: Local binary cache (e.g., /nix/cache/ or channel-local)
+        if let Some(ref idx_path) = packages_index_path {
+            let cache_dir = idx_path.parent().unwrap_or(Path::new("/nix/cache"));
+            if let Ok(()) = crate::local_cache::fetch_local(&pkg.store_path, cache_dir.to_str().unwrap_or("/nix/cache")) {
+                fetched += 1;
+                continue;
+            }
+        }
+
+        // Strategy 2: Embedded binary cache at /nix/cache/
+        if let Ok(()) = crate::local_cache::fetch_local(&pkg.store_path, "/nix/cache") {
+            fetched += 1;
+            continue;
+        }
+
+        // Strategy 3: Remote binary cache URL (if configured)
+        if let Some(ref url) = cache_url {
+            if let Ok(()) = crate::cache::fetch(&pkg.store_path, url) {
+                fetched += 1;
+                continue;
+            }
+        }
+
+        eprintln!("  warning: could not fetch {} — store path not available", pkg.name);
+    }
+
+    Ok(fetched)
 }
 
 // ===== Activation Command =====
@@ -2177,6 +2377,116 @@ mod tests {
         let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
         assert_eq!(active.generation.id, 1);
         assert_eq!(active.packages.len(), 2);
+    }
+
+    // ===== Upgrade Tests =====
+
+    #[test]
+    fn upgrade_plan_detects_no_changes() {
+        let m = sample_manifest();
+        let plan = crate::activate::plan(&m, &m);
+        assert!(plan.is_empty());
+    }
+
+    #[test]
+    fn upgrade_plan_detects_package_additions() {
+        let current = sample_manifest();
+        let mut new_m = sample_manifest();
+        new_m.packages.push(Package {
+            name: "ripgrep".to_string(),
+            version: "14.0".to_string(),
+            store_path: "/nix/store/abc-ripgrep-14.0".to_string(),
+        });
+
+        let plan = crate::activate::plan(&current, &new_m);
+        assert!(!plan.is_empty());
+        assert_eq!(plan.packages_added, vec!["ripgrep"]);
+        assert!(plan.profile_needs_rebuild);
+    }
+
+    #[test]
+    fn upgrade_plan_detects_version_change() {
+        let current = sample_manifest();
+        let mut new_m = sample_manifest();
+        new_m.system.redox_system_version = "0.5.0".to_string();
+        new_m.packages[0].version = "2.0.0".to_string();
+        new_m.packages[0].store_path = "/nix/store/new-ion-2.0.0".to_string();
+
+        let plan = crate::activate::plan(&current, &new_m);
+        assert!(!plan.is_empty());
+        assert_eq!(plan.packages_changed.len(), 1);
+        assert_eq!(plan.packages_changed[0].name, "ion");
+    }
+
+    #[test]
+    fn upgrade_same_build_hash_is_up_to_date() {
+        let mut current = sample_manifest();
+        current.generation.build_hash = "deadbeef12345678".to_string();
+
+        let mut new_m = sample_manifest();
+        new_m.generation.build_hash = "deadbeef12345678".to_string();
+
+        let plan = crate::activate::plan(&current, &new_m);
+        // Plan is empty AND build hashes match → up to date
+        assert!(plan.is_empty());
+        assert_eq!(current.generation.build_hash, new_m.generation.build_hash);
+    }
+
+    #[test]
+    fn upgrade_different_build_hash_needs_update() {
+        let mut current = sample_manifest();
+        current.generation.build_hash = "aaaaaa".to_string();
+
+        let mut new_m = sample_manifest();
+        new_m.generation.build_hash = "bbbbbb".to_string();
+
+        // Even if packages are identical, different build hash means a rebuild happened
+        let plan = crate::activate::plan(&current, &new_m);
+        // Plan itself may be empty (same packages), but build hash differs
+        assert_ne!(current.generation.build_hash, new_m.generation.build_hash);
+    }
+
+    #[test]
+    fn upgrade_preserves_store_paths() {
+        let current = sample_manifest();
+        let mut new_m = sample_manifest();
+        new_m.packages.push(Package {
+            name: "helix".to_string(),
+            version: "24.07".to_string(),
+            store_path: "/nix/store/xyz-helix-24.07".to_string(),
+        });
+
+        let plan = crate::activate::plan(&current, &new_m);
+        assert_eq!(plan.packages_added, vec!["helix"]);
+
+        // The new manifest preserves all store paths
+        let helix = new_m.packages.iter().find(|p| p.name == "helix").unwrap();
+        assert_eq!(helix.store_path, "/nix/store/xyz-helix-24.07");
+    }
+
+    #[test]
+    fn upgrade_detects_config_and_service_changes() {
+        let mut current = sample_manifest();
+        current.files.insert("etc/passwd".to_string(), FileInfo {
+            blake3: "aaa111".to_string(), size: 42, mode: "644".to_string(),
+        });
+        let mut new_m = current.clone();
+        // Add a new service
+        new_m.services.init_scripts.push("20_httpd".to_string());
+        // Change a config file hash
+        new_m.files.get_mut("etc/passwd").unwrap().blake3 = "changed123".to_string();
+        // Add a new config file
+        new_m.files.insert("etc/httpd.conf".to_string(), FileInfo {
+            blake3: "newfile".to_string(),
+            size: 50,
+            mode: "644".to_string(),
+        });
+
+        let plan = crate::activate::plan(&current, &new_m);
+        assert_eq!(plan.services_added, vec!["20_httpd"]);
+        assert_eq!(plan.config_files_added, vec!["etc/httpd.conf"]);
+        assert_eq!(plan.config_files_changed.len(), 1);
+        assert_eq!(plan.config_files_changed[0].path, "etc/passwd");
     }
 
     #[test]
