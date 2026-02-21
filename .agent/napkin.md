@@ -267,3 +267,31 @@
 - ipcd, ptyd, USB daemons are rootfs services — do NOT put in initfs init scripts
 - acpid is spawned by pcid-spawner — do NOT notify it directly (causes "File exists" crash)
 - Boot test bisecting caught the regression — exactly what it was built for
+
+### Mock package pname mismatch (Feb 20 2026)
+- Mock packages in nix/tests/mock-pkgs.nix use short names (`ion`, `base`, `snix`)
+- Real packages use prefixed pnames (`ion-shell`, `redox-base`, `snix-redox`)
+- Build module's `isBootEssential` uses `pkg.pname or (builtins.parseDrvName pkg.name).name`
+- Mock packages need explicit `pname` attribute via `// { inherit pname; }` to match
+- `mkMockPackageWithBins` now accepts optional `pname` parameter
+- Without this fix, artifact tests for boot/managed classification silently misclassify everything
+
+### snix unit tests require --target x86_64-unknown-linux-gnu (Feb 20 2026)
+- `snix-redox` is a cross-compiled crate targeting x86_64-unknown-redox
+- `cargo test` without `--target` tries to link with relibc (which isn't available on host)
+- Must use `cargo test --target x86_64-unknown-linux-gnu` to run tests on the host
+- Alternatively set `CARGO_BUILD_TARGET=""` to avoid inheriting the cross-target
+- All #[cfg(test)] modules compile fine for linux — no redox-specific APIs used in tests
+
+### Generation counting in Ion shell (Feb 20 2026)
+- `grep -c '^[[:space:]]*[0-9]'` doesn't work reliably in Redox grep
+- `wc -l` is more reliable for counting output lines
+- `snix system generations` outputs: 5 header lines + N gen entries + 2 footer lines
+- So `wc -l > 10` means at least 4 generation entries (header=5, footer=2, data≥4)
+
+### Artifact test coverage (58 total, Feb 20 2026)
+- 16 new store/profile/generation artifact tests added
+- Key invariants tested: boot-essential stays in /bin/, managed goes to profile, symlinks target /nix/store/
+- `rootTree-boot-vs-profile-separation` is the CRITICAL test — catches classification bugs
+- `rootTree-profile-symlinks-to-store` verifies symlinks actually point to valid store paths
+- `rootTree-path-precedence` verifies /nix/system/profile/bin comes before /bin in PATH
