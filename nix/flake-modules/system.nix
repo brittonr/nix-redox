@@ -145,6 +145,29 @@
           vmConfig = systems.minimal.vmConfig;
         };
 
+        # Shared FS profile: development + virtio-fsd driver for host↔guest sharing
+        sharedFsSystem = mkSystem {
+          modules = [
+            ../redox-system/profiles/development.nix
+            (
+              { pkgs, lib }:
+              {
+                "/hardware" = {
+                  storageDrivers = [
+                    "virtio-blkd"
+                    "virtio-fsd"
+                  ];
+                };
+              }
+            )
+          ];
+          inherit extraPkgs;
+        };
+        sharedFsRunners = mkCHRunners {
+          diskImage = sharedFsSystem.diskImage;
+          vmConfig = sharedFsSystem.vmConfig;
+        };
+
         # Cloud profile: CH headless + CH with TAP networking (static IP)
         cloudRunners = mkCHRunners {
           diskImage = systems.cloud-hypervisor.diskImage;
@@ -215,8 +238,8 @@
           run-redox-cloud = cloudRunners.headless;
           run-redox-cloud-net = cloudRunners.withNetwork;
 
-          # Shared filesystem (virtio-fs)
-          run-redox-shared = defaultRunners.withSharedFs;
+          # Shared filesystem (virtio-fs) — uses development + virtio-fsd driver
+          run-redox-shared = sharedFsRunners.withSharedFs;
 
           # Graphical profile
           run-redox-graphical-desktop = graphicalQemuRunners.graphical;
@@ -245,7 +268,7 @@
           runCloudHypervisor = defaultRunners.headless;
           runCloudHypervisorNet = cloudRunners.withNetwork;
           runCloudHypervisorDev = defaultRunners.withDev;
-          runCloudHypervisorShared = defaultRunners.withSharedFs;
+          runCloudHypervisorShared = sharedFsRunners.withSharedFs;
           setupCloudHypervisorNetwork = defaultRunners.setupNetwork;
 
           # VM control utilities (from default profile CH runners)

@@ -72,6 +72,13 @@
           meta.description = "Run Redox OS in Cloud Hypervisor with TAP networking";
         };
 
+        # Shared filesystem (virtio-fs): boots with host directory shared to guest
+        run-redox-shared = {
+          type = "app";
+          program = "${self'.packages.run-redox-shared}/bin/run-redox-cloud-hypervisor-shared";
+          meta.description = "Run Redox OS with virtio-fs shared directory (Cloud Hypervisor)";
+        };
+
         # Development mode with API socket for runtime control
         run-redox-cloud-hypervisor-dev = {
           type = "app";

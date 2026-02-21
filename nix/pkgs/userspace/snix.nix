@@ -42,7 +42,7 @@ mkUserspace.mkBinary {
   binaryName = "snix";
 
   # Vendor hash — includes git dependency on snix-eval from git.snix.dev
-  vendorHash = "sha256-I3FkNitdYBQnw5TPZeI4Ej1FTJQnMDGLtle3Ya8DwSI=";
+  vendorHash = "sha256-BZR2JD0DSJ51cGEzGsG61gf6zDJfzAfcee/3MhOyouE=";
 
   # snix-eval is fetched from git (along with snix-eval-builtin-macros)
   gitSources = [

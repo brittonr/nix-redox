@@ -19,13 +19,13 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use redox_scheme::scheme::SchemeSync;
 use redox_scheme::{CallerCtx, OpenResult};
-use syscall::data::{Stat, StatVfs, TimeSpec};
-use syscall::dirent::{DirentBuf, DirentKind};
-use syscall::error::{Error, Result, EBADF, EINVAL, EISDIR, ENOENT, ENOTDIR, EOPNOTSUPP, ESPIPE};
+use syscall::data::{Stat, StatVfs};
+use syscall::dirent::{DirEntry as RedoxDirEntry, DirentBuf, DirentKind};
+use syscall::error::{Error, Result, EBADF, EISDIR, ENOENT, ENOTDIR};
 use syscall::flag::{EventFlags, O_ACCMODE, O_DIRECTORY, O_RDONLY, O_STAT};
 use syscall::schemev2::NewFdFlags;
 
-use crate::fuse::{S_IFDIR, S_IFMT, S_IFREG, S_IFLNK};
+use crate::fuse::{S_IFDIR, S_IFMT};
 use crate::session::{DirEntry, FuseSession};
 
 /// An open file or directory handle.
@@ -44,8 +44,6 @@ struct Handle {
     mode: u32,
     /// Cached directory listing (lazily populated).
     dir_entries: Option<Vec<DirEntry>>,
-    /// Current read offset for directory listing.
-    dir_offset: u64,
 }
 
 pub struct VirtioFsScheme<'a> {
@@ -101,12 +99,6 @@ impl<'a> VirtioFsScheme<'a> {
 
         Ok((current_nodeid, attr_out.attr))
     }
-
-    /// Convert POSIX mode to Redox stat mode.
-    fn posix_mode_to_redox(mode: u32) -> u16 {
-        // Redox uses the same POSIX mode bits
-        mode as u16
-    }
 }
 
 impl<'a> SchemeSync for VirtioFsScheme<'a> {
@@ -133,7 +125,6 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                 size: attr_out.attr.size,
                 mode: attr_out.attr.mode,
                 dir_entries: None,
-                dir_offset: 0,
             },
         );
 
@@ -185,7 +176,6 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                     size: attr.size,
                     mode: attr.mode,
                     dir_entries: None,
-                    dir_offset: 0,
                 },
             );
 
@@ -216,7 +206,6 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                     size: attr.size,
                     mode: attr.mode,
                     dir_entries: None,
-                    dir_offset: 0,
                 },
             );
 
@@ -245,7 +234,6 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                     size: attr.size,
                     mode: attr.mode,
                     dir_entries: None,
-                    dir_offset: 0,
                 },
             );
 
@@ -328,7 +316,8 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
 
         let attr = &attr_out.attr;
 
-        stat.st_mode = Self::posix_mode_to_redox(attr.mode);
+        // Redox Stat uses plain u64 for times, plus separate nsec u32 fields
+        stat.st_mode = attr.mode as u16;
         stat.st_size = attr.size;
         stat.st_blksize = attr.blksize;
         stat.st_blocks = attr.blocks;
@@ -336,18 +325,12 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         stat.st_uid = attr.uid;
         stat.st_gid = attr.gid;
         stat.st_ino = attr.ino;
-        stat.st_atime = TimeSpec {
-            tv_sec: attr.atime as i64,
-            tv_nsec: attr.atimensec as i32,
-        };
-        stat.st_mtime = TimeSpec {
-            tv_sec: attr.mtime as i64,
-            tv_nsec: attr.mtimensec as i32,
-        };
-        stat.st_ctime = TimeSpec {
-            tv_sec: attr.ctime as i64,
-            tv_nsec: attr.ctimensec as i32,
-        };
+        stat.st_atime = attr.atime;
+        stat.st_atime_nsec = attr.atimensec;
+        stat.st_mtime = attr.mtime;
+        stat.st_mtime_nsec = attr.mtimensec;
+        stat.st_ctime = attr.ctime;
+        stat.st_ctime_nsec = attr.ctimensec;
 
         Ok(())
     }
@@ -383,7 +366,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         let nodeid = handle.nodeid;
         let fh = handle.fh;
 
-        // Fetch directory entries if not cached or if offset changed
+        // Fetch directory entries if not cached or if offset is 0 (restart)
         if handle.dir_entries.is_none() || opaque_offset == 0 {
             let entries = self
                 .session
@@ -403,8 +386,14 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                     _ => DirentKind::Regular,
                 };
 
+                // DirentBuf.entry() takes a DirEntry struct
                 if buf
-                    .entry(kind, entry.ino, (i + 1) as u64, &entry.name)
+                    .entry(RedoxDirEntry {
+                        inode: entry.ino,
+                        next_opaque_id: (i + 1) as u64,
+                        name: &entry.name,
+                        kind,
+                    })
                     .is_err()
                 {
                     break; // Buffer full

@@ -22,27 +22,20 @@ mod session;
 mod transport;
 
 use pcid_interface::PciFunctionHandle;
-use redox_scheme::{RequestKind, Response, SignalBehavior, Socket};
-use virtio_core::transport::Transport;
+use redox_scheme::{RequestKind, SignalBehavior, Socket};
 
 use crate::scheme::VirtioFsScheme;
 use crate::session::FuseSession;
-
-/// virtio-fs device config space layout.
-/// The tag is a UTF-8 string identifying the filesystem instance.
-/// Cloud Hypervisor sets this via --fs tag=<name>.
-#[repr(C)]
-struct VirtioFsConfig {
-    tag: [u8; 36],
-    num_request_queues: u32,
-}
 
 fn main() {
     pcid_interface::pci_daemon(daemon_runner);
 }
 
 fn daemon_runner(daemon: daemon::Daemon, pcid_handle: PciFunctionHandle) -> ! {
-    run_daemon(daemon, pcid_handle).unwrap();
+    match run_daemon(daemon, pcid_handle) {
+        Ok(()) => eprintln!("virtio-fsd: daemon exited normally"),
+        Err(e) => eprintln!("virtio-fsd: FATAL ERROR: {}", e),
+    }
     unreachable!();
 }
 
@@ -50,6 +43,9 @@ fn run_daemon(
     daemon: daemon::Daemon,
     mut pcid_handle: PciFunctionHandle,
 ) -> anyhow::Result<()> {
+    // Use eprintln! for early-boot serial output (before logd is ready)
+    eprintln!("virtio-fsd: starting driver initialization");
+
     common::setup_logging(
         "fs",
         "pci",
@@ -61,16 +57,20 @@ fn run_daemon(
     let pci_config = pcid_handle.config();
     let device_id = pci_config.func.full_device_id.device_id;
 
+    eprintln!("virtio-fsd: PCI device ID: {:#x}", device_id);
+
     // virtio-fs modern device ID: 0x1040 + device_type(26) = 0x105A
     assert_eq!(
         device_id, 0x105A,
         "unexpected virtio-fs device ID: {:#x} (expected 0x105A)",
         device_id
     );
-    log::info!("virtio-fsd: initiating startup sequence");
+    eprintln!("virtio-fsd: initiating startup sequence");
 
     // Probe the virtio device (reset, negotiate, set up PCI capabilities)
+    eprintln!("virtio-fsd: probing virtio device...");
     let device = virtio_core::probe_device(&mut pcid_handle)?;
+    eprintln!("virtio-fsd: virtio device probed successfully");
 
     // Read the filesystem tag from device config space.
     let tag = {
@@ -87,13 +87,14 @@ fn run_daemon(
     // Read number of request queues
     let num_request_queues = device.transport.load_config(36, 4) as u32;
 
-    log::info!(
+    eprintln!(
         "virtio-fsd: tag='{}', num_request_queues={}",
         tag,
         num_request_queues
     );
 
     // Finalize feature negotiation
+    eprintln!("virtio-fsd: finalizing features...");
     device.transport.finalize_features();
 
     // Set up virtqueues:
@@ -109,27 +110,33 @@ fn run_daemon(
 
     // Device is alive
     device.transport.run_device();
-    log::info!("virtio-fsd: device is running");
+    eprintln!("virtio-fsd: device is running, setting up queues...");
 
     // Initialize the FUSE session
+    eprintln!("virtio-fsd: sending FUSE_INIT...");
     let session = FuseSession::init(request_queue)
-        .map_err(|e| anyhow::anyhow!("FUSE init failed: {}", e))?;
+        .map_err(|e| {
+            eprintln!("virtio-fsd: FUSE init FAILED: {}", e);
+            anyhow::anyhow!("FUSE init failed: {}", e)
+        })?;
 
-    log::info!("virtio-fsd: FUSE session initialized");
+    eprintln!("virtio-fsd: FUSE session initialized successfully");
 
     // Register as a Redox scheme using the tag as the scheme name.
     // This makes the filesystem accessible at /scheme/<tag>/
+    eprintln!("virtio-fsd: creating scheme socket...");
     let socket = Socket::create()?;
 
-    let scheme_name = tag.clone();
-    let mut scheme = VirtioFsScheme::new(session, scheme_name.clone());
+    let mut scheme_handler = VirtioFsScheme::new(session, tag.clone());
 
-    redox_scheme::scheme::register_sync_scheme(&socket, &scheme_name, &mut scheme)?;
+    // Register the scheme (calls scheme_root internally)
+    eprintln!("virtio-fsd: registering scheme '{}'...", tag);
+    redox_scheme::scheme::register_sync_scheme(&socket, &tag, &mut scheme_handler)?;
 
-    log::info!("virtio-fsd: registered scheme '{}'", scheme_name);
+    eprintln!("virtio-fsd: scheme '{}' registered successfully!", tag);
 
-    // Signal daemon readiness
-    daemon.ready().unwrap();
+    // Signal daemon readiness (consumes daemon)
+    daemon.ready();
 
     // Drop into null namespace (security: no further scheme access needed)
     libredox::call::setrens(0, 0).expect("virtio-fsd: failed to enter null namespace");
@@ -138,20 +145,22 @@ fn run_daemon(
     loop {
         let req = match socket.next_request(SignalBehavior::Restart)? {
             None => break, // Socket closed
-            Some(req) => match req.kind() {
-                RequestKind::Call(r) => r,
-                RequestKind::OnClose { id } => {
-                    scheme.on_close(id);
-                    continue;
-                }
-                _ => continue,
-            },
+            Some(req) => req,
         };
 
-        let response = req.handle_sync(&mut scheme);
-
-        if !socket.write_response(response, SignalBehavior::Restart)? {
-            break;
+        match req.kind() {
+            RequestKind::Call(call_req) => {
+                // handle_sync is on CallRequest, dispatches to SchemeSync trait methods
+                let response = call_req.handle_sync(&mut scheme_handler);
+                if !socket.write_response(response, SignalBehavior::Restart)? {
+                    break;
+                }
+            }
+            RequestKind::OnClose { id } => {
+                use redox_scheme::scheme::SchemeSync;
+                scheme_handler.on_close(id);
+            }
+            _ => continue,
         }
     }
 

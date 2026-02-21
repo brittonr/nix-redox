@@ -387,7 +387,7 @@
 - 198 host unit tests + 110 VM functional tests + 161 nix checks — all pass
 - Cross-compiled binary: 4.0MB (+100KB for rebuild module)
 
-### virtio-fsd driver for Redox (Feb 20 2026)
+### virtio-fsd driver for Redox (Feb 20-21 2026)
 - virtio-fs = FUSE protocol over virtqueues (virtio device type 26, PCI ID 0x1AF4:0x105A)
 - Cloud Hypervisor `--fs tag=shared,socket=/tmp/virtiofsd.sock` presents device to guest
 - Host side: virtiofsd (Rust, available in nixpkgs) serves a directory via FUSE protocol
@@ -405,3 +405,40 @@
 - Source: nix/pkgs/system/virtio-fsd/ (1384 lines across 5 files)
 - Injected into base workspace via patchPhase (copies source, adds to Cargo.toml members)
 - This is the CHANNEL for the build bridge: host writes to shared dir, guest reads via /scheme/shared/
+
+### virtio-fsd compilation fixes (Feb 21 2026)
+- **Heredoc indentation bug**: VIRTIOFS_TOML heredoc content at 6-space indent pulled down
+  the Nix `''` string's minimum indentation, leaving the Python `EOF` terminator with 6
+  leading spaces — bash couldn't find it. Fix: use `pkgs.writeText` for Cargo.toml content.
+- **Redox Stat struct**: `st_atime`, `st_mtime`, `st_ctime` are plain `u64` (not `TimeSpec`).
+  Separate `st_atime_nsec`, `st_mtime_nsec`, `st_ctime_nsec` fields are `u32`.
+- **DirentBuf.entry()**: Takes `DirEntry<'_>` struct (with `inode`, `next_opaque_id`, `name`,
+  `kind` fields), not 4 separate arguments. Import as `RedoxDirEntry` to avoid name collision.
+- **daemon.ready()** returns `()` (no `unwrap`). `daemon.ready_sync_scheme()` exists in source
+  but Rust couldn't resolve it (possibly edition 2024 visibility issue). Fix: use separate
+  `register_sync_scheme()` + `daemon.ready()` calls.
+- **handle_sync()** is on `CallRequest` (from `RequestKind::Call(r)`), NOT on `Request`.
+- **on_close()** is a trait default method on `SchemeSync` — must import trait with
+  `use redox_scheme::scheme::SchemeSync;` at call site.
+- **Vendor hash changes**: Modifying the Cargo.toml content changes the `fetchCargoVendor` hash.
+  Must update the hash when Cargo.toml content changes.
+
+### virtio-fsd disk image wiring (Feb 21 2026)
+- The `run-redox-shared` runner was using the DEFAULT profile disk image, but `virtio-fsd`
+  was only in the cloud-hypervisor profile's `storageDrivers`. No driver binary in the initfs!
+- Fix: created `sharedFsSystem` in system.nix that extends development profile with `virtio-fsd`
+- The shared runner now uses this dedicated system configuration
+- Default hardware.storageDrivers = ["ahcid" "nvmed" "virtio-blkd"] — missing virtio-fsd
+- Cloud profile adds it, but cloud profile has static networking that HANGS without `--net`
+
+### virtio-fsd VM verification (Feb 21 2026) — FULLY WORKING
+- Boot completes in ~1s with KVM
+- Driver detects PCI device 0x105A, probes virtio device, reads tag "shared"
+- FUSE_INIT handshake with host virtiofsd succeeds
+- Scheme `/scheme/shared` registered in Redox namespace
+- Guest can access host files via `/scheme/shared/path`
+- The "non-power-of-two zeroed_phys_contiguous allocation" kernel warnings are from
+  virtqueue DMA buffer allocation — harmless, the kernel rounds up automatically
+- `eprintln!` is critical for debugging drivers — `common::setup_logging` goes through
+  the `log:` scheme which isn't visible on serial early in boot
+- Cloud Hypervisor `--serial file=path` + grep polling is the reliable test pattern
