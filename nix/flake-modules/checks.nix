@@ -91,9 +91,14 @@
         # For CI, run outside the sandbox with KVM access
         boot-test = packages.bootTest;
 
-        # Functional test - runs ~40 in-guest tests after boot
+        # Functional test - runs ~110 in-guest tests after boot
         # Run interactively with: nix run .#functional-test
         functional-test = packages.functionalTest;
+
+        # Bridge test - tests live package delivery via virtio-fs
+        # Pushes packages to shared cache, boots VM, verifies snix install
+        # Run interactively with: nix run .#bridge-test
+        bridge-test = packages.bridgeTest;
       };
     };
 }
