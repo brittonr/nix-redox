@@ -153,6 +153,7 @@ pkgs.writeShellScriptBin "functional-test" ''
       -drive file="$IMAGE",format=raw,if=none,id=disk0 \
       -device virtio-blk-pci,drive=disk0 \
       -display none \
+      -vga none \
       -no-reboot \
       &>"$WORK_DIR/vmm.log" &
     VM_PID=$!
