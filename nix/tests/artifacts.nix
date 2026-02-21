@@ -1101,6 +1101,38 @@ in
     ];
   };
 
+  # Test: configuration.nix exists for `snix system rebuild`
+  rootTree-has-configuration-nix = mkArtifactTest {
+    name = "rootTree-has-configuration-nix";
+    description = "Verifies rootTree has /etc/redox-system/configuration.nix with rebuild instructions";
+    modules = [
+      {
+        "/time" = {
+          hostname = "config-test";
+        };
+      }
+    ];
+    checks = [
+      { file = "etc/redox-system/configuration.nix"; }
+      {
+        file = "etc/redox-system/configuration.nix";
+        contains = "snix system rebuild";
+      }
+      {
+        file = "etc/redox-system/configuration.nix";
+        contains = "config-test";
+      }
+      {
+        file = "etc/redox-system/configuration.nix";
+        contains = "hostname";
+      }
+      {
+        file = "etc/redox-system/configuration.nix";
+        contains = "networking";
+      }
+    ];
+  };
+
   # Test: Manifest file inventory has hashes
   rootTree-manifest-has-file-hashes = mkArtifactTest {
     name = "rootTree-manifest-has-file-hashes";

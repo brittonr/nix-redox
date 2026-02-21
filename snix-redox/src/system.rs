@@ -169,7 +169,7 @@ pub struct Drivers {
     pub core: Vec<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct User {
     pub uid: u32,
     pub gid: u32,

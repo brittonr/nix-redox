@@ -16,6 +16,7 @@ mod install;
 mod local_cache;
 mod nar;
 mod pathinfo;
+mod rebuild;
 mod store;
 mod system;
 
@@ -326,6 +327,40 @@ enum SystemCommand {
         #[arg(short, long)]
         manifest: Option<String>,
     },
+
+    /// Rebuild system from configuration.nix (like nixos-rebuild switch)
+    Rebuild {
+        /// Path to configuration.nix (default: /etc/redox-system/configuration.nix)
+        #[arg(short, long)]
+        config: Option<String>,
+
+        /// Only show what would change, don't apply
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Initialize a default configuration.nix
+        #[arg(long)]
+        init: bool,
+
+        /// Path to current manifest file
+        #[arg(short, long)]
+        manifest: Option<String>,
+
+        /// Path to generations directory
+        #[arg(short, long)]
+        gen_dir: Option<String>,
+
+        /// Path to binary cache package index
+        #[arg(long)]
+        cache_index: Option<String>,
+    },
+
+    /// Show parsed configuration.nix without applying
+    ShowConfig {
+        /// Path to configuration.nix
+        #[arg(short, long)]
+        config: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -467,6 +502,29 @@ fn main() {
                 dir,
                 manifest,
             } => system::rollback(generation, dir.as_deref(), manifest.as_deref()),
+            SystemCommand::Rebuild {
+                config,
+                dry_run,
+                init,
+                manifest,
+                gen_dir,
+                cache_index,
+            } => {
+                if init {
+                    rebuild::init_config(config.as_deref())
+                } else {
+                    rebuild::rebuild(
+                        config.as_deref(),
+                        dry_run,
+                        manifest.as_deref(),
+                        gen_dir.as_deref(),
+                        cache_index.as_deref(),
+                    )
+                }
+            }
+            SystemCommand::ShowConfig { config } => {
+                rebuild::show_config(config.as_deref())
+            }
         },
     };
 

@@ -818,6 +818,62 @@ adios:
         };
       }
 
+      # Default configuration.nix for `snix system rebuild`
+      # Users can edit this file on the running system, then run
+      # `snix system rebuild` to apply changes declaratively.
+      // {
+        "etc/redox-system/configuration.nix" = {
+          text = ''
+            # /etc/redox-system/configuration.nix
+            #
+            # Declarative system configuration for Redox OS.
+            # Edit this file and run `snix system rebuild` to apply changes.
+            #
+            # Only set the options you want to change — everything else keeps
+            # its current value from the running system.
+            #
+            # After editing:
+            #   snix system rebuild --dry-run   # Preview changes
+            #   snix system rebuild             # Apply changes
+            #
+            # Available options:
+            #   hostname, timezone, packages,
+            #   networking.{enable, mode, dns},
+            #   graphics.{enable, resolution},
+            #   security.{protectKernelSchemes, requirePasswords, allowRemoteRoot},
+            #   logging.{level, kernelLevel, logToFile},
+            #   power.{acpiEnabled, powerAction, rebootOnPanic},
+            #   users.{name = { uid, gid, home, shell }},
+            #   programs.{editor}
+
+            {
+              hostname = "${hostname}";
+              timezone = "${timezone}";
+
+              networking = {
+                enable = ${if networkingEnabled then "true" else "false"};
+                mode = "${inputs.networking.mode or "auto"}";
+                dns = [ ${
+                  lib.concatMapStringsSep " " (d: ''"${d}"'') (inputs.networking.dns or [ "1.1.1.1" ])
+                } ];
+              };
+
+              security = {
+                protectKernelSchemes = ${if protectKernelSchemes then "true" else "false"};
+                requirePasswords = ${if requirePasswords then "true" else "false"};
+              };
+
+              # packages = [
+              #   "ripgrep"
+              #   "fd"
+              #   "helix"
+              # ];
+            }
+          '';
+          mode = "0644";
+        };
+      }
+
       # Init script files (raw initScripts + rendered structured services)
       // (builtins.listToAttrs (
         lib.mapAttrsToList (
