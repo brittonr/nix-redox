@@ -1047,6 +1047,48 @@ let
         else
             echo "FUNC_TEST:gen-profile-has-binaries:FAIL:empty"
         end
+        # Test: rollback restores profile after modification
+        /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+        rm /nix/system/profile/bin/rg ^> /dev/null
+        /bin/snix system rollback > /dev/null ^> /dev/null
+        if exists -f /nix/system/profile/bin/rg
+            echo "FUNC_TEST:gen-rollback-works:PASS"
+        else
+            echo "FUNC_TEST:gen-rollback-works:FAIL:rg-missing"
+        end
+
+        # Test: snix system diff runs without error
+        cp /etc/redox-system/manifest.json /tmp/diff_manifest.json
+        /bin/snix system diff /tmp/diff_manifest.json > /tmp/diff_out ^> /dev/null
+        if test $? = 0
+            echo "FUNC_TEST:gen-diff-runs:PASS"
+        else
+            echo "FUNC_TEST:gen-diff-runs:FAIL"
+        end
+        rm /tmp/diff_manifest.json /tmp/diff_out ^> /dev/null
+
+        # Test: system packages are GC-protected after switch
+        /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+        /bin/snix store roots > /tmp/gc_roots ^> /dev/null
+        if test $? = 0
+            if grep -q 'system-' /tmp/gc_roots
+                echo "FUNC_TEST:gen-gc-safe:PASS"
+            else
+                echo "FUNC_TEST:gen-gc-safe:FAIL:no-system-roots"
+            end
+        else
+            echo "FUNC_TEST:gen-gc-safe:FAIL:roots-cmd-failed"
+        end
+        rm /tmp/gc_roots ^> /dev/null
+
+        # Test: GC dry-run doesn't crash
+        /bin/snix store gc --dry-run > /tmp/gc_out ^> /dev/null
+        if test $? = 0
+            echo "FUNC_TEST:gen-gc-dry-run:PASS"
+        else
+            echo "FUNC_TEST:gen-gc-dry-run:FAIL"
+        end
+        rm /tmp/gc_out ^> /dev/null
     else
         echo "FUNC_TEST:gen-profile-exists:SKIP"
         echo "FUNC_TEST:gen-rg-initial:SKIP"
@@ -1062,6 +1104,10 @@ let
         echo "FUNC_TEST:gen-boot-ion-runs:SKIP"
         echo "FUNC_TEST:gen-boot-snix-runs:SKIP"
         echo "FUNC_TEST:gen-profile-has-binaries:SKIP"
+        echo "FUNC_TEST:gen-rollback-works:SKIP"
+        echo "FUNC_TEST:gen-diff-runs:SKIP"
+        echo "FUNC_TEST:gen-gc-safe:SKIP"
+        echo "FUNC_TEST:gen-gc-dry-run:SKIP"
     end
 
     # ── Package Manager (snix install) ───────────────────────────

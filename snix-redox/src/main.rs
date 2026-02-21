@@ -9,6 +9,7 @@
 //!   /nix/var/snix/gcroots/   — GC root symlinks
 
 mod cache;
+mod channel;
 mod eval;
 mod install;
 mod local_cache;
@@ -129,6 +130,12 @@ enum Command {
         #[command(subcommand)]
         command: SystemCommand,
     },
+
+    /// Manage remote update channels
+    Channel {
+        #[command(subcommand)]
+        command: ChannelCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -181,6 +188,32 @@ enum StoreCommand {
 enum ProfileCommand {
     /// List installed packages
     List,
+
+    /// Install a package into the user profile
+    Install {
+        /// Package name (as listed in `snix search`)
+        name: String,
+
+        /// Path to local binary cache
+        #[arg(short, long, default_value = "/nix/cache")]
+        cache_path: String,
+    },
+
+    /// Remove a package from the user profile
+    Remove {
+        /// Package name to remove
+        name: String,
+    },
+
+    /// Show detailed info about a package
+    Show {
+        /// Package name
+        name: String,
+
+        /// Path to local binary cache
+        #[arg(short, long, default_value = "/nix/cache")]
+        cache_path: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -218,8 +251,12 @@ enum SystemCommand {
 
     /// Switch to a new system manifest, saving current as a generation
     Switch {
-        /// Path to the new manifest.json to activate
-        path: String,
+        /// Path to the new manifest.json to activate (or omit if using --channel)
+        path: Option<String>,
+
+        /// Switch to a named channel's manifest instead of a file path
+        #[arg(long)]
+        channel: Option<String>,
 
         /// Description for this generation (e.g. "added ripgrep")
         #[arg(short = 'D', long)]
@@ -247,6 +284,33 @@ enum SystemCommand {
         /// Path to current manifest file
         #[arg(short, long)]
         manifest: Option<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum ChannelCommand {
+    /// Add a new channel
+    Add {
+        /// Channel name (e.g. "stable", "unstable")
+        name: String,
+
+        /// Channel URL (points to a directory with manifest.json)
+        url: String,
+    },
+
+    /// Remove a channel
+    Remove {
+        /// Channel name
+        name: String,
+    },
+
+    /// List registered channels
+    List,
+
+    /// Fetch/update a channel's manifest
+    Update {
+        /// Channel name (or omit to update all)
+        name: Option<String>,
     },
 }
 
@@ -290,8 +354,20 @@ fn main() {
         Command::Show { name, cache_path } => install::show(&name, &cache_path),
         Command::Profile { command } => match command {
             ProfileCommand::List => install::list_profile(),
+            ProfileCommand::Install { name, cache_path } => install::install(&name, &cache_path),
+            ProfileCommand::Remove { name } => install::remove(&name),
+            ProfileCommand::Show { name, cache_path } => install::show(&name, &cache_path),
         },
         Command::Repl => eval::repl(),
+        Command::Channel { command } => match command {
+            ChannelCommand::Add { name, url } => channel::add(&name, &url),
+            ChannelCommand::Remove { name } => channel::remove(&name),
+            ChannelCommand::List => channel::list(),
+            ChannelCommand::Update { name } => match name {
+                Some(n) => channel::update(&n),
+                None => channel::update_all(),
+            },
+        },
         Command::System { command } => match command {
             SystemCommand::Info { manifest } => system::info(manifest.as_deref()),
             SystemCommand::Verify { verbose, manifest } => {
@@ -301,15 +377,30 @@ fn main() {
             SystemCommand::Generations { dir } => system::generations(dir.as_deref()),
             SystemCommand::Switch {
                 path,
+                channel: channel_name,
                 description,
                 gen_dir,
                 manifest,
-            } => system::switch(
-                &path,
-                description.as_deref(),
-                gen_dir.as_deref(),
-                manifest.as_deref(),
-            ),
+            } => {
+                let resolved_path: Result<String, Box<dyn std::error::Error>> =
+                    match (&path, &channel_name) {
+                        (Some(p), _) => Ok(p.clone()),
+                        (None, Some(ch)) => channel::get_manifest_path(ch)
+                            .map(|p| p.to_string_lossy().to_string()),
+                        (None, None) => {
+                            Err("either a manifest path or --channel is required".into())
+                        }
+                    };
+                match resolved_path {
+                    Ok(p) => system::switch(
+                        &p,
+                        description.as_deref(),
+                        gen_dir.as_deref(),
+                        manifest.as_deref(),
+                    ),
+                    Err(e) => Err(e),
+                }
+            }
             SystemCommand::Rollback {
                 generation,
                 dir,

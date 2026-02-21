@@ -748,6 +748,11 @@ pub fn switch(
         eprintln!("  Binaries in /nix/system/profile/bin/ may be stale.");
     }
 
+    // Update GC roots to protect current generation's store paths
+    if let Err(e) = update_system_gc_roots(&new_manifest) {
+        eprintln!("warning: failed to update GC roots: {e}");
+    }
+
     println!("Switched to generation {next_id}");
 
     // Show brief diff
@@ -866,6 +871,11 @@ pub fn rollback(
         eprintln!("  Binaries in /nix/system/profile/bin/ may be stale.");
     }
 
+    // Update GC roots to protect rolled-back generation's store paths
+    if let Err(e) = update_system_gc_roots(&rolled_back) {
+        eprintln!("warning: failed to update GC roots: {e}");
+    }
+
     println!();
     println!("Rolled back to generation {} (saved as generation {next_id})", target.id);
     println!();
@@ -935,6 +945,45 @@ fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error:
 
     println!("System profile rebuilt: {linked} binaries linked");
     Ok(())
+}
+
+/// Update GC roots to protect the current generation's store paths from garbage collection.
+/// Called after switch/rollback to ensure `snix store gc` won't delete active packages.
+fn update_system_gc_roots(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+    let gc_roots = crate::store::GcRoots::open()?;
+
+    // Remove old system-* roots (from previous generation)
+    if let Ok(roots) = gc_roots.list_roots() {
+        for root in roots {
+            if root.name.starts_with("system-") {
+                let _ = gc_roots.remove_root(&root.name);
+            }
+        }
+    }
+
+    // Add roots for current generation's packages
+    let mut added = 0u32;
+    for pkg in &manifest.packages {
+        if !pkg.store_path.is_empty() {
+            let root_name = format!("system-{}", pkg.name);
+            if let Err(e) = gc_roots.add_root(&root_name, &pkg.store_path) {
+                eprintln!("warning: could not add GC root for {}: {e}", pkg.name);
+            } else {
+                added += 1;
+            }
+        }
+    }
+
+    if added > 0 {
+        println!("GC roots updated: {added} system packages protected");
+    }
+
+    Ok(())
+}
+
+/// Public accessor for current_timestamp (used by channel module).
+pub fn current_timestamp_pub() -> String {
+    current_timestamp()
 }
 
 /// Get current timestamp as ISO 8601 string
@@ -1937,4 +1986,81 @@ mod tests {
         let manifest = result.unwrap();
         assert_eq!(manifest.system.hostname, "myhost");
     }
+
+    #[test]
+    fn switch_with_gc_roots_resilient() {
+        // Verify switch succeeds even when GC root directory isn't writable
+        // (update_system_gc_roots errors are non-fatal warnings)
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+        let new_manifest_file = dir.path().join("new.json");
+
+        let current = sample_manifest();
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+
+        let mut new_m = sample_manifest();
+        new_m.packages[0].store_path =
+            "/nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-ion-1.0".to_string();
+        std::fs::write(
+            &new_manifest_file,
+            serde_json::to_string_pretty(&new_m).unwrap(),
+        )
+        .unwrap();
+
+        // switch() calls update_system_gc_roots which tries /nix/var/snix/gcroots/
+        // On the host this may fail — but switch should still succeed (errors are warnings)
+        let result = switch(
+            new_manifest_file.to_str().unwrap(),
+            Some("test gc"),
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        );
+        assert!(result.is_ok());
+
+        // Verify manifest was still updated
+        let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
+        assert_eq!(active.packages[0].store_path, "/nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-ion-1.0");
+    }
+
+    #[test]
+    fn rollback_with_gc_roots_resilient() {
+        // Verify rollback succeeds even when GC root updates fail
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+
+        // Create generation 1
+        let gen1_dir = gen_dir.join("1");
+        std::fs::create_dir_all(&gen1_dir).unwrap();
+        let mut gen1 = sample_manifest();
+        gen1.generation.id = 1;
+        gen1.packages[0].store_path =
+            "/nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-ion-1.0".to_string();
+        std::fs::write(
+            gen1_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen1).unwrap(),
+        )
+        .unwrap();
+
+        // Current is gen 2
+        let gen2_dir = gen_dir.join("2");
+        std::fs::create_dir_all(&gen2_dir).unwrap();
+        let mut gen2 = sample_manifest();
+        gen2.generation.id = 2;
+        std::fs::write(
+            gen2_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen2).unwrap(),
+        )
+        .unwrap();
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+
+        let result = rollback(
+            Some(1),
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        );
+        assert!(result.is_ok());
+    }
+
 }
