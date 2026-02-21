@@ -371,3 +371,18 @@
 - `fetch_upgrade_packages()` tries 3 strategies: channel-local cache → /nix/cache/ → remote URL
 - Second upgrade with same manifest = "up to date" (detected by build hash comparison)
 - 102 VM functional tests, 178 host unit tests — all pass
+
+### Declarative rebuild — snix system rebuild (Feb 20 2026)
+- `snix system rebuild` evaluates `/etc/redox-system/configuration.nix` via snix-eval → JSON → merge → switch
+- configuration.nix is a simple Nix attrset — no functions, no imports, no module system
+- `builtins.toJSON (import /path)` is the full Nix expression; snix-eval handles the rest
+- snix-eval's Display representation of a Nix string is quoted+escaped: strip outer `"` and unescape `\"`
+- JSON config fallback: if path ends with `.json`, skip snix-eval and parse directly (testability)
+- Boot-essential packages (ion, base, uutils, snix) always preserved during package merge
+- All RebuildConfig fields are `Option<T>` — only present fields override the current manifest
+- Users field replaces entirely (no merge); groups auto-generated from users
+- delegate_task workers STILL don't persist files — 4th or 5th time this session. ALWAYS implement directly.
+- The `User` struct in system.rs needed `PartialEq` derive for comparison in rebuild.rs
+- The build module generates configuration.nix with current system values interpolated
+- 198 host unit tests + 110 VM functional tests + 161 nix checks — all pass
+- Cross-compiled binary: 4.0MB (+100KB for rebuild module)
