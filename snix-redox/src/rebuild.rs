@@ -286,6 +286,11 @@ pub fn show_config(config_path: Option<&str>) -> Result<(), Box<dyn std::error::
 ///
 /// Uses snix-eval to evaluate `builtins.toJSON (import <path>)`, then
 /// parses the JSON output.
+/// Public accessor for bridge module to evaluate configuration files.
+pub fn evaluate_config_pub(path: &str) -> Result<RebuildConfig, Box<dyn std::error::Error>> {
+    evaluate_config(path)
+}
+
 fn evaluate_config(path: &str) -> Result<RebuildConfig, Box<dyn std::error::Error>> {
     // If the file is already JSON, parse directly (useful for testing)
     if path.ends_with(".json") {

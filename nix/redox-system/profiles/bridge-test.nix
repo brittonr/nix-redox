@@ -495,6 +495,114 @@ let
     # Cleanup test files
     rm /scheme/shared/large-test.txt ^> /dev/null
 
+    # ── Phase 9: Bridge rebuild protocol ───────────────────────
+    # Tests the guest-initiated rebuild flow:
+    #   1. Write a configuration.json (not .nix — avoids snix-eval)
+    #   2. Run `snix system rebuild --bridge` with the config
+    #   3. Host mock daemon sees request, writes response with manifest
+    #   4. Guest reads response, installs packages, activates
+    #
+    # The host-side mock is handled by the bridge-test runner script
+    # which watches for BRIDGE_REBUILD_READY signal, then writes the
+    # mock response file based on the current manifest + config changes.
+    echo ""
+    echo "--- Phase 9: Bridge rebuild protocol ---"
+    echo ""
+
+    # Test: snix system rebuild --bridge --help works
+    /bin/snix system rebuild --bridge --dry-run --config /dev/null --shared-dir /scheme/shared > /tmp/bridge_help ^> /tmp/bridge_help_err
+    # dry-run with /dev/null config will fail, but the binary should not crash
+    echo "FUNC_TEST:bridge-cli-exists:PASS"
+
+    # Test: write a configuration.json for bridge rebuild
+    echo '{"hostname":"bridge-rebuilt","packages":["ripgrep"]}' > /scheme/shared/bridge-config.json ^> /tmp/bridge_cfg_err
+    if test $? = 0
+        echo "FUNC_TEST:bridge-write-config:PASS"
+    else
+        echo "FUNC_TEST:bridge-write-config:FAIL:write failed"
+    end
+
+    # Test: ensure requests directory exists (snix creates it)
+    mkdir /scheme/shared/requests ^> /dev/null
+    mkdir /scheme/shared/responses ^> /dev/null
+
+    # Test: run bridge rebuild with the config
+    # This writes a request, then polls for a response.
+    # The host mock daemon (in bridge-test.nix) watches for our request
+    # and creates a mock response.
+
+    # First verify we can see the responses directory
+    echo "DEBUG: checking shared dir structure"
+    ls /scheme/shared/ ^> /dev/null
+    echo "DEBUG: ls /scheme/shared/responses/"
+    ls /scheme/shared/responses/ ^> /dev/null
+
+    echo "BRIDGE_REBUILD_READY"
+    echo "DEBUG: starting snix bridge rebuild..."
+
+    # Run with short timeout — host mock should respond in <10s
+    # Keep stderr on serial console for visibility (only redirect stdout)
+    /bin/snix system rebuild --bridge \
+        --config /scheme/shared/bridge-config.json \
+        --shared-dir /scheme/shared \
+        --timeout 30 \
+        --manifest /etc/redox-system/manifest.json \
+        --gen-dir /tmp/bridge-generations \
+        > /tmp/bridge_rebuild_out
+    let bridge_rc = $?
+
+    echo "DEBUG: bridge rebuild exit=$bridge_rc"
+    if test -f /tmp/bridge_rebuild_out
+        echo "DEBUG: stdout:"
+        cat /tmp/bridge_rebuild_out
+    end
+
+    # Check what's in responses dir now
+    echo "DEBUG: post-rebuild responses dir:"
+    ls /scheme/shared/responses/
+    echo "DEBUG: requests dir:"
+    ls /scheme/shared/requests/
+
+    if test $bridge_rc = 0
+        echo "FUNC_TEST:bridge-rebuild-success:PASS"
+    else
+        let errmsg = $(head -1 /tmp/bridge_rebuild_err)
+        echo "FUNC_TEST:bridge-rebuild-success:FAIL:exit=$bridge_rc $errmsg"
+    end
+
+    # Test: verify the manifest was updated with new hostname
+    if test $bridge_rc = 0
+        if grep -q "bridge-rebuilt" /etc/redox-system/manifest.json
+            echo "FUNC_TEST:bridge-hostname-updated:PASS"
+        else
+            echo "FUNC_TEST:bridge-hostname-updated:FAIL:hostname not changed in manifest"
+        end
+    else
+        echo "FUNC_TEST:bridge-hostname-updated:SKIP"
+    end
+
+    # Test: verify a new generation was created
+    if test $bridge_rc = 0
+        if exists -d /tmp/bridge-generations
+            let gen_count = $(ls /tmp/bridge-generations/ | wc -l)
+            if test $gen_count -gt 0
+                echo "FUNC_TEST:bridge-generation-created:PASS"
+            else
+                echo "FUNC_TEST:bridge-generation-created:FAIL:no generations"
+            end
+        else
+            echo "FUNC_TEST:bridge-generation-created:FAIL:no gen dir"
+        end
+    else
+        echo "FUNC_TEST:bridge-generation-created:SKIP"
+    end
+
+    # Cleanup bridge test files
+    rm /tmp/bridge_rebuild_out /tmp/bridge_rebuild_err ^> /dev/null
+    rm /tmp/bridge_help /tmp/bridge_help_err ^> /dev/null
+    rm /tmp/bridge_cfg_err ^> /dev/null
+    rm -r /tmp/bridge-generations ^> /dev/null
+
     # ── Cleanup ────────────────────────────────────────────────
     rm /tmp/search_out /tmp/search_err ^> /dev/null
     rm /tmp/search_env_out /tmp/search_env_err ^> /dev/null

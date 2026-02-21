@@ -9,6 +9,7 @@
 //!   /nix/var/snix/gcroots/   — GC root symlinks
 
 mod activate;
+mod bridge;
 mod cache;
 mod channel;
 mod eval;
@@ -353,6 +354,18 @@ enum SystemCommand {
         /// Path to binary cache package index
         #[arg(long)]
         cache_index: Option<String>,
+
+        /// Rebuild via bridge: send config to host, host builds, guest activates
+        #[arg(long)]
+        bridge: bool,
+
+        /// Shared directory for bridge communication (default: /scheme/shared)
+        #[arg(long)]
+        shared_dir: Option<String>,
+
+        /// Timeout in seconds for bridge build (default: 300)
+        #[arg(long)]
+        timeout: Option<u64>,
     },
 
     /// Show parsed configuration.nix without applying
@@ -509,9 +522,21 @@ fn main() {
                 manifest,
                 gen_dir,
                 cache_index,
+                bridge,
+                shared_dir,
+                timeout,
             } => {
                 if init {
                     rebuild::init_config(config.as_deref())
+                } else if bridge {
+                    bridge::rebuild_via_bridge(
+                        config.as_deref(),
+                        dry_run,
+                        shared_dir.as_deref(),
+                        timeout,
+                        manifest.as_deref(),
+                        gen_dir.as_deref(),
+                    )
                 } else {
                     rebuild::rebuild(
                         config.as_deref(),
