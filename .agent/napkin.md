@@ -295,3 +295,27 @@
 - `rootTree-boot-vs-profile-separation` is the CRITICAL test — catches classification bugs
 - `rootTree-profile-symlinks-to-store` verifies symlinks actually point to valid store paths
 - `rootTree-path-precedence` verifies /nix/system/profile/bin comes before /bin in PATH
+
+### GC roots + generation integration (Feb 20 2026)
+- `update_system_gc_roots()` called from both `switch()` and `rollback()`
+- Creates `system-{name}` GC roots for each package with non-empty store_path
+- Old `system-*` roots cleared first (atomic swap of the protection set)
+- Errors are warnings via `if let Err(e)` — switch/rollback never fails due to GC root issues
+- Unit tests verify switch/rollback succeed even when /nix/var/snix/gcroots/ doesn't exist
+- VM test `gen-gc-safe` verifies system-* roots exist after switch
+- VM test `gen-gc-dry-run` verifies `snix store gc --dry-run` doesn't crash
+
+### Channel system design (Feb 20 2026)
+- Channels stored at `/nix/var/snix/channels/{name}/` with `url`, `manifest.json`, `last-fetched`
+- `snix channel update` fetches manifest.json from URL via ureq (already a dependency)
+- `snix system switch --channel stable` resolves to channel's cached manifest path
+- `channel::get_manifest_path()` returns PathBuf for the cached manifest
+- `system::current_timestamp_pub()` is the public accessor (private `current_timestamp()` stays private)
+- main.rs Switch command now takes `path: Option<String>` + `channel: Option<String>`
+- Type annotation `Result<String, Box<dyn std::error::Error>>` needed for the match arm (inference fails)
+
+### Profile subcommand expansion (Feb 20 2026)
+- `snix profile install/remove/show` now wired through ProfileCommand enum
+- These delegate to existing `install::install()`, `install::remove()`, `install::show()`
+- Top-level `snix install/remove/show` still works too (backward compat)
+- ProfileCommand::Install/Remove/Show mirror the top-level commands exactly
