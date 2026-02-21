@@ -180,6 +180,13 @@ adios:
             device = "0x1042";
           }
         ];
+        virtio-fsd = [
+          {
+            name = "VirtIO FS Modern";
+            vendor = "0x1AF4";
+            device = "0x105A";
+          }
+        ];
         e1000d = [
           {
             name = "Intel E1000";

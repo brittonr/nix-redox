@@ -386,3 +386,22 @@
 - The build module generates configuration.nix with current system values interpolated
 - 198 host unit tests + 110 VM functional tests + 161 nix checks — all pass
 - Cross-compiled binary: 4.0MB (+100KB for rebuild module)
+
+### virtio-fsd driver for Redox (Feb 20 2026)
+- virtio-fs = FUSE protocol over virtqueues (virtio device type 26, PCI ID 0x1AF4:0x105A)
+- Cloud Hypervisor `--fs tag=shared,socket=/tmp/virtiofsd.sock` presents device to guest
+- Host side: virtiofsd (Rust, available in nixpkgs) serves a directory via FUSE protocol
+- Driver structure mirrors virtio-blkd: PCI probe via virtio-core → virtqueues → scheme
+- Differences from virtio-blkd:
+  - TWO queues: hiprio (queue 0, for FORGET) + request (queue 1, for everything else)
+  - Messages are FUSE structs (FuseInHeader + args → FuseOutHeader + response), not block I/O
+  - Config space: 36-byte UTF-8 tag + u32 num_request_queues (not capacity/block_size)
+  - Exposes SchemeSync (filesystem API), not DiskScheme (block device API)
+- Minimal FUSE ops for read-only: INIT, LOOKUP, GETATTR, OPEN, READ, READDIR, RELEASE, OPENDIR, RELEASEDIR, STATFS
+- Memory: `shared=on` required in Cloud Hypervisor `--memory` for virtio-fs DAX
+- virtiofsd flags: `--sandbox=none` (no seccomp in non-Linux guest), `--cache=auto`
+- PCI registry entry added to build module; StorageDriver enum extended; cloud-hypervisor profile includes it
+- Runner: `run-redox-cloud-hypervisor-shared` starts virtiofsd + VM with `--fs`
+- Source: nix/pkgs/system/virtio-fsd/ (1384 lines across 5 files)
+- Injected into base workspace via patchPhase (copies source, adds to Cargo.toml members)
+- This is the CHANNEL for the build bridge: host writes to shared dir, guest reads via /scheme/shared/

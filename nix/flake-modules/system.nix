@@ -215,6 +215,9 @@
           run-redox-cloud = cloudRunners.headless;
           run-redox-cloud-net = cloudRunners.withNetwork;
 
+          # Shared filesystem (virtio-fs)
+          run-redox-shared = defaultRunners.withSharedFs;
+
           # Graphical profile
           run-redox-graphical-desktop = graphicalQemuRunners.graphical;
           run-redox-graphical-headless = graphicalCHRunners.headless;
@@ -242,6 +245,7 @@
           runCloudHypervisor = defaultRunners.headless;
           runCloudHypervisorNet = cloudRunners.withNetwork;
           runCloudHypervisorDev = defaultRunners.withDev;
+          runCloudHypervisorShared = defaultRunners.withSharedFs;
           setupCloudHypervisorNetwork = defaultRunners.setupNetwork;
 
           # VM control utilities (from default profile CH runners)

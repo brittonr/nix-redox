@@ -51,9 +51,12 @@ let
   virtioCorePatch = ../patches/virtio-core-repost-buffer.py;
   virtioNetIrqPatch = ../patches/virtio-netd-irq-wakeup.py;
 
+  # virtio-fsd driver source (injected into base workspace)
+  virtioFsdSrc = ./virtio-fsd;
+
   # Prepare source with patched dependencies
   patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "base-src-patched-v10"; # v10: Fix ihdad CORB/RIRB timeout
+    name = "base-src-patched-v11"; # v11: Add virtio-fsd driver
     src = base-src;
 
     nativeBuildInputs = [ pkgs.gnupatch ];
@@ -65,260 +68,296 @@ let
     ];
 
     patchPhase = ''
-            runHook prePatch
+                  runHook prePatch
 
-            # Replace git dependencies with path dependencies in Cargo.toml
-            # The [patch.crates-io] section needs to point to local paths
-            substituteInPlace Cargo.toml \
-              --replace-quiet 'libc = { git = "https://gitlab.redox-os.org/redox-os/liblibc.git", branch = "redox-0.2" }' \
-                             'libc = { path = "${liblibc-src}" }' \
-              --replace-quiet 'orbclient = { git = "https://gitlab.redox-os.org/redox-os/orbclient.git", version = "0.3.44" }' \
-                             'orbclient = { path = "${orbclient-src}" }' \
-              --replace-quiet 'rustix = { git = "https://github.com/jackpot51/rustix.git", branch = "redox-ioctl" }' \
-                             'rustix = { path = "${rustix-redox-src}" }' \
-              --replace-quiet 'drm = { git = "https://github.com/Smithay/drm-rs.git" }' \
-                             'drm = { path = "${drm-rs-src}" }' \
-              --replace-quiet 'drm-sys = { git = "https://github.com/Smithay/drm-rs.git" }' \
-                             'drm-sys = { path = "${drm-rs-src}/drm-ffi/drm-sys" }'
+                  # Replace git dependencies with path dependencies in Cargo.toml
+                  # The [patch.crates-io] section needs to point to local paths
+                  substituteInPlace Cargo.toml \
+                    --replace-quiet 'libc = { git = "https://gitlab.redox-os.org/redox-os/liblibc.git", branch = "redox-0.2" }' \
+                                   'libc = { path = "${liblibc-src}" }' \
+                    --replace-quiet 'orbclient = { git = "https://gitlab.redox-os.org/redox-os/orbclient.git", version = "0.3.44" }' \
+                                   'orbclient = { path = "${orbclient-src}" }' \
+                    --replace-quiet 'rustix = { git = "https://github.com/jackpot51/rustix.git", branch = "redox-ioctl" }' \
+                                   'rustix = { path = "${rustix-redox-src}" }' \
+                    --replace-quiet 'drm = { git = "https://github.com/Smithay/drm-rs.git" }' \
+                                   'drm = { path = "${drm-rs-src}" }' \
+                    --replace-quiet 'drm-sys = { git = "https://github.com/Smithay/drm-rs.git" }' \
+                                   'drm-sys = { path = "${drm-rs-src}/drm-ffi/drm-sys" }'
 
-            # Replace redox-log git dependency with local path
-            substituteInPlace Cargo.toml \
-              --replace-quiet 'redox-log = { git = "https://gitlab.redox-os.org/redox-os/redox-log.git" }' \
-                             'redox-log = { path = "${redox-log-src}" }'
+                  # Replace redox-log git dependency with local path
+                  substituteInPlace Cargo.toml \
+                    --replace-quiet 'redox-log = { git = "https://gitlab.redox-os.org/redox-os/redox-log.git" }' \
+                                   'redox-log = { path = "${redox-log-src}" }'
 
-            # Add patch for redox-rt from relibc (used by individual crates)
-            # Append to the [patch.crates-io] section
-            echo "" >> Cargo.toml
-            echo '# Added by Nix build' >> Cargo.toml
-            echo 'redox-rt = { path = "${relibc-src}/redox-rt" }' >> Cargo.toml
+                  # Add patch for redox-rt from relibc (used by individual crates)
+                  # Append to the [patch.crates-io] section
+                  echo "" >> Cargo.toml
+                  echo '# Added by Nix build' >> Cargo.toml
+                  echo 'redox-rt = { path = "${relibc-src}/redox-rt" }' >> Cargo.toml
 
-            # Patch all git dependencies across ALL Cargo.toml files in the workspace
-            find . -name Cargo.toml -exec sed -i \
-              -e 's|redox-rt = { git = "https://gitlab.redox-os.org/redox-os/relibc.git"[^}]*}|redox-rt = { path = "${relibc-src}/redox-rt", default-features = false }|g' \
-              -e 's|redox-log = { git = "https://gitlab.redox-os.org/redox-os/redox-log.git"[^}]*}|redox-log = { path = "${redox-log-src}" }|g' \
-              -e 's|fdt = { git = "https://github.com/repnop/fdt.git"[^}]*}|fdt = { path = "${fdt-src}" }|g' \
-              {} +
+                  # Patch all git dependencies across ALL Cargo.toml files in the workspace
+                  find . -name Cargo.toml -exec sed -i \
+                    -e 's|redox-rt = { git = "https://gitlab.redox-os.org/redox-os/relibc.git"[^}]*}|redox-rt = { path = "${relibc-src}/redox-rt", default-features = false }|g' \
+                    -e 's|redox-log = { git = "https://gitlab.redox-os.org/redox-os/redox-log.git"[^}]*}|redox-log = { path = "${redox-log-src}" }|g' \
+                    -e 's|fdt = { git = "https://github.com/repnop/fdt.git"[^}]*}|fdt = { path = "${fdt-src}" }|g' \
+                    {} +
 
-            # Apply GraphicScreen page-aligned allocation patch
-            # This fixes the "Invalid argument" error when Orbital tries to mmap the display
-            # The kernel requires page-aligned addresses from scheme mmap_prep responses
-            # We use manual over-allocation with alignment instead of mmap for simplicity
-            if [ -f drivers/graphics/vesad/src/scheme.rs ]; then
-              echo "Applying GraphicScreen page-aligned allocation patch..."
-              SCHEME_FILE="drivers/graphics/vesad/src/scheme.rs"
+                  # Apply GraphicScreen page-aligned allocation patch
+                  # This fixes the "Invalid argument" error when Orbital tries to mmap the display
+                  # The kernel requires page-aligned addresses from scheme mmap_prep responses
+                  # We use manual over-allocation with alignment instead of mmap for simplicity
+                  if [ -f drivers/graphics/vesad/src/scheme.rs ]; then
+                    echo "Applying GraphicScreen page-aligned allocation patch..."
+                    SCHEME_FILE="drivers/graphics/vesad/src/scheme.rs"
 
-              # Use Python for all the replacements
-              ${pkgs.python3}/bin/python3 - "$SCHEME_FILE" << 'EOF'
-      import sys
-      import re
+                    # Use Python for all the replacements
+                    ${pkgs.python3}/bin/python3 - "$SCHEME_FILE" << 'EOF'
+            import sys
+            import re
 
-      file_path = sys.argv[1]
-      with open(file_path, 'r') as f:
-          content = f.read()
+            file_path = sys.argv[1]
+            with open(file_path, 'r') as f:
+                content = f.read()
 
-      # Replace ptr import to remove NonNull
-      content = content.replace('use std::ptr::{self, NonNull};', 'use std::ptr;')
+            # Replace ptr import to remove NonNull
+            content = content.replace('use std::ptr::{self, NonNull};', 'use std::ptr;')
 
-      # Replace GraphicScreen struct - need to handle the new fields
-      old_struct = """pub struct GraphicScreen {
-          width: usize,
-          height: usize,
-          ptr: NonNull<[u32]>,
-      }"""
+            # Replace GraphicScreen struct - need to handle the new fields
+            old_struct = """pub struct GraphicScreen {
+                width: usize,
+                height: usize,
+                ptr: NonNull<[u32]>,
+            }"""
 
-      # Store both the aligned pointer and the original allocation pointer for proper deallocation
-      new_struct = """pub struct GraphicScreen {
-          width: usize,
-          height: usize,
-          // Aligned pointer to framebuffer data (page-aligned for kernel mmap)
-          ptr: *mut u32,
-          // Original allocation pointer (for deallocation)
-          alloc_ptr: *mut u8,
-          // Number of pixels
-          len: usize,
-          // Layout for deallocation
-          alloc_layout: Layout,
-      }"""
+            # Store both the aligned pointer and the original allocation pointer for proper deallocation
+            new_struct = """pub struct GraphicScreen {
+                width: usize,
+                height: usize,
+                // Aligned pointer to framebuffer data (page-aligned for kernel mmap)
+                ptr: *mut u32,
+                // Original allocation pointer (for deallocation)
+                alloc_ptr: *mut u8,
+                // Number of pixels
+                len: usize,
+                // Layout for deallocation
+                alloc_layout: Layout,
+            }"""
 
-      if old_struct in content:
-          content = content.replace(old_struct, new_struct)
-          print("Replaced GraphicScreen struct")
-      else:
-          print("WARNING: Could not find GraphicScreen struct")
+            if old_struct in content:
+                content = content.replace(old_struct, new_struct)
+                print("Replaced GraphicScreen struct")
+            else:
+                print("WARNING: Could not find GraphicScreen struct")
 
-      # Replace impl GraphicScreen block with new() that does manual alignment
-      old_impl = """impl GraphicScreen {
-          fn new(width: usize, height: usize) -> GraphicScreen {
-              let len = width * height;
-              let layout = Self::layout(len);
-              let ptr = unsafe { alloc::alloc_zeroed(layout) };
-              let ptr = ptr::slice_from_raw_parts_mut(ptr.cast(), len);
-              let ptr = NonNull::new(ptr).unwrap_or_else(|| alloc::handle_alloc_error(layout));
+            # Replace impl GraphicScreen block with new() that does manual alignment
+            old_impl = """impl GraphicScreen {
+                fn new(width: usize, height: usize) -> GraphicScreen {
+                    let len = width * height;
+                    let layout = Self::layout(len);
+                    let ptr = unsafe { alloc::alloc_zeroed(layout) };
+                    let ptr = ptr::slice_from_raw_parts_mut(ptr.cast(), len);
+                    let ptr = NonNull::new(ptr).unwrap_or_else(|| alloc::handle_alloc_error(layout));
 
-              GraphicScreen { width, height, ptr }
-          }
+                    GraphicScreen { width, height, ptr }
+                }
 
-          #[inline]
-          fn layout(len: usize) -> Layout {
-              // optimizes to an integer mul
-              Layout::array::<u32>(len)
-                  .unwrap()
-                  .align_to(PAGE_SIZE)
-                  .unwrap()
-          }
-      }"""
+                #[inline]
+                fn layout(len: usize) -> Layout {
+                    // optimizes to an integer mul
+                    Layout::array::<u32>(len)
+                        .unwrap()
+                        .align_to(PAGE_SIZE)
+                        .unwrap()
+                }
+            }"""
 
-      # New implementation uses over-allocation to guarantee page alignment
-      new_impl = """impl GraphicScreen {
-          fn new(width: usize, height: usize) -> GraphicScreen {
-              let len = width * height;
-              let byte_size = len * std::mem::size_of::<u32>();
+            # New implementation uses over-allocation to guarantee page alignment
+            new_impl = """impl GraphicScreen {
+                fn new(width: usize, height: usize) -> GraphicScreen {
+                    let len = width * height;
+                    let byte_size = len * std::mem::size_of::<u32>();
 
-              // Over-allocate by PAGE_SIZE to guarantee we can find a page-aligned address
-              // within the allocation. This is necessary because the kernel fmap validation
-              // requires page-aligned base addresses.
-              let alloc_size = byte_size + PAGE_SIZE;
-              let alloc_layout = Layout::from_size_align(alloc_size, std::mem::align_of::<u32>())
-                  .expect("Failed to create layout");
+                    // Over-allocate by PAGE_SIZE to guarantee we can find a page-aligned address
+                    // within the allocation. This is necessary because the kernel fmap validation
+                    // requires page-aligned base addresses.
+                    let alloc_size = byte_size + PAGE_SIZE;
+                    let alloc_layout = Layout::from_size_align(alloc_size, std::mem::align_of::<u32>())
+                        .expect("Failed to create layout");
 
-              let alloc_ptr = unsafe { alloc::alloc_zeroed(alloc_layout) };
-              if alloc_ptr.is_null() {
-                  alloc::handle_alloc_error(alloc_layout);
-              }
+                    let alloc_ptr = unsafe { alloc::alloc_zeroed(alloc_layout) };
+                    if alloc_ptr.is_null() {
+                        alloc::handle_alloc_error(alloc_layout);
+                    }
 
-              // Align the pointer up to the next page boundary
-              let alloc_addr = alloc_ptr as usize;
-              let aligned_addr = (alloc_addr + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
-              let ptr = aligned_addr as *mut u32;
+                    // Align the pointer up to the next page boundary
+                    let alloc_addr = alloc_ptr as usize;
+                    let aligned_addr = (alloc_addr + PAGE_SIZE - 1) & !(PAGE_SIZE - 1);
+                    let ptr = aligned_addr as *mut u32;
 
-              eprintln!(
-                  "GraphicScreen: alloc_addr={:#x}, aligned_addr={:#x}, page_aligned={}",
-                  alloc_addr, aligned_addr, aligned_addr % PAGE_SIZE == 0
-              );
+                    eprintln!(
+                        "GraphicScreen: alloc_addr={:#x}, aligned_addr={:#x}, page_aligned={}",
+                        alloc_addr, aligned_addr, aligned_addr % PAGE_SIZE == 0
+                    );
 
-              GraphicScreen { width, height, ptr, alloc_ptr, len, alloc_layout }
-          }
-      }"""
+                    GraphicScreen { width, height, ptr, alloc_ptr, len, alloc_layout }
+                }
+            }"""
 
-      if old_impl in content:
-          content = content.replace(old_impl, new_impl)
-          print("Replaced impl GraphicScreen block")
-      else:
-          print("WARNING: Could not find impl GraphicScreen block")
+            if old_impl in content:
+                content = content.replace(old_impl, new_impl)
+                print("Replaced impl GraphicScreen block")
+            else:
+                print("WARNING: Could not find impl GraphicScreen block")
 
-      # Replace Drop impl
-      old_drop = """impl Drop for GraphicScreen {
-          fn drop(&mut self) {
-              let layout = Self::layout(self.ptr.len());
-              unsafe { alloc::dealloc(self.ptr.as_ptr().cast(), layout) };
-          }
-      }"""
+            # Replace Drop impl
+            old_drop = """impl Drop for GraphicScreen {
+                fn drop(&mut self) {
+                    let layout = Self::layout(self.ptr.len());
+                    unsafe { alloc::dealloc(self.ptr.as_ptr().cast(), layout) };
+                }
+            }"""
 
-      new_drop = """impl Drop for GraphicScreen {
-          fn drop(&mut self) {
-              // Deallocate using the original allocation pointer, not the aligned one
-              unsafe { alloc::dealloc(self.alloc_ptr, self.alloc_layout) };
-          }
-      }"""
+            new_drop = """impl Drop for GraphicScreen {
+                fn drop(&mut self) {
+                    // Deallocate using the original allocation pointer, not the aligned one
+                    unsafe { alloc::dealloc(self.alloc_ptr, self.alloc_layout) };
+                }
+            }"""
 
-      if old_drop in content:
-          content = content.replace(old_drop, new_drop)
-          print("Replaced Drop impl")
-      else:
-          print("WARNING: Could not find Drop impl")
+            if old_drop in content:
+                content = content.replace(old_drop, new_drop)
+                print("Replaced Drop impl")
+            else:
+                print("WARNING: Could not find Drop impl")
 
-      # Replace all remaining .as_ptr() usages on ptr fields (may appear in different contexts)
-      # The .as_ptr() method doesn't exist on raw pointers
-      # Use regex to handle potential whitespace variations
+            # Replace all remaining .as_ptr() usages on ptr fields (may appear in different contexts)
+            # The .as_ptr() method doesn't exist on raw pointers
+            # Use regex to handle potential whitespace variations
 
-      # self.ptr.as_ptr() as *mut u32 -> self.ptr
-      content = re.sub(r'self\.ptr\.as_ptr\(\)\s*as\s*\*mut\s*u32', 'self.ptr', content)
+            # self.ptr.as_ptr() as *mut u32 -> self.ptr
+            content = re.sub(r'self\.ptr\.as_ptr\(\)\s*as\s*\*mut\s*u32', 'self.ptr', content)
 
-      # framebuffer.ptr.as_ptr().cast::<u8>() -> framebuffer.ptr as *mut u8
-      # This is in map_dumb_framebuffer where 'framebuffer' is actually a GraphicScreen
-      content = re.sub(r'framebuffer\.ptr\.as_ptr\(\)\.cast::<u8>\(\)', 'framebuffer.ptr as *mut u8', content)
+            # framebuffer.ptr.as_ptr().cast::<u8>() -> framebuffer.ptr as *mut u8
+            # This is in map_dumb_framebuffer where 'framebuffer' is actually a GraphicScreen
+            content = re.sub(r'framebuffer\.ptr\.as_ptr\(\)\.cast::<u8>\(\)', 'framebuffer.ptr as *mut u8', content)
 
-      # Any other .ptr.as_ptr() patterns
-      content = re.sub(r'\.ptr\.as_ptr\(\)', '.ptr', content)
+            # Any other .ptr.as_ptr() patterns
+            content = re.sub(r'\.ptr\.as_ptr\(\)', '.ptr', content)
 
-      # Also replace any self.ptr.len() calls since ptr is now raw
-      content = re.sub(r'self\.ptr\.len\(\)', 'self.len', content)
+            # Also replace any self.ptr.len() calls since ptr is now raw
+            content = re.sub(r'self\.ptr\.len\(\)', 'self.len', content)
 
-      print("Replaced .as_ptr() and .len() usages on ptr fields")
+            print("Replaced .as_ptr() and .len() usages on ptr fields")
 
-      with open(file_path, 'w') as f:
-          f.write(content)
+            with open(file_path, 'w') as f:
+                f.write(content)
 
-      print("Python patching complete")
-      EOF
-              echo "GraphicScreen page-aligned allocation patch applied"
-            fi
+            print("Python patching complete")
+            EOF
+                    echo "GraphicScreen page-aligned allocation patch applied"
+                  fi
 
-            # Fix xhcid sub-driver spawning during initfs boot
-            # Problem: .stdin(Stdio::null()) tries to open /dev/null which goes through
-            # the file: scheme. During initfs boot, file: scheme doesn't exist yet,
-            # causing ENODEV errors when spawning usbhubd/usbhidd.
-            # Fix: Use Stdio::inherit() instead so stdin is inherited from parent.
-            if [ -f drivers/usb/xhcid/src/xhci/mod.rs ]; then
-              echo "Patching xhcid Stdio::null() -> Stdio::inherit() for initfs boot..."
-              sed -i 's/\.stdin(process::Stdio::null())/.stdin(process::Stdio::inherit())/' \
-                drivers/usb/xhcid/src/xhci/mod.rs
-              echo "Done patching xhcid"
-            fi
+                  # Fix xhcid sub-driver spawning during initfs boot
+                  # Problem: .stdin(Stdio::null()) tries to open /dev/null which goes through
+                  # the file: scheme. During initfs boot, file: scheme doesn't exist yet,
+                  # causing ENODEV errors when spawning usbhubd/usbhidd.
+                  # Fix: Use Stdio::inherit() instead so stdin is inherited from parent.
+                  if [ -f drivers/usb/xhcid/src/xhci/mod.rs ]; then
+                    echo "Patching xhcid Stdio::null() -> Stdio::inherit() for initfs boot..."
+                    sed -i 's/\.stdin(process::Stdio::null())/.stdin(process::Stdio::inherit())/' \
+                      drivers/usb/xhcid/src/xhci/mod.rs
+                    echo "Done patching xhcid"
+                  fi
 
-            # Add Queue::repost_buffer() to virtio-core for RX buffer recycling
-            if [ -f drivers/virtio-core/src/transport.rs ]; then
-              echo "Patching virtio-core: adding Queue::repost_buffer()..."
-              ${pkgs.python3}/bin/python3 ${virtioCorePatch} drivers/virtio-core/src/transport.rs
-              echo "Done patching virtio-core"
-            fi
+                  # Add Queue::repost_buffer() to virtio-core for RX buffer recycling
+                  if [ -f drivers/virtio-core/src/transport.rs ]; then
+                    echo "Patching virtio-core: adding Queue::repost_buffer()..."
+                    ${pkgs.python3}/bin/python3 ${virtioCorePatch} drivers/virtio-core/src/transport.rs
+                    echo "Done patching virtio-core"
+                  fi
 
-            # Fix virtio-netd RX buffer recycling and used ring tracking
-            # Bug 1: try_recv() never re-posts consumed buffers to the available ring.
-            #   After ~256 packets, all RX buffers are exhausted and inbound packets are dropped.
-            # Bug 2: try_recv() reads only the last used ring element (idx-1) and jumps recv_head
-            #   to head_index(), skipping any intermediate packets.
-            # Fix: Process one entry at recv_head per call, re-post the buffer after reading.
-            if [ -f drivers/net/virtio-netd/src/scheme.rs ]; then
-              echo "Patching virtio-netd RX buffer recycling..."
-              ${pkgs.python3}/bin/python3 ${virtioNetPatch} drivers/net/virtio-netd/src/scheme.rs
-              echo "Done patching virtio-netd"
-            fi
+                  # Fix virtio-netd RX buffer recycling and used ring tracking
+                  # Bug 1: try_recv() never re-posts consumed buffers to the available ring.
+                  #   After ~256 packets, all RX buffers are exhausted and inbound packets are dropped.
+                  # Bug 2: try_recv() reads only the last used ring element (idx-1) and jumps recv_head
+                  #   to head_index(), skipping any intermediate packets.
+                  # Fix: Process one entry at recv_head per call, re-post the buffer after reading.
+                  if [ -f drivers/net/virtio-netd/src/scheme.rs ]; then
+                    echo "Patching virtio-netd RX buffer recycling..."
+                    ${pkgs.python3}/bin/python3 ${virtioNetPatch} drivers/net/virtio-netd/src/scheme.rs
+                    echo "Done patching virtio-netd"
+                  fi
 
-            # Fix virtio-netd main loop to wake on IRQ events
-            # Without this, the main loop only wakes on scheme requests from smolnetd.
-            # When smolnetd's timer goes idle (no active sockets), nobody reads incoming
-            # packets from the device, causing all inbound traffic to be ignored.
-            if [ -f drivers/net/virtio-netd/src/main.rs ]; then
-              echo "Patching virtio-netd IRQ wakeup..."
-              ${pkgs.python3}/bin/python3 ${virtioNetIrqPatch} drivers/net/virtio-netd/src/main.rs
-              echo "Done patching virtio-netd IRQ wakeup"
-            fi
+                  # Fix virtio-netd main loop to wake on IRQ events
+                  # Without this, the main loop only wakes on scheme requests from smolnetd.
+                  # When smolnetd's timer goes idle (no active sockets), nobody reads incoming
+                  # packets from the device, causing all inbound traffic to be ignored.
+                  if [ -f drivers/net/virtio-netd/src/main.rs ]; then
+                    echo "Patching virtio-netd IRQ wakeup..."
+                    ${pkgs.python3}/bin/python3 ${virtioNetIrqPatch} drivers/net/virtio-netd/src/main.rs
+                    echo "Done patching virtio-netd IRQ wakeup"
+                  fi
 
-            # Fix ihdad: use Immediate Command Interface for all HDA controllers
-            #
-            # The CORB/RIRB (DMA-based) command interface times out on QEMU's ICH6
-            # intel-hda controller (vendor:device 0x8086:0x2668). The DMA ring buffers
-            # are properly allocated but the hardware emulation never writes responses
-            # to the RIRB, causing a 1-second timeout that panics the driver with
-            # "ihdad: failed to allocate device: I/O error".
-            #
-            # The root cause: ihdad forces CORB/RIRB mode only for device 0x2668
-            # (originally a VirtualBox workaround), while all other devices use the
-            # simpler Immediate Command Interface (ICI). QEMU's intel-hda happens to
-            # use the same device ID as VirtualBox, triggering the broken path.
-            #
-            # Fix: Always use ICI. The Immediate Command Interface is simpler (no DMA
-            # ring buffers needed), works on all tested controllers, and is what the
-            # driver already uses for every device except 0x2668.
-            if [ -f drivers/audio/ihdad/src/hda/device.rs ]; then
-              echo "Patching ihdad: always use Immediate Command Interface..."
-              sed -i 's/0x8086_2668 => false/0x8086_2668 => true/' \
-                drivers/audio/ihdad/src/hda/device.rs
-              echo "Done patching ihdad"
-            fi
+                  # Fix ihdad: use Immediate Command Interface for all HDA controllers
+                  #
+                  # The CORB/RIRB (DMA-based) command interface times out on QEMU's ICH6
+                  # intel-hda controller (vendor:device 0x8086:0x2668). The DMA ring buffers
+                  # are properly allocated but the hardware emulation never writes responses
+                  # to the RIRB, causing a 1-second timeout that panics the driver with
+                  # "ihdad: failed to allocate device: I/O error".
+                  #
+                  # The root cause: ihdad forces CORB/RIRB mode only for device 0x2668
+                  # (originally a VirtualBox workaround), while all other devices use the
+                  # simpler Immediate Command Interface (ICI). QEMU's intel-hda happens to
+                  # use the same device ID as VirtualBox, triggering the broken path.
+                  #
+                  # Fix: Always use ICI. The Immediate Command Interface is simpler (no DMA
+                  # ring buffers needed), works on all tested controllers, and is what the
+                  # driver already uses for every device except 0x2668.
+                  if [ -f drivers/audio/ihdad/src/hda/device.rs ]; then
+                    echo "Patching ihdad: always use Immediate Command Interface..."
+                    sed -i 's/0x8086_2668 => false/0x8086_2668 => true/' \
+                      drivers/audio/ihdad/src/hda/device.rs
+                    echo "Done patching ihdad"
+                  fi
 
-            runHook postPatch
+                  # ─── virtio-fsd: inject driver source into workspace ───
+                  echo "Adding virtio-fsd driver to workspace..."
+                  cp -r ${virtioFsdSrc} drivers/storage/virtio-fsd
+                  chmod -R u+w drivers/storage/virtio-fsd
+
+                  # Fix the Cargo.toml paths (they reference ../../common etc. relative
+                  # to drivers/storage/virtio-fsd/, which is the same layout as virtio-blkd)
+                  cat > drivers/storage/virtio-fsd/Cargo.toml << 'VIRTIOFS_TOML'
+      [package]
+      name = "virtio-fsd"
+      version = "0.1.0"
+      edition = "2021"
+      description = "VirtIO filesystem driver for Redox OS (virtio-fs / FUSE over virtqueue)"
+
+      [dependencies]
+      anyhow.workspace = true
+      log.workspace = true
+      thiserror = "1.0.40"
+      static_assertions = "1.1.0"
+      futures = { version = "0.3.28", features = ["executor"] }
+
+      redox_event.workspace = true
+      redox_syscall = { workspace = true, features = ["std"] }
+      redox-scheme.workspace = true
+
+      common = { path = "../../common" }
+      daemon = { path = "../../../daemon" }
+      pcid = { path = "../../pcid" }
+      virtio-core = { path = "../../virtio-core" }
+      libredox.workspace = true
+      VIRTIOFS_TOML
+
+                  # Add to workspace members
+                  sed -i 's|"drivers/storage/virtio-blkd",|"drivers/storage/virtio-blkd",\n    "drivers/storage/virtio-fsd",|' Cargo.toml
+                  echo "Done adding virtio-fsd"
+
+                  runHook postPatch
     '';
 
     installPhase = ''

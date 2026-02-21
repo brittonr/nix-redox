@@ -12,6 +12,7 @@ let
     "nvmed"
     "ided"
     "virtio-blkd"
+    "virtio-fsd"
   ];
   networkDriver = t.enum "NetworkDriver" [
     "e1000d"

@@ -377,6 +377,127 @@ in
       "$@"
   '';
 
+  # Cloud Hypervisor runner with shared filesystem via virtio-fs
+  # Starts virtiofsd to serve a host directory, then boots the VM with --fs
+  # The guest sees the shared directory at /scheme/shared (via virtio-fsd driver)
+  withSharedFs = pkgs.writeShellScriptBin "run-redox-cloud-hypervisor-shared" ''
+    set -e
+
+    # Configuration
+    CH_CPUS="''${CH_CPUS:-${defaultCpus}}"
+    CH_MEMORY="''${CH_MEMORY:-${defaultMemory}}"
+    CH_HUGEPAGES="''${CH_HUGEPAGES:-}"
+    CH_DIRECT_IO="''${CH_DIRECT_IO:-on}"
+    SHARED_DIR="''${REDOX_SHARED_DIR:-/tmp/redox-shared}"
+    VIRTIOFSD_SOCKET="''${VIRTIOFSD_SOCKET:-/tmp/virtiofsd-redox.sock}"
+    FS_TAG="''${FS_TAG:-shared}"
+
+    # Create shared directory
+    mkdir -p "$SHARED_DIR"
+    mkdir -p "$SHARED_DIR"/{requests,responses,cache}
+
+    # Create writable copies
+    WORK_DIR=$(mktemp -d)
+
+    cleanup() {
+      echo "Cleaning up..."
+      # Kill virtiofsd if running
+      if [ -n "$VIRTIOFSD_PID" ]; then
+        kill "$VIRTIOFSD_PID" 2>/dev/null || true
+        wait "$VIRTIOFSD_PID" 2>/dev/null || true
+      fi
+      rm -rf "$WORK_DIR"
+      rm -f "$VIRTIOFSD_SOCKET"
+    }
+    trap cleanup EXIT
+
+    IMAGE="$WORK_DIR/redox.img"
+    FIRMWARE="${cloudhvFirmware}/FV/CLOUDHV.fd"
+
+    echo "Copying disk image to $WORK_DIR..."
+    cp ${diskImage}/redox.img "$IMAGE"
+    chmod +w "$IMAGE"
+
+    # Build disk options
+    DISK_OPTS="path=$IMAGE"
+    if [ "$CH_DIRECT_IO" = "on" ]; then
+      DISK_OPTS="$DISK_OPTS,direct=on"
+    fi
+
+    # Memory must be shared for virtio-fs (DAX requires shared memory)
+    MEMORY_OPTS="size=$CH_MEMORY,shared=on"
+    if [ -n "$CH_HUGEPAGES" ]; then
+      MEMORY_OPTS="$MEMORY_OPTS,hugepages=on"
+    fi
+
+    echo "Starting virtiofsd..."
+    echo "  Socket: $VIRTIOFSD_SOCKET"
+    echo "  Shared directory: $SHARED_DIR"
+    echo "  Tag: $FS_TAG"
+    echo ""
+
+    # Start virtiofsd (serves host directory to guest via FUSE-over-virtio)
+    rm -f "$VIRTIOFSD_SOCKET"
+    ${pkgs.virtiofsd}/bin/virtiofsd \
+      --socket-path="$VIRTIOFSD_SOCKET" \
+      --shared-dir="$SHARED_DIR" \
+      --sandbox=none \
+      --announce-submounts \
+      --cache=auto \
+      --log-level=info &
+    VIRTIOFSD_PID=$!
+
+    # Wait for socket to appear
+    for i in $(seq 1 20); do
+      if [ -S "$VIRTIOFSD_SOCKET" ]; then
+        break
+      fi
+      sleep 0.1
+    done
+
+    if [ ! -S "$VIRTIOFSD_SOCKET" ]; then
+      echo "ERROR: virtiofsd socket did not appear after 2 seconds"
+      exit 1
+    fi
+
+    echo "Starting Redox OS with Cloud Hypervisor (shared filesystem)..."
+    echo ""
+    echo "Firmware: $FIRMWARE"
+    echo "Disk: $IMAGE"
+    echo ""
+    echo "Configuration:"
+    echo "  CPUs: $CH_CPUS (topology: ${cpuTopology})"
+    echo "  Memory: $CH_MEMORY (shared=on for virtio-fs)"
+    echo "  Direct I/O: $CH_DIRECT_IO"
+    echo ""
+    echo "Shared Filesystem:"
+    echo "  Host: $SHARED_DIR"
+    echo "  Guest: /scheme/$FS_TAG"
+    echo "  Socket: $VIRTIOFSD_SOCKET"
+    echo ""
+    echo "The build bridge can read/write $SHARED_DIR on the host."
+    echo "The guest accesses files via /scheme/$FS_TAG/"
+    echo ""
+    echo "Controls:"
+    echo "  Ctrl+C: Quit"
+    echo ""
+
+    # Cloud Hypervisor with virtio-fs:
+    # - --memory shared=on: Required for virtio-fs DAX
+    # - --fs: Connects to virtiofsd socket, uses tag for guest identification
+    ${cloudHypervisor}/bin/cloud-hypervisor \
+      --firmware "$FIRMWARE" \
+      --disk "$DISK_OPTS" \
+      --cpus boot="$CH_CPUS",topology=${cpuTopology} \
+      --memory "$MEMORY_OPTS" \
+      --platform num_pci_segments=1 \
+      --pci-segment pci_segment=0,mmio32_aperture_weight=4 \
+      --fs tag="$FS_TAG",socket="$VIRTIOFSD_SOCKET",num_queues=1,queue_size=512 \
+      --serial tty \
+      --console off \
+      "$@"
+  '';
+
   # Development mode runner with API socket for runtime control
   # Enables pause/resume, snapshot/restore, and runtime monitoring
   withDev = pkgs.writeShellScriptBin "run-redox-cloud-hypervisor-dev" ''

@@ -22,7 +22,10 @@ dev
   };
 
   "/hardware" = (dev."/hardware" or { }) // {
-    storageDrivers = [ "virtio-blkd" ];
+    storageDrivers = [
+      "virtio-blkd"
+      "virtio-fsd"
+    ];
     networkDrivers = [ "virtio-netd" ];
   };
 

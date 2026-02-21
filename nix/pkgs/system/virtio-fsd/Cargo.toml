@@ -1,0 +1,22 @@
+[package]
+name = "virtio-fsd"
+version = "0.1.0"
+edition = "2021"
+description = "VirtIO filesystem driver for Redox OS (virtio-fs / FUSE over virtqueue)"
+
+[dependencies]
+anyhow.workspace = true
+log.workspace = true
+thiserror = "1.0.40"
+static_assertions = "1.1.0"
+futures = { version = "0.3.28", features = ["executor"] }
+
+redox_event.workspace = true
+redox_syscall = { workspace = true, features = ["std"] }
+redox-scheme.workspace = true
+
+common = { path = "../../common" }
+daemon = { path = "../../../daemon" }
+pcid = { path = "../../pcid" }
+virtio-core = { path = "../../virtio-core" }
+libredox.workspace = true
