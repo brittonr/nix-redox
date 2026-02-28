@@ -371,6 +371,7 @@ rec {
 
   netcfg-setup = mkMockPackageWithBins {
     name = "netcfg-setup";
+    pname = "netcfg-setup";
     binaries = [ "netcfg-setup" ];
   };
 
