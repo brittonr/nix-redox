@@ -1,33 +1,76 @@
 //! FUSE session management.
 //!
-//! Manages the FUSE session lifecycle and provides typed operations
-//! over the raw virtqueue transport.
+//! Manages the FUSE session lifecycle, owns pre-allocated DMA buffers, and
+//! provides typed operations over the raw virtqueue transport.
+//!
+//! ## DMA buffer ownership
+//!
+//! Two DMA buffers are allocated once during [`FuseSession::init`] and reused
+//! for every subsequent FUSE operation. They are wrapped in [`ManuallyDrop`]
+//! so the kernel's buggy `deallocate_p2frame` path is never hit — even if the
+//! session is dropped during error handling or shutdown.
+//!
+//! - `req_buf`: holds outgoing request data (header + args + write payload).
+//!   Sized to fit a FUSE_WRITE with `MAX_IO_SIZE` bytes of data.
+//! - `resp_buf`: holds incoming response data (header + read payload).
+//!   Sized to fit a FUSE_READ returning `MAX_IO_SIZE` bytes.
+//!
+//! Per-operation descriptor sizes are controlled via `Buffer::new_sized`,
+//! so virtiofsd sees exactly the right length for each request — no
+//! over-reading on FUSE_READ, no wasted I/O.
 
+use std::mem::ManuallyDrop;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
+use common::dma::Dma;
 use virtio_core::transport::Queue;
 
 use crate::fuse::*;
 use crate::transport::*;
 
 /// A FUSE session over a virtio-fs request queue.
+///
+/// All methods take `&mut self` because they write into the shared DMA
+/// buffers. The session is used single-threaded from the scheme event loop.
 pub struct FuseSession<'a> {
     queue: Arc<Queue<'a>>,
     unique_counter: AtomicU64,
     max_readahead: u32,
     max_write: u32,
+
+    /// Pre-allocated request DMA buffer. Sized for the largest possible
+    /// request (FUSE_WRITE: header + FuseWriteIn + MAX_IO_SIZE).
+    req_buf: ManuallyDrop<Dma<[u8]>>,
+
+    /// Pre-allocated response DMA buffer. Sized for the largest possible
+    /// response (FUSE_READ: header + MAX_IO_SIZE).
+    resp_buf: ManuallyDrop<Dma<[u8]>>,
 }
 
 impl<'a> FuseSession<'a> {
     /// Initialize a FUSE session with the host virtiofsd.
+    ///
+    /// Allocates two DMA buffers that are reused for the lifetime of the
+    /// driver. The FUSE_INIT handshake itself uses these buffers.
     pub fn init(queue: Arc<Queue<'a>>) -> Result<Self, FuseTransportError> {
-        let session = Self {
-            queue,
-            unique_counter: AtomicU64::new(1),
-            max_readahead: 0,
-            max_write: 0,
-        };
+        let unique_counter = AtomicU64::new(1);
+
+        // Pre-allocate DMA buffers at maximum sizes.
+        //
+        // Request: header(40) + largest args (FuseWriteIn=40) + MAX_IO_SIZE
+        // Response: header(16) + MAX_IO_SIZE
+        //
+        // Both are wrapped in ManuallyDrop immediately so that even if
+        // FUSE_INIT fails, the buffers are leaked (not dropped). This avoids
+        // the Redox kernel page frame deallocation bug.
+        let req_buf_size = core::mem::size_of::<FuseInHeader>()
+            + core::mem::size_of::<FuseWriteIn>()
+            + MAX_IO_SIZE;
+        let resp_buf_size = core::mem::size_of::<FuseOutHeader>() + MAX_IO_SIZE;
+
+        let mut req_buf = ManuallyDrop::new(alloc_dma_buffer(req_buf_size)?);
+        let resp_buf = ManuallyDrop::new(alloc_dma_buffer(resp_buf_size)?);
 
         // Send FUSE_INIT
         let init_in = FuseInitIn {
@@ -39,15 +82,18 @@ impl<'a> FuseSession<'a> {
             unused: [0; 11],
         };
 
+        let unique = unique_counter.fetch_add(1, Ordering::Relaxed);
         let req = build_request_with_args(
             FuseOpcode::Init as u32,
             0,
-            session.next_unique(),
+            unique,
             &init_in,
             None,
         );
 
-        let resp = fuse_meta_request(&session.queue, &req)?;
+        req_buf[..req.len()].copy_from_slice(&req);
+        let resp = fuse_exchange(&queue, &*req_buf, req.len(), &*resp_buf, META_RESPONSE)?;
+
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -65,21 +111,87 @@ impl<'a> FuseSession<'a> {
             init_out.max_write
         );
 
-        // Use interior mutability pattern — these are set once during init.
-        // We keep them as regular fields since init returns an owned Self.
-        let mut session = session;
-        session.max_readahead = init_out.max_readahead;
-        session.max_write = init_out.max_write;
+        if init_out.max_write as usize > MAX_IO_SIZE {
+            log::warn!(
+                "virtio-fsd: negotiated max_write ({}) exceeds buffer size ({}), large writes will fail",
+                init_out.max_write,
+                MAX_IO_SIZE
+            );
+        }
 
-        Ok(session)
+        Ok(Self {
+            queue,
+            unique_counter,
+            max_readahead: init_out.max_readahead,
+            max_write: init_out.max_write,
+            req_buf,
+            resp_buf,
+        })
     }
 
     fn next_unique(&self) -> u64 {
         self.unique_counter.fetch_add(1, Ordering::Relaxed)
     }
 
+    /// Copy a serialized request into the request DMA buffer and send it,
+    /// expecting a metadata-sized response (4 KiB descriptor).
+    fn meta_exchange(&mut self, req: &[u8]) -> Result<Vec<u8>, FuseTransportError> {
+        if req.len() > self.req_buf.len() {
+            return Err(FuseTransportError::RequestTooLarge(req.len()));
+        }
+        self.req_buf[..req.len()].copy_from_slice(req);
+        fuse_exchange(
+            &self.queue,
+            &*self.req_buf,
+            req.len(),
+            &*self.resp_buf,
+            META_RESPONSE,
+        )
+    }
+
+    /// Copy a serialized request into the request DMA buffer and send it,
+    /// expecting a data-sized response. The response descriptor is sized to
+    /// exactly `header + data_size` so virtiofsd reads the right amount.
+    fn data_exchange(
+        &mut self,
+        req: &[u8],
+        data_size: usize,
+    ) -> Result<Vec<u8>, FuseTransportError> {
+        if req.len() > self.req_buf.len() {
+            return Err(FuseTransportError::RequestTooLarge(req.len()));
+        }
+        let resp_len = core::mem::size_of::<FuseOutHeader>() + data_size;
+        if resp_len > self.resp_buf.len() {
+            return Err(FuseTransportError::RequestTooLarge(resp_len));
+        }
+        self.req_buf[..req.len()].copy_from_slice(req);
+        fuse_exchange(
+            &self.queue,
+            &*self.req_buf,
+            req.len(),
+            &*self.resp_buf,
+            resp_len,
+        )
+    }
+
+    /// Copy a large request (with write data) into the request DMA buffer
+    /// and send it, expecting a metadata-sized response.
+    fn write_exchange(&mut self, req: &[u8]) -> Result<Vec<u8>, FuseTransportError> {
+        if req.len() > self.req_buf.len() {
+            return Err(FuseTransportError::RequestTooLarge(req.len()));
+        }
+        self.req_buf[..req.len()].copy_from_slice(req);
+        fuse_exchange(
+            &self.queue,
+            &*self.req_buf,
+            req.len(),
+            &*self.resp_buf,
+            META_RESPONSE,
+        )
+    }
+
     /// FUSE_LOOKUP: resolve a name in a directory to a node + attributes.
-    pub fn lookup(&self, parent: u64, name: &str) -> Result<FuseEntryOut, FuseTransportError> {
+    pub fn lookup(&mut self, parent: u64, name: &str) -> Result<FuseEntryOut, FuseTransportError> {
         let req = build_request(
             FuseOpcode::Lookup as u32,
             parent,
@@ -88,7 +200,7 @@ impl<'a> FuseSession<'a> {
             Some(name.as_bytes()),
         );
 
-        let resp = fuse_meta_request(&self.queue, &req)?;
+        let resp = self.meta_exchange(&req)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -100,7 +212,7 @@ impl<'a> FuseSession<'a> {
     }
 
     /// FUSE_GETATTR: get attributes of a node.
-    pub fn getattr(&self, nodeid: u64) -> Result<FuseAttrOut, FuseTransportError> {
+    pub fn getattr(&mut self, nodeid: u64) -> Result<FuseAttrOut, FuseTransportError> {
         let args = FuseGetattrIn {
             getattr_flags: 0,
             dummy: 0,
@@ -115,7 +227,7 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_meta_request(&self.queue, &req)?;
+        let resp = self.meta_exchange(&req)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -127,7 +239,7 @@ impl<'a> FuseSession<'a> {
     }
 
     /// FUSE_OPEN: open a file (returns a file handle).
-    pub fn open(&self, nodeid: u64, flags: u32) -> Result<FuseOpenOut, FuseTransportError> {
+    pub fn open(&mut self, nodeid: u64, flags: u32) -> Result<FuseOpenOut, FuseTransportError> {
         let args = FuseOpenIn {
             flags,
             open_flags: 0,
@@ -141,7 +253,7 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_meta_request(&self.queue, &req)?;
+        let resp = self.meta_exchange(&req)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -153,7 +265,7 @@ impl<'a> FuseSession<'a> {
     }
 
     /// FUSE_OPENDIR: open a directory (returns a file handle).
-    pub fn opendir(&self, nodeid: u64) -> Result<FuseOpenOut, FuseTransportError> {
+    pub fn opendir(&mut self, nodeid: u64) -> Result<FuseOpenOut, FuseTransportError> {
         let args = FuseOpenIn {
             flags: 0,
             open_flags: 0,
@@ -167,7 +279,7 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_meta_request(&self.queue, &req)?;
+        let resp = self.meta_exchange(&req)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -180,11 +292,10 @@ impl<'a> FuseSession<'a> {
 
     /// FUSE_READ: read data from an open file.
     ///
-    /// The response buffer is sized to exactly `header + size` bytes because
-    /// virtiofsd uses the descriptor size to determine how many bytes to read
-    /// from the host file.
+    /// The response descriptor is sized to exactly `header + size` bytes so
+    /// virtiofsd reads exactly the requested amount from the host file.
     pub fn read(
-        &self,
+        &mut self,
         nodeid: u64,
         fh: u64,
         offset: u64,
@@ -208,14 +319,14 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_data_request(&self.queue, &req, size as usize)?;
+        let resp = self.data_exchange(&req, size as usize)?;
         let _hdr = parse_response_header(&resp)?;
         Ok(response_body(&resp).to_vec())
     }
 
     /// FUSE_READDIR: read directory entries.
     pub fn readdir(
-        &self,
+        &mut self,
         nodeid: u64,
         fh: u64,
         offset: u64,
@@ -239,13 +350,13 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_data_request(&self.queue, &req, size as usize)?;
+        let resp = self.data_exchange(&req, size as usize)?;
         let _hdr = parse_response_header(&resp)?;
         parse_dirents(response_body(&resp))
     }
 
     /// FUSE_RELEASE: close an open file handle.
-    pub fn release(&self, nodeid: u64, fh: u64) -> Result<(), FuseTransportError> {
+    pub fn release(&mut self, nodeid: u64, fh: u64) -> Result<(), FuseTransportError> {
         let args = FuseReleaseIn {
             fh,
             flags: 0,
@@ -261,13 +372,13 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_meta_request(&self.queue, &req)?;
+        let resp = self.meta_exchange(&req)?;
         let _hdr = parse_response_header(&resp)?;
         Ok(())
     }
 
     /// FUSE_RELEASEDIR: close an open directory handle.
-    pub fn releasedir(&self, nodeid: u64, fh: u64) -> Result<(), FuseTransportError> {
+    pub fn releasedir(&mut self, nodeid: u64, fh: u64) -> Result<(), FuseTransportError> {
         let args = FuseReleaseIn {
             fh,
             flags: 0,
@@ -283,7 +394,7 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_meta_request(&self.queue, &req)?;
+        let resp = self.meta_exchange(&req)?;
         let _hdr = parse_response_header(&resp)?;
         Ok(())
     }
@@ -293,7 +404,7 @@ impl<'a> FuseSession<'a> {
     /// Data is packed into the request descriptor (header + FuseWriteIn + data).
     /// Returns the number of bytes actually written by the host.
     pub fn write(
-        &self,
+        &mut self,
         nodeid: u64,
         fh: u64,
         offset: u64,
@@ -317,7 +428,7 @@ impl<'a> FuseSession<'a> {
             data,
         );
 
-        let resp = fuse_write_request(&self.queue, &req)?;
+        let resp = self.write_exchange(&req)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -334,7 +445,7 @@ impl<'a> FuseSession<'a> {
     /// Returns (FuseEntryOut, FuseOpenOut) — the new node's attributes and
     /// file handle. On Redox, this is triggered by `openat` with O_CREAT.
     pub fn create(
-        &self,
+        &mut self,
         parent: u64,
         name: &str,
         flags: u32,
@@ -355,7 +466,7 @@ impl<'a> FuseSession<'a> {
             Some(name.as_bytes()),
         );
 
-        let resp = fuse_meta_request(&self.queue, &req)?;
+        let resp = self.meta_exchange(&req)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -374,7 +485,7 @@ impl<'a> FuseSession<'a> {
 
     /// FUSE_MKDIR: create a directory.
     pub fn mkdir(
-        &self,
+        &mut self,
         parent: u64,
         name: &str,
         mode: u32,
@@ -392,7 +503,7 @@ impl<'a> FuseSession<'a> {
             Some(name.as_bytes()),
         );
 
-        let resp = fuse_meta_request(&self.queue, &req)?;
+        let resp = self.meta_exchange(&req)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -404,7 +515,7 @@ impl<'a> FuseSession<'a> {
     }
 
     /// FUSE_UNLINK: remove a file.
-    pub fn unlink(&self, parent: u64, name: &str) -> Result<(), FuseTransportError> {
+    pub fn unlink(&mut self, parent: u64, name: &str) -> Result<(), FuseTransportError> {
         let req = build_request(
             FuseOpcode::Unlink as u32,
             parent,
@@ -413,13 +524,13 @@ impl<'a> FuseSession<'a> {
             Some(name.as_bytes()),
         );
 
-        let resp = fuse_meta_request(&self.queue, &req)?;
+        let resp = self.meta_exchange(&req)?;
         let _hdr = parse_response_header(&resp)?;
         Ok(())
     }
 
     /// FUSE_RMDIR: remove a directory.
-    pub fn rmdir(&self, parent: u64, name: &str) -> Result<(), FuseTransportError> {
+    pub fn rmdir(&mut self, parent: u64, name: &str) -> Result<(), FuseTransportError> {
         let req = build_request(
             FuseOpcode::Rmdir as u32,
             parent,
@@ -428,14 +539,14 @@ impl<'a> FuseSession<'a> {
             Some(name.as_bytes()),
         );
 
-        let resp = fuse_meta_request(&self.queue, &req)?;
+        let resp = self.meta_exchange(&req)?;
         let _hdr = parse_response_header(&resp)?;
         Ok(())
     }
 
     /// FUSE_SETATTR with FATTR_SIZE: truncate a file to a given length.
     pub fn truncate(
-        &self,
+        &mut self,
         nodeid: u64,
         fh: u64,
         size: u64,
@@ -467,7 +578,7 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_meta_request(&self.queue, &req)?;
+        let resp = self.meta_exchange(&req)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 
@@ -479,7 +590,7 @@ impl<'a> FuseSession<'a> {
     }
 
     /// FUSE_STATFS: get filesystem statistics.
-    pub fn statfs(&self) -> Result<FuseStatfsOut, FuseTransportError> {
+    pub fn statfs(&mut self) -> Result<FuseStatfsOut, FuseTransportError> {
         let req = build_request(
             FuseOpcode::Statfs as u32,
             1,
@@ -488,7 +599,7 @@ impl<'a> FuseSession<'a> {
             None,
         );
 
-        let resp = fuse_meta_request(&self.queue, &req)?;
+        let resp = self.meta_exchange(&req)?;
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
 

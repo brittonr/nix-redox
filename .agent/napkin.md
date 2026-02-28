@@ -283,6 +283,23 @@
 - Alternatively set `CARGO_BUILD_TARGET=""` to avoid inheriting the cross-target
 - All #[cfg(test)] modules compile fine for linux — no redox-specific APIs used in tests
 
+### virtio-fsd DMA buffer reuse (Feb 28 2026)
+- `Buffer::new_sized(dma, len)` exists in virtio-core — creates descriptor with custom length
+  backed by a larger DMA buffer. This is the key to exact-size descriptors without per-request alloc.
+- Two DMA buffers allocated once at init, wrapped in ManuallyDrop:
+  - req_buf: header + FuseWriteIn + MAX_IO_SIZE (~1MB) — covers all requests including WRITE
+  - resp_buf: header + MAX_IO_SIZE (~1MB) — covers all responses including READ
+- Per-operation descriptor sizes via Buffer::new_sized:
+  - Meta ops: req=actual_len, resp=4KB
+  - READ/READDIR: req=actual_len, resp=header+data_size (exact, no over-read)
+  - WRITE: req=header+args+data_len, resp=4KB
+- Session methods changed from &self to &mut self (writes into shared DMA buffers)
+- scheme.rs: resolve_path changed from &self to &mut self (calls session methods)
+- FUSE_INIT uses the same pre-allocated buffers (no separate init path needed)
+- ManuallyDrop on the DMA buffers prevents Drop from running → no munmap → no kernel bug
+- Old approach: ~12KB leaked per request (unbounded). New: ~2MB fixed at init (zero growth).
+- FuseTransportError::RequestTooLarge added for buffer overflow protection
+
 ### Pre-commit formatting after flake module migration (Feb 28 2026)
 - After migrating from flake-parts to adios-flake, nixfmt-rfc-style requires reformatting
 - `nix fmt` fixes all formatting; commit the result BEFORE running `nix flake check`

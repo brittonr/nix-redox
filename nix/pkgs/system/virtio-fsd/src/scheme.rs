@@ -114,7 +114,7 @@ impl<'a> VirtioFsScheme<'a> {
     }
 
     /// Resolve a path relative to the FUSE root by walking LOOKUP.
-    fn resolve_path(&self, path: &str) -> Result<(u64, crate::fuse::FuseAttr)> {
+    fn resolve_path(&mut self, path: &str) -> Result<(u64, crate::fuse::FuseAttr)> {
         let path = path.trim_matches('/');
 
         if path.is_empty() {

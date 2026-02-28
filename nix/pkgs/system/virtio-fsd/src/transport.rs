@@ -11,19 +11,21 @@
 //! ## Response buffer sizing
 //!
 //! virtiofsd uses the response descriptor size to decide how many bytes to
-//! `preadv2()` from the host file for FUSE_READ. The response buffer MUST be
-//! sized to `sizeof(FuseOutHeader) + requested_read_size`, not a fixed large
-//! value. For metadata operations, any reasonable size (e.g. 4096) works.
+//! `preadv2()` from the host file for FUSE_READ. We use `Buffer::new_sized`
+//! to set exact descriptor sizes even though the underlying DMA buffer may
+//! be larger. This avoids over-reading while reusing pre-allocated memory.
 //!
-//! ## DMA buffer lifetime
+//! ## DMA buffer strategy
 //!
-//! DMA buffers are intentionally leaked (`core::mem::forget`) after each
-//! request to work around a Redox kernel bug where rapid DMA deallocation
-//! corrupts page frame reference counts (`deallocate_p2frame` panics).
-//! This wastes ~12KB per metadata request and ~8KB per read chunk, but the
-//! total is bounded by the number of FUSE operations during the session.
-
-use std::sync::Arc;
+//! Two DMA buffers are pre-allocated once during FUSE session init and reused
+//! for every request. This avoids a Redox kernel bug where rapid DMA
+//! deallocation corrupts page frame reference counts (`deallocate_p2frame`
+//! panics). The buffers are wrapped in `ManuallyDrop` so they are never
+//! freed, even if the session is dropped.
+//!
+//! Previous approach: allocate per-request, `core::mem::forget` after use.
+//! That leaked ~12KB per FUSE operation (unbounded growth).
+//! New approach: ~2MB allocated once at init, zero growth thereafter.
 
 use common::dma::Dma;
 use virtio_core::spec::{Buffer, ChainBuilder, DescriptorFlags};
@@ -32,86 +34,62 @@ use virtio_core::transport::Queue;
 use crate::fuse::{FuseInHeader, FuseOutHeader};
 
 /// Response buffer size for metadata operations (LOOKUP, GETATTR, OPEN, etc.).
-const META_RESPONSE: usize = 4096;
+pub const META_RESPONSE: usize = 4096;
 
-/// Send a FUSE request and wait for the response synchronously.
+/// Maximum I/O payload for pre-allocated DMA buffers (1 MiB).
 ///
-/// `request` — serialized FUSE request (FuseInHeader + args + optional name).
-/// `max_response` — maximum expected response size (header + body).
-fn fuse_request_inner(
-    queue: &Queue<'_>,
-    request: &[u8],
-    max_response: usize,
-) -> Result<Vec<u8>, FuseTransportError> {
-    let req_dma = {
-        let mut dma = unsafe {
-            Dma::<[u8]>::zeroed_slice(request.len())
-                .map_err(|_| FuseTransportError::DmaAlloc)?
-                .assume_init()
-        };
-        dma.copy_from_slice(request);
-        dma
-    };
+/// Covers the common case where virtiofsd negotiates max_readahead and
+/// max_write ≤ 1 MiB. Operations with payloads exceeding this are rejected.
+pub const MAX_IO_SIZE: usize = 1024 * 1024;
 
-    let resp_dma = unsafe {
-        Dma::<[u8]>::zeroed_slice(max_response)
+/// Allocate a DMA buffer of the given logical size.
+///
+/// The underlying physical allocation is page-aligned (rounded up to
+/// PAGE_SIZE). The caller is responsible for the buffer's lifetime —
+/// wrap in `ManuallyDrop` to prevent the kernel deallocation bug.
+pub fn alloc_dma_buffer(size: usize) -> Result<Dma<[u8]>, FuseTransportError> {
+    let buf = unsafe {
+        Dma::<[u8]>::zeroed_slice(size)
             .map_err(|_| FuseTransportError::DmaAlloc)?
             .assume_init()
     };
+    Ok(buf)
+}
+
+/// Send a FUSE request using pre-allocated DMA buffers.
+///
+/// The request data must already be copied into `req_buf[..req_len]`.
+/// `resp_len` controls the response descriptor size seen by virtiofsd —
+/// critical for FUSE_READ where virtiofsd reads exactly descriptor-size
+/// bytes from the host file.
+///
+/// Both buffers must be large enough: `req_buf.len() >= req_len` and
+/// `resp_buf.len() >= resp_len`. No DMA allocation or deallocation occurs.
+pub fn fuse_exchange(
+    queue: &Queue<'_>,
+    req_buf: &Dma<[u8]>,
+    req_len: usize,
+    resp_buf: &Dma<[u8]>,
+    resp_len: usize,
+) -> Result<Vec<u8>, FuseTransportError> {
+    debug_assert!(req_len <= req_buf.len());
+    debug_assert!(resp_len <= resp_buf.len());
 
     let chain = ChainBuilder::new()
-        .chain(Buffer::new_unsized(&req_dma))
-        .chain(Buffer::new_unsized(&resp_dma).flags(DescriptorFlags::WRITE_ONLY))
+        .chain(Buffer::new_sized(req_buf, req_len))
+        .chain(Buffer::new_sized(resp_buf, resp_len).flags(DescriptorFlags::WRITE_ONLY))
         .build();
 
     let written = futures::executor::block_on(queue.send(chain)) as usize;
 
     if written < core::mem::size_of::<FuseOutHeader>() {
-        // Leak before returning error
-        core::mem::forget(req_dma);
-        core::mem::forget(resp_dma);
         return Err(FuseTransportError::ShortResponse(written));
     }
 
     let mut result = vec![0u8; written];
-    result.copy_from_slice(&resp_dma[..written]);
-
-    // Leak DMA buffers to avoid kernel panic in funmap.
-    // See module-level docs for explanation.
-    core::mem::forget(req_dma);
-    core::mem::forget(resp_dma);
+    result.copy_from_slice(&resp_buf[..written]);
 
     Ok(result)
-}
-
-/// Send a FUSE metadata request (LOOKUP, GETATTR, OPEN, RELEASE, STATFS, etc.).
-/// Uses a fixed 4KB response buffer.
-pub fn fuse_meta_request(queue: &Queue<'_>, request: &[u8]) -> Result<Vec<u8>, FuseTransportError> {
-    fuse_request_inner(queue, request, META_RESPONSE)
-}
-
-/// Send a FUSE data request (READ, READDIR) with a response buffer sized to
-/// exactly `sizeof(FuseOutHeader) + data_size`. This is critical because
-/// virtiofsd uses the descriptor size to determine how many bytes to read
-/// from the host file.
-pub fn fuse_data_request(
-    queue: &Queue<'_>,
-    request: &[u8],
-    data_size: usize,
-) -> Result<Vec<u8>, FuseTransportError> {
-    let resp_size = core::mem::size_of::<FuseOutHeader>() + data_size;
-    fuse_request_inner(queue, request, resp_size)
-}
-
-/// Send a FUSE write request: header + FuseWriteIn + data in one request descriptor.
-///
-/// Unlike reads, writes pack the data INTO the request. The response is just
-/// a FuseOutHeader + FuseWriteOut (8 bytes) confirming how many bytes were written.
-pub fn fuse_write_request(
-    queue: &Queue<'_>,
-    request_with_data: &[u8],
-) -> Result<Vec<u8>, FuseTransportError> {
-    fuse_request_inner(queue, request_with_data, META_RESPONSE)
 }
 
 /// Build a FUSE request with typed args struct AND trailing data (for FUSE_WRITE).
@@ -241,4 +219,6 @@ pub enum FuseTransportError {
     FuseError(i32),
     #[error("unexpected response size")]
     UnexpectedSize,
+    #[error("request too large for pre-allocated buffer ({0} bytes)")]
+    RequestTooLarge(usize),
 }
