@@ -11,3 +11,4 @@ description = "Network configuration utility for Redox OS"
 [[bin]]
 name = "netcfg-setup"
 path = "src/main.rs"
+test = false
