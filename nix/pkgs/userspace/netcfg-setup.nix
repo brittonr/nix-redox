@@ -19,6 +19,7 @@
   stubLibs,
   vendor,
   craneLib ? null,
+  ...
 }:
 
 let
@@ -98,8 +99,7 @@ pkgs.stdenv.mkDerivation {
     cargo build \
       --target ${redoxTarget} \
       --release \
-      -Z build-std=core,alloc,std,panic_abort \
-      -Z build-std-features=compiler-builtins-mem
+      ${lib.concatStringsSep " \\\n      " rustFlags.buildStdArgs}
 
     runHook postBuild
   '';

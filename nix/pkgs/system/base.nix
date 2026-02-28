@@ -31,7 +31,7 @@
 }:
 
 let
-  # Import rust-flags for centralized RUSTFLAGS
+  # Import rust-flags — useToolchainRlibs=true by default
   rustFlags = import ../../lib/rust-flags.nix {
     inherit
       lib
@@ -41,6 +41,8 @@ let
       stubLibs
       ;
   };
+
+  needsBuildStd = !rustFlags.useToolchainRlibs;
 
   # Patch for GraphicScreen to use mmap for page-aligned allocation
   # Version: 2 - Fixed patch format
@@ -377,10 +379,11 @@ let
   };
 
   # Create merged vendor directory (cached as separate derivation)
+  # With prebuilt sysroot, skip sysroot vendor merge (not needed)
   mergedVendor = vendor.mkMergedVendor {
     name = "base";
     projectVendor = baseVendor;
-    inherit sysrootVendor;
+    sysrootVendor = if needsBuildStd then sysrootVendor else null;
   };
 
   # Git source mappings for cargo config
@@ -450,7 +453,7 @@ pkgs.stdenv.mkDerivation {
   buildInputs = [ relibc ];
 
   TARGET = redoxTarget;
-  RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+  RUST_SRC_PATH = lib.optionalString needsBuildStd "${rustToolchain}/lib/rustlib/src/rust/library";
 
   configurePhase = ''
     runHook preConfigure
@@ -494,8 +497,7 @@ pkgs.stdenv.mkDerivation {
       --exclude bootstrap \
       --target ${redoxTarget} \
       --release \
-      -Z build-std=core,alloc,std,panic_abort \
-      -Z build-std-features=compiler-builtins-mem
+      ${lib.concatStringsSep " \\\n      " rustFlags.buildStdArgs}
 
     runHook postBuild
   '';

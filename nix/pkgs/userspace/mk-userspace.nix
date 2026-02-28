@@ -2,10 +2,14 @@
 #
 # This module provides helper functions for building cross-compiled Rust
 # packages for the Redox target. It handles:
-# - Vendor directory merging (project + sysroot)
+# - Pre-compiled sysroot injection (--sysroot instead of -Z build-std)
+# - Vendor directory management (no sysroot merge needed with prebuilt sysroot)
 # - Stub library linking (for panic=abort builds)
 # - RUSTFLAGS configuration
 # - Cargo config generation
+#
+# When combinedSysroot is provided, packages skip -Z build-std entirely
+# and use pre-compiled stdlib rlibs, saving ~60-90s per package.
 #
 # Usage:
 #   mkUserspace = import ./mk-userspace.nix { ... };
@@ -27,10 +31,12 @@
   stubLibs,
   vendor,
   craneLib ? null,
+  # Accept but ignore (passed via userspaceArgs/standaloneCommon)
+  ...
 }:
 
 let
-  # Import rust-flags for centralized RUSTFLAGS
+  # Import rust-flags — useToolchainRlibs=true by default, so buildStdArgs is empty
   rustFlags = import ../../lib/rust-flags.nix {
     inherit
       lib
@@ -40,6 +46,9 @@ let
       stubLibs
       ;
   };
+
+  # With toolchain rlibs, no sysroot vendor merge needed
+  needsBuildStd = !rustFlags.useToolchainRlibs;
 
   # Common native build inputs for all userspace packages
   commonNativeBuildInputs = [
@@ -77,10 +86,13 @@ rec {
         hash = vendorHash;
       };
 
-      # Create merged vendor directory (cached as separate derivation)
+      # Create vendor directory:
+      # - With prebuilt sysroot: just the project vendor (no sysroot merge needed)
+      # - Without: merged project + sysroot vendor (legacy path)
       mergedVendor = vendor.mkMergedVendor {
         name = pname;
-        inherit projectVendor sysrootVendor;
+        inherit projectVendor;
+        sysrootVendor = if needsBuildStd then sysrootVendor else null;
       };
     in
     pkgs.stdenv.mkDerivation {
@@ -93,7 +105,9 @@ rec {
       buildInputs = [ relibc ] ++ buildInputs;
 
       TARGET = redoxTarget;
-      RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
+
+      # RUST_SRC_PATH only needed for -Z build-std (to find stdlib source)
+      RUST_SRC_PATH = lib.optionalString needsBuildStd "${rustToolchain}/lib/rustlib/src/rust/library";
 
       configurePhase = ''
         runHook preConfigure
@@ -132,6 +146,8 @@ rec {
         ${preBuild}
 
         # Set RUSTFLAGS for cross-compilation
+        # When combinedSysroot is set, this includes --sysroot pointing to
+        # pre-compiled stdlib rlibs (no -Z build-std needed)
         export ${rustFlags.cargoEnvVar}="${rustFlags.userRustFlags} -L ${stubLibs}/lib"
 
         # Set C compiler flags for cross-compilation so cc-rs uses relibc headers
@@ -144,8 +160,7 @@ rec {
           ${cargoBuildFlags} \
           --target ${redoxTarget} \
           --release \
-          -Z build-std=core,alloc,std,panic_abort \
-          -Z build-std-features=compiler-builtins-mem
+          ${lib.concatStringsSep " \\\n          " rustFlags.buildStdArgs}
 
         ${postBuild}
 

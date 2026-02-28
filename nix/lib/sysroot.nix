@@ -1,15 +1,26 @@
 # Sysroot vendor management for Redox cross-compilation
 #
 # This module handles vendoring of the Rust standard library dependencies
-# needed for `-Z build-std` cross-compilation. It creates a fixed-output
-# derivation that works with the Nix sandbox.
+# needed for `-Z build-std` cross-compilation on targets that don't ship
+# pre-compiled rlibs in the toolchain.
+#
+# NOTE: As of nightly-2025-10-03, the Rust toolchain ships pre-compiled
+# rlibs for x86_64-unknown-redox. Userspace and system packages no longer
+# need -Z build-std — they use the toolchain's rlibs directly.
+# The sysroot vendor is still available for any future targets that
+# don't ship pre-compiled rlibs.
 #
 # Usage:
-#   sysrootLib = import ./sysroot.nix { inherit pkgs rustToolchain; };
+#   sysrootLib = import ./sysroot.nix { inherit pkgs lib rustToolchain redoxTarget; };
 #   sysrootVendor = sysrootLib.vendor;
 #   sysroot = sysrootLib.mkSysroot { inherit relibc; };
 
-{ pkgs, rustToolchain }:
+{
+  pkgs,
+  lib,
+  rustToolchain,
+  redoxTarget,
+}:
 
 let
   # Source directory with sysroot Cargo.toml and Cargo.lock
@@ -45,7 +56,7 @@ rec {
 
   # Create a combined sysroot with relibc
   mkSysroot =
-    { relibc }:
+    { relibc, stubLibs ? null }:
     pkgs.symlinkJoin {
       name = "redox-sysroot";
       paths = [
@@ -55,6 +66,8 @@ rec {
     };
 
   # Common build-std arguments for cross-compilation
+  # These are only needed for targets where the toolchain doesn't ship
+  # pre-compiled rlibs (e.g., kernel no_std, UEFI bootloader).
   buildStdArgs = "-Z build-std=core,alloc,std,panic_abort -Z build-std-features=compiler-builtins-mem";
 
   # Build-std arguments as a list (for Nix list manipulation)

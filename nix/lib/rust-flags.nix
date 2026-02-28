@@ -16,6 +16,10 @@
   redoxTarget,
   relibc,
   stubLibs,
+  # When true, skip -Z build-std (toolchain ships pre-compiled rlibs).
+  # Default: true for x86_64-unknown-redox (nightly-2025-10-03+).
+  # Kernel and bootloader still need -Z build-std (different targets).
+  useToolchainRlibs ? true,
 }:
 
 let
@@ -72,6 +76,7 @@ rec {
     {
       useClangLinker ? true,
       includePanic ? true,
+      includeSysroot ? true,
       extraLibPaths ? [ ],
     }:
     let
@@ -86,6 +91,8 @@ rec {
         # Library search path for relibc
         "-L ${relibc}/${redoxTarget}/lib"
       ]
+      # The toolchain ships pre-compiled rlibs for x86_64-unknown-redox.
+      # No --sysroot override is needed — rustc finds them automatically.
       ++ (map (p: "-L ${p}") extraLibPaths)
       ++ (lib.optional includePanic "-C panic=abort")
       ++ (lib.optional useClangLinker "-C linker=${clangBin}")
@@ -98,7 +105,7 @@ rec {
         ++ crtObjects
         ++ [
           # Allow multiple definitions to resolve conflicts between relibc's
-          # bundled core/alloc and -Z build-std versions.
+          # bundled core/alloc and the sysroot rlibs.
           "${wlPrefix}--allow-multiple-definition"
         ]
       ))
@@ -129,12 +136,25 @@ rec {
     "-Wl,--as-needed" # Only link needed libraries
   ];
 
-  # === Common Build-std Arguments ===
+  # === Toolchain Rlibs Status ===
 
-  buildStdArgs = [
-    "-Z build-std=core,alloc,std,panic_abort"
-    "-Z build-std-features=compiler-builtins-mem"
-  ];
+  # Whether the toolchain ships pre-compiled rlibs for the target.
+  # When true, -Z build-std is skipped and sysroot vendor merge is unnecessary.
+  inherit useToolchainRlibs;
+
+  # === Build-std Arguments ===
+  #
+  # Empty when using toolchain rlibs (default for x86_64-unknown-redox).
+  # Kernel and bootloader targets still need their own -Z build-std.
+
+  buildStdArgs =
+    if useToolchainRlibs then
+      [ ]
+    else
+      [
+        "-Z build-std=core,alloc,std,panic_abort"
+        "-Z build-std-features=compiler-builtins-mem"
+      ];
 
   # === Cargo Profile Settings ===
 

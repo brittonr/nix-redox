@@ -148,13 +148,13 @@ let
     );
   };
 
+  # Common args for userspace packages
+  userspaceArgs = commonArgs // {
+    relibc = resolvedRelibc;
+  };
+
   # Userspace helper - creates cross-compiled packages with common settings
-  mkUserspace = import ./userspace/mk-userspace.nix (
-    commonArgs
-    // {
-      relibc = resolvedRelibc;
-    }
-  );
+  mkUserspace = import ./userspace/mk-userspace.nix userspaceArgs;
 
   # Get vendor from redoxLib for use in userspace packages
   inherit (redoxLib) vendor;
@@ -609,10 +609,7 @@ let
 
     # netcfg-setup - network configuration tool (replaces Ion scripts)
     netcfg-setup = import ./userspace/netcfg-setup.nix (
-      commonArgs
-      // {
-        relibc = resolvedRelibc;
-      }
+      userspaceArgs
     );
 
     # redoxfs compiled for Redox target (goes into initfs)
@@ -636,10 +633,9 @@ let
 
     # Extrautils - extended utilities (grep, gzip, less, etc.)
     extrautils = import ./userspace/extrautils.nix (
-      commonArgs
+      userspaceArgs
       // {
         inherit (inputs) extrautils-src filetime-src cc-rs-src;
-        relibc = resolvedRelibc;
       }
     );
 

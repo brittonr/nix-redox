@@ -35,7 +35,17 @@ let
   stubLibsModule = import ./stub-libs.nix { inherit pkgs redoxTarget; };
   vendorModule = import ./vendor.nix { inherit pkgs lib; };
   sysrootModule =
-    if rustToolchain != null then import ./sysroot.nix { inherit pkgs rustToolchain; } else null;
+    if rustToolchain != null then
+      import ./sysroot.nix {
+        inherit
+          pkgs
+          lib
+          rustToolchain
+          redoxTarget
+          ;
+      }
+    else
+      null;
 
 in
 rec {

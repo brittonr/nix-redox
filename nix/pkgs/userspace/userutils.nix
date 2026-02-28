@@ -22,6 +22,7 @@
   termion-src,
   orbclient-src,
   libredox-src,
+  ...
 }:
 
 let
@@ -183,8 +184,7 @@ pkgs.stdenv.mkDerivation {
         --target ${redoxTarget} \
         --release \
         --bin $bin \
-        -Z build-std=core,alloc,std,panic_abort \
-        -Z build-std-features=compiler-builtins-mem || echo "Warning: $bin failed to build"
+        ${lib.concatStringsSep " \\\n        " rustFlags.buildStdArgs} || echo "Warning: $bin failed to build"
     done
 
     runHook postBuild

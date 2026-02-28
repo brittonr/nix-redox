@@ -173,16 +173,14 @@ pkgs.stdenv.mkDerivation {
       --bin orblogin \
       --target ${redoxTarget} \
       --release \
-      -Z build-std=core,alloc,std,panic_abort \
-      -Z build-std-features=compiler-builtins-mem
+      ${lib.concatStringsSep " \\\n      " rustFlags.buildStdArgs}
 
     # Build background (desktop background manager)
     cargo build \
       --bin background \
       --target ${redoxTarget} \
       --release \
-      -Z build-std=core,alloc,std,panic_abort \
-      -Z build-std-features=compiler-builtins-mem
+      ${lib.concatStringsSep " \\\n      " rustFlags.buildStdArgs}
 
     runHook postBuild
   '';

@@ -22,6 +22,7 @@
   vendor,
   sodium-src,
   orbclient-src,
+  ...
 }:
 
 let
@@ -176,8 +177,7 @@ pkgs.stdenv.mkDerivation {
       --release \
       --no-default-features \
       --features ansi \
-      -Z build-std=core,alloc,std,panic_abort \
-      -Z build-std-features=compiler-builtins-mem
+      ${lib.concatStringsSep " \\\n      " rustFlags.buildStdArgs}
 
     runHook postBuild
   '';
