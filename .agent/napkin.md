@@ -283,6 +283,17 @@
 - Alternatively set `CARGO_BUILD_TARGET=""` to avoid inheriting the cross-target
 - All #[cfg(test)] modules compile fine for linux — no redox-specific APIs used in tests
 
+### nextest 0 tests fix (Feb 28 2026)
+- Root crate has `test = false` on its only binary (cross-only for x86_64-unknown-redox)
+- `cargo nextest run` finds 0 tests → exits code 4 (NO_TESTS_RUN)
+- nextest has NO config file key for `no-tests` — only CLI flag `--no-tests pass` or env var `NEXTEST_NO_TESTS=pass`
+- `.cargo/config.toml` `[env]` does NOT pass env vars to nextest (it's a cargo subcommand, not a build target)
+- `.env` file is NOT read by nextest either
+- Fix: `export NEXTEST_NO_TESTS=pass` in `.envrc` (direnv) + `NEXTEST_NO_TESTS = "pass"` in devshells.nix rustEnv
+- Must `inherit (rustEnv) ... NEXTEST_NO_TESTS;` in EACH shell definition that inherits from rustEnv
+- After editing `.envrc`, `direnv allow` is needed for changes to take effect
+- `.config/nextest.toml` kept for documentation but has no functional effect on this issue
+
 ### virtio-fsd DMA buffer reuse (Feb 28 2026)
 - `Buffer::new_sized(dma, len)` exists in virtio-core — creates descriptor with custom length
   backed by a larger DMA buffer. This is the key to exact-size descriptors without per-request alloc.

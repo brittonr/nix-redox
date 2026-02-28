@@ -1,0 +1,14 @@
+# Root crate has no Rust tests (test = false in Cargo.toml).
+# Real tests are run via Nix:
+#   nix flake check              # All static + build checks
+#   nix run .#boot-test          # Automated boot test
+#   nix run .#functional-test    # 110+ in-guest VM tests
+#   nix run .#bridge-test        # Live package delivery tests
+#
+# snix-redox unit tests (198 tests) run separately:
+#   cd snix-redox && cargo test --target x86_64-unknown-linux-gnu
+#
+# Set NEXTEST_NO_TESTS=pass to allow 0 tests without error.
+
+[profile.default]
+default-filter = "all()"

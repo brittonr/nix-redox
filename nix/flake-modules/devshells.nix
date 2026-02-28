@@ -136,7 +136,12 @@ in
 
       buildInputs = commonBuildInputs;
 
-      inherit (rustEnv) CARGO_BUILD_TARGET RUST_SRC_PATH TARGET;
+      inherit (rustEnv)
+        CARGO_BUILD_TARGET
+        RUST_SRC_PATH
+        TARGET
+        NEXTEST_NO_TESTS
+        ;
       PKG_CONFIG_PATH = pkgConfigPath;
       NIX_SHELL_BUILD = "1";
       PODMAN_BUILD = "0";
@@ -264,7 +269,7 @@ in
         fuse
       ];
 
-      inherit (rustEnv) RUST_SRC_PATH TARGET;
+      inherit (rustEnv) RUST_SRC_PATH TARGET NEXTEST_NO_TESTS;
       PKG_CONFIG_PATH = pkgConfigPath;
       NIX_SHELL_BUILD = "1";
       PODMAN_BUILD = "0";
