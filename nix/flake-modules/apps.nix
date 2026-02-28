@@ -149,6 +149,12 @@
       meta.description = "Run functional tests inside Redox OS (shell, filesystem, tools, config)";
     };
 
+    network-test = {
+      type = "app";
+      program = "${self'.packages.networkTest}/bin/network-test";
+      meta.description = "Test in-guest networking: DHCP, DNS, ping, TCP via QEMU SLiRP";
+    };
+
     bridge-test = {
       type = "app";
       program = "${self'.packages.bridgeTest}/bin/bridge-test";

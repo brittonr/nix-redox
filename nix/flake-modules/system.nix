@@ -186,6 +186,16 @@ let
     inherit bootloader;
   };
 
+  mkNetworkTest = modularPkgs.infrastructure.mkNetworkTest;
+  networkTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/network-test.nix ];
+    inherit extraPkgs;
+  };
+  networkTest = mkNetworkTest {
+    diskImage = networkTestSystem.diskImage;
+    inherit bootloader;
+  };
+
   mkBridgeTest = modularPkgs.infrastructure.mkBridgeTest;
   bridgeTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/bridge-test.nix ];
@@ -270,6 +280,9 @@ in
 
     redox-functional-test = functionalTestSystem.diskImage;
     inherit functionalTest;
+
+    redox-network-test = networkTestSystem.diskImage;
+    inherit networkTest;
 
     redox-bridge-test = bridgeTestSystem.diskImage;
     inherit bridgeTest;

@@ -61,16 +61,21 @@ fn cmd_auto() -> i32 {
         return 0; // Not a fatal error
     }
 
-    // Wait for DHCP (15 attempts × 500ms = 7.5 seconds)
+    // Wait for DHCP (30 attempts × 500ms = 15 seconds)
     eprintln!("netcfg-auto: Waiting for DHCP...");
     let addr_list_path = "/scheme/netcfg/ifaces/eth0/addr/list";
 
-    for _ in 0..15 {
+    for attempt in 0..30 {
         // Try to read the DHCP-assigned address
         if let Ok(content) = read_config(addr_list_path) {
-            if !content.is_empty() {
+            // smolnetd returns "Not configured" before DHCP completes.
+            // Only accept responses that look like an IP address (contain a dot).
+            if !content.is_empty() && content.contains('.') {
                 eprintln!("netcfg-auto: DHCP configured: {}", content);
                 return 0;
+            }
+            if attempt == 0 || attempt % 10 == 0 {
+                eprintln!("netcfg-auto: addr/list = '{}' (attempt {})", content, attempt);
             }
         }
         thread::sleep(Duration::from_millis(500));

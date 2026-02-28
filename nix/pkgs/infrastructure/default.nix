@@ -119,6 +119,19 @@ in
         ;
     };
 
+  # Network test factory - requires diskImage with network test startup script
+  # Uses QEMU SLiRP by default (no root/TAP needed)
+  mkNetworkTest =
+    { diskImage, bootloader }:
+    import ./network-test.nix {
+      inherit
+        pkgs
+        lib
+        diskImage
+        bootloader
+        ;
+    };
+
   # Bridge test factory - requires diskImage with virtio-fsd + test script
   # Orchestrates host-side package push + guest-side snix install via virtio-fs
   mkBridgeTest =
