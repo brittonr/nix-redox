@@ -73,7 +73,12 @@ let
 
   # === Library & sysroot ===
   redoxLib = import ../lib {
-    inherit pkgs lib rustToolchain redoxTarget;
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      redoxTarget
+      ;
   };
 
   sysrootVendor = redoxLib.sysroot.vendor;

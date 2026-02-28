@@ -18,7 +18,14 @@ let
   inputs = self.inputs;
 
   # Shared build environment (config + toolchain + sources + modular packages)
-  env = import ./redox-env.nix { inherit pkgs system lib inputs; };
+  env = import ./redox-env.nix {
+    inherit
+      pkgs
+      system
+      lib
+      inputs
+      ;
+  };
 
   inherit (env)
     rustToolchain
@@ -32,7 +39,13 @@ let
   # === Standalone packages (special handling, not in modularPkgs) ===
 
   sodium = import ../pkgs/userspace/sodium.nix {
-    inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;
     inherit (inputs) sodium-src orbclient-src;
@@ -44,7 +57,14 @@ let
   };
 
   orbital = import ../pkgs/userspace/orbital.nix {
-    inherit pkgs lib craneLib rustToolchain sysrootVendor redoxTarget;
+    inherit
+      pkgs
+      lib
+      craneLib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;
     inherit (inputs)
@@ -65,7 +85,13 @@ let
   };
 
   orbterm = import ../pkgs/userspace/orbterm.nix {
-    inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;
     inherit (inputs)
@@ -79,63 +105,123 @@ let
   };
 
   orbutils = import ../pkgs/userspace/orbutils.nix {
-    inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;
     inherit (inputs) orbutils-src;
   };
 
   userutils = import ../pkgs/userspace/userutils.nix {
-    inherit pkgs lib craneLib rustToolchain sysrootVendor redoxTarget;
+    inherit
+      pkgs
+      lib
+      craneLib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;
-    inherit (inputs) userutils-src termion-src orbclient-src libredox-src;
+    inherit (inputs)
+      userutils-src
+      termion-src
+      orbclient-src
+      libredox-src
+      ;
   };
 
   ripgrep = import ../pkgs/userspace/ripgrep.nix {
-    inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;
     inherit (inputs) ripgrep-src;
   };
 
   fd = import ../pkgs/userspace/fd.nix {
-    inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;
     inherit (inputs) fd-src;
   };
 
   bat = import ../pkgs/userspace/bat.nix {
-    inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;
     inherit (inputs) bat-src;
   };
 
   hexyl = import ../pkgs/userspace/hexyl.nix {
-    inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;
     inherit (inputs) hexyl-src;
   };
 
   zoxide = import ../pkgs/userspace/zoxide.nix {
-    inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;
     inherit (inputs) zoxide-src;
   };
 
   dust = import ../pkgs/userspace/dust.nix {
-    inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;
     inherit (inputs) dust-src;
   };
 
   snix = import ../pkgs/userspace/snix.nix {
-    inherit pkgs lib rustToolchain sysrootVendor redoxTarget;
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;
     snix-redox-src = ../../snix-redox;
@@ -157,7 +243,12 @@ in
     fstools = modularPkgs.host.fstools;
 
     # System components
-    inherit (modularPkgs.system) relibc kernel bootloader base;
+    inherit (modularPkgs.system)
+      relibc
+      kernel
+      bootloader
+      base
+      ;
     inherit sysroot sysrootVendor;
 
     # Userspace packages
@@ -174,13 +265,26 @@ in
     inherit sodium;
 
     # Orbital graphics packages
-    inherit orbdata orbital orbterm orbutils;
+    inherit
+      orbdata
+      orbital
+      orbterm
+      orbutils
+      ;
 
     # User management
     inherit userutils;
 
     # CLI tools
-    inherit ripgrep fd bat hexyl zoxide dust snix;
+    inherit
+      ripgrep
+      fd
+      bat
+      hexyl
+      zoxide
+      dust
+      snix
+      ;
 
     # Infrastructure (needed by module system)
     inherit (modularPkgs.infrastructure) initfsTools bootstrap;

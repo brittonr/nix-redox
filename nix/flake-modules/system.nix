@@ -21,7 +21,14 @@ let
   inputs = self.inputs;
 
   # Shared build environment
-  env = import ./redox-env.nix { inherit pkgs system lib inputs; };
+  env = import ./redox-env.nix {
+    inherit
+      pkgs
+      system
+      lib
+      inputs
+      ;
+  };
 
   inherit (env)
     rustToolchain
@@ -37,7 +44,9 @@ let
 
   # Build a flat package set from modular packages
   mkFlatPkgs =
-    { extraPkgs ? { } }:
+    {
+      extraPkgs ? { },
+    }:
     modularPkgs.host
     // modularPkgs.system
     // modularPkgs.userspace
@@ -46,7 +55,10 @@ let
 
   # Helper to create a system configuration
   mkSystem =
-    { modules, extraPkgs ? { } }:
+    {
+      modules,
+      extraPkgs ? { },
+    }:
     let
       flatPkgs = mkFlatPkgs { inherit extraPkgs; };
     in

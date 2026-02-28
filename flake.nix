@@ -360,34 +360,61 @@
       ];
 
       # System-agnostic outputs
-      flake = { withSystem }: {
-        # NixOS modules for host integration
-        nixosModules = import ./nix/nixos-modules { inherit self; };
+      flake =
+        { withSystem }:
+        {
+          # NixOS modules for host integration
+          nixosModules = import ./nix/nixos-modules { inherit self; };
 
-        # Overlay for other flakes to consume RedoxOS packages
-        overlays.default = final: _prev:
-          let
-            perSys = withSystem final.system (
-              { self', ... }:
-              self'.packages
-            );
-          in
-          {
-            redox = {
-              # Host tools
-              inherit (perSys) cookbook redoxfs installer fstools;
-              # System components
-              inherit (perSys) relibc kernel bootloader base sysroot;
-              # Userspace
-              inherit (perSys)
-                ion helix binutils extrautils sodium netutils uutils redoxfsTarget;
-              # Disk images
-              inherit (perSys) redox-default redox-minimal redox-graphical redox-cloud;
-              # Runners
-              inherit (perSys)
-                run-redox-default run-redox-default-qemu run-redox-graphical-desktop;
+          # Overlay for other flakes to consume RedoxOS packages
+          overlays.default =
+            final: _prev:
+            let
+              perSys = withSystem final.system ({ self', ... }: self'.packages);
+            in
+            {
+              redox = {
+                # Host tools
+                inherit (perSys)
+                  cookbook
+                  redoxfs
+                  installer
+                  fstools
+                  ;
+                # System components
+                inherit (perSys)
+                  relibc
+                  kernel
+                  bootloader
+                  base
+                  sysroot
+                  ;
+                # Userspace
+                inherit (perSys)
+                  ion
+                  helix
+                  binutils
+                  extrautils
+                  sodium
+                  netutils
+                  uutils
+                  redoxfsTarget
+                  ;
+                # Disk images
+                inherit (perSys)
+                  redox-default
+                  redox-minimal
+                  redox-graphical
+                  redox-cloud
+                  ;
+                # Runners
+                inherit (perSys)
+                  run-redox-default
+                  run-redox-default-qemu
+                  run-redox-graphical-desktop
+                  ;
+              };
             };
-          };
-      };
+        };
     };
 }
