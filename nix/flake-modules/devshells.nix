@@ -22,7 +22,14 @@ let
   inputs = self.inputs;
 
   # Shared build environment
-  env = import ./redox-env.nix { inherit pkgs system lib inputs; };
+  env = import ./redox-env.nix {
+    inherit
+      pkgs
+      system
+      lib
+      inputs
+      ;
+  };
   inherit (env) rustToolchain redoxTarget;
 
   # Git hooks via git-hooks.nix (direct lib usage, no flake-parts module)
@@ -55,7 +62,7 @@ let
       check-json.enable = true;
     };
 
-    settings.excludes = [
+    excludes = [
       "^vendor/"
       "^vendor-combined/"
       "^result.*/"
