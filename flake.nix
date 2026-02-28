@@ -24,6 +24,10 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
+    adios-flake.url = "github:Mic92/adios-flake";
+
+    # Kept as a top-level input so upstream dependencies that use
+    # flake-parts all share a single copy via follows.
     flake-parts = {
       url = "github:hercules-ci/flake-parts";
       inputs.nixpkgs-lib.follows = "nixpkgs";
@@ -337,49 +341,53 @@
   };
 
   outputs =
-    inputs@{
-      self,
-      nixpkgs,
-      flake-parts,
-      rust-overlay,
-      crane,
-      ...
-    }:
-    flake-parts.lib.mkFlake { inherit inputs; } {
+    inputs@{ adios-flake, self, ... }:
+    adios-flake.lib.mkFlake {
+      inherit inputs self;
       systems = [
         "x86_64-linux"
         "aarch64-linux"
       ];
 
-      # Import all flake-parts modules
-      imports = [
-        ./nix/flake-modules/toolchain.nix
-        ./nix/flake-modules/sources.nix
-        ./nix/flake-modules/packages.nix
-        ./nix/flake-modules/devshells.nix
-        ./nix/flake-modules/checks.nix
-        ./nix/flake-modules/apps.nix
-        ./nix/flake-modules/treefmt.nix
-        ./nix/flake-modules/git-hooks.nix
-        ./nix/flake-modules/overlays.nix
-        ./nix/flake-modules/nixos-module.nix
-        ./nix/flake-modules/flake-modules.nix
-        ./nix/flake-modules/config.nix
-        # RedoxOS module system integration (declarative system configurations)
-        ./nix/flake-modules/system.nix
+      # Per-system modules (each is a plain function)
+      modules = [
+        (import ./nix/flake-modules/packages.nix)
+        (import ./nix/flake-modules/system.nix)
+        (import ./nix/flake-modules/apps.nix)
+        (import ./nix/flake-modules/devshells.nix)
+        (import ./nix/flake-modules/checks.nix)
+        (import ./nix/flake-modules/treefmt.nix)
       ];
 
-      # Legacy packages interface (for backwards compatibility)
-      perSystem =
-        {
-          pkgs,
-          config,
-          ...
-        }:
-        {
-          legacyPackages = {
-            inherit (config._module.args.redoxConfig or { }) rustToolchain craneLib;
+      # System-agnostic outputs
+      flake = { withSystem }: {
+        # NixOS modules for host integration
+        nixosModules = import ./nix/nixos-modules { inherit self; };
+
+        # Overlay for other flakes to consume RedoxOS packages
+        overlays.default = final: _prev:
+          let
+            perSys = withSystem final.system (
+              { self', ... }:
+              self'.packages
+            );
+          in
+          {
+            redox = {
+              # Host tools
+              inherit (perSys) cookbook redoxfs installer fstools;
+              # System components
+              inherit (perSys) relibc kernel bootloader base sysroot;
+              # Userspace
+              inherit (perSys)
+                ion helix binutils extrautils sodium netutils uutils redoxfsTarget;
+              # Disk images
+              inherit (perSys) redox-default redox-minimal redox-graphical redox-cloud;
+              # Runners
+              inherit (perSys)
+                run-redox-default run-redox-default-qemu run-redox-graphical-desktop;
+            };
           };
-        };
+      };
     };
 }
