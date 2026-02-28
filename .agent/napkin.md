@@ -297,9 +297,9 @@
 ### virtio-fsd DMA buffer reuse (Feb 28 2026)
 - `Buffer::new_sized(dma, len)` exists in virtio-core — creates descriptor with custom length
   backed by a larger DMA buffer. This is the key to exact-size descriptors without per-request alloc.
-- Two DMA buffers allocated once at init, wrapped in ManuallyDrop:
-  - req_buf: header + FuseWriteIn + MAX_IO_SIZE (~1MB) — covers all requests including WRITE
-  - resp_buf: header + MAX_IO_SIZE (~1MB) — covers all responses including READ
+- Two DMA buffers allocated once at init (no ManuallyDrop — see root cause fix below):
+  - req_buf: header + FuseWriteIn + MAX_IO_SIZE rounded to p2 pages (~2MB)
+  - resp_buf: header + MAX_IO_SIZE rounded to p2 pages (~2MB)
 - Per-operation descriptor sizes via Buffer::new_sized:
   - Meta ops: req=actual_len, resp=4KB
   - READ/READDIR: req=actual_len, resp=header+data_size (exact, no over-read)
@@ -307,9 +307,28 @@
 - Session methods changed from &self to &mut self (writes into shared DMA buffers)
 - scheme.rs: resolve_path changed from &self to &mut self (calls session methods)
 - FUSE_INIT uses the same pre-allocated buffers (no separate init path needed)
-- ManuallyDrop on the DMA buffers prevents Drop from running → no munmap → no kernel bug
-- Old approach: ~12KB leaked per request (unbounded). New: ~2MB fixed at init (zero growth).
 - FuseTransportError::RequestTooLarge added for buffer overflow protection
+
+### virtio-fsd DMA kernel bug — root cause found & fixed (Feb 28 2026)
+- **Root cause**: kernel's `zeroed_phys_contiguous` allocates 2^order pages via `allocate_p2frame(order)`
+  but only initializes `span.count` pages with `RC_USED_NOT_FREE` refcount. When span.count is NOT
+  a power of two (e.g., 257 pages → 512 allocated), the excess pages (257-511) have zeroed PageInfo.
+- **Crash mechanism**: on munmap, `handle_free_action` frees frames 0-256 one by one. When frame 256
+  is freed, the buddy allocator checks sibling frame 257. Frame 257's refcount=0 (no RC_USED_NOT_FREE bit)
+  so `as_free()` returns `Some` — it looks free but ISN'T on any freelist. The merge logic follows
+  stale prev/next pointers (both zero). `P2Frame(0).frame()=None` → enters the `else` branch →
+  `freelist.for_orders[0] = None` → WIPES the entire order-0 freelist. This cascades through all orders.
+- **Debug kernel**: panics at `debug_assert_eq!(freelist.for_orders[0], Some(sibling))` in the merge loop
+- **Release kernel**: silent freelist corruption → memory leak → eventual OOM or later panics
+- **Our trigger**: DMA buffers of `header(40) + FuseWriteIn(40) + MAX_IO_SIZE(1048576) = 1048656 bytes`
+  → ceil(1048656/4096) = 257 pages — NOT a power of two!
+- **Fix**: `round_to_p2_pages()` rounds DMA allocation sizes to next power-of-two page count.
+  With 512 pages requested, `span.count == 2^order` → ALL allocated pages get proper refcount →
+  buddy allocator deallocation works correctly → ManuallyDrop removed.
+- **Memory**: 4 MiB total (was ~2 MiB leaked via ManuallyDrop). Now properly freeable on drop.
+- **Upstream kernel fix needed**: `zeroed_phys_contiguous` should initialize ALL 2^order pages,
+  and `handle_free_action` should use `deallocate_p2frame(base, order)` (per its own FIXME comment)
+  instead of freeing pages one by one.
 
 ### End-to-end networking via QEMU SLiRP (Feb 28 2026)
 - Full network stack works: e1000d → smolnetd → DHCP → DNS → ping → TCP
