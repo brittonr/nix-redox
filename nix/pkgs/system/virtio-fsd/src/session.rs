@@ -6,9 +6,10 @@
 //! ## DMA buffer ownership
 //!
 //! Two DMA buffers are allocated once during [`FuseSession::init`] and reused
-//! for every subsequent FUSE operation. They are wrapped in [`ManuallyDrop`]
-//! so the kernel's buggy `deallocate_p2frame` path is never hit — even if the
-//! session is dropped during error handling or shutdown.
+//! for every subsequent FUSE operation. Buffer sizes are rounded to
+//! power-of-two page counts by [`alloc_dma_buffer`], which avoids a Redox
+//! kernel buddy allocator bug (see transport.rs module docs). With correct
+//! sizing, the buffers can be safely dropped — no `ManuallyDrop` needed.
 //!
 //! - `req_buf`: holds outgoing request data (header + args + write payload).
 //!   Sized to fit a FUSE_WRITE with `MAX_IO_SIZE` bytes of data.
@@ -19,7 +20,6 @@
 //! so virtiofsd sees exactly the right length for each request — no
 //! over-reading on FUSE_READ, no wasted I/O.
 
-use std::mem::ManuallyDrop;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -40,19 +40,23 @@ pub struct FuseSession<'a> {
     max_write: u32,
 
     /// Pre-allocated request DMA buffer. Sized for the largest possible
-    /// request (FUSE_WRITE: header + FuseWriteIn + MAX_IO_SIZE).
-    req_buf: ManuallyDrop<Dma<[u8]>>,
+    /// request (FUSE_WRITE: header + FuseWriteIn + MAX_IO_SIZE), rounded
+    /// up to power-of-two pages for safe kernel deallocation.
+    req_buf: Dma<[u8]>,
 
     /// Pre-allocated response DMA buffer. Sized for the largest possible
-    /// response (FUSE_READ: header + MAX_IO_SIZE).
-    resp_buf: ManuallyDrop<Dma<[u8]>>,
+    /// response (FUSE_READ: header + MAX_IO_SIZE), rounded up to
+    /// power-of-two pages for safe kernel deallocation.
+    resp_buf: Dma<[u8]>,
 }
 
 impl<'a> FuseSession<'a> {
     /// Initialize a FUSE session with the host virtiofsd.
     ///
     /// Allocates two DMA buffers that are reused for the lifetime of the
-    /// driver. The FUSE_INIT handshake itself uses these buffers.
+    /// driver. Buffer sizes are rounded to power-of-two page counts by
+    /// `alloc_dma_buffer`, avoiding the kernel's phys_contiguous bug.
+    /// The FUSE_INIT handshake itself uses these buffers.
     pub fn init(queue: Arc<Queue<'a>>) -> Result<Self, FuseTransportError> {
         let unique_counter = AtomicU64::new(1);
 
@@ -61,16 +65,16 @@ impl<'a> FuseSession<'a> {
         // Request: header(40) + largest args (FuseWriteIn=40) + MAX_IO_SIZE
         // Response: header(16) + MAX_IO_SIZE
         //
-        // Both are wrapped in ManuallyDrop immediately so that even if
-        // FUSE_INIT fails, the buffers are leaked (not dropped). This avoids
-        // the Redox kernel page frame deallocation bug.
+        // alloc_dma_buffer rounds these up to power-of-two page counts,
+        // so the kernel's zeroed_phys_contiguous initializes ALL allocated
+        // pages. This makes munmap/deallocation safe — no ManuallyDrop needed.
         let req_buf_size = core::mem::size_of::<FuseInHeader>()
             + core::mem::size_of::<FuseWriteIn>()
             + MAX_IO_SIZE;
         let resp_buf_size = core::mem::size_of::<FuseOutHeader>() + MAX_IO_SIZE;
 
-        let mut req_buf = ManuallyDrop::new(alloc_dma_buffer(req_buf_size)?);
-        let resp_buf = ManuallyDrop::new(alloc_dma_buffer(resp_buf_size)?);
+        let mut req_buf = alloc_dma_buffer(req_buf_size)?;
+        let resp_buf = alloc_dma_buffer(resp_buf_size)?;
 
         // Send FUSE_INIT
         let init_in = FuseInitIn {
@@ -92,7 +96,7 @@ impl<'a> FuseSession<'a> {
         );
 
         req_buf[..req.len()].copy_from_slice(&req);
-        let resp = fuse_exchange(&queue, &*req_buf, req.len(), &*resp_buf, META_RESPONSE)?;
+        let resp = fuse_exchange(&queue, &req_buf, req.len(), &resp_buf, META_RESPONSE)?;
 
         let _hdr = parse_response_header(&resp)?;
         let body = response_body(&resp);
@@ -142,9 +146,9 @@ impl<'a> FuseSession<'a> {
         self.req_buf[..req.len()].copy_from_slice(req);
         fuse_exchange(
             &self.queue,
-            &*self.req_buf,
+            &self.req_buf,
             req.len(),
-            &*self.resp_buf,
+            &self.resp_buf,
             META_RESPONSE,
         )
     }
@@ -167,9 +171,9 @@ impl<'a> FuseSession<'a> {
         self.req_buf[..req.len()].copy_from_slice(req);
         fuse_exchange(
             &self.queue,
-            &*self.req_buf,
+            &self.req_buf,
             req.len(),
-            &*self.resp_buf,
+            &self.resp_buf,
             resp_len,
         )
     }
@@ -183,9 +187,9 @@ impl<'a> FuseSession<'a> {
         self.req_buf[..req.len()].copy_from_slice(req);
         fuse_exchange(
             &self.queue,
-            &*self.req_buf,
+            &self.req_buf,
             req.len(),
-            &*self.resp_buf,
+            &self.resp_buf,
             META_RESPONSE,
         )
     }
