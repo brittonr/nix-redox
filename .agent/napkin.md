@@ -283,6 +283,12 @@
 - Alternatively set `CARGO_BUILD_TARGET=""` to avoid inheriting the cross-target
 - All #[cfg(test)] modules compile fine for linux — no redox-specific APIs used in tests
 
+### Pre-commit formatting after flake module migration (Feb 28 2026)
+- After migrating from flake-parts to adios-flake, nixfmt-rfc-style requires reformatting
+- `nix fmt` fixes all formatting; commit the result BEFORE running `nix flake check`
+- The `pre-commit-run` check runs nixfmt on all tracked .nix files — one bad file blocks ALL checks
+- `nix flake check` cascading failures: pre-commit-run failure makes ALL other checks appear to fail too
+
 ### Generation counting in Ion shell (Feb 20 2026)
 - `grep -c '^[[:space:]]*[0-9]'` doesn't work reliably in Redox grep
 - `wc -l` is more reliable for counting output lines
