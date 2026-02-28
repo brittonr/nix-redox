@@ -56,7 +56,10 @@ rec {
 
   # Create a combined sysroot with relibc
   mkSysroot =
-    { relibc, stubLibs ? null }:
+    {
+      relibc,
+      stubLibs ? null,
+    }:
     pkgs.symlinkJoin {
       name = "redox-sysroot";
       paths = [

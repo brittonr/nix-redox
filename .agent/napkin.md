@@ -2,6 +2,26 @@
 
 ## Corrections & Lessons
 
+### Toolchain ships pre-compiled rlibs for x86_64-unknown-redox (Feb 28 2026)
+- Rust nightly-2025-10-03 ships 26 pre-compiled rlibs for x86_64-unknown-redox
+- `-Z build-std` was recompiling core/alloc/std/panic_abort in EVERY package (~60-90s each × 20 pkgs)
+- Fix: just REMOVE `-Z build-std` — the toolchain's rlibs work out of the box
+- `--allow-multiple-definition` still needed (relibc bundles core/alloc, conflicts with sysroot rlibs)
+- Packages no longer need sysroot vendor merged into their vendor directory
+- Kernel/bootloader STILL need `-Z build-std` (different target triples: no_std and UEFI)
+- First attempted custom prebuilt-sysroot via dummy project + `-Z build-std` → extract rlibs
+  - FAILED: Cargo `-Z build-std` rlibs have different metadata hashes than sysroot rlibs
+  - rustc found BOTH sets (toolchain's + ours) → E0464 "multiple candidates for core"
+  - Even after removing toolchain rlibs, E0425 "cannot find Some" = wrong rlib metadata
+- The simplest solution was the right one: don't fight the toolchain, just use its rlibs
+- delegate_task workers STILL don't persist file changes — 6th+ time this session. ALWAYS do directly.
+
+### packages.nix standaloneCommon pattern (Feb 28 2026)
+- Standalone package imports in packages.nix had 10+ repeated `inherit` lines each
+- Fixed: `standaloneCommon` attrset with all common args, then `// { specific-args }` per package
+- Standalone files that receive extra args need `...` in their function params
+- Some files (orbital, orbterm, orbutils) already had `...` — sed adding duplicate caused syntax error
+
 ### Nix store file permissions
 - Nix store strips write bits from all files
 - `chmod 755` → `555`, `chmod 644` → `444`, `chmod 600` → `444`
