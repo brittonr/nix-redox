@@ -300,6 +300,28 @@
 - Old approach: ~12KB leaked per request (unbounded). New: ~2MB fixed at init (zero growth).
 - FuseTransportError::RequestTooLarge added for buffer overflow protection
 
+### End-to-end networking via QEMU SLiRP (Feb 28 2026)
+- Full network stack works: e1000d → smolnetd → DHCP → DNS → ping → TCP
+- QEMU SLiRP (user-mode networking) works perfectly — no root/TAP needed
+- `-netdev user,id=net0 -device e1000,netdev=net0` is the QEMU incantation
+- Guest gets 10.0.2.15/24 via DHCP, gateway 10.0.2.2, DNS 10.0.2.3
+- **netcfg-setup bug**: `addr/list` returns "Not configured" before DHCP completes
+  - Old code: `!content.is_empty()` → treated "Not configured" as a valid IP
+  - Fix: check `content.contains('.')` to require a real IP address
+- **No `sleep` binary on Redox** — not in uutils, extrautils, or any package
+  - Busy-wait delay: read `/scheme/sys/uname` for real scheme I/O latency (~5ms)
+  - 3000 iterations × 5ms = ~15s effective timeout
+- **Ion shell `echo $var | grep` FAILS SILENTLY** — the pipe to grep doesn't work
+  - Always use Ion-native string comparison: `test $var = "value"`
+  - Or `not test $var = ""` for non-empty checks
+  - This wasted 3 iterations of build+test debugging
+- `extrautils` provides `grep`, `less`, `tar` — NOT in `uutils`
+- `uutils` only has: cat, cp, df, du, echo, head, ls, mkdir, mv, pwd, rm, sort, touch, uniq, wc
+- Network test completes in 2.3s (QEMU+KVM), all 9 tests pass
+- procmgr "Cancellation for unknown id" warnings are harmless (from pipe cleanup)
+- `ifconfig eth0` output: MAC shows 00:00:00:00:00:00 (known smolnetd issue, real MAC at /scheme/netcfg)
+- DHCP takes ~75 polls (roughly 3-5 seconds) to complete after boot
+
 ### Pre-commit formatting after flake module migration (Feb 28 2026)
 - After migrating from flake-parts to adios-flake, nixfmt-rfc-style requires reformatting
 - `nix fmt` fixes all formatting; commit the result BEFORE running `nix flake check`
