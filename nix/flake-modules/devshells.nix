@@ -114,6 +114,10 @@ let
     CARGO_BUILD_TARGET = redoxTarget;
     RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
     TARGET = redoxTarget;
+    # Cross-only crates (redox, netcfg-setup) set [[bin]] test=false since
+    # they can't link on the host. This tells nextest to pass with 0 tests
+    # instead of failing.
+    NEXTEST_NO_TESTS = "pass";
   };
 
 in
