@@ -404,6 +404,56 @@
 - Tarball sources need extraction step — either `pkgs.stdenv.mkDerivation` to pre-extract,
   or manual `tar xf` in configurePhase. Can't use `cp -r ${src}/* .` on a .tar.gz.
 
+### CC wrapper -nostdlib for C binaries (Feb 28 2026)
+- The CC wrapper in mk-c-library.nix MUST add `-nostdlib` to prevent the host glibc's
+  crt1.o/crti.o from being linked. Without it, binaries get BOTH host and relibc CRT files
+  → duplicate _start, _init, _fini symbols.
+- HOWEVER, `-nostdlib` in LDFLAGS breaks autotools configure tests — they try to compile+link
+  tiny programs to detect functions like getopt(), getenv(), etc. With -nostdlib, link fails
+  → configure reports "getopt not found" → build aborts.
+- Solution: CC wrapper adds `-nostdlib` at the LINKER level (inside the wrapper), but
+  packages that need configure tests use `crossEnvSetupWithWrapper` which puts the wrapper
+  as CC (handles CRT injection). Then in preConfigure, override CC with the wrapper and set
+  LDFLAGS WITHOUT -nostdlib (just `--target --sysroot -L -static -fuse-ld=lld`).
+- ncurses: needed CC wrapper override in preConfigure + `--disable-widec` (relibc lacks wint_t)
+  + stub man file inputs (man/man_db.renames.in, man/MKncu_config.in)
+- readline: needed CC wrapper override + stub doc/Makefile.in + tarball hash fix
+  (sha256-0rMVaEhcPF0ZcL1pyWpTNsAMX2MWX7eHMcJEBh68sH8= → sha256-dQ1DcYUob0CjaeHk9HZO2pMrlFm17JpzFig5PdPTIzQ=)
+
+### bash 5.2 cross-compilation for Redox (Feb 28 2026)
+- bash 5.2.15 = 5.0MB static ELF for x86_64-unknown-redox (with readline+ncurses)
+- Dependency chain: relibc → ncurses → readline → bash
+- Patching approach: Python (not sed!) for complex multi-line patches. Sed with `\|` and
+  `\n` in replacement strings is unreliable inside Nix heredocs due to quoting layers.
+- Key patches (from upstream Redox cookbook):
+  1. bashline.c: disable group completion on Redox
+  2. ulimit.def: guard HAVE_RESOURCE with !__redox__
+  3. config-top.h: BROKEN_DIRENT_D_INO
+  4. configure: disable bash_malloc for redox*
+  5. posixwait.h: force POSIX wait types
+  6. lib/readline/input.c: HAVE_SELECT fallback (variable declarations + condition)
+  7. lib/readline/terminal.c: __redox__ guard
+  8. lib/sh/getcwd.c: disable custom getcwd
+  9. lib/sh/strtoimax.c: disable entirely (relibc provides it)
+  10. parse.y + y.tab.c: comment out shell_input_line_property references (HANDLE_MULTIBYTE only)
+- Build tool separation: `CC_FOR_BUILD=gcc` + `sed -i 's/-DHAVE_CONFIG_H//' builtins/Makefile`
+  + `sed -i 's/CC_FOR_BUILD = .*/CC_FOR_BUILD = gcc -std=gnu89/' builtins/Makefile`
+  because config.h is for the cross target, not the host, and GCC 15 rejects K&R declarations.
+- Clang flags: `-Wno-error -Wno-implicit-function-declaration -Wno-implicit-int -Wno-deprecated-non-prototype`
+- Duplicate symbol (mktime): `--allow-multiple-definition` in LDFLAGS
+- Timestamp fix: `find . -type f -exec touch -t 202501010000 {} +` then `touch configure`
+  (configure must be newer than configure.ac to prevent autotools regen)
+- doc/Makefile.in stub needed (same as readline/ncurses pattern)
+
+### gnu-make cross-compilation for Redox (Feb 28 2026)
+- gnu-make 4.4 = 3.9MB static ELF for x86_64-unknown-redox
+- Used mkAutotools from mk-c-library.nix (simpler than bash — no dependency chain)
+- Key patch: `#define ELIDE_CODE` before `#include "getopt.h"` in src/main.c
+  (gnu-make bundles getopt.h/getopt.c which conflict with relibc's getopt)
+- `touch Makefile.in configure` to prevent autotools regeneration
+- doc/make.1 stub to satisfy Makefile reference
+- `--disable-nls --without-guile --disable-job-server --disable-load` for minimal Redox build
+
 ### Batch package addition — pure Rust packages (Feb 28 2026)
 - 10 new packages added in one batch, 3 more attempted but disabled
 - Pattern: create .nix file → add flake input → wire in packages.nix → get vendor hash → fix → build
