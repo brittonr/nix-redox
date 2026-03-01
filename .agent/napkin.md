@@ -735,3 +735,14 @@
 - **Redox flag translation**: Redox open flags (O_RDONLY=0x10000, O_ACCMODE=0x30000) must be
   translated to Linux FUSE flags (O_RDONLY=0) in `redox_to_fuse_flags()` before FUSE_OPEN
 - **All 30 bridge tests pass**: filesystem access, snix search, install, remove, live push, reinstall
+
+### GNU coreutils cross-compilation for Redox (gnulib issues) (Mar 1 2026)
+- **gnulib circular include chain**: `lib/stddef.h → relibc/stddef.h → lib/stdint.h → relibc/sys/types.h → relibc/bits/pthread.h → needs size_t → not defined yet`. Fix: replace ONLY `lib/stddef.h` and `lib/stdint.h` with `#include_next` pass-throughs. Do NOT replace all gnulib headers — the others provide needed definitions (O_BINARY, mbscasecmp, file-type macros etc.)
+- **LDBL_DIG missing**: gnulib's `vasnprintf.c` needs it. gnulib's `lib/float.h` wrapper doesn't pass through to compiler builtin. Fix: `-DLDBL_DIG=__LDBL_DIG__` in CFLAGS uses clang's builtin directly.
+- **mktime/tzset duplicates**: configure guesses `mktime` is broken during cross-compilation and compiles replacements that conflict with relibc. Fix: `gl_cv_func_working_mktime=yes gl_cv_func_tzset_clobber=no` configure cache variables.
+- **timezone_t/mktime_z/tzalloc**: Not in relibc. Need stub `lib/time_rz.c` — but do NOT use inline stubs in headers if gnulib has `time_rz.c` (will conflict). Replace gnulib's `time_rz.c` with stub implementations.
+- **AT_EACCESS / O_SEARCH**: POSIX constants missing from relibc. Fix: `-DAT_EACCESS=0x200 -DO_SEARCH=O_RDONLY` in CFLAGS.
+- **autoreconf vs config.sub-only**: Full autoreconf with gnulib works for newer packages (sed 4.4) but older packages (patch 2.7.6, diffutils 3.6) can get worse with autoreconf pulling in newer gnulib that has more incompatibilities. Safer approach: just replace `build-aux/config.sub` using `pkgs.gnu-config` + timestamp fixup to prevent autotools regeneration.
+- **Tab vs space in patches**: GNU source files use tabs for indentation. Python patch scripts must match exact whitespace. Use `\t` in Python strings, not spaces.
+- **Build order**: configure → apply gnulib fixes → make. Header replacements must happen AFTER configure generates Makefiles (which record header dependencies) but BEFORE make compiles.
+- **Successfully built**: diffutils 3.6 (diff, cmp, diff3, sdiff), sed 4.4, patch 2.7.6 — all static ELF x86_64-unknown-redox

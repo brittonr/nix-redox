@@ -358,7 +358,11 @@ let
     }
   );
 
-  # redox-patch: disabled — gnulib header conflicts with relibc's cross headers
+  redox-diffutils = import ../pkgs/userspace/diffutils-redox.nix cLibCommon;
+
+  redox-sed = import ../pkgs/userspace/sed-redox.nix cLibCommon;
+
+  redox-patch = import ../pkgs/userspace/patch-redox.nix cLibCommon;
 
   # pkgutils disabled: ring crate needs pregenerated assembly from git source
   # pkgutils = import ../pkgs/userspace/pkgutils.nix (
@@ -470,6 +474,9 @@ in
       gnu-make
       redox-bash
       redox-git
+      redox-diffutils
+      redox-sed
+      redox-patch
       ;
 
     # Infrastructure (needed by module system)
