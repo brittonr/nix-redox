@@ -33,7 +33,7 @@ let
 
   src = pkgs.fetchurl {
     url = "https://ftp.gnu.org/gnu/readline/readline-${version}.tar.gz";
-    hash = "sha256-0rMVaEhcPF0ZcL1pyWpTNsAMX2MWX7eHMcJEBh68sH8=";
+    hash = "sha256-dQ1DcYUob0CjaeHk9HZO2pMrlFm17JpzFig5PdPTIzQ=";
   };
 
   # Redox patch: add redox* to config.sub's OS detection
@@ -79,6 +79,22 @@ mkCLibrary.mkAutotools {
   preConfigure = ''
     # Apply Redox config.sub patch
     patch -p1 < ${redoxPatch} || true
+
+    # Create stub doc/Makefile.in (not always present in the tarball)
+    mkdir -p doc
+    if [ ! -f doc/Makefile.in ]; then
+      cat > doc/Makefile.in << 'DOCEOF'
+all:
+install:
+clean:
+distclean:
+DOCEOF
+    fi
+
+    # Use CC wrapper for working link tests
+    export CC="${mkCLibrary.ccWrapper}"
+    export CXX="${mkCLibrary.cxxWrapper}"
+    export LDFLAGS="--target=${redoxTarget} --sysroot=${relibc}/${redoxTarget} -L${relibc}/${redoxTarget}/lib -static -fuse-ld=lld"
   '';
 
   postInstall = ''

@@ -66,7 +66,7 @@ mkCLibrary.mkAutotools {
     "--without-shared"
     "--without-cxx"
     "--without-cxx-binding"
-    "--enable-widec"
+    "--disable-widec"
     "--enable-pc-files"
     "--with-pkg-config-libdir=$out/lib/pkgconfig"
   ];
@@ -76,32 +76,31 @@ mkCLibrary.mkAutotools {
     sed -i 's/(linux\*|gnu\*|k\*bsd\*-gnu)/(linux*|gnu*|k*bsd*-gnu|redox*)/' configure
     grep -q 'redox' configure || { echo "ERROR: Redox patch failed"; exit 1; }
 
+    # Override CC with the wrapper that handles CRT files.
+    # Without this, configure's link tests fail (e.g., getopt, getenv)
+    # because -nostdlib prevents libc linking.
+    export CC="${mkCLibrary.ccWrapper}"
+    export CXX="${mkCLibrary.cxxWrapper}"
+    export LDFLAGS="--target=${redoxTarget} --sysroot=${relibc}/${redoxTarget} -L${relibc}/${redoxTarget}/lib -static -fuse-ld=lld"
+
     # Override ac_cv to avoid configure tests that fail in cross-compilation
     export ac_cv_func_mkstemp=yes
+
+    # Create stub man files (--without-manpages doesn't fully prevent references)
+    mkdir -p man
+    touch man/man_db.renames.in man/MKncu_config.in
   '';
 
   postInstall = ''
-    # Create non-wide symlinks (many packages look for -lncurses not -lncursesw)
-    for lib in ncurses form panel menu; do
-      if [ -f $out/lib/lib''${lib}w.a ]; then
-        ln -sf lib''${lib}w.a $out/lib/lib''${lib}.a
-      fi
-    done
-
     # Symlink curses.h -> ncurses.h for compat
-    if [ -f $out/include/ncursesw/curses.h ]; then
-      ln -sf ncursesw/curses.h $out/include/curses.h
-      ln -sf ncursesw/ncurses.h $out/include/ncurses.h
-      ln -sf ncursesw/term.h $out/include/term.h
-    fi
-
-    # Create pkgconfig symlinks
-    if [ -f $out/lib/pkgconfig/ncursesw.pc ]; then
-      ln -sf ncursesw.pc $out/lib/pkgconfig/ncurses.pc
+    if [ -d $out/include/ncurses ]; then
+      for h in $out/include/ncurses/*.h; do
+        ln -sf "ncurses/$(basename $h)" "$out/include/$(basename $h)" 2>/dev/null || true
+      done
     fi
 
     # Verify
-    test -f $out/lib/libncursesw.a || { echo "ERROR: libncursesw.a not built"; exit 1; }
+    test -f $out/lib/libncurses.a || { echo "ERROR: libncurses.a not built"; exit 1; }
     echo "ncurses libraries:"
     ls -la $out/lib/lib*.a
   '';
