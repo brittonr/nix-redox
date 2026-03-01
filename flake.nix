@@ -338,6 +338,78 @@
       url = "github:bootandy/dust/v1.0.0";
       flake = false;
     };
+
+    # tokei - count lines of code (upstream)
+    tokei-src = {
+      url = "github:XAMPPRocky/tokei/v14.0.0";
+      flake = false;
+    };
+
+    # lsd - modern ls replacement (upstream)
+    lsd-src = {
+      url = "github:lsd-rs/lsd/v1.2.0";
+      flake = false;
+    };
+
+    # shellharden - shell script linter (upstream, pinned rev for Redox compat)
+    shellharden-src = {
+      url = "github:anordal/shellharden/v4.3.1";
+      flake = false;
+    };
+
+    # perg - parallel grep (upstream, pinned rev for Redox compat)
+    perg-src = {
+      url = "github:guerinoni/perg/0.6.0";
+      flake = false;
+    };
+
+    # smith - text editor (Redox-native)
+    smith-src = {
+      url = "gitlab:redox-os/Smith/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # strace-redox - system call tracer (Redox-native)
+    strace-redox-src = {
+      url = "gitlab:redox-os/strace-redox/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # findutils - find command (Redox-native)
+    findutils-src = {
+      url = "gitlab:redox-os/findutils/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # contain - container/namespace tool (Redox-native)
+    contain-src = {
+      url = "gitlab:redox-os/contain/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # pkgar - package archive tool (Redox-native)
+    pkgar-src = {
+      url = "gitlab:redox-os/pkgar/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # redox-ssh - SSH client/server (Redox-native)
+    redox-ssh-src = {
+      url = "gitlab:redox-os/redox-ssh/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # exampled - example scheme daemon (Redox-native)
+    exampled-src = {
+      url = "gitlab:redox-os/exampled/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # games - terminal games collection (Redox-native)
+    games-src = {
+      url = "gitlab:redox-os/games/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
   };
 
   outputs =

@@ -168,6 +168,92 @@ let
     }
   );
 
+  tokei = import ../pkgs/userspace/tokei.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) tokei-src;
+    }
+  );
+
+  lsd = import ../pkgs/userspace/lsd.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) lsd-src;
+    }
+  );
+
+  shellharden = import ../pkgs/userspace/shellharden.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) shellharden-src;
+    }
+  );
+
+  smith = import ../pkgs/userspace/smith.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) smith-src;
+    }
+  );
+
+  strace-redox = import ../pkgs/userspace/strace-redox.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) strace-redox-src;
+    }
+  );
+
+  findutils = import ../pkgs/userspace/findutils.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) findutils-src;
+    }
+  );
+
+  contain = import ../pkgs/userspace/contain.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) contain-src;
+    }
+  );
+
+  pkgar = import ../pkgs/userspace/pkgar.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) pkgar-src;
+    }
+  );
+
+  # redox-ssh disabled: rustc-serialize dep doesn't compile on recent Rust nightly
+  # redox-ssh = import ../pkgs/userspace/redox-ssh.nix (
+  #   standaloneCommon
+  #   // {
+  #     inherit (inputs) redox-ssh-src;
+  #   }
+  # );
+
+  exampled = import ../pkgs/userspace/exampled.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) exampled-src;
+    }
+  );
+
+  redox-games = import ../pkgs/userspace/games.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) games-src;
+    }
+  );
+
+  # pkgutils disabled: ring crate needs pregenerated assembly from git source
+  # pkgutils = import ../pkgs/userspace/pkgutils.nix (
+  #   standaloneCommon
+  #   // {
+  #     inherit (inputs) pkgutils-src;
+  #   }
+  # );
+
   sysroot = pkgs.symlinkJoin {
     name = "redox-sysroot";
     paths = [
@@ -225,6 +311,16 @@ in
       zoxide
       dust
       snix
+      tokei
+      lsd
+      shellharden
+      smith
+      strace-redox
+      findutils
+      contain
+      pkgar
+      exampled
+      redox-games
       ;
 
     # Infrastructure (needed by module system)

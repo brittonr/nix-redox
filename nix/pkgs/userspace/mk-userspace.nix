@@ -203,8 +203,11 @@ rec {
       binaries,
       ...
     }@args:
+    let
+      cleanArgs = builtins.removeAttrs args [ "binaries" ];
+    in
     mkPackage (
-      args
+      cleanArgs
       // {
         installPhase =
           args.installPhase or ''
