@@ -793,3 +793,31 @@
   --disable-arm-simd` to avoid ARM-specific code. Builds clean for x86_64.
 - **libwebp**: mkCmake. Simple cmake build with `-DWEBP_BUILD_CWEBP/DWEBP=OFF -DWEBP_BUILD_GIF2WEBP=OFF`
   to skip tool binaries. Produces 5 libraries: libsharpyuv, libwebp, libwebpdecoder, libwebpdemux, libwebpmux.
+
+### snix-eval upstream update to eee47792 (Mar 1 2026)
+- Updated from commit 6959c488 → eee47792 (12 upstream commits)
+- Key new features: `__curPos` implementation, path interpolation (`./path/${var}`), `dirs` crate removed
+- rnix parser 0.12 → 0.14: `ast::Path` split into `PathAbs/PathHome/PathRel/PathSearch`, `rnix::parser::ParseError` → `rnix::ParseError`
+- nix-compat: `ExportedPathInfo` dropped global `rename_all = "camelCase"`, uses per-field `#[serde(rename)]` instead
+- **Nix 2.31 FOD reference check regression**: `fetchCargoVendor` with git dependencies (snix-eval from git.snix.dev)
+  creates a staging FOD containing the full git checkout, which includes test fixture files with `/nix/store/` paths.
+  Nix 2.31's reference scanner flags these, blocking hash discovery (can't use fake-hash-then-check method).
+  - Error: `fixed-output derivations must not reference store paths`
+  - The check only fires on hash MISMATCH — correct hash skips it — but you can't discover the correct hash!
+  - Old builds were cached with correct hash so never triggered the check
+- **Fix: vendor snix-eval locally** instead of using git dependency in Cargo.toml
+  - Copied snix-eval + snix-eval-builtin-macros from upstream at eee47792
+  - Converted `workspace = true` deps to explicit version numbers
+  - Applied Redox OS patch (`is_second_coordinate` includes `"redox"`) directly in vendored source
+  - Removed test fixtures (3.5MB → 680KB), disabled `mod tests` in lib.rs
+  - `#[cfg(test)]` attribute was silently gating the next non-commented line — commenting out `mod tests`
+    caused `use rustc_hash::FxHashMap` to become test-only! Fixed by commenting out the `#[cfg(test)]` too.
+  - `rustc-hash` 2.x needs `features = ["std"]` for `FxHashMap` type alias (moved behind feature gate)
+  - No more git sources in Cargo.lock → no `gitSources` needed in snix.nix → no `postConfigure` patching
+  - Binary: 4.8MB static ELF (was 4.0MB — slight increase from new features + rnix 0.14)
+  - 206 host unit tests pass, cross-compilation succeeds
+- `dirs` crate removal is great for Redox: home dir now resolved via `EvalIO::get_env("HOME")`
+  which maps to relibc's `getenv()` — no more platform-specific `dirs-sys` → `redox_users` chain
+- The `fetch-cargo-vendor-util create-vendor-staging` can be run manually outside a FOD
+  to compute hashes: set `PATH` to include `fetch-cargo-vendor-util`, `nix-prefetch-git`;
+  set `SSL_CERT_FILE` to cacert bundle

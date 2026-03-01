@@ -27,7 +27,7 @@ pub enum Error<I> {
     Validation(super::DerivationError),
 }
 
-/// Convenience conversion of borring Error to an owned counterpart.
+/// Convenience conversion of borrowed Error to an owned counterpart.
 impl From<Error<&[u8]>> for Error<Vec<u8>> {
     fn from(value: Error<&[u8]>) -> Self {
         match value {

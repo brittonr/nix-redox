@@ -11,12 +11,9 @@ use std::collections::BTreeSet;
 /// It includes some more fields, like `registrationTime`, `signatures` and `ultimate`,
 /// does not include the `closureSize` and encodes `narHash` as SRI.
 #[derive(Clone, Debug, Eq, PartialEq, Hash)]
-#[cfg_attr(
-    feature = "serde",
-    derive(Serialize, Deserialize),
-    serde(rename_all = "camelCase")
-)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct ExportedPathInfo<'a> {
+    #[cfg_attr(feature = "serde", serde(rename = "closureSize"))]
     pub closure_size: u64,
 
     #[cfg_attr(
@@ -29,6 +26,7 @@ pub struct ExportedPathInfo<'a> {
     )]
     pub nar_sha256: [u8; 32],
 
+    #[cfg_attr(feature = "serde", serde(rename = "narSize"))]
     pub nar_size: u64,
 
     #[cfg_attr(feature = "serde", serde(borrow))]
