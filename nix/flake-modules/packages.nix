@@ -421,6 +421,17 @@ let
 
   redox-fribidi = import ../pkgs/userspace/fribidi-redox.nix cLibCommon;
 
+  # === Self-hosting: LLVM toolchain ===
+
+  redox-libcxx = import ../pkgs/userspace/libcxx-redox.nix cLibCommon;
+
+  redox-llvm = import ../pkgs/userspace/llvm-redox.nix (
+    cLibCommon
+    // {
+      inherit redox-libcxx redox-zstd;
+    }
+  );
+
   redox-git = import ../pkgs/userspace/git-redox.nix (
     cLibCommon
     // {
@@ -569,6 +580,12 @@ in
       redox-diffutils
       redox-sed
       redox-patch
+      ;
+
+    # Self-hosting: LLVM toolchain
+    inherit
+      redox-libcxx
+      redox-llvm
       ;
 
     # Infrastructure (needed by module system)

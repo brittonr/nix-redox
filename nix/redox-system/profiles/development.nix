@@ -1,6 +1,7 @@
 # Development RedoxOS Profile
 #
 # Full CLI: editors, utilities, networking with remote shell.
+# Includes self-hosting build tools (bash, make, git, diffutils, sed, patch).
 # Usage: redoxSystem { modules = [ ./profiles/development.nix ]; ... }
 
 { pkgs, lib }:
@@ -11,6 +12,7 @@ in
 {
   "/environment" = {
     systemPackages =
+      # Core shell and utilities
       opt "ion"
       ++ opt "uutils"
       ++ opt "helix"
@@ -19,14 +21,24 @@ in
       ++ opt "sodium"
       ++ opt "netutils"
       ++ opt "userutils"
+      # CLI tools
       ++ opt "ripgrep"
       ++ opt "fd"
       ++ opt "bat"
       ++ opt "hexyl"
       ++ opt "zoxide"
       ++ opt "dust"
+      # System management
       ++ opt "snix"
-      ++ opt "redox-curl";
+      ++ opt "redox-curl"
+      # Self-hosting: build tools
+      ++ opt "redox-bash"
+      ++ opt "gnu-make"
+      ++ opt "redox-git"
+      ++ opt "redox-diffutils"
+      ++ opt "redox-sed"
+      ++ opt "redox-patch"
+      ++ opt "strace-redox";
 
     shellAliases = {
       ls = "ls --color=auto";
