@@ -445,6 +445,21 @@
   (configure must be newer than configure.ac to prevent autotools regen)
 - doc/Makefile.in stub needed (same as readline/ncurses pattern)
 
+### Foundation C libraries — libpng, pcre2, freetype2, sqlite3 (Feb 28 2026)
+- libpng 1.6.46: autotools, depends on zlib. GitHub archive needs `autoreconf -fi`.
+  Test programs use `feenableexcept` (not in relibc) — build only `libpng16.la` target.
+  Manual install of .a, headers, pkg-config (skip libtool's make install which builds tests).
+- pcre2 10.45: autotools. Has ~80 doc files referenced in Makefile. `autoreconf -fi` regenerates
+  the Makefile.in with doc targets we don't have. Fix: `sed -i '/^dist_doc_DATA/,/^$/d'` and
+  `sed -i 's/ doc\/[^ ]*//g'` to strip doc references from Makefile.in before configure.
+- freetype2 2.13.3: cmake (upstream uses meson but cmake also works). Pass explicit
+  `-DZLIB_LIBRARY=`, `-DPNG_LIBRARY=` paths. Disable harfbuzz/brotli/bzip2. Builds clean.
+- sqlite3 3.49.1: amalgamation build (single sqlite3.c). No configure needed — just
+  `$CC $CFLAGS -c sqlite3.c` then `$AR rcs libsqlite3.a sqlite3.o`. Trivial cross-compile.
+  Use `-DSQLITE_OMIT_LOAD_EXTENSION -DSQLITE_THREADSAFE=0 -DSQLITE_OS_UNIX=1`.
+- All four use crossEnvSetup (raw clang, not wrapper) except libpng which needs
+  crossEnvSetupWithWrapper for configure link tests.
+
 ### gnu-make cross-compilation for Redox (Feb 28 2026)
 - gnu-make 4.4 = 3.9MB static ELF for x86_64-unknown-redox
 - Used mkAutotools from mk-c-library.nix (simpler than bash — no dependency chain)
