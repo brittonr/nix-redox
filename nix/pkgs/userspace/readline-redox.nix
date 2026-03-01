@@ -77,24 +77,24 @@ mkCLibrary.mkAutotools {
   ];
 
   preConfigure = ''
-    # Apply Redox config.sub patch
-    patch -p1 < ${redoxPatch} || true
+        # Apply Redox config.sub patch
+        patch -p1 < ${redoxPatch} || true
 
-    # Create stub doc/Makefile.in (not always present in the tarball)
-    mkdir -p doc
-    if [ ! -f doc/Makefile.in ]; then
-      cat > doc/Makefile.in << 'DOCEOF'
-all:
-install:
-clean:
-distclean:
-DOCEOF
-    fi
+        # Create stub doc/Makefile.in (not always present in the tarball)
+        mkdir -p doc
+        if [ ! -f doc/Makefile.in ]; then
+          cat > doc/Makefile.in << 'DOCEOF'
+    all:
+    install:
+    clean:
+    distclean:
+    DOCEOF
+        fi
 
-    # Use CC wrapper for working link tests
-    export CC="${mkCLibrary.ccWrapper}"
-    export CXX="${mkCLibrary.cxxWrapper}"
-    export LDFLAGS="--target=${redoxTarget} --sysroot=${relibc}/${redoxTarget} -L${relibc}/${redoxTarget}/lib -static -fuse-ld=lld"
+        # Use CC wrapper for working link tests
+        export CC="${mkCLibrary.ccWrapper}"
+        export CXX="${mkCLibrary.cxxWrapper}"
+        export LDFLAGS="--target=${redoxTarget} --sysroot=${relibc}/${redoxTarget} -L${relibc}/${redoxTarget}/lib -static -fuse-ld=lld"
   '';
 
   postInstall = ''
