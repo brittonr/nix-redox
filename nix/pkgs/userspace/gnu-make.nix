@@ -38,7 +38,10 @@ let
   extractedSrc = pkgs.stdenv.mkDerivation {
     name = "gnu-make-${version}-src";
     dontUnpack = true;
-    nativeBuildInputs = [ pkgs.gnutar pkgs.gzip ];
+    nativeBuildInputs = [
+      pkgs.gnutar
+      pkgs.gzip
+    ];
     installPhase = ''
       mkdir -p $out
       tar xf ${src} -C $out --strip-components=1
@@ -52,53 +55,53 @@ mkCLibrary.mkLibrary {
   src = extractedSrc;
 
   configurePhase = ''
-    runHook preConfigure
+        runHook preConfigure
 
-    cp -r ${extractedSrc}/* .
-    chmod -R u+w .
+        cp -r ${extractedSrc}/* .
+        chmod -R u+w .
 
-    # Patch 1: ar.h not available on Redox — use fallback definitions
-    sed -i 's|# if !defined (__ANDROID__) && !defined (__BEOS__)|# if 0|' src/arscan.c
+        # Patch 1: ar.h not available on Redox — use fallback definitions
+        sed -i 's|# if !defined (__ANDROID__) && !defined (__BEOS__)|# if 0|' src/arscan.c
 
-    # Patch 2: ELIDE_CODE for getopt on Redox (relibc provides getopt)
-    # Make's getopt conflicts with relibc's getopt — disable make's copy
-    sed -i '1i\
-#ifdef __redox__\
-#define ELIDE_CODE\
-#endif' src/getopt1.c src/getopt.c
+        # Patch 2: ELIDE_CODE for getopt on Redox (relibc provides getopt)
+        # Make's getopt conflicts with relibc's getopt — disable make's copy
+        sed -i '1i\
+    #ifdef __redox__\
+    #define ELIDE_CODE\
+    #endif' src/getopt1.c src/getopt.c
 
-    # Create stub doc/Makefile.in — prevents doc-related build failures
-    mkdir -p doc
-    cat > doc/Makefile.in << 'DOCEOF'
-all:
-install:
-clean:
-distclean:
-DOCEOF
-    # Also create a dummy man page so the top-level Makefile doesn't fail
-    touch doc/make.1
+        # Create stub doc/Makefile.in — prevents doc-related build failures
+        mkdir -p doc
+        cat > doc/Makefile.in << 'DOCEOF'
+    all:
+    install:
+    clean:
+    distclean:
+    DOCEOF
+        # Also create a dummy man page so the top-level Makefile doesn't fail
+        touch doc/make.1
 
-    # Fix timestamps to prevent autotools regeneration
-    # Order: aclocal.m4 < configure < config.h.in < Makefile.in
-    touch aclocal.m4
-    sleep 1
-    touch configure
-    sleep 1
-    find . -name 'config.h.in' -exec touch {} \;
-    sleep 1
-    find . -name 'Makefile.in' -exec touch {} \;
+        # Fix timestamps to prevent autotools regeneration
+        # Order: aclocal.m4 < configure < config.h.in < Makefile.in
+        touch aclocal.m4
+        sleep 1
+        touch configure
+        sleep 1
+        find . -name 'config.h.in' -exec touch {} \;
+        sleep 1
+        find . -name 'Makefile.in' -exec touch {} \;
 
-    ${mkCLibrary.crossEnvSetupWithWrapper}
+        ${mkCLibrary.crossEnvSetupWithWrapper}
 
-    # Configure for cross-compilation
-    ./configure \
-      --host=${redoxTarget} \
-      --build=${pkgs.stdenv.buildPlatform.config} \
-      --prefix=$out \
-      ac_cv_func_mkfifo=no \
-      --disable-nls
+        # Configure for cross-compilation
+        ./configure \
+          --host=${redoxTarget} \
+          --build=${pkgs.stdenv.buildPlatform.config} \
+          --prefix=$out \
+          ac_cv_func_mkfifo=no \
+          --disable-nls
 
-    runHook postConfigure
+        runHook postConfigure
   '';
 
   buildPhase = ''
