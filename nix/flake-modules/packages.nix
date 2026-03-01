@@ -346,6 +346,52 @@ let
 
   redox-sqlite3 = import ../pkgs/userspace/sqlite3-redox.nix cLibCommon;
 
+  # === Tier 1 foundation libraries ===
+
+  redox-libiconv = import ../pkgs/userspace/libiconv-redox.nix cLibCommon;
+
+  redox-bzip2 = import ../pkgs/userspace/bzip2-redox.nix cLibCommon;
+
+  redox-lz4 = import ../pkgs/userspace/lz4-redox.nix cLibCommon;
+
+  redox-xz = import ../pkgs/userspace/xz-redox.nix cLibCommon;
+
+  redox-libffi = import ../pkgs/userspace/libffi-redox.nix cLibCommon;
+
+  redox-libjpeg = import ../pkgs/userspace/libjpeg-redox.nix cLibCommon;
+
+  redox-libgif = import ../pkgs/userspace/libgif-redox.nix cLibCommon;
+
+  redox-pixman = import ../pkgs/userspace/pixman-redox.nix cLibCommon;
+
+  redox-gettext = import ../pkgs/userspace/gettext-redox.nix (
+    cLibCommon
+    // {
+      inherit redox-libiconv;
+    }
+  );
+
+  redox-libtiff = import ../pkgs/userspace/libtiff-redox.nix (
+    cLibCommon
+    // {
+      inherit redox-zlib redox-libjpeg;
+    }
+  );
+
+  redox-libwebp = import ../pkgs/userspace/libwebp-redox.nix (
+    cLibCommon
+    // {
+      inherit redox-zlib redox-libpng redox-libjpeg;
+    }
+  );
+
+  redox-harfbuzz = import ../pkgs/userspace/harfbuzz-redox.nix (
+    cLibCommon
+    // {
+      inherit redox-freetype2 redox-zlib redox-libpng;
+    }
+  );
+
   redox-git = import ../pkgs/userspace/git-redox.nix (
     cLibCommon
     // {
@@ -467,6 +513,19 @@ in
       redox-pcre2
       redox-freetype2
       redox-sqlite3
+      # Tier 1 foundation libraries
+      redox-libiconv
+      redox-bzip2
+      redox-lz4
+      redox-xz
+      redox-libffi
+      redox-libjpeg
+      redox-libgif
+      redox-pixman
+      redox-gettext
+      redox-libtiff
+      redox-libwebp
+      redox-harfbuzz
       ;
 
     # Self-hosting: build tools and shells

@@ -111,12 +111,27 @@ mkCLibrary.mkLibrary {
     # Compat symlinks
     ln -sf libpng16.a $out/lib/libpng.a
 
-    # pkg-config
-    cp libpng16.pc $out/lib/pkgconfig/ 2>/dev/null || true
-    ln -sf libpng16.pc $out/lib/pkgconfig/libpng.pc 2>/dev/null || true
+    # pkg-config — create both libpng16.pc and libpng.pc
+    if [ -f libpng16.pc ]; then
+      cp libpng16.pc $out/lib/pkgconfig/
+      sed -i "s|^prefix=.*|prefix=$out|" $out/lib/pkgconfig/libpng16.pc
+    else
+      cat > $out/lib/pkgconfig/libpng16.pc << PCEOF
+    prefix=$out
+    exec_prefix=''${prefix}
+    libdir=''${prefix}/lib
+    includedir=''${prefix}/include/libpng16
 
-    # Fix prefix in pkgconfig
-    sed -i "s|^prefix=.*|prefix=$out|" $out/lib/pkgconfig/*.pc 2>/dev/null || true
+    Name: libpng
+    Description: PNG library
+    Version: ${version}
+    Requires: zlib
+    Libs: -L''${libdir} -lpng16
+    Cflags: -I''${includedir}
+    PCEOF
+    fi
+    # libpng.pc is a copy, not a symlink (avoids broken symlink issue)
+    cp $out/lib/pkgconfig/libpng16.pc $out/lib/pkgconfig/libpng.pc
 
     # Verify
     test -f $out/lib/libpng16.a || { echo "ERROR: libpng16.a not built"; exit 1; }

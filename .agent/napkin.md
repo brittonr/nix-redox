@@ -746,3 +746,50 @@
 - **Tab vs space in patches**: GNU source files use tabs for indentation. Python patch scripts must match exact whitespace. Use `\t` in Python strings, not spaces.
 - **Build order**: configure → apply gnulib fixes → make. Header replacements must happen AFTER configure generates Makefiles (which record header dependencies) but BEFORE make compiles.
 - **Successfully built**: diffutils 3.6 (diff, cmp, diff3, sdiff), sed 4.4, patch 2.7.6 — all static ELF x86_64-unknown-redox
+
+### Tier 1 foundation C libraries batch (Mar 1 2026)
+- **All 12 built**: libiconv, gettext, bzip2, lz4, xz, libffi, libjpeg, libtiff, libgif, libwebp, pixman, harfbuzz
+- **libjpeg headers**: libjpeg-turbo puts source headers in `src/` not root. `find .. -name "header.h"` works;
+  `find .. -maxdepth 1` misses them. Missing `jerror.h` caused libtiff failure.
+- **libtiff cmake CXX**: cmake option to disable C++ wrapper is `cxx=OFF` (not `tiff-cxx=OFF`).
+  Found via `grep -i 'option.*cxx'` in cmake/CXXLibrary.cmake.
+- **libtiff FindCMath**: relibc includes math functions in libc (no separate libm).
+  Replace `cmake/FindCMath.cmake` with `set(CMath_FOUND TRUE)` stub.
+- **cmake cross include paths**: `-DJPEG_INCLUDE_DIR=path` tells cmake WHERE to find the package
+  but does NOT automatically add `-I` flags to compilation commands when `CMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY`.
+  Must also set `CMAKE_C_STANDARD_INCLUDE_DIRECTORIES` or put deps in `CMAKE_C_FLAGS` directly.
+- **gettext gnulib conflict**: Full gettext build pulls in gnulib which has wchar.h/stdint.h wrappers
+  that conflict with relibc include chain. Solution: compile ONLY the minimal libintl source files
+  manually (bindtextdom, dgettext, gettext, etc.) with a hand-written config.h. Skip gnulib entirely.
+- **gettext libintl.h generation**: Header is generated from `libgnuintl.in.h` template with @VAR@ substitution.
+  Must generate it explicitly; `make install` of the full gettext would do this but we skip it.
+  Use Python for substitution (Nix `''` strings eat `@''` in sed patterns).
+- **libpng broken symlink**: `ln -sf libpng16.pc libpng.pc` creates a symlink, but if libpng16.pc
+  doesn't exist as a real file (only as a libtool-generated path), the symlink is dangling.
+  Fix: `cp` instead of `ln -sf` for pkg-config compatibility files.
+- **harfbuzz C++ stubs**: HarfBuzz is C++ internally (uses type_traits, atomic, initializer_list, etc.)
+  but relibc has no C++ standard library. Full libc++ headers DON'T WORK because `#include_next`
+  chain for float.h/math.h breaks when cross-compiling with custom sysroot.
+  Solution: minimal hand-written C++ header stubs in a `runCommand` derivation. Provide ONLY
+  what harfbuzz needs: type_traits (38 traits), atomic (single-threaded), initializer_list,
+  new (placement new), memory (addressof), utility (move/forward/swap), algorithm (upper_bound),
+  functional (hash for all integer/float types), mutex (no-op stubs).
+  Key: `std::addressof` must handle const types; `std::hash<float>` uses memcpy to bits.
+  Compile with `-nostdinc++ -I$stubs -isystem $clangResDir -fno-exceptions -fno-rtti -DHB_NO_MT`.
+- **harfbuzz `addressof` redefinition**: Had it in both `<new>` and `<memory>`. Keep only in `<memory>`.
+- **meson pkg-config for cross builds**: meson ignores PKG_CONFIG_LIBDIR env var during cross compilation.
+  The `pkg-config` binary in the cross file must be an absolute path (relative paths fail with
+  "Did not find pkg-config by name"). BUT even with absolute path, dependency chain (freetype2→zlib+libpng)
+  fails if those deps' .pc files aren't in the search path. Ended up building harfbuzz with cmake instead.
+- **cmake vs meson**: cmake handles cross-compilation better for our use case (can pass all flags
+  via -DCMAKE_*_FLAGS). meson's cross file + property system is more opinionated and harder to debug.
+- **xz**: mkAutotools with CC wrapper. Straightforward build.
+- **lz4/bzip2**: mkLibrary (manual build phases). lz4 uses `make -C lib` with LIB_CFLAGS/AR/RANLIB.
+  bzip2 uses `make libbz2.a` with CC/AR/RANLIB env vars.
+- **libffi**: mkAutotools. GitHub archive needs `autoreconf -fi`. Disable test/man/doc subdirs.
+- **libgif**: mkLibrary with manual compilation of `dgif_lib.c egif_lib.c gifalloc.c gif_err.c
+  gif_font.c gif_hash.c openbsd-reallocarray.c`. Skip utilities that need linked executables.
+- **pixman**: mkAutotools. `--disable-arm-a64-neon --disable-arm-iwmmxt --disable-arm-neon
+  --disable-arm-simd` to avoid ARM-specific code. Builds clean for x86_64.
+- **libwebp**: mkCmake. Simple cmake build with `-DWEBP_BUILD_CWEBP/DWEBP=OFF -DWEBP_BUILD_GIF2WEBP=OFF`
+  to skip tool binaries. Produces 5 libraries: libsharpyuv, libwebp, libwebpdecoder, libwebpdemux, libwebpmux.
