@@ -84,6 +84,15 @@ let
     dust = self'.packages.dust or null;
     snix = self'.packages.snix or null;
     redox-curl = self'.packages.redox-curl or null;
+
+    # Self-hosting: build tools
+    redox-bash = self'.packages.redox-bash or null;
+    gnu-make = self'.packages.gnu-make or null;
+    redox-git = self'.packages.redox-git or null;
+    redox-diffutils = self'.packages.redox-diffutils or null;
+    redox-sed = self'.packages.redox-sed or null;
+    redox-patch = self'.packages.redox-patch or null;
+    strace-redox = self'.packages.strace-redox or null;
   };
 
   # Pre-built system configurations using profiles
