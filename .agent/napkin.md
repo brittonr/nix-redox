@@ -460,6 +460,32 @@
 - All four use crossEnvSetup (raw clang, not wrapper) except libpng which needs
   crossEnvSetupWithWrapper for configure link tests.
 
+### git 2.13.1 cross-compilation for Redox (Feb 28 2026)
+- 6.4MB static ELF with 166 subcommands (git-add, commit, push, clone, etc.)
+- Dependencies: curl + expat + openssl + zlib (all previously built)
+- REG_STARTEND: relibc's regex.h lacks it. Define `REG_STARTEND 0` in git-compat-util.h
+  after `#include <regex.h>`. Then override configure's `NO_REGEX` in config.mak.autogen
+  AFTER configure runs (configure detects missing REG_STARTEND and sets NO_REGEX=YesPlease).
+  The bundled compat/regex is broken because its `regex.c` does `#include <regex.h>`
+  (angle brackets) which finds relibc's version due to `--sysroot` include precedence.
+  Even `"regex.h"` (quotes) didn't fix it reliably with sysroot. Best approach: use system
+  regex with REG_STARTEND=0 as no-op flag.
+- config.mak.autogen overrides MUST be appended AFTER `./configure` runs, not before.
+  Configure writes this file — appending before gets overwritten.
+- `struct ustar_header`: forward-declared in `get-tar-commit-id.c` but never defined.
+  relibc's `tar.h` also redefines `RECORDSIZE` with a different value.
+  Fix: `#undef RECORDSIZE` before redefine, and add full struct definition inline.
+- `-liconv`: configure detects iconv and adds it. Override with `NO_ICONV = 1` and
+  `NEEDS_LIBICONV =` (empty) in config.mak.autogen.
+- `NO_PERL = 1`: no perl on Redox. Without this, make tries `/usr/bin/perl` and fails.
+- Python patching for complex Redox patches (terminal.c prompt, daemon.c syslog guards,
+  git-compat-util.h SIG defines, /dev/null → /scheme/null, setup.c setsid guard).
+  terminal.c patched via separate heredoc `python3 << 'PYEOF'` to avoid Nix `''` string issues.
+- Makefile hard-link removal: Redox lacks hard links. Use grep+sed to delete `ln "$<"` lines,
+  keeping `ln -s` (symlink) fallbacks.
+- Nix `''` string quoting: Python `''` (empty string) terminates Nix heredoc strings.
+  Use heredoc `<< 'PYEOF'` for Python code containing `''`.
+
 ### gnu-make cross-compilation for Redox (Feb 28 2026)
 - gnu-make 4.4 = 3.9MB static ELF for x86_64-unknown-redox
 - Used mkAutotools from mk-c-library.nix (simpler than bash — no dependency chain)
