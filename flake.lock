@@ -126,6 +126,41 @@
         "type": "gitlab"
       }
     },
+    "bottom-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1762206029,
+        "narHash": "sha256-ryzI0dF5XzvHOmn+UgDG6to+OsrYXpOLA9wvSP70iUY=",
+        "owner": "jackpot51",
+        "repo": "bottom",
+        "rev": "7cf3105d8856eb3d6a931ce31cfa56ee0262d691",
+        "type": "github"
+      },
+      "original": {
+        "owner": "jackpot51",
+        "repo": "bottom",
+        "type": "github"
+      }
+    },
+    "ca-certificates-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1736783256,
+        "narHash": "sha256-+rLomQsBhSPScaDdeaPjTRPBenYQCPVWt/w40LcIPZM=",
+        "owner": "redox-os",
+        "repo": "ca-certificates",
+        "rev": "8139d99ed9cee43280f435ec3d52730e21e7f459",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "ca-certificates",
+        "type": "gitlab"
+      }
+    },
     "cc-rs-src": {
       "flake": false,
       "locked": {
@@ -601,6 +636,25 @@
         "type": "github"
       }
     },
+    "netdb-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1511149750,
+        "narHash": "sha256-Ei88cjh7tdHSrXJG+JkosDca3fodApU4djR6Izh0BRU=",
+        "owner": "redox-os",
+        "repo": "netdb",
+        "rev": "2c1560629852f10c8cc3dde3d254f7c753d7557d",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "netdb",
+        "type": "gitlab"
+      }
+    },
     "netutils-src": {
       "flake": false,
       "locked": {
@@ -653,6 +707,23 @@
         "ref": "master",
         "repo": "object",
         "type": "gitlab"
+      }
+    },
+    "onefetch-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1667153550,
+        "narHash": "sha256-ydRdnzOI9syfF2ox9vHA9Q0j8C7ZNb0b7CJfqUprPA0=",
+        "owner": "o2sh",
+        "repo": "onefetch",
+        "rev": "a6e5ebb8eb90571f952b47c7d10b25dd8e43d55a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "o2sh",
+        "ref": "v2.13.2",
+        "repo": "onefetch",
+        "type": "github"
       }
     },
     "openlibm-src": {
@@ -1096,6 +1167,8 @@
         "bat-src": "bat-src",
         "binutils-src": "binutils-src",
         "bootloader-src": "bootloader-src",
+        "bottom-src": "bottom-src",
+        "ca-certificates-src": "ca-certificates-src",
         "cc-rs-src": "cc-rs-src",
         "compiler-builtins-src": "compiler-builtins-src",
         "contain-src": "contain-src",
@@ -1120,9 +1193,11 @@
         "liblibc-src": "liblibc-src",
         "libredox-src": "libredox-src",
         "lsd-src": "lsd-src",
+        "netdb-src": "netdb-src",
         "netutils-src": "netutils-src",
         "nixpkgs": "nixpkgs",
         "object-src": "object-src",
+        "onefetch-src": "onefetch-src",
         "openlibm-src": "openlibm-src",
         "openssl-redox-src": "openssl-redox-src",
         "orbclient-src": "orbclient-src",
@@ -1152,6 +1227,7 @@
         "smith-src": "smith-src",
         "sodium-src": "sodium-src",
         "strace-redox-src": "strace-redox-src",
+        "terminfo-src": "terminfo-src",
         "termion-src": "termion-src",
         "tokei-src": "tokei-src",
         "treefmt-nix": "treefmt-nix",
@@ -1270,6 +1346,22 @@
         "ref": "master",
         "repo": "strace-redox",
         "type": "gitlab"
+      }
+    },
+    "terminfo-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1512336690,
+        "narHash": "sha256-Mvqe+sbIrrUZ8xsg+jt8Te1+6EGvpxPhqvyajlWV1wE=",
+        "owner": "sajattack",
+        "repo": "terminfo",
+        "rev": "dc5712b13b4a4058ffca1f077167994b1764828a",
+        "type": "github"
+      },
+      "original": {
+        "owner": "sajattack",
+        "repo": "terminfo",
+        "type": "github"
       }
     },
     "termion-src": {

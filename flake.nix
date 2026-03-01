@@ -416,6 +416,36 @@
       url = "gitlab:redox-os/openssl/redox-v1?host=gitlab.redox-os.org";
       flake = false;
     };
+
+    # ca-certificates - TLS root certificate bundle
+    ca-certificates-src = {
+      url = "gitlab:redox-os/ca-certificates/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # terminfo - terminal capability database
+    terminfo-src = {
+      url = "github:sajattack/terminfo";
+      flake = false;
+    };
+
+    # netdb - network database (hosts, services, protocols)
+    netdb-src = {
+      url = "gitlab:redox-os/netdb/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # bottom - graphical system monitor (Redox fork)
+    bottom-src = {
+      url = "github:jackpot51/bottom";
+      flake = false;
+    };
+
+    # onefetch - git repository summary (upstream, cargo template)
+    onefetch-src = {
+      url = "github:o2sh/onefetch/v2.13.2";
+      flake = false;
+    };
   };
 
   outputs =

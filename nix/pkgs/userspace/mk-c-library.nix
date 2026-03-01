@@ -67,7 +67,40 @@ let
     pkg-config
   ];
 
+  # CC wrapper script that transparently adds CRT startup files for link steps.
+  # This makes autotools ./configure link tests WORK, since they can now find
+  # crt0.o/crti.o/crtn.o and -lc. Without this, -nostdlib causes all AC_CHECK_FUNC
+  # tests to fail (they try to link a small program but can't find libc).
+  #
+  # Compile-only (-c, -S, -E): pass through to real clang
+  # Link step: prepend crt0.o+crti.o, append -lc/-lpthread/crtn.o
+  ccWrapper = pkgs.writeShellScript "redox-cc" ''
+    # Detect compile-only operations
+    for arg in "$@"; do
+      case "$arg" in
+        -c|-S|-E|-M|-MM)
+          exec ${cc} "$@"
+          ;;
+      esac
+    done
+    # Link step: add relibc CRT startup files
+    exec ${cc} -static ${sysroot}/lib/crt0.o ${sysroot}/lib/crti.o "$@" -l:libc.a -l:libpthread.a ${sysroot}/lib/crtn.o
+  '';
+
+  cxxWrapper = pkgs.writeShellScript "redox-cxx" ''
+    for arg in "$@"; do
+      case "$arg" in
+        -c|-S|-E|-M|-MM)
+          exec ${cxx} "$@"
+          ;;
+      esac
+    done
+    exec ${cxx} -static ${sysroot}/lib/crt0.o ${sysroot}/lib/crti.o "$@" -l:libc.a -l:libpthread.a ${sysroot}/lib/crtn.o
+  '';
+
   # Shell snippet that exports all cross-compilation environment variables
+  # Uses raw clang (no CRT wrapper) — for library-only builds where link tests
+  # aren't needed or where -nostdlib is desired.
   crossEnvSetup = ''
     export CC="${cc}"
     export CXX="${cxx}"
@@ -90,6 +123,30 @@ let
     export PKG_CONFIG_SYSROOT_DIR="${sysroot}"
   '';
 
+  # Shell snippet using the CC wrapper — makes configure link tests work.
+  # Use this for packages that need working AC_CHECK_FUNC / AC_TRY_LINK.
+  crossEnvSetupWithWrapper = ''
+    export CC="${ccWrapper}"
+    export CXX="${cxxWrapper}"
+    export AR="${ar}"
+    export RANLIB="${ranlib}"
+    export STRIP="${strip}"
+    export LD="${ld}"
+    export NM="${nm}"
+
+    export CHOST="${redoxTarget}"
+    export TARGET="${redoxTarget}"
+
+    export CFLAGS="${baseCFlags}"
+    export CXXFLAGS="${baseCFlags}"
+    export CPPFLAGS="-I${sysroot}/include"
+    # With the CC wrapper handling CRT, LDFLAGS stays clean (no -nostdlib needed)
+    export LDFLAGS="--target=${redoxTarget} --sysroot=${sysroot} -L${sysroot}/lib -static -fuse-ld=lld"
+
+    export PKG_CONFIG_LIBDIR="$out/lib/pkgconfig:${sysroot}/lib/pkgconfig"
+    export PKG_CONFIG_SYSROOT_DIR="${sysroot}"
+  '';
+
   # Helper to add dependency paths to CFLAGS/LDFLAGS
   mkDepFlags =
     deps:
@@ -107,7 +164,13 @@ let
 
 in
 rec {
-  inherit crossEnvSetup mkDepFlags;
+  inherit
+    crossEnvSetup
+    crossEnvSetupWithWrapper
+    mkDepFlags
+    ccWrapper
+    cxxWrapper
+    ;
 
   # Build a C library using a custom build script
   mkLibrary =

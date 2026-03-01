@@ -253,6 +253,41 @@ let
     inherit (modularPkgs.system) relibc;
   };
 
+  # === Data packages (no compilation) ===
+
+  ca-certificates = import ../pkgs/userspace/ca-certificates.nix {
+    inherit pkgs lib;
+    inherit (inputs) ca-certificates-src;
+  };
+
+  terminfo = import ../pkgs/userspace/terminfo.nix {
+    inherit pkgs lib;
+    inherit (inputs) terminfo-src;
+  };
+
+  netdb = import ../pkgs/userspace/netdb.nix {
+    inherit pkgs lib;
+    inherit (inputs) netdb-src;
+  };
+
+  # === Additional Rust packages ===
+
+  bottom = import ../pkgs/userspace/bottom.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) bottom-src;
+    }
+  );
+
+  onefetch = import ../pkgs/userspace/onefetch.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) onefetch-src;
+    }
+  );
+
+  # === C Libraries (cross-compiled static libs for Redox) ===
+
   redox-zlib = import ../pkgs/userspace/zlib.nix cLibCommon;
 
   redox-zstd = import ../pkgs/userspace/zstd-redox.nix cLibCommon;
@@ -270,6 +305,15 @@ let
     cLibCommon
     // {
       inherit redox-zlib redox-openssl;
+    }
+  );
+
+  redox-ncurses = import ../pkgs/userspace/ncurses-redox.nix cLibCommon;
+
+  redox-readline = import ../pkgs/userspace/readline-redox.nix (
+    cLibCommon
+    // {
+      inherit redox-ncurses;
     }
   );
 
@@ -350,6 +394,19 @@ in
       redox-games
       ;
 
+    # Data packages
+    inherit
+      ca-certificates
+      terminfo
+      netdb
+      ;
+
+    # Additional Rust CLI tools
+    inherit
+      bottom
+      ;
+    # onefetch disabled: proc-macro2 1.0.46 uses removed proc_macro_span_shrink feature
+
     # C Libraries (cross-compiled static libs)
     inherit
       redox-zlib
@@ -357,6 +414,8 @@ in
       redox-expat
       redox-openssl
       redox-curl
+      redox-ncurses
+      redox-readline
       ;
 
     # Infrastructure (needed by module system)
