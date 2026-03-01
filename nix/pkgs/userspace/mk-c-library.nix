@@ -164,12 +164,49 @@ let
       export PKG_CONFIG_LIBDIR="$PKG_CONFIG_LIBDIR${lib.concatMapStrings (d: ":${d}/lib/pkgconfig") deps}"
     '';
 
+  # Generate a meson cross file for the Redox target.
+  # Takes a list of dependency packages to add to PKG_CONFIG_LIBDIR.
+  mkMesonCrossFile =
+    deps:
+    let
+      pkgConfigDirs = lib.concatMapStringsSep ":" (d: "${d}/lib/pkgconfig") deps;
+    in
+    pkgs.writeText "redox-cross-file.txt" ''
+      [binaries]
+      c = '${cc}'
+      cpp = '${cxx}'
+      ar = '${ar}'
+      strip = '${strip}'
+      pkg-config = '${pkgs.writeShellScript "redox-pkg-config" ''
+        export PKG_CONFIG_LIBDIR="${pkgConfigDirs}"
+        export PKG_CONFIG_SYSROOT_DIR=""
+        exec ${pkgs.pkg-config}/bin/pkg-config "$@"
+      ''}'
+
+      [built-in options]
+      c_args = ['--target=${redoxTarget}', '--sysroot=${sysroot}', '-D__redox__', '-U_FORTIFY_SOURCE', '-D_FORTIFY_SOURCE=0', '-I${sysroot}/include', '-fPIC']
+      c_link_args = ['--target=${redoxTarget}', '--sysroot=${sysroot}', '-L${sysroot}/lib', '-static', '-nostdlib', '${sysroot}/lib/crt0.o', '${sysroot}/lib/crti.o', '-lc', '-lpthread', '${sysroot}/lib/crtn.o']
+      cpp_args = ['--target=${redoxTarget}', '--sysroot=${sysroot}', '-D__redox__', '-U_FORTIFY_SOURCE', '-D_FORTIFY_SOURCE=0', '-I${sysroot}/include', '-fPIC']
+      cpp_link_args = ['--target=${redoxTarget}', '--sysroot=${sysroot}', '-L${sysroot}/lib', '-static', '-nostdlib', '${sysroot}/lib/crt0.o', '${sysroot}/lib/crti.o', '-lc', '-lpthread', '${sysroot}/lib/crtn.o']
+
+      [host_machine]
+      system = 'redox'
+      cpu_family = '${targetArch}'
+      cpu = '${targetArch}'
+      endian = 'little'
+
+      [properties]
+      needs_exe_wrapper = true
+      sys_root = '${sysroot}'
+    '';
+
 in
 rec {
   inherit
     crossEnvSetup
     crossEnvSetupWithWrapper
     mkDepFlags
+    mkMesonCrossFile
     ccWrapper
     cxxWrapper
     ;
@@ -364,6 +401,76 @@ rec {
       installPhase = ''
         runHook preInstall
         make install
+        runHook postInstall
+      '';
+    };
+
+  # Build a C library using meson + ninja
+  mkMeson =
+    {
+      pname,
+      version ? "unstable",
+      src,
+      nativeBuildInputs ? [ ],
+      buildInputs ? [ ],
+      mesonFlags ? [ ],
+      preConfigure ? "",
+      postInstall ? "",
+      meta ? { },
+      ...
+    }:
+    let
+      crossFile = mkMesonCrossFile buildInputs;
+    in
+    mkLibrary {
+      inherit
+        pname
+        version
+        src
+        postInstall
+        meta
+        ;
+
+      nativeBuildInputs = nativeBuildInputs ++ [
+        pkgs.meson
+        pkgs.ninja
+        pkgs.python3
+      ];
+
+      configurePhase = ''
+        runHook preConfigure
+
+        # Copy source with write permissions
+        cp -r ${src}/* .
+        chmod -R u+w .
+
+        # Fix shebangs in Python scripts to use the Nix Python
+        find . -name '*.py' -exec sed -i 's|#!/usr/bin/env python3|#!${pkgs.python3}/bin/python3|' {} \; 2>/dev/null || true
+        find . -name '*.py' -exec sed -i 's|#!/usr/bin/python3|#!${pkgs.python3}/bin/python3|' {} \; 2>/dev/null || true
+
+        ${crossEnvSetup}
+        ${mkDepFlags buildInputs}
+        ${preConfigure}
+
+        meson setup build \
+          --cross-file ${crossFile} \
+          --prefix=$out \
+          --default-library=static \
+          --wrap-mode=nodownload \
+          ${lib.concatStringsSep " \\\n          " mesonFlags}
+
+        runHook postConfigure
+      '';
+
+      buildPhase = ''
+        runHook preBuild
+        ninja -C build -j $NIX_BUILD_CORES
+        runHook postBuild
+      '';
+
+      installPhase = ''
+        runHook preInstall
+        ninja -C build install
         runHook postInstall
       '';
     };

@@ -153,9 +153,14 @@ mkCLibrary.mkLibrary {
         'HAVE_SNPRINTF': '1',
         'HAVE_ASPRINTF': '0',
         'HAVE_WPRINTF': '0',
+        'ENHANCE_LOCALE_FUNCS': '0',
+        'HAVE_NAMELESS_LOCALES': '0',
     }
     for k, v in subs.items():
         content = content.replace('@' + k + '@', v)
+    # Replace any remaining @VAR@ with 0 (safe default for #if)
+    import re
+    content = re.sub(r'@[A-Z_]+@', '0', content)
     with open('$out/include/libintl.h', 'w') as f:
         f.write(content)
     "
