@@ -392,6 +392,35 @@ let
     }
   );
 
+  # ---- Graphics stack ----
+
+  redox-glib = import ../pkgs/userspace/glib-redox.nix (
+    cLibCommon
+    // {
+      inherit
+        redox-zlib
+        redox-libffi
+        redox-libiconv
+        redox-gettext
+        redox-pcre2
+        ;
+    }
+  );
+
+  redox-fontconfig = import ../pkgs/userspace/fontconfig-redox.nix (
+    cLibCommon
+    // {
+      inherit
+        redox-expat
+        redox-freetype2
+        redox-libpng
+        redox-zlib
+        ;
+    }
+  );
+
+  redox-fribidi = import ../pkgs/userspace/fribidi-redox.nix cLibCommon;
+
   redox-git = import ../pkgs/userspace/git-redox.nix (
     cLibCommon
     // {
@@ -526,6 +555,10 @@ in
       redox-libtiff
       redox-libwebp
       redox-harfbuzz
+      # Graphics stack
+      redox-glib
+      redox-fontconfig
+      redox-fribidi
       ;
 
     # Self-hosting: build tools and shells
