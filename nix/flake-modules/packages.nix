@@ -328,6 +328,24 @@ let
     }
   );
 
+  redox-libpng = import ../pkgs/userspace/libpng-redox.nix (
+    cLibCommon
+    // {
+      inherit redox-zlib;
+    }
+  );
+
+  redox-pcre2 = import ../pkgs/userspace/pcre2-redox.nix cLibCommon;
+
+  redox-freetype2 = import ../pkgs/userspace/freetype2-redox.nix (
+    cLibCommon
+    // {
+      inherit redox-zlib redox-libpng;
+    }
+  );
+
+  redox-sqlite3 = import ../pkgs/userspace/sqlite3-redox.nix cLibCommon;
+
   # redox-patch: disabled — gnulib header conflicts with relibc's cross headers
   # redox-git: disabled — needs hash discovery and link testing
 
@@ -430,6 +448,10 @@ in
       redox-curl
       redox-ncurses
       redox-readline
+      redox-libpng
+      redox-pcre2
+      redox-freetype2
+      redox-sqlite3
       ;
 
     # Self-hosting: build tools and shells
