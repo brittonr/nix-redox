@@ -346,8 +346,19 @@ let
 
   redox-sqlite3 = import ../pkgs/userspace/sqlite3-redox.nix cLibCommon;
 
+  redox-git = import ../pkgs/userspace/git-redox.nix (
+    cLibCommon
+    // {
+      inherit
+        redox-curl
+        redox-expat
+        redox-openssl
+        redox-zlib
+        ;
+    }
+  );
+
   # redox-patch: disabled — gnulib header conflicts with relibc's cross headers
-  # redox-git: disabled — needs hash discovery and link testing
 
   # pkgutils disabled: ring crate needs pregenerated assembly from git source
   # pkgutils = import ../pkgs/userspace/pkgutils.nix (
@@ -458,6 +469,7 @@ in
     inherit
       gnu-make
       redox-bash
+      redox-git
       ;
 
     # Infrastructure (needed by module system)
