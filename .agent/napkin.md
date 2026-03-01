@@ -384,6 +384,24 @@
 - `snix system generations` outputs: 5 header lines + N gen entries + 2 footer lines
 - So `wc -l > 10` means at least 4 generation entries (header=5, footer=2, data≥4)
 
+### Batch package addition — pure Rust packages (Feb 28 2026)
+- 10 new packages added in one batch, 3 more attempted but disabled
+- Pattern: create .nix file → add flake input → wire in packages.nix → get vendor hash → fix → build
+- Dummy hash `sha256-0000...` triggers hash mismatch error that reveals the real hash
+- `mkMultiBinary` had a bug: passed `binaries` arg through to `mkPackage` which rejected it
+  Fix: `builtins.removeAttrs args ["binaries"]` before forwarding (same pattern as `mkBinary`/`binaryName`)
+- `fetchCargoVendor` ONLY works when Cargo.lock exists — perg (0.6.0) has none → build fails at vendor stage
+- Git dependencies: adding `gitSources` to package args configures the cargo vendor config to map git URLs
+  to the vendor directory. Without this, offline build can't find git deps → "can't checkout in offline mode"
+- ring crate from git: needs `pregenerated/` assembly files that aren't in crates.io registry download
+  The vendor dir only has registry sources, not full git checkout → assembly files missing → clang error
+  This blocks pkgutils (depends on ring for TLS). Would need special handling to include git source.
+- rustc-serialize: ancient crate, doesn't compile on Rust nightly 2025+ (lifetime errors)
+  Blocks redox-ssh which depends on it. Would need upstream update or fork.
+- Parallel vendor hash discovery: `nix build .#pkg 2>&1 | grep 'got:'` in backgrounded loops
+  BUT backgrounded output interleaves — better to run sequentially with labeled output
+- All packages should use `...` in their function params to accept standaloneCommon extras silently
+
 ### Artifact test coverage (58 total, Feb 20 2026)
 - 16 new store/profile/generation artifact tests added
 - Key invariants tested: boot-essential stays in /bin/, managed goes to profile, symlinks target /nix/store/

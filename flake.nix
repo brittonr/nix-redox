@@ -410,6 +410,12 @@
       url = "gitlab:redox-os/games/master?host=gitlab.redox-os.org";
       flake = false;
     };
+
+    # openssl - Redox-patched OpenSSL fork (v1 branch)
+    openssl-redox-src = {
+      url = "gitlab:redox-os/openssl/redox-v1?host=gitlab.redox-os.org";
+      flake = false;
+    };
   };
 
   outputs =

@@ -246,6 +246,26 @@ let
     }
   );
 
+  # === C Libraries (cross-compiled static libs for Redox) ===
+
+  cLibCommon = {
+    inherit pkgs lib redoxTarget;
+    inherit (modularPkgs.system) relibc;
+  };
+
+  redox-zlib = import ../pkgs/userspace/zlib.nix cLibCommon;
+
+  redox-zstd = import ../pkgs/userspace/zstd-redox.nix cLibCommon;
+
+  redox-expat = import ../pkgs/userspace/expat-redox.nix cLibCommon;
+
+  redox-openssl = import ../pkgs/userspace/openssl-redox.nix (
+    cLibCommon
+    // {
+      inherit (inputs) openssl-redox-src;
+    }
+  );
+
   # pkgutils disabled: ring crate needs pregenerated assembly from git source
   # pkgutils = import ../pkgs/userspace/pkgutils.nix (
   #   standaloneCommon
@@ -321,6 +341,14 @@ in
       pkgar
       exampled
       redox-games
+      ;
+
+    # C Libraries (cross-compiled static libs)
+    inherit
+      redox-zlib
+      redox-zstd
+      redox-expat
+      redox-openssl
       ;
 
     # Infrastructure (needed by module system)

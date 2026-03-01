@@ -674,6 +674,25 @@
         "type": "gitlab"
       }
     },
+    "openssl-redox-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1763325406,
+        "narHash": "sha256-E9nLb1hHAGDDjXPbLGC8139XV6VloJxcD1dIT3LM2Zw=",
+        "owner": "redox-os",
+        "repo": "openssl",
+        "rev": "4718e756cf7a2be433113b844dda79de3d599d8f",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "redox-v1",
+        "repo": "openssl",
+        "type": "gitlab"
+      }
+    },
     "orbclient-src": {
       "flake": false,
       "locked": {
@@ -1105,6 +1124,7 @@
         "nixpkgs": "nixpkgs",
         "object-src": "object-src",
         "openlibm-src": "openlibm-src",
+        "openssl-redox-src": "openssl-redox-src",
         "orbclient-src": "orbclient-src",
         "orbdata-src": "orbdata-src",
         "orbfont-src": "orbfont-src",
