@@ -84,7 +84,9 @@ let
       esac
     done
     # Link step: add relibc CRT startup files
-    exec ${cc} -static ${sysroot}/lib/crt0.o ${sysroot}/lib/crti.o "$@" -l:libc.a -l:libpthread.a ${sysroot}/lib/crtn.o
+    # -nostdlib prevents clang/gcc from adding HOST CRT files (which would
+    # conflict with our relibc CRT providing _start/_init/_fini).
+    exec ${cc} -nostdlib -static ${sysroot}/lib/crt0.o ${sysroot}/lib/crti.o "$@" -l:libc.a -l:libpthread.a ${sysroot}/lib/crtn.o
   '';
 
   cxxWrapper = pkgs.writeShellScript "redox-cxx" ''
@@ -95,7 +97,7 @@ let
           ;;
       esac
     done
-    exec ${cxx} -static ${sysroot}/lib/crt0.o ${sysroot}/lib/crti.o "$@" -l:libc.a -l:libpthread.a ${sysroot}/lib/crtn.o
+    exec ${cxx} -nostdlib -static ${sysroot}/lib/crt0.o ${sysroot}/lib/crti.o "$@" -l:libc.a -l:libpthread.a ${sysroot}/lib/crtn.o
   '';
 
   # Shell snippet that exports all cross-compilation environment variables

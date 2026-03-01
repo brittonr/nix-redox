@@ -317,6 +317,20 @@ let
     }
   );
 
+  # === Self-hosting: C binaries cross-compiled for Redox ===
+
+  gnu-make = import ../pkgs/userspace/gnu-make.nix cLibCommon;
+
+  redox-bash = import ../pkgs/userspace/bash-redox.nix (
+    cLibCommon
+    // {
+      inherit redox-readline redox-ncurses;
+    }
+  );
+
+  # redox-patch: disabled — gnulib header conflicts with relibc's cross headers
+  # redox-git: disabled — needs hash discovery and link testing
+
   # pkgutils disabled: ring crate needs pregenerated assembly from git source
   # pkgutils = import ../pkgs/userspace/pkgutils.nix (
   #   standaloneCommon
@@ -416,6 +430,12 @@ in
       redox-curl
       redox-ncurses
       redox-readline
+      ;
+
+    # Self-hosting: build tools and shells
+    inherit
+      gnu-make
+      redox-bash
       ;
 
     # Infrastructure (needed by module system)
