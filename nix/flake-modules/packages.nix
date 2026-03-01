@@ -266,6 +266,13 @@ let
     }
   );
 
+  redox-curl = import ../pkgs/userspace/curl-redox.nix (
+    cLibCommon
+    // {
+      inherit redox-zlib redox-openssl;
+    }
+  );
+
   # pkgutils disabled: ring crate needs pregenerated assembly from git source
   # pkgutils = import ../pkgs/userspace/pkgutils.nix (
   #   standaloneCommon
@@ -349,6 +356,7 @@ in
       redox-zstd
       redox-expat
       redox-openssl
+      redox-curl
       ;
 
     # Infrastructure (needed by module system)

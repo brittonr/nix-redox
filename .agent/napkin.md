@@ -422,6 +422,29 @@
   BUT backgrounded output interleaves — better to run sequentially with labeled output
 - All packages should use `...` in their function params to accept standaloneCommon extras silently
 
+### curl cross-compilation for Redox (Feb 28 2026)
+- curl 8.11.1 cross-compiled with 1-line Redox patch (adds `__redox__` to sys/select.h guard)
+- Three cross-compilation challenges solved:
+  1. **Host CRT contamination**: Nix-wrapped clang picks up HOST glibc's crt1.o even with `--sysroot`
+     because clang doesn't recognize `x86_64-unknown-redox` as a standard target for CRT search.
+     Fix: CC wrapper script that adds relibc CRT files for link steps only.
+  2. **relibc stdatomic.h incompatibility**: `_Atomic(int)` builtins in clang don't work with
+     relibc's stdatomic.h macros. Fix: `ac_cv_header_stdatomic_h=no` in configure → falls to pthread lock.
+  3. **libtool strips -static and rejects .o in LDFLAGS**: libtool removes `-static` from LDFLAGS
+     (thinks it knows better) and rejects CRT .o files as "non-libtool objects".
+     Fix: CC wrapper adds both `-static` and CRT files — they can't be stripped.
+- CC wrapper pattern (reusable for any C binary cross-compiled to Redox):
+  ```bash
+  # Compile-only: pass through to real clang
+  for arg in "$@"; do case "$arg" in -c|-S|-E|-M|-MM) exec clang "$@" ;; esac; done
+  # Link step: add CRT + force static
+  exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" -l:libc.a -l:libpthread.a $SYSROOT/lib/crtn.o
+  ```
+- `-l:libc.a` (GNU linker extension) forces static libc when both libc.a and libc.so exist in sysroot
+- Output: 6.6MB static ELF binary + 1.1MB libcurl.a + headers + pkg-config
+- Protocols: FILE HTTP HTTPS IPFS IPNS WS WSS (no FTP/SMTP/IMAP — disabled)
+- Wired into development profile as a managed package (not boot-essential)
+
 ### Artifact test coverage (58 total, Feb 20 2026)
 - 16 new store/profile/generation artifact tests added
 - Key invariants tested: boot-essential stays in /bin/, managed goes to profile, symlinks target /nix/store/

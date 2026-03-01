@@ -83,6 +83,7 @@ let
     zoxide = self'.packages.zoxide or null;
     dust = self'.packages.dust or null;
     snix = self'.packages.snix or null;
+    redox-curl = self'.packages.redox-curl or null;
   };
 
   # Pre-built system configurations using profiles

@@ -25,7 +25,8 @@ in
       ++ opt "hexyl"
       ++ opt "zoxide"
       ++ opt "dust"
-      ++ opt "snix";
+      ++ opt "snix"
+      ++ opt "redox-curl";
 
     shellAliases = {
       ls = "ls --color=auto";
