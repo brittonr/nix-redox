@@ -384,6 +384,26 @@
 - `snix system generations` outputs: 5 header lines + N gen entries + 2 footer lines
 - So `wc -l > 10` means at least 4 generation entries (header=5, footer=2, data≥4)
 
+### C library cross-compilation for Redox (Feb 28 2026)
+- Created `mk-c-library.nix` with `mkLibrary`, `mkAutotools`, `mkCmake` helpers
+- Cross-env: CC=clang, AR=llvm-ar, CFLAGS includes `--target=x86_64-unknown-redox --sysroot=relibc/...`
+- CRITICAL: C library builds CANNOT build test/app binaries — they need full libc linking
+  but our LDFLAGS have `-nostdlib -static`. Build only `.a` targets, install manually.
+- zlib: `./configure` uses `CHOST` env var for cross-detection. `make libz.a` for lib-only.
+  The pkgconfig prefix varies — use `sed` not `substituteInPlace` for robustness.
+- zstd: `make -C lib libzstd.a HAVE_PTHREAD=0` — the shared lib build uses `--noexecstack`
+  flag that clang doesn't support. `lib-mt` target builds both static+shared — avoid it.
+- expat: autotools needs `doc/Makefile.in` stub + correct timestamp ordering to prevent regen.
+  `touch aclocal.m4; sleep 1; touch configure expat_config.h.in; sleep 1; touch Makefile.in`
+  The `sleep 1` matters — Nix timestamps can all be epoch-zero otherwise.
+- OpenSSL (Redox fork): Configure args after target go into CFLAGS — don't put `--with-rand-seed`
+  there, it becomes a clang arg. `make build_generated` then `make libcrypto.a libssl.a || true`
+  because the Makefile also tries to link apps/openssl which fails. Verify .a files exist after.
+- `fetchurl` hashes: always wrong on first try. Get the real hash from the error message.
+- `dontFixup = true` prevents patchelf from running on cross-compiled outputs.
+- Tarball sources need extraction step — either `pkgs.stdenv.mkDerivation` to pre-extract,
+  or manual `tar xf` in configurePhase. Can't use `cp -r ${src}/* .` on a .tar.gz.
+
 ### Batch package addition — pure Rust packages (Feb 28 2026)
 - 10 new packages added in one batch, 3 more attempted but disabled
 - Pattern: create .nix file → add flake input → wire in packages.nix → get vendor hash → fix → build
