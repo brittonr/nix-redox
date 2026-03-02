@@ -72,60 +72,79 @@ mkCLibrary.mkLibrary {
   buildPhase = ''
     runHook preBuild
 
-    cd gettext-runtime/intl
-
     CC="${pkgs.llvmPackages.clang-unwrapped}/bin/clang"
+    CFLAGS="--target=${redoxTarget} --sysroot=${sysroot} -I${sysroot}/include -D__redox__ -fPIC"
 
-    INTL_CFLAGS="--target=${redoxTarget} --sysroot=${sysroot} -I${sysroot}/include"
-    INTL_CFLAGS="$INTL_CFLAGS -I. -I.. -I${redox-libiconv}/include"
-    INTL_CFLAGS="$INTL_CFLAGS -D__redox__ -DHAVE_CONFIG_H -DLOCALEDIR=\"/usr/share/locale\""
-    INTL_CFLAGS="$INTL_CFLAGS -DLOCALE_ALIAS_PATH=\"/usr/share/locale\""
-    INTL_CFLAGS="$INTL_CFLAGS -DLIBDIR=\"/usr/lib\" -DIN_LIBINTL"
-    INTL_CFLAGS="$INTL_CFLAGS -DENABLE_RELOCATABLE=0 -DNO_XMALLOC"
-    INTL_CFLAGS="$INTL_CFLAGS -fPIC -Wno-incompatible-pointer-types"
+    # Redox is C-locale only, so libintl functions are simple passthroughs.
+    # The real GNU gettext source has deep gnulib dependencies that don't
+    # compile cleanly against relibc. Stub implementations are the standard
+    # approach for single-locale systems.
+    cat > libintl_stubs.c << 'STUBEOF'
+    #include <stddef.h>
 
-    # Create a minimal config.h
-    cat > config.h << 'CONFEOF'
-    #define HAVE_ALLOCA_H 1
-    #define HAVE_ALLOCA 1
-    #define HAVE_STDLIB_H 1
-    #define HAVE_STRING_H 1
-    #define HAVE_MEMORY_H 1
-    #define HAVE_STRINGS_H 1
-    #define HAVE_UNISTD_H 1
-    #define HAVE_STDINT_H 1
-    #define HAVE_LIMITS_H 1
-    #define HAVE_LOCALE_H 1
-    #define HAVE_GETCWD 1
-    #define HAVE_STPCPY 1
-    #define HAVE_MEMPCPY 1
-    #define HAVE_TSEARCH 1
-    #define HAVE_ICONV 1
-    #define HAVE_SETLOCALE 1
-    #define HAVE_NEWLOCALE 0
-    #define HAVE_USELOCALE 0
-    #define STDC_HEADERS 1
-    #define ENABLE_NLS 1
-    CONFEOF
+    /* Domain binding — no-ops that return their input */
+    static const char *current_domain = "messages";
 
-    # Compile the minimal set of libintl source files
-    OBJS=""
-    for src_file in \
-      bindtextdom.c dcgettext.c dgettext.c gettext.c \
-      finddomain.c hash-string.c loadmsgcat.c localealias.c \
-      textdomain.c l10nflist.c explodename.c dcigettext.c \
-      dcngettext.c dngettext.c ngettext.c plural.c plural-exp.c \
-      localcharset.c log.c printf.c osdep.c intl-compat.c; do
-      if [ -f "$src_file" ]; then
-        obj=$(basename $src_file .c).o
-        echo "Compiling $src_file..."
-        $CC $INTL_CFLAGS -c "$src_file" -o "$obj" 2>/dev/null && OBJS="$OBJS $obj" || echo "  skipped $src_file"
-      fi
-    done
+    char *libintl_textdomain(const char *domainname) {
+        if (domainname) current_domain = domainname;
+        return (char *)current_domain;
+    }
 
-    # Archive into static library
-    ${pkgs.llvmPackages.bintools-unwrapped}/bin/llvm-ar rcs libintl.a $OBJS
+    char *libintl_bindtextdomain(const char *domainname, const char *dirname) {
+        (void)domainname;
+        return (char *)dirname;
+    }
+
+    char *libintl_bind_textdomain_codeset(const char *domainname, const char *codeset) {
+        (void)domainname;
+        return (char *)codeset;
+    }
+
+    /* Message lookup — return msgid untranslated (C locale) */
+    char *libintl_gettext(const char *msgid) {
+        return (char *)msgid;
+    }
+
+    char *libintl_dgettext(const char *domainname, const char *msgid) {
+        (void)domainname;
+        return (char *)msgid;
+    }
+
+    char *libintl_dcgettext(const char *domainname, const char *msgid, int category) {
+        (void)domainname;
+        (void)category;
+        return (char *)msgid;
+    }
+
+    /* Plural forms — return singular if n==1, plural otherwise */
+    char *libintl_ngettext(const char *msgid, const char *msgid_plural, unsigned long n) {
+        return (char *)(n == 1 ? msgid : msgid_plural);
+    }
+
+    char *libintl_dngettext(const char *domainname, const char *msgid, const char *msgid_plural, unsigned long n) {
+        (void)domainname;
+        return (char *)(n == 1 ? msgid : msgid_plural);
+    }
+
+    char *libintl_dcngettext(const char *domainname, const char *msgid, const char *msgid_plural, unsigned long n, int category) {
+        (void)domainname;
+        (void)category;
+        return (char *)(n == 1 ? msgid : msgid_plural);
+    }
+
+    /* Needed by some consumers for locale charset detection */
+    const char *locale_charset(void) {
+        return "UTF-8";
+    }
+    STUBEOF
+
+    echo "Compiling libintl stubs..."
+    $CC $CFLAGS -c libintl_stubs.c -o libintl_stubs.o
+    ${pkgs.llvmPackages.bintools-unwrapped}/bin/llvm-ar rcs libintl.a libintl_stubs.o
     ${pkgs.llvmPackages.bintools-unwrapped}/bin/llvm-ranlib libintl.a
+
+    echo "=== libintl.a symbols ==="
+    ${pkgs.llvmPackages.bintools-unwrapped}/bin/llvm-nm libintl.a | grep ' T '
 
     runHook postBuild
   '';
@@ -136,14 +155,12 @@ mkCLibrary.mkLibrary {
         mkdir -p $out/lib $out/include $out/lib/pkgconfig
 
         cp libintl.a $out/lib/
-        cp libintl.h $out/include/ 2>/dev/null || cp ../../gettext-runtime/intl/libintl.h $out/include/ 2>/dev/null || true
 
-        # Generate libintl.h from libgnuintl.in.h template using Python
-        if [ ! -f "$out/include/libintl.h" ]; then
-          template=$(find ../.. -name 'libgnuintl.in.h' | head -1)
-          if [ -n "$template" ]; then
-            ${pkgs.python3}/bin/python3 -c "
-    import re, sys
+        # Generate libintl.h from the template in the extracted source
+        template=$(find ${extractedSrc} -name 'libgnuintl.in.h' | head -1)
+        if [ -n "$template" ]; then
+          ${pkgs.python3}/bin/python3 -c "
+    import re
     with open('$template') as f:
         content = f.read()
     subs = {
@@ -158,13 +175,12 @@ mkCLibrary.mkLibrary {
     }
     for k, v in subs.items():
         content = content.replace('@' + k + '@', v)
-    # Replace any remaining @VAR@ with 0 (safe default for #if)
-    import re
     content = re.sub(r'@[A-Z_]+@', '0', content)
     with open('$out/include/libintl.h', 'w') as f:
         f.write(content)
     "
-          fi
+        else
+          echo "ERROR: libgnuintl.in.h template not found"; exit 1
         fi
 
         cat > $out/lib/pkgconfig/intl.pc << EOF
@@ -180,6 +196,7 @@ mkCLibrary.mkLibrary {
         EOF
 
         test -f $out/lib/libintl.a || { echo "ERROR: libintl.a not built"; exit 1; }
+        test -f $out/include/libintl.h || { echo "ERROR: libintl.h not generated"; exit 1; }
         echo "gettext (libintl) libraries:"
         ls -la $out/lib/lib*.a
 

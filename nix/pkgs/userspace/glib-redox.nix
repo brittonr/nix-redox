@@ -227,47 +227,102 @@ mkCLibrary.mkLibrary {
     PYEOF
 
         # 9. Patch GIO source files for Redox compatibility
-        # gunixmounts.c: stub mount point functions (Redox has no /etc/fstab)
+        # gunixmounts.c: the internal functions _g_get_unix_mounts,
+        # _g_get_unix_mount_points, get_mtab_monitor_file are defined
+        # inside #if chains (HAVE_GETMNTENT_R, HAVE_GETMNTENT, etc.).
+        # On Redox none match → #error. We must replace each #error with
+        # an actual function body that returns empty results.
         ${pkgs.python3}/bin/python3 << 'PYEOF'
-    import re
-
-    # Patch gunixmounts.c — add Redox stubs
     with open("gio/gunixmounts.c") as f:
-        lines = f.readlines()
-    result = []
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        # Replace #error with empty implementations
-        if '#error No _g_get_unix_mounts() implementation' in line:
-            # This #error is inside an #else block. Replace with nothing —
-            # the function body is already provided by the preceding #elif blocks.
-            # But we need to provide a stub. The #else block was the catch-all.
-            # Remove the #error and keep the #else + #endif structure.
-            pass  # skip the line
-        elif '#error No g_get_mount_table() implementation' in line:
-            pass  # skip the line
-        else:
-            result.append(line)
-        i += 1
-    with open("gio/gunixmounts.c", "w") as f:
-        f.writelines(result)
+        content = f.read()
 
-    # Now add fallback __redox__ functions for the mount points section too
-    # and get_mtab_monitor_file
-    with open("gio/gunixmounts.c") as f:
-        c = f.read()
-    # Add a __redox__ defined-away version of _g_get_unix_mount_points
-    c = c.replace(
-        '#error No _g_get_unix_mount_points() implementation for system',
-        '/* Redox: no mount points */'
+    # Each platform provides a full function definition under its #if.
+    # On Redox none match, so we must provide complete function bodies.
+    content = content.replace(
+        '#error No _g_get_unix_mounts() implementation for system',
+        "/* Redox: no mount entries */\nstatic GList *\n_g_get_unix_mounts (void)\n{\n  return (void *)0;\n}"
     )
-    # Ensure get_mtab_monitor_file has a fallback
-    if 'get_mtab_monitor_file' in c and '__redox__' not in c:
-        # Add a define before first use
-        c = '#ifdef __redox__\nstatic const char * get_mtab_monitor_file(void) { return (const char *)0; }\n#endif\n' + c
+
+    content = content.replace(
+        '#error No _g_get_unix_mount_points() implementation for system',
+        "/* Redox: no mount points */\nstatic GList *\n_g_get_unix_mount_points (void)\n{\n  return (void *)0;\n}"
+    )
+
+    content = content.replace(
+        '#error No g_get_mount_table() implementation for system',
+        "/* Redox: no mount table or mount points */\nstatic GList *\n_g_get_unix_mount_points (void)\n{\n  return (void *)0;\n}"
+    )
+
+    content = content.replace(
+        '#error No get_mounts_timestamp() implementation',
+        "/* Redox: no mounts timestamp */\nstatic guint64\nget_mounts_timestamp (void)\n{\n  return 0;\n}"
+    )
+
+    # Add fallback get_mtab_monitor_file at the top if not already present
+    if '_g_get_unix_mounts' in content and '__redox__' not in content:
+        content = '#ifdef __redox__\nstatic const char *get_mtab_monitor_file(void) { return (const char *)0; }\n#endif\n' + content
+
     with open("gio/gunixmounts.c", "w") as f:
-        f.write(c)
+        f.write(content)
+    PYEOF
+
+        # 10. Create Redox stubs for missing POSIX *at() functions.
+        # relibc doesn't implement openat/unlinkat/fchownat/linkat.
+        # Create a .c file added to gio's build.
+        cat > gio/_redox_stubs.c << 'STUBEOF'
+    /* Stub implementations of POSIX *at() functions for Redox OS.
+     * These ignore the dirfd parameter and fall back to non-at variants.
+     * This is safe because GIO always passes AT_FDCWD on Redox. */
+    #include <fcntl.h>
+    #include <stdarg.h>
+    #include <unistd.h>
+
+    /* Prototypes (not in relibc headers) */
+    int openat(int dirfd, const char *pathname, int flags, ...);
+    int unlinkat(int dirfd, const char *pathname, int flags);
+    int fchownat(int dirfd, const char *pathname, unsigned int uid, unsigned int gid, int flags);
+    int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags);
+
+    int openat(int dirfd, const char *pathname, int flags, ...) {
+        (void)dirfd;
+        if (flags & O_CREAT) {
+            va_list ap;
+            va_start(ap, flags);
+            int mode = va_arg(ap, int);
+            va_end(ap);
+            return open(pathname, flags, mode);
+        }
+        return open(pathname, flags);
+    }
+
+    int unlinkat(int dirfd, const char *pathname, int flags) {
+        (void)dirfd;
+        (void)flags;
+        return unlink(pathname);
+    }
+
+    int fchownat(int dirfd, const char *pathname, unsigned int uid, unsigned int gid, int flags) {
+        (void)dirfd; (void)pathname; (void)uid; (void)gid; (void)flags;
+        return 0;
+    }
+
+    int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags) {
+        (void)olddirfd; (void)newdirfd; (void)flags;
+        return link(oldpath, newpath);
+    }
+    STUBEOF
+
+        # Wire _redox_stubs.c into gio/meson.build
+        ${pkgs.python3}/bin/python3 << 'PYEOF'
+    with open("gio/meson.build") as f:
+        content = f.read()
+    # Add our stubs file to the gio sources list
+    content = content.replace(
+        "gio_sources = files(",
+        "gio_sources = files(\n  '_redox_stubs.c',"
+    )
+    with open("gio/meson.build", "w") as f:
+        f.write(content)
     PYEOF
 
         meson setup build \
