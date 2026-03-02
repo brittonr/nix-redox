@@ -912,3 +912,31 @@
 - The `fetch-cargo-vendor-util create-vendor-staging` can be run manually outside a FOD
   to compute hashes: set `PATH` to include `fetch-cargo-vendor-util`, `nix-prefetch-git`;
   set `SSL_CERT_FILE` to cacert bundle
+
+### libc++ exception support + libunwind (Mar 2 2026)
+- libc++ was built with `-DLIBCXX_ENABLE_EXCEPTIONS=OFF` — blocked cmake linking
+- Fixed: enable exceptions in libc++, libc++abi, and add LLVM libunwind
+- **link.h missing from relibc**: libunwind's AddressSpace.hpp needs it for `dl_iterate_phdr`
+  - Created stub `link.h` with `struct dl_phdr_info` using raw `uint64_t`/`uint16_t` types
+  - relibc's elf.h uses `struct Elf64_Phdr` (not typedef'd) — must use `struct` keyword in C code
+- **`_LIBUNWIND_USE_DL_ITERATE_PHDR=1`**: must be passed via `-D` in C/CXX flags
+  because `CMAKE_SYSTEM_NAME=Generic` doesn't trigger it (only `Linux` does)
+  Without this, `Elf_Half`/`Elf_Phdr`/`Elf_Addr` typedefs in AddressSpace.hpp are never created
+- **dl_iterate_phdr for static binaries**: uses `__ehdr_start` linker symbol (weak, hidden)
+  to find the main executable's program headers. Returns just one object (the static binary).
+  Compiled into libunwind.a via patched CMakeLists.txt.
+- **ElfW macro**: glibc defines `ElfW(type)` in `link.h` — our stub defines it as `Elf64_##type`
+- Sparse checkout hash changes when adding "libunwind" to the list
+- Output: libc++.a (2.4MB) + libc++abi.a (700KB) + libunwind.a (132KB)
+- 40 `__cxa_*` symbols now defined in libc++abi.a (exception handling works)
+
+### cmake 3.31.0 fully linked for Redox (Mar 2 2026)
+- With exception-enabled libc++ + libunwind, cmake links successfully
+- Added `-lunwind` to `CMAKE_CXX_STANDARD_LIBRARIES` in toolchain file
+- libuv stub needed 13 MORE symbols beyond the initial set:
+  `uv_close`, `uv_fs_get_system_error`, `uv_fs_link`, `uv_fs_symlink`,
+  `uv_idle_stop`, `uv_is_closing`, `uv_write`, `uv_buf_init`, `uv_cpumask_size`,
+  `uv_process_kill`, `uv_is_active`, `uv_is_readable`, `uv_is_writable`
+- Iterative approach: build → check undefined symbols → add stubs → rebuild
+- Output: cmake (19MB), cpack (19MB), ctest (20MB) — all static ELF for x86_64-unknown-redox
+- Added cmake + LLVM to development profile for self-hosting toolchain

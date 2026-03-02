@@ -1,7 +1,7 @@
 # libc++ — LLVM C++ standard library cross-compiled for Redox OS
 #
-# Builds libc++abi + libc++ as static libraries for x86_64-unknown-redox.
-# Required by: LLVM, Clang, LLD (all written in C++)
+# Builds libunwind + libc++abi + libc++ as static libraries for x86_64-unknown-redox.
+# Required by: LLVM, Clang, LLD, cmake (all written in C++)
 #
 # Source: Redox fork of LLVM at gitlab.redox-os.org/redox-os/llvm-project
 # Branch: redox-2025-10-03 (based on llvmorg-21.1.2)
@@ -9,7 +9,10 @@
 # Uses the unified runtimes build (cmake -S runtimes) with Makefiles
 # (Ninja has duplicate target conflicts with libc++abi.a).
 #
-# Output: libc++.a + libc++abi.a + headers
+# Exception support: enabled (cmake and other C++ apps use try/catch).
+# Unwinding: LLVM libunwind (pure C, no external deps).
+#
+# Output: libc++.a + libc++abi.a + libunwind.a + headers
 
 {
   pkgs,
@@ -32,11 +35,12 @@ let
   src = pkgs.fetchgit {
     url = "https://gitlab.redox-os.org/redox-os/llvm-project.git";
     rev = "250d0b022e5ae323f57659a1063bb40728f3629c";
-    hash = "sha256-XljG7J4ZdU5j7W8VGBtPfXvEgJDPrmRbbLKjvTcXnfk=";
+    hash = "sha256-6xgLcStJRJGluK8SZvGndacqQp6YKmjoPGk3Zg/mBc0=";
     fetchSubmodules = false;
     sparseCheckout = [
       "libcxx"
       "libcxxabi"
+      "libunwind"
       "libc"
       "runtimes"
       "cmake"
@@ -254,6 +258,77 @@ pkgs.stdenv.mkDerivation {
         sed -i '/set(LIBCXX_SOURCES/a\  wchar_stubs_redox.cpp' libcxx/src/CMakeLists.txt
         echo "Patched libcxx: added wcstof/wcstold + locale stubs for Redox"
 
+        # libunwind needs link.h for dl_iterate_phdr (ELF program header iteration).
+        # relibc doesn't provide it. Create a stub with a working implementation
+        # for static binaries (reports the main executable's headers via __ehdr_start).
+        chmod -R u+w libunwind/
+        mkdir -p "$SRCDIR/redox-compat/include"
+
+        cat > "$SRCDIR/redox-compat/include/link.h" << 'LINKH'
+        #ifndef _LINK_H
+        #define _LINK_H
+
+        #include <stddef.h>
+        #include <stdint.h>
+        #include <elf.h>
+
+        /* ElfW macro (maps to 64-bit ELF types on x86_64) */
+        #ifndef ElfW
+        #define ElfW(type) Elf64_##type
+        #endif
+
+        #ifdef __cplusplus
+        extern "C" {
+        #endif
+
+        struct dl_phdr_info {
+            uint64_t dlpi_addr;
+            const char *dlpi_name;
+            const struct Elf64_Phdr *dlpi_phdr;
+            uint16_t dlpi_phnum;
+        };
+
+        int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *, size_t, void *), void *data);
+
+        #ifdef __cplusplus
+        }
+        #endif
+        #endif /* _LINK_H */
+    LINKH
+
+        # dl_iterate_phdr for static Redox binaries.
+        # Uses the linker-defined __ehdr_start symbol to find program headers.
+        cat > libunwind/src/dl_iterate_phdr_redox.c << 'DLSTUB'
+        #ifdef __redox__
+        #include <stddef.h>
+        #include <stdint.h>
+        #include <elf.h>
+
+        struct dl_phdr_info {
+            uint64_t dlpi_addr;
+            const char *dlpi_name;
+            const struct Elf64_Phdr *dlpi_phdr;
+            uint16_t dlpi_phnum;
+        };
+
+        /* Linker-defined symbol at the start of the ELF image in memory. */
+        extern const struct Elf64_Ehdr __ehdr_start __attribute__((weak, visibility("hidden")));
+
+        int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *, size_t, void *), void *data) {
+            if (&__ehdr_start == 0) return 0;
+            struct dl_phdr_info info;
+            info.dlpi_addr = 0;
+            info.dlpi_name = "";
+            info.dlpi_phdr = (const struct Elf64_Phdr *)((const char *)&__ehdr_start + __ehdr_start.e_phoff);
+            info.dlpi_phnum = __ehdr_start.e_phnum;
+            return callback(&info, sizeof(info), data);
+        }
+        #endif
+    DLSTUB
+        # Add to libunwind's CMakeLists.txt source list
+        sed -i '/set(LIBUNWIND_SOURCES/a\  dl_iterate_phdr_redox.c' libunwind/src/CMakeLists.txt
+        echo "Patched libunwind: added link.h stub + dl_iterate_phdr for Redox"
+
         # relibc's mbstate_t is an empty struct; = {0} is invalid in C++
         sed -i 's/mbstate_t mb *= {0}/mbstate_t mb = {}/g' \
           libcxx/src/locale.cpp
@@ -303,15 +378,15 @@ pkgs.stdenv.mkDerivation {
           -DCMAKE_C_COMPILER_TARGET=${redoxTarget} \
           -DCMAKE_CXX_COMPILER_TARGET=${redoxTarget} \
           -DCMAKE_SYSROOT=${sysroot} \
-          "-DCMAKE_C_FLAGS=--target=${redoxTarget} --sysroot=${sysroot} -D__redox__ -fPIC -I${sysroot}/include -include ${wcharCompat}" \
-          "-DCMAKE_CXX_FLAGS=--target=${redoxTarget} --sysroot=${sysroot} -D__redox__ -D_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE -fPIC -I${sysroot}/include -include ${wcharCompat} -I$SRCDIR/libc -I$SRCDIR/libc-stubs" \
+          "-DCMAKE_C_FLAGS=--target=${redoxTarget} --sysroot=${sysroot} -D__redox__ -D_LIBUNWIND_USE_DL_ITERATE_PHDR=1 -fPIC -I$SRCDIR/redox-compat/include -I${sysroot}/include -include ${wcharCompat}" \
+          "-DCMAKE_CXX_FLAGS=--target=${redoxTarget} --sysroot=${sysroot} -D__redox__ -D_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE -D_LIBUNWIND_USE_DL_ITERATE_PHDR=1 -fPIC -I$SRCDIR/redox-compat/include -I${sysroot}/include -include ${wcharCompat} -I$SRCDIR/libc -I$SRCDIR/libc-stubs" \
           -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
           \
-          -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" \
+          -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi;libunwind" \
           \
           -DLIBCXX_ENABLE_SHARED=OFF \
           -DLIBCXX_ENABLE_STATIC=ON \
-          -DLIBCXX_ENABLE_EXCEPTIONS=OFF \
+          -DLIBCXX_ENABLE_EXCEPTIONS=ON \
           -DLIBCXX_ENABLE_RTTI=ON \
           -DLIBCXX_ENABLE_THREADS=ON \
           -DLIBCXX_HAS_PTHREAD_API=ON \
@@ -327,11 +402,17 @@ pkgs.stdenv.mkDerivation {
           \
           -DLIBCXXABI_ENABLE_SHARED=OFF \
           -DLIBCXXABI_ENABLE_STATIC=ON \
-          -DLIBCXXABI_ENABLE_EXCEPTIONS=OFF \
+          -DLIBCXXABI_ENABLE_EXCEPTIONS=ON \
           -DLIBCXXABI_USE_COMPILER_RT=OFF \
-          -DLIBCXXABI_USE_LLVM_UNWINDER=OFF \
+          -DLIBCXXABI_USE_LLVM_UNWINDER=ON \
           -DLIBCXXABI_ENABLE_THREADS=ON \
           -DLIBCXXABI_HAS_PTHREAD_API=ON \
+          \
+          -DLIBUNWIND_ENABLE_SHARED=OFF \
+          -DLIBUNWIND_ENABLE_STATIC=ON \
+          -DLIBUNWIND_ENABLE_THREADS=ON \
+          -DLIBUNWIND_USE_COMPILER_RT=OFF \
+          -DLIBUNWIND_IS_BAREMETAL=OFF \
           \
           -Wno-dev
 

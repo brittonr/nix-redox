@@ -265,7 +265,7 @@ let
     # CMAKE_EXE_LINKER_FLAGS_INIT goes before object files, so put libs in
     # CMAKE_CXX_STANDARD_LIBRARIES instead (goes after objects).
     set(CMAKE_EXE_LINKER_FLAGS_INIT "--target=${redoxTarget} --sysroot=${sysroot} -L${sysroot}/lib -L${redox-libcxx}/lib -L${stubLibs}/lib ${depLdFlags} -static -fuse-ld=lld")
-    set(CMAKE_CXX_STANDARD_LIBRARIES "-lc++ -lc++abi -lgcc" CACHE STRING "")
+    set(CMAKE_CXX_STANDARD_LIBRARIES "-lc++ -lc++abi -lunwind -lgcc" CACHE STRING "")
 
     set(CMAKE_FIND_ROOT_PATH ${sysroot} ${lib.concatStringsSep " " deps})
     set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM NEVER)
@@ -391,6 +391,26 @@ pkgs.stdenv.mkDerivation {
     int uv_timer_start(uv_timer_t* h, uv_timer_cb cb, unsigned long long t, unsigned long long r) { (void)h;(void)cb;(void)t;(void)r; return -1; }
     int uv_timer_stop(uv_timer_t* h) { (void)h; return 0; }
     int uv_tty_init(uv_loop_t* l, uv_tty_t* h, int fd, int r) { (void)l;(void)h;(void)fd;(void)r; return -1; }
+    /* Stubs for filesystem operations used by cmSystemTools */
+    typedef struct uv_handle_s uv_handle_t;
+    typedef struct uv_write_s uv_write_t;
+    typedef struct uv_buf_s { char *base; size_t len; } uv_buf_t;
+    typedef void (*uv_close_cb)(uv_handle_t*);
+    typedef void (*uv_write_cb)(uv_write_t*, int);
+    void uv_close(uv_handle_t* h, uv_close_cb cb) { (void)h; if(cb) cb(h); }
+    int uv_is_closing(const uv_handle_t* h) { (void)h; return 1; }
+    int uv_idle_stop(uv_idle_t* h) { (void)h; return 0; }
+    int uv_fs_symlink(uv_loop_t* l, uv_fs_t* r, const char* p, const char* n, int f, uv_fs_cb cb) { (void)l;(void)r;(void)p;(void)n;(void)f;(void)cb; return -1; }
+    int uv_fs_link(uv_loop_t* l, uv_fs_t* r, const char* p, const char* n, uv_fs_cb cb) { (void)l;(void)r;(void)p;(void)n;(void)cb; return -1; }
+    int uv_fs_get_system_error(const uv_fs_t* r) { (void)r; return -1; }
+    int uv_write(uv_write_t* r, uv_stream_t* h, const uv_buf_t b[], unsigned int n, uv_write_cb cb) { (void)r;(void)h;(void)b;(void)n;(void)cb; return -1; }
+    /* Stubs for ctest process management */
+    uv_buf_t uv_buf_init(char* base, unsigned int len) { uv_buf_t buf; buf.base = base; buf.len = len; return buf; }
+    int uv_cpumask_size(void) { return 0; }
+    int uv_process_kill(uv_process_t* h, int sig) { (void)h; (void)sig; return -1; }
+    int uv_is_active(const uv_handle_t* h) { (void)h; return 0; }
+    int uv_is_readable(const uv_stream_t* s) { (void)s; return 0; }
+    int uv_is_writable(const uv_stream_t* s) { (void)s; return 0; }
     UVCODE
     # Write minimal CMakeLists.txt — just builds stub.c into a static lib
     printf 'project(libuv C)\nadd_library(cmlibuv STATIC stub.c)\ntarget_include_directories(cmlibuv PUBLIC include)\n' > ../Utilities/cmlibuv/CMakeLists.txt
