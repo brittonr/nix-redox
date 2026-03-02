@@ -21,6 +21,7 @@
   relibc,
   redox-libcxx,
   redox-zstd ? null,
+  stubLibs,
   ...
 }:
 
@@ -80,13 +81,55 @@ let
   ];
 
   # Header with declarations for wcstof/wcstold missing from relibc
+  # Compat header force-included in all C++ files for LLVM build.
+  # The locale _l stubs are already compiled into libc++.a — we just need
+  # declarations so LLVM's headers can see them, plus _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE
+  # so libc++ uses its own ctype masks instead of glibc's _IS* constants.
   wcharCompat = pkgs.writeText "wchar_compat.h" ''
     #ifndef REDOX_WCHAR_COMPAT_H
     #define REDOX_WCHAR_COMPAT_H
+
+    #if defined(__redox__)
+    #ifndef _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE
+    #define _LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE
+    #endif
+    #endif
+
     #if defined(__redox__) && defined(__cplusplus)
+    #include <bits/locale-t.h>
+    #include <wctype.h>
+    #include <time.h>
     extern "C" {
     float wcstof(const wchar_t * __restrict__ ptr, wchar_t ** __restrict__ end);
     long double wcstold(const wchar_t * __restrict__ ptr, wchar_t ** __restrict__ end);
+    int iswspace_l(wint_t, locale_t);
+    int iswprint_l(wint_t, locale_t);
+    int iswcntrl_l(wint_t, locale_t);
+    int iswupper_l(wint_t, locale_t);
+    int iswlower_l(wint_t, locale_t);
+    int iswalpha_l(wint_t, locale_t);
+    int iswblank_l(wint_t, locale_t);
+    int iswdigit_l(wint_t, locale_t);
+    int iswpunct_l(wint_t, locale_t);
+    int iswxdigit_l(wint_t, locale_t);
+    int iswctype_l(wint_t, wctype_t, locale_t);
+    wint_t towupper_l(wint_t, locale_t);
+    wint_t towlower_l(wint_t, locale_t);
+    float strtof_l(const char *, char **, locale_t);
+    double strtod_l(const char *, char **, locale_t);
+    long double strtold_l(const char *, char **, locale_t);
+    long long strtoll_l(const char *, char **, int, locale_t);
+    unsigned long long strtoull_l(const char *, char **, int, locale_t);
+    int wcscoll_l(const wchar_t *, const wchar_t *, locale_t);
+    size_t wcsxfrm_l(wchar_t *, const wchar_t *, size_t, locale_t);
+    size_t strftime_l(char *, size_t, const char *, const struct tm *, locale_t);
+    int snprintf_l(char *, size_t, locale_t, const char *, ...);
+    int asprintf_l(char **, locale_t, const char *, ...);
+    int sscanf_l(const char *, locale_t, const char *, ...);
+    struct timespec;
+    int openat(int, const char *, int, ...);
+    int unlinkat(int, const char *, int);
+    int utimensat(int, const char *, const struct timespec[2], int);
     }
     #endif
     #endif
@@ -97,6 +140,9 @@ let
     "--sysroot=${sysroot}"
     "-D__redox__"
     "-fPIC"
+    "-nostdlibinc"
+    "-isystem"
+    "${sysroot}/include"
   ];
 
   # Linker flags: static binary linked against libc++ and relibc
@@ -108,12 +154,14 @@ let
     "-nostdlib"
     "-L${redox-libcxx}/lib"
     "-L${sysroot}/lib"
+    "-L${stubLibs}/lib"
     "${sysroot}/lib/crt0.o"
     "${sysroot}/lib/crti.o"
     "-lc++"
     "-lc++abi"
     "-lc"
     "-lpthread"
+    "-lgcc"
     "${sysroot}/lib/crtn.o"
   ];
 
@@ -138,6 +186,46 @@ pkgs.stdenv.mkDerivation {
 
   configurePhase = ''
     runHook preConfigure
+
+    # Disable MachO/COFF/MinGW linkers — we only need ELF+Wasm for Redox.
+    # MachO needs macOS headers (mach-o/compact_unwind_encoding.h),
+    # COFF needs Windows headers.
+    chmod -R u+w lld/
+
+    # Remove MachO and COFF subdirectories from build
+    sed -i '/add_subdirectory(MachO)/d; /add_subdirectory(COFF)/d' lld/CMakeLists.txt
+
+    # Rewrite lld driver CMakeLists.txt to only link ELF+Wasm
+    cat > lld/tools/lld/CMakeLists.txt << 'LLDCMAKE'
+    set(LLVM_LINK_COMPONENTS Support TargetParser)
+    add_lld_tool(lld lld.cpp SUPPORT_PLUGINS GENERATE_DRIVER)
+    export_executable_symbols_for_plugins(lld)
+    function(lld_target_link_libraries target type)
+      if (TARGET obj.''${target})
+        target_link_libraries(obj.''${target} ''${ARGN})
+      endif()
+      get_property(LLVM_DRIVER_TOOLS GLOBAL PROPERTY LLVM_DRIVER_TOOLS)
+      if(LLVM_TOOL_LLVM_DRIVER_BUILD AND ''${target} IN_LIST LLVM_DRIVER_TOOLS)
+        set(target llvm-driver)
+      endif()
+      target_link_libraries(''${target} ''${type} ''${ARGN})
+    endfunction()
+    lld_target_link_libraries(lld PRIVATE lldCommon lldELF lldWasm)
+    set(LLD_SYMLINKS_TO_CREATE ld.lld wasm-ld)
+    foreach(link ''${LLD_SYMLINKS_TO_CREATE})
+      add_lld_symlink(''${link} lld)
+    endforeach()
+    LLDCMAKE
+
+    # Remove driver registrations for disabled linker flavors
+    sed -i '/LLD_HAS_DRIVER(coff)/d; /LLD_HAS_DRIVER(macho)/d; /LLD_HAS_DRIVER(mingw)/d' lld/tools/lld/lld.cpp
+
+    # Rewrite LLD_ALL_DRIVERS to only include ELF+Wasm
+    chmod -R u+w lld/include/
+    sed -i '/^#define LLD_ALL_DRIVERS/,/^  }$/c\
+    #define LLD_ALL_DRIVERS \\\
+      { {lld::Gnu, \&lld::elf::link}, {lld::Wasm, \&lld::wasm::link} }' \
+      lld/include/lld/Common/Driver.h
 
     mkdir -p build && cd build
 
@@ -184,18 +272,47 @@ pkgs.stdenv.mkDerivation {
       -DLLVM_INCLUDE_EXAMPLES=OFF \
       -DLLVM_INCLUDE_TESTS=OFF \
       -DLLVM_INCLUDE_BENCHMARKS=OFF \
+      -DCLANG_ENABLE_STATIC_ANALYZER=OFF \
+      -DCLANG_TOOL_C_INDEX_TEST_BUILD=OFF \
+      -DCLANG_TOOL_CLANG_REPL_BUILD=OFF \
       \
       -DLLVM_OPTIMIZED_TABLEGEN=ON \
       "-DCROSS_TOOLCHAIN_FLAGS_NATIVE=-DCMAKE_TOOLCHAIN_FILE=${nativeCmake}" \
       \
       -DLLVM_ENABLE_LIBCXX=ON \
-      -DLLVM_LIBSTDCXX_MIN=ON \
-      -DLLVM_LIBSTDCXX_SOFT_ERROR=ON \
       -DHAVE_CXX_ATOMICS_WITHOUT_LIB=ON \
       -DHAVE_CXX_ATOMICS64_WITHOUT_LIB=ON \
       -DLLVM_TOOLS_INSTALL_DIR=bin \
       -DLLVM_UTILS_INSTALL_DIR=bin \
       -DUNIX=1 \
+      \
+      -DHAVE_SYSEXITS_H=1 \
+      -DHAVE_PTHREAD_H=1 \
+      -DHAVE_SYS_MMAN_H=1 \
+      -DHAVE_UNISTD_H=1 \
+      -DHAVE_SYS_IOCTL_H=1 \
+      -DHAVE_DLFCN_H=1 \
+      -DHAVE_FENV_H=1 \
+      \
+      -DHAVE_GETPAGESIZE=1 \
+      -DHAVE_SYSCONF=1 \
+      -DHAVE_GETRUSAGE=1 \
+      -DHAVE_ISATTY=1 \
+      -DHAVE_FUTIMENS=1 \
+      -DHAVE_SETENV=1 \
+      -DHAVE_PREAD=1 \
+      -DHAVE_STRERROR_R=1 \
+      -DHAVE_SIGALTSTACK=1 \
+      -DHAVE_SBRK=1 \
+      -DHAVE_GETAUXVAL=1 \
+      -DHAVE_STRUCT_STAT_ST_MTIM_TV_NSEC=1 \
+      \
+      -DHAVE_FE_ALL_EXCEPT=1 \
+      -DHAVE_FE_INEXACT=1 \
+      -DLLVM_ENABLE_THREADS=ON \
+      -DHAVE_PTHREAD_MUTEX_LOCK=1 \
+      -DHAVE_PTHREAD_RWLOCK_INIT=1 \
+      -DLLVM_HAS_ATOMICS=1 \
       -Wno-dev
 
     cd ..

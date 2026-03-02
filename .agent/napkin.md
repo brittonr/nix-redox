@@ -79,6 +79,28 @@
 - Korora types: `t.int` (not `t.integer`), `t.bool`, `t.string`, `t.enum "Name" [...]`, `t.struct "Name" {...}`
 - Structured services: `renderService` must handle missing `enable` field with `svc.enable or true`
 
+### LLVM 21.1.2 cross-compilation for Redox (Mar 1 2026)
+- libc++ needs localization, filesystem, and random_device enabled for LLVM
+- relibc is MISSING 18 locale-aware `_l` functions (iswspace_l, strtof_l, etc.)
+  → stub them in libc++ build as C++ wrappers that call the non-_l versions (C-only locale)
+  → must declare in force-included compat header too
+- `_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE` must be defined for libc++ on Redox
+  (not Bionic, not musl, not glibc — falls through to `#error` without it)
+- relibc's `mbstate_t` is an empty struct `{}` — `{0}` initialization is invalid in C++
+  → sed -i to replace `= {0}` with `= {}` in locale.cpp
+- `__cxa_thread_atexit` missing from libc++abi — add stub in wchar_stubs_redox.cpp
+- POSIX `*at` functions (openat, unlinkat, utimensat) not in relibc headers
+  → stub in libc++: openat→open, unlinkat→unlink, utimensat→noop
+- cmake `check_include_file` fails for ALL relibc headers because clang doesn't add
+  sysroot includes for unknown targets (x86_64-unknown-redox). Must force cmake cache:
+  `-DHAVE_SYSEXITS_H=1 -DHAVE_PTHREAD_H=1 -DHAVE_UNISTD_H=1 ...`
+- `-DUNIX=1` in cmake → `LLVM_ON_UNIX=1` → `ExitCodes.h #error` if HAVE_SYSEXITS_H=0
+- C files need `-nostdlibinc -isystem $sysroot/include` (same as CXX), not just --sysroot
+- LLD MachO/COFF backends disabled (need macOS/Windows headers) — only ELF+Wasm
+  Must rewrite lld/tools/lld/CMakeLists.txt AND lld/include/lld/Common/Driver.h LLD_ALL_DRIVERS
+- `__register_frame`/`__deregister_frame` needed by LLVM ORC JIT — add to stub-libs.nix
+- Final: clang-21 = 91MB, lld = 57MB, llvm-ar = 11MB — all static ELF for Redox
+
 ## What Works
 - 68 module system tests across 4 layers all pass
 - Mock packages build in seconds, enabling fast iteration

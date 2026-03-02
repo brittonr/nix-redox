@@ -251,6 +251,7 @@ let
   cLibCommon = {
     inherit pkgs lib redoxTarget;
     inherit (modularPkgs.system) relibc;
+    inherit (redoxLib) stubLibs;
   };
 
   # === Data packages (no compilation) ===

@@ -45,18 +45,68 @@ let
     ];
   };
 
-  # Header with declarations for wcstof/wcstold missing from relibc.
-  # Only included in C++ mode (where wchar_t is a builtin type).
+  # Header with declarations for functions missing from relibc.
+  # Force-included in all C++ compilation units.
   wcharCompat = pkgs.writeText "wchar_compat.h" ''
     #ifndef REDOX_WCHAR_COMPAT_H
     #define REDOX_WCHAR_COMPAT_H
+
     #if defined(__redox__) && defined(__cplusplus)
+    #include <stddef.h>
+    #include <bits/locale-t.h>
+    #include <wctype.h>
+
     extern "C" {
+
+    /* Wide char functions missing from relibc */
     float wcstof(const wchar_t * __restrict__ ptr, wchar_t ** __restrict__ end);
     long double wcstold(const wchar_t * __restrict__ ptr, wchar_t ** __restrict__ end);
+
+    /* Locale-aware wide char classification (relibc only has C locale) */
+    int iswspace_l(wint_t, locale_t);
+    int iswprint_l(wint_t, locale_t);
+    int iswcntrl_l(wint_t, locale_t);
+    int iswupper_l(wint_t, locale_t);
+    int iswlower_l(wint_t, locale_t);
+    int iswalpha_l(wint_t, locale_t);
+    int iswblank_l(wint_t, locale_t);
+    int iswdigit_l(wint_t, locale_t);
+    int iswpunct_l(wint_t, locale_t);
+    int iswxdigit_l(wint_t, locale_t);
+    int iswctype_l(wint_t, wctype_t, locale_t);
+
+    /* Locale-aware conversions */
+    float strtof_l(const char *, char **, locale_t);
+    double strtod_l(const char *, char **, locale_t);
+    long double strtold_l(const char *, char **, locale_t);
+    long long strtoll_l(const char *, char **, int, locale_t);
+    unsigned long long strtoull_l(const char *, char **, int, locale_t);
+
+    /* Locale-aware wide char case conversion */
+    wint_t towupper_l(wint_t, locale_t);
+    wint_t towlower_l(wint_t, locale_t);
+
+    /* Locale-aware wide string collation */
+    int wcscoll_l(const wchar_t *, const wchar_t *, locale_t);
+    size_t wcsxfrm_l(wchar_t *, const wchar_t *, size_t, locale_t);
+
+    /* Locale-aware time formatting */
+    size_t strftime_l(char *, size_t, const char *, const struct tm *, locale_t);
+
+    /* Locale-aware snprintf/sscanf (used by bsd_locale_fallbacks.h) */
+    int snprintf_l(char *, size_t, locale_t, const char *, ...);
+    int asprintf_l(char **, locale_t, const char *, ...);
+    int sscanf_l(const char *, locale_t, const char *, ...);
+
+    /* POSIX *at functions (stubs for filesystem support) */
+    struct timespec;
+    int openat(int, const char *, int, ...);
+    int unlinkat(int, const char *, int);
+    int utimensat(int, const char *, const struct timespec[2], int);
+
     }
-    #endif
-    #endif
+    #endif /* __redox__ && __cplusplus */
+    #endif /* REDOX_WCHAR_COMPAT_H */
   '';
 
 in
@@ -92,8 +142,15 @@ pkgs.stdenv.mkDerivation {
         cat > libcxx/src/wchar_stubs_redox.cpp << 'STUBS'
         #ifdef __redox__
         #include <wchar.h>
+        #include <wctype.h>
+        #include <stdlib.h>
+        #include <string.h>
         #include <errno.h>
+        #include <locale.h>
+
         extern "C" {
+
+        // Wide char functions missing from relibc
         float wcstof(const wchar_t * __restrict__ ptr, wchar_t ** __restrict__ end) {
           if (end) *end = (wchar_t*)ptr;
           errno = ENOSYS;
@@ -104,11 +161,103 @@ pkgs.stdenv.mkDerivation {
           errno = ENOSYS;
           return 0;
         }
+
+        // Locale-aware wide char classification stubs.
+        // Redox only has the "C" locale, so _l variants just call the base functions.
+        int iswspace_l(wint_t c, locale_t) { return iswspace(c); }
+        int iswprint_l(wint_t c, locale_t) { return iswprint(c); }
+        int iswcntrl_l(wint_t c, locale_t) { return iswcntrl(c); }
+        int iswupper_l(wint_t c, locale_t) { return iswupper(c); }
+        int iswlower_l(wint_t c, locale_t) { return iswlower(c); }
+        int iswalpha_l(wint_t c, locale_t) { return iswalpha(c); }
+        int iswblank_l(wint_t c, locale_t) { return iswblank(c); }
+        int iswdigit_l(wint_t c, locale_t) { return iswdigit(c); }
+        int iswpunct_l(wint_t c, locale_t) { return iswpunct(c); }
+        int iswxdigit_l(wint_t c, locale_t) { return iswxdigit(c); }
+        int iswctype_l(wint_t c, wctype_t t, locale_t) { return iswctype(c, t); }
+
+        // Locale-aware string/number conversion stubs
+        float strtof_l(const char *s, char **e, locale_t) { return strtof(s, e); }
+        double strtod_l(const char *s, char **e, locale_t) { return strtod(s, e); }
+        long double strtold_l(const char *s, char **e, locale_t) { return strtold(s, e); }
+        long long strtoll_l(const char *s, char **e, int b, locale_t) { return strtoll(s, e, b); }
+        unsigned long long strtoull_l(const char *s, char **e, int b, locale_t) { return strtoull(s, e, b); }
+
+        // Locale-aware wide char case conversion stubs
+        wint_t towupper_l(wint_t c, locale_t) { return towupper(c); }
+        wint_t towlower_l(wint_t c, locale_t) { return towlower(c); }
+
+        // Locale-aware wide string collation stubs
+        int wcscoll_l(const wchar_t *a, const wchar_t *b, locale_t) { return wcscoll(a, b); }
+        size_t wcsxfrm_l(wchar_t *d, const wchar_t *s, size_t n, locale_t) { return wcsxfrm(d, s, n); }
+
+        // Locale-aware time formatting stub
+        size_t strftime_l(char *s, size_t max, const char *fmt, const struct tm *tm, locale_t) {
+          return strftime(s, max, fmt, tm);
+        }
+
+        // Thread-local storage atexit handler (needed by LLD)
+        // In a full libc++abi, this registers destructors for thread_local objects.
+        // Stub: Redox doesn't have robust TLS cleanup yet.
+        int __cxa_thread_atexit(void (*)(void*), void*, void*) { return 0; }
+
+        // POSIX *at functions missing from relibc (needed by libc++ filesystem)
+        #include <fcntl.h>
+        #include <sys/stat.h>
+        int openat(int dirfd, const char *path, int flags, ...) {
+          (void)dirfd;
+          // Ignore dirfd — Redox doesn't support *at functions, fall back to open()
+          va_list ap;
+          va_start(ap, flags);
+          mode_t mode = 0;
+          if (flags & O_CREAT) mode = va_arg(ap, int);
+          va_end(ap);
+          return open(path, flags, mode);
+        }
+        int unlinkat(int dirfd, const char *path, int flags) {
+          (void)dirfd; (void)flags;
+          return unlink(path);
+        }
+        int utimensat(int dirfd, const char *path, const struct timespec ts[2], int flags) {
+          (void)dirfd; (void)path; (void)ts; (void)flags;
+          // No-op: Redox doesn't support utimensat
+          return 0;
+        }
+
+        // Locale-aware printf/scanf stubs (ignore locale, use C locale)
+        #include <stdarg.h>
+        int snprintf_l(char *buf, size_t n, locale_t, const char *fmt, ...) {
+          va_list ap;
+          va_start(ap, fmt);
+          int r = vsnprintf(buf, n, fmt, ap);
+          va_end(ap);
+          return r;
+        }
+        int asprintf_l(char **ret, locale_t, const char *fmt, ...) {
+          va_list ap;
+          va_start(ap, fmt);
+          int r = vasprintf(ret, fmt, ap);
+          va_end(ap);
+          return r;
+        }
+        int sscanf_l(const char *s, locale_t, const char *fmt, ...) {
+          va_list ap;
+          va_start(ap, fmt);
+          int r = vsscanf(s, fmt, ap);
+          va_end(ap);
+          return r;
+        }
+
         }
         #endif
     STUBS
         sed -i '/set(LIBCXX_SOURCES/a\  wchar_stubs_redox.cpp' libcxx/src/CMakeLists.txt
-        echo "Patched libcxx: added wcstof/wcstold stubs for Redox"
+        echo "Patched libcxx: added wcstof/wcstold + locale stubs for Redox"
+
+        # relibc's mbstate_t is an empty struct; = {0} is invalid in C++
+        sed -i 's/mbstate_t mb *= {0}/mbstate_t mb = {}/g' \
+          libcxx/src/locale.cpp
+        echo "Patched libcxx: fixed mbstate_t initializers for relibc"
 
         # LLVM libc's internal headers reference generated headers (hdr/*.h).
         # Create stubs that redirect to the real system headers.
@@ -155,7 +304,7 @@ pkgs.stdenv.mkDerivation {
           -DCMAKE_CXX_COMPILER_TARGET=${redoxTarget} \
           -DCMAKE_SYSROOT=${sysroot} \
           "-DCMAKE_C_FLAGS=--target=${redoxTarget} --sysroot=${sysroot} -D__redox__ -fPIC -I${sysroot}/include -include ${wcharCompat}" \
-          "-DCMAKE_CXX_FLAGS=--target=${redoxTarget} --sysroot=${sysroot} -D__redox__ -fPIC -I${sysroot}/include -include ${wcharCompat} -I$SRCDIR/libc -I$SRCDIR/libc-stubs" \
+          "-DCMAKE_CXX_FLAGS=--target=${redoxTarget} --sysroot=${sysroot} -D__redox__ -D_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE -fPIC -I${sysroot}/include -include ${wcharCompat} -I$SRCDIR/libc -I$SRCDIR/libc-stubs" \
           -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
           \
           -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" \
@@ -166,11 +315,11 @@ pkgs.stdenv.mkDerivation {
           -DLIBCXX_ENABLE_RTTI=ON \
           -DLIBCXX_ENABLE_THREADS=ON \
           -DLIBCXX_HAS_PTHREAD_API=ON \
-          -DLIBCXX_ENABLE_LOCALIZATION=OFF \
+          -DLIBCXX_ENABLE_LOCALIZATION=ON \
           -DLIBCXX_ENABLE_WIDE_CHARACTERS=ON \
           -DLIBCXX_ENABLE_UNICODE=OFF \
-          -DLIBCXX_ENABLE_RANDOM_DEVICE=OFF \
-          -DLIBCXX_ENABLE_FILESYSTEM=OFF \
+          -DLIBCXX_ENABLE_RANDOM_DEVICE=ON \
+          -DLIBCXX_ENABLE_FILESYSTEM=ON \
           -DLIBCXX_CXX_ABI=libcxxabi \
           -DLIBCXX_USE_COMPILER_RT=OFF \
           -DLIBCXX_INCLUDE_BENCHMARKS=OFF \

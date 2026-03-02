@@ -58,6 +58,12 @@ pkgs.stdenv.mkDerivation {
     _Unwind_Reason_Code _Unwind_RaiseException(_Unwind_Exception* exc) { return 0; }
     void _Unwind_Resume(_Unwind_Exception* exc) { }
     void _Unwind_DeleteException(_Unwind_Exception* exc) { }
+
+    // EH frame registration (needed by LLVM ORC JIT, no-ops on Redox)
+    void __register_frame(void* begin) { (void)begin; }
+    void __deregister_frame(void* begin) { (void)begin; }
+    void __register_frame_info(void* begin, void* ob) { (void)begin; (void)ob; }
+    void __deregister_frame_info(void* begin) { (void)begin; }
     EOF
 
     ${pkgs.llvmPackages.clang-unwrapped}/bin/clang \
