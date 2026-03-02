@@ -147,4 +147,20 @@ in
         pushToRedox
         ;
     };
+
+  # Bridge rebuild test factory - end-to-end test with REAL build-bridge daemon
+  # Guest sends config, host builds via nix, exports to shared cache, guest activates
+  mkBridgeRebuildTest =
+    {
+      diskImage,
+      buildBridge,
+    }:
+    import ./bridge-rebuild-test.nix {
+      inherit
+        pkgs
+        lib
+        diskImage
+        buildBridge
+        ;
+    };
 }

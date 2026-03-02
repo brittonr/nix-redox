@@ -216,6 +216,17 @@ let
     inherit pushToRedox;
   };
 
+  # Bridge rebuild test: end-to-end with REAL build-bridge daemon
+  mkBridgeRebuildTest = modularPkgs.infrastructure.mkBridgeRebuildTest;
+  bridgeRebuildTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/bridge-rebuild-test.nix ];
+    inherit extraPkgs;
+  };
+  bridgeRebuildTest = mkBridgeRebuildTest {
+    diskImage = bridgeRebuildTestSystem.diskImage;
+    inherit buildBridge;
+  };
+
   # redox-rebuild CLI tool
   redoxRebuild = import ../pkgs/infrastructure/redox-rebuild.nix {
     inherit pkgs lib;
@@ -296,6 +307,9 @@ in
 
     redox-bridge-test = bridgeTestSystem.diskImage;
     inherit bridgeTest;
+
+    redox-bridge-rebuild-test = bridgeRebuildTestSystem.diskImage;
+    inherit bridgeRebuildTest;
 
     redox-rebuild = redoxRebuild;
     push-to-redox = pushToRedox;

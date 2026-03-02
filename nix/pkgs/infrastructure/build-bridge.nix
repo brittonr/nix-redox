@@ -138,16 +138,24 @@ pkgs.writeShellScriptBin "redox-build-bridge" ''
 
     write_error_response() {
       local resp_file="$1" req_id="$2" error_msg="$3"
+      # Write error message to a temp file to avoid shell/Python quoting issues
+      # (Nix error output contains Unicode like '…' which breaks Python string literals)
+      local err_tmp
+      err_tmp=$(mktemp /tmp/bridge-errmsg-XXXXXX.txt)
+      printf '%s' "$error_msg" > "$err_tmp"
       ${python}/bin/python3 -c "
   import json
+  with open('$err_tmp') as f:
+      error_msg = f.read()
   response = {
       'status': 'error',
       'requestId': '$req_id',
-      'error': '''$error_msg'''
+      'error': error_msg
   }
   with open('$resp_file', 'w') as f:
       json.dump(response, f, indent=2)
   "
+      rm -f "$err_tmp"
     }
 
     cleanup_request() {

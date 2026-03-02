@@ -19,7 +19,9 @@
 
 use std::fs;
 use std::path::Path;
-use std::time::{Duration, Instant};
+// NOTE: std::time::{Duration, Instant} and std::thread::sleep are NOT reliable
+// on Redox OS — the clock may not advance and nanosleep may block indefinitely.
+// All timing in this module uses count-based loops with FUSE I/O as natural delays.
 
 use serde::{Deserialize, Serialize};
 
@@ -122,7 +124,7 @@ pub fn rebuild_via_bridge(
     let resp_path = format!("{shared}/responses/{request_id}.json");
     eprintln!("bridge: polling for response at {resp_path} (timeout: {timeout}s)");
 
-    let response = poll_response(&resp_path, timeout)?;
+    let response = poll_response(&resp_path, timeout, shared)?;
 
     // Step 5: Process response
     match response.status.as_str() {
@@ -225,33 +227,48 @@ fn summarize_config(config: &rebuild::RebuildConfig) -> String {
 
 /// Poll the shared filesystem for a response file.
 ///
-/// Uses direct read attempts rather than exists() checks, since
-/// on Redox with virtio-fs, newly created host files may not be
-/// immediately visible via stat() but can be opened directly.
+/// Uses count-based timing with FUSE I/O delays because Redox's
+/// std::time::Instant and std::thread::sleep don't work reliably.
+///
+/// Key insight: FUSE round-trips through virtio-fs are fast (~0.3ms) for
+/// cached/empty dirs, but reading real files on the shared filesystem takes
+/// ~5-10ms. We read a real shared file in a loop to build ~1s of delay per
+/// poll iteration.
 fn poll_response(
     path: &str,
     timeout_s: u64,
+    shared_dir: &str,
 ) -> Result<BridgeResponse, Box<dyn std::error::Error>> {
-    let start = Instant::now();
-    let timeout = Duration::from_secs(timeout_s);
-    let poll_interval = Duration::from_millis(POLL_INTERVAL_MS);
-    let mut dots = 0u32;
+    let max_polls = timeout_s as u64;
+    let mut polls = 0u64;
 
-    // Also try listing the parent directory to force FUSE cache refresh
-    let parent = Path::new(path)
-        .parent()
-        .map(|p| p.to_path_buf());
+    let parent = Path::new(path).parent().map(|p| p.to_path_buf());
+
+    // Find a real file on the shared filesystem to use as an I/O delay source.
+    // Each read_to_string of a small shared file takes ~5ms through virtio-fs FUSE.
+    // 200 reads ≈ 1 second of wall-clock delay per poll iteration.
+    let delay_path = format!("{shared_dir}/cache/nix-cache-info");
+    let delay_file_exists = Path::new(&delay_path).exists();
+
+    eprintln!("  polling (max {max_polls} iterations, ~1s each)...");
+    if !delay_file_exists {
+        eprintln!("  (no delay file at {delay_path} — using dir reads)");
+    }
 
     loop {
-        if start.elapsed() >= timeout {
-            // Debug: show what files exist in the responses directory
+        polls += 1;
+
+        if polls > max_polls {
             let mut diag = String::new();
             if let Some(ref p) = parent {
                 match fs::read_dir(p) {
                     Ok(entries) => {
                         diag.push_str(&format!("\n  Files in {}:", p.display()));
                         for entry in entries.flatten() {
-                            diag.push_str(&format!("\n    {}", entry.file_name().to_string_lossy()));
+                            diag.push_str(&format!(
+                                "\n    {}",
+                                entry.file_name().to_string_lossy()
+                            ));
                         }
                     }
                     Err(e) => {
@@ -260,7 +277,7 @@ fn poll_response(
                 }
             }
             return Err(format!(
-                "timed out waiting for host response after {timeout_s}s\n\
+                "timed out after {polls} iterations (~{timeout_s}s)\n\
                  Expected: {path}\n\
                  Is the build-bridge daemon running on the host?{diag}"
             )
@@ -272,22 +289,24 @@ fn poll_response(
             let _ = fs::read_dir(p);
         }
 
-        // Try to read the file directly (more reliable than exists() on virtio-fs)
+        // Try to read the response file directly
         match fs::read_to_string(path) {
             Ok(content) if !content.is_empty() => {
                 match serde_json::from_str::<BridgeResponse>(&content) {
-                    Ok(response) => return Ok(response),
+                    Ok(response) => {
+                        eprintln!("  response received (after {polls} polls)");
+                        return Ok(response);
+                    }
                     Err(e) => {
-                        // File exists but isn't valid JSON yet — host may still be writing
-                        eprintln!("  (response file incomplete, retrying: {e})");
-                        std::thread::sleep(Duration::from_millis(500));
+                        eprintln!("  (response incomplete, retrying: {e})");
+                        fuse_delay(shared_dir, 1500);
                         continue;
                     }
                 }
             }
             Ok(_) => {
-                // Empty file — host started writing but not done
-                std::thread::sleep(Duration::from_millis(200));
+                // Empty file — host still writing
+                fuse_delay(shared_dir, 600);
                 continue;
             }
             Err(_) => {
@@ -295,15 +314,34 @@ fn poll_response(
             }
         }
 
-        std::thread::sleep(poll_interval);
+        // ~1 second delay using shared filesystem I/O.
+        // Each write+read cycle through virtio-fs FUSE takes ~0.3ms.
+        // 3000 cycles ≈ 900ms wall-clock time.
+        fuse_delay(shared_dir, 3000);
 
-        // Progress indicator every ~5 seconds
-        dots += 1;
-        if dots % 10 == 0 {
-            let elapsed = start.elapsed().as_secs();
-            eprintln!("  [{elapsed}s] waiting for host response...");
+        if polls % 10 == 0 {
+            eprintln!("  [{polls}s] waiting for host response...");
         }
     }
+}
+
+/// Burn wall-clock time via FUSE I/O on the shared filesystem.
+///
+/// FUSE reads through virtio-fs can be cached and return instantly.
+/// FUSE writes are more reliable for delay since they require a host-side
+/// round-trip: guest → virtqueue → virtiofsd → host write → ack.
+///
+/// Each write+read cycle takes ~5-10ms, so `iterations` writes ≈ iterations*7ms.
+fn fuse_delay(shared_dir: &str, iterations: u32) {
+    let marker = format!("{shared_dir}/.poll-marker");
+    for i in 0..iterations {
+        // Write forces a real FUSE_WRITE + host fsync
+        let _ = fs::write(&marker, format!("{i}"));
+        // Read back forces FUSE_READ (content changed, can't be cached)
+        let _ = fs::read_to_string(&marker);
+    }
+    // Clean up
+    let _ = fs::remove_file(&marker);
 }
 
 /// Install packages from the bridge's shared cache.
