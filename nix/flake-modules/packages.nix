@@ -445,6 +445,20 @@ let
     }
   );
 
+  redox-cmake = import ../pkgs/userspace/cmake-redox.nix (
+    cLibCommon
+    // {
+      inherit
+        redox-zlib
+        redox-zstd
+        redox-openssl
+        redox-expat
+        redox-bzip2
+        redox-libcxx
+        ;
+    }
+  );
+
   redox-diffutils = import ../pkgs/userspace/diffutils-redox.nix cLibCommon;
 
   redox-sed = import ../pkgs/userspace/sed-redox.nix cLibCommon;
@@ -581,6 +595,7 @@ in
       redox-diffutils
       redox-sed
       redox-patch
+      redox-cmake
       ;
 
     # Self-hosting: LLVM toolchain

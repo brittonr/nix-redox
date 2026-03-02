@@ -22,6 +22,24 @@
 - **Test profiles MUST NOT include userutils**: init runs getty instead of /startup.sh
   when userutils is present (documented in napkin but re-learned).
 
+### cmake cross-compilation (Mar 2 2026)
+- **CMAKE_SYSTEM_NAME=Linux** needed for POSIX code paths (ProcessUNIX.c not ProcessWin32.c)
+- **libuv stub**: cmake bundles libuv for server mode. On Redox, replace with stub library
+  providing all required uv_* symbols. 30+ functions need no-op stubs.
+- **wchar_compat.h needed for C AND C++**: openat/unlinkat/environ declarations needed in C code
+  (libarchive), not just C++ (originally only in `#ifdef __cplusplus` block)
+- **CHECK_TYPE_SIZE cache vars**: libarchive uses `CHECK_TYPE_SIZE(pid_t PID_T)` which sets
+  `HAVE_PID_T` and `PID_T` (not `SIZE_OF_PID_T`). Must pre-set in toolchain for cross-compile.
+- **cmake 100% compiles but fails to link**: libc++abi was built WITHOUT exception support
+  (`__cxa_begin_catch` etc. missing). cmake uses C++ exceptions. Need to rebuild libc++ with
+  `-fexceptions -funwind-tables` to get exception handling in libc++abi.a.
+- **sys-compat stub headers**: statfs, syscall, prctl, inotify, epoll, sendfile, perf_event — all
+  stubbed as no-op for libuv's Linux backend.
+- **Nix `${}` interpolation in heredocs**: Even `<< 'EOF'` heredocs get processed by Nix.
+  Use `''${VAR}` to escape cmake variables like `${CMAKE_CURRENT_SOURCE_DIR}`.
+- **-DCMAKE_C_FLAGS overrides toolchain**: Command-line `-DCMAKE_C_FLAGS=` REPLACES
+  `CMAKE_C_FLAGS_INIT` from toolchain file. Never set CMAKE_C_FLAGS on cmdline.
+
 ### Toolchain ships pre-compiled rlibs for x86_64-unknown-redox (Feb 28 2026)
 - Rust nightly-2025-10-03 ships 26 pre-compiled rlibs for x86_64-unknown-redox
 - `-Z build-std` was recompiling core/alloc/std/panic_abort in EVERY package (~60-90s each × 20 pkgs)
