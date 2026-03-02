@@ -161,6 +161,12 @@
       meta.description = "Test build bridge: push packages to VM via virtio-fs, install with snix";
     };
 
+    bridge-rebuild-test = {
+      type = "app";
+      program = "${self'.packages.bridgeRebuildTest}/bin/bridge-rebuild-test";
+      meta.description = "End-to-end test: guest sends config, host builds via nix, guest activates";
+    };
+
     redox-rebuild = {
       type = "app";
       program = "${self'.packages.redox-rebuild}/bin/redox-rebuild";

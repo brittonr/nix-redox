@@ -2,6 +2,26 @@
 
 ## Corrections & Lessons
 
+### Bridge rebuild end-to-end (Mar 2 2026)
+- **bridge-eval.nix `//` replaces entire module path**: adios `extend` uses `//` at the module
+  path level. Override `{ "/environment" = { systemPackages = [rg]; }; }` REPLACES the profile's
+  entire `/environment`, losing shellAliases, existing packages, etc. Fix: resolve the profile's
+  module definitions first, merge with `existingEnv // { systemPackages = combined; }`.
+- **serde `None` → JSON `null`, not absent**: `{ "packages": null }` in Nix: `config ? packages`
+  returns `true` even though value is `null`. Must check `config ? field && config.field != null`.
+  Added `hasNonNull` helper in bridge-eval.nix.
+- **Unicode in Nix errors breaks Python**: Nix error output contains `…` (U+2026). Interpolating
+  `$error_msg` into Python source → SyntaxError. Fix: write error to temp file, read in Python.
+- **std::thread::sleep DOES NOT WORK on Redox**: `nanosleep()` in relibc hangs forever.
+  `Instant::now()` may not advance. Must use FUSE I/O operations as delay source.
+- **FUSE reads are cached, writes are not**: `fs::read_to_string` on shared filesystem returns
+  in ~0.3ms (cached). `fs::write` forces host round-trip (~0.3ms each but adds up). 3000
+  write+read cycles ≈ 1 second wall-clock delay.
+- **Bridge test needs large disk**: 25 packages = 277MB NAR. Default 768MB disk fills up
+  after 14 installs. Bridge rebuild test profile uses `diskSizeMB = 1536`.
+- **Test profiles MUST NOT include userutils**: init runs getty instead of /startup.sh
+  when userutils is present (documented in napkin but re-learned).
+
 ### Toolchain ships pre-compiled rlibs for x86_64-unknown-redox (Feb 28 2026)
 - Rust nightly-2025-10-03 ships 26 pre-compiled rlibs for x86_64-unknown-redox
 - `-Z build-std` was recompiling core/alloc/std/panic_abort in EVERY package (~60-90s each × 20 pkgs)
