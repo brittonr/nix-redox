@@ -7,6 +7,10 @@ description = "Nix evaluator, store manager, and binary cache client for Redox O
 [[bin]]
 name = "snix"
 path = "src/main.rs"
+# The devshell sets CARGO_BUILD_TARGET=x86_64-unknown-redox, but test binaries
+# cannot link without relibc on the host. Disable test binary generation here.
+# Run tests with: cargo test --target x86_64-unknown-linux-gnu
+test = false
 
 [dependencies]
 # === SNIX crates ===
