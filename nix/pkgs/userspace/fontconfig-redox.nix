@@ -35,7 +35,7 @@ let
 
   src = pkgs.fetchurl {
     url = "https://www.freedesktop.org/software/fontconfig/release/fontconfig-${version}.tar.xz";
-    hash = "sha256-Y/cLMkW1MYSmGHkJxS5GK6aeKNJvvbSBKRFCJxGdm4E=";
+    hash = "sha256-ajPcVVzJuosQyvdpWHjvE07rNtCvNmBB9jmx2ptu0iA=";
   };
 
   extractedSrc = pkgs.stdenv.mkDerivation {
@@ -77,6 +77,9 @@ mkCLibrary.mkAutotools {
     "--disable-docs"
     # Tell configure that XML_SetDoctypeDeclHandler exists (cross-compile can't test)
     "ac_cv_func_XML_SetDoctypeDeclHandler=yes"
+    # Clang supports C99/C11 by default; skip the wchar_t probe that fails with relibc
+    "ac_cv_prog_cc_c99="
+    "ac_cv_prog_cc_c11="
   ];
 
   preConfigure = ''
@@ -94,12 +97,23 @@ mkCLibrary.mkAutotools {
     export EXPAT_LIBS="-L${redox-expat}/lib -lexpat"
 
     # Link against libpng and zlib (freetype2 needs them)
-    export LIBS="-lpng -lz"
+    export LIBS="-L${redox-libpng}/lib -lpng -L${redox-zlib}/lib -lz"
     export V=1
 
     # Replace config.sub for Redox target
     chmod +w config.sub 2>/dev/null || true
     cp ${pkgs.gnu-config}/config.sub config.sub
+
+    # Stub doc files — fontconfig 2.16.0 references them but we don't need docs
+    mkdir -p doc
+    echo 'all:' > doc/Makefile.in
+    echo 'install:' >> doc/Makefile.in
+    echo 'clean:' >> doc/Makefile.in
+    echo "" > doc/version.sgml.in
+
+    # Timestamp fixup to prevent autotools regeneration
+    find . -type f -exec touch -t 202501010000 '{}' '+' 2>/dev/null || true
+    touch configure
   '';
 
   postInstall = ''

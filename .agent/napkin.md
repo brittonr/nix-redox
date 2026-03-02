@@ -816,6 +816,37 @@
 - **libwebp**: mkCmake. Simple cmake build with `-DWEBP_BUILD_CWEBP/DWEBP=OFF -DWEBP_BUILD_GIF2WEBP=OFF`
   to skip tool binaries. Produces 5 libraries: libsharpyuv, libwebp, libwebpdecoder, libwebpdemux, libwebpmux.
 
+### Graphics stack fixes: gettext, glib, fontconfig (Mar 2 2026)
+- **gettext libintl was empty**: Build compiled 20+ files with `2>/dev/null` error suppression
+  — almost all failed silently due to gnulib deps. Only `hash-string.c` and `plural-exp.c` survived.
+  Fix: Redox is C-locale only, so replace with stub implementations that pass through msgid.
+  10 functions: gettext, dgettext, dcgettext, ngettext, dngettext, dcngettext, textdomain,
+  bindtextdomain, bind_textdomain_codeset, plus locale_charset.
+- **gettext installPhase `find ../../`**: Old buildPhase `cd gettext-runtime/intl` then installPhase
+  used `find ../.. -name 'libgnuintl.in.h'`. New buildPhase stays in top dir, so `../../` traverses
+  to `/proc` (sandbox). Fix: reference `${extractedSrc}` directly for template path.
+- **glib gunixmounts.c**: The `#error` lines are at FILE scope (each platform provides the full
+  function def under its own `#if`). Replacing `#error` with `return NULL;` puts return at file scope.
+  Must provide COMPLETE function definitions: `static GList *\n_g_get_unix_mounts(void)\n{...}`.
+- **glib mount_points**: `_g_get_unix_mount_points` has NO separate `#error`. It's defined inside
+  the same `#if` chain as `g_get_mount_table`. The `#error No g_get_mount_table()` covers BOTH.
+  Replace with `_g_get_unix_mount_points` stub (which is what's actually needed).
+- **glib _g_get_unix_mounts signature**: Forward declaration at line 165 says `(void)`, not
+  `(GUnixMountEntry **mount_point)`. Stub must match: `_g_get_unix_mounts(void)`.
+- **glib openat stubs**: `-Werror,-Wmissing-prototypes` requires prototypes before definitions.
+  Add both prototype declarations AND implementations in `_redox_stubs.c`.
+- **glib get_mtab_monitor_file stub**: Added before any `#include`, so `NULL` undefined.
+  Use `(const char *)0` instead.
+- **Python `'''` in Nix `''` strings**: Triple-single-quotes contain `''` which terminates
+  Nix indented strings. Use Python double-quoted strings with `\n` for multiline content.
+- **Nix `echo ''`**: Also terminates Nix `''` string. Use `echo ""` instead.
+- **fontconfig 2.16.0 hash changed**: `sha256-Y/...` → `sha256-ajPc...`
+- **fontconfig missing doc stubs**: `doc/Makefile.in` and `doc/version.sgml.in` needed.
+- **fontconfig LIBS needs -L paths**: `LIBS="-lpng -lz"` missing search paths.
+  Fix: `LIBS="-L${redox-libpng}/lib -lpng -L${redox-zlib}/lib -lz"`
+- **fontconfig C99 wchar_t probe**: `ac_cv_prog_cc_c99=` and `ac_cv_prog_cc_c11=` skip
+  the probe that uses `wchar_t` (undefined in relibc without explicit include).
+
 ### snix-eval upstream update to eee47792 (Mar 1 2026)
 - Updated from commit 6959c488 → eee47792 (12 upstream commits)
 - Key new features: `__curPos` implementation, path interpolation (`./path/${var}`), `dirs` crate removed
