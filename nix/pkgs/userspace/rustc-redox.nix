@@ -65,7 +65,24 @@ let
     done
 
     if [ "$NEEDS_DYNAMIC" = "true" ]; then
-      # Dynamic link: add dynamic linker path for PT_INTERP, keep libc static
+      # Dynamic link: add dynamic linker path for PT_INTERP, keep libc static.
+      # --export-dynamic: export all program symbols in the dynamic symbol table
+      # so that shared libraries (librustc_driver.so, libstdc++.so.6, proc-macros)
+      # resolve C/relibc symbols from the program binary instead of libc.so.
+      #
+      # Intercept Rust's version script to add __relibc_init_ns_fd to exported
+      # symbols. Without this, the version script's "local: *;" hides the symbol,
+      # preventing ld_so from injecting the process namespace fd into .so files.
+      for arg in "$@"; do
+        case "$arg" in
+          -Wl,--version-script=*)
+            vs="''${arg#-Wl,--version-script=}"
+            if [ -f "$vs" ]; then
+              ${pkgs.gnused}/bin/sed -i '/^[[:space:]]*local:/i\    __relibc_init_ns_fd;\n    __relibc_init_proc_fd;' "$vs"
+            fi
+            ;;
+        esac
+      done
       exec ${cc} --target=${redoxTarget} --sysroot=${sysroot} -D__redox__ \
         -nostdlib \
         ${sysroot}/lib/crt0.o ${sysroot}/lib/crti.o \
@@ -74,7 +91,9 @@ let
         -lc++ -lc++abi -lunwind -l:libc.a -l:libpthread.a -lgcc \
         ${sysroot}/lib/crtn.o \
         -fuse-ld=lld \
-        -Wl,--dynamic-linker=/lib/ld64.so.1
+        -Wl,--dynamic-linker=/lib/ld64.so.1 \
+        -Wl,--export-dynamic \
+        -Wl,--undefined-version
     else
       # Fully static link (cargo, etc.)
       exec ${cc} --target=${redoxTarget} --sysroot=${sysroot} -D__redox__ \

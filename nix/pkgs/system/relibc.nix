@@ -34,6 +34,8 @@ let
     name = "relibc-src-patched";
     src = relibc-src;
 
+    nativeBuildInputs = [ pkgs.python3 ];
+
     phases = [
       "unpackPhase"
       "patchPhase"
@@ -67,6 +69,20 @@ let
       sed -i 's/export AR=x86_64-unknown-redox-ar/export AR=llvm-ar/g' config.mk
       sed -i 's/export NM=x86_64-unknown-redox-nm/export NM=llvm-nm/g' config.mk
       sed -i 's/export OBJCOPY=x86_64-unknown-redox-objcopy/export OBJCOPY=llvm-objcopy/g' config.mk
+
+      # ── Fix: inject namespace fd into shared libraries ──────────────
+      # When ld_so loads a dynamically-linked program, each DSO (shared library)
+      # gets its own copy of DYNAMIC_PROC_INFO (it's a private static in redox-rt).
+      # Only the ld_so binary initializes its copy (from auxv). The DSOs' copies
+      # remain at default (ns_fd = None), causing EBADF on scheme access like
+      # File::open("/scheme/rand") from within .so code.
+      #
+      # Fix: add __relibc_init_ns_fd global symbol to redox-rt (checked first by
+      # current_namespace_fd), and have ld_so write the ns_fd to each DSO's copy
+      # during run_init (same pattern as __relibc_init_environ).
+
+      python3 ${./patch-relibc-ns-fd.py}
+      python3 ${./patch-relibc-run-init.py}
 
       runHook postPatch
     '';
