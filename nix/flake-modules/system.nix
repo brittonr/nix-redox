@@ -98,6 +98,7 @@ let
     redox-llvm = self'.packages.redox-llvm or null;
     redox-cmake = self'.packages.redox-cmake or null;
     redox-rustc = self'.packages.redox-rustc or null;
+    redox-libstdcxx-shim = self'.packages.redox-libstdcxx-shim or null;
     redox-sysroot = self'.packages.redox-sysroot or null;
   };
 

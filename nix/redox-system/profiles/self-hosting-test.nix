@@ -168,6 +168,29 @@ let
       ls /scheme/ ^>/dev/null
     end
 
+    # ── Diagnostics: rand scheme read ───────────────────────
+    # Test: can we actually read from /scheme/rand? Use head (uutils)
+    head -c 8 /scheme/rand > /tmp/rand-test
+    let rand_read_exit = $?
+    if test $rand_read_exit = 0
+      echo "FUNC_TEST:rand-read:PASS"
+    else
+      echo "FUNC_TEST:rand-read:FAIL:read /scheme/rand exited $rand_read_exit"
+    end
+
+    # Test: rustc -vV directly (not through cargo)
+    rustc -vV > /tmp/rustc-vv-out ^>/tmp/rustc-vv-err
+    let rustc_vv_exit = $?
+    if test $rustc_vv_exit = 0
+      echo "FUNC_TEST:rustc-version:PASS"
+      cat /tmp/rustc-vv-out
+    else
+      echo "FUNC_TEST:rustc-version:FAIL:rustc -vV exited $rustc_vv_exit"
+      echo "=== rustc stderr ==="
+      cat /tmp/rustc-vv-err
+      echo "=== end ==="
+    end
+
     # Run cargo build and capture exit code
     # Ion shell: ^> redirects stderr (not 2> like bash)
     # Use &> to capture both stdout and stderr for debugging

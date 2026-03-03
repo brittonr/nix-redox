@@ -53,6 +53,9 @@ let
   virtioCorePatch = ../patches/virtio-core-repost-buffer.py;
   virtioNetIrqPatch = ../patches/virtio-netd-irq-wakeup.py;
 
+  # Patch for randd to allow reads from scheme root handles
+  randdPatch = ../patches/randd-scheme-root-read.py;
+
   # virtio-fsd driver source (injected into base workspace)
   virtioFsdSrc = ./virtio-fsd;
 
@@ -347,6 +350,17 @@ let
               sed -i 's/0x8086_2668 => false/0x8086_2668 => true/' \
                 drivers/audio/ihdad/src/hda/device.rs
               echo "Done patching ihdad"
+            fi
+
+            # ─── randd: allow reads from scheme root handle ───
+            # Rust's std::sys::random::redox opens /scheme/rand (the scheme root)
+            # and reads random bytes from it. But randd's read() only accepts
+            # Handle::File, not Handle::SchemeRoot, returning EBADF.
+            # Fix: allow reads from SchemeRoot handles (always permitted).
+            if [ -f randd/src/main.rs ]; then
+              echo "Patching randd: allow reads from scheme root..."
+              ${pkgs.python3}/bin/python3 ${randdPatch} randd/src/main.rs
+              echo "Done patching randd"
             fi
 
             # ─── virtio-fsd: inject driver source into workspace ───
