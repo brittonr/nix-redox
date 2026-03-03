@@ -2,6 +2,27 @@
 
 ## Corrections & Lessons
 
+### Cross-compiling rustc+cargo for Redox (Mar 2 2026)
+
+**Goal**: Build a full Rust toolchain (rustc, cargo, rustdoc) targeting x86_64-unknown-redox.
+
+**Critical mistakes to avoid**:
+1. **`crt_static_allows_dylibs` must be TRUE**: Upstream Redox target spec already has `dynamic_linking: true` and `crt_static_allows_dylibs: true`. Don't set it to false — that breaks proc-macro builds.
+2. **libc++ locale issue**: relibc has `locale_t`, `newlocale`, `freelocale`, `uselocale`, and all `is*_l` functions declared but MISSING `strtof_l`, `strtod_l`, `strtold_l`, `strtoll_l`, `strtoull_l`, `snprintf_l`, `sscanf_l`, `asprintf_l`. Solution: provide `redox_locale_stubs.h` with inline stubs that ignore locale and call base C functions. Wrap via `locale.h` that `#include_next <locale.h>` then includes stubs.
+3. **`_LIBCPP_HAS_LOCALIZATION`**: This is baked into `__config_site` as `#define _LIBCPP_HAS_LOCALIZATION 1` at libc++ build time. Cannot override with `-D` flag. Don't try disabling it entirely — LLVM uses `<sstream>` which needs localization. Instead, provide the missing locale stubs.
+4. **`_LIBCPP_PROVIDES_DEFAULT_RUNE_TABLE`**: Must be defined via `-D` flag for CXX wrapper — relibc doesn't provide platform rune tables.
+5. **CC wrapper must include `-lc++ -lc++abi -lunwind`**: The CC wrapper is used as the LINKER for rustc binaries. Without C++ runtime libs, the LLVM symbols in librustc_driver.so are unresolved.
+6. **Use `-l:libc.a -l:libpthread.a`**: Force static linking of libc to avoid `libc.so` being found and causing `__init_array_start` errors.
+7. **OpenSSL**: cargo depends on `openssl-sys`. Set `X86_64_UNKNOWN_REDOX_OPENSSL_DIR` and `X86_64_UNKNOWN_REDOX_OPENSSL_STATIC=1`.
+8. **`libc::S_IRWXU` type mismatch**: On Redox, `S_IRWXU` etc. are `i32` not `u32`. Cargo-util uses `u32::from()` which fails. Patch to `as u32`.
+9. **`-nostdlibinc` + explicit `-isystem`**: Clang doesn't know where Redox sysroot headers are. Must use `-nostdlibinc -isystem ${sysroot}/include` for compile-only mode.
+10. **`available_parallelism` patch**: Don't add `target_os = "redox"` to the sysconf block — the `libc` crate for Redox doesn't define `_SC_NPROCESSORS_ONLN`. Skip the patch; std handles the fallback gracefully.
+11. **`sysconfdir` in install config**: Must set `sysconfdir = "$out/etc"` or the installer panics trying to write to `/etc`.
+
+**Build architecture**: Stage 0 (host rustc) → Stage 1 (host LLVM → host rustc) → Stage 2 (cross LLVM → Redox rustc/cargo). Takes ~20 min per iteration.
+
+**Output**: rustc (284K + 180MB librustc_driver.so), cargo (41MB static), rustdoc (16MB), 21 rlibs for Redox sysroot.
+
 ### Bridge rebuild end-to-end (Mar 2 2026)
 - **bridge-eval.nix `//` replaces entire module path**: adios `extend` uses `//` at the module
   path level. Override `{ "/environment" = { systemPackages = [rg]; }; }` REPLACES the profile's
