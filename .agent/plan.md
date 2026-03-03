@@ -13,19 +13,19 @@
 - [x] Cross-compile Rust compiler (rustc 284K + 180MB librustc_driver.so)
 - [x] Cross-compile cargo (41MB static ELF)
 - [x] Self-hosting profile with toolchain, sysroot, CC wrapper, cargo config
-- [x] Self-hosting test profile (13/17 tests pass)
-- [x] libstdcxx-shim: shared libc++ as libstdc++.so.6 (943 C++ ABI symbols)
+- [x] Self-hosting test profile (14/17 tests pass)
+- [x] libstdcxx-shim: shared libc++ as libstdc++.so.6 (943 C++ ABI symbols, no libc.so dep)
 - [x] randd patch: accept reads from SchemeRoot handles
-- [ ] **BLOCKER: ld_so scheme fd corruption** — `rustc -vV` crashes with EBADF on
-      `/scheme/rand` after dynamic library loading. Static binaries work fine.
-      Root cause is in relibc's `ld_so/linker.rs`, not in randd or the kernel.
+- [x] **relibc ld_so DSO process state injection** — `rustc -vV` works on Redox!
+      Root cause: each .so has private STATIC_PROC_INFO/DYNAMIC_PROC_INFO copies.
+      Fix: inject ns_fd/proc_fd from ld_so into DSO statics via get_sym + lazy init.
+- [ ] **LLVM flag mismatch**: `-generate-arange-section` removed in LLVM 21.
+      Blocks `cargo build` — rustc's target info probe fails.
 
-## Phase 2.5: Fix ld_so for Dynamic Binaries (current blocker)
-- [ ] **Debug relibc ld_so scheme fd handling** — ld_so opens/closes files during
-      library loading, may leave kernel scheme state in bad condition
-- [ ] Alternative: patch rustc std to use `rand:` URL instead of `/scheme/rand`
-- [ ] Alternative: make rustc fully static (no librustc_driver.so)
-- [ ] Once rustc runs: verify `cargo build` of hello-world succeeds on-guest
+## Phase 2.5: Fix cargo build (LLVM flag mismatch)
+- [ ] Investigate `-generate-arange-section` — where does rustc inject this flag?
+- [ ] Patch Rust source or use LLVM version that still supports it
+- [ ] Once `cargo build` works: verify hello-world compilation succeeds on-guest
 
 ## Phase 3: Native Build Capability
 - [ ] **Implement `derivationStrict` in snix-eval** — produce .drv files on guest

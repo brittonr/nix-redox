@@ -980,17 +980,37 @@
   `chmod u+w` the directory before `cp`-ing additional files.
 - **selfHostingPackageNames whitelist**: New packages providing lib/ must be added to
   the whitelist for mkSystemProfile to create lib/ symlinks.
-- **The actual bug**: After ALL dynamic libraries load successfully, the process
-  tries to `File::open("/scheme/rand")` and gets EBADF. The Redox kernel's scheme
-  resolution works for static binaries but returns EBADF for the same call from a
-  dynamically-linked process. The issue is in relibc's ld_so/linker.rs — dynamic
-  library loading corrupts some kernel state related to scheme file descriptors.
-- **RIP 0x0000000012845a52**: The crash is ALWAYS at this address (in librustc_driver.so),
-  regardless of which version of ld_so or randd is running. It's the `ud2` instruction
-  from `panic = "abort"` in Rust's std random code.
+- **The actual bug (FIXED)**: Each .so gets its own statically-linked copy of relibc/redox-rt
+  with SEPARATE STATIC_PROC_INFO and DYNAMIC_PROC_INFO. Only the main program's copies are
+  initialized (by relibc_start_v1). DSOs' copies remain default (proc_fd=None, ns_fd=None).
+  When .so code calls File::open("/scheme/rand"), it uses its own current_namespace_fd()
+  which returns usize::MAX → EBADF. Thread spawn panics because proc_fd is None.
+- **Fix**: 3-part relibc patch: (1) Add __relibc_init_ns_fd / __relibc_init_proc_fd static
+  variables to redox-rt. (2) Modify current_namespace_fd() and static_proc_info() to check
+  injected values as fallback. (3) In ld_so run_init(), write process fds to each DSO's
+  statics via get_sym() before .init_array runs.
+- **renamesyms.sh**: Only renames T (text/function) symbols from rlib deps, NOT B/D (data).
+  So `static mut` variables keep their original names and are findable by ld_so's get_sym().
+  Functions get __relibc_ prefix (e.g., __relibc_init_process_state → __relibc___relibc_init_process_state).
+- **Rust dylib version scripts**: Rust generates `local: *;` which hides all non-Rust symbols.
+  Must intercept `-Wl,--version-script=` in CC wrapper and add our symbols to global section.
+  Use `--undefined-version` for .so files that don't contain the symbols (e.g., libstd.so).
+- **init_array from libc.a**: Functions in .init_array section from static libraries are NOT
+  guaranteed to be included — only if their containing object file is needed. With multiple
+  CGUs, the init_array entry may be in a different object file from needed symbols. Use inline
+  fallback checks instead of init_array.
+- **arch::PROC_FD PIC issue**: Referencing crate::arch::PROC_FD from static_proc_info()
+  causes R_X86_64_PC32 relocation issues when building libc.so. Remove the arch::PROC_FD
+  write from the lazy init path — it's only needed for signal handling, not critical for
+  basic compilation.
+- **--export-dynamic on executables**: Makes all program symbols visible in dynamic symbol
+  table, but doesn't help when .so has its OWN copy of the function (no interposition).
 - **Commands NOT available on Redox**: `dd`, `tail`, `sleep`, `grep -E`, `sed`
   Only: cat, cp, df, du, echo, head, ls, mkdir, mv, pwd, rm, sort, touch, uniq, wc (uutils)
 - **Ion `export` syntax**: `export VAR value` sets+exports. `export VAR` (no value) fails
   with "cannot export ... because it does not exist" if `let VAR` was used to set it.
-- **Self-hosting test results**: 13/17 pass. All toolchain presence tests pass.
-  3 failures are all from the same ld_so scheme bug (rustc-version, cargo-build, binary-exists).
+- **Self-hosting test results**: 14/17 pass (was 13/17). rustc -vV works!
+  2 failures: cargo build hits LLVM flag mismatch (`-generate-arange-section` removed in
+  LLVM 21). This is a separate issue from the ld_so bug.
+- **LLVM flag mismatch**: rustc passes `-generate-arange-section` to internal LLVM which
+  was removed/renamed. This affects cargo's target info probe. Separate from ld_so fix.
