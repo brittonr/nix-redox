@@ -40,6 +40,8 @@ dev
       (dev."/environment".systemPackages or [ ])
       # Rust toolchain
       ++ opt "redox-rustc"
+      # C++ runtime shim (libstdc++.so.6 from libc++ — needed by librustc_driver.so)
+      ++ opt "redox-libstdcxx-shim"
       # Minimal LLVM (clang as CC, lld as linker, llvm-ar as archiver)
       ++ opt "redox-llvm"
       # relibc sysroot (headers + libs for linking)

@@ -459,6 +459,14 @@ pkgs.stdenv.mkDerivation {
       fi
     done
 
+    # Build stub libstdc++.so.6 with C++ ABI symbols needed by LLVM code
+    # The Rust build system adds -lstdc++ to librustc_driver.so NEEDED.
+    # We use libc++ (statically linked), so the actual C++ stdlib is present,
+    # but __cxa_guard_* symbols for static init are expected via dynamic linking.
+    # NOTE: librustc_driver.so has NEEDED: libstdc++.so.6 (from Rust build system).
+    # The redox-libstdcxx-shim package provides this as a shared lib from libc++.
+    # It must be in LD_LIBRARY_PATH alongside librustc_driver.so.
+
     runHook postInstall
   '';
 

@@ -477,6 +477,13 @@ let
     }
   );
 
+  redox-libstdcxx-shim = import ../pkgs/userspace/libstdcxx-shim.nix (
+    cLibCommon
+    // {
+      inherit redox-libcxx;
+    }
+  );
+
   redox-sysroot = import ../pkgs/userspace/redox-sysroot.nix {
     inherit pkgs lib;
     inherit (modularPkgs.system) relibc;
@@ -619,6 +626,7 @@ in
     # Self-hosting: LLVM + Rust toolchain
     inherit
       redox-libcxx
+      redox-libstdcxx-shim
       redox-llvm
       redox-rustc
       redox-sysroot

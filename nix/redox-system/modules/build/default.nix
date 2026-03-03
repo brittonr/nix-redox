@@ -972,6 +972,7 @@ adios:
         "redox-sysroot"
         "cmake-redox"
         "libcxx-redox"
+        "libstdcxx-redox-shim"
       ];
       isSelfHostingPkg =
         pkg:
@@ -1221,6 +1222,10 @@ adios:
         p: (p.pname or (builtins.parseDrvName p.name).name) == "rustc-redox"
       ) null allPackages;
 
+      libstdcxxShimPkg = lib.findFirst (
+        p: (p.pname or (builtins.parseDrvName p.name).name) == "libstdcxx-redox-shim"
+      ) null allPackages;
+
       # ===== BINARY CACHE =====
       # Generate a local Nix binary cache from binaryCachePackages.
       # Included in rootTree at /nix/cache/ when non-empty.
@@ -1279,10 +1284,19 @@ adios:
                         chmod 555 $out/lib/libc.so
                         ln -sf libc.so $out/lib/libc.so.6
                         # libstdc++.so.6 shim (libc++ with libstdc++ soname, for librustc_driver.so)
-                        if [ -f "/nix/store/${pkgStoreName sysrootPkg}/sysroot/lib/libstdc++.so.6" ]; then
-                          cp "/nix/store/${pkgStoreName sysrootPkg}/sysroot/lib/libstdc++.so.6" $out/lib/libstdc++.so.6
-                          chmod 555 $out/lib/libstdc++.so.6
-                        fi
+                        ${lib.optionalString (libstdcxxShimPkg != null) ''
+                          if [ -f "$out/nix/store/${pkgStoreName libstdcxxShimPkg}/lib/libstdc++.so.6" ]; then
+                            cp "$out/nix/store/${pkgStoreName libstdcxxShimPkg}/lib/libstdc++.so.6" $out/lib/libstdc++.so.6
+                            chmod 555 $out/lib/libstdc++.so.6
+                            # Also copy alongside librustc_driver.so for RUNPATH=$ORIGIN resolution
+                            ${lib.optionalString (rustcPkg != null) ''
+                              chmod u+w "$out/nix/store/${pkgStoreName rustcPkg}/lib"
+                              cp "$out/nix/store/${pkgStoreName libstdcxxShimPkg}/lib/libstdc++.so.6" \
+                                "$out/nix/store/${pkgStoreName rustcPkg}/lib/libstdc++.so.6"
+                              chmod 555 "$out/nix/store/${pkgStoreName rustcPkg}/lib/libstdc++.so.6"
+                            ''}
+                          fi
+                        ''}
 
                         # LD_LIBRARY_PATH for rustc's dynamic libs
                         # rustc needs librustc_driver.so + proc-macro .so files at runtime
