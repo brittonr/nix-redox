@@ -93,6 +93,12 @@ let
     redox-sed = self'.packages.redox-sed or null;
     redox-patch = self'.packages.redox-patch or null;
     strace-redox = self'.packages.strace-redox or null;
+
+    # Self-hosting: LLVM + Rust toolchain
+    redox-llvm = self'.packages.redox-llvm or null;
+    redox-cmake = self'.packages.redox-cmake or null;
+    redox-rustc = self'.packages.redox-rustc or null;
+    redox-sysroot = self'.packages.redox-sysroot or null;
   };
 
   # Pre-built system configurations using profiles
@@ -114,6 +120,11 @@ let
 
     cloud-hypervisor = mkSystem {
       modules = [ ../redox-system/profiles/cloud-hypervisor.nix ];
+      inherit extraPkgs;
+    };
+
+    self-hosting = mkSystem {
+      modules = [ ../redox-system/profiles/self-hosting.nix ];
       inherit extraPkgs;
     };
   };
@@ -140,6 +151,17 @@ let
   minimalRunners = mkCHRunners {
     diskImage = systems.minimal.diskImage;
     vmConfig = systems.minimal.vmConfig;
+  };
+
+  # Self-hosting profile runners
+  selfHostingRunners = mkCHRunners {
+    diskImage = systems.self-hosting.diskImage;
+    vmConfig = systems.self-hosting.vmConfig;
+  };
+  selfHostingQemuRunners = mkQemuRunners {
+    diskImage = systems.self-hosting.diskImage;
+    inherit bootloader;
+    vmConfig = systems.self-hosting.vmConfig;
   };
 
   # Shared FS profile: development + virtio-fsd driver
@@ -206,6 +228,16 @@ let
     inherit bootloader;
   };
 
+  # Self-hosting test: boots self-hosting image, tests cargo build
+  selfHostingTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/self-hosting-test.nix ];
+    inherit extraPkgs;
+  };
+  selfHostingTest = mkFunctionalTest {
+    diskImage = selfHostingTestSystem.diskImage;
+    inherit bootloader;
+  };
+
   mkBridgeTest = modularPkgs.infrastructure.mkBridgeTest;
   bridgeTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/bridge-test.nix ];
@@ -248,12 +280,14 @@ in
     redox-minimal = systems.minimal.diskImage;
     redox-graphical = systems.graphical.diskImage;
     redox-cloud = systems.cloud-hypervisor.diskImage;
+    redox-self-hosting = systems.self-hosting.diskImage;
 
     # System identity (toplevel)
     redox-default-toplevel = systems.default.toplevel;
     redox-minimal-toplevel = systems.minimal.toplevel;
     redox-graphical-toplevel = systems.graphical.toplevel;
     redox-cloud-toplevel = systems.cloud-hypervisor.toplevel;
+    redox-self-hosting-toplevel = systems.self-hosting.toplevel;
     toplevel = systems.default.toplevel;
 
     # Default profile runners
@@ -266,6 +300,10 @@ in
     # Cloud Hypervisor profile
     run-redox-cloud = cloudRunners.headless;
     run-redox-cloud-net = cloudRunners.withNetwork;
+
+    # Self-hosting profile
+    run-redox-self-hosting = selfHostingRunners.headless;
+    run-redox-self-hosting-qemu = selfHostingQemuRunners.headless;
 
     # Shared filesystem (virtio-fs)
     run-redox-shared = sharedFsRunners.withSharedFs;
@@ -310,6 +348,9 @@ in
 
     redox-bridge-rebuild-test = bridgeRebuildTestSystem.diskImage;
     inherit bridgeRebuildTest;
+
+    redox-self-hosting-test = selfHostingTestSystem.diskImage;
+    self-hosting-test = selfHostingTest;
 
     redox-rebuild = redoxRebuild;
     push-to-redox = pushToRedox;

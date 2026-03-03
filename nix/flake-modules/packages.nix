@@ -477,6 +477,12 @@ let
     }
   );
 
+  redox-sysroot = import ../pkgs/userspace/redox-sysroot.nix {
+    inherit pkgs lib;
+    inherit (modularPkgs.system) relibc;
+    inherit redoxTarget redox-llvm redox-libcxx;
+  };
+
   # pkgutils disabled: ring crate needs pregenerated assembly from git source
   # pkgutils = import ../pkgs/userspace/pkgutils.nix (
   #   standaloneCommon
@@ -615,6 +621,7 @@ in
       redox-libcxx
       redox-llvm
       redox-rustc
+      redox-sysroot
       ;
 
     # Infrastructure (needed by module system)

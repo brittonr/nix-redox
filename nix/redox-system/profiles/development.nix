@@ -31,10 +31,7 @@ in
       # System management
       ++ opt "snix"
       ++ opt "redox-curl"
-      # Self-hosting: C/C++ toolchain
-      ++ opt "redox-llvm"
-      ++ opt "redox-cmake"
-      # Self-hosting: build tools
+      # Build tools (small, useful for development)
       ++ opt "redox-bash"
       ++ opt "gnu-make"
       ++ opt "redox-git"

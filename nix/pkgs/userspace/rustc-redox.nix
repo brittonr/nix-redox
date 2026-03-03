@@ -55,14 +55,37 @@ let
           -nostdlibinc -isystem ${sysroot}/include "$@" ;;
       esac
     done
-    exec ${cc} --target=${redoxTarget} --sysroot=${sysroot} -D__redox__ \
-      -static -nostdlib \
-      ${sysroot}/lib/crt0.o ${sysroot}/lib/crti.o \
-      "$@" \
-      -L${sysroot}/lib -L${redox-libcxx}/lib -L${stubLibs}/lib \
-      -lc++ -lc++abi -lunwind -l:libc.a -l:libpthread.a -lgcc \
-      ${sysroot}/lib/crtn.o \
-      -fuse-ld=lld
+    # Check if any arg is a .so (dynamic linking needed)
+    NEEDS_DYNAMIC=false
+    for arg in "$@"; do
+      case "$arg" in
+        *.so|*.so.*|-shared|-Bdynamic) NEEDS_DYNAMIC=true ;;
+        -l) NEEDS_DYNAMIC=true ;;
+      esac
+    done
+
+    if [ "$NEEDS_DYNAMIC" = "true" ]; then
+      # Dynamic link: add dynamic linker path for PT_INTERP, keep libc static
+      exec ${cc} --target=${redoxTarget} --sysroot=${sysroot} -D__redox__ \
+        -nostdlib \
+        ${sysroot}/lib/crt0.o ${sysroot}/lib/crti.o \
+        "$@" \
+        -L${sysroot}/lib -L${redox-libcxx}/lib -L${stubLibs}/lib \
+        -lc++ -lc++abi -lunwind -l:libc.a -l:libpthread.a -lgcc \
+        ${sysroot}/lib/crtn.o \
+        -fuse-ld=lld \
+        -Wl,--dynamic-linker=/lib/ld64.so.1
+    else
+      # Fully static link (cargo, etc.)
+      exec ${cc} --target=${redoxTarget} --sysroot=${sysroot} -D__redox__ \
+        -static -nostdlib \
+        ${sysroot}/lib/crt0.o ${sysroot}/lib/crti.o \
+        "$@" \
+        -L${sysroot}/lib -L${redox-libcxx}/lib -L${stubLibs}/lib \
+        -lc++ -lc++abi -lunwind -l:libc.a -l:libpthread.a -lgcc \
+        ${sysroot}/lib/crtn.o \
+        -fuse-ld=lld
+    fi
   '';
 
   # Redox's relibc has locale_t, newlocale/freelocale/uselocale, isdigit_l etc.
@@ -414,6 +437,26 @@ pkgs.stdenv.mkDerivation {
     echo "=== Installed files ==="
     find $out -type f -name 'rustc' -o -name 'cargo' -o -name 'rustdoc' | while read f; do
       echo "$f: $(file "$f") — $(du -sh "$f" | cut -f1)"
+    done
+
+    # Fix RUNPATH for dynamically linked binaries (rustc, rustdoc).
+    # The cross-compilation embeds host Nix store paths in RUNPATH which
+    # don't exist on the Redox guest. Replace with $ORIGIN-relative path
+    # that works regardless of install location.
+    echo "=== Fixing RUNPATH ==="
+    for bin in $out/bin/rustc $out/bin/rustdoc; do
+      if [ -f "$bin" ] && file "$bin" | grep -q "dynamically linked"; then
+        echo "Patching RUNPATH: $bin"
+        ${pkgs.patchelf}/bin/patchelf --set-rpath '$ORIGIN/../lib' "$bin"
+      fi
+    done
+
+    # Also fix RUNPATH on all .so files in lib/
+    for so in $out/lib/*.so; do
+      if [ -f "$so" ]; then
+        echo "Patching RUNPATH: $so"
+        ${pkgs.patchelf}/bin/patchelf --set-rpath '$ORIGIN' "$so" 2>/dev/null || true
+      fi
     done
 
     runHook postInstall
