@@ -50,13 +50,17 @@ pkgs.stdenv.mkDerivation {
       -Wl,--no-whole-archive \
       -Wl,-soname,libstdc++.so.6
 
-    # Replace Linux-specific NEEDED entries with Redox's libc.so
-    # Linux: librt.so.1, libpthread.so.0, libdl.so.2 → Redox: all in libc.so
+    # Remove ALL Linux-specific NEEDED entries.
+    # The C library symbols (malloc, free, write, etc.) will be resolved at
+    # runtime from the program binary's exported symbols (via --export-dynamic).
+    # This avoids loading libc.so separately, which has an uninitialized
+    # DYNAMIC_PROC_INFO (namespace fd) because ld_so doesn't re-initialize it.
+    # See: ld_so scheme fd corruption bug — double-initialization of ns_fd.
     patchelf --remove-needed librt.so.1 libstdc++.so.6 || true
     patchelf --remove-needed libpthread.so.0 libstdc++.so.6 || true
     patchelf --remove-needed libdl.so.2 libstdc++.so.6 || true
     patchelf --remove-needed libc.so.6 libstdc++.so.6 || true
-    patchelf --add-needed libc.so libstdc++.so.6
+    patchelf --remove-needed libc.so libstdc++.so.6 || true
 
     echo "Built libstdc++.so.6 ($(wc -c < libstdc++.so.6) bytes)"
     echo "NEEDED entries: $(readelf -d libstdc++.so.6 | grep NEEDED | wc -l)"
