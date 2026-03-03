@@ -961,3 +961,36 @@
 - Iterative approach: build → check undefined symbols → add stubs → rebuild
 - Output: cmake (19MB), cpack (19MB), ctest (20MB) — all static ELF for x86_64-unknown-redox
 - Added cmake + LLVM to development profile for self-hosting toolchain
+
+### Self-hosting test — dynamic linker scheme fd bug (Mar 3 2026)
+- **Root issue**: `rustc -vV` crashes with `EBADF` on `File::open("/scheme/rand")`
+  but ONLY for dynamically-linked binaries. Static binaries (`head -c 8 /scheme/rand`) work fine.
+- **Red herring: randd SchemeRoot read()**: Patched randd to accept reads from
+  Handle::SchemeRoot — correct fix but NOT the root cause of the EBADF error.
+- **librustc_driver.so has NEEDED: libstdc++.so.6**: Rust build system adds `-lstdc++`
+  even though we use libc++ (statically linked). Without this .so, Redox ld_so panics
+  during loading with "symbol '__cxa_guard_acquire' not found" or just EBADF.
+- **libstdcxx-shim package**: Built shared libstdc++.so.6 from libc++.a + libc++abi.a +
+  libunwind.a via `--whole-archive`. 1.7MB, 943 exported symbols, 0 NEEDED (stripped
+  Linux-specific librt.so.1/libpthread.so.0/libdl.so.2, added libc.so).
+- **RUNPATH $ORIGIN resolution**: ld_so resolves $ORIGIN to the REAL path (store path),
+  not the symlink path (profile path). Must copy libstdc++.so.6 alongside librustc_driver.so
+  in the store copy within rootTree, not just in /nix/system/profile/lib.
+- **Build module store path permissions**: Nix store copies are read-only. Must
+  `chmod u+w` the directory before `cp`-ing additional files.
+- **selfHostingPackageNames whitelist**: New packages providing lib/ must be added to
+  the whitelist for mkSystemProfile to create lib/ symlinks.
+- **The actual bug**: After ALL dynamic libraries load successfully, the process
+  tries to `File::open("/scheme/rand")` and gets EBADF. The Redox kernel's scheme
+  resolution works for static binaries but returns EBADF for the same call from a
+  dynamically-linked process. The issue is in relibc's ld_so/linker.rs — dynamic
+  library loading corrupts some kernel state related to scheme file descriptors.
+- **RIP 0x0000000012845a52**: The crash is ALWAYS at this address (in librustc_driver.so),
+  regardless of which version of ld_so or randd is running. It's the `ud2` instruction
+  from `panic = "abort"` in Rust's std random code.
+- **Commands NOT available on Redox**: `dd`, `tail`, `sleep`, `grep -E`, `sed`
+  Only: cat, cp, df, du, echo, head, ls, mkdir, mv, pwd, rm, sort, touch, uniq, wc (uutils)
+- **Ion `export` syntax**: `export VAR value` sets+exports. `export VAR` (no value) fails
+  with "cannot export ... because it does not exist" if `let VAR` was used to set it.
+- **Self-hosting test results**: 13/17 pass. All toolchain presence tests pass.
+  3 failures are all from the same ld_so scheme bug (rustc-version, cargo-build, binary-exists).
