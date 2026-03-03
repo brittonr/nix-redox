@@ -465,6 +465,18 @@ let
 
   redox-patch = import ../pkgs/userspace/patch-redox.nix cLibCommon;
 
+  redox-rustc = import ../pkgs/userspace/rustc-redox.nix (
+    cLibCommon
+    // {
+      inherit
+        redox-llvm
+        redox-libcxx
+        redox-openssl
+        rustToolchain
+        ;
+    }
+  );
+
   # pkgutils disabled: ring crate needs pregenerated assembly from git source
   # pkgutils = import ../pkgs/userspace/pkgutils.nix (
   #   standaloneCommon
@@ -598,10 +610,11 @@ in
       redox-cmake
       ;
 
-    # Self-hosting: LLVM toolchain
+    # Self-hosting: LLVM + Rust toolchain
     inherit
       redox-libcxx
       redox-llvm
+      redox-rustc
       ;
 
     # Infrastructure (needed by module system)
