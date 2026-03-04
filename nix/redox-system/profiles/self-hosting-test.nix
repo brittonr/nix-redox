@@ -707,11 +707,9 @@ let
 
     # Check .so load addresses: LD_DEBUG=load shows where ld_so maps libraries
     echo "--- LD_DEBUG=load: rustc from shell ---"
-    export LD_DEBUG=load
-    rustc -vV > /tmp/ld-debug-shell-out ^>/tmp/ld-debug-shell-err
+    /nix/system/profile/bin/bash -c 'LD_DEBUG=load /nix/system/profile/bin/rustc -vV >/tmp/ld-debug-shell-out 2>/tmp/ld-debug-shell-err'
     echo "LD_DEBUG rustc from shell: exit=$?"
     cat /tmp/ld-debug-shell-err
-    drop LD_DEBUG
 
     # Now replicate cargo's exact third rustc invocation from the shell
     echo "--- Replicate cargo's probe command ---"
@@ -740,38 +738,32 @@ let
       head -c 500 /tmp/cargo-probe-bt-err
     end
 
-    # Spy2: pass through to real rustc, with logging before AND after.
-    # Use fsync to ensure log is flushed to disk even if the process
-    # tree is killed by a crash.
+    # Spy2: simple pass-through that closes FDs 3-1023 before exec
+    # Tests whether cargo's inherited FDs cause the crash.
     echo 'use std::io::Write;' > /tmp/rustc_spy2.rs
     echo 'use std::process::Command;' >> /tmp/rustc_spy2.rs
     echo 'fn main() {' >> /tmp/rustc_spy2.rs
     echo '    let args: Vec<String> = std::env::args().collect();' >> /tmp/rustc_spy2.rs
-    echo '    let call_id = std::time::SystemTime::now()' >> /tmp/rustc_spy2.rs
-    echo '        .duration_since(std::time::UNIX_EPOCH).unwrap().as_millis();' >> /tmp/rustc_spy2.rs
-    echo '    let log = |msg: &str| {' >> /tmp/rustc_spy2.rs
+    echo '    {' >> /tmp/rustc_spy2.rs
     echo '        if let Ok(mut f) = std::fs::OpenOptions::new()' >> /tmp/rustc_spy2.rs
     echo '            .create(true).append(true)' >> /tmp/rustc_spy2.rs
     echo '            .open("/tmp/rustc-spy2.log") {' >> /tmp/rustc_spy2.rs
-    echo '            let _ = writeln!(f, "[{}] {}", call_id, msg);' >> /tmp/rustc_spy2.rs
+    echo '            let _ = writeln!(f, "SPY2: {:?}", &args[1..]);' >> /tmp/rustc_spy2.rs
     echo '            let _ = f.flush();' >> /tmp/rustc_spy2.rs
     echo '        }' >> /tmp/rustc_spy2.rs
-    echo '    };' >> /tmp/rustc_spy2.rs
-    echo '    log(&format!("BEFORE: {:?}", &args[1..]));' >> /tmp/rustc_spy2.rs
+    echo '    }' >> /tmp/rustc_spy2.rs
+    echo '    // Close ALL inherited FDs above stderr' >> /tmp/rustc_spy2.rs
+    echo '    extern "C" { fn close(fd: i32) -> i32; }' >> /tmp/rustc_spy2.rs
+    echo '    for fd in 3..256i32 {' >> /tmp/rustc_spy2.rs
+    echo '        unsafe { close(fd); }' >> /tmp/rustc_spy2.rs
+    echo '    }' >> /tmp/rustc_spy2.rs
     echo '    let status = Command::new("/nix/system/profile/bin/rustc")' >> /tmp/rustc_spy2.rs
     echo '        .args(&args[1..])' >> /tmp/rustc_spy2.rs
-    echo '        .env("LD_DEBUG", "load")' >> /tmp/rustc_spy2.rs
-    echo '        .stdin(std::process::Stdio::inherit())' >> /tmp/rustc_spy2.rs
-    echo '        .stdout(std::process::Stdio::inherit())' >> /tmp/rustc_spy2.rs
-    echo '        .stderr(std::process::Stdio::inherit())' >> /tmp/rustc_spy2.rs
     echo '        .status();' >> /tmp/rustc_spy2.rs
     echo '    match status {' >> /tmp/rustc_spy2.rs
-    echo '        Ok(s) => {' >> /tmp/rustc_spy2.rs
-    echo '            log(&format!("AFTER: exit={}", s));' >> /tmp/rustc_spy2.rs
-    echo '            std::process::exit(s.code().unwrap_or(1));' >> /tmp/rustc_spy2.rs
-    echo '        }' >> /tmp/rustc_spy2.rs
+    echo '        Ok(s) => std::process::exit(s.code().unwrap_or(1)),' >> /tmp/rustc_spy2.rs
     echo '        Err(e) => {' >> /tmp/rustc_spy2.rs
-    echo '            log(&format!("ERROR: {}", e));' >> /tmp/rustc_spy2.rs
+    echo '            eprintln!("spy2: {}", e);' >> /tmp/rustc_spy2.rs
     echo '            std::process::exit(1);' >> /tmp/rustc_spy2.rs
     echo '        }' >> /tmp/rustc_spy2.rs
     echo '    }' >> /tmp/rustc_spy2.rs
@@ -797,12 +789,7 @@ let
       echo "/tmp/rustc-spy2" >> /tmp/spy2-link.txt
       /nix/system/profile/bin/bash -c '/nix/system/profile/bin/ld.lld @/tmp/spy2-link.txt' ^>/dev/null
       if test $? = 0
-        # First: test spy2 directly (should work like fork_test)
-        /tmp/rustc-spy2 -vV > /tmp/spy2-direct-out ^>/tmp/spy2-direct-err
-        echo "spy2 direct test: exit=$?"
-
-        # Then: use spy2 as RUSTC for cargo (in bash to isolate crash)
-        echo "--- cargo build with spy2 ---"
+        echo "--- cargo build with FD-closing spy2 ---"
         /nix/system/profile/bin/bash -c '
           cd /tmp/hello
           export RUSTC=/tmp/rustc-spy2
@@ -810,14 +797,15 @@ let
           echo "spy2-exit=$?"
         ' > /tmp/cargo-spy2-out
         cat /tmp/cargo-spy2-out
-
-        echo "=== spy2 log ==="
         if test -f /tmp/rustc-spy2.log
+          echo "=== spy2 log ==="
           cat /tmp/rustc-spy2.log
-        else
-          echo "(no spy2 log)"
         end
+      else
+        echo "spy2 link failed"
       end
+    else
+      echo "spy2 compile failed"
     end
 
     echo "FUNC_TEST:cargo-build:FAIL:investigating"
