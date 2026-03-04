@@ -109,13 +109,20 @@ in
   # Functional test factory - requires diskImage with test startup script
   # Produces a script that boots the image, watches for FUNC_TEST results
   mkFunctionalTest =
-    { diskImage, bootloader }:
+    {
+      diskImage,
+      bootloader,
+      memoryMB ? 1024,
+      cpus ? 2,
+    }:
     import ./functional-test.nix {
       inherit
         pkgs
         lib
         diskImage
         bootloader
+        memoryMB
+        cpus
         ;
     };
 

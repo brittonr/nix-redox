@@ -29,6 +29,8 @@
   lib,
   diskImage,
   bootloader,
+  memoryMB ? 1024,
+  cpus ? 2,
 }:
 
 let
@@ -131,8 +133,8 @@ pkgs.writeShellScriptBin "functional-test" ''
     ${cloudHypervisor}/bin/cloud-hypervisor \
       --firmware "$FIRMWARE" \
       --disk path="$IMAGE" \
-      --cpus boot=2 \
-      --memory size=1024M \
+      --cpus boot=${toString cpus} \
+      --memory size=${toString memoryMB}M \
       --serial file="$SERIAL_LOG" \
       --console off \
       &>"$WORK_DIR/vmm.log" &

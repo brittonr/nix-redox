@@ -95,22 +95,19 @@ let
     # ── Rustc Dynamic Libraries ─────────────────────────────
     # Test: LD_LIBRARY_PATH includes rustc libs
 
-    # Test: librustc_driver.so accessible
-    if exists -f /usr/lib/rustc/librustc_driver-44e39a95cebb75f9.so
-      echo "FUNC_TEST:rustc-driver-so:PASS"
-    else
-      # Try any librustc_driver*.so
-      let found = false
-      for f in @(ls /usr/lib/rustc/ 2>/dev/null)
+    # Test: librustc_driver.so accessible (check all lib paths)
+    let found = false
+    for dir in /nix/system/profile/lib /usr/lib/rustc /lib
+      for f in @(ls $dir/ 2>/dev/null)
         if matches $f "^librustc_driver"
           let found = true
         end
       end
-      if test $found = true
-        echo "FUNC_TEST:rustc-driver-so:PASS"
-      else
-        echo "FUNC_TEST:rustc-driver-so:FAIL:librustc_driver.so not found"
-      end
+    end
+    if test $found = true
+      echo "FUNC_TEST:rustc-driver-so:PASS"
+    else
+      echo "FUNC_TEST:rustc-driver-so:FAIL:librustc_driver.so not found"
     end
 
     # ── Cargo Config ────────────────────────────────────────
@@ -189,6 +186,68 @@ let
       echo "=== rustc stderr ==="
       cat /tmp/rustc-vv-err
       echo "=== end ==="
+    end
+
+    # Test: rustc --print cfg (target config query — LLVM option parsing)
+    # Let stderr flow to serial so we see any errors / ld_so debug output
+    let LD_DEBUG = "1"
+    export LD_DEBUG
+    rustc --print cfg >/tmp/rustc-print-cfg-out
+    let print_cfg_exit = $?
+    let LD_DEBUG = "0"
+    export LD_DEBUG
+    if test $print_cfg_exit = 0
+      echo "FUNC_TEST:rustc-print-cfg:PASS"
+    else
+      echo "FUNC_TEST:rustc-print-cfg:FAIL:rustc --print cfg exited $print_cfg_exit"
+      echo "=== rustc print cfg output ==="
+      cat /tmp/rustc-print-cfg-out
+      echo "=== end ==="
+    end
+
+    # Sysroot check
+    let sysroot = $(rustc --print sysroot)
+    echo "Sysroot: $sysroot"
+
+    # Test: repeated rustc invocations to detect state issues
+    echo "=== Sequential rustc tests ==="
+    echo "--- Test A: rustc -vV (4th invocation) ---"
+    rustc -vV &>/dev/null
+    echo "--- Test A: exited $? ---"
+
+    echo "--- Test B: rustc --help ---"
+    rustc --help &>/dev/null
+    echo "--- Test B: exited $? ---"
+
+    echo "--- Test C: rustc --print target-list ---"
+    rustc --print target-list &>/dev/null
+    echo "--- Test C: exited $? ---"
+
+    # Now try with a source file
+    echo 'fn main() { }' > /tmp/empty.rs
+    # Test D: compile empty main → binary (no cargo, no -Z flags)
+    echo "--- Test D: rustc /tmp/empty.rs -o /tmp/empty-bin ---"
+    rustc /tmp/empty.rs -o /tmp/empty-bin
+    let compile_exit = $?
+    echo "--- Test D: exited $compile_exit ---"
+
+    # Test E: compile hello with println
+    echo 'fn main() { println!("hello from rustc"); }' > /tmp/hello.rs
+    echo "--- Test E: rustc /tmp/hello.rs -o /tmp/hello-direct ---"
+    rustc /tmp/hello.rs -o /tmp/hello-direct
+    let hello_exit = $?
+    echo "--- Test E: exited $hello_exit ---"
+
+    # Test F: run the compiled binary
+    if test $compile_exit = 0
+      if exists -f /tmp/empty-bin
+        /tmp/empty-bin
+        echo "FUNC_TEST:rustc-compile-direct:PASS"
+      else
+        echo "FUNC_TEST:rustc-compile-direct:FAIL:binary not found"
+      end
+    else
+      echo "FUNC_TEST:rustc-compile-direct:FAIL:rustc exited $compile_exit"
     end
 
     # Run cargo build and capture exit code

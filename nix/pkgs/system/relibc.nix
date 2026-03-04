@@ -83,6 +83,7 @@ let
 
       python3 ${./patch-relibc-ns-fd.py}
       python3 ${./patch-relibc-run-init.py}
+      python3 ${./patch-relibc-prefault-stack.py}
 
       runHook postPatch
     '';

@@ -237,6 +237,8 @@ let
   selfHostingTest = mkFunctionalTest {
     diskImage = selfHostingTestSystem.diskImage;
     inherit bootloader;
+    memoryMB = 4096;
+    cpus = 4;
   };
 
   mkBridgeTest = modularPkgs.infrastructure.mkBridgeTest;

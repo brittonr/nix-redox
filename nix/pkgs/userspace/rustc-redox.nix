@@ -242,9 +242,20 @@ let
         echo "$libs"
         ;;
       *--components*)
+        # Return component names as llvm-config would (not individual library names).
+        # The rustc_llvm build.rs expects "x86" not "x86codegen x86info x86desc ...".
+        # Map library names to their component group names.
+        components=""
         for f in ${redox-llvm}/lib/libLLVM*.a; do
-          basename "$f" .a | sed 's/^libLLVM//' | tr '[:upper:]' '[:lower:]'
-        done | tr '\n' ' '
+          lib=$(basename "$f" .a | sed 's/^libLLVM//' | tr '[:upper:]' '[:lower:]')
+          case "$lib" in
+            x86*) components="$components x86" ;;
+            aarch64*) components="$components aarch64" ;;
+            arm*) components="$components arm" ;;
+            *) components="$components $lib" ;;
+          esac
+        done
+        echo "$components" | tr ' ' '\n' | sort -u | tr '\n' ' '
         echo
         ;;
       *)
@@ -315,18 +326,39 @@ pkgs.stdenv.mkDerivation {
     # The Redox fork patches the vendored libc, but we use the upstream tarball.
     # std handles the fallback gracefully (returns Err or defaults to 1).
 
-    # Patch 2: Sysroot fallback to / (commit 7335d7e1)
+    # Patch 2: Sysroot detection for Redox
+    # On Redox: dladdr() may not work, and argv[0] may not be a symlink.
+    # Fallback: try current_exe() path (from /scheme/sys/exe), then known paths.
     python3 << 'PYEOF'
     path = "compiler/rustc_session/src/filesearch.rs"
     with open(path) as f:
         content = f.read()
-    content = content.replace(
-        '.unwrap_or_else(|| default_from_rustc_driver_dll().expect("Failed finding sysroot"))',
-        '.unwrap_or_else(|| default_from_rustc_driver_dll().unwrap_or(PathBuf::from("/")))'
-    )
+    old = '.unwrap_or_else(|| default_from_rustc_driver_dll().expect("Failed finding sysroot"))'
+    new = """.unwrap_or_else(|| {
+            default_from_rustc_driver_dll().unwrap_or_else(|_| {
+                // Redox fallback: try current_exe() to derive sysroot
+                if let Ok(exe) = std::env::current_exe() {
+                    if let Some(p) = exe.parent().and_then(|p| p.parent()) {
+                        let rustlib = p.join("lib").join("rustlib");
+                        if rustlib.exists() {
+                            return p.to_path_buf();
+                        }
+                    }
+                }
+                // Last resort: try well-known Redox paths
+                for candidate in ["/nix/system/profile", "/usr", "/"] {
+                    let p = PathBuf::from(candidate);
+                    if p.join("lib").join("rustlib").exists() {
+                        return p;
+                    }
+                }
+                PathBuf::from("/")
+            })
+        })"""
+    content = content.replace(old, new)
     with open(path, 'w') as f:
         f.write(content)
-    print(f"  Patched {path}")
+    print(f"  Patched {path}: Redox sysroot fallback chain")
     PYEOF
 
     # Patch 3: crt_static_allows_dylibs — REMOVED
@@ -348,7 +380,44 @@ pkgs.stdenv.mkDerivation {
     print(f"  Patched {path}")
     PYEOF
 
-    # Patch 5: cargo-util S_IRWXU type mismatch
+    # Patch 5: Disable generate-arange-section for Redox target
+    # The Redox target spec has generate_arange_section: true (inherited default).
+    # When rustc passes -generate-arange-section to LLVM, the cl::opt registration
+    # from libLLVMAsmPrinter.a may be dead-stripped during static linking of
+    # librustc_driver.so, causing LLVM to reject the unknown flag.
+    # Fix: set generate_arange_section: false in the Redox base target options.
+    python3 << 'PYEOF'
+    path = "compiler/rustc_target/src/spec/base/redox.rs"
+    with open(path) as f:
+        content = f.read()
+    if "generate_arange_section" not in content:
+        # Insert before the closing of the TargetOptions block
+        # The file returns TargetOptions { ... }
+        content = content.replace(
+            "..Default::default()",
+            "generate_arange_section: false,\n        ..Default::default()"
+        )
+        with open(path, 'w') as f:
+            f.write(content)
+        print(f"  Patched {path}: disabled generate_arange_section")
+    else:
+        print(f"  {path}: already patched")
+    PYEOF
+
+    # Patch 6: Force-link LLVM X86 target in bootstrap RUSTFLAGS
+    # Static linking of LLVM into librustc_driver.so dead-strips the X86 backend
+    # because registration functions are only referenced via constructors.
+    # This causes "no targets registered" at runtime. Fix: patch the bootstrap
+    # to add -Wl,-u,<symbol> for Redox targets.
+    python3 ${./patch-bootstrap-force-link.py}
+
+    # Patch 6b: Grow main thread stack on Redox
+    # The Redox kernel gives main threads ~8KB of stack, but rustc needs ~12KB
+    # just for session setup before spawning its worker thread. Since the kernel
+    # doesn't respect PT_GNU_STACK, we patch main() to spawn a 16MB thread.
+    python3 ${./patch-rustc-main-stack.py}
+
+    # Patch 7: cargo-util S_IRWXU type mismatch
     # On Redox, libc::S_IRWXU etc. are i32 (not u32 like Linux).
     # Cargo uses u32::from() which doesn't accept i32.
     python3 << 'PYEOF'
