@@ -51,6 +51,58 @@ pkgs.runCommand "redox-sysroot"
       fi
     done
 
+    # ===== Stub libgcc_eh.a and libgcc.a (unwind symbols) =====
+    # libstd references _Unwind_* symbols for backtraces and panic_unwind.
+    # On Redox we use panic=abort, so these are never called at runtime.
+    # Provide stub implementations so the linker can resolve them.
+    echo "Creating stub libgcc_eh.a..."
+    cat > $TMPDIR/unwind_stubs.c << 'STUBS'
+    /* Stub implementations of GCC/LLVM unwind ABI functions.
+     * These are referenced by libstd for backtrace/panic support but
+     * never called when panic=abort is used. */
+    typedef int _Unwind_Reason_Code;
+    typedef void* _Unwind_Context;
+    typedef void* _Unwind_Exception;
+    typedef _Unwind_Reason_Code (*_Unwind_Trace_Fn)(_Unwind_Context*, void*);
+
+    unsigned long _Unwind_GetIP(_Unwind_Context* c) { return 0; }
+    void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
+    _Unwind_Reason_Code _Unwind_Backtrace(_Unwind_Trace_Fn fn, void* data) { return 0; }
+    unsigned long _Unwind_GetCFA(_Unwind_Context* c) { return 0; }
+    unsigned long _Unwind_GetTextRelBase(_Unwind_Context* c) { return 0; }
+    unsigned long _Unwind_GetDataRelBase(_Unwind_Context* c) { return 0; }
+    void _Unwind_SetIP(_Unwind_Context* c, unsigned long val) {}
+    void _Unwind_SetGR(_Unwind_Context* c, int reg, unsigned long val) {}
+    unsigned long _Unwind_GetGR(_Unwind_Context* c, int reg) { return 0; }
+    _Unwind_Reason_Code _Unwind_RaiseException(_Unwind_Exception* e) { return 0; }
+    void _Unwind_Resume(_Unwind_Exception* e) {}
+    void _Unwind_DeleteException(_Unwind_Exception* e) {}
+    void* _Unwind_GetLanguageSpecificData(_Unwind_Context* c) { return 0; }
+    unsigned long _Unwind_GetRegionStart(_Unwind_Context* c) { return 0; }
+    unsigned long _Unwind_GetIPInfo(_Unwind_Context* c, int* ip_before_insn) {
+      if (ip_before_insn) *ip_before_insn = 0;
+      return 0;
+    }
+    int __gcc_personality_v0() { return 0; }
+    STUBS
+
+    ${pkgs.llvmPackages.clang}/bin/clang \
+      --target=x86_64-unknown-redox \
+      --sysroot=$out/${sysrootRelPath} \
+      -nostdlib -ffreestanding \
+      -c $TMPDIR/unwind_stubs.c \
+      -o $TMPDIR/unwind_stubs.o
+
+    ${pkgs.llvmPackages.llvm}/bin/llvm-ar rcs \
+      $out/${sysrootRelPath}/lib/libgcc_eh.a \
+      $TMPDIR/unwind_stubs.o
+
+    # Also create libgcc.a (some linker invocations look for -lgcc)
+    cp $out/${sysrootRelPath}/lib/libgcc_eh.a \
+       $out/${sysrootRelPath}/lib/libgcc.a
+
+    echo "Stub libgcc_eh.a and libgcc.a created"
+
     # ===== Dynamic linker and shared libc for /lib/ =====
     # Dynamically linked binaries (like rustc) need ld64.so.1 at /lib/
     # and libc.so at a findable path. The build module will symlink these.
@@ -74,49 +126,58 @@ pkgs.runCommand "redox-sysroot"
     # with the sysroot include paths.
     # When invoked for linking, adds CRT files and drives lld.
     cat > $out/bin/cc << 'WRAPPER'
-    #!/bin/ion
-    # CC wrapper for Redox self-hosting
-    # Wraps clang with the correct sysroot, CRT files, and linker flags.
-
-    # Resolve sysroot relative to this script's location
-    # On Redox: /nix/store/<hash>-redox-sysroot/bin/cc
-    # Sysroot:  /nix/store/<hash>-redox-sysroot/sysroot/
+    #!/nix/system/profile/bin/bash
+    # CC wrapper for Redox self-hosting — invokes ld.lld directly.
     #
-    # Since Ion doesn't support dirname/readlink easily, we use the
-    # well-known store path symlink. The /nix/system/profile/sysroot/
-    # directory exists because the build module creates it.
-    let SYSROOT = "/usr/lib/redox-sysroot"
+    # Uses bash (not Ion) because Ion's argument parser eats -o.
+    #
+    # CRITICAL WORKAROUND: Rust std's Command::output() on Redox crashes
+    # (Invalid opcode in read2/poll) when reading from pipes connected to
+    # a child process that runs for more than trivial time.
+    #
+    # Fix: Close stdout/stderr (sends EOF to rustc's pipes) BEFORE running
+    # ld.lld. ld.lld's output goes to temp files for post-mortem diagnosis.
 
-    # Check if this is a compile-only invocation
-    let compile_only = false
-    for arg in @args
-      if test $arg = "-c"
-        let compile_only = true
-      else if test $arg = "-S"
-        let compile_only = true
-      else if test $arg = "-E"
-        let compile_only = true
-      else if test $arg = "-M"
-        let compile_only = true
-      else if test $arg = "-MM"
-        let compile_only = true
-      end
-    end
+    S=/usr/lib/redox-sysroot
+    LLD=/nix/system/profile/bin/ld.lld
+    ERR=/tmp/.cc-wrapper-stderr
 
-    if test $compile_only = true
-      # Compile-only: pass through with sysroot include paths
-      exec clang -nostdlibinc -isystem $SYSROOT/include @args
-    else
-      # Link step: add CRT files, libc, and drive lld
-      exec clang -static \
-        $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o \
-        @args \
-        -L $SYSROOT/lib \
-        -l:libc.a -l:libpthread.a \
-        $SYSROOT/lib/crtn.o \
-        -fuse-ld=lld
-    end
+    # Filter out GCC flags that ld.lld doesn't understand
+    ARGS=()
+    for arg in "$@"; do
+      case "$arg" in
+        -m64|-m32)         ;;    # lld uses -m elf_x86_64 not -m64
+        -Wl,*)             ARGS+=("''${arg#-Wl,}") ;;
+        -nodefaultlibs)    ;;
+        -nostdlib)         ;;
+        *)                 ARGS+=("$arg") ;;
+      esac
+    done
+
+    # Run ld.lld in background with output redirected to files
+    "$LLD" \
+      "$S/lib/crt0.o" "$S/lib/crti.o" \
+      "''${ARGS[@]}" \
+      -L "$S/lib" -l:libc.a -l:libpthread.a -l:libgcc_eh.a \
+      "$S/lib/crtn.o" \
+      > /dev/null 2> "$ERR" &
+    pid=$!
+
+    # Close stdout/stderr — sends EOF to rustc's pipes immediately
+    exec 1>&- 2>&-
+
+    # Wait for ld.lld to finish
+    wait $pid
+    exit $?
     WRAPPER
+
+    # Arg-capture "linker" — writes its arguments to /tmp/linker-args.txt then exits 0.
+    # Used to see what arguments rustc passes to the linker without actually linking.
+    cat > $out/bin/cc-print-args << 'PRINTARGS'
+    #!/nix/system/profile/bin/bash
+    printf '%s\n' "$@" > /tmp/linker-args.txt
+    PRINTARGS
+    chmod +x $out/bin/cc-print-args
     chmod 755 $out/bin/cc
 
     # Also provide 'gcc' symlink (some tools look for gcc)

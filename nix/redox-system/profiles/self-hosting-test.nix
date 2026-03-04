@@ -223,36 +223,300 @@ let
     rustc --print target-list &>/dev/null
     echo "--- Test C: exited $? ---"
 
-    # Now try with a source file
-    echo 'fn main() { }' > /tmp/empty.rs
-    # Test D: compile empty main → binary (no cargo, no -Z flags)
-    echo "--- Test D: rustc /tmp/empty.rs -o /tmp/empty-bin ---"
-    rustc /tmp/empty.rs -o /tmp/empty-bin
-    let compile_exit = $?
-    echo "--- Test D: exited $compile_exit ---"
-
-    # Test E: compile hello with println
-    echo 'fn main() { println!("hello from rustc"); }' > /tmp/hello.rs
-    echo "--- Test E: rustc /tmp/hello.rs -o /tmp/hello-direct ---"
-    rustc /tmp/hello.rs -o /tmp/hello-direct
-    let hello_exit = $?
-    echo "--- Test E: exited $hello_exit ---"
-
-    # Test F: run the compiled binary
-    if test $compile_exit = 0
-      if exists -f /tmp/empty-bin
-        /tmp/empty-bin
-        echo "FUNC_TEST:rustc-compile-direct:PASS"
-      else
-        echo "FUNC_TEST:rustc-compile-direct:FAIL:binary not found"
-      end
+    # ── Diagnostics: PATH and cc availability ─────────────
+    echo "=== PATH diagnostics ==="
+    echo "PATH = $PATH"
+    echo "--- cc binary check ---"
+    if exists -f /nix/system/profile/bin/cc
+      echo "cc exists at /nix/system/profile/bin/cc"
     else
-      echo "FUNC_TEST:rustc-compile-direct:FAIL:rustc exited $compile_exit"
+      echo "cc NOT found at /nix/system/profile/bin/cc"
+    end
+    # Check symlink target
+    ls -la /nix/system/profile/bin/cc
+    # Try running cc directly from shell
+    echo "--- cc --version from shell ---"
+    /nix/system/profile/bin/cc --version ^>/dev/null
+    echo "cc direct exit: $?"
+
+    # ── Diagnostics: clang directly ────────────────────────
+    # Narrow down clang failure: test small vs large clang tools
+    # clang-format (5.9MB, no codegen) and clang-tblgen (4.3MB)
+    echo "--- clang-format --version ---"
+    /nix/system/profile/bin/clang-format --version &>/tmp/clang-format-out
+    echo "clang-format exit: $?"
+    cat /tmp/clang-format-out
+
+    echo "--- diagtool --version ---"
+    /nix/system/profile/bin/diagtool &>/tmp/diagtool-out
+    echo "diagtool exit: $?"
+    cat /tmp/diagtool-out
+
+    # llc --version with merged output to see targets
+    echo "--- llc --version (merged) ---"
+    /nix/system/profile/bin/llc --version &>/tmp/llc-out
+    echo "llc exit: $?"
+    cat /tmp/llc-out
+
+    # Try clang-21 --help-hidden (different code path than --version)
+    echo "--- clang-21 --help (first 5 lines) ---"
+    /nix/system/profile/bin/clang-21 --help &>/tmp/clang-help-out
+    echo "clang --help exit: $?"
+    head -c 200 /tmp/clang-help-out
+
+    # Try clang-scan-deps (uses Clang frontend but not driver)
+    echo "--- clang-scan-deps --version ---"
+    /nix/system/profile/bin/clang-scan-deps --version &>/tmp/csd-out
+    echo "clang-scan-deps exit: $?"
+    cat /tmp/csd-out
+
+    # ld.lld + llvm-ar still work (confirms stack growth)
+    /nix/system/profile/bin/ld.lld --version &>/dev/null
+    echo "ld.lld: $?"
+    /nix/system/profile/bin/llvm-ar --version &>/dev/null
+    echo "llvm-ar: $?"
+
+    ls -la /nix/system/profile/bin/clang /nix/system/profile/bin/clang-21
+
+    # Try lld too
+    echo "--- lld --version directly ---"
+    /nix/system/profile/bin/lld --version >/tmp/lld-stdout ^>/tmp/lld-stderr
+    let lld_exit = $?
+    echo "lld exit: $lld_exit"
+    echo "lld stdout:"
+    cat /tmp/lld-stdout
+    echo "lld stderr:"
+    cat /tmp/lld-stderr
+
+    # Try clang-21 directly (resolving symlink chain)
+    echo "--- clang-21 direct test ---"
+    # Find clang-21 via the profile symlink chain
+    ls -la /nix/system/profile/bin/clang
+    # Try ld.lld --version (lld expects to be invoked as ld.lld)
+    echo "--- ld.lld --version ---"
+    /nix/system/profile/bin/ld.lld --version >/tmp/ld-lld-stdout ^>/tmp/ld-lld-stderr
+    let ld_lld_exit = $?
+    echo "ld.lld exit: $ld_lld_exit"
+    echo "ld.lld stdout:"
+    cat /tmp/ld-lld-stdout
+    echo "ld.lld stderr:"
+    cat /tmp/ld-lld-stderr
+
+    # Try llvm-ar --version (simpler tool, less stack)
+    echo "--- llvm-ar --version ---"
+    /nix/system/profile/bin/llvm-ar --version >/tmp/llvm-ar-stdout ^>/tmp/llvm-ar-stderr
+    let llvm_ar_exit = $?
+    echo "llvm-ar exit: $llvm_ar_exit"
+    echo "llvm-ar stdout:"
+    cat /tmp/llvm-ar-stdout
+
+    # ── Separate compilation from linking ──────────────────
+    # Compile to object file first (no linker needed), then link separately.
+    # This pinpoints whether the crash is in LLVM codegen or linking.
+
+    echo "--- Step 1: rustc --emit=obj (compile only, no linker) ---"
+    echo 'fn main() { }' > /tmp/empty.rs
+    rustc /tmp/empty.rs --emit=obj -o /tmp/empty.o &>/tmp/rustc-emit-obj-out
+    let emit_obj_exit = $?
+    echo "rustc --emit=obj exit: $emit_obj_exit"
+    if test $emit_obj_exit != 0
+      echo "=== rustc --emit=obj output ==="
+      cat /tmp/rustc-emit-obj-out
+      echo "=== end ==="
+    else
+      echo "Object file created successfully"
+      ls -la /tmp/empty.o
     end
 
-    # Run cargo build and capture exit code
-    # Ion shell: ^> redirects stderr (not 2> like bash)
-    # Use &> to capture both stdout and stderr for debugging
+    echo "--- Step 1b: rustc --emit=obj with println ---"
+    echo 'fn main() { println!("hello"); }' > /tmp/hello.rs
+    rustc /tmp/hello.rs --emit=obj -o /tmp/hello.o &>/tmp/rustc-hello-obj-out
+    let hello_obj_exit = $?
+    echo "rustc --emit=obj hello exit: $hello_obj_exit"
+    if test $hello_obj_exit != 0
+      cat /tmp/rustc-hello-obj-out
+    else
+      ls -la /tmp/hello.o
+    end
+
+    echo "--- Step 2: Link with ld.lld directly ---"
+    if test $emit_obj_exit = 0
+      /nix/system/profile/bin/ld.lld --static \
+        /usr/lib/redox-sysroot/lib/crt0.o \
+        /usr/lib/redox-sysroot/lib/crti.o \
+        /tmp/empty.o \
+        -L /usr/lib/redox-sysroot/lib \
+        -l:libc.a -l:libpthread.a \
+        /usr/lib/redox-sysroot/lib/crtn.o \
+        -o /tmp/empty-bin &>/tmp/lld-link-out
+      let link_exit = $?
+      echo "ld.lld link exit: $link_exit"
+      if test $link_exit != 0
+        echo "=== ld.lld output ==="
+        cat /tmp/lld-link-out
+        echo "=== end ==="
+      else
+        ls -la /tmp/empty-bin
+      end
+    end
+
+    echo "--- Step 3: Link via CC wrapper ---"
+    if test $emit_obj_exit = 0
+      /nix/system/profile/bin/cc /tmp/empty.o -o /tmp/empty-cc &>/tmp/cc-link-out
+      let cc_link_exit = $?
+      echo "CC wrapper link exit: $cc_link_exit"
+      if test $cc_link_exit != 0
+        cat /tmp/cc-link-out
+      end
+    end
+
+    echo "--- Step 3b: Rust sysroot contents ---"
+    let rust_sysroot = $(rustc --print sysroot)
+    echo "Rust sysroot: $rust_sysroot"
+    echo "Rust target lib dir:"
+    ls $rust_sysroot/lib/rustlib/x86_64-unknown-redox/lib/ ^>/dev/null
+    echo "---"
+
+    echo "--- Step 3c: Show cargo config ---"
+    cat /root/.cargo/config.toml
+
+    echo "--- Step 3d: Link with ld.lld + all Rust libs ---"
+    /nix/system/profile/bin/ld.lld /usr/lib/redox-sysroot/lib/crt0.o /usr/lib/redox-sysroot/lib/crti.o /tmp/empty.o -L $rust_sysroot/lib/rustlib/x86_64-unknown-redox/lib -L /usr/lib/redox-sysroot/lib -l:libc.a -l:libpthread.a /usr/lib/redox-sysroot/lib/crtn.o -o /tmp/empty-lld &>/tmp/lld-full-out
+    let lld_full_exit = $?
+    echo "ld.lld manual link exit: $lld_full_exit"
+    cat /tmp/lld-full-out
+
+    # ── Linker tests: safe first, risky last ──────────────
+    # The rustc linker invocation may crash the process (Invalid opcode in
+    # fork/waitpid on Redox). Run safe tests first to get results.
+
+    # ── Step 4a: Two-step compile+link (SAFE — no rustc subprocess) ──
+    echo "--- Step 4a: Two-step compile+link ---"
+    rustc /tmp/empty.rs --emit=obj -o /tmp/empty-step.o &>/tmp/rustc-step1-out
+    let step1_exit = $?
+    echo "Compile (emit=obj): $step1_exit"
+
+    let step2_exit = 1
+    if test $step1_exit = 0
+      let sysroot = $(rustc --print sysroot)
+      let target_lib = "$sysroot/lib/rustlib/x86_64-unknown-redox/lib"
+
+      # Write ld.lld response file — one arg per line
+      # (Ion treats $string as a single arg; use a response file to avoid this)
+      echo "/usr/lib/redox-sysroot/lib/crt0.o" > /tmp/link-args.txt
+      echo "/usr/lib/redox-sysroot/lib/crti.o" >> /tmp/link-args.txt
+      echo "/tmp/empty-step.o" >> /tmp/link-args.txt
+      # Include only .rlib files — write a bash script to filter
+      # (Ion can't pipe inside @() and find isn't available on Redox)
+      /nix/system/profile/bin/bash -c "ls $target_lib/*.rlib" >> /tmp/link-args.txt
+      echo "-L" >> /tmp/link-args.txt
+      echo "/usr/lib/redox-sysroot/lib" >> /tmp/link-args.txt
+      echo "-l:libc.a" >> /tmp/link-args.txt
+      echo "-l:libpthread.a" >> /tmp/link-args.txt
+      echo "-l:libgcc_eh.a" >> /tmp/link-args.txt
+      echo "/usr/lib/redox-sysroot/lib/crtn.o" >> /tmp/link-args.txt
+      echo "-o" >> /tmp/link-args.txt
+      echo "/tmp/empty-linked" >> /tmp/link-args.txt
+
+      echo "Link args:"
+      cat /tmp/link-args.txt
+
+      echo "Linking with rlibs from: $target_lib"
+      # Use bash to invoke ld.lld with response file (Ion interprets @ as array sigil)
+      /nix/system/profile/bin/bash -c '/nix/system/profile/bin/ld.lld @/tmp/link-args.txt' &>/tmp/lld-step2-out
+      let step2_exit = $?
+      echo "Link (ld.lld): $step2_exit"
+      if test $step2_exit != 0
+        cat /tmp/lld-step2-out
+      end
+    end
+
+    if test $step2_exit = 0
+      if exists -f /tmp/empty-linked
+        /tmp/empty-linked &>/tmp/linked-run-out
+        let run_exit = $?
+        echo "Run linked binary: exit $run_exit"
+        echo "FUNC_TEST:two-step-compile:PASS"
+      else
+        echo "FUNC_TEST:two-step-compile:FAIL:binary not created"
+      end
+    else
+      echo "FUNC_TEST:two-step-compile:FAIL:step1=$step1_exit step2=$step2_exit"
+    end
+
+    # ── Step 4b: Hello world two-step ──
+    echo "--- Step 4b: Hello world two-step ---"
+    rustc /tmp/hello.rs --emit=obj -o /tmp/hello-step.o &>/tmp/rustc-hello-step1-out
+    let hello_step1 = $?
+    echo "Hello compile: $hello_step1"
+
+    if test $hello_step1 = 0
+      let sysroot = $(rustc --print sysroot)
+      let target_lib = "$sysroot/lib/rustlib/x86_64-unknown-redox/lib"
+
+      echo "/usr/lib/redox-sysroot/lib/crt0.o" > /tmp/hello-link-args.txt
+      echo "/usr/lib/redox-sysroot/lib/crti.o" >> /tmp/hello-link-args.txt
+      echo "/tmp/hello-step.o" >> /tmp/hello-link-args.txt
+      /nix/system/profile/bin/bash -c "ls $target_lib/*.rlib" >> /tmp/hello-link-args.txt
+      echo "-L" >> /tmp/hello-link-args.txt
+      echo "/usr/lib/redox-sysroot/lib" >> /tmp/hello-link-args.txt
+      echo "-l:libc.a" >> /tmp/hello-link-args.txt
+      echo "-l:libpthread.a" >> /tmp/hello-link-args.txt
+      echo "-l:libgcc_eh.a" >> /tmp/hello-link-args.txt
+      echo "/usr/lib/redox-sysroot/lib/crtn.o" >> /tmp/hello-link-args.txt
+      echo "-o" >> /tmp/hello-link-args.txt
+      echo "/tmp/hello-linked" >> /tmp/hello-link-args.txt
+
+      /nix/system/profile/bin/bash -c '/nix/system/profile/bin/ld.lld @/tmp/hello-link-args.txt' &>/tmp/lld-hello-out
+      let hello_step2 = $?
+      echo "Hello link: $hello_step2"
+      if test $hello_step2 != 0
+        cat /tmp/lld-hello-out
+      end
+
+      if test $hello_step2 = 0
+        let hello_out = $(/tmp/hello-linked 2>/dev/null)
+        echo "Hello output: $hello_out"
+        if test "$hello_out" = "Hello from self-hosted Redox!"
+          echo "FUNC_TEST:hello-two-step:PASS"
+        else
+          echo "FUNC_TEST:hello-two-step:FAIL:wrong output: $hello_out"
+        end
+      else
+        echo "FUNC_TEST:hello-two-step:FAIL:link failed"
+      end
+    else
+      echo "FUNC_TEST:hello-two-step:FAIL:compile failed"
+    end
+
+    # ── Step 4c: rustc with ld.lld direct (linker-flavor) ──
+    echo "--- Step 4c: rustc with ld.lld direct ---"
+    echo "Testing /bin/echo as linker first (baseline)..."
+    rustc /tmp/empty.rs -o /tmp/empty-echo -C linker=/bin/echo -C linker-flavor=gcc &>/tmp/rustc-echo-out
+    echo "echo linker: $?"
+
+    echo "Testing ld.lld as linker via linker-flavor..."
+    rustc /tmp/empty.rs -o /tmp/empty-lld -Z unstable-options -C linker-flavor=gnu-lld-cc -C linker=/nix/system/profile/bin/cc &>/tmp/rustc-lld-out
+    let lld_direct_exit = $?
+    echo "ld.lld direct: $lld_direct_exit"
+    if test $lld_direct_exit != 0
+      cat /tmp/rustc-lld-out
+    end
+
+    # ── Step 4d: Subprocess diagnostics ──
+    echo "--- Step 4d: Subprocess timing diagnostics ---"
+    echo "Test: /bin/true as linker"
+    rustc /tmp/empty.rs -o /tmp/empty-true -C linker=/bin/true -C linker-flavor=gcc &>/tmp/rustc-true-out
+    echo "true linker: $?"
+
+    echo "Test: /bin/cat as linker (will fail but should not crash)"
+    rustc /tmp/empty.rs -o /tmp/empty-cat -C linker=/bin/cat -C linker-flavor=gcc &>/tmp/rustc-cat-out
+    echo "cat linker: $?"
+
+    # ── Step 4e: cargo build ──
+    echo "--- Step 4e: cargo build ---"
+    echo "cargo config:"
+    cat /root/.cargo/config.toml
     cargo build &>/tmp/cargo-build-output
     let build_exit = $?
 
@@ -265,22 +529,17 @@ let
       echo "=== end cargo output ==="
     end
 
-    # Test: the built binary exists
+    # Test: the built binary exists and runs
     if exists -f target/x86_64-unknown-redox/debug/hello
       echo "FUNC_TEST:binary-exists:PASS"
-    else
-      echo "FUNC_TEST:binary-exists:FAIL:target binary not found"
-    end
-
-    # Test: the built binary runs and produces correct output
-    if exists -f target/x86_64-unknown-redox/debug/hello
       let output = $(target/x86_64-unknown-redox/debug/hello 2>/dev/null)
-      if test $output = "Hello from self-hosted Redox!"
+      if test "$output" = "Hello from self-hosted Redox!"
         echo "FUNC_TEST:binary-runs:PASS"
       else
-        echo "FUNC_TEST:binary-runs:FAIL:unexpected output"
+        echo "FUNC_TEST:binary-runs:FAIL:unexpected output: $output"
       end
     else
+      echo "FUNC_TEST:binary-exists:FAIL"
       echo "FUNC_TEST:binary-runs:SKIP"
     end
 

@@ -84,6 +84,7 @@ let
       python3 ${./patch-relibc-ns-fd.py}
       python3 ${./patch-relibc-run-init.py}
       python3 ${./patch-relibc-prefault-stack.py}
+      python3 ${./patch-relibc-grow-main-stack.py}
 
       runHook postPatch
     '';

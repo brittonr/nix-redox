@@ -417,6 +417,23 @@ pkgs.stdenv.mkDerivation {
     # doesn't respect PT_GNU_STACK, we patch main() to spawn a 16MB thread.
     python3 ${./patch-rustc-main-stack.py}
 
+    # Patch: Avoid piped linker output (Redox poll() bug causes crash).
+    # Rust std's read2() uses poll() to read from piped stdout/stderr.
+    # On Redox, poll() has a bug that causes Invalid opcode (ud2) when
+    # the child process runs for more than trivial time.
+    # Fix: Use Stdio::inherit() so linker output goes directly to terminal.
+    python3 ${./patch-rustc-linker-pipes.py} .
+
+    # Patch: Skip CLOEXEC error pipe reading in spawn() on Redox.
+    # After fork, the parent reads from a CLOEXEC pipe to detect exec failures.
+    # On Redox, this pipe read also crashes. Skip it and rely on waitpid().
+    python3 ${./patch-rustc-spawn-pipes.py} .
+
+    # Patch: Replace poll()-based read2() with sequential reads on Redox.
+    # read2() multiplexes stdout/stderr reading with poll(). On Redox,
+    # poll() crashes. Use simple sequential reads instead.
+    python3 ${./patch-rustc-read2-pipes.py} .
+
     # Patch 7: cargo-util S_IRWXU type mismatch
     # On Redox, libc::S_IRWXU etc. are i32 (not u32 like Linux).
     # Cargo uses u32::from() which doesn't accept i32.
