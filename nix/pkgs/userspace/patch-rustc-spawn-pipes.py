@@ -32,6 +32,22 @@ def patch_file(path):
         content = content.replace(old_fn, new_fn)
         print(f"  Added allow(unused_mut) to spawn()")
 
+    # ALSO patch the child side: skip the CLOEXEC error pipe write on Redox.
+    # If exec fails, the child tries to write error bytes to the pipe.
+    # But the parent already dropped the read end (our patch above),
+    # so the write gets EPIPE and rtassert! fires, causing an abort.
+    # Fix: on Redox, just _exit(1) without writing to the pipe.
+    old_child_write = '''            rtassert!(output.write(&bytes).is_ok());
+            unsafe { libc::_exit(1) }'''
+    new_child_write = '''            #[cfg(not(target_os = "redox"))]
+            rtassert!(output.write(&bytes).is_ok());
+            #[cfg(target_os = "redox")]
+            let _ = &bytes; // suppress unused warning
+            unsafe { libc::_exit(1) }'''
+    if old_child_write in content:
+        content = content.replace(old_child_write, new_child_write)
+        print(f"  Patched: child CLOEXEC write → skip on Redox")
+
     # The spawn function has this flow after fork (parent side):
     #   drop(env_lock);
     #   drop(output);

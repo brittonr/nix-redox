@@ -189,13 +189,8 @@ let
     end
 
     # Test: rustc --print cfg (target config query — LLVM option parsing)
-    # Let stderr flow to serial so we see any errors / ld_so debug output
-    let LD_DEBUG = "1"
-    export LD_DEBUG
     rustc --print cfg >/tmp/rustc-print-cfg-out
     let print_cfg_exit = $?
-    let LD_DEBUG = "0"
-    export LD_DEBUG
     if test $print_cfg_exit = 0
       echo "FUNC_TEST:rustc-print-cfg:PASS"
     else
@@ -414,6 +409,10 @@ let
       echo "-l:libc.a" >> /tmp/link-args.txt
       echo "-l:libpthread.a" >> /tmp/link-args.txt
       echo "-l:libgcc_eh.a" >> /tmp/link-args.txt
+      # Allocator shim: provides __rust_alloc → __rdl_alloc etc.
+      if exists -f /usr/lib/redox-sysroot/lib/liballoc_shim.a
+        echo "/usr/lib/redox-sysroot/lib/liballoc_shim.a" >> /tmp/link-args.txt
+      end
       echo "/usr/lib/redox-sysroot/lib/crtn.o" >> /tmp/link-args.txt
       echo "-o" >> /tmp/link-args.txt
       echo "/tmp/empty-linked" >> /tmp/link-args.txt
@@ -463,6 +462,9 @@ let
       echo "-l:libc.a" >> /tmp/hello-link-args.txt
       echo "-l:libpthread.a" >> /tmp/hello-link-args.txt
       echo "-l:libgcc_eh.a" >> /tmp/hello-link-args.txt
+      if exists -f /usr/lib/redox-sysroot/lib/liballoc_shim.a
+        echo "/usr/lib/redox-sysroot/lib/liballoc_shim.a" >> /tmp/hello-link-args.txt
+      end
       echo "/usr/lib/redox-sysroot/lib/crtn.o" >> /tmp/hello-link-args.txt
       echo "-o" >> /tmp/hello-link-args.txt
       echo "/tmp/hello-linked" >> /tmp/hello-link-args.txt
@@ -475,12 +477,19 @@ let
       end
 
       if test $hello_step2 = 0
-        let hello_out = $(/tmp/hello-linked 2>/dev/null)
-        echo "Hello output: $hello_out"
-        if test "$hello_out" = "Hello from self-hosted Redox!"
+        # Run and capture output to file (Ion $() may lose output on crash)
+        /tmp/hello-linked > /tmp/hello-run-out ^>/tmp/hello-run-err
+        let hello_run_exit = $?
+        echo "Hello run exit: $hello_run_exit"
+        echo "Hello stdout:"
+        cat /tmp/hello-run-out
+        echo "Hello stderr:"
+        cat /tmp/hello-run-err
+        let hello_out = $(cat /tmp/hello-run-out)
+        if test "$hello_out" = "hello"
           echo "FUNC_TEST:hello-two-step:PASS"
         else
-          echo "FUNC_TEST:hello-two-step:FAIL:wrong output: $hello_out"
+          echo "FUNC_TEST:hello-two-step:FAIL:exit=$hello_run_exit output=$hello_out"
         end
       else
         echo "FUNC_TEST:hello-two-step:FAIL:link failed"
@@ -489,45 +498,86 @@ let
       echo "FUNC_TEST:hello-two-step:FAIL:compile failed"
     end
 
-    # ── Step 4c: rustc with ld.lld direct (linker-flavor) ──
-    echo "--- Step 4c: rustc with ld.lld direct ---"
-    echo "Testing /bin/echo as linker first (baseline)..."
-    rustc /tmp/empty.rs -o /tmp/empty-echo -C linker=/bin/echo -C linker-flavor=gcc &>/tmp/rustc-echo-out
-    echo "echo linker: $?"
-
-    echo "Testing ld.lld as linker via linker-flavor..."
-    rustc /tmp/empty.rs -o /tmp/empty-lld -Z unstable-options -C linker-flavor=gnu-lld-cc -C linker=/nix/system/profile/bin/cc &>/tmp/rustc-lld-out
-    let lld_direct_exit = $?
-    echo "ld.lld direct: $lld_direct_exit"
-    if test $lld_direct_exit != 0
-      cat /tmp/rustc-lld-out
+    # ── Step 4c: Allocator shim test ──
+    echo "--- Step 4c: Allocator shim presence ---"
+    if exists -f /usr/lib/redox-sysroot/lib/liballoc_shim.a
+      echo "FUNC_TEST:alloc-shim:PASS"
+    else
+      echo "FUNC_TEST:alloc-shim:FAIL:liballoc_shim.a not found"
     end
 
-    # ── Step 4d: Subprocess diagnostics ──
-    echo "--- Step 4d: Subprocess timing diagnostics ---"
-    echo "Test: /bin/true as linker"
-    rustc /tmp/empty.rs -o /tmp/empty-true -C linker=/bin/true -C linker-flavor=gcc &>/tmp/rustc-true-out
-    echo "true linker: $?"
+    # ── Step 4d: Fork/pipe diagnostics (before risky cargo build) ──
+    echo "--- Step 4d: Fork/pipe diagnostics ---"
 
-    echo "Test: /bin/cat as linker (will fail but should not crash)"
-    rustc /tmp/empty.rs -o /tmp/empty-cat -C linker=/bin/cat -C linker-flavor=gcc &>/tmp/rustc-cat-out
-    echo "cat linker: $?"
+    # Test: can bash fork+exec rustc? (kernel fork, not Rust Command)
+    echo "Test: bash fork rustc -vV..."
+    /nix/system/profile/bin/bash -c 'rustc -vV > /tmp/bash-rustc-vv 2>&1; echo "exit=$?"' > /tmp/bash-fork-out ^>/dev/null
+    echo "FUNC_TEST:bash-fork-rustc:$(cat /tmp/bash-fork-out)"
+    cat /tmp/bash-rustc-vv
+
+    # Test: rustc with --error-format=json (what cargo uses)
+    echo "Test: rustc --emit=obj --error-format=json..."
+    rustc /tmp/empty.rs --emit=obj -o /tmp/empty-json.o --error-format=json > /tmp/rustc-json-stdout ^>/tmp/rustc-json-stderr
+    echo "FUNC_TEST:rustc-json-format:exit=$?"
+
+    # Test: rustc with piped output (simulate cargo's pipe capture)
+    echo "Test: rustc --emit=obj through pipe..."
+    /nix/system/profile/bin/bash -c 'rustc /tmp/empty.rs --emit=obj -o /tmp/empty-pipe.o 2>/tmp/pipe-stderr' > /tmp/pipe-stdout
+    echo "FUNC_TEST:rustc-piped:exit=$?"
+
+    # Test: rustc --emit=obj with --message-format=json (full cargo mode)
+    echo "Test: rustc with message-format json..."
+    rustc /tmp/empty.rs --emit=obj -o /tmp/empty-msgfmt.o --error-format=json --json=diagnostic-rendered-ansi > /tmp/rustc-msgfmt-stdout ^>/tmp/rustc-msgfmt-stderr
+    echo "FUNC_TEST:rustc-message-format:exit=$?"
+
+    # Test: unset LD_DEBUG before running rustc (might interfere)
+    echo "Unsetting LD_DEBUG..."
+    drop LD_DEBUG
+    rustc /tmp/empty.rs --emit=obj -o /tmp/empty-nold.o > /tmp/rustc-nold-stdout ^>/tmp/rustc-nold-stderr
+    echo "FUNC_TEST:rustc-no-ld-debug:exit=$?"
 
     # ── Step 4e: cargo build ──
+    # Clean environment — LD_DEBUG=0 pollutes child processes
+    drop LD_DEBUG
     echo "--- Step 4e: cargo build ---"
-    echo "cargo config:"
-    cat /root/.cargo/config.toml
-    cargo build &>/tmp/cargo-build-output
+
+    cargo version > /tmp/cargo-version-out ^>/tmp/cargo-version-err
+    echo "cargo version exit: $?"
+    cat /tmp/cargo-version-out
+
+    echo "Starting cargo build -vv..."
+    cargo build -vv > /tmp/cargo-build-stdout ^>/tmp/cargo-build-stderr
     let build_exit = $?
+
+    echo "=== cargo stderr (first 2000 bytes) ==="
+    head -c 2000 /tmp/cargo-build-stderr
+    echo ""
+    echo "=== end ==="
 
     if test $build_exit = 0
       echo "FUNC_TEST:cargo-build:PASS"
     else
       echo "FUNC_TEST:cargo-build:FAIL:cargo build exited $build_exit"
-      echo "=== cargo build output ==="
-      cat /tmp/cargo-build-output
-      echo "=== end cargo output ==="
     end
+
+    # ── Step 4f: subprocess fork tests (RISKY — may crash) ──
+    echo "--- Step 4f: fork diagnostics ---"
+
+    # Test: can bash fork rustc? (tests kernel fork, not Rust Command)
+    echo "Testing: bash -c 'rustc -vV' (bash fork, not Rust Command)..."
+    /nix/system/profile/bin/bash -c 'rustc -vV > /tmp/bash-rustc-out 2>&1'
+    echo "FUNC_TEST:bash-fork-rustc:exit=$?"
+    cat /tmp/bash-rustc-out
+
+    # Test: rustc with echo linker (exits instantly)
+    echo "Testing /bin/echo as linker..."
+    rustc /tmp/empty.rs -o /tmp/empty-echo -C linker=/bin/echo -C linker-flavor=gcc &>/tmp/rustc-echo-out
+    echo "FUNC_TEST:echo-linker:exit=$?"
+
+    # Test: rustc --emit=obj through bash (no linking, just LLVM)
+    echo "Testing: bash -c 'rustc --emit=obj' (rustc as subprocess, no link)..."
+    /nix/system/profile/bin/bash -c 'rustc /tmp/empty.rs --emit=obj -o /tmp/empty-bash.o > /tmp/bash-rustc-obj-out 2>&1'
+    echo "FUNC_TEST:bash-fork-rustc-obj:exit=$?"
 
     # Test: the built binary exists and runs
     if exists -f target/x86_64-unknown-redox/debug/hello

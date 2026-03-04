@@ -488,6 +488,7 @@ let
     inherit pkgs lib;
     inherit (modularPkgs.system) relibc;
     inherit redoxTarget redox-llvm redox-libcxx;
+    rustc-redox = redox-rustc;
   };
 
   # pkgutils disabled: ring crate needs pregenerated assembly from git source
