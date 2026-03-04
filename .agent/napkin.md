@@ -1014,3 +1014,49 @@
   LLVM 21). This is a separate issue from the ld_so bug.
 - **LLVM flag mismatch**: rustc passes `-generate-arange-section` to internal LLVM which
   was removed/renamed. This affects cargo's target info probe. Separate from ld_so fix.
+
+### Allocator shim for two-step compile+link (Mar 3 2026)
+- **7 symbols needed**: `__rust_alloc`, `__rust_dealloc`, `__rust_realloc`, `__rust_alloc_zeroed`,
+  `__rust_alloc_error_handler`, `__rust_alloc_error_handler_should_panic_v2`,
+  `__rust_no_alloc_shim_is_unstable_v2`
+- All use v0 mangling with `__rustc` crate hash: `_RNvCshD9Gi206LEK_7___rustc<len><name>`
+- The hash is derived from `tcx.sess.cfg_version` (rustc version string) — deterministic per build
+- Shim redirects `__rust_alloc` → `__rdl_alloc` (default System allocator in libstd.rlib)
+- Built as x86_64 assembly with `jmp` instructions (4 allocator methods + OOM handler)
+- `__rust_alloc_error_handler_should_panic_v2` returns 0 (xorl %eax, %eax; retq)
+- `__rust_no_alloc_shim_is_unstable_v2` is a no-op (retq)
+- Hash extracted at build time via `llvm-nm --defined-only` on rlibs — stays correct across versions
+- Installed as `liballoc_shim.a` in sysroot/lib alongside libgcc_eh.a
+- **Result**: two-step compile+link works for both empty programs AND hello world!
+- `println!("hello")` produces correct output through Redox stdio
+
+### Ion shell `matches` builtin doesn't work in @() context (Mar 3 2026)
+- `for f in @(ls dir | grep pattern)` — pipe inside @() doesn't work in Ion
+- `for f in @(find ... -name '*.rlib')` — `find` not available on Redox
+- **Fix**: use bash subprocess: `/nix/system/profile/bin/bash -c "ls dir/*.rlib"` >> file
+- Bash glob expansion works correctly and avoids Ion's @() expansion issues
+
+### CLOEXEC pipe child-side rtassert crash (Mar 3 2026)
+- **Root cause**: spawn() parent drops pipe read end immediately (Redox patch), then child
+  writes to write end after exec failure → write gets EPIPE → `rtassert!` aborts
+- `rtassert!(output.write(&bytes).is_ok())` at line 122 of unix.rs fires in child after fork
+- Fix: skip the write on Redox (`#[cfg(not(target_os = "redox"))]`), just `_exit(1)`
+- Must also suppress `unused variable: bytes` with `let _ = &bytes;` due to `-Dwarnings`
+- This is the CHILD side of the spawn patch; the parent side skips reading
+
+### cargo→rustc subprocess crash (Mar 3 2026) — UNSOLVED
+- `cargo build` invokes rustc as subprocess → rustc crashes with Invalid opcode (ud2)
+- Crash RIP: 0x14650ca2 (pre-child-patch) / 0x14650882 (post-child-patch)
+- addr2line identifies: `tracing_tree::format::FmtEvent::record_bytes` in `rustc_log`
+- Frame pointer chain is CORRUPTED — points to unrelated functions (query system, graphviz, drop)
+- All individual operations work from the shell:
+  - `bash -c 'rustc -vV'` PASS (bash fork, not Rust Command)
+  - `rustc --error-format=json` PASS
+  - `rustc` through piped stdout PASS
+  - `rustc --json=diagnostic-rendered-ansi` PASS
+- `cargo version` works (doesn't invoke rustc)
+- `cargo build -vv` crashes immediately when it forks rustc
+- NOT a fork/waitpid issue — the crash is in rustc code after it starts running
+- Theory: cargo sets up different environment/pipes that trigger a code path in rustc
+  that crashes. Stack corruption (frame pointers point to random functions) suggests
+  either a bug in ld_so initialization, a corrupted .so mapping, or a signal handler issue.
