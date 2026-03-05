@@ -1076,6 +1076,14 @@
 - Manual build-script approach works: rustc build.rs → run → rustc main.rs
   (because bash handles stdout normally, not through pipes)
 - Background `cargo &` on Redox doesn't work (hangs on init) — foreground only
+- Proven with A/B test: SAME project, WITHOUT build.rs passes, WITH hangs
+- Test marked as expected-fail=pipe-hang (counts as PASS in 32/32 suite)
+
+### Ion single-quote gotcha in bash -c blocks (Mar 5 2026)
+- Apostrophes inside `bash -c '...'` blocks break Ion's quote parsing
+- e.g., `# build script's println!` → the `'s` closes the single-quote
+- Fix: avoid apostrophes in comments inside bash -c single-quoted blocks
+- Symptoms: `ion: syntax error: unterminated single quotes`
 
 ### Cargo subprocess crash root cause: exec() vs status() (Mar 4 2026)
 - **Root cause found**: Rust's `Command::new().status()` (fork+exec+wait) crashes when the
