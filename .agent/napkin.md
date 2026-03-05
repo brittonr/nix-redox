@@ -1061,6 +1061,23 @@
   that crashes. Stack corruption (frame pointers point to random functions) suggests
   either a bug in ld_so initialization, a corrupted .so mapping, or a signal handler issue.
 
+### Self-hosting test suite — 30/30 pass (Mar 4 2026)
+- **3 new tests**: real-program (std features), multifile-build (lib+bin modules), buildscript (known-fail)
+- `real-program`: HashMap, Vec, file I/O, iterators, String formatting, env vars — all work on Redox
+- `multifile-build`: lib.rs + main.rs with modules, Caesar cipher, reverse_words — cargo handles two-crate builds
+- `buildscript`: cargo compiles build.rs fine, but second rustc invocation (src/main.rs) crashes with ud2
+  after cargo forks the build script subprocess. Marked as known-fail (not a regression).
+- **Ion `@(ls) + matches` unreliable**: librustc_driver.so detection failed because Ion's glob expansion
+  in `@(ls $dir/)` with `matches` pattern doesn't work. Fixed: use bash glob instead.
+- **Ion `$()` unreliable for absolute binary paths**: Running `/tmp/hello-direct/.../hello` via Ion
+  `$()` returns empty. Fixed: use bash subprocess to capture output.
+- **`set -e` in bash -c blocks**: Kills the block silently on any non-zero exit. Never use `set -e`
+  in test bash blocks — always handle errors explicitly.
+- **Nix `''` string gotcha**: `cargo''s` (apostrophe) terminates a Nix `''` string.
+  Avoid contractions or use `''''` (four quotes) for a literal `''`.
+- **Duplicate FUNC_TEST names**: Both wrapped and direct cargo tests used `cargo-build` name,
+  second result overwrote first. Renamed direct test to `cargo-direct-no-wrapper`.
+
 ### Cargo self-hosting breakthrough (Mar 4 2026)
 
 **Goal**: Get `cargo build` working on Redox OS (self-hosted compilation).
