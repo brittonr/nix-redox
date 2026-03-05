@@ -1061,6 +1061,22 @@
   that crashes. Stack corruption (frame pointers point to random functions) suggests
   either a bug in ld_so initialization, a corrupted .so mapping, or a signal handler issue.
 
+### Cargo build-script hang: build script's println blocks on pipe (Mar 5 2026)
+- **Definitive finding**: Cargo's build script pipeline hangs because the build
+  script's `println!` blocks when writing to the stdout pipe back to cargo.
+- Build script COMPILES successfully (cargo → rustc-abs → rustc)
+- Build script STARTS running (we see `Running build-script-build` in -vv)
+- Build script NEVER EXITS — it hangs on `println!("cargo:rustc-cfg=...")`
+- The pipe from build-script → cargo is the bottleneck. Cargo uses
+  pipe-based stdout capture for build scripts. On Redox, this pipe either:
+  a) Has a zero-size buffer → first write blocks
+  b) Cargo's read side never polls/reads → pipe fills → write blocks
+  c) The pipe FD setup during fork+exec is wrong (child can't write)
+- All OTHER cargo features work: compile, link, multi-file, minigrep CLI
+- Manual build-script approach works: rustc build.rs → run → rustc main.rs
+  (because bash handles stdout normally, not through pipes)
+- Background `cargo &` on Redox doesn't work (hangs on init) — foreground only
+
 ### Cargo subprocess crash root cause: exec() vs status() (Mar 4 2026)
 - **Root cause found**: Rust's `Command::new().status()` (fork+exec+wait) crashes when the
   child is a dynamically-linked binary (rustc + librustc_driver.so). But `Command::new().exec()`
