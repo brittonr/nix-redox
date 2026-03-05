@@ -891,13 +891,13 @@ adios:
       // (lib.optionalAttrs hasSelfHosting {
         # Global cargo config: tells cargo where rustc is and how to link for Redox
         #
-        # Uses ld.lld directly (not through a CC wrapper) because Ion shell's
-        # argument parser interprets -o as its own keybinding flag, breaking:
-        #   cc foo.o -o output  →  ion parse_args sees -o, expects "vi"/"emacs"
+        # Uses the CC wrapper (/nix/system/profile/bin/cc) as linker because:
+        # 1. It adds CRT objects (crt0.o, crti.o, crtn.o) that ld.lld alone misses
+        # 2. It adds libc, libgcc, and dynamic linker configuration
+        # 3. It handles the --export-dynamic + version script for DSO symbol export
         #
-        # With linker-flavor=ld.lld, rustc handles CRT objects and library
-        # ordering internally. We just need to add the sysroot search path
-        # so rustc can find crt0.o, crti.o, crtn.o, libc.a etc.
+        # The CC wrapper is a bash script that wraps clang→ld.lld with all the
+        # sysroot library paths and CRT files.
         "root/.cargo/config.toml" = {
           text = ''
             # Cargo configuration for on-guest Rust compilation
@@ -907,9 +907,8 @@ adios:
             target = "x86_64-unknown-redox"
 
             [target.x86_64-unknown-redox]
-            linker = "/nix/system/profile/bin/ld.lld"
+            linker = "/nix/system/profile/bin/cc"
             rustflags = [
-              "-C", "linker-flavor=ld.lld",
               "-C", "link-arg=-L/usr/lib/redox-sysroot/lib",
             ]
           '';

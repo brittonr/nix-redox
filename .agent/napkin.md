@@ -1060,3 +1060,26 @@
 - Theory: cargo sets up different environment/pipes that trigger a code path in rustc
   that crashes. Stack corruption (frame pointers point to random functions) suggests
   either a bug in ld_so initialization, a corrupted .so mapping, or a signal handler issue.
+
+### Cargo self-hosting breakthrough (Mar 4 2026)
+
+**Goal**: Get `cargo build` working on Redox OS (self-hosted compilation).
+
+**Root causes found**:
+1. **Relative path resolution broken in rustc**: Dynamically-linked programs (like rustc with librustc_driver.so) lose their working directory after DSO loading. `ls src/main.rs` works from bash, but `rustc src/main.rs` says ENOENT. Absolute paths work fine.
+2. **CRT objects missing with ld.lld**: Using `ld.lld` directly as linker misses `_start` entry point because CRT objects (crt0.o, crti.o, crtn.o) aren't linked.
+
+**Fixes applied**:
+1. **rustc-abs wrapper**: Compiled Rust binary that resolves relative `.rs` paths to absolute before `exec()`ing the real rustc. Set as `RUSTC=/tmp/rustc-abs` in cargo.
+2. **CC wrapper as linker**: Changed `.cargo/config.toml` to use `/nix/system/profile/bin/cc` instead of `ld.lld`. The CC wrapper adds CRT files, libc, libgcc, and dynamic linker config.
+
+**Critical mistakes to avoid**:
+- **Heredocs in Ion shell**: Ion doesn't support `<< EOF` syntax. Use `echo ... >> file` or write from bash.
+- **Heredocs in bash -c**: `bash -c '...'` can't use heredocs — they leak to the outer shell.
+- **Script execution from /tmp**: Redox denies execute permission for scripts on /tmp ("Operation not permitted"). Compiled binaries work.
+- **chmod not in bash PATH**: Use full path `/nix/system/profile/bin/chmod`.
+- **Nix escaping ${ARGS[@]}**: In Nix `''` strings, use `''${ARGS[@]}` to prevent Nix interpolation.
+- **Don't remove patches without testing**: The ns-fd, run-init, and pipe patches are ALL still needed for the Feb 19 relibc. Upstream fixes that replace them are in LATER commits.
+- **Test script changes affect disk image**: Modifying self-hosting-test.nix changes the root tree → different build hash for ALL derived packages.
+
+**Result**: `cargo build` of hello world succeeds in 4.23s, producing a working binary that prints "Hello from self-hosted Redox!".
