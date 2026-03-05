@@ -1061,6 +1061,24 @@
   that crashes. Stack corruption (frame pointers point to random functions) suggests
   either a bug in ld_so initialization, a corrupted .so mapping, or a signal handler issue.
 
+### Cargo subprocess crash root cause: exec() vs status() (Mar 4 2026)
+- **Root cause found**: Rust's `Command::new().status()` (fork+exec+wait) crashes when the
+  child is a dynamically-linked binary (rustc + librustc_driver.so). But `Command::new().exec()`
+  (in-place process replacement, no fork) works perfectly.
+- **rustc-abs uses .exec()**: Replaces the wrapper process with rustc → no fork → no crash
+- **spy2 uses .status()**: Creates a child process → fork+exec → crash in abort() at 0x14650882
+- **cargo uses .output()/.status()**: Same fork+exec path → crash on build script's second rustc
+- **Build scripts work via manual rustc**: 3-step (compile→run→compile) with rustc-abs succeeds
+  because each `rustc-abs` invocation replaces its process (no fork from Rust code)
+- **The crash**: GOT entry for panic hook is NULL in librustc_driver.so's relibc copy.
+  When rustc panics during initialization (for any reason), abort() finds no hook → ud2.
+- **Theory**: The CLOEXEC pipe setup in std::process::Command corrupts something during fork
+  that prevents the child's DSO initialization from completing. The first rustc invocation
+  works because cargo hasn't yet forked any children. After forking a build script, some
+  pipe/signal state leaks into the next fork.
+- **nixfmt breaks bash heredocs**: heredoc terminators must be at column 0, but nixfmt
+  re-indents them. Added self-hosting-test.nix to treefmt + git-hooks excludes.
+
 ### Self-hosting test suite — 30/30 pass (Mar 4 2026)
 - **3 new tests**: real-program (std features), multifile-build (lib+bin modules), buildscript (known-fail)
 - `real-program`: HashMap, Vec, file I/O, iterators, String formatting, env vars — all work on Redox

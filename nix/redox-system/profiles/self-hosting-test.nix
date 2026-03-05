@@ -1448,6 +1448,195 @@ MAINEOF
               end
             end
 
+            # ═══════════════════════════════════════════════════════════════
+            # Step 8: Practical tool — mini-grep built and tested on Redox
+            # A real CLI tool: args, file I/O, pattern matching, error handling
+            # ═══════════════════════════════════════════════════════════════
+            echo ""
+            echo "--- Step 8: Mini-grep tool ---"
+
+            /nix/system/profile/bin/bash -c '
+              export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
+              export CARGO_BUILD_JOBS=1
+              export CARGO_HOME=/root/.cargo
+              export CARGO_INCREMENTAL=0
+              export RUSTC=/tmp/rustc-abs
+
+              rm -rf /tmp/minigrep
+              mkdir -p /tmp/minigrep/src
+
+              echo "[minigrep] writing source..."
+              printf "%s\n" \
+                "use std::env;" \
+                "use std::fs;" \
+                "use std::io::{self, BufRead, Write};" \
+                "use std::process;" \
+                "" \
+                "fn matches_pattern(line: &str, pattern: &str, case_insensitive: bool) -> bool {" \
+                "    if case_insensitive {" \
+                "        line.to_lowercase().contains(&pattern.to_lowercase())" \
+                "    } else {" \
+                "        line.contains(pattern)" \
+                "    }" \
+                "}" \
+                "" \
+                "fn search_file(path: &str, pattern: &str, case_insensitive: bool," \
+                "               show_line_nums: bool) -> io::Result<Vec<String>> {" \
+                "    let content = fs::read_to_string(path)?;" \
+                "    let mut results = Vec::new();" \
+                "    for (i, line) in content.lines().enumerate() {" \
+                "        if matches_pattern(line, pattern, case_insensitive) {" \
+                "            if show_line_nums {" \
+                "                results.push(format!(\"{}:{}:{}\", path, i + 1, line));" \
+                "            } else {" \
+                "                results.push(format!(\"{}:{}\", path, line));" \
+                "            }" \
+                "        }" \
+                "    }" \
+                "    Ok(results)" \
+                "}" \
+                "" \
+                "fn main() {" \
+                "    let args: Vec<String> = env::args().collect();" \
+                "    if args.len() < 3 {" \
+                "        eprintln!(\"Usage: {} [-i] [-n] <pattern> <file>...\", args[0]);" \
+                "        process::exit(1);" \
+                "    }" \
+                "" \
+                "    let mut case_insensitive = false;" \
+                "    let mut show_line_nums = false;" \
+                "    let mut positional = Vec::new();" \
+                "" \
+                "    for arg in &args[1..] {" \
+                "        match arg.as_str() {" \
+                "            \"-i\" => case_insensitive = true," \
+                "            \"-n\" => show_line_nums = true," \
+                "            _ => positional.push(arg.as_str())," \
+                "        }" \
+                "    }" \
+                "" \
+                "    if positional.len() < 2 {" \
+                "        eprintln!(\"Need pattern and at least one file\");" \
+                "        process::exit(1);" \
+                "    }" \
+                "" \
+                "    let pattern = positional[0];" \
+                "    let mut found = false;" \
+                "    let stdout = io::stdout();" \
+                "    let mut out = stdout.lock();" \
+                "" \
+                "    for file in &positional[1..] {" \
+                "        match search_file(file, pattern, case_insensitive, show_line_nums) {" \
+                "            Ok(matches) => {" \
+                "                for m in &matches {" \
+                "                    let _ = writeln!(out, \"{}\", m);" \
+                "                    found = true;" \
+                "                }" \
+                "            }" \
+                "            Err(e) => eprintln!(\"minigrep: {}: {}\", file, e)," \
+                "        }" \
+                "    }" \
+                "" \
+                "    if !found { process::exit(1); }" \
+                "}" \
+                > /tmp/minigrep/src/main.rs
+
+              printf "%s\n" \
+                "[package]" \
+                "name = \"minigrep\"" \
+                "version = \"0.1.0\"" \
+                "edition = \"2021\"" \
+                > /tmp/minigrep/Cargo.toml
+
+              # Create test data
+              printf "%s\n" \
+                "Hello World" \
+                "hello redox" \
+                "Rust on Redox OS" \
+                "self-hosted compilation" \
+                "HELLO AGAIN" \
+                "the quick brown fox" \
+                > /tmp/minigrep-testdata.txt
+
+              cd /tmp/minigrep
+              echo "[minigrep] cargo build..."
+              cargo build 2>/tmp/minigrep-stderr
+              MG_EXIT=$?
+              echo "[minigrep] cargo exit: $MG_EXIT"
+
+              if [ $MG_EXIT -eq 0 ]; then
+                BIN=./target/x86_64-unknown-redox/debug/minigrep
+                PASS=0
+                FAIL=0
+
+                # Test 1: basic pattern match
+                OUT=$($BIN "Redox" /tmp/minigrep-testdata.txt)
+                if echo "$OUT" | grep -q "Rust on Redox OS"; then
+                  PASS=$((PASS+1))
+                else
+                  echo "FAIL test1: $OUT"
+                  FAIL=$((FAIL+1))
+                fi
+
+                # Test 2: case-insensitive
+                OUT=$($BIN -i "hello" /tmp/minigrep-testdata.txt)
+                LINES=$(echo "$OUT" | wc -l)
+                if [ "$LINES" -ge 3 ]; then
+                  PASS=$((PASS+1))
+                else
+                  echo "FAIL test2: lines=$LINES"
+                  FAIL=$((FAIL+1))
+                fi
+
+                # Test 3: line numbers
+                OUT=$($BIN -n "fox" /tmp/minigrep-testdata.txt)
+                if echo "$OUT" | grep -q ":6:"; then
+                  PASS=$((PASS+1))
+                else
+                  echo "FAIL test3: $OUT"
+                  FAIL=$((FAIL+1))
+                fi
+
+                # Test 4: no match returns exit 1
+                $BIN "NONEXISTENT_PATTERN" /tmp/minigrep-testdata.txt > /dev/null 2>&1
+                if [ $? -eq 1 ]; then
+                  PASS=$((PASS+1))
+                else
+                  echo "FAIL test4: expected exit 1"
+                  FAIL=$((FAIL+1))
+                fi
+
+                # Test 5: missing file error
+                OUT=$($BIN "test" /tmp/nonexistent 2>&1)
+                # Redox grep does not support \| alternation — check each pattern
+                if echo "$OUT" | grep -qi "error"; then
+                  PASS=$((PASS+1))
+                else
+                  echo "FAIL test5: $OUT"
+                  FAIL=$((FAIL+1))
+                fi
+
+                echo "MINIGREP_RESULT: $PASS passed, $FAIL failed" > /tmp/minigrep-stdout
+              fi
+            '
+
+            if exists -f /tmp/minigrep-stdout
+              let mg_out = $(cat /tmp/minigrep-stdout)
+              echo "Mini-grep: $mg_out"
+            end
+            if exists -f /tmp/minigrep-stderr
+              echo "Mini-grep stderr (tail):"
+              /nix/system/profile/bin/bash -c 'tail -5 /tmp/minigrep-stderr 2>/dev/null'
+            end
+
+            /nix/system/profile/bin/bash -c 'grep -q "0 failed" /tmp/minigrep-stdout 2>/dev/null'
+            if test $? = 0
+              echo "FUNC_TEST:minigrep:PASS"
+            else
+              let mg_res = $(cat /tmp/minigrep-stdout 2>/dev/null)
+              echo "FUNC_TEST:minigrep:FAIL:$mg_res"
+            end
+
             echo ""
             echo "FUNC_TESTS_COMPLETE"
   '';
