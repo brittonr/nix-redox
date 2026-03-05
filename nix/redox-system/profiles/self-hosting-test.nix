@@ -147,7 +147,9 @@ let
     export LD_LIBRARY_PATH
     let CARGO_BUILD_JOBS = "1"
     export CARGO_BUILD_JOBS
-    let CARGO_HOME = "/tmp/.cargo"
+    # CARGO_HOME must be /root/.cargo where config.toml lives
+    # (config.toml has linker=ld.lld and rustflags for Redox target)
+    let CARGO_HOME = "/root/.cargo"
     export CARGO_HOME
 
     # Test: check if rand scheme is available (needed by rustc for std::random)
@@ -608,6 +610,41 @@ let
       echo "FUNC_TEST:rust-command-fork:FAIL:compile failed"
     end
 
+    # ── Step 4e: rustc direct link (rustc -o binary, no cargo) ──
+    echo "--- Step 4e: rustc -o binary (direct link, no cargo) ---"
+    rm -f /tmp/abort.log
+    echo 'fn main() { println!("direct link works!"); }' > /tmp/direct_link.rs
+    # Full compile+link in one step — tests rustc's linker invocation
+    # Must pass -C linker=ld.lld explicitly (cargo config only applies through cargo)
+    rustc /tmp/direct_link.rs -o /tmp/direct_link_bin \
+      -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld \
+      -C link-arg=-L/usr/lib/redox-sysroot/lib \
+      >/tmp/rustc-direct-link-stdout ^>/tmp/rustc-direct-link-stderr
+    let direct_link_exit = $?
+    echo "rustc -o binary exit: $direct_link_exit"
+    echo "rustc link stdout:"
+    cat /tmp/rustc-direct-link-stdout
+    echo "rustc link stderr:"
+    cat /tmp/rustc-direct-link-stderr
+    if test $direct_link_exit = 0
+      if exists -f /tmp/direct_link_bin
+        /tmp/direct_link_bin > /tmp/direct-link-run-out ^>/tmp/direct-link-run-err
+        let run_exit = $?
+        echo "Direct link binary exit: $run_exit"
+        echo "Output: $(cat /tmp/direct-link-run-out)"
+        echo "FUNC_TEST:rustc-direct-link:PASS"
+      else
+        echo "FUNC_TEST:rustc-direct-link:FAIL:binary not created"
+      end
+    else
+      # Check abort.log
+      if exists -f /tmp/abort.log
+        echo "abort.log:"
+        cat /tmp/abort.log
+      end
+      echo "FUNC_TEST:rustc-direct-link:FAIL:exit=$direct_link_exit"
+    end
+
     # ── Cargo crash diagnostics ──
     # Cargo build crashes when it invokes rustc as subprocess.
     # Build a compiled RUSTC wrapper that logs args/env before exec.
@@ -738,6 +775,26 @@ let
       head -c 500 /tmp/cargo-probe-bt-err
     end
 
+    # Test: probe with --target x86_64-unknown-redox (what cargo actually sends)
+    echo "--- cargo probe with --target (the REAL probe cargo uses) ---"
+    rm -f /tmp/abort.log
+    echo "" | rustc - --crate-name ___ --print=file-names -C linker-flavor=ld.lld -C link-arg=-L/usr/lib/redox-sysroot/lib --target x86_64-unknown-redox --crate-type bin --crate-type rlib --crate-type dylib --crate-type cdylib --crate-type staticlib --crate-type proc-macro --print=sysroot --print=split-debuginfo --print=crate-name --print=cfg -Wwarnings > /tmp/cargo-probe-target-out ^>/tmp/cargo-probe-target-err
+    let probe_target_exit = $?
+    echo "cargo probe with --target exit: $probe_target_exit"
+    if test $probe_target_exit = 0
+      echo "FUNC_TEST:cargo-probe-target:PASS"
+      echo "probe-target output (first 200b):"
+      head -c 200 /tmp/cargo-probe-target-out
+    else
+      echo "FUNC_TEST:cargo-probe-target:FAIL:exit=$probe_target_exit"
+      echo "probe-target stderr:"
+      head -c 500 /tmp/cargo-probe-target-err
+      if exists -f /tmp/abort.log
+        echo "abort.log:"
+        cat /tmp/abort.log
+      end
+    end
+
     # Spy2: simple pass-through that closes FDs 3-1023 before exec
     # Tests whether cargo's inherited FDs cause the crash.
     echo 'use std::io::Write;' > /tmp/rustc_spy2.rs
@@ -790,16 +847,48 @@ let
       /nix/system/profile/bin/bash -c '/nix/system/profile/bin/ld.lld @/tmp/spy2-link.txt' ^>/dev/null
       if test $? = 0
         echo "--- cargo build with FD-closing spy2 ---"
+        # Use a background process + sleep to implement timeout
+        # This prevents the test from hanging forever
+        # NOTE: seq is not available on Redox; use bash brace expansion
         /nix/system/profile/bin/bash -c '
           cd /tmp/hello
           export RUSTC=/tmp/rustc-spy2
-          cargo build 2>/tmp/cargo-spy2-stderr
+          cargo build >/tmp/cargo-spy2-stdout 2>/tmp/cargo-spy2-stderr &
+          CARGO_PID=$!
+          SECONDS=0
+          while kill -0 $CARGO_PID 2>/dev/null; do
+            if [ $SECONDS -ge 60 ]; then
+              echo "spy2-exit=TIMEOUT"
+              kill $CARGO_PID 2>/dev/null
+              wait $CARGO_PID 2>/dev/null
+              kill -9 $CARGO_PID 2>/dev/null
+              exit 0
+            fi
+            cat /scheme/sys/uname >/dev/null 2>/dev/null
+          done
+          wait $CARGO_PID
           echo "spy2-exit=$?"
         ' > /tmp/cargo-spy2-out
         cat /tmp/cargo-spy2-out
-        if test -f /tmp/rustc-spy2.log
+        echo "=== cargo stdout ==="
+        if exists -f /tmp/cargo-spy2-stdout
+          head -c 1000 /tmp/cargo-spy2-stdout
+        end
+        echo "=== cargo stderr ==="
+        if exists -f /tmp/cargo-spy2-stderr
+          head -c 2000 /tmp/cargo-spy2-stderr
+        end
+        if exists -f /tmp/rustc-spy2.log
           echo "=== spy2 log ==="
           cat /tmp/rustc-spy2.log
+        end
+        # Check abort.log — this is the key diagnostic
+        echo "=== abort.log (from _exit(134) patch) ==="
+        if exists -f /tmp/abort.log
+          cat /tmp/abort.log
+          echo "(abort.log exists — rustc hit abort path)"
+        else
+          echo "(no abort.log — rustc did NOT hit abort)"
         end
       else
         echo "spy2 link failed"
@@ -808,7 +897,236 @@ let
       echo "spy2 compile failed"
     end
 
-    echo "FUNC_TEST:cargo-build:FAIL:investigating"
+    # ── Diagnostic: relative path issue + rustc-abs wrapper ──
+    # rustc can't resolve relative paths (cwd mismatch in DSO-loaded process).
+    # Test a bash wrapper that converts relative .rs paths to absolute.
+    echo "--- Setting up cargo project ---"
+    /nix/system/profile/bin/bash -c '
+      rm -rf /tmp/hello-direct
+      mkdir -p /tmp/hello-direct/src
+      printf "fn main() { println!(\"Hello from self-hosted Redox!\"); }\n" > /tmp/hello-direct/src/main.rs
+      printf "[package]\nname = \"hello\"\nversion = \"0.1.0\"\nedition = \"2021\"\n" > /tmp/hello-direct/Cargo.toml
+      echo "Project created:"
+      ls -la /tmp/hello-direct/src/main.rs
+      cat /tmp/hello-direct/src/main.rs
+    '
+
+    # Quick diagnostic: does bash see the file with relative path?
+    echo "--- cat relative path diagnostic ---"
+    /nix/system/profile/bin/bash -c '
+      cd /tmp/hello-direct && echo "bash-pwd=$(pwd)" && cat src/main.rs
+    '
+
+    # Build a compiled rustc-abs wrapper (bash scripts can't execute from /tmp on Redox)
+    echo "--- Building compiled rustc-abs wrapper ---"
+    # Write source file using echo (no heredocs — Ion doesn't support them)
+    echo 'use std::os::unix::process::CommandExt;' > /tmp/rustc_abs.rs
+    echo 'use std::process::Command;' >> /tmp/rustc_abs.rs
+    echo 'fn main() {' >> /tmp/rustc_abs.rs
+    echo '    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/"));' >> /tmp/rustc_abs.rs
+    echo '    let args: Vec<String> = std::env::args().skip(1).map(|arg| {' >> /tmp/rustc_abs.rs
+    echo '        if arg.ends_with(".rs") && !arg.starts_with("/") && !arg.starts_with("-") {' >> /tmp/rustc_abs.rs
+    echo '            cwd.join(&arg).to_string_lossy().into_owned()' >> /tmp/rustc_abs.rs
+    echo '        } else { arg }' >> /tmp/rustc_abs.rs
+    echo '    }).collect();' >> /tmp/rustc_abs.rs
+    echo '    let _err = Command::new("/nix/system/profile/bin/rustc").args(&args).exec();' >> /tmp/rustc_abs.rs
+    echo '    std::process::exit(127);' >> /tmp/rustc_abs.rs
+    echo '}' >> /tmp/rustc_abs.rs
+    echo "Source written. Compiling..."
+    /nix/system/profile/bin/bash -c '
+      export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
+      cat /tmp/rustc_abs.rs
+      rustc /tmp/rustc_abs.rs -o /tmp/rustc-abs \
+        --target x86_64-unknown-redox \
+        -C linker=/nix/system/profile/bin/cc 2>&1
+      echo "Compile+link exit: $?"
+      echo "Testing /tmp/rustc-abs -vV..."
+      /tmp/rustc-abs -vV 2>&1
+      echo "rustc-abs-exit=$?"
+    '
+
+    # Test: cargo build with rustc-abs wrapper
+    echo "--- Cargo build with rustc-abs wrapper ---"
+    /nix/system/profile/bin/bash -c '
+      set -x
+      cd /tmp/hello-direct
+      rm -rf target
+      rm -f /tmp/abort.log /tmp/panic.log
+      export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
+      export CARGO_BUILD_JOBS=1
+      export CARGO_HOME=/root/.cargo
+      export CARGO_INCREMENTAL=0
+      export RUSTC=/tmp/rustc-abs
+      cargo build -vv >/tmp/cargo-abs-stdout 2>/tmp/cargo-abs-stderr &
+      CARGO_PID=$!
+      SECONDS=0
+      TMOUT=90
+      while kill -0 $CARGO_PID 2>/dev/null; do
+        if [ $SECONDS -ge $TMOUT ]; then
+          echo "TIMEOUT after ''${TMOUT}s"
+          kill $CARGO_PID 2>/dev/null
+          wait $CARGO_PID 2>/dev/null
+          kill -9 $CARGO_PID 2>/dev/null
+          echo "cargo-abs=TIMEOUT" > /tmp/cargo-abs-result
+          break
+        fi
+        cat /scheme/sys/uname >/dev/null 2>/dev/null
+      done
+      if ! kill -0 $CARGO_PID 2>/dev/null; then
+        wait $CARGO_PID
+        echo "cargo-abs=$?" > /tmp/cargo-abs-result
+      fi
+    '
+    echo "=== cargo-abs result ==="
+    cat /tmp/cargo-abs-result
+    echo "=== cargo-abs stdout ==="
+    if exists -f /tmp/cargo-abs-stdout
+      head -c 2000 /tmp/cargo-abs-stdout
+    end
+    echo "=== cargo-abs stderr ==="
+    if exists -f /tmp/cargo-abs-stderr
+      head -c 4000 /tmp/cargo-abs-stderr
+    end
+
+    # Check if the binary exists and runs
+    if exists -f /tmp/hello-direct/target/x86_64-unknown-redox/debug/hello
+      echo "FUNC_TEST:cargo-build:PASS"
+      let output = $(/tmp/hello-direct/target/x86_64-unknown-redox/debug/hello)
+      echo "Binary output: $output"
+    else
+      # Fall back to result from cargo
+      let cargo_abs_res = $(cat /tmp/cargo-abs-result)
+      echo "FUNC_TEST:cargo-build:FAIL:$cargo_abs_res"
+    end
+
+    # ── Direct cargo build (no wrapper, with timeout) ──
+    echo "--- Direct cargo build (no wrapper) ---"
+    /nix/system/profile/bin/bash -c '
+      set -x
+      rm -rf /tmp/hello-direct2
+      mkdir -p /tmp/hello-direct2/src
+      printf "fn main() { println!(\"Hello direct!\"); }\n" > /tmp/hello-direct2/src/main.rs
+      printf "[package]\nname = \"hello\"\nversion = \"0.1.0\"\nedition = \"2021\"\n" > /tmp/hello-direct2/Cargo.toml
+      cd /tmp/hello-direct2
+      rm -f /tmp/abort.log /tmp/panic.log
+      export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
+      export CARGO_BUILD_JOBS=1
+      export CARGO_HOME=/root/.cargo
+      export CARGO_INCREMENTAL=0
+      # Run cargo build in background with timeout using bash SECONDS
+      cargo build -vv >/tmp/cargo-direct-stdout 2>/tmp/cargo-direct-stderr &
+      CARGO_PID=$!
+      SECONDS=0
+      TMOUT=60
+      while kill -0 $CARGO_PID 2>/dev/null; do
+        if [ $SECONDS -ge $TMOUT ]; then
+          echo "TIMEOUT after ''${TMOUT}s"
+          kill $CARGO_PID 2>/dev/null
+          wait $CARGO_PID 2>/dev/null
+          kill -9 $CARGO_PID 2>/dev/null
+          echo "cargo-direct=TIMEOUT" > /tmp/cargo-direct-result
+          break
+        fi
+        # Busy-wait: no sleep/read -t on Redox (nanosleep hangs).
+        # Use /scheme/sys/uname reads as a ~5ms delay to avoid CPU spin.
+        cat /scheme/sys/uname >/dev/null 2>/dev/null
+      done
+      if ! kill -0 $CARGO_PID 2>/dev/null; then
+        wait $CARGO_PID
+        echo "cargo-direct=$?" > /tmp/cargo-direct-result
+      fi
+    '
+    echo "=== cargo exit ==="
+    cat /tmp/cargo-direct-result
+    echo "=== cargo stdout (first 2000b) ==="
+    if exists -f /tmp/cargo-direct-stdout
+      head -c 2000 /tmp/cargo-direct-stdout
+    end
+    echo "=== cargo stderr (first 4000b) ==="
+    if exists -f /tmp/cargo-direct-stderr
+      head -c 4000 /tmp/cargo-direct-stderr
+    end
+    echo "=== panic.log ==="
+    if exists -f /tmp/panic.log
+      cat /tmp/panic.log
+      echo "(panic.log exists — rustc panicked!)"
+    else
+      echo "(no panic.log — no panic)"
+    end
+    echo "=== abort.log ==="
+    if exists -f /tmp/abort.log
+      cat /tmp/abort.log
+      echo "(abort.log exists — rustc hit abort path)"
+    else
+      echo "(no abort.log — no abort)"
+    end
+    # Check result
+    let cargo_result = $(cat /tmp/cargo-direct-result)
+    if test "$cargo_result" = "cargo-direct=0"
+      echo "FUNC_TEST:cargo-build:PASS"
+    else if test "$cargo_result" = "cargo-direct=TIMEOUT"
+      echo "FUNC_TEST:cargo-build:FAIL:TIMEOUT"
+      # ── Timeout diagnostic: try the exact rustc command from shell ──
+      echo "--- Timeout diagnostic: replicate cargo rustc cmd ---"
+      # Extract the rustc command from cargo -vv output
+      /nix/system/profile/bin/bash -c '
+        # Try to find the Running `rustc ...` line
+        if grep -q "Running.*rustc.*--emit" /tmp/cargo-direct-stderr 2>/dev/null; then
+          echo "Found rustc command in cargo stderr"
+        fi
+        # Run the same compilation directly from shell with timeout
+        rm -f /tmp/abort.log /tmp/panic.log
+        cd /tmp/hello-direct
+        export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
+        # Run rustc with the exact flags cargo uses (minus env vars)
+        rustc --crate-name hello --edition=2021 src/main.rs \
+          --error-format=json --json=diagnostic-rendered-ansi,artifacts,future-incompat \
+          --crate-type bin --emit=dep-info,link \
+          -C embed-bitcode=no -C debuginfo=2 \
+          --check-cfg "cfg(docsrs,test)" --check-cfg "cfg(feature, values())" \
+          -C metadata=test -C extra-filename=-test \
+          --out-dir /tmp/hello-direct/target/debug/deps \
+          --target x86_64-unknown-redox \
+          -C linker=/nix/system/profile/bin/ld.lld \
+          -C linker-flavor=ld.lld \
+          -C link-arg=-L/usr/lib/redox-sysroot/lib \
+          >/tmp/diag-rustc-stdout 2>/tmp/diag-rustc-stderr &
+        DIAG_PID=$!
+        SECONDS=0
+        while kill -0 $DIAG_PID 2>/dev/null; do
+          if [ $SECONDS -ge 90 ]; then
+            echo "DIAG TIMEOUT"
+            kill -9 $DIAG_PID 2>/dev/null
+            break
+          fi
+          cat /scheme/sys/uname >/dev/null 2>/dev/null
+        done
+        if ! kill -0 $DIAG_PID 2>/dev/null; then
+          wait $DIAG_PID
+          echo "diag-exit=$?"
+        else
+          echo "diag-exit=TIMEOUT"
+        fi
+      '
+      echo "=== diag rustc stdout ==="
+      if exists -f /tmp/diag-rustc-stdout
+        head -c 1000 /tmp/diag-rustc-stdout
+      end
+      echo "=== diag rustc stderr ==="
+      if exists -f /tmp/diag-rustc-stderr
+        head -c 1000 /tmp/diag-rustc-stderr
+      end
+      echo "=== diag panic.log ==="
+      if exists -f /tmp/panic.log
+        cat /tmp/panic.log
+      end
+      echo "=== diag abort.log ==="
+      if exists -f /tmp/abort.log
+        cat /tmp/abort.log
+      end
+    else
+      echo "FUNC_TEST:cargo-build:FAIL:$cargo_result"
+    end
 
     # ── Step 4f: subprocess fork tests (RISKY — may crash) ──
     echo "--- Step 4f: fork diagnostics ---"
