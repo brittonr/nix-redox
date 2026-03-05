@@ -911,6 +911,12 @@ adios:
             rustflags = [
               "-C", "link-arg=-L/usr/lib/redox-sysroot/lib",
             ]
+
+            # Disable cargo's global cache auto-GC — relibc's flock() is
+            # unimplemented (error 3850) and cargo sometimes hangs trying
+            # to acquire the advisory lock on .package-cache.
+            [gc]
+            auto = false
           '';
           mode = "0644";
         };

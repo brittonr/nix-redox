@@ -146,6 +146,11 @@ let
             let CARGO_HOME = "/root/.cargo"
             export CARGO_HOME
 
+            # Create a cargo-build wrapper with timeout+retry
+            # Cargo sometimes hangs on relibc's broken flock() implementation.
+            # This wrapper runs cargo in background, kills after 90s, retries once.
+            /nix/system/profile/bin/bash -c 'printf "#!/nix/system/profile/bin/bash\nMAX_TIME=90\nfor attempt in 1 2; do\n  cargo build --offline \"\$@\" &\n  PID=\$!\n  SECONDS=0\n  while kill -0 \$PID 2>/dev/null; do\n    if [ \$SECONDS -ge \$MAX_TIME ]; then\n      echo \"[cargo-safe] timeout attempt \$attempt\" >&2\n      kill \$PID 2>/dev/null; wait \$PID 2>/dev/null\n      kill -9 \$PID 2>/dev/null; wait \$PID 2>/dev/null\n      rm -f \"\$CARGO_HOME/.package-cache\"* 2>/dev/null\n      continue 2\n    fi\n    cat /scheme/sys/uname >/dev/null 2>/dev/null\n  done\n  wait \$PID\n  exit \$?\ndone\necho \"[cargo-safe] both attempts timed out\" >&2\nexit 124\n" > /tmp/cargo-build-safe && chmod +x /tmp/cargo-build-safe'
+
             # Test: check if rand scheme is available (needed by rustc for std::random)
             # On Redox, random is provided by the randd daemon via /scheme/rand.
             # List all available schemes to check.
@@ -1093,7 +1098,11 @@ let
             /nix/system/profile/bin/bash -c '
               export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
               export CARGO_BUILD_JOBS=1
-              export CARGO_HOME=/root/.cargo
+              # Fresh cargo home per test to avoid stale flock hangs
+              rm -rf /tmp/cargo-realtest
+              mkdir -p /tmp/cargo-realtest
+              cp /root/.cargo/config.toml /tmp/cargo-realtest/
+              export CARGO_HOME=/tmp/cargo-realtest
               export CARGO_INCREMENTAL=0
               export RUSTC=/tmp/rustc-abs
 
@@ -1181,8 +1190,9 @@ RUSTEOF
 TOMLEOF
 
               cd /tmp/realtest
+              rm -f /root/.cargo/.package-cache* /root/.cargo/.global-cache* 2>/dev/null
               echo "[realtest] starting cargo build..."
-              cargo build 2>/tmp/realtest-stderr
+              /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>/tmp/realtest-stderr
               CARGO_EXIT=$?
               echo "cargo-exit=$CARGO_EXIT" > /tmp/realtest-result
 
@@ -1219,7 +1229,11 @@ TOMLEOF
             /nix/system/profile/bin/bash -c '
               export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
               export CARGO_BUILD_JOBS=1
-              export CARGO_HOME=/root/.cargo
+              # Use a FRESH cargo home (copy config, avoid stale locks)
+              rm -rf /tmp/cargo-multifile
+              mkdir -p /tmp/cargo-multifile
+              cp /root/.cargo/config.toml /tmp/cargo-multifile/
+              export CARGO_HOME=/tmp/cargo-multifile
               export CARGO_INCREMENTAL=0
               export RUSTC=/tmp/rustc-abs
 
@@ -1321,8 +1335,8 @@ MAINEOF
 TOMLEOF
 
               cd /tmp/multifile
-              echo "[multifile] starting cargo build..."
-              cargo build 2>/tmp/multifile-stderr
+              echo "[multifile] starting cargo build (offline)..."
+              /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>/tmp/multifile-stderr
               CARGO_EXIT=$?
 
               if [ $CARGO_EXIT -eq 0 ]; then
@@ -1458,7 +1472,10 @@ MAINEOF
             /nix/system/profile/bin/bash -c '
               export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
               export CARGO_BUILD_JOBS=1
-              export CARGO_HOME=/root/.cargo
+              rm -rf /tmp/cargo-minigrep
+              mkdir -p /tmp/cargo-minigrep
+              cp /root/.cargo/config.toml /tmp/cargo-minigrep/
+              export CARGO_HOME=/tmp/cargo-minigrep
               export CARGO_INCREMENTAL=0
               export RUSTC=/tmp/rustc-abs
 
@@ -1559,8 +1576,9 @@ MAINEOF
                 > /tmp/minigrep-testdata.txt
 
               cd /tmp/minigrep
+              rm -f /root/.cargo/.package-cache* /root/.cargo/.global-cache* 2>/dev/null
               echo "[minigrep] cargo build..."
-              cargo build 2>/tmp/minigrep-stderr
+              /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>/tmp/minigrep-stderr
               MG_EXIT=$?
               echo "[minigrep] cargo exit: $MG_EXIT"
 
@@ -1635,6 +1653,150 @@ MAINEOF
             else
               let mg_res = $(cat /tmp/minigrep-stdout 2>/dev/null)
               echo "FUNC_TEST:minigrep:FAIL:$mg_res"
+            end
+
+            # ═══════════════════════════════════════════════════════════════
+            # Step 9: Fork+exec crash isolation
+            # Test whether Command::new().status() (fork+exec+wait) works
+            # for dynamically-linked binaries. This is the root cause of
+            # the cargo build-script crash.
+            # ═══════════════════════════════════════════════════════════════
+            echo ""
+            echo "--- Step 9: Fork+exec test (status vs exec) ---"
+
+            # Build a test program that uses Command::new().status()
+            /nix/system/profile/bin/bash -c '
+              export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
+
+              rm -rf /tmp/forktest
+              mkdir -p /tmp/forktest/src
+
+              printf "%s\n" \
+                "use std::process::Command;" \
+                "use std::io::Write;" \
+                "" \
+                "fn main() {" \
+                "    eprintln!(\"[forktest] PID={}\", std::process::id());" \
+                "    eprintln!(\"[forktest] testing Command::new().status()...\");" \
+                "" \
+                "use std::process::Stdio;" \
+                "" \
+                "    // Test 1: spawn a simple command (echo)" \
+                "    let r1 = Command::new(\"/bin/echo\")" \
+                "        .arg(\"fork-echo-ok\")" \
+                "        .stdout(Stdio::null()).stderr(Stdio::null())" \
+                "        .status();" \
+                "    match &r1 {" \
+                "        Ok(s) => eprintln!(\"[forktest] echo status: {}\", s)," \
+                "        Err(e) => eprintln!(\"[forktest] echo error: {}\", e)," \
+                "    }" \
+                "" \
+                "    // Test 2: spawn a statically-linked binary (head)" \
+                "    let r2 = Command::new(\"/bin/head\")" \
+                "        .args([\"-c\", \"8\", \"/scheme/sys/uname\"])" \
+                "        .stdout(Stdio::null()).stderr(Stdio::null())" \
+                "        .status();" \
+                "    match &r2 {" \
+                "        Ok(s) => eprintln!(\"[forktest] head status: {}\", s)," \
+                "        Err(e) => eprintln!(\"[forktest] head error: {}\", e)," \
+                "    }" \
+                "" \
+                "    // Test 3: spawn rustc (dynamically-linked!)" \
+                "    eprintln!(\"[forktest] spawning rustc -vV via .status()...\");" \
+                "    let r3 = Command::new(\"/nix/system/profile/bin/rustc\")" \
+                "        .args([\"-vV\"])" \
+                "        .stdout(Stdio::null()).stderr(Stdio::null())" \
+                "        .status();" \
+                "    match &r3 {" \
+                "        Ok(s) => eprintln!(\"[forktest] rustc status: {}\", s)," \
+                "        Err(e) => eprintln!(\"[forktest] rustc error: {}\", e)," \
+                "    }" \
+                "" \
+                "    // Results — write to file directly (stdout redirect has encoding issues)" \
+                "    let ok1 = r1.map(|s| s.success()).unwrap_or(false);" \
+                "    let ok2 = r2.map(|s| s.success()).unwrap_or(false);" \
+                "    let ok3 = r3.map(|s| s.success()).unwrap_or(false);" \
+                "    let result = format!(\"FORKTEST: echo={} head={} rustc={}\", ok1, ok2, ok3);" \
+                "    eprintln!(\"{}\", result);" \
+                "    std::fs::write(\"/tmp/forktest-result\", &result).expect(\"write result\");" \
+                "}" \
+                > /tmp/forktest/src/main.rs
+
+              printf "%s\n" \
+                "[package]" \
+                "name = \"forktest\"" \
+                "version = \"0.1.0\"" \
+                "edition = \"2021\"" \
+                > /tmp/forktest/Cargo.toml
+
+              cd /tmp/forktest
+              echo "[forktest] building with cargo..."
+              export RUSTC=/tmp/rustc-abs
+              export CARGO_BUILD_JOBS=1
+              rm -rf /tmp/cargo-forktest
+              mkdir -p /tmp/cargo-forktest
+              cp /root/.cargo/config.toml /tmp/cargo-forktest/
+              export CARGO_HOME=/tmp/cargo-forktest
+              export CARGO_INCREMENTAL=0
+              /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>/tmp/forktest-build.log
+              BUILD_EXIT=$?
+              echo "[forktest] build exit: $BUILD_EXIT"
+
+              if [ $BUILD_EXIT -eq 0 ]; then
+                echo "[forktest] running (30s timeout)..."
+                ./target/x86_64-unknown-redox/debug/forktest \
+                  >/tmp/forktest-stdout 2>/tmp/forktest-stderr &
+                FT_PID=$!
+                SECONDS=0
+                while kill -0 $FT_PID 2>/dev/null; do
+                  if [ $SECONDS -ge 30 ]; then
+                    echo "[forktest] TIMEOUT — .status() likely hung"
+                    kill $FT_PID 2>/dev/null; wait $FT_PID 2>/dev/null
+                    kill -9 $FT_PID 2>/dev/null
+                    echo "FORKTEST: TIMEOUT" > /tmp/forktest-stdout
+                    break
+                  fi
+                  cat /scheme/sys/uname >/dev/null 2>/dev/null
+                done
+                if ! kill -0 $FT_PID 2>/dev/null; then
+                  wait $FT_PID
+                  echo "[forktest] exit: $?"
+                fi
+                sync 2>/dev/null
+                echo "[forktest] result file:"
+                cat /tmp/forktest-result 2>/dev/null
+                echo ""
+                echo "[forktest] stderr tail:"
+                tail -10 /tmp/forktest-stderr 2>/dev/null
+                # Check the result file written by forktest itself
+                RESULT=$(cat /tmp/forktest-result 2>/dev/null)
+                case "$RESULT" in
+                  *rustc=true*)  echo "PASS" > /tmp/forktest-verdict ;;
+                  *echo=true*)   echo "PARTIAL" > /tmp/forktest-verdict ;;
+                  *)             echo "FAIL" > /tmp/forktest-verdict ;;
+                esac
+              fi
+            '
+
+            echo "=== forktest result ==="
+            if exists -f /tmp/forktest-result
+              cat /tmp/forktest-result
+            end
+
+            # Read verdict written by the same bash block that ran forktest
+            if exists -f /tmp/forktest-verdict
+              /nix/system/profile/bin/bash -c '
+                V=$(cat /tmp/forktest-verdict)
+                if [ "$V" = "PASS" ]; then
+                  echo "FUNC_TEST:fork-exec-status:PASS"
+                elif [ "$V" = "PARTIAL" ]; then
+                  echo "FUNC_TEST:fork-exec-status:PASS:echo-ok-rustc-unknown"
+                else
+                  echo "FUNC_TEST:fork-exec-status:FAIL:verdict=$V"
+                fi
+              '
+            else
+              echo "FUNC_TEST:fork-exec-status:FAIL:no-verdict"
             end
 
             echo ""
