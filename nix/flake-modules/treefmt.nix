@@ -32,12 +32,14 @@ let
       indent_size = 2;
     };
 
-    # Exclude vendor directories and generated files
+    # Exclude vendor directories, generated files, and files with bash heredocs
+    # that nixfmt would break by re-indenting terminators
     settings.global.excludes = [
       "vendor/*"
       "vendor-combined/*"
       "result*"
       ".git/*"
+      "nix/redox-system/profiles/self-hosting-test.nix"
     ];
   };
 
