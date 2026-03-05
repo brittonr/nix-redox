@@ -66,6 +66,8 @@ let
       "^vendor/"
       "^vendor-combined/"
       "^result.*/"
+      # nixfmt breaks bash heredoc terminators inside Nix strings
+      "^nix/redox-system/profiles/self-hosting-test\\.nix$"
     ];
   };
   gitHooksShellHook = gitHooksEval.shellHook;
