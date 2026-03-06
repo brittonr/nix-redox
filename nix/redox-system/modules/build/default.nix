@@ -705,10 +705,17 @@ adios:
       ))
       # ===== NEW MODULE GENERATED FILES =====
 
-      # /time: hostname, timezone
+      # /time: hostname, timezone, hosts
       // {
         "etc/hostname" = {
           text = hostname;
+          mode = "0644";
+        };
+        "etc/hosts" = {
+          text = ''
+            127.0.0.1 localhost ${hostname}
+            ::1       localhost ${hostname}
+          '';
           mode = "0644";
         };
         "etc/timezone" = {

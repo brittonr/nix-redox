@@ -86,6 +86,7 @@ let
       python3 ${./patch-relibc-prefault-stack.py}
       python3 ${./patch-relibc-grow-main-stack.py}
       python3 ${./patch-relibc-chdir-deadlock.py}
+      python3 ${./patch-relibc-abort-dso.py}
 
       runHook postPatch
     '';
