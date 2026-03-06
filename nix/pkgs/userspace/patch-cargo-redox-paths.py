@@ -80,6 +80,26 @@ if 'redox_strip_file_prefix' not in util_content:
         f.write(util_content)
     print(f"  Patched {util_mod_path}: added redox_strip_file_prefix helper")
 
+# Also patch try_canonicalize to strip file: prefix at the source.
+# On Redox, std::fs::canonicalize() returns "file:/path" instead of "/path".
+# Fixing it here prevents ALL downstream code from seeing the bad prefix.
+with open(util_mod_path, 'r') as f:
+    util_content = f.read()
+
+old_canon = '''pub fn try_canonicalize<P: AsRef<Path>>(path: P) -> std::io::Result<PathBuf> {
+    std::fs::canonicalize(&path)
+}'''
+
+new_canon = '''pub fn try_canonicalize<P: AsRef<Path>>(path: P) -> std::io::Result<PathBuf> {
+    std::fs::canonicalize(&path).map(redox_strip_file_prefix)
+}'''
+
+if old_canon in util_content:
+    util_content = util_content.replace(old_canon, new_canon)
+    with open(util_mod_path, 'w') as f:
+        f.write(util_content)
+    print(f"  Patched {util_mod_path}: try_canonicalize now strips file: prefix")
+
 # ============================================================
 # Patch 3: DirectorySource — strip file: from root path
 # ============================================================
@@ -111,3 +131,39 @@ else:
         idx = dir_content.index("pub fn new")
         print(f"  Context: {dir_content[idx:idx+200]}")
     sys.exit(1)
+
+# ============================================================
+# Patch 4: into_url.rs — strip file: prefix before Url::from_file_path
+# ============================================================
+# On Redox, paths passed to IntoUrl may have "file:" prefix from
+# canonicalize() in code paths that don't go through try_canonicalize.
+into_url_path = os.path.join(base, "src/tools/cargo/src/cargo/util/into_url.rs")
+
+with open(into_url_path, 'r') as f:
+    into_url_content = f.read()
+
+old_into_url = '''impl<'a> IntoUrl for &'a Path {
+    fn into_url(self) -> CargoResult<Url> {
+        Url::from_file_path(self)
+            .map_err(|()| anyhow::format_err!("invalid path url `{}`", self.display()))
+    }
+}'''
+
+new_into_url = '''impl<'a> IntoUrl for &'a Path {
+    fn into_url(self) -> CargoResult<Url> {
+        // On Redox OS, paths may have "file:" prefix from canonicalize().
+        // Strip it before converting to URL.
+        let clean = crate::util::redox_strip_file_prefix(self.to_path_buf());
+        Url::from_file_path(&clean)
+            .map_err(|()| anyhow::format_err!("invalid path url `{}`", clean.display()))
+    }
+}'''
+
+if old_into_url in into_url_content:
+    into_url_content = into_url_content.replace(old_into_url, new_into_url)
+    with open(into_url_path, 'w') as f:
+        f.write(into_url_content)
+    print(f"  Patched {into_url_path}: strip file: prefix in IntoUrl for Path")
+else:
+    print(f"  WARNING: Could not find IntoUrl for Path pattern in {into_url_path}")
+    # Not fatal — try_canonicalize patch may be sufficient

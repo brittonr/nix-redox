@@ -1392,6 +1392,15 @@ adios:
 
             ${mkGeneratedFiles}
 
+            # Extra paths: copy arbitrary store derivations to target directories
+            ${lib.concatStringsSep "\n" (
+              builtins.map (ep: ''
+                echo "Copying extra path to ${ep.target}..."
+                mkdir -p "$out/${ep.target}"
+                cp -r ${ep.source}/* "$out/${ep.target}/"
+              '') (inputs.filesystem.extraPaths or [ ])
+            )}
+
             # Include local binary cache if configured
             ${lib.optionalString hasBinaryCache ''
               echo "Including binary cache (${toString (builtins.length (builtins.attrNames binaryCachePackages))} packages)..."

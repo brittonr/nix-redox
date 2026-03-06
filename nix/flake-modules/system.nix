@@ -229,15 +229,23 @@ let
     inherit bootloader;
   };
 
+  # snix source bundle for self-compile test
+  snixSourceBundle = import ../pkgs/infrastructure/snix-source-bundle.nix {
+    inherit pkgs;
+    snix-redox-src = ../../snix-redox;
+  };
+
   # Self-hosting test: boots self-hosting image, tests cargo build
   selfHostingTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/self-hosting-test.nix ];
-    inherit extraPkgs;
+    extraPkgs = extraPkgs // {
+      snix-source-bundle = snixSourceBundle;
+    };
   };
   selfHostingTest = mkFunctionalTest {
     diskImage = selfHostingTestSystem.diskImage;
     inherit bootloader;
-    memoryMB = 4096;
+    memoryMB = 8192;
     cpus = 4;
   };
 

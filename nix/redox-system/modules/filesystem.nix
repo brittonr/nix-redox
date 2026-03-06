@@ -52,6 +52,16 @@ in
       };
       description = "Special symlinks (path → target)";
     };
+    extraPaths = {
+      type = t.listOf (
+        t.struct "ExtraPath" {
+          source = t.derivation;
+          target = t.string;
+        }
+      );
+      default = [ ];
+      description = "Extra store paths to copy into the root tree (source derivation → target directory)";
+    };
   };
 
   impl = { options }: options;
