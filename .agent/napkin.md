@@ -1142,3 +1142,27 @@
 - **Test script changes affect disk image**: Modifying self-hosting-test.nix changes the root tree → different build hash for ALL derived packages.
 
 **Result**: `cargo build` of hello world succeeds in 4.23s, producing a working binary that prints "Hello from self-hosted Redox!".
+
+### chdir deadlock fix — CWD Mutex after fork (Mar 5 2026)
+- **Root cause**: relibc's `CWD` is a non-reentrant `Mutex<Option<Box<str>>>`. The `path::open()`
+  function (called for EVERY file open in the process) temporarily acquires `CWD.lock()`.
+  If ANY thread in a multi-threaded process (like cargo) holds `CWD.lock()` at `fork()` time,
+  the child inherits the mutex in LOCKED state. When child calls `chdir()` → `CWD.lock()` →
+  `futex_wait()` → hangs forever (no other thread exists to call `futex_wake()`).
+- **Proposal inaccuracy**: Proposal described "change `current_dir()?` to `cwd_guard`" in chdir().
+  Our pinned relibc (`28ffabebf629`, Feb 19 2026) already correctly uses `cwd_guard.as_deref()`.
+  The REAL issue is post-fork mutex stale state, not a double-lock within chdir().
+- **Actual fix**: `CWD.try_lock()` with `manual_unlock()` fallback in `chdir()`. If `try_lock()`
+  fails (stale lock inherited from parent), force-reset and retry. Safe because child is
+  single-threaded after fork.
+- **relibc Mutex internals**: Uses `AtomicI32` with states UNLOCKED(0)/LOCKED(1)/WAITING(2).
+  `lock()` does CAS UNLOCKED→LOCKED, then futex_wait on failure. `manual_unlock()` stores
+  UNLOCKED + futex_wake. `try_lock()` does single CAS, returns None on failure.
+- **Test results**: 31/32 self-hosting tests pass. `cargo-buildrs` still fails with "Invalid
+  opcode fault" (ud2) in rustc when cargo invokes it for build.rs compilation. This is a
+  SEPARATE issue from the chdir deadlock — it's the known rustc subprocess crash (GOT entry
+  for panic hook is NULL in librustc_driver.so's relibc copy after fork).
+- **LLVM pipe fix**: `ls -la $out/bin/ | head -20` in llvm-redox.nix install phase causes
+  SIGPIPE → "write error: Broken pipe" → build failure. Fixed with `|| true`.
+- **Pattern**: existing relibc patches use exact string matching in Python scripts. The patch
+  MUST fail loudly (sys.exit(1)) if pattern not found — signals pin update made it obsolete.

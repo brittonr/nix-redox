@@ -1721,7 +1721,10 @@ let
                 /nix/system/profile/bin/bash -c '
                   export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
                   export CARGO_BUILD_JOBS=1
-                  export CARGO_HOME=/root/.cargo
+                  rm -rf /tmp/cargo-buildrs
+                  mkdir -p /tmp/cargo-buildrs
+                  cp /root/.cargo/config.toml /tmp/cargo-buildrs/
+                  export CARGO_HOME=/tmp/cargo-buildrs
                   export CARGO_INCREMENTAL=0
                   export RUSTC=/tmp/rustc-abs
                   rm -f /root/.cargo/.package-cache* 2>/dev/null
@@ -1759,14 +1762,38 @@ let
                     > /tmp/buildrs-test/Cargo.toml
 
                   cd /tmp/buildrs-test
+                  echo "[buildrs] starting cargo build with build.rs..."
+                  /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>/tmp/buildrs-stderr
+                  CARGO_EXIT=$?
+                  echo "cargo-exit=$CARGO_EXIT" > /tmp/buildrs-result
 
-                  # Known: build-script pipe hang on Redox.
-                  # Manual 3-step approach (Step 7) works instead.
-                  echo "[buildrs] SKIPPED: build-script pipe hang (known issue)"
-                  echo "pipe-hang" > /tmp/buildrs-stdout
+                  if [ $CARGO_EXIT -eq 0 ]; then
+                    BIN=./target/x86_64-unknown-redox/debug/buildrs-test
+                    if [ -f "$BIN" ]; then
+                      $BIN > /tmp/buildrs-stdout 2>/tmp/buildrs-run-err
+                      echo "run-exit=$?" >> /tmp/buildrs-result
+                    else
+                      echo "no-binary" >> /tmp/buildrs-result
+                    fi
+                  fi
                 '
 
-                echo "FUNC_TEST:cargo-buildrs:PASS:expected-fail=pipe-hang"
+                if exists -f /tmp/buildrs-stdout
+                  let buildrs_out = $(cat /tmp/buildrs-stdout)
+                  echo "Build.rs output: $buildrs_out"
+                end
+
+                /nix/system/profile/bin/bash -c 'grep -q "BUILDRS_OK" /tmp/buildrs-stdout 2>/dev/null'
+                if test $? = 0
+                  echo "FUNC_TEST:cargo-buildrs:PASS"
+                else
+                  if exists -f /tmp/buildrs-stderr
+                    echo "Build.rs stderr (tail):"
+                    /nix/system/profile/bin/bash -c 'tail -10 /tmp/buildrs-stderr 2>/dev/null'
+                  end
+                  let buildrs_res = $(cat /tmp/buildrs-result 2>/dev/null)
+                  echo "FUNC_TEST:cargo-buildrs:FAIL:$buildrs_res"
+                end
 
                 echo ""
                 echo "FUNC_TESTS_COMPLETE"

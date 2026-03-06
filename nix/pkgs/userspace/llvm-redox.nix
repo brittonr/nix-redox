@@ -335,7 +335,7 @@ pkgs.stdenv.mkDerivation {
     ln -sf lld ld.lld 2>/dev/null || true
 
     echo "=== Installed binaries ==="
-    ls -la $out/bin/ | head -20
+    ls -la $out/bin/ | head -20 || true
     echo "=== Binary sizes ==="
     du -sh $out/bin/clang $out/bin/lld $out/bin/llvm-ar 2>/dev/null || true
     echo "=== Total size ==="
