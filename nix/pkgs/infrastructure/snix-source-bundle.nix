@@ -2,10 +2,6 @@
 #
 # Creates a directory with the full snix-redox source tree and all crate
 # dependencies vendored, ready for `cargo build --offline` on the guest.
-#
-# Build scripts that probe rustc version are pre-run on the host and their
-# outputs injected, because Redox's fork+exec has issues with build scripts
-# that spawn subprocess chains (cargo -> build-script -> rustc).
 
 { pkgs, snix-redox-src }:
 
@@ -17,34 +13,26 @@ let
     hash = "sha256-exmebgBCk6/6RzNnqIA+jIhsrC8/w7+cjeEgmO5YAfI=";
   };
 in
-pkgs.runCommand "snix-source-bundle"
-  {
-    nativeBuildInputs = [ pkgs.python3 ];
-  }
-  ''
-    mkdir -p $out/.cargo
+pkgs.runCommand "snix-source-bundle" { } ''
+  mkdir -p $out/.cargo
 
-    # Copy source tree
-    cp ${snix-redox-src}/Cargo.toml $out/
-    cp ${snix-redox-src}/Cargo.lock $out/
-    cp -r ${snix-redox-src}/src $out/src
-    cp -r ${snix-redox-src}/snix-eval-vendored $out/snix-eval-vendored
-    cp -r ${snix-redox-src}/nix-compat-redox $out/nix-compat-redox
-    cp -r ${snix-redox-src}/nix-compat-derive $out/nix-compat-derive
+  # Copy source tree
+  cp ${snix-redox-src}/Cargo.toml $out/
+  cp ${snix-redox-src}/Cargo.lock $out/
+  cp -r ${snix-redox-src}/src $out/src
+  cp -r ${snix-redox-src}/snix-eval-vendored $out/snix-eval-vendored
+  cp -r ${snix-redox-src}/nix-compat-redox $out/nix-compat-redox
+  cp -r ${snix-redox-src}/nix-compat-derive $out/nix-compat-derive
 
-    # Copy vendored dependencies (writable - we patch build scripts)
-    cp -r ${vendoredDeps} $out/vendor
-    chmod -R u+w $out/vendor
+  # Copy vendored dependencies
+  cp -r ${vendoredDeps} $out/vendor
 
-    # Neutralize build scripts that fork rustc for version detection
-    python3 ${./neutralize-build-scripts.py} $out/vendor
+  # Cargo config for offline vendored builds
+  cat > $out/.cargo/config.toml <<'EOF'
+  [source.crates-io]
+  replace-with = "vendored-sources"
 
-    # Cargo config for offline vendored builds
-    cat > $out/.cargo/config.toml <<'EOF'
-    [source.crates-io]
-    replace-with = "vendored-sources"
-
-    [source.vendored-sources]
-    directory = "vendor"
-    EOF
-  ''
+  [source.vendored-sources]
+  directory = "vendor"
+  EOF
+''

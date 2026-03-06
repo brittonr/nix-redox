@@ -442,6 +442,13 @@ pkgs.stdenv.mkDerivation {
     # the event, so the pipe fills and the child's write blocks.
     python3 ${./patch-cargo-read2-pipes.py} .
 
+    # Patch: Pass env vars via --env-set flag to rustc.
+    # On Redox, Command::env() doesn't propagate env vars through exec().
+    # This means rustc doesn't see OUT_DIR, CARGO_PKG_*, or cargo:rustc-env
+    # values when processing env!() / option_env!() macros. Fix: also pass
+    # these as --env-set CLI flags, which rustc processes before env::var().
+    python3 ${./patch-cargo-env-set.py} .
+
     # Patch 7: cargo-util S_IRWXU type mismatch
     # On Redox, libc::S_IRWXU etc. are i32 (not u32 like Linux).
     # Cargo uses u32::from() which doesn't accept i32.
