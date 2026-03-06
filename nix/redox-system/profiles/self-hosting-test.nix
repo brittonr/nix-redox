@@ -1814,6 +1814,405 @@ let
                   echo "FUNC_TEST:cargo-buildrs:FAIL:$buildrs_res"
                 end
 
+                # ══════════════════════════════════════════════════════════
+                # Phase 3: Crate Dependencies
+                # ══════════════════════════════════════════════════════════
+
+                # ── Test: Path dependency (local subcrate) ──────────────
+                # Tests multi-crate workspace-like compilation with a local
+                # library crate used as a path dependency.
+                echo ""
+                echo "--- cargo-path-dep: local path dependency ---"
+                /nix/system/profile/bin/bash -c '
+                  # Build pathdep project
+                  rm -rf /tmp/pathdep
+                  mkdir -p /tmp/pathdep/src /tmp/pathdep/mylib/src
+
+                  # Library crate
+                  printf "%s\n" \
+                    "[package]" \
+                    "name = \"mylib\"" \
+                    "version = \"0.1.0\"" \
+                    "edition = \"2021\"" \
+                    > /tmp/pathdep/mylib/Cargo.toml
+
+                  printf "%s\n" \
+                    "pub fn greet(name: &str) -> String {" \
+                    "    format!(\"Hello, {}! From mylib on Redox.\", name)" \
+                    "}" \
+                    "" \
+                    "pub fn add(a: i32, b: i32) -> i32 {" \
+                    "    a + b" \
+                    "}" \
+                    > /tmp/pathdep/mylib/src/lib.rs
+
+                  # Main crate depending on mylib
+                  printf "%s\n" \
+                    "[package]" \
+                    "name = \"pathdep\"" \
+                    "version = \"0.1.0\"" \
+                    "edition = \"2021\"" \
+                    "" \
+                    "[dependencies]" \
+                    "mylib = { path = \"mylib\" }" \
+                    > /tmp/pathdep/Cargo.toml
+
+                  printf "%s\n" \
+                    "use mylib::{greet, add};" \
+                    "" \
+                    "fn main() {" \
+                    "    let msg = greet(\"Redox\");" \
+                    "    println!(\"{}\", msg);" \
+                    "    println!(\"2 + 3 = {}\", add(2, 3));" \
+                    "    if add(2, 3) == 5 && msg.contains(\"mylib\") {" \
+                    "        println!(\"PATH_DEP_OK\");" \
+                    "    } else {" \
+                    "        println!(\"PATH_DEP_FAIL\");" \
+                    "    }" \
+                    "}" \
+                    > /tmp/pathdep/src/main.rs
+
+                  cd /tmp/pathdep
+                  export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
+                  export CARGO_BUILD_JOBS=1
+                  # Fresh CARGO_HOME to avoid corrupted flock state from earlier tests
+                  rm -rf /tmp/cargo-pathdep
+                  mkdir -p /tmp/cargo-pathdep
+                  cp /root/.cargo/config.toml /tmp/cargo-pathdep/
+                  export CARGO_HOME=/tmp/cargo-pathdep
+                  export CARGO_INCREMENTAL=0
+                  export RUSTC=/tmp/rustc-abs
+
+                  rm -f /root/.cargo/.package-cache* 2>/dev/null
+                  rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
+
+                  /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>/tmp/pathdep-stderr
+                  CARGO_EXIT=$?
+
+                  BIN=./target/x86_64-unknown-redox/debug/pathdep
+                  if [ $CARGO_EXIT -eq 0 ] && [ -f "$BIN" ]; then
+                    $BIN 2>&1
+                    echo "pathdep=$?" > /tmp/pathdep-result
+                  else
+                    echo "pathdep=$CARGO_EXIT" > /tmp/pathdep-result
+                  fi
+                '
+                echo "pathdep result: $(cat /tmp/pathdep-result)"
+
+                let pathdep_bin = "/tmp/pathdep/target/x86_64-unknown-redox/debug/pathdep"
+                if exists -f $pathdep_bin
+                  $pathdep_bin > /tmp/pathdep-run-out ^>/tmp/pathdep-run-err
+                  /nix/system/profile/bin/bash -c 'grep -q "PATH_DEP_OK" /tmp/pathdep-run-out'
+                  if test $? = 0
+                    echo "FUNC_TEST:cargo-path-dep:PASS"
+                  else
+                    echo "FUNC_TEST:cargo-path-dep:FAIL:bad output"
+                    cat /tmp/pathdep-run-out
+                  end
+                else
+                  echo "FUNC_TEST:cargo-path-dep:FAIL:$(cat /tmp/pathdep-result)"
+                  echo "=== pathdep stderr (last 2KB) ==="
+                  /nix/system/profile/bin/bash -c 'tail -c 2048 /tmp/pathdep-stderr 2>/dev/null'
+                end
+
+                # ── Test: Vendored dependency ───────────────────────────
+                # Tests cargo offline build with a vendored crate.
+                # Creates a fake registry crate in vendor/ with proper
+                # .cargo-checksum.json and source replacement config.
+                echo ""
+                echo "--- cargo-vendored-dep: vendored crate dependency ---"
+                /nix/system/profile/bin/bash -c '
+                  # Build vendored project
+                  rm -rf /tmp/vendored
+                  mkdir -p /tmp/vendored/src
+                  mkdir -p /tmp/vendored/.cargo
+                  mkdir -p /tmp/vendored/vendor/minimath/src
+
+                  # Vendored crate: minimath 0.1.0
+                  printf "%s\n" \
+                    "[package]" \
+                    "name = \"minimath\"" \
+                    "version = \"0.1.0\"" \
+                    "edition = \"2021\"" \
+                    > /tmp/vendored/vendor/minimath/Cargo.toml
+
+                  printf "%s\n" \
+                    "/// Compute factorial iteratively" \
+                    "pub fn factorial(n: u64) -> u64 {" \
+                    "    (1..=n).product()" \
+                    "}" \
+                    "" \
+                    "/// Fibonacci via iterative method" \
+                    "pub fn fibonacci(n: u32) -> u64 {" \
+                    "    if n <= 1 { return n as u64; }" \
+                    "    let (mut a, mut b) = (0u64, 1u64);" \
+                    "    for _ in 2..=n {" \
+                    "        let c = a + b;" \
+                    "        a = b;" \
+                    "        b = c;" \
+                    "    }" \
+                    "    b" \
+                    "}" \
+                    > /tmp/vendored/vendor/minimath/src/lib.rs
+
+                  # cargo-checksum.json (empty files hash = valid for vendored sources)
+                  echo "{\"files\":{}}" > /tmp/vendored/vendor/minimath/.cargo-checksum.json
+
+                  # Cargo source replacement config (project-local; global config has build/target/gc)
+                  printf "%s\n" \
+                    "[source.crates-io]" \
+                    "replace-with = \"vendored-sources\"" \
+                    "" \
+                    "[source.vendored-sources]" \
+                    "directory = \"vendor\"" \
+                    > /tmp/vendored/.cargo/config.toml
+
+                  # Main project
+                  printf "%s\n" \
+                    "[package]" \
+                    "name = \"vendored-test\"" \
+                    "version = \"0.1.0\"" \
+                    "edition = \"2021\"" \
+                    "" \
+                    "[dependencies]" \
+                    "minimath = \"0.1.0\"" \
+                    > /tmp/vendored/Cargo.toml
+
+                  printf "%s\n" \
+                    "use minimath::{factorial, fibonacci};" \
+                    "" \
+                    "fn main() {" \
+                    "    let f5 = factorial(5);" \
+                    "    let fib10 = fibonacci(10);" \
+                    "    println!(\"5! = {}\", f5);" \
+                    "    println!(\"fib(10) = {}\", fib10);" \
+                    "    if f5 == 120 && fib10 == 55 {" \
+                    "        println!(\"VENDORED_OK\");" \
+                    "    } else {" \
+                    "        println!(\"VENDORED_FAIL: f5={} fib10={}\", f5, fib10);" \
+                    "    }" \
+                    "}" \
+                    > /tmp/vendored/src/main.rs
+
+                  # Cargo.lock (must exist for --offline vendored builds)
+                  printf "%s\n" \
+                    "# This file is automatically @generated by Cargo." \
+                    "# It is not intended for manual editing." \
+                    "version = 3" \
+                    "" \
+                    "[[package]]" \
+                    "name = \"minimath\"" \
+                    "version = \"0.1.0\"" \
+                    "source = \"registry+https://github.com/rust-lang/crates.io-index\"" \
+                    "" \
+                    "[[package]]" \
+                    "name = \"vendored-test\"" \
+                    "version = \"0.1.0\"" \
+                    "dependencies = [" \
+                    " \"minimath\"," \
+                    "]" \
+                    > /tmp/vendored/Cargo.lock
+
+                  cd /tmp/vendored
+                  export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
+                  export CARGO_BUILD_JOBS=1
+                  rm -rf /tmp/cargo-vendored
+                  mkdir -p /tmp/cargo-vendored
+                  cp /root/.cargo/config.toml /tmp/cargo-vendored/
+                  export CARGO_HOME=/tmp/cargo-vendored
+                  export CARGO_INCREMENTAL=0
+                  export RUSTC=/tmp/rustc-abs
+
+                  rm -f /root/.cargo/.package-cache* 2>/dev/null
+                  rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
+
+                  # Merge stderr into stdout so errors show on serial console
+                  /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>&1
+                  CARGO_EXIT=$?
+                  echo "[vendored] cargo exit=$CARGO_EXIT"
+
+                  BIN=./target/x86_64-unknown-redox/debug/vendored-test
+                  if [ $CARGO_EXIT -eq 0 ] && [ -f "$BIN" ]; then
+                    $BIN 2>&1
+                    echo "vendored=$?" > /tmp/vendored-result
+                  else
+                    echo "vendored=$CARGO_EXIT" > /tmp/vendored-result
+                  fi
+                '
+                echo "vendored result: $(cat /tmp/vendored-result)"
+
+                let vendored_bin = "/tmp/vendored/target/x86_64-unknown-redox/debug/vendored-test"
+                if exists -f $vendored_bin
+                  $vendored_bin > /tmp/vendored-run-out ^>/tmp/vendored-run-err
+                  /nix/system/profile/bin/bash -c 'grep -q "VENDORED_OK" /tmp/vendored-run-out'
+                  if test $? = 0
+                    echo "FUNC_TEST:cargo-vendored-dep:PASS"
+                  else
+                    echo "FUNC_TEST:cargo-vendored-dep:FAIL:bad output"
+                    cat /tmp/vendored-run-out
+                  end
+                else
+                  echo "FUNC_TEST:cargo-vendored-dep:FAIL:$(cat /tmp/vendored-result)"
+                  echo "=== vendored stderr (last 2KB) ==="
+                  /nix/system/profile/bin/bash -c 'tail -c 2048 /tmp/vendored-stderr 2>/dev/null'
+                end
+
+                # ── Test: Proc-macro crate ──────────────────────────────
+                # THE milestone test. Proc-macros compile as .so files that
+                # rustc dlopen()s at compile time. If this works, the entire
+                # serde/clap/tokio ecosystem is within reach on Redox.
+                echo ""
+                echo "--- cargo-proc-macro: proc-macro dependency ---"
+                /nix/system/profile/bin/bash -c '
+                  # Build proc-macro project
+                  rm -rf /tmp/procmacro
+                  mkdir -p /tmp/procmacro/src
+                  mkdir -p /tmp/procmacro/.cargo
+                  mkdir -p /tmp/procmacro/vendor/my-derive/src
+
+                  # Proc-macro crate: my-derive 0.1.0
+                  printf "%s\n" \
+                    "[package]" \
+                    "name = \"my-derive\"" \
+                    "version = \"0.1.0\"" \
+                    "edition = \"2021\"" \
+                    "" \
+                    "[lib]" \
+                    "proc-macro = true" \
+                    > /tmp/procmacro/vendor/my-derive/Cargo.toml
+
+                  # A simple derive macro that generates a describe() method
+                  printf "%s\n" \
+                    "extern crate proc_macro;" \
+                    "use proc_macro::TokenStream;" \
+                    "" \
+                    "#[proc_macro_derive(Describe)]" \
+                    "pub fn describe_derive(input: TokenStream) -> TokenStream {" \
+                    "    let input_str = input.to_string();" \
+                    "    let name = input_str" \
+                    "        .split_whitespace()" \
+                    "        .skip_while(|w| *w != \"struct\")" \
+                    "        .nth(1)" \
+                    "        .unwrap_or(\"Unknown\")" \
+                    "        .trim_end_matches(\"{\")" \
+                    "        .trim_end_matches(\";\");" \
+                    "    let output = format!(" \
+                    "        \"impl {} {{ pub fn describe() -> String {{ String::from(\\\"{}\\\") }} }}\"," \
+                    "        name, name" \
+                    "    );" \
+                    "    output.parse().unwrap()" \
+                    "}" \
+                    > /tmp/procmacro/vendor/my-derive/src/lib.rs
+
+                  echo "{\"files\":{}}" > /tmp/procmacro/vendor/my-derive/.cargo-checksum.json
+
+                  # Cargo config with vendor source replacement (project-local)
+                  printf "%s\n" \
+                    "[source.crates-io]" \
+                    "replace-with = \"vendored-sources\"" \
+                    "" \
+                    "[source.vendored-sources]" \
+                    "directory = \"vendor\"" \
+                    > /tmp/procmacro/.cargo/config.toml
+
+                  printf "%s\n" \
+                    "[package]" \
+                    "name = \"procmacro-test\"" \
+                    "version = \"0.1.0\"" \
+                    "edition = \"2021\"" \
+                    "" \
+                    "[dependencies]" \
+                    "my-derive = \"0.1.0\"" \
+                    > /tmp/procmacro/Cargo.toml
+
+                  printf "%s\n" \
+                    "use my_derive::Describe;" \
+                    "" \
+                    "#[derive(Describe)]" \
+                    "struct Widget {" \
+                    "    x: i32," \
+                    "    y: i32," \
+                    "}" \
+                    "" \
+                    "#[derive(Describe)]" \
+                    "struct Button;" \
+                    "" \
+                    "fn main() {" \
+                    "    let w_desc = Widget::describe();" \
+                    "    let b_desc = Button::describe();" \
+                    "    println!(\"Widget: {}\", w_desc);" \
+                    "    println!(\"Button: {}\", b_desc);" \
+                    "    if w_desc == \"Widget\" && b_desc == \"Button\" {" \
+                    "        println!(\"PROC_MACRO_OK\");" \
+                    "    } else {" \
+                    "        println!(\"PROC_MACRO_FAIL: w={} b={}\", w_desc, b_desc);" \
+                    "    }" \
+                    "}" \
+                    > /tmp/procmacro/src/main.rs
+
+                  printf "%s\n" \
+                    "version = 3" \
+                    "" \
+                    "[[package]]" \
+                    "name = \"my-derive\"" \
+                    "version = \"0.1.0\"" \
+                    "source = \"registry+https://github.com/rust-lang/crates.io-index\"" \
+                    "" \
+                    "[[package]]" \
+                    "name = \"procmacro-test\"" \
+                    "version = \"0.1.0\"" \
+                    "dependencies = [" \
+                    " \"my-derive\"," \
+                    "]" \
+                    > /tmp/procmacro/Cargo.lock
+
+                  cd /tmp/procmacro
+                  export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
+                  export CARGO_BUILD_JOBS=1
+                  rm -rf /tmp/cargo-procmacro
+                  mkdir -p /tmp/cargo-procmacro
+                  cp /root/.cargo/config.toml /tmp/cargo-procmacro/
+                  export CARGO_HOME=/tmp/cargo-procmacro
+                  export CARGO_INCREMENTAL=0
+                  export RUSTC=/tmp/rustc-abs
+
+                  rm -f /root/.cargo/.package-cache* 2>/dev/null
+                  rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
+
+                  # Merge stderr into stdout so errors show on serial console
+                  /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>&1
+                  CARGO_EXIT=$?
+                  echo "[procmacro] cargo exit=$CARGO_EXIT"
+
+                  BIN=./target/x86_64-unknown-redox/debug/procmacro-test
+                  if [ $CARGO_EXIT -eq 0 ] && [ -f "$BIN" ]; then
+                    $BIN 2>&1
+                    echo "procmacro=$?" > /tmp/procmacro-result
+                  else
+                    echo "procmacro=$CARGO_EXIT" > /tmp/procmacro-result
+                  fi
+                '
+                echo "procmacro result: $(cat /tmp/procmacro-result)"
+
+                let pm_bin = "/tmp/procmacro/target/x86_64-unknown-redox/debug/procmacro-test"
+                if exists -f $pm_bin
+                  $pm_bin > /tmp/procmacro-run-out ^>/tmp/procmacro-run-err
+                  /nix/system/profile/bin/bash -c 'grep -q "PROC_MACRO_OK" /tmp/procmacro-run-out'
+                  if test $? = 0
+                    echo "FUNC_TEST:cargo-proc-macro:PASS"
+                  else
+                    echo "FUNC_TEST:cargo-proc-macro:FAIL:bad output"
+                    cat /tmp/procmacro-run-out
+                    cat /tmp/procmacro-run-err
+                  end
+                else
+                  echo "FUNC_TEST:cargo-proc-macro:FAIL:$(cat /tmp/procmacro-result)"
+                  echo "=== procmacro stderr (last 4KB) ==="
+                  /nix/system/profile/bin/bash -c 'tail -c 4096 /tmp/procmacro-stderr 2>/dev/null'
+                  echo "=== procmacro stdout (last 2KB) ==="
+                  /nix/system/profile/bin/bash -c 'tail -c 2048 /tmp/procmacro-stdout 2>/dev/null'
+                end
+
                 echo ""
                 echo "FUNC_TESTS_COMPLETE"
   '';

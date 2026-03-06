@@ -1201,3 +1201,25 @@
   stderr on failure. This showed the exact rustc command line and the env! compile error.
 - **No more ud2 in the entire test suite**: The abort() patch converts ALL ud2 sites in relibc
   to clean `_exit(134)` calls across the ENTIRE system (not just rustc).
+
+### Three new self-hosting tests — all passing (Mar 6 2026)
+- **cargo-path-dep**: Local path dependency (`mylib` as `path = "../mylib"` in Cargo.toml)
+  - Root cause: `std::fs::canonicalize()` returns `file:/path` on Redox → `Path::is_absolute()` fails
+  - Fix: `patch-cargo-redox-paths.py` strips `file:` prefix in `TargetSourcePath::From<PathBuf>`
+- **cargo-vendored-dep**: Vendored crate dependency (minimath in `vendor/` dir)
+  - Root cause: `url::Url::to_file_path()` returns `file:/path` for `file:///path` URLs on Redox
+  - Cargo's `DirectorySource::new()` gets the path from SourceId URL → doubled `file:` in paths
+  - Fix: Added `redox_strip_file_prefix()` helper to cargo's `util/mod.rs`, patched `DirectorySource::new()`
+    and `TargetSourcePath::from()` to use it
+  - `std::env::current_dir()` returns clean `/path` (getcwd patch works), so the issue was specifically
+    in cargo's URL-to-path conversion for the vendor directory source
+- **cargo-proc-macro**: Proc-macro crate (`#[derive(Named)]` custom derive)
+  - Issue 1: CC wrapper always added `crt0.o` (provides `_start` for executables), conflicting with `-shared`
+    - Fix: Detect `-shared` flag in CC wrapper, skip `crt0.o`, use `-lc` (dynamic) instead of `-l:libc.a`
+  - Issue 2: No `libgcc_s.so`/`libgcc_s.a` in sysroot — `-lgcc_s` from rustc fails
+    - Fix: Filter out `-lgcc_s` in CC wrapper (symbols are in `libgcc_eh.a`)
+  - Issue 3: `ld_so` crashes with "division by zero" at `dso.rs:492` when loading the `.so`
+    - Root cause: `p_vaddr % p_align` computed for ALL ELF program headers, not just PT_LOAD.
+      PT_GNU_STACK has `p_align=0` → modulo-by-zero panic
+    - Fix: `patch-relibc-ld-so-align.py` guards `p_align` with `core::cmp::max(p_align, 1)`
+- **Total**: 35/35 self-hosting tests pass (was 32/32 before adding these 3)

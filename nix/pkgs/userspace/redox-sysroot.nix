@@ -244,6 +244,15 @@ pkgs.runCommand "redox-sysroot"
     LLD=/nix/system/profile/bin/ld.lld
     ERR=/tmp/.cc-wrapper-stderr
 
+    # Detect -shared flag (for proc-macro .so builds)
+    IS_SHARED=0
+    for arg in "$@"; do
+      if [ "$arg" = "-shared" ]; then
+        IS_SHARED=1
+        break
+      fi
+    done
+
     # Filter out GCC flags that ld.lld doesn't understand
     ARGS=()
     for arg in "$@"; do
@@ -252,17 +261,29 @@ pkgs.runCommand "redox-sysroot"
         -Wl,*)             ARGS+=("''${arg#-Wl,}") ;;
         -nodefaultlibs)    ;;
         -nostdlib)         ;;
+        -lgcc_s)           ;;    # no libgcc_s; symbols are in libgcc_eh.a
         *)                 ARGS+=("$arg") ;;
       esac
     done
 
-    # Run ld.lld in background with output redirected to files
-    "$LLD" \
-      "$S/lib/crt0.o" "$S/lib/crti.o" \
-      "''${ARGS[@]}" \
-      -L "$S/lib" -l:libc.a -l:libpthread.a -l:libgcc_eh.a \
-      "$S/lib/crtn.o" \
-      > /dev/null 2> "$ERR" &
+    if [ "$IS_SHARED" = "1" ]; then
+      # Shared library (proc-macro .so): no crt0.o (provides _start for exes).
+      # Keep crti/crtn for .init/.fini sections. Use dynamic libc.
+      "$LLD" \
+        "$S/lib/crti.o" \
+        "''${ARGS[@]}" \
+        -L "$S/lib" -lc -lgcc_eh \
+        "$S/lib/crtn.o" \
+        > /dev/null 2> "$ERR" &
+    else
+      # Executable: full CRT + static libc
+      "$LLD" \
+        "$S/lib/crt0.o" "$S/lib/crti.o" \
+        "''${ARGS[@]}" \
+        -L "$S/lib" -l:libc.a -l:libpthread.a -l:libgcc_eh.a \
+        "$S/lib/crtn.o" \
+        > /dev/null 2> "$ERR" &
+    fi
     pid=$!
 
     # Close stdout/stderr — sends EOF to rustc's pipes immediately

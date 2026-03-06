@@ -450,6 +450,13 @@ pkgs.stdenv.mkDerivation {
     print(f"  Patched {path}")
     PYEOF
 
+    # Patch 8: Strip "file:" URL scheme prefix from OS-returned paths.
+    # On Redox, kernel syscalls (realpath, getcwd) return paths like
+    # "file:/tmp/hello" instead of "/tmp/hello". This breaks path handling
+    # throughout the standard library and cargo. Fix both std and cargo.
+    python3 ${./patch-std-redox-paths.py} .
+    python3 ${./patch-cargo-redox-paths.py} .
+
     echo "=== Generating config.toml ==="
 
     # Generate config.toml with proper paths
