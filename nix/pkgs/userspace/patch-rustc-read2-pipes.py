@@ -77,13 +77,25 @@ def patch_file(path):
     new = '''#[allow(unused_imports, dead_code)]
 pub fn read2(p1: AnonPipe, v1: &mut Vec<u8>, p2: AnonPipe, v2: &mut Vec<u8>) -> io::Result<()> {
     // REDOX PATCH: On Redox, poll() on pipes crashes (Invalid opcode).
-    // Read sequentially instead of multiplexing with poll().
+    // Use a thread-based approach to avoid both poll() and the classic
+    // sequential-read pipe deadlock (child writes >64KB to one pipe,
+    // blocks, parent blocks reading the other pipe → deadlock).
     #[cfg(target_os = "redox")]
     {
+        use crate::thread;
         let p1 = p1.into_inner();
         let p2 = p2.into_inner();
+        // Read p2 (stderr) in background thread
+        let handle = thread::spawn(move || -> io::Result<Vec<u8>> {
+            let mut buf = Vec::new();
+            p2.read_to_end(&mut buf)?;
+            Ok(buf)
+        });
+        // Read p1 (stdout) in main thread
         p1.read_to_end(v1)?;
-        p2.read_to_end(v2)?;
+        // Join stderr thread
+        let stderr_data = handle.join().expect("stderr reader panicked")?;
+        v2.extend_from_slice(&stderr_data);
         return Ok(());
     }
 

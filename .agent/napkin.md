@@ -1223,3 +1223,33 @@
       PT_GNU_STACK has `p_align=0` → modulo-by-zero panic
     - Fix: `patch-relibc-ld-so-align.py` guards `p_align` with `core::cmp::max(p_align, 1)`
 - **Total**: 35/35 self-hosting tests pass (was 32/32 before adding these 3)
+
+### Build script pipe hang — ROOT CAUSE FOUND AND FIXED (Mar 6 2026)
+- **Root cause**: Cargo's build script output capture uses `exec_with_streaming()` → cargo-util's
+  `read2()` → `libc::poll()` to multiplex reading stdout/stderr from the build script process.
+  On Redox, `poll()` is implemented via `epoll` → `/scheme/event`. After `fork()+exec()`, the
+  event notification for pipe writes doesn't reliably reach the parent's event listener. The build
+  script writes to stdout (pipe), cargo's `poll()` never returns, the pipe buffer fills (64KB),
+  and the build script's `write()` blocks → deadlock.
+- **Key insight**: There are TWO separate `read2()` functions:
+  1. `library/std/src/sys/pal/unix/pipe.rs` — used by `std::process::Command::output()`
+  2. `src/tools/cargo/crates/cargo-util/src/read2.rs` — used by cargo's `exec_with_streaming()`
+  We had only patched #1 (std's read2), NOT #2 (cargo-util's read2). Build script capture goes
+  through #2, so the pipe hang persisted.
+- **Fix**: `patch-cargo-read2-pipes.py` — replaces cargo-util's poll-based read2 with a
+  thread-based approach: spawn a background thread for stderr, read stdout in the main thread.
+  Both can make progress independently, avoiding the classic pipe deadlock.
+- **Also fixed**: Updated std's read2 patch (`patch-rustc-read2-pipes.py`) from sequential reads
+  to thread-based reads. Sequential reads can deadlock when the child writes >64KB to one pipe
+  before the other — the parent blocks on read_to_end for pipe A, the child blocks on write to
+  pipe B (buffer full), nobody reads pipe B → deadlock.
+- **Thread-based approach**: `thread::spawn(move || p2.read_to_end(&mut buf))` for stderr,
+  `p1.read_to_end(&mut out)` for stdout in main thread. After stdout EOF, join the thread
+  and copy stderr data. Works on Redox because `thread::spawn` uses `clone()` not `fork()`.
+- **Result**: `cargo-buildrs:PASS` — build scripts with `println!("cargo:rustc-cfg=...")` work!
+  The build script compiles, runs, produces output, and cargo processes the directives correctly.
+- **Remaining issues** (separate from pipe fix):
+  - 3 heredoc escaping failures in test profile (real-program, multifile-build, buildscript)
+  - snix self-compile: `rustversion` proc-macro linking abort (exit 134) — separate issue
+- **Tests**: 34/37 pass (was 34/37 before, but `cargo-buildrs` now passes for the RIGHT reason
+  — the build script actually executes through pipes, not just through a timeout workaround)
