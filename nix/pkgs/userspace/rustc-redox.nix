@@ -434,6 +434,14 @@ pkgs.stdenv.mkDerivation {
     # poll() crashes. Use simple sequential reads instead.
     python3 ${./patch-rustc-read2-pipes.py} .
 
+    # Patch: Replace poll()-based read2() in cargo-util with sequential reads.
+    # cargo-util has its OWN read2() (separate from std's) that uses libc::poll()
+    # for build script output capture (exec_with_streaming). On Redox, poll() on
+    # pipes after fork+exec doesn't reliably deliver events, causing build scripts
+    # to hang. The build script writes to its stdout pipe but cargo never polls
+    # the event, so the pipe fills and the child's write blocks.
+    python3 ${./patch-cargo-read2-pipes.py} .
+
     # Patch 7: cargo-util S_IRWXU type mismatch
     # On Redox, libc::S_IRWXU etc. are i32 (not u32 like Linux).
     # Cargo uses u32::from() which doesn't accept i32.
