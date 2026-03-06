@@ -1275,3 +1275,66 @@
 - **Neutralize-build-scripts.py removed**: No longer needed — build scripts run natively.
 - **Underlying Redox bug**: Still exists (env vars via Command::env don't propagate through exec).
   Needs investigation in relibc's exec path. But the --env-set workaround is sufficient.
+
+### blake3 build script hang — CARGO_FEATURE_* not propagated (Mar 6 2026)
+- **Root cause**: blake3's build.rs calls `c_compiler_support()` which invokes `cc` (C compiler)
+  via `Command::new()` to check if AVX-512 is supported. This happens BEFORE checking `is_pure()`.
+  On Redox, `CARGO_FEATURE_PURE` isn't propagated to build scripts (Command::env() exec bug),
+  so `is_pure()` returns false. The C compiler invocation then hangs (fork+exec from build script).
+- **Fix**: Patch blake3's vendored build.rs in snix-source-bundle.nix. Check `TARGET` env var
+  for "redox" and force pure Rust mode (SSE2/SSE41/AVX2 intrinsics only), skipping C compiler.
+- **Pattern**: Must regenerate `.cargo-checksum.json` after patching vendored crates (SHA-256).
+  Use `patch-blake3-redox.py` script that patches + updates checksum atomically.
+- **Nix `''` string + Python `'''`**: Triple-single-quotes terminate Nix `''` strings.
+  Never use Python triple-quoted strings in Nix heredocs. Write Python to a separate .py file.
+- **Result**: snix self-compile went from 75/168 to 123/168 crates compiled.
+
+### Heredoc indentation in Nix `''` strings (Mar 6 2026)
+- Nix `''` indented strings strip the MINIMUM indentation across ALL lines
+- If the minimum is 4 spaces, heredoc terminators at 8-space indent become 4-space indent
+- Bash `<< 'EOF'` requires the terminator at column 0 (or `<<- EOF` with tabs)
+- Fix: Ensure heredoc terminators are at the minimum indentation level of the `''` block
+- The snix compile section's `CARGOEOF` at 4-space indent was correct; other terminators
+  (`RUSTEOF`, `TOMLEOF`, `LIBEOF`, `MAINEOF`, `BUILDEOF`) at 8-space were broken
+- Moved all to 4-space → 3 previously failing tests now pass
+
+### serde_derive proc-macro linking failure — FIXED (Mar 6 2026)
+- **Root cause**: Rustc uses **response files** (`@/tmp/rustcXXXXXX/linker-arguments`) when
+  there are many linker arguments (50+). Instead of passing each flag as a separate argv entry,
+  rustc writes all flags to a temp file and passes `@file` as a single argument to the linker.
+  The CC wrapper's for loop iterated over `"$@"` which contained only `@/tmp/rustc.../linker-arguments`,
+  so none of the case patterns matched (`-Wl,*`, `-shared`, `-nodefaultlibs`, `-m64`, `-lgcc_s`).
+  lld received the file via `@file` and expanded the raw contents which still had `-Wl,` prefixes.
+- **Why my_derive worked**: Small proc-macros (5 object files, 17 rlibs) stay below the response
+  file threshold. rustc passes args directly on the command line → CC wrapper processes them fine.
+- **Why serde_derive failed**: 16 object files + 17 rlibs + flags = 50+ args → response file used.
+- **Fix**: Expand `@file` response files before processing. Read file contents line by line into
+  `RAW_ARGS` array, strip surrounding quotes, then run the existing filter loop on `RAW_ARGS`.
+- **Additional fixes applied**:
+  1. `-Wl,` comma splitting: `-Wl,-z,relro,-z,now` now correctly becomes `-z relro -z now`
+  2. Version script injection: `__relibc_init_ns_fd` and `__relibc_init_proc_fd` added to
+     version scripts (same as host-side rustc-redox.nix)
+  3. `--undefined-version` added to shared library links
+- **Result**: All 41/41 self-hosting tests pass, including full snix self-compile (168 crates,
+  83MB binary) with eval verification on Redox.
+- **Timing variability**: snix self-compile takes 500-900s with JOBS=1 depending on host load.
+  37 basic tests take ~350s. Outer test timeout needs ≥1300s (ideally 1500s). The first passing
+  run (568s total) was exceptionally fast — subsequent runs took 900-1300s total.
+
+### Parallel compilation (JOBS>1) causes hangs on Redox (Mar 6 2026)
+- With `CARGO_BUILD_JOBS=4`, compilation hangs after ~123 crates (with blake3 fix)
+- With `CARGO_BUILD_JOBS=1`, compilation reaches serde_derive quickly (18 crates in 130s)
+  but then fails on proc-macro linking
+- The hang with JOBS=4 was at the same point (lzma-rs last printed, serde_derive being attempted)
+- Theory: Multiple concurrent fork+exec+pipe chains overwhelm Redox's pipe handling.
+  With JOBS=1, the proc-macro failure is immediate and clear instead of hanging.
+- JOBS=1 is the correct setting for reliability until Redox's pipe handling is fixed.
+
+### Heredoc indentation in Nix '' strings — revisited (Mar 6 2026)
+- The `testScript = ''..''` block has minimum indentation of 4 spaces (from the CARGOEOF section)
+- Nix strips 4 spaces from all lines in the `''` string
+- Heredoc terminators at 8-space indent → 4-space after stripping → bash can't find them (expects col 0)
+- Heredoc terminators at 4-space indent → 0-space after stripping → bash finds them correctly
+- This was re-introduced by `98889b46` commit which re-ran nixfmt on the file
+- Even though the file is in treefmt excludes, manual `nix fmt` or editor formatters can re-indent
+- MUST verify heredoc terminators are at 4-space indent after ANY formatting of this file

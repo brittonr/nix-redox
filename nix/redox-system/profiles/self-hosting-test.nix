@@ -1180,14 +1180,14 @@ let
 
                     println!("REAL_PROGRAM_OK: {} tests passed, {}", 8, msg);
                 }
-        RUSTEOF
+    RUSTEOF
 
                       cat > /tmp/realtest/Cargo.toml << '"'"'TOMLEOF'"'"'
                 [package]
                 name = "realtest"
                 version = "0.1.0"
                 edition = "2021"
-        TOMLEOF
+    TOMLEOF
 
                       cd /tmp/realtest
                       rm -f /root/.cargo/.package-cache* /root/.cargo/.global-cache* 2>/dev/null
@@ -1295,7 +1295,7 @@ let
                             .join(" ")
                     }
                 }
-        LIBEOF
+    LIBEOF
 
                       cat > /tmp/multifile/src/main.rs << '"'"'MAINEOF'"'"'
                 use multifile::math::{gcd, lcm};
@@ -1317,7 +1317,7 @@ let
 
                     println!("MULTIFILE_OK: math+text modules working");
                 }
-        MAINEOF
+    MAINEOF
 
                       cat > /tmp/multifile/Cargo.toml << '"'"'TOMLEOF'"'"'
                 [package]
@@ -1332,7 +1332,7 @@ let
                 [lib]
                 name = "multifile"
                 path = "src/lib.rs"
-        TOMLEOF
+    TOMLEOF
 
                       cd /tmp/multifile
                       echo "[multifile] starting cargo build (offline)..."
@@ -1389,7 +1389,7 @@ let
                 fs::write(&dest_path, code).expect("write failed");
                 eprintln!("build.rs: wrote generated.rs");
             }
-        BUILDEOF
+    BUILDEOF
 
                       cat > /tmp/buildscript/src/main.rs << MAINEOF
             include!("/tmp/buildscript/out/generated.rs");
@@ -1398,7 +1398,7 @@ let
                 assert_eq!(BUILD_TARGET, "x86_64-unknown-redox");
                 println!("BUILDSCRIPT_OK: target={}, val={}", BUILD_TARGET, GENERATED_VALUE);
             }
-        MAINEOF
+    MAINEOF
 
                       echo "[bs] Step 1: compile build.rs..."
                       /tmp/rustc-abs --edition=2021 /tmp/buildscript/build.rs \
@@ -2316,12 +2316,37 @@ let
 
                     # Check compilation result
                     let snix_result = $(cat /tmp/snix-build-result)
+                    # Check BOTH the exit code AND that the binary was produced
+                    # (cargo build can exit 0 due to pipe pipeline but still fail)
+                    let snix_bin = "/tmp/snix-build/target/x86_64-unknown-redox/debug/snix"
                     if test "$snix_result" = "snix-build=0"
-                      echo "FUNC_TEST:snix-compile:PASS"
+                      if exists -f $snix_bin
+                        echo "FUNC_TEST:snix-compile:PASS"
+                      else
+                        echo "FUNC_TEST:snix-compile:FAIL:exit-ok-but-no-binary"
+                        echo "=== snix build log (last 4KB) ==="
+                        /nix/system/profile/bin/bash -c 'tail -c 4096 /tmp/snix-build-log 2>/dev/null'
+                        echo "=== CC wrapper raw args ==="
+                        cat /tmp/.cc-wrapper-raw-args
+                        echo "=== CC wrapper last error ==="
+                        cat /tmp/.cc-wrapper-last-err
+                        echo "=== CC wrapper stderr ==="
+                        cat /tmp/.cc-wrapper-stderr
+                        echo "=== CC wrapper shared cmd ==="
+                        cat /tmp/.cc-wrapper-shared-cmd
+                      end
                     else
                       echo "FUNC_TEST:snix-compile:FAIL:$snix_result"
-                      echo "=== snix build log ==="
-                      cat /tmp/snix-build-log
+                      echo "=== snix build log (last 4KB) ==="
+                      /nix/system/profile/bin/bash -c 'tail -c 4096 /tmp/snix-build-log 2>/dev/null'
+                      echo "=== CC wrapper raw args ==="
+                      cat /tmp/.cc-wrapper-raw-args
+                      echo "=== CC wrapper last error ==="
+                      cat /tmp/.cc-wrapper-last-err
+                      echo "=== CC wrapper stderr ==="
+                      cat /tmp/.cc-wrapper-stderr
+                      echo "=== CC wrapper shared cmd ==="
+                      cat /tmp/.cc-wrapper-shared-cmd
                     end
 
                     # Check if binary was produced

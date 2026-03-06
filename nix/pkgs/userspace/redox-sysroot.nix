@@ -239,26 +239,75 @@ pkgs.runCommand "redox-sysroot"
     #
     # Fix: Close stdout/stderr (sends EOF to rustc's pipes) BEFORE running
     # ld.lld. ld.lld's output goes to temp files for post-mortem diagnosis.
+    #
+    # RESPONSE FILES: rustc passes linker arguments via @file (response file)
+    # when there are many arguments (e.g., proc-macros with 50+ args). The CC
+    # wrapper must expand @file, process the args, and write a clean @file
+    # for lld. Response file format: one arg per line, optionally quoted.
 
     S=/usr/lib/redox-sysroot
     LLD=/nix/system/profile/bin/ld.lld
     ERR=/tmp/.cc-wrapper-stderr
 
+    # Log raw input args for debugging
+    printf '%s\n' "--- CC wrapper invocation ---" "$@" > /tmp/.cc-wrapper-raw-args
+
+    # Expand response files (@file) into RAW_ARGS array
+    RAW_ARGS=()
+    for arg in "$@"; do
+      case "$arg" in
+        @*)
+          respfile="''${arg#@}"
+          if [ -f "$respfile" ]; then
+            # Read response file: one arg per line, strip surrounding quotes
+            while IFS= read -r line || [ -n "$line" ]; do
+              # Strip leading/trailing whitespace
+              line="''${line#"''${line%%[![:space:]]*}"}"
+              line="''${line%"''${line##*[![:space:]]}"}"
+              # Skip empty lines
+              [ -z "$line" ] && continue
+              # Strip surrounding double quotes if present
+              case "$line" in
+                \"*\") line="''${line#\"}"; line="''${line%\"}" ;;
+              esac
+              RAW_ARGS+=("$line")
+            done < "$respfile"
+          else
+            RAW_ARGS+=("$arg")
+          fi
+          ;;
+        *)
+          RAW_ARGS+=("$arg")
+          ;;
+      esac
+    done
+
     # Detect -shared flag (for proc-macro .so builds)
     IS_SHARED=0
-    for arg in "$@"; do
+    for arg in "''${RAW_ARGS[@]}"; do
       if [ "$arg" = "-shared" ]; then
         IS_SHARED=1
         break
       fi
     done
 
-    # Filter out GCC flags that ld.lld doesn't understand
+    # Filter out GCC flags that ld.lld doesn't understand.
+    # Handle -Wl, prefix stripping with comma splitting:
+    #   -Wl,--version-script=/tmp/foo  ->  --version-script=/tmp/foo
+    #   -Wl,-z,relro,-z,now           ->  -z relro -z now
+    #   -Wl,-Bstatic                   ->  -Bstatic
     ARGS=()
-    for arg in "$@"; do
+    for arg in "''${RAW_ARGS[@]}"; do
       case "$arg" in
         -m64|-m32)         ;;    # lld uses -m elf_x86_64 not -m64
-        -Wl,*)             ARGS+=("''${arg#-Wl,}") ;;
+        -Wl,*)
+          # Strip -Wl, prefix and split on commas into separate args
+          stripped="''${arg#-Wl,}"
+          IFS=',' read -ra parts <<< "$stripped"
+          for part in "''${parts[@]}"; do
+            ARGS+=("$part")
+          done
+          ;;
         -nodefaultlibs)    ;;
         -nostdlib)         ;;
         -lgcc_s)           ;;    # no libgcc_s; symbols are in libgcc_eh.a
@@ -269,9 +318,27 @@ pkgs.runCommand "redox-sysroot"
     if [ "$IS_SHARED" = "1" ]; then
       # Shared library (proc-macro .so): no crt0.o (provides _start for exes).
       # Keep crti/crtn for .init/.fini sections. Use dynamic libc.
+
+      # For proc-macros, inject version script symbols and use --undefined-version
+      # to avoid errors from symbols not present in every .so.
+      for i in "''${!ARGS[@]}"; do
+        case "''${ARGS[$i]}" in
+          --version-script=*)
+            vs="''${ARGS[$i]#--version-script=}"
+            if [ -f "$vs" ]; then
+              # Add relibc init symbols before "local: *;" to prevent hiding them
+              sed -i '/^[[:space:]]*local:/i\    __relibc_init_ns_fd;\n    __relibc_init_proc_fd;' "$vs" 2>/dev/null
+            fi
+            ;;
+        esac
+      done
+
+      # Log the full command for debugging
+      printf '%s\n' "$LLD" "$S/lib/crti.o" "''${ARGS[@]}" "--undefined-version" "-L" "$S/lib" "-lc" "-lgcc_eh" "$S/lib/crtn.o" > /tmp/.cc-wrapper-shared-cmd
       "$LLD" \
         "$S/lib/crti.o" \
         "''${ARGS[@]}" \
+        --undefined-version \
         -L "$S/lib" -lc -lgcc_eh \
         "$S/lib/crtn.o" \
         > /dev/null 2> "$ERR" &
