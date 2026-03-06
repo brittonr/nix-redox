@@ -1250,6 +1250,28 @@
   The build script compiles, runs, produces output, and cargo processes the directives correctly.
 - **Remaining issues** (separate from pipe fix):
   - 3 heredoc escaping failures in test profile (real-program, multifile-build, buildscript)
-  - snix self-compile: `rustversion` proc-macro linking abort (exit 134) — separate issue
-- **Tests**: 34/37 pass (was 34/37 before, but `cargo-buildrs` now passes for the RIGHT reason
-  — the build script actually executes through pipes, not just through a timeout workaround)
+- **Tests**: 34/37 pass. `cargo-buildrs` passes for the RIGHT reason — build scripts run through
+  pipes correctly, and env vars propagate via --env-set.
+
+### Redox exec() env var propagation bug — WORKAROUND via --env-set (Mar 6 2026)
+- **Root cause**: On Redox, `Command::env()` → `fork()` → `do_exec()` → `*environ = envp` →
+  `execvp()` → `execv()` → `execve(path, argv, platform::environ)`. Theoretically the global
+  `environ` pointer is updated before exec. But somewhere in the chain, the new env vars don't
+  make it to the child process. Result: rustc doesn't see env vars like OUT_DIR, CARGO_PKG_*,
+  or cargo:rustc-env values when processing `env!()` / `option_env!()` macros.
+- **Evidence**: buildrs test shows `cfg=yes` (CLI flags work) but `env=missing` (env vars don't).
+  rustversion crate failed: `env!("OUT_DIR") not defined at compile time`.
+  ureq crate failed: `env!("CARGO_PKG_NAME") not defined at compile time`.
+- **Workaround**: `patch-cargo-env-set.py` — patches cargo to also pass env vars via rustc's
+  `--env-set` CLI flag (which populates `logical_env`, checked BEFORE `std::env::var()` in the
+  env!() expansion). Three patches:
+  1. `mod.rs`: `cargo:rustc-env=KEY=VALUE` → also `--env-set KEY=VALUE`
+  2. `mod.rs`: `OUT_DIR` → also `--env-set OUT_DIR=...`
+  3. `compilation.rs`: CARGO_PKG_*, CARGO_MANIFEST_* → also `--env-set`
+- **Note**: `--env-set` requires `-Z unstable-options` on nightly rustc. Cargo now passes this.
+- **Result**: `option_env!("BUILD_TARGET")` returns `Some("x86_64-unknown-redox")`. rustversion,
+  ureq, and all other crates that use `env!()` now compile. snix self-compile reaches 121/165
+  crates compiled without errors (just needs more VM time).
+- **Neutralize-build-scripts.py removed**: No longer needed — build scripts run natively.
+- **Underlying Redox bug**: Still exists (env vars via Command::env don't propagate through exec).
+  Needs investigation in relibc's exec path. But the --env-set workaround is sufficient.
