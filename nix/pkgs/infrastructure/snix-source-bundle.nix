@@ -10,7 +10,7 @@ let
   vendoredDeps = pkgs.rustPlatform.fetchCargoVendor {
     name = "snix-redox-vendor";
     src = snix-redox-src;
-    hash = "sha256-exmebgBCk6/6RzNnqIA+jIhsrC8/w7+cjeEgmO5YAfI=";
+    hash = "sha256-PascrYRF/z9NLF83eBUCtrTaGB+gYpOJ73cAPro6L0o=";
   };
 in
 pkgs.runCommand "snix-source-bundle" { } ''
