@@ -5,6 +5,7 @@
 
 pub mod activate;
 pub mod bridge;
+pub mod bridge_build;
 pub mod cache;
 pub mod channel;
 pub mod derivation_builtins;

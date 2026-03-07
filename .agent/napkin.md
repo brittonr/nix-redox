@@ -1408,3 +1408,22 @@
   read_dir (2), import_path (1), sanitize_store_name (4), extract_store_path (4), copy_path (3),
   eval integration through SnixRedoxIO (5: storeDir, derivation, pathExists true/false, readDir)
 - **Total**: 280 tests pass (250 prior + 30 new), cross-compilation clean
+
+### Bridge derivation-level protocol (Mar 7 2026)
+- **Implemented**: `bridge_build.rs` — guest-initiated per-derivation builds over the bridge.
+  Two request types:
+  1. `build-attr`: Send flake attribute name (e.g., "ripgrep") → host runs `nix build .#ripgrep`
+  2. `build-drv`: Serialize derivation to ATerm → send to host → host imports + realises
+- **CLI**: `snix build --bridge --attr ripgrep` or `snix build --bridge --expr '...'`
+  The `--bridge` flag delegates to the host instead of building locally.
+- **Host daemon extended**: `build-bridge.nix` now handles `build-*` requests alongside
+  `rebuild-*`. Routes by filename prefix. Includes `export_single_output()` for per-package
+  binary cache export.
+- **Nix `''` string escaping in Python**: `get('key', '')` contains `''` which terminates
+  Nix indented strings. Fix: use `str()` instead of `''` for empty string default in Python
+  code inside Nix `''` blocks. Already known from prior napkin entries but still catches me.
+- **FUSE delay polling**: Same pattern as rebuild bridge — uses write+read cycles through
+  virtio-fs for wall-clock delay since `std::thread::sleep` is unreliable on Redox.
+- **9 new tests**: request serialization (build-attr, build-drv), response parsing (success,
+  error, minimal, multi-output), ID generation, request roundtrip, eval→ATerm→request end-to-end
+- **Total**: 289 tests pass (280 prior + 9 new), cross-compilation clean

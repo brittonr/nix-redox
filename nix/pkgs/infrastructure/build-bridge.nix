@@ -259,13 +259,263 @@ pkgs.writeShellScriptBin "redox-build-bridge" ''
       rm -rf "$cache_tmp" "$pkg_info"
     }
 
+    # ── Derivation-Level Build Handlers ────────────────────────────────
+    #
+    # Handle "build-attr" and "build-drv" requests from snix build --bridge
+
+    process_build_request() {
+      local req_file="$1"
+      local req_id
+      req_id=$(basename "$req_file" .json)
+      local resp_file="$SHARED_DIR/responses/$req_id.json"
+      local start_ms=$(( $(date +%s%N) / 1000000 ))
+      local req_type
+
+      req_type=$(${python}/bin/python3 -c "
+    import json
+    with open('$req_file') as f:
+        req = json.load(f)
+    print(req.get('type', 'unknown'))
+    ")
+
+      case "$req_type" in
+        build-attr)
+          local attr
+          attr=$(${python}/bin/python3 -c "
+    import json
+    with open('$req_file') as f:
+        print(json.load(f).get('attr', str()))
+    ")
+          echo -e "''${BLUE}[$(date +%H:%M:%S)] Build-attr: $attr (req: $req_id)''${RESET}"
+
+          local out_path
+          if out_path=$(${nix}/bin/nix build "$FLAKE_DIR#$attr" --no-link --print-out-paths 2>&1); then
+            out_path=$(echo "$out_path" | tail -1)
+            echo -e "  ''${GREEN}Built: $out_path''${RESET}"
+
+            # Export output to shared cache
+            export_single_output "$attr" "$out_path"
+
+            local end_ms=$(( $(date +%s%N) / 1000000 ))
+            local build_time_ms=$(( end_ms - start_ms ))
+
+            ${python}/bin/python3 -c "
+    import json
+    response = {
+        'status': 'success',
+        'requestId': '$req_id',
+        'outputs': {'out': '$out_path'},
+        'buildTimeMs': $build_time_ms
+    }
+    with open('$resp_file', 'w') as f:
+        json.dump(response, f, indent=2)
+    "
+            echo -e "  ''${GREEN}Response written (''${build_time_ms}ms)''${RESET}"
+          else
+            echo -e "  ''${RED}Build failed''${RESET}"
+            write_build_error_response "$resp_file" "$req_id" "$out_path"
+          fi
+          ;;
+
+        build-drv)
+          echo -e "''${BLUE}[$(date +%H:%M:%S)] Build-drv: $req_id''${RESET}"
+
+          # Extract ATerm and write to temp .drv file
+          local drv_info
+          drv_info=$(${python}/bin/python3 -c "
+    import json, sys
+    with open('$req_file') as f:
+        req = json.load(f)
+    aterm = req.get('drvAterm', str())
+    name = req.get('drvName', 'unknown')
+    outputs = req.get('expectedOutputs', {})
+    if not aterm:
+        print('ERROR:no ATerm in request', file=sys.stderr)
+        sys.exit(1)
+    # Write ATerm to temp file
+    import tempfile
+    drv_file = tempfile.mktemp(suffix='.drv', prefix='bridge-')
+    with open(drv_file, 'w') as f:
+        f.write(aterm)
+    print(f'{drv_file}')
+    print(f'{name}')
+    for out_name, out_path in outputs.items():
+        print(f'{out_name}={out_path}')
+    ")
+
+          local drv_file drv_name
+          drv_file=$(echo "$drv_info" | head -1)
+          drv_name=$(echo "$drv_info" | sed -n '2p')
+
+          if [ -z "$drv_file" ] || [ ! -f "$drv_file" ]; then
+            write_build_error_response "$resp_file" "$req_id" "failed to extract derivation"
+            cleanup_request "$req_file" "$req_id" ""
+            return
+          fi
+
+          echo -e "  Derivation: $drv_name ($drv_file)"
+
+          # Import .drv into Nix store and build
+          local store_drv
+          if store_drv=$(${nix}/bin/nix-store --add "$drv_file" 2>&1); then
+            echo -e "  Imported: $store_drv"
+
+            local out_path
+            if out_path=$(${nix}/bin/nix-store --realise "$store_drv" 2>&1); then
+              echo -e "  ''${GREEN}Built: $out_path''${RESET}"
+
+              # Export output to shared cache
+              export_single_output "$drv_name" "$out_path"
+
+              local end_ms=$(( $(date +%s%N) / 1000000 ))
+              local build_time_ms=$(( end_ms - start_ms ))
+
+              # Build outputs map from expected outputs
+              ${python}/bin/python3 -c "
+    import json
+    with open('$req_file') as f:
+        req = json.load(f)
+    expected = req.get('expectedOutputs', {})
+    # If we have expected outputs, use those; otherwise use realised path
+    outputs = expected if expected else {'out': '$out_path'}
+    response = {
+        'status': 'success',
+        'requestId': '$req_id',
+        'outputs': outputs,
+        'buildTimeMs': $build_time_ms
+    }
+    with open('$resp_file', 'w') as f:
+        json.dump(response, f, indent=2)
+    "
+              echo -e "  ''${GREEN}Response written (''${build_time_ms}ms)''${RESET}"
+            else
+              echo -e "  ''${RED}Realise failed''${RESET}"
+              write_build_error_response "$resp_file" "$req_id" "$out_path"
+            fi
+          else
+            echo -e "  ''${RED}Import failed''${RESET}"
+            write_build_error_response "$resp_file" "$req_id" "$store_drv"
+          fi
+
+          rm -f "$drv_file"
+          ;;
+
+        *)
+          echo -e "''${YELLOW}Unknown request type: $req_type''${RESET}"
+          write_build_error_response "$resp_file" "$req_id" "unknown request type: $req_type"
+          ;;
+      esac
+
+      cleanup_request "$req_file" "$req_id" ""
+    }
+
+    write_build_error_response() {
+      local resp_file="$1" req_id="$2" error_msg="$3"
+      local err_tmp
+      err_tmp=$(mktemp /tmp/bridge-build-err-XXXXXX.txt)
+      printf '%s' "$error_msg" > "$err_tmp"
+      ${python}/bin/python3 -c "
+    import json
+    with open('$err_tmp') as f:
+        error_msg = f.read()
+    response = {
+        'status': 'error',
+        'requestId': '$req_id',
+        'error': error_msg
+    }
+    with open('$resp_file', 'w') as f:
+        json.dump(response, f, indent=2)
+    "
+      rm -f "$err_tmp"
+    }
+
+    export_single_output() {
+      local name="$1" store_path="$2"
+
+      if [ ! -e "$store_path" ]; then
+        echo -e "  ''${YELLOW}Warning: output missing: $store_path''${RESET}"
+        return
+      fi
+
+      local pkg_info cache_tmp
+      pkg_info=$(mktemp /tmp/bridge-build-pkg-XXXXXX.json)
+      cache_tmp=$(mktemp -d /tmp/bridge-build-cache-XXXXXX)
+
+      local version
+      version=$(echo "$store_path" | sed 's|.*/||; s|^[^-]*-||; s|-[^-]*$||')
+
+      ${python}/bin/python3 -c "
+    import json
+    entries = [{
+        'name': '$name',
+        'storePath': '$store_path',
+        'pname': '$name',
+        'version': '$version',
+    }]
+    with open('$pkg_info', 'w') as f:
+        json.dump(entries, f)
+    "
+
+      ${python}/bin/python3 ${buildBinaryCachePy} "$pkg_info" "$cache_tmp" 2>&1 | sed 's/^/    /'
+
+      # Merge into shared cache (same logic as export_packages_to_cache)
+      ${python}/bin/python3 -c "
+    import json, os, shutil
+    src, dst = '$cache_tmp', '$SHARED_DIR/cache'
+    os.makedirs(dst, exist_ok=True)
+    for f in os.listdir(src):
+        if f.endswith('.narinfo'):
+            with open(os.path.join(src, f)) as fh:
+                content = fh.read().replace('URL: nar/', 'URL: ')
+            with open(os.path.join(dst, f), 'w') as fh:
+                fh.write(content)
+    src_nar = os.path.join(src, 'nar')
+    if os.path.isdir(src_nar):
+        for f in os.listdir(src_nar):
+            shutil.copy2(os.path.join(src_nar, f), os.path.join(dst, f))
+    dst_idx = {'version': 1, 'packages': {}}
+    dst_idx_path = os.path.join(dst, 'packages.json')
+    if os.path.exists(dst_idx_path):
+        with open(dst_idx_path) as f:
+            dst_idx = json.load(f)
+    src_idx_path = os.path.join(src, 'packages.json')
+    if os.path.exists(src_idx_path):
+        with open(src_idx_path) as f:
+            dst_idx['packages'].update(json.load(f).get('packages', {}))
+    with open(dst_idx_path, 'w') as f:
+        json.dump(dst_idx, f, indent=2, sort_keys=True)
+    ci = os.path.join(dst, 'nix-cache-info')
+    if not os.path.exists(ci):
+        with open(ci, 'w') as f: f.write('StoreDir: /nix/store\n')
+    for r, ds, fs_ in os.walk(dst):
+        for d in ds: os.chmod(os.path.join(r, d), 0o755)
+        for f in fs_: os.chmod(os.path.join(r, f), 0o644)
+    "
+
+      rm -rf "$cache_tmp" "$pkg_info"
+    }
+
     # Main loop: poll for requests
     while true; do
       for req_file in "$SHARED_DIR"/requests/*.json; do
         [ -f "$req_file" ] || continue
         [ -f "$req_file.lock" ] && continue
         touch "$req_file.lock"
-        process_request "$req_file"
+
+        # Route to appropriate handler based on filename prefix
+        local basename
+        basename=$(basename "$req_file" .json)
+        case "$basename" in
+          build-*)
+            process_build_request "$req_file"
+            ;;
+          rebuild-*)
+            process_request "$req_file"
+            ;;
+          *)
+            process_request "$req_file"
+            ;;
+        esac
       done
       sleep "$POLL_INTERVAL"
     done

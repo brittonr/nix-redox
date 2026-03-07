@@ -44,8 +44,8 @@
 - [x] **Dependency resolution** — topological sort + `build_needed()` for dependency chains
 - [x] **`snix build` CLI command** — `snix build --expr '...'` evaluates + builds + prints output
 - [x] **`SnixRedoxIO` EvalIO wrapper** — store-aware IO with build-on-demand (IFD)
+- [x] **Upgrade bridge to derivation-level protocol** — `build-attr` and `build-drv` request types
 - [ ] **Cargo vendoring** — offline crate sources via virtio-fs or disk image
-- [ ] **Upgrade bridge to derivation-level protocol** — guest sends .drv hashes, host builds
 
 ## Architecture Notes
 - Two-step compile (rustc --emit=obj + ld.lld) works around the subprocess crash

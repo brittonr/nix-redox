@@ -10,6 +10,7 @@
 
 mod activate;
 mod bridge;
+mod bridge_build;
 mod cache;
 mod channel;
 mod derivation_builtins;
@@ -60,6 +61,22 @@ enum Command {
         /// File containing a Nix expression to build
         #[arg(short, long)]
         file: Option<String>,
+
+        /// Flake attribute to build (e.g., "ripgrep")
+        #[arg(short, long)]
+        attr: Option<String>,
+
+        /// Delegate build to host via bridge (virtio-fs shared filesystem)
+        #[arg(long)]
+        bridge: bool,
+
+        /// Shared directory for bridge communication (default: /scheme/shared)
+        #[arg(long)]
+        shared_dir: Option<String>,
+
+        /// Bridge timeout in seconds (default: 300)
+        #[arg(long)]
+        timeout: Option<u64>,
     },
 
     /// Show a derivation in human-readable form
@@ -423,7 +440,20 @@ fn main() {
 
     let result = match cli.command {
         Command::Eval { expr, file, raw } => eval::run(expr, file, raw),
-        Command::Build { expr, file } => local_build::run(expr, file),
+        Command::Build {
+            expr,
+            file,
+            attr,
+            bridge,
+            shared_dir,
+            timeout,
+        } => {
+            if bridge {
+                bridge_build::run(expr, file, attr, shared_dir, timeout)
+            } else {
+                local_build::run(expr, file)
+            }
+        }
         Command::ShowDerivation { path } => eval::show_derivation(&path),
         Command::Fetch {
             store_path,
