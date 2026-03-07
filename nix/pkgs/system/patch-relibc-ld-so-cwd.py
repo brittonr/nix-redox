@@ -95,8 +95,8 @@ else:
             // Without this injection, open("src/main.rs") returns ENOENT.
             if let Some((ptr_sym, _)) = obj.get_sym("__relibc_init_cwd_ptr") {
                 if let Some((len_sym, _)) = obj.get_sym("__relibc_init_cwd_len") {
-                    if let Some(cwd) = crate::platform::path::clone_cwd() {
-                        let cwd_leaked = alloc::boxed::Box::leak(cwd);
+                    if let Some(cwd) = crate::platform::sys::path::clone_cwd() {
+                        let cwd_leaked: &'static str = alloc::boxed::Box::leak(cwd);
                         unsafe {
                             ptr_sym.as_ptr().cast::<usize>().write(cwd_leaked.as_ptr() as usize);
                             len_sym.as_ptr().cast::<usize>().write(cwd_leaked.len());
@@ -107,6 +107,9 @@ else:
         }
 
         obj.run_init();"""
+
+    # Account for the fact that the original source may still be unpatched
+    # but the anchor above was already modified. Check the intermediate version too.
 
     if old_run_init in content:
         content = content.replace(old_run_init, new_run_init)
