@@ -20,3 +20,4 @@ pub mod rebuild;
 pub mod snix_io;
 pub mod store;
 pub mod system;
+pub mod vendor;

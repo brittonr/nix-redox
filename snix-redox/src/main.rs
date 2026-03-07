@@ -17,6 +17,7 @@ mod derivation_builtins;
 mod eval;
 mod local_build;
 mod snix_io;
+mod vendor;
 mod install;
 mod known_paths;
 mod local_cache;
@@ -159,6 +160,12 @@ enum Command {
 
     /// Interactive REPL for Nix expressions
     Repl,
+
+    /// Manage Cargo vendor directories for offline builds
+    Vendor {
+        #[command(subcommand)]
+        command: vendor::VendorCommand,
+    },
 
     /// System introspection (info, verify, diff)
     System {
@@ -494,6 +501,7 @@ fn main() {
             ProfileCommand::Show { name, cache_path } => install::show(&name, &cache_path),
         },
         Command::Repl => eval::repl(),
+        Command::Vendor { command } => vendor::run(&command),
         Command::Channel { command } => match command {
             ChannelCommand::Add { name, url } => channel::add(&name, &url),
             ChannelCommand::Remove { name } => channel::remove(&name),
