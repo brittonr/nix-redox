@@ -1,8 +1,13 @@
 //! Nix expression evaluation using snix-eval's bytecode VM.
 
+use std::cell::RefCell;
 use std::io::{self, BufRead, Write};
+use std::rc::Rc;
 
 use snix_eval::Evaluation;
+
+use crate::derivation_builtins::{derivation_builtins, SnixRedoxState};
+use crate::known_paths::KnownPaths;
 
 /// Evaluate a Nix expression from --expr or --file
 pub fn run(
@@ -95,7 +100,15 @@ pub fn repl() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Core evaluation function
 fn evaluate(expr: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let eval = Evaluation::builder_impure().build();
+    let state = Rc::new(SnixRedoxState {
+        known_paths: RefCell::new(KnownPaths::default()),
+    });
+
+    let eval = Evaluation::builder_impure()
+        .add_builtins(derivation_builtins::builtins(Rc::clone(&state)))
+        .add_src_builtin("derivation", include_str!("derivation.nix"))
+        .build();
+
     let result = eval.evaluate(expr, None);
 
     if !result.errors.is_empty() {
@@ -317,5 +330,173 @@ mod tests {
         let drv = drv.unwrap();
         // Basic sanity checks on the parsed derivation
         assert!(!drv.outputs.is_empty(), "derivation should have outputs");
+    }
+
+    // ===== Derivation Builtins =====
+    //
+    // Expected paths verified against Nix (upstream snix test vectors).
+
+    #[test]
+    fn test_derivation_outpath() {
+        let result = evaluate(
+            r#"(derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; }).outPath"#,
+        ).unwrap();
+        assert_eq!(result, r#""/nix/store/xpcvxsx5sw4rbq666blz6sxqlmsqphmr-foo""#);
+    }
+
+    #[test]
+    fn test_derivation_drvpath() {
+        let result = evaluate(
+            r#"(derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; }).drvPath"#,
+        ).unwrap();
+        assert!(result.contains("/nix/store/"), "should be a store path");
+        assert!(result.contains("-foo.drv"), "should be a .drv");
+    }
+
+    #[test]
+    fn test_derivation_empty_name_fails() {
+        let result = evaluate(
+            r#"(derivation { name = ""; builder = "/bin/sh"; system = "x86_64-linux"; }).outPath"#,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_fod_recursive_sha256() {
+        let result = evaluate(
+            r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; outputHashMode = "recursive"; outputHashAlgo = "sha256"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath"#,
+        ).unwrap();
+        assert_eq!(result, r#""/nix/store/17wgs52s7kcamcyin4ja58njkf91ipq8-foo""#);
+    }
+
+    #[test]
+    fn test_fod_recursive_sha256_other_name() {
+        let result = evaluate(
+            r#"(builtins.derivation { name = "foo2"; builder = "/bin/sh"; system = "x86_64-linux"; outputHashMode = "recursive"; outputHashAlgo = "sha256"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath"#,
+        ).unwrap();
+        assert_eq!(result, r#""/nix/store/gi0p8vd635vpk1nq029cz3aa3jkhar5k-foo2""#);
+    }
+
+    #[test]
+    fn test_fod_flat_sha256() {
+        let result = evaluate(
+            r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; outputHashMode = "flat"; outputHashAlgo = "sha256"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath"#,
+        ).unwrap();
+        assert_eq!(result, r#""/nix/store/q4pkwkxdib797fhk22p0k3g1q32jmxvf-foo""#);
+    }
+
+    #[test]
+    fn test_fod_sha256_algo_omitted() {
+        // When outputHashAlgo is omitted, algo is inferred from the SRI hash.
+        let result = evaluate(
+            r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; outputHashMode = "recursive"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath"#,
+        ).unwrap();
+        assert_eq!(result, r#""/nix/store/17wgs52s7kcamcyin4ja58njkf91ipq8-foo""#);
+    }
+
+    #[test]
+    fn test_fod_sha256_mode_omitted() {
+        // When both outputHashAlgo and outputHashMode are omitted, defaults to flat.
+        let result = evaluate(
+            r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath"#,
+        ).unwrap();
+        assert_eq!(result, r#""/nix/store/q4pkwkxdib797fhk22p0k3g1q32jmxvf-foo""#);
+    }
+
+    #[test]
+    fn test_derivation_no_outputhash() {
+        let result = evaluate(
+            r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; }).outPath"#,
+        ).unwrap();
+        assert_eq!(result, r#""/nix/store/xpcvxsx5sw4rbq666blz6sxqlmsqphmr-foo""#);
+    }
+
+    #[test]
+    fn test_derivation_multiple_outputs() {
+        let result = evaluate(
+            r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; outputs = ["foo" "bar"]; system = "x86_64-linux"; }).outPath"#,
+        ).unwrap();
+        assert_eq!(result, r#""/nix/store/hkwdinvz2jpzgnjy9lv34d2zxvclj4s3-foo-foo""#);
+    }
+
+    #[test]
+    fn test_derivation_with_args() {
+        let result = evaluate(
+            r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; args = ["--foo" "42" "--bar"]; system = "x86_64-linux"; }).outPath"#,
+        ).unwrap();
+        assert_eq!(result, r#""/nix/store/365gi78n2z7vwc1bvgb98k0a9cqfp6as-foo""#);
+    }
+
+    #[test]
+    fn test_derivation_with_dep() {
+        // A derivation that depends on another.
+        let result = evaluate(r#"
+            let
+              bar = builtins.derivation {
+                name = "bar";
+                builder = ":";
+                system = ":";
+                outputHash = "08813cbee9903c62be4c5027726a418a300da4500b2d369d3af9286f4815ceba";
+                outputHashAlgo = "sha256";
+                outputHashMode = "recursive";
+              };
+            in
+            (builtins.derivation {
+              name = "foo";
+              builder = ":";
+              system = ":";
+              inherit bar;
+            }).outPath
+        "#).unwrap();
+        assert_eq!(result, r#""/nix/store/5vyvcwah9l9kf07d52rcgdk70g2f4y13-foo""#);
+    }
+
+    #[test]
+    fn test_fod_same_hash_same_outpath() {
+        // Two FODs with the same name and hash but different builders
+        // should produce the same output path.
+        let result = evaluate(r#"
+            (builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath ==
+            (builtins.derivation { name = "foo"; builder = "/bin/aa"; system = "x86_64-linux"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath
+        "#).unwrap();
+        assert_eq!(result, "true");
+    }
+
+    #[test]
+    fn test_ignore_nulls_true() {
+        // __ignoreNulls = true, with a null arg — should produce the same path
+        // as without the null arg.
+        let without = evaluate(
+            r#"(builtins.derivation { name = "foo"; system = ":"; builder = ":"; __ignoreNulls = true; }).drvPath"#,
+        ).unwrap();
+        let with_null = evaluate(
+            r#"(builtins.derivation { name = "foo"; system = ":"; builder = ":"; __ignoreNulls = true; ignoreme = null; }).drvPath"#,
+        ).unwrap();
+        assert_eq!(without, with_null);
+    }
+
+    #[test]
+    fn test_placeholder() {
+        let result = evaluate(r#"builtins.placeholder "out""#).unwrap();
+        assert_eq!(
+            result,
+            r#""/1rz4g4znpzjwh1xymhjpm42vipw92pr73vdgl6xs1hycac8kf2n9""#
+        );
+    }
+
+    #[test]
+    fn test_derivation_type_attr() {
+        let result = evaluate(
+            r#"(derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; }).type"#,
+        ).unwrap();
+        assert_eq!(result, r#""derivation""#);
+    }
+
+    #[test]
+    fn test_derivation_duplicate_outputs_fails() {
+        let result = evaluate(
+            r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; outputs = ["foo" "foo"]; system = "x86_64-linux"; }).outPath"#,
+        );
+        assert!(result.is_err());
     }
 }

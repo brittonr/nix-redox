@@ -1133,9 +1133,11 @@ name = "snix-redox"
 version = "0.4.0"
 dependencies = [
  "blake3",
+ "bstr",
  "bzip2-rs",
  "clap",
  "data-encoding",
+ "genawaiter",
  "lzma-rs",
  "nix-compat",
  "ruzstd",
