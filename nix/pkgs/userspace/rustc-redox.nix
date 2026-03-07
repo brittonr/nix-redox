@@ -78,7 +78,7 @@ let
           -Wl,--version-script=*)
             vs="''${arg#-Wl,--version-script=}"
             if [ -f "$vs" ]; then
-              ${pkgs.gnused}/bin/sed -i '/^[[:space:]]*local:/i\    __relibc_init_ns_fd;\n    __relibc_init_proc_fd;' "$vs"
+              ${pkgs.gnused}/bin/sed -i '/^[[:space:]]*local:/i\    __relibc_init_ns_fd;\n    __relibc_init_proc_fd;\n    __relibc_init_cwd_ptr;\n    __relibc_init_cwd_len;' "$vs"
             fi
             ;;
         esac

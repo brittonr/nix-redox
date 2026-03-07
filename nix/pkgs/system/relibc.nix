@@ -88,6 +88,7 @@ let
       python3 ${./patch-relibc-chdir-deadlock.py}
       python3 ${./patch-relibc-abort-dso.py}
       python3 ${./patch-relibc-ld-so-align.py}
+      python3 ${./patch-relibc-ld-so-cwd.py}
 
       runHook postPatch
     '';
