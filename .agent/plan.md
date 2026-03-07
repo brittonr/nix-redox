@@ -43,7 +43,7 @@
 - [x] **NAR hashing** — `nar_hash_path()` for PathInfoDb registration
 - [x] **Dependency resolution** — topological sort + `build_needed()` for dependency chains
 - [x] **`snix build` CLI command** — `snix build --expr '...'` evaluates + builds + prints output
-- [ ] **`SnixRedoxIO` EvalIO wrapper** — intercept store paths, trigger builds during eval
+- [x] **`SnixRedoxIO` EvalIO wrapper** — store-aware IO with build-on-demand (IFD)
 - [ ] **Cargo vendoring** — offline crate sources via virtio-fs or disk image
 - [ ] **Upgrade bridge to derivation-level protocol** — guest sends .drv hashes, host builds
 

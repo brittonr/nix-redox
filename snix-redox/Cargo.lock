@@ -1134,6 +1134,7 @@ version = "0.4.0"
 dependencies = [
  "blake3",
  "bstr",
+ "bytes",
  "bzip2-rs",
  "clap",
  "data-encoding",

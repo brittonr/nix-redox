@@ -15,6 +15,7 @@ mod channel;
 mod derivation_builtins;
 mod eval;
 mod local_build;
+mod snix_io;
 mod install;
 mod known_paths;
 mod local_cache;

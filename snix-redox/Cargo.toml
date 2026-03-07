@@ -52,6 +52,7 @@ sha2 = "0.10"
 blake3 = { version = "1.8", default-features = false, features = ["pure"] }
 data-encoding = "2"
 thiserror = "2"
+bytes = "1"
 bstr = "1"
 genawaiter = { version = "0.99.1", default-features = false }
 

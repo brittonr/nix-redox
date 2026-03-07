@@ -1384,3 +1384,27 @@
   scan all output files/symlinks for substring matches. Candidates = input_sources +
   resolved input_derivation outputs + self-reference.
 - **Total**: 250 tests pass (223 existing + 27 new), cross-compilation clean
+
+### SnixRedoxIO — EvalIO wrapper with build-on-demand (Mar 7 2026)
+- **Implemented**: `SnixRedoxIO` implementing snix-eval's `EvalIO` trait with three extensions
+  over the default `StdIO`:
+  1. `store_dir()` returns `"/nix/store"` → `builtins.storeDir` works
+  2. `import_path()` copies local files to store as content-addressed paths (NAR SHA-256)
+  3. Build-on-demand: `path_exists/open/file_type/read_dir` try to build missing store paths
+     by looking up the derivation in KnownPaths and calling `build_needed()`
+- **`bytes` crate dependency**: Required for `EvalIO::read_dir()` return type
+  `Vec<(bytes::Bytes, FileType)>`. Already in Cargo.lock via snix-eval, just added to direct deps.
+- **`evaluate_with_state()` now uses SnixRedoxIO**: Replaces default `StdIO` via
+  `builder_pure().enable_impure(Some(Box::new(io)))` — all eval operations now route through
+  store-aware IO.
+- **Lazy PathInfoDb**: `RefCell<Option<PathInfoDb>>` avoids errors when `/nix/var` doesn't exist
+  (e.g., in tests). Opened on first use via `Ref::map()`.
+- **`import_to_store()`**: Computes NAR hash → `build_ca_path()` with `CAHash::Nar(sha256)` →
+  copies files to `/nix/store/` → registers in PathInfoDb. Sanitizes filenames for store names.
+- **`ensure_store_path()`**: For paths under `/nix/store/` that don't exist, extracts the
+  `StorePath`, looks up the producing derivation via `get_drv_path_for_output_path()`, builds it.
+  Enables Import From Derivation (IFD) patterns.
+- **30 new tests**: store_dir, get_env (2), path_exists (3), open (2), file_type (3),
+  read_dir (2), import_path (1), sanitize_store_name (4), extract_store_path (4), copy_path (3),
+  eval integration through SnixRedoxIO (5: storeDir, derivation, pathExists true/false, readDir)
+- **Total**: 280 tests pass (250 prior + 30 new), cross-compilation clean

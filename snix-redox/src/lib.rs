@@ -16,5 +16,6 @@ pub mod local_cache;
 pub mod nar;
 pub mod pathinfo;
 pub mod rebuild;
+pub mod snix_io;
 pub mod store;
 pub mod system;

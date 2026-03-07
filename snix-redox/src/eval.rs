@@ -107,6 +107,7 @@ fn evaluate(expr: &str) -> Result<String, Box<dyn std::error::Error>> {
 /// Evaluate a Nix expression, returning both the string result and the
 /// shared state (including KnownPaths with all registered derivations).
 ///
+/// Uses [`SnixRedoxIO`] for store-aware imports and build-on-demand.
 /// Used by `snix build` to access derivations after evaluation.
 pub fn evaluate_with_state(
     expr: &str,
@@ -115,7 +116,10 @@ pub fn evaluate_with_state(
         known_paths: RefCell::new(KnownPaths::default()),
     });
 
-    let eval = Evaluation::builder_impure()
+    let io = crate::snix_io::SnixRedoxIO::new(Rc::clone(&state));
+
+    let eval = Evaluation::builder_pure()
+        .enable_impure(Some(Box::new(io) as Box<dyn snix_eval::EvalIO>))
         .add_builtins(derivation_builtins::builtins(Rc::clone(&state)))
         .add_src_builtin("derivation", include_str!("derivation.nix"))
         .build();
