@@ -38,10 +38,12 @@
 
 ## Phase 3: Native Build Capability
 - [x] **Implement `derivationStrict` in snix-eval** — eval-only, computes store paths (Phase 1)
-- [ ] **Local unsandboxed build execution** — run builders directly via Command (Phase 2)
-- [ ] **Reference scanning** — scan outputs for store path references
-- [ ] **`SnixRedoxIO` EvalIO wrapper** — intercept store paths, trigger builds
-- [ ] **`snix build` CLI command** — evaluate + build + print output path
+- [x] **Local unsandboxed build execution** — `build_derivation()` via Command (Phase 2)
+- [x] **Reference scanning** — `scan_references()` finds store path hashes in outputs
+- [x] **NAR hashing** — `nar_hash_path()` for PathInfoDb registration
+- [x] **Dependency resolution** — topological sort + `build_needed()` for dependency chains
+- [x] **`snix build` CLI command** — `snix build --expr '...'` evaluates + builds + prints output
+- [ ] **`SnixRedoxIO` EvalIO wrapper** — intercept store paths, trigger builds during eval
 - [ ] **Cargo vendoring** — offline crate sources via virtio-fs or disk image
 - [ ] **Upgrade bridge to derivation-level protocol** — guest sends .drv hashes, host builds
 

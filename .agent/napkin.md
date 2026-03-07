@@ -1362,5 +1362,25 @@
   - Added `[lib]` target in Cargo.toml to enable `cargo test --lib` (binary has `test = false`)
 - **Dependencies added**: `bstr = "1"`, `genawaiter = { version = "0.99.1", default-features = false }`
 - **Total**: 223 tests pass (210 existing + 13 new derivation tests), cross-compilation clean
-- **Phase 2 next**: `local_build.rs` (unsandboxed build execution), `SnixRedoxIO` (EvalIO wrapper),
-  reference scanning, `snix build` CLI command
+- **Phase 2 next**: `SnixRedoxIO` (EvalIO wrapper), `snix build` integration testing
+
+### local_build.rs — unsandboxed build execution (Mar 7 2026)
+- **Implemented**: `build_derivation()`, `build_needed()`, `nar_hash_path()`, `scan_references()`,
+  topological dependency sort, `snix build --expr/--file` CLI command
+- **27 new tests**: NAR hashing (single file, directory, symlink, executable flag, nested dirs,
+  determinism, ordering), reference scanning (file, directory, symlink targets, multiple refs),
+  topological sort (single, chain, diamond, unknown drv error), eval→build integration
+  (drv path extraction, dependency registration, topo sort from eval)
+- **`tempfile` crate is dev-only**: Can't use `tempfile::tempdir()` in production code — it's
+  a dev-dependency, unavailable when cross-compiling for Redox. Implemented `TempBuildDir` with
+  atomic counter + pid for unique names, `Drop` impl for cleanup.
+- **`evaluate_with_state()`**: New public function in `eval.rs` returns `(String, Rc<SnixRedoxState>)`
+  so `snix build` can access KnownPaths after evaluation. The existing `evaluate()` wraps it.
+- **Build flow**: evaluate `(expr).drvPath` → extract drv path string → topological sort
+  dependencies → build each missing derivation → register in PathInfoDb → print output paths
+- **NAR serialization**: Recursive `write_path_to_nar()` using nix-compat's sync NAR writer.
+  Handles files (with executable flag), directories (sorted entries), and symlinks.
+- **Reference scanning**: Extract 32-char nixbase32 hash from each candidate store path,
+  scan all output files/symlinks for substring matches. Candidates = input_sources +
+  resolved input_derivation outputs + self-reference.
+- **Total**: 250 tests pass (223 existing + 27 new), cross-compilation clean

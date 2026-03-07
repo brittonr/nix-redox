@@ -100,6 +100,17 @@ pub fn repl() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Core evaluation function
 fn evaluate(expr: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let (result, _state) = evaluate_with_state(expr)?;
+    Ok(result)
+}
+
+/// Evaluate a Nix expression, returning both the string result and the
+/// shared state (including KnownPaths with all registered derivations).
+///
+/// Used by `snix build` to access derivations after evaluation.
+pub fn evaluate_with_state(
+    expr: &str,
+) -> Result<(String, Rc<SnixRedoxState>), Box<dyn std::error::Error>> {
     let state = Rc::new(SnixRedoxState {
         known_paths: RefCell::new(KnownPaths::default()),
     });
@@ -117,7 +128,7 @@ fn evaluate(expr: &str) -> Result<String, Box<dyn std::error::Error>> {
     }
 
     match result.value {
-        Some(v) => Ok(format!("{v}")),
+        Some(v) => Ok((format!("{v}"), state)),
         None => Err("no value produced".into()),
     }
 }

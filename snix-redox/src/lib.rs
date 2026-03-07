@@ -11,6 +11,7 @@ pub mod derivation_builtins;
 pub mod eval;
 pub mod install;
 pub mod known_paths;
+pub mod local_build;
 pub mod local_cache;
 pub mod nar;
 pub mod pathinfo;

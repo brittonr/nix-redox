@@ -14,6 +14,7 @@ mod cache;
 mod channel;
 mod derivation_builtins;
 mod eval;
+mod local_build;
 mod install;
 mod known_paths;
 mod local_cache;
@@ -47,6 +48,17 @@ enum Command {
         /// Print raw string value (strip quotes, no escaping)
         #[arg(long)]
         raw: bool,
+    },
+
+    /// Build a derivation (evaluate + execute builder)
+    Build {
+        /// Nix expression to build (must evaluate to a derivation)
+        #[arg(short, long)]
+        expr: Option<String>,
+
+        /// File containing a Nix expression to build
+        #[arg(short, long)]
+        file: Option<String>,
     },
 
     /// Show a derivation in human-readable form
@@ -410,6 +422,7 @@ fn main() {
 
     let result = match cli.command {
         Command::Eval { expr, file, raw } => eval::run(expr, file, raw),
+        Command::Build { expr, file } => local_build::run(expr, file),
         Command::ShowDerivation { path } => eval::show_derivation(&path),
         Command::Fetch {
             store_path,
