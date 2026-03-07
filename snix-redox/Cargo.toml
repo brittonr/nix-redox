@@ -12,6 +12,13 @@ path = "src/main.rs"
 # Run tests with: cargo test --target x86_64-unknown-linux-gnu
 test = false
 
+[lib]
+name = "snix_redox"
+path = "src/lib.rs"
+# Same as [[bin]] — test binary can't link for x86_64-unknown-redox on host.
+# Run tests with: CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu cargo test --lib
+test = false
+
 [dependencies]
 # === SNIX crates ===
 
@@ -45,6 +52,8 @@ sha2 = "0.10"
 blake3 = { version = "1.8", default-features = false, features = ["pure"] }
 data-encoding = "2"
 thiserror = "2"
+bstr = "1"
+genawaiter = { version = "0.99.1", default-features = false }
 
 [dev-dependencies]
 tempfile = "3"

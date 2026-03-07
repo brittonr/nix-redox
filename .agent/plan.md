@@ -37,10 +37,13 @@
 - [ ] Fix librustc_driver.so detection (cosmetic test failure)
 
 ## Phase 3: Native Build Capability
-- [ ] **Implement `derivationStrict` in snix-eval** — produce .drv files on guest
+- [x] **Implement `derivationStrict` in snix-eval** — eval-only, computes store paths (Phase 1)
+- [ ] **Local unsandboxed build execution** — run builders directly via Command (Phase 2)
+- [ ] **Reference scanning** — scan outputs for store path references
+- [ ] **`SnixRedoxIO` EvalIO wrapper** — intercept store paths, trigger builds
+- [ ] **`snix build` CLI command** — evaluate + build + print output path
 - [ ] **Cargo vendoring** — offline crate sources via virtio-fs or disk image
 - [ ] **Upgrade bridge to derivation-level protocol** — guest sends .drv hashes, host builds
-- [ ] **Native build support** — snix can invoke local rustc/cargo when available
 
 ## Architecture Notes
 - Two-step compile (rustc --emit=obj + ld.lld) works around the subprocess crash

@@ -1338,3 +1338,29 @@
 - This was re-introduced by `98889b46` commit which re-ran nixfmt on the file
 - Even though the file is in treefmt excludes, manual `nix fmt` or editor formatters can re-indent
 - MUST verify heredoc terminators are at 4-space indent after ANY formatting of this file
+
+### derivationStrict builtin for snix-redox — Phase 1 (Mar 7 2026)
+- **Implemented**: `derivationStrict` and `placeholder` builtins, `derivation.nix` wrapper,
+  `KnownPaths` registry — all eval-only (no builds yet, just output path calculation)
+- **18 new tests**: exact path compatibility with Nix verified for all major derivation patterns:
+  plain derivation, FODs (flat/recursive, sha256/sha1/md5/sha512), SRI hashes, multiple outputs,
+  args, dependencies, `__ignoreNulls`, `placeholder`, duplicate output rejection, `type` attr
+- **Key implementation details**:
+  - State type: `Rc<SnixRedoxState>` with `RefCell<KnownPaths>` — shared between builtins and (later) EvalIO
+  - `#[builtins(state = "Rc<SnixRedoxState>")]` macro requires `genawaiter::rc::Gen` in scope inside
+    the module — the proc macro generates code referencing `Gen` directly
+  - `NixString::as_str()` not `to_str()` — the vendored snix-eval uses `as_str()` for &str conversion
+  - `ErrorKind::CatchableError(cek)` exists for propagating catchable errors
+  - `WarningKind` is re-exported from `snix_eval` (not `snix_eval::warnings` which is private)
+  - `NixContext::new().append(element)` chains; `NixContext::into_iter()` yields `NixContextElement`s
+  - `NixString::iter_context()` returns `impl Iterator<Item = &NixContext>` — one level of indirection
+  - `Value::attrs(NixAttrs::from_iter(...))` constructs result attrsets
+  - `handle_fixed_output` closely matches upstream: handles SRI, hex, base32, base64; optional algo
+    (inferred from SRI prefix); optional mode (defaults to flat); wrong-padding warning
+  - `populate_inputs` handles all three NixContextElement variants (Plain, Single, Derivation)
+  - `derivation.nix` is the standard LGPL wrapper from nixcpp, used verbatim
+  - Added `[lib]` target in Cargo.toml to enable `cargo test --lib` (binary has `test = false`)
+- **Dependencies added**: `bstr = "1"`, `genawaiter = { version = "0.99.1", default-features = false }`
+- **Total**: 223 tests pass (210 existing + 13 new derivation tests), cross-compilation clean
+- **Phase 2 next**: `local_build.rs` (unsandboxed build execution), `SnixRedoxIO` (EvalIO wrapper),
+  reference scanning, `snix build` CLI command

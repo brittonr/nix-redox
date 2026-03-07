@@ -1,0 +1,19 @@
+// Library crate — enables `cargo test` for modules that don't depend on
+// the binary target (which is disabled for cross-compilation).
+//
+// The binary (`src/main.rs`) re-uses these modules directly.
+
+pub mod activate;
+pub mod bridge;
+pub mod cache;
+pub mod channel;
+pub mod derivation_builtins;
+pub mod eval;
+pub mod install;
+pub mod known_paths;
+pub mod local_cache;
+pub mod nar;
+pub mod pathinfo;
+pub mod rebuild;
+pub mod store;
+pub mod system;
