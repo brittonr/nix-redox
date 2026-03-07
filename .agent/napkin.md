@@ -1427,3 +1427,30 @@
 - **9 new tests**: request serialization (build-attr, build-drv), response parsing (success,
   error, minimal, multi-output), ID generation, request roundtrip, eval→ATerm→request end-to-end
 - **Total**: 289 tests pass (280 prior + 9 new), cross-compilation clean
+
+### ld_so CWD injection — root cause found and patched (Mar 7 2026)
+- **Root cause**: Each DSO that statically links relibc has its OWN copy of the
+  `path::CWD` static, initialized to `None`. The ld_so's `run_init()` already
+  injects `ns_fd` and `proc_fd` into DSOs via `__relibc_init_*` symbols, but
+  there was NO corresponding `__relibc_init_cwd` mechanism. When DSO code
+  (e.g., librustc_driver.so) opens a relative path, `canonicalize_using_cwd(None,
+  "src/main.rs")` returns `None` → ENOENT.
+- **Fix**: `patch-relibc-ld-so-cwd.py` — 3-file patch following the existing
+  ns_fd/proc_fd injection pattern:
+  1. `redox-rt/src/lib.rs`: Add `__relibc_init_cwd_ptr` and `__relibc_init_cwd_len`
+     statics (same pattern as `__relibc_init_ns_fd`/`__relibc_init_proc_fd`)
+  2. `src/ld_so/linker.rs`: `run_init()` reads own CWD via `path::clone_cwd()`,
+     leaks it into a Box, writes ptr+len into each DSO's injection statics
+  3. `src/platform/redox/path.rs`: `get_injected_cwd()` fallback when `CWD.lock()`
+     is `None`. Used by both `open()` and `canonicalize()`. On first use, also
+     calls `set_cwd_manual()` to populate the local CWD for subsequent calls.
+- **Version script**: Added `__relibc_init_cwd_ptr` and `__relibc_init_cwd_len` to
+  the version script injection in BOTH the host-side CC wrapper (rustc-redox.nix)
+  AND the guest-side CC wrapper (redox-sysroot.nix). Without this, Rust's
+  `"local: *;"` version script hides the symbols from ld_so's `get_sym()`.
+- **Leaked memory**: The CWD string is `Box::leak()`ed in `run_init()`. This is
+  intentional — the string must outlive the injection point and be readable for
+  the entire process lifetime. One allocation per DSO, typically <256 bytes.
+- **This should remove the need for the `rustc-abs` wrapper** — relative paths
+  should now work in dynamically-linked programs because DSO code can resolve
+  them through the injected CWD.
