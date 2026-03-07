@@ -167,7 +167,12 @@ else:
             let guard = CWD.lock();
             match guard.as_deref() {
                 Some(c) => Some(alloc::string::String::from(c)),
-                None => get_injected_cwd(),
+                None => {
+                    // Drop the lock BEFORE calling get_injected_cwd(),
+                    // which calls set_cwd_manual() → CWD.lock() internally.
+                    drop(guard);
+                    get_injected_cwd()
+                }
             }
         };
         let canon = canonicalize_with_cwd_internal(cwd_val.as_deref(), path)?;"""
