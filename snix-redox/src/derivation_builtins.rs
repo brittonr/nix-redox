@@ -4,7 +4,7 @@
 //! synchronous, filesystem-only operation on Redox OS.
 //!
 //! Key differences from upstream:
-//! - No fetcher support (builtin:fetchurl)
+//! - Fetcher support via `fetchers.rs` (builtin:fetchurl)
 //! - No async / tokio — everything runs synchronously via snix-eval generators
 //! - State is `Rc<SnixRedoxState>` instead of `Rc<SnixStoreIO>`
 

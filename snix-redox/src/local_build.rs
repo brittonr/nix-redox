@@ -208,6 +208,12 @@ pub fn build_derivation(
         .map_err(|e| BuildError::Io(format!("creating {STORE_DIR}: {e}")))?;
 
     // ── 5. Execute builder ─────────────────────────────────────────────
+
+    // Handle builtin fetchers (builtin:fetchurl, builtin:fetchTarball)
+    if drv.builder.starts_with("builtin:") {
+        return build_builtin_fetcher(drv, drv_path, known_paths, db);
+    }
+
     let mut cmd = Command::new(&drv.builder);
     cmd.args(&drv.arguments);
     cmd.current_dir(build_dir.path());
@@ -655,6 +661,101 @@ fn scan_path(
     }
 
     Ok(())
+}
+
+// ── Builtin Fetcher Execution ───────────────────────────────────────────────
+
+/// Build a derivation using a builtin fetcher (e.g., `builtin:fetchurl`).
+///
+/// Instead of executing an external builder, this downloads the URL from
+/// the derivation's environment and writes it to the output path. The
+/// content hash is verified against the FOD's declared hash.
+fn build_builtin_fetcher(
+    drv: &nix_compat::derivation::Derivation,
+    drv_path: &StorePath<String>,
+    known_paths: &KnownPaths,
+    db: &PathInfoDb,
+) -> Result<BuildResult, BuildError> {
+    let drv_name = drv_path
+        .to_string()
+        .strip_suffix(".drv")
+        .unwrap_or(&drv_path.to_string())
+        .to_string();
+
+    // Get the output path
+    let out_path = drv
+        .outputs
+        .get("out")
+        .and_then(|o| o.path.as_ref())
+        .ok_or_else(|| BuildError::Io("builtin fetcher: no output path".to_string()))?
+        .to_absolute_path();
+
+    // Check if already exists
+    if Path::new(&out_path).exists() {
+        return build_result_from_existing(drv, drv_path, known_paths, db);
+    }
+
+    // Ensure /nix/store exists
+    fs::create_dir_all(STORE_DIR)
+        .map_err(|e| BuildError::Io(format!("creating {STORE_DIR}: {e}")))?;
+
+    // Execute the fetch
+    crate::fetchers::fetch_to_store(drv).map_err(|e| BuildError::BuildFailed {
+        drv_name: drv_name.clone(),
+        exit_code: None,
+        stderr: format!("fetch failed: {e}"),
+    })?;
+
+    // Verify the output was created
+    if !Path::new(&out_path).exists() {
+        return Err(BuildError::MissingOutput {
+            output: "out".to_string(),
+            path: out_path,
+        });
+    }
+
+    // Verify the content hash
+    crate::fetchers::verify_fetch_hash(drv, &out_path).map_err(|e| {
+        // Clean up on hash mismatch
+        let _ = fs::remove_file(&out_path);
+        let _ = fs::remove_dir_all(&out_path);
+        BuildError::BuildFailed {
+            drv_name: drv_name.clone(),
+            exit_code: None,
+            stderr: format!("{e}"),
+        }
+    })?;
+
+    // Scan for references and compute NAR hash
+    let candidates = collect_potential_references(drv, known_paths, &out_path);
+    let references = scan_references(Path::new(&out_path), &candidates)
+        .map_err(|e| BuildError::Io(format!("scanning references: {e}")))?;
+
+    let (nar_hash, nar_size) = nar_hash_path(Path::new(&out_path))
+        .map_err(|e| BuildError::Io(format!("computing NAR hash: {e}")))?;
+
+    // Register in PathInfoDb
+    let info = PathInfo {
+        store_path: out_path.clone(),
+        nar_hash: nar_hash.clone(),
+        nar_size,
+        references: references.iter().cloned().collect(),
+        deriver: Some(drv_path.to_absolute_path()),
+        registration_time: pathinfo::current_timestamp(),
+        signatures: vec![],
+    };
+    db.register(&info)
+        .map_err(|e| BuildError::Io(format!("registering {out_path}: {e}")))?;
+
+    let mut output_paths = BTreeMap::new();
+    output_paths.insert("out".to_string(), out_path);
+
+    Ok(BuildResult {
+        outputs: output_paths,
+        references,
+        nar_hash,
+        nar_size,
+    })
 }
 
 // ── CLI Entry Point ────────────────────────────────────────────────────────

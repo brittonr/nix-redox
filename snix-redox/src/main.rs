@@ -15,6 +15,7 @@ mod cache;
 mod channel;
 mod derivation_builtins;
 mod eval;
+mod fetchers;
 mod local_build;
 mod snix_io;
 mod vendor;

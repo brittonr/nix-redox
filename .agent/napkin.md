@@ -1565,6 +1565,36 @@
 - **Redox grep has no `\|` alternation**: `grep -qi "fail\|error"` silently
   matches nothing. Must use separate `grep` calls with `elif`.
 
+### builtins.fetchurl / builtins.fetchTarball (Mar 8 2026)
+- **Implemented**: `builtins.fetchurl` and `builtins.fetchTarball` — create fixed-output
+  derivations (FODs) with `builder = "builtin:fetchurl"`. Actual downloads happen at build time.
+- **Architecture**: Eval creates FOD → `build_derivation` detects `builtin:` prefix → downloads
+  URL from drv environment → verifies content hash → registers in PathInfoDb.
+- **FOD property**: Same name + same hash = same store path regardless of URL (content-addressed).
+  Different hash modes (flat vs recursive) produce different paths.
+- **Hash verification**: Flat mode SHA-256 hashes raw file content. Recursive/NAR mode hashes
+  the NAR serialization of the extracted directory.
+- **`BString::as_ref()` type ambiguity**: `v.as_ref() == b"1"` fails with E0283 (multiple
+  `AsRef<T>` impls for BString). Fix: use `v.to_string() == "1"` instead.
+- **`.drvPath` doesn't work on fetchurl result**: `builtins.fetchurl` returns a NixString
+  (store path), not a derivation attrset. `.drvPath` is only on attrset derivations. Test
+  must evaluate the expression directly and inspect KnownPaths.
+- **`flate2` for gzip**: Added `flate2 = { default-features = false, features = ["rust_backend"] }`
+  for gzip decompression in fetchTarball. Pure Rust (miniz_oxide), no C code.
+- **Tar extraction**: Minimal tar parser handles files, directories, symlinks, hard links.
+  Strips top-level directory component (like GitHub release tarballs with `project-version/`).
+- **New files must be `git add`ed**: Flakes only see tracked files. `fetchers.rs` wasn't visible
+  to the Nix build until `git add`. Known issue, still catches me.
+- **Vendor hash update**: Adding flate2 changed Cargo.lock → vendor hash changed in BOTH
+  `snix.nix` and `snix-source-bundle.nix`.
+- **26 new unit tests**: url_basename, sanitize_name, tar parsing, FOD creation, eval
+  integration, determinism, hash-mode differentiation, context propagation.
+- **8 new VM tests**: fetchurl-store-path, fetchurl-is-nix-store, fetchurl-fod-deterministic,
+  fetchurl-different-hash, fetchtarball-store-path, fetch-flat-vs-recursive, fetchurl-as-input,
+  fetchurl-requires-hash.
+- **Binary size**: 5.3MB static ELF (was 4.8MB — flate2 adds ~500KB).
+- **Total**: 329 host tests pass, cross-compilation clean.
+
 ### snix-build-cargo: Rust crate compiled through Nix on Redox (Mar 8 2026)
 - **`snix build` runs `cargo build` inside a Nix derivation on Redox!**
 - Full pipeline: snix eval → derivationStrict → builder (bash) → cargo → rustc → cc → lld → ELF

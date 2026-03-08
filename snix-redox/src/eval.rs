@@ -7,6 +7,7 @@ use std::rc::Rc;
 use snix_eval::Evaluation;
 
 use crate::derivation_builtins::{derivation_builtins, SnixRedoxState};
+use crate::fetchers::fetcher_builtins;
 use crate::known_paths::KnownPaths;
 
 /// Evaluate a Nix expression from --expr or --file
@@ -121,6 +122,7 @@ pub fn evaluate_with_state(
     let eval = Evaluation::builder_pure()
         .enable_impure(Some(Box::new(io) as Box<dyn snix_eval::EvalIO>))
         .add_builtins(derivation_builtins::builtins(Rc::clone(&state)))
+        .add_builtins(fetcher_builtins::builtins(Rc::clone(&state)))
         .add_src_builtin("derivation", include_str!("derivation.nix"))
         .build();
 
