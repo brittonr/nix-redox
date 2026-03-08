@@ -2181,6 +2181,220 @@ let
                       /nix/system/profile/bin/bash -c 'tail -c 2048 /tmp/procmacro-stdout 2>/dev/null'
                     end
 
+                    # ══════════════════════════════════════════════════════
+                    # Phase 4: snix build — Nix derivation builder on Redox
+                    # ══════════════════════════════════════════════════════
+                    #
+                    # These tests prove that `snix build --expr` can:
+                    #   1. Evaluate a Nix expression to a derivation
+                    #   2. Execute the builder program
+                    #   3. Produce output in /nix/store/
+                    #   4. Register the output in PathInfoDb
+                    #
+                    # This is the "Nix builds on Redox" milestone.
+
+                    echo ""
+                    echo "========================================"
+                    echo "  SNIX BUILD TESTS"
+                    echo "========================================"
+                    echo ""
+
+                    # All snix build tests run inside single bash blocks to avoid
+                    # Ion $? issues between external commands. The FUNC_TEST verdict
+                    # is echoed from inside bash.
+                    # Derivations set PATH so the builder can find mkdir, cat, chmod.
+                    # No cut command on Redox — use bash parameter expansion instead.
+
+                    # ── Test: snix build simple file output ─────────────
+                    echo "--- snix-build-simple: basic derivation ---"
+                    /nix/system/profile/bin/bash -c '
+                      mkdir -p /nix/store /nix/var/snix/pathinfo
+                      OUTPUT=$(/bin/snix build --expr "derivation { name = \"snix-build-test\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"-c\" \"echo snix-build-works > \\\$out\"]; system = \"x86_64-unknown-redox\"; }" 2>/tmp/snix-build-simple-err)
+                      EXIT=$?
+                      echo "$OUTPUT" > /tmp/snix-build-simple-output
+                      if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -f "$OUTPUT" ]; then
+                        CONTENT=$(cat "$OUTPUT")
+                        if [ "$CONTENT" = "snix-build-works" ]; then
+                          echo "FUNC_TEST:snix-build-simple:PASS"
+                        else
+                          echo "FUNC_TEST:snix-build-simple:FAIL:wrong content: $CONTENT"
+                        fi
+                      else
+                        echo "FUNC_TEST:snix-build-simple:FAIL:exit=$EXIT output=$OUTPUT"
+                        cat /tmp/snix-build-simple-err 2>/dev/null
+                      fi
+                    '
+
+                    # ── Test: output path is in /nix/store/ ────────────
+                    echo "--- snix-build-store-path: output is a store path ---"
+                    /nix/system/profile/bin/bash -c '
+                      OUTPUT=$(cat /tmp/snix-build-simple-output 2>/dev/null)
+                      case "$OUTPUT" in
+                        /nix/store/*) echo "FUNC_TEST:snix-build-store-path:PASS" ;;
+                        *) echo "FUNC_TEST:snix-build-store-path:FAIL:$OUTPUT" ;;
+                      esac
+                    '
+
+                    # ── Test: snix store info shows the built path ──────
+                    echo "--- snix-build-registered: output in pathinfo db ---"
+                    /nix/system/profile/bin/bash -c '
+                      OUTPUT=$(cat /tmp/snix-build-simple-output 2>/dev/null)
+                      if [ -n "$OUTPUT" ]; then
+                        INFO=$(/bin/snix store info "$OUTPUT" 2>&1)
+                        if echo "$INFO" | grep -qi "sha256"; then
+                          echo "FUNC_TEST:snix-build-registered:PASS"
+                        else
+                          echo "FUNC_TEST:snix-build-registered:FAIL:$INFO"
+                        fi
+                      else
+                        echo "FUNC_TEST:snix-build-registered:FAIL:no output"
+                      fi
+                    '
+
+                    # ── Test: snix build directory output ───────────────
+                    echo "--- snix-build-dir: directory output ---"
+                    /nix/system/profile/bin/bash -c '
+                      P="/nix/system/profile/bin"
+                      OUTPUT=$(/bin/snix build --expr "derivation { name = \"dir-test\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"-c\" \"export PATH=/nix/system/profile/bin:/bin:/usr/bin && mkdir -p \\\$out/bin && echo hello-from-dir > \\\$out/bin/greeting && echo 42 > \\\$out/version\"]; system = \"x86_64-unknown-redox\"; }" 2>/tmp/snix-build-dir-err)
+                      EXIT=$?
+                      if [ $EXIT -eq 0 ] && [ -d "$OUTPUT" ]; then
+                        G=$(cat "$OUTPUT/bin/greeting" 2>/dev/null)
+                        V=$(cat "$OUTPUT/version" 2>/dev/null)
+                        if [ "$G" = "hello-from-dir" ] && [ "$V" = "42" ]; then
+                          echo "FUNC_TEST:snix-build-dir:PASS"
+                        else
+                          echo "FUNC_TEST:snix-build-dir:FAIL:greeting=$G version=$V"
+                        fi
+                      else
+                        echo "FUNC_TEST:snix-build-dir:FAIL:exit=$EXIT"
+                        cat /tmp/snix-build-dir-err 2>/dev/null
+                      fi
+                    '
+
+                    # ── Test: snix build idempotent (cached) ───────────
+                    echo "--- snix-build-cached: idempotent rebuild ---"
+                    /nix/system/profile/bin/bash -c '
+                      OUTPUT=$(/bin/snix build --expr "derivation { name = \"snix-build-test\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"-c\" \"echo snix-build-works > \\\$out\"]; system = \"x86_64-unknown-redox\"; }" 2>/dev/null)
+                      ORIG=$(cat /tmp/snix-build-simple-output 2>/dev/null)
+                      if [ "$OUTPUT" = "$ORIG" ] && [ -n "$OUTPUT" ]; then
+                        echo "FUNC_TEST:snix-build-cached:PASS"
+                      else
+                        echo "FUNC_TEST:snix-build-cached:FAIL:output=$OUTPUT orig=$ORIG"
+                      fi
+                    '
+
+                    # ── Test: snix build with dependency chain ──────────
+                    echo "--- snix-build-dep: dependency chain ---"
+                    /nix/system/profile/bin/bash -c '
+                      cat > /tmp/snix-dep-test.nix << '"'"'NIXEOF'"'"'
+    let
+      dep = derivation {
+        name = "snix-dep";
+        builder = "/nix/system/profile/bin/bash";
+        args = ["-c" "echo dependency-output > $out"];
+        system = "x86_64-unknown-redox";
+      };
+      main = derivation {
+        name = "snix-main";
+        builder = "/nix/system/profile/bin/bash";
+        args = ["-c" "export PATH=/nix/system/profile/bin:/bin:/usr/bin; cat ''${dep} > $out; echo main-added >> $out"];
+        system = "x86_64-unknown-redox";
+        inherit dep;
+      };
+    in main
+    NIXEOF
+
+                      OUTPUT=$(/bin/snix build --file /tmp/snix-dep-test.nix 2>/tmp/snix-build-dep-err)
+                      EXIT=$?
+                      if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ]; then
+                        CONTENT=$(cat "$OUTPUT")
+                        if echo "$CONTENT" | grep -q "dependency-output" && echo "$CONTENT" | grep -q "main-added"; then
+                          echo "FUNC_TEST:snix-build-dep:PASS"
+                        else
+                          echo "FUNC_TEST:snix-build-dep:FAIL:content=$CONTENT"
+                        fi
+                      else
+                        echo "FUNC_TEST:snix-build-dep:FAIL:exit=$EXIT"
+                        cat /tmp/snix-build-dep-err 2>/dev/null
+                      fi
+                    '
+
+                    # ── Test: snix build executable output ─────────────
+                    echo "--- snix-build-exec: executable output ---"
+                    /nix/system/profile/bin/bash -c '
+                      cat > /tmp/snix-exec-test.nix << '"'"'NIXEOF'"'"'
+    derivation {
+      name = "hello-script";
+      builder = "/nix/system/profile/bin/bash";
+      args = ["-c" "export PATH=/nix/system/profile/bin:/bin:/usr/bin; mkdir -p $out/bin; echo SNIX_BUILT_AND_RAN > $out/bin/hello"];
+      system = "x86_64-unknown-redox";
+    }
+    NIXEOF
+
+                      OUTPUT=$(/bin/snix build --file /tmp/snix-exec-test.nix 2>/tmp/snix-build-exec-err)
+                      EXIT=$?
+                      if [ $EXIT -eq 0 ] && [ -f "$OUTPUT/bin/hello" ]; then
+                        CONTENT=$(cat "$OUTPUT/bin/hello")
+                        if [ "$CONTENT" = "SNIX_BUILT_AND_RAN" ]; then
+                          echo "FUNC_TEST:snix-build-exec:PASS"
+                        else
+                          echo "FUNC_TEST:snix-build-exec:FAIL:content=$CONTENT"
+                        fi
+                      else
+                        echo "FUNC_TEST:snix-build-exec:FAIL:exit=$EXIT"
+                        cat /tmp/snix-build-exec-err 2>/dev/null
+                      fi
+                    '
+
+                    # ── Test: snix build via --file ─────────────────────
+                    echo "--- snix-build-file: build from .nix file ---"
+                    /nix/system/profile/bin/bash -c '
+                      cat > /tmp/snix-file-test.nix << '"'"'NIXEOF'"'"'
+    derivation {
+      name = "from-file";
+      builder = "/nix/system/profile/bin/bash";
+      args = ["-c" "echo built-from-nix-file > $out"];
+      system = "x86_64-unknown-redox";
+    }
+    NIXEOF
+
+                      OUTPUT=$(/bin/snix build --file /tmp/snix-file-test.nix 2>/tmp/snix-build-file-err)
+                      EXIT=$?
+                      if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ]; then
+                        CONTENT=$(cat "$OUTPUT")
+                        if [ "$CONTENT" = "built-from-nix-file" ]; then
+                          echo "FUNC_TEST:snix-build-file:PASS"
+                        else
+                          echo "FUNC_TEST:snix-build-file:FAIL:content=$CONTENT"
+                        fi
+                      else
+                        echo "FUNC_TEST:snix-build-file:FAIL:exit=$EXIT"
+                        cat /tmp/snix-build-file-err 2>/dev/null
+                      fi
+                    '
+
+                    # ── Test: snix build failing builder ───────────────
+                    echo "--- snix-build-fail: builder failure handled ---"
+                    /nix/system/profile/bin/bash -c '
+                      /bin/snix build --expr "derivation { name = \"will-fail\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"-c\" \"echo failing >&2 && exit 42\"]; system = \"x86_64-unknown-redox\"; }" >/dev/null 2>/tmp/snix-build-fail-err
+                      EXIT=$?
+                      if [ $EXIT -ne 0 ]; then
+                        # Redox grep has no \| alternation — check each pattern
+                        if grep -qi "fail" /tmp/snix-build-fail-err 2>/dev/null; then
+                          echo "FUNC_TEST:snix-build-fail:PASS"
+                        elif grep -qi "error" /tmp/snix-build-fail-err 2>/dev/null; then
+                          echo "FUNC_TEST:snix-build-fail:PASS"
+                        elif grep -qi "builder" /tmp/snix-build-fail-err 2>/dev/null; then
+                          echo "FUNC_TEST:snix-build-fail:PASS"
+                        else
+                          echo "FUNC_TEST:snix-build-fail:FAIL:no error message"
+                          cat /tmp/snix-build-fail-err
+                        fi
+                      else
+                        echo "FUNC_TEST:snix-build-fail:FAIL:should have failed"
+                      fi
+                    '
+
                     # ── Test: Self-compile snix on Redox ─────────────────
                     # THE ultimate self-hosting test. Compile snix-redox
                     # (a real 45K-line Rust project with 183 crate deps,
