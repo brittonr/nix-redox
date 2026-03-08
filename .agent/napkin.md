@@ -1564,3 +1564,41 @@
   instead of being stripped to column 0).
 - **Redox grep has no `\|` alternation**: `grep -qi "fail\|error"` silently
   matches nothing. Must use separate `grep` calls with `elif`.
+
+### snix-build-cargo: Rust crate compiled through Nix on Redox (Mar 8 2026)
+- **`snix build` runs `cargo build` inside a Nix derivation on Redox!**
+- Full pipeline: snix eval → derivationStrict → builder (bash) → cargo → rustc → cc → lld → ELF
+- **51/51 tests pass** including the cargo build test, in 530 seconds
+
+**Two critical fixes to make it work:**
+
+1. **`build_derivation()` Stdio::inherit() on Redox**: `cmd.output()` creates pipes.
+  Deep process hierarchies (snix→bash→cargo→rustc→cc→lld) crash when the CC
+  wrapper's `exec 1>&- 2>&-` closes pipe fds — triggers unrecoverable read2/poll
+  state in the grandparent. Fix: `#[cfg(target_os = "redox")]` uses `Stdio::inherit()`
+  + `.status()` instead of `.output()`. Builder output goes to terminal. On non-Redox
+  (unit tests), cmd.output() is still used for captured stderr.
+
+2. **Absolute path for linker**: `linker = "/nix/system/profile/bin/cc"` instead of
+  `linker = "cc"`. In the derivation builder's `env_clear()` environment, PATH may
+  not propagate correctly to rustc's `Command::new("cc")` for linker resolution.
+  Absolute path avoids PATH lookup entirely.
+
+**Debugging journey (lessons for future):**
+- **`chmod` not on Redox**: Not in uutils. Builder scripts can't be made executable.
+  Fix: use `bash /path/to/script` as the builder, not `/path/to/script` directly.
+  Or use `builder = "/nix/system/profile/bin/bash"` with `args = ["/tmp/script.sh"]`.
+- **No single quotes inside bash -c heredoc bodies**: When a bash -c block uses
+  `'"'"'TERMINATOR'"'"'` quoting, the heredoc body is inside a single-quoted string
+  at the Ion level. Any `'` in the body terminates the outer single quote, causing
+  Ion to background the command or parse it incorrectly.
+  Example: `echo "$(bash -c 'some command')" >&2` BREAKS the outer bash -c block.
+  Fix: never put `'` in heredoc bodies inside bash -c blocks. Use `"` or
+  escape differently.
+- **CC wrapper debug files empty = CC wrapper never executed**: If
+  `/tmp/.cc-wrapper-raw-args` is empty after clearing, the CC wrapper bash script
+  never ran its first statement. This is usually a PATH lookup or exec issue.
+- **rustc exit 134 = SIGABRT = panic in rustc**: When rustc's linker invocation
+  fails and rustc can't properly format the error, it panics. The "fatal runtime
+  error: failed to initiate panic, error 0, aborting" message is from the Rust
+  runtime's double-panic handler.
