@@ -2395,6 +2395,110 @@ let
                       fi
                     '
 
+                    # ── Test: snix build compiles a Rust crate ─────────
+                    # The crown jewel of the snix-build tests: a Nix
+                    # derivation that runs cargo build to compile a Rust
+                    # hello-world, producing a real ELF binary in
+                    # /nix/store/. Proves: eval → derivationStrict →
+                    # cargo build → link → ELF → runs on Redox.
+                    # ── Test: snix build compiles a Rust crate ─────────
+                    # The crown jewel: a Nix derivation that runs cargo
+                    # to compile a Rust hello-world. Builder output goes
+                    # to the terminal (Stdio::inherit in build_derivation).
+                    echo "--- snix-build-cargo: Rust crate in Nix derivation ---"
+                    /nix/system/profile/bin/bash -c '
+                      # Write builder script (bash, not executable — no chmod)
+                      cat > /tmp/build-hello-cargo.sh << '"'"'BUILDEOF'"'"'
+    set -e
+    export PATH=/nix/system/profile/bin:/bin:/usr/bin
+    export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+    export HOME="$TMPDIR"
+    export CARGO_HOME="$TMPDIR/cargo-home"
+    SRCDIR="$TMPDIR/hello-src"
+    mkdir -p "$SRCDIR/src" "$CARGO_HOME" "$out/bin"
+    cat > "$SRCDIR/Cargo.toml" << TOML
+    [package]
+    name = "hello"
+    version = "0.1.0"
+    edition = "2021"
+    TOML
+    cat > "$SRCDIR/src/main.rs" << RUST
+    fn main() {
+        println!("Hello from Nix-built Rust on Redox!");
+    }
+    RUST
+    mkdir -p "$SRCDIR/.cargo"
+    cat > "$SRCDIR/.cargo/config.toml" << CFG
+    [build]
+    jobs = 1
+    target = "x86_64-unknown-redox"
+    [target.x86_64-unknown-redox]
+    linker = "/nix/system/profile/bin/cc"
+    CFG
+    cd "$SRCDIR"
+    # cargo timeout+retry — handles intermittent startup hangs
+    MAX_TIME=120
+    for attempt in 1 2 3; do
+      cargo build --offline -j1 &
+      PID=$!
+      SECONDS=0
+      while kill -0 $PID 2>/dev/null; do
+        if [ $SECONDS -ge $MAX_TIME ]; then
+          echo "[builder] cargo timeout attempt $attempt" >&2
+          kill $PID 2>/dev/null; wait $PID 2>/dev/null
+          kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
+          rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
+          continue 2
+        fi
+        cat /scheme/sys/uname >/dev/null 2>/dev/null
+      done
+      wait $PID
+      CARGO_EXIT=$?
+      if [ $CARGO_EXIT -eq 0 ]; then
+        break
+      else
+        echo "[builder] cargo failed (exit=$CARGO_EXIT) attempt $attempt" >&2
+        if [ $attempt -eq 3 ]; then
+          exit $CARGO_EXIT
+        fi
+      fi
+    done
+    cp target/x86_64-unknown-redox/debug/hello "$out/bin/hello"
+    BUILDEOF
+
+                      cat > /tmp/hello-cargo.nix << '"'"'HELLONIX'"'"'
+    derivation {
+      name = "hello-cargo";
+      builder = "/nix/system/profile/bin/bash";
+      args = ["/tmp/build-hello-cargo.sh"];
+      system = "x86_64-unknown-redox";
+    }
+    HELLONIX
+
+                      # Clear stale cc-wrapper debug files
+                      rm -f /tmp/.cc-wrapper-raw-args /tmp/.cc-wrapper-stderr /tmp/.cc-wrapper-shared-cmd /tmp/.cc-wrapper-last-err 2>/dev/null
+
+                      OUTPUT=$(/bin/snix build --file /tmp/hello-cargo.nix 2>/tmp/snix-build-cargo-err)
+                      EXIT=$?
+                      if [ $EXIT -eq 0 ] && [ -x "$OUTPUT/bin/hello" ]; then
+                        RUN=$("$OUTPUT/bin/hello" 2>&1)
+                        if [ "$RUN" = "Hello from Nix-built Rust on Redox!" ]; then
+                          echo "FUNC_TEST:snix-build-cargo:PASS"
+                        else
+                          echo "FUNC_TEST:snix-build-cargo:FAIL:output=$RUN"
+                        fi
+                      else
+                        echo "FUNC_TEST:snix-build-cargo:FAIL:exit=$EXIT"
+                        echo "=== cc-wrapper-raw-args ==="
+                        cat /tmp/.cc-wrapper-raw-args 2>/dev/null
+                        echo "=== cc-wrapper-stderr (lld errors) ==="
+                        cat /tmp/.cc-wrapper-stderr 2>/dev/null
+                        echo "=== cc-wrapper-last-err ==="
+                        cat /tmp/.cc-wrapper-last-err 2>/dev/null
+                        echo "=== end debug ==="
+                      fi
+                    '
+
                     # ── Test: Self-compile snix on Redox ─────────────────
                     # THE ultimate self-hosting test. Compile snix-redox
                     # (a real 45K-line Rust project with 183 crate deps,
