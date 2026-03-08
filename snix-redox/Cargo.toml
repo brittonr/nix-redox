@@ -41,6 +41,7 @@ ureq = { version = "3", default-features = false }
 ruzstd = "0.8"
 lzma-rs = "0.3"
 bzip2-rs = "0.1"
+flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 
 # === Standard utilities ===
 clap = { version = "4", features = ["derive", "env"] }
