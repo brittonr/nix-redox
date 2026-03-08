@@ -38,17 +38,16 @@
 - [x] Full snix self-compile: 168 crates, 83MB binary, eval verification on Redox
 - [x] Proc-macros, vendored deps, path deps, build scripts — all working
 
-### Remaining workarounds (not blockers, but would remove wrapper scripts):
-- [x] **ld_so cwd bug**: Root cause: each DSO gets its own path::CWD static = None.
-      Fix: patch-relibc-ld-so-cwd.py injects CWD via __relibc_init_cwd_ptr/len
-      (same pattern as ns_fd/proc_fd). Should remove need for rustc-abs wrapper.
-- [ ] **exec() env var propagation**: cargo:rustc-env vars don't propagate through
-      Redox exec(). Using --env-set CLI flag as workaround (patch-cargo-env-set.py).
-      Root cause: relibc's do_exec → execve env handling.
-- [ ] **flock() hangs**: cargo's .package-cache flock sometimes hangs forever.
-      Using cargo-build-safe wrapper with timeout+retry.
-- [ ] **JOBS>1 reliability**: parallel compilation (CARGO_BUILD_JOBS=4) works for
-      the snix self-compile but was historically unreliable. May need further testing.
+### Remaining workarounds:
+- [x] **ld_so cwd bug — FIXED**: patch-relibc-ld-so-cwd.py injects CWD via
+      __relibc_init_cwd_ptr/len. Deadlock fix: drop() guard before set_cwd_manual().
+      **rustc-abs wrapper removed.** All tests pass with direct rustc.
+- [x] **fcntl lock — FIXED**: patch-relibc-fcntl-lock.py makes F_SETLK/F_SETLKW/F_GETLK
+      no-ops. Prevents fcntl-based hangs in cargo.
+- [ ] **exec() env var propagation**: Using --env-set CLI flag (patch-cargo-env-set.py).
+- [ ] **Intermittent cargo hangs**: cargo-build-safe (90s timeout + retry) still needed.
+      Not flock or fcntl — some other blocking operation in cargo startup.
+- [x] **JOBS>1 reliability**: JOBS=4 hangs after ~115 crates. JOBS=1 works reliably.
 
 ## Phase 3: Native Build Capability
 - [x] **Implement `derivationStrict` in snix-eval** — eval-only, computes store paths (Phase 1)
@@ -59,11 +58,19 @@
 - [x] **`snix build` CLI command** — `snix build --expr '...'` evaluates + builds + prints output
 - [x] **`SnixRedoxIO` EvalIO wrapper** — store-aware IO with build-on-demand (IFD)
 - [x] **Upgrade bridge to derivation-level protocol** — `build-attr` and `build-drv` request types
-- [ ] **Cargo vendoring** — offline crate sources via virtio-fs or disk image
+- [x] **Cargo vendoring** — `snix vendor setup/info/check/link` (offline builds)
+
+## Test Results Summary
+- **303 host unit tests** — all pass (snix-redox crate)
+- **50/50 self-hosting VM tests** — all pass (JOBS=1)
+  - 14 toolchain presence, 16 compilation, 16 cargo workflows, 4 snix self-compile
+  - snix self-compile: 168 crates → 83MB binary → eval verification on Redox (6m 43s)
+- **relibc patches**: 8 total (ns-fd, run-init, prefault-stack, grow-main-stack, chdir-deadlock, abort-dso, ld-so-align, ld-so-cwd)
+- **cargo patches**: 4 total (read2-pipes, env-set, redox-paths ×2)
+- **rustc patches**: 4 total (main-stack, linker-pipes, spawn-pipes, read2-pipes)
 
 ## Architecture Notes
-- Two-step compile (rustc --emit=obj + ld.lld) works around the subprocess crash
-- Could build a "cargo wrapper" that uses two-step internally (compile without link, then link separately)
-- The subprocess crash might be in ld_so initialization for child processes, or in Redox's fork COW
-- Bridge pattern (guest evaluates, host builds) is the near-term path
-- snix-eval lacks `derivationStrict` builtin — can't produce .drv files yet (Phase 3)
+- CWD injection in ld_so eliminates the #1 workaround (rustc-abs wrapper)
+- JOBS=1 required for reliable compilation (pipe handling limitation)
+- Bridge pattern (guest evaluates, host builds) for complex packages
+- Native `snix build` for simple derivations on-guest

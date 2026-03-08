@@ -1454,3 +1454,78 @@
 - **This should remove the need for the `rustc-abs` wrapper** — relative paths
   should now work in dynamically-linked programs because DSO code can resolve
   them through the injected CWD.
+
+### CWD injection deadlock fix + test results (Mar 7 2026)
+- **Deadlock root cause**: `path::open()` acquired `CWD.lock()`, then called
+  `get_injected_cwd()` inside the lock guard which called `set_cwd_manual()` →
+  `CWD.lock()` again → deadlock (Mutex is not reentrant).
+- **Fix**: Drop the `CWD.lock()` guard BEFORE calling `get_injected_cwd()`:
+  ```rust
+  let cwd_val = {
+      let guard = CWD.lock();
+      match guard.as_deref() {
+          Some(c) => Some(String::from(c)),
+          None => {
+              drop(guard);  // <-- prevents deadlock
+              get_injected_cwd()
+          }
+      }
+  };
+  ```
+- **Module path fix**: `linker.rs` must use `crate::platform::sys::path::clone_cwd()`
+  not `crate::platform::path::clone_cwd()`. The redox module is re-exported as `sys`
+  via `pub(crate) mod sys;` in `platform/mod.rs`.
+- **Type annotation fix**: `Box::leak(cwd)` needs `let cwd_leaked: &'static str = ...`
+  because Rust can't infer the borrow lifetime through `Box::leak()`.
+- **Vendor hash update**: Adding `bridge_build.rs` and `vendor.rs` changed snix's
+  Cargo.lock → vendor hash changed from `sha256-exmebgBCk6/...` to `sha256-PascrYRF/...`.
+  Both `snix.nix` and `snix-source-bundle.nix` need the same hash updated.
+
+### Self-hosting test — 50/50 PASS with CWD fix (Mar 7 2026)
+- All 50 tests pass with JOBS=1 (sequential compilation)
+- CWD injection eliminates the primary failure mode (relative path ENOENT)
+- snix self-compile: 168+ crates in 6m 43s (JOBS=1 in Cloud Hypervisor VM)
+- Test breakdown:
+  - 14 toolchain presence tests (PASS)
+  - 16 compilation/linking tests including proc-macros (PASS)
+  - 16 cargo workflow tests including build scripts, vendored deps (PASS)
+  - 4 snix self-compile tests (compile, binary exists, binary runs, eval) (PASS)
+- **JOBS=4 still hangs**: After ~115 crates, parallel compilation stalls. The last
+  crates printed are `bzip2-rs`, `ruzstd`, `ureq`, `lzma-rs`. No progress for 30 min.
+  Theory: Multiple concurrent fork+exec+pipe chains overwhelm Redox's pipe handling.
+  JOBS=1 is required for reliability.
+- **rustc-abs wrapper still in use**: Test still sets `RUSTC=/tmp/rustc-abs`. Now that
+  CWD injection is in place, the wrapper's path absolutization should be redundant.
+  Next step: test WITHOUT rustc-abs to verify CWD injection works end-to-end.
+
+### rustc-abs wrapper removed — 41/41 tests pass without it (Mar 7 2026)
+- **CWD injection confirmed working end-to-end**: `cargo build` with direct
+  `RUSTC=/nix/system/profile/bin/rustc` passes all tests. No path absolutization needed.
+- Removed: rustc-abs compilation block (~10s boot time savings)
+- Removed: 9 × `RUSTC=/tmp/rustc-abs` exports
+- Removed: 5 × direct `/tmp/rustc-abs` invocations (replaced with `rustc`)
+- `cargo-direct-no-wrapper` test changed from expected-fail to real test → PASS
+- Test count 50→41 because diagnostic fork tests (bash-fork-rustc, rustc-json-format,
+  rustc-piped, rustc-message-format, rustc-no-ld-debug) were removed/deduplicated.
+  All 41 are real functional tests.
+- Total time: 531s (8m 51s) including snix self-compile (168 crates, JOBS=1).
+
+### cargo-build-safe wrapper STILL NEEDED (Mar 7 2026)
+- Attempted removing cargo-build-safe (timeout+retry for flock hangs)
+- Result: cargo hangs at the "realtest" step (first real cargo build after the simple hello tests)
+- The flock hang is DIFFERENT from the CWD bug — it's relibc's flock() implementation
+- cargo-build-safe with 90s timeout + retry remains necessary
+- **What's been removed**: rustc-abs wrapper (CWD injection replaces it)
+- **What stays**: cargo-build-safe (flock timeout), --env-set (exec env propagation)
+
+### fcntl lock no-op — fix helps but doesn't fully eliminate hangs (Mar 7 2026)
+- **Patch**: `patch-relibc-fcntl-lock.py` — F_SETLK/F_SETLKW/F_GETLK return Ok(0)
+  immediately, F_GETLK sets l_type=F_UNLCK (no conflicting lock).
+- **Result**: Eliminates fcntl-based locking hangs. BUT cargo still hangs
+  intermittently on OTHER operations (first run worked, second run hung at
+  realtest step). The hang is NOT from flock or fcntl — something else in
+  cargo's startup/initialization blocks.
+- **cargo-build-safe stays**: The 90s timeout + retry wrapper is still needed
+  as a safety net for the remaining intermittent hangs.
+- **Final config**: 9 relibc patches, 4 cargo patches, 4 rustc patches.
+  41/41 tests pass in 539s. No rustc-abs wrapper needed.

@@ -896,9 +896,9 @@ let
                       echo "spy2 compile failed"
                     end
 
-                    # ── Diagnostic: relative path issue + rustc-abs wrapper ──
-                    # rustc can't resolve relative paths (cwd mismatch in DSO-loaded process).
-                    # Test a bash wrapper that converts relative .rs paths to absolute.
+                    # ── Cargo build test ──
+                    # CWD injection in ld_so means rustc resolves relative paths directly.
+                    # No rustc-abs wrapper needed.
                     echo "--- Setting up cargo project ---"
                     /nix/system/profile/bin/bash -c '
                       rm -rf /tmp/hello-direct
@@ -916,36 +916,8 @@ let
                       cd /tmp/hello-direct && echo "bash-pwd=$(pwd)" && cat src/main.rs
                     '
 
-                    # Build a compiled rustc-abs wrapper (bash scripts can't execute from /tmp on Redox)
-                    echo "--- Building compiled rustc-abs wrapper ---"
-                    # Write source file using echo (no heredocs — Ion doesn't support them)
-                    echo 'use std::os::unix::process::CommandExt;' > /tmp/rustc_abs.rs
-                    echo 'use std::process::Command;' >> /tmp/rustc_abs.rs
-                    echo 'fn main() {' >> /tmp/rustc_abs.rs
-                    echo '    let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("/"));' >> /tmp/rustc_abs.rs
-                    echo '    let args: Vec<String> = std::env::args().skip(1).map(|arg| {' >> /tmp/rustc_abs.rs
-                    echo '        if arg.ends_with(".rs") && !arg.starts_with("/") && !arg.starts_with("-") {' >> /tmp/rustc_abs.rs
-                    echo '            cwd.join(&arg).to_string_lossy().into_owned()' >> /tmp/rustc_abs.rs
-                    echo '        } else { arg }' >> /tmp/rustc_abs.rs
-                    echo '    }).collect();' >> /tmp/rustc_abs.rs
-                    echo '    let _err = Command::new("/nix/system/profile/bin/rustc").args(&args).exec();' >> /tmp/rustc_abs.rs
-                    echo '    std::process::exit(127);' >> /tmp/rustc_abs.rs
-                    echo '}' >> /tmp/rustc_abs.rs
-                    echo "Source written. Compiling..."
-                    /nix/system/profile/bin/bash -c '
-                      export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                      cat /tmp/rustc_abs.rs
-                      rustc /tmp/rustc_abs.rs -o /tmp/rustc-abs \
-                        --target x86_64-unknown-redox \
-                        -C linker=/nix/system/profile/bin/cc 2>&1
-                      echo "Compile+link exit: $?"
-                      echo "Testing /tmp/rustc-abs -vV..."
-                      /tmp/rustc-abs -vV 2>&1
-                      echo "rustc-abs-exit=$?"
-                    '
-
-                    # Test: cargo build with rustc-abs wrapper
-                    echo "--- Cargo build with rustc-abs wrapper ---"
+                    # Test: cargo build (direct rustc, no wrapper)
+                    echo "--- Cargo build ---"
                     /nix/system/profile/bin/bash -c '
                       set -x
                       cd /tmp/hello-direct
@@ -955,7 +927,7 @@ let
                       export CARGO_BUILD_JOBS=1
                       export CARGO_HOME=/root/.cargo
                       export CARGO_INCREMENTAL=0
-                      export RUSTC=/tmp/rustc-abs
+                      export RUSTC=/nix/system/profile/bin/rustc
                       cargo build -vv >/tmp/cargo-abs-stdout 2>/tmp/cargo-abs-stderr &
                       CARGO_PID=$!
                       SECONDS=0
@@ -998,10 +970,8 @@ let
                       echo "FUNC_TEST:cargo-build:FAIL:$cargo_abs_res"
                     end
 
-                    # ── Direct cargo build (no wrapper — known cwd bug diagnostic) ──
-                    # This tests WITHOUT rustc-abs to track the ld_so cwd bug.
-                    # Expected to FAIL until the kernel/ld_so cwd bug is fixed upstream.
-                    echo "--- Direct cargo build (no wrapper, known-fail) ---"
+                    # ── Direct cargo build (no RUSTC override — uses system rustc) ──
+                    echo "--- Direct cargo build (no RUSTC override) ---"
                     /nix/system/profile/bin/bash -c '
                       set -x
                       rm -rf /tmp/hello-direct2
@@ -1043,13 +1013,11 @@ let
                     if exists -f /tmp/cargo-direct-stderr
                       head -c 2000 /tmp/cargo-direct-stderr
                     end
-                    # Report as informational — this is a KNOWN BUG, not a regression
                     let cargo_direct_res = $(cat /tmp/cargo-direct-result)
                     if test "$cargo_direct_res" = "cargo-direct=0"
                       echo "FUNC_TEST:cargo-direct-no-wrapper:PASS"
                     else
-                      # Expected failure: ld_so cwd bug causes ENOENT on relative paths
-                      echo "FUNC_TEST:cargo-direct-no-wrapper:PASS:expected-fail=$cargo_direct_res"
+                      echo "FUNC_TEST:cargo-direct-no-wrapper:FAIL:$cargo_direct_res"
                     end
                       # ── Timeout diagnostic: try the exact rustc command from shell ──
                       echo "--- Timeout diagnostic: replicate cargo rustc cmd ---"
@@ -1104,7 +1072,7 @@ let
                       cp /root/.cargo/config.toml /tmp/cargo-realtest/
                       export CARGO_HOME=/tmp/cargo-realtest
                       export CARGO_INCREMENTAL=0
-                      export RUSTC=/tmp/rustc-abs
+                      export RUSTC=/nix/system/profile/bin/rustc
 
                       rm -rf /tmp/realtest
                       mkdir -p /tmp/realtest/src
@@ -1235,7 +1203,7 @@ let
                       cp /root/.cargo/config.toml /tmp/cargo-multifile/
                       export CARGO_HOME=/tmp/cargo-multifile
                       export CARGO_INCREMENTAL=0
-                      export RUSTC=/tmp/rustc-abs
+                      export RUSTC=/nix/system/profile/bin/rustc
 
                       rm -rf /tmp/multifile
                       mkdir -p /tmp/multifile/src
@@ -1401,7 +1369,7 @@ let
     MAINEOF
 
                       echo "[bs] Step 1: compile build.rs..."
-                      /tmp/rustc-abs --edition=2021 /tmp/buildscript/build.rs \
+                      rustc --edition=2021 /tmp/buildscript/build.rs \
                         -o /tmp/buildscript/build-script-bin \
                         --target x86_64-unknown-redox \
                         -C linker=/nix/system/profile/bin/cc \
@@ -1425,7 +1393,7 @@ let
                         echo "[bs] generated.rs:"
                         cat /tmp/buildscript/out/generated.rs
                         echo "[bs] Step 3: compile src/main.rs (second rustc)..."
-                        /tmp/rustc-abs --edition=2021 /tmp/buildscript/src/main.rs \
+                        rustc --edition=2021 /tmp/buildscript/src/main.rs \
                           -o /tmp/buildscript/main-bin \
                           --target x86_64-unknown-redox \
                           -C linker=/nix/system/profile/bin/cc \
@@ -1477,7 +1445,7 @@ let
                       cp /root/.cargo/config.toml /tmp/cargo-minigrep/
                       export CARGO_HOME=/tmp/cargo-minigrep
                       export CARGO_INCREMENTAL=0
-                      export RUSTC=/tmp/rustc-abs
+                      export RUSTC=/nix/system/profile/bin/rustc
 
                       rm -rf /tmp/minigrep
                       mkdir -p /tmp/minigrep/src
@@ -1674,7 +1642,7 @@ let
                       LFLAGS="-C linker=/nix/system/profile/bin/cc -C link-arg=-L/usr/lib/redox-sysroot/lib"
                       echo "fn main() {}" > /tmp/fork-test-9a.rs
                       echo "[9a] full compile+link with linker flags..."
-                      /tmp/rustc-abs $LFLAGS /tmp/fork-test-9a.rs -o /tmp/fork-test-9a-bin 2>/tmp/fork-test-9a-err
+                      rustc $LFLAGS /tmp/fork-test-9a.rs -o /tmp/fork-test-9a-bin 2>/tmp/fork-test-9a-err
                       echo "[9a] exit: $?"
                       if [ -f /tmp/fork-test-9a-bin ]; then
                         /tmp/fork-test-9a-bin
@@ -1693,10 +1661,10 @@ let
                       echo "fn main() { println!(\"alpha\"); }" > /tmp/fork-test-9b1.rs
                       echo "fn main() { println!(\"beta\"); }" > /tmp/fork-test-9b2.rs
                       echo "[9b] first compile+link..."
-                      /tmp/rustc-abs $LFLAGS /tmp/fork-test-9b1.rs -o /tmp/fork-test-9b1-bin 2>/dev/null
+                      rustc $LFLAGS /tmp/fork-test-9b1.rs -o /tmp/fork-test-9b1-bin 2>/dev/null
                       echo "[9b] first exit: $?"
                       echo "[9b] second compile+link..."
-                      /tmp/rustc-abs $LFLAGS /tmp/fork-test-9b2.rs -o /tmp/fork-test-9b2-bin 2>/dev/null
+                      rustc $LFLAGS /tmp/fork-test-9b2.rs -o /tmp/fork-test-9b2-bin 2>/dev/null
                       echo "[9b] second exit: $?"
                       if [ -f /tmp/fork-test-9b1-bin ]; then
                         OUT=$(/tmp/fork-test-9b1-bin)
@@ -1726,7 +1694,7 @@ let
                       cp /root/.cargo/config.toml /tmp/cargo-buildrs/
                       export CARGO_HOME=/tmp/cargo-buildrs
                       export CARGO_INCREMENTAL=0
-                      export RUSTC=/tmp/rustc-abs
+                      export RUSTC=/nix/system/profile/bin/rustc
                       rm -f /root/.cargo/.package-cache* 2>/dev/null
 
                       rm -rf /tmp/buildrs-test
@@ -1881,7 +1849,7 @@ let
                       cp /root/.cargo/config.toml /tmp/cargo-pathdep/
                       export CARGO_HOME=/tmp/cargo-pathdep
                       export CARGO_INCREMENTAL=0
-                      export RUSTC=/tmp/rustc-abs
+                      export RUSTC=/nix/system/profile/bin/rustc
 
                       rm -f /root/.cargo/.package-cache* 2>/dev/null
                       rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
@@ -2021,7 +1989,7 @@ let
                       cp /root/.cargo/config.toml /tmp/cargo-vendored/
                       export CARGO_HOME=/tmp/cargo-vendored
                       export CARGO_INCREMENTAL=0
-                      export RUSTC=/tmp/rustc-abs
+                      export RUSTC=/nix/system/profile/bin/rustc
 
                       rm -f /root/.cargo/.package-cache* 2>/dev/null
                       rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
@@ -2174,7 +2142,7 @@ let
                       cp /root/.cargo/config.toml /tmp/cargo-procmacro/
                       export CARGO_HOME=/tmp/cargo-procmacro
                       export CARGO_INCREMENTAL=0
-                      export RUSTC=/tmp/rustc-abs
+                      export RUSTC=/nix/system/profile/bin/rustc
 
                       rm -f /root/.cargo/.package-cache* 2>/dev/null
                       rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
@@ -2271,9 +2239,9 @@ let
                       mkdir -p /tmp/cargo-snix
                       export CARGO_HOME=/tmp/cargo-snix
                       export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                      export CARGO_BUILD_JOBS=4
+                      export CARGO_BUILD_JOBS=1
                       export CARGO_INCREMENTAL=0
-                      export RUSTC=/tmp/rustc-abs
+                      export RUSTC=/nix/system/profile/bin/rustc
 
                       # Clean any stale lock files
                       rm -f /tmp/cargo-snix/.package-cache* 2>/dev/null
@@ -2281,9 +2249,10 @@ let
                       echo "[snix-build] Starting cargo build..."
                       echo "[snix-build] Vendor crates: $(ls vendor/ | wc -l)"
 
-                      # Build with timeout — this is a BIG compile, give it 15 minutes
-                      # Use debug profile (release + LTO would take much longer)
-                      MAX_TIME=900
+                      # Build with timeout — this is a BIG compile (168 crates + build-std).
+                      # The big crates (nix-compat, snix-eval, snix-redox) each take 2-5 min
+                      # in the VM, so 30 minutes total is needed.
+                      MAX_TIME=1800
                       cargo build --offline 2>&1 | while IFS= read -r line; do
                         echo "$line" >> /tmp/snix-build-log
                         echo "$line"

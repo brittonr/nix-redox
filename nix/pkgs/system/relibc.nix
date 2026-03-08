@@ -89,6 +89,7 @@ let
       python3 ${./patch-relibc-abort-dso.py}
       python3 ${./patch-relibc-ld-so-align.py}
       python3 ${./patch-relibc-ld-so-cwd.py}
+      python3 ${./patch-relibc-fcntl-lock.py}
 
       runHook postPatch
     '';
