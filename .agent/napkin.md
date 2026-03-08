@@ -1529,3 +1529,38 @@
   as a safety net for the remaining intermittent hangs.
 - **Final config**: 9 relibc patches, 4 cargo patches, 4 rustc patches.
   41/41 tests pass in 539s. No rustc-abs wrapper needed.
+
+### snix build end-to-end on Redox — Nix builds on Redox! (Mar 7 2026)
+- **9 new VM tests** prove `snix build --expr/--file` works inside a running Redox VM
+- Full pipeline: evaluate Nix expression → compute store paths → execute builder →
+  verify outputs → register in PathInfoDb
+- **Tests**: simple file output, store path validation, PathInfoDb registration,
+  directory outputs, idempotent rebuild (cached), dependency chains (dep→main with
+  `${dep}` interpolation), executable outputs, build from .nix file, failing builder
+- **50/50 total tests pass** in 655s (41 existing + 9 new snix-build tests)
+
+**Critical lessons:**
+- **Derivation builders have NO default PATH**: `build_derivation()` sets
+  `PATH=/path-not-set` unless the derivation environment provides one. External
+  commands like `mkdir`, `cat`, `chmod` are NOT bash builtins — they need PATH.
+  Fix: add `export PATH=/nix/system/profile/bin:/bin:/usr/bin;` at the start of
+  builder `-c` strings, or use a heredoc .nix file with full PATH in the environment.
+- **`cut` not on Redox**: Not in uutils or extrautils. Use bash parameter expansion
+  `''${var#*=}` instead of `grep | cut -d= -f2`.
+- **Ion `$?` unreliable between external commands**: Running `bash -c 'grep ...'`
+  then checking `if test $? = 0` in Ion doesn't work reliably. Fix: emit
+  `FUNC_TEST:name:PASS/FAIL` directly from inside the bash block.
+- **Nix `\n` in double-quoted strings**: `\n` becomes an actual newline in the
+  Nix string value, splitting bash `-c` commands across lines. Use heredoc .nix
+  files for complex derivations instead of inline `--expr`.
+- **Nix `''` string + `${dep}`**: `''${dep}` in a Nix `''` string produces
+  literal `${dep}` in the output (Nix escape). Must use this for heredoc content
+  that snix will later evaluate as Nix interpolation. Bare `${dep}` would be
+  interpolated at the Nix `''` string level where `dep` is undefined → error.
+- **Heredoc terminator indentation**: All heredoc terminators in a Nix `''` string
+  must be at the same minimum indentation (4 spaces). A terminator at column 0
+  makes the minimum indent 0, which prevents stripping of ALL indentation,
+  breaking other heredoc terminators at 4-space indent (they'd stay at 4 spaces
+  instead of being stripped to column 0).
+- **Redox grep has no `\|` alternation**: `grep -qi "fail\|error"` silently
+  matches nothing. Must use separate `grep` calls with `elif`.
