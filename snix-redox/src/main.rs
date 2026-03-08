@@ -16,6 +16,7 @@ mod channel;
 mod derivation_builtins;
 mod eval;
 mod fetchers;
+mod flake;
 mod local_build;
 mod snix_io;
 mod vendor;
@@ -55,7 +56,16 @@ enum Command {
     },
 
     /// Build a derivation (evaluate + execute builder)
+    ///
+    /// Supports three modes:
+    ///   snix build .#ripgrep           — flake installable (new!)
+    ///   snix build --expr '...'        — Nix expression
+    ///   snix build --file path.nix     — Nix file
     Build {
+        /// Flake installable (e.g., `.#ripgrep`, `path#package`)
+        #[arg(index = 1)]
+        installable: Option<String>,
+
         /// Nix expression to build (must evaluate to a derivation)
         #[arg(short, long)]
         expr: Option<String>,
@@ -64,7 +74,7 @@ enum Command {
         #[arg(short, long)]
         file: Option<String>,
 
-        /// Flake attribute to build (e.g., "ripgrep")
+        /// Flake attribute to build via bridge (e.g., "ripgrep")
         #[arg(short, long)]
         attr: Option<String>,
 
@@ -449,6 +459,7 @@ fn main() {
     let result = match cli.command {
         Command::Eval { expr, file, raw } => eval::run(expr, file, raw),
         Command::Build {
+            installable,
             expr,
             file,
             attr,
@@ -456,7 +467,23 @@ fn main() {
             shared_dir,
             timeout,
         } => {
-            if bridge {
+            // Check if we got a flake installable (contains '#')
+            if let Some(ref inst_str) = installable {
+                if let Some(inst) = flake::parse_installable(inst_str) {
+                    if bridge {
+                        // Delegate to host via bridge
+                        bridge_build::run(None, None, Some(inst.attr_path), shared_dir, timeout)
+                    } else {
+                        flake::build_flake_installable(&inst)
+                    }
+                } else {
+                    Err(format!(
+                        "invalid installable '{}' (expected format: .#attr or path#attr)",
+                        inst_str
+                    )
+                    .into())
+                }
+            } else if bridge {
                 bridge_build::run(expr, file, attr, shared_dir, timeout)
             } else {
                 local_build::run(expr, file)

@@ -388,7 +388,7 @@ fn fetch_flat(url: &str, out: &str) -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// Supports `.tar.gz`, `.tar.xz`, `.tar.bz2`, `.tar.zst`, and plain `.tar`.
 /// Uses the same pure-Rust decompressors as the binary cache client.
-fn fetch_and_unpack(url: &str, out: &str) -> Result<(), Box<dyn std::error::Error>> {
+pub fn fetch_and_unpack(url: &str, out: &str) -> Result<(), Box<dyn std::error::Error>> {
     let resp = ureq::get(url).call()?;
     let reader = resp.into_body().into_reader();
 

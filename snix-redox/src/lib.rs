@@ -11,6 +11,7 @@ pub mod channel;
 pub mod derivation_builtins;
 pub mod eval;
 pub mod fetchers;
+pub mod flake;
 pub mod install;
 pub mod known_paths;
 pub mod local_build;
