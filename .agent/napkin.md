@@ -1742,3 +1742,28 @@
 - **Diagnostic approach**: Added process monitoring but /scheme/sys/context output wasn't
   captured by the serial console grep. Need to redirect diag output to a file and dump
   it after the hang, or use a simpler approach.
+
+### Network-enabled snix — remote binary cache install (Mar 9 2026)
+- **Full pipeline works**: `snix install mock-hello --cache-url http://10.0.2.2:18080` inside
+  a Redox VM downloads packages.json, narinfo, and NAR over HTTP from a host Python server.
+- **8/8 in-guest tests pass** in 2.5 seconds: DHCP, connectivity, search, install, execute,
+  store path, idempotent reinstall, show.
+- **CacheSource enum**: `Local(PathBuf)` vs `Remote(String)` abstracts over filesystem/HTTP.
+  `from_args(cache_url, cache_path)` determines variant. URL priority > path > default.
+  11 unit tests + 2 integration tests in install.rs.
+- **Ion `2>&1` doesn't work**: Ion uses `^>` for stderr redirect. `$(cmd 2>&1)` produces
+  "syntax error: expected file argument after redirection for output". Fix: redirect to
+  files with `cmd > /tmp/out` and `cmd ^> /tmp/err`, then `$(cat /tmp/out)`.
+- **Port 8080 conflict**: Host may have services on 8080. Use 18080 (or env var override).
+- **QEMU SLiRP 10.0.2.2 is the host**: Guest→10.0.2.2:PORT connects to host:PORT directly.
+  No hostfwd needed for guest→host connections (only for host→guest).
+- **setsockopt TODO warning**: `TODO: setsockopt(5, 6, 1, ...)` from relibc — TCP_NODELAY
+  not implemented. Harmless, ureq still works.
+- **`builtins.unsafeDiscardStringContext` for store paths in JSON**: Package info JSON
+  references store paths — Nix string context tracking prevents this in FOD builders.
+  Use `unsafeDiscardStringContext` to strip context for the JSON template.
+- **Flat cache layout**: NARs in cache root (not `nar/` subdir). Narinfo URL field rewritten
+  from `nar/hash.nar.zst` to `hash.nar.zst` via sed in test-binary-cache.nix.
+- **No new Cargo dependencies needed**: ureq (HTTP client) was already in Cargo.toml.
+  No vendor hash change. 375 host tests pass (was 371, +4 new).
+- **129/129 functional tests still pass**: No regressions from the refactoring.

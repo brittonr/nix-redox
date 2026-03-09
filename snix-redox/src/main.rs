@@ -12,6 +12,7 @@ mod activate;
 mod bridge;
 mod bridge_build;
 mod cache;
+mod cache_source;
 mod channel;
 mod derivation_builtins;
 mod eval;
@@ -127,14 +128,22 @@ enum Command {
         command: StoreCommand,
     },
 
-    /// Install a package from the local binary cache
+    /// Install a package from a binary cache (local or remote)
     Install {
         /// Package name (as listed in `snix search`)
         name: String,
 
+        /// Remote binary cache URL (e.g., http://10.0.2.2:8080)
+        #[arg(long)]
+        cache_url: Option<String>,
+
         /// Path to local binary cache (also: SNIX_CACHE_PATH env var)
         #[arg(short, long, default_value = "/nix/cache", env = "SNIX_CACHE_PATH")]
         cache_path: String,
+
+        /// Recursively fetch all dependencies
+        #[arg(short, long)]
+        recursive: bool,
     },
 
     /// Remove an installed package from the profile
@@ -143,20 +152,28 @@ enum Command {
         name: String,
     },
 
-    /// Search available packages in the local binary cache
+    /// Search available packages in a binary cache (local or remote)
     Search {
         /// Optional search pattern (substring match)
         pattern: Option<String>,
+
+        /// Remote binary cache URL (e.g., http://10.0.2.2:8080)
+        #[arg(long)]
+        cache_url: Option<String>,
 
         /// Path to local binary cache (also: SNIX_CACHE_PATH env var)
         #[arg(short, long, default_value = "/nix/cache", env = "SNIX_CACHE_PATH")]
         cache_path: String,
     },
 
-    /// Show detailed info about a cached package
+    /// Show detailed info about a cached package (local or remote)
     Show {
         /// Package name
         name: String,
+
+        /// Remote binary cache URL (e.g., http://10.0.2.2:8080)
+        #[arg(long)]
+        cache_url: Option<String>,
 
         /// Path to local binary cache (also: SNIX_CACHE_PATH env var)
         #[arg(short, long, default_value = "/nix/cache", env = "SNIX_CACHE_PATH")]
@@ -247,9 +264,17 @@ enum ProfileCommand {
         /// Package name (as listed in `snix search`)
         name: String,
 
+        /// Remote binary cache URL (e.g., http://10.0.2.2:8080)
+        #[arg(long)]
+        cache_url: Option<String>,
+
         /// Path to local binary cache (also: SNIX_CACHE_PATH env var)
         #[arg(short, long, default_value = "/nix/cache", env = "SNIX_CACHE_PATH")]
         cache_path: String,
+
+        /// Recursively fetch all dependencies
+        #[arg(short, long)]
+        recursive: bool,
     },
 
     /// Remove a package from the user profile
@@ -262,6 +287,10 @@ enum ProfileCommand {
     Show {
         /// Package name
         name: String,
+
+        /// Remote binary cache URL (e.g., http://10.0.2.2:8080)
+        #[arg(long)]
+        cache_url: Option<String>,
 
         /// Path to local binary cache (also: SNIX_CACHE_PATH env var)
         #[arg(short, long, default_value = "/nix/cache", env = "SNIX_CACHE_PATH")]
@@ -515,18 +544,75 @@ fn main() {
             StoreCommand::RemoveRoot { name } => store::remove_root(&name),
             StoreCommand::Roots => store::list_roots(),
         },
-        Command::Install { name, cache_path } => install::install(&name, &cache_path),
+        Command::Install {
+            name,
+            cache_url,
+            cache_path,
+            recursive,
+        } => {
+            let source = cache_source::CacheSource::from_args(
+                cache_url.as_deref(),
+                Some(&cache_path),
+            );
+            if recursive {
+                install::install_recursive(&name, &source)
+            } else {
+                install::install(&name, &source)
+            }
+        }
         Command::Remove { name } => install::remove(&name),
         Command::Search {
             pattern,
+            cache_url,
             cache_path,
-        } => local_cache::search(&cache_path, pattern.as_deref()),
-        Command::Show { name, cache_path } => install::show(&name, &cache_path),
+        } => {
+            let source = cache_source::CacheSource::from_args(
+                cache_url.as_deref(),
+                Some(&cache_path),
+            );
+            source.search(pattern.as_deref())
+        }
+        Command::Show {
+            name,
+            cache_url,
+            cache_path,
+        } => {
+            let source = cache_source::CacheSource::from_args(
+                cache_url.as_deref(),
+                Some(&cache_path),
+            );
+            install::show(&name, &source)
+        }
         Command::Profile { command } => match command {
             ProfileCommand::List => install::list_profile(),
-            ProfileCommand::Install { name, cache_path } => install::install(&name, &cache_path),
+            ProfileCommand::Install {
+                name,
+                cache_url,
+                cache_path,
+                recursive,
+            } => {
+                let source = cache_source::CacheSource::from_args(
+                    cache_url.as_deref(),
+                    Some(&cache_path),
+                );
+                if recursive {
+                    install::install_recursive(&name, &source)
+                } else {
+                    install::install(&name, &source)
+                }
+            }
             ProfileCommand::Remove { name } => install::remove(&name),
-            ProfileCommand::Show { name, cache_path } => install::show(&name, &cache_path),
+            ProfileCommand::Show {
+                name,
+                cache_url,
+                cache_path,
+            } => {
+                let source = cache_source::CacheSource::from_args(
+                    cache_url.as_deref(),
+                    Some(&cache_path),
+                );
+                install::show(&name, &source)
+            }
         },
         Command::Repl => eval::repl(),
         Command::Vendor { command } => vendor::run(&command),

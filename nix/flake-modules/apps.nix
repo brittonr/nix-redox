@@ -155,6 +155,12 @@
       meta.description = "Test in-guest networking: DHCP, DNS, ping, TCP via QEMU SLiRP";
     };
 
+    network-install-test = {
+      type = "app";
+      program = "${self'.packages.networkInstallTest}/bin/network-install-test";
+      meta.description = "Test snix install from remote HTTP binary cache via QEMU SLiRP";
+    };
+
     bridge-test = {
       type = "app";
       program = "${self'.packages.bridgeTest}/bin/bridge-test";
