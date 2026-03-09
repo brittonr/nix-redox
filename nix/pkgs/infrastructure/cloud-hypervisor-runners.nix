@@ -181,15 +181,7 @@ in
 
     # Create writable copies
     WORK_DIR=$(mktemp -d)
-    SAVED_TTY=""
-    cleanup() {
-      # Restore terminal settings (critical — raw mode makes the terminal unusable)
-      if [ -n "$SAVED_TTY" ]; then
-        stty "$SAVED_TTY" 2>/dev/null || true
-      fi
-      rm -rf "$WORK_DIR"
-    }
-    trap cleanup EXIT
+    trap "rm -rf $WORK_DIR" EXIT
 
     IMAGE="$WORK_DIR/redox.img"
     FIRMWARE="${cloudhvFirmware}/FV/CLOUDHV.fd"
@@ -231,25 +223,11 @@ in
     echo "  CH_DIRECT_IO=on|off - Direct I/O bypass (default: on)"
     echo ""
     echo "Controls:"
-    echo "  Type directly into the serial console after boot"
-    echo "  To exit: run 'poweroff' in Redox, or kill from another terminal"
+    echo "  Ctrl+C: Quit Cloud Hypervisor"
     echo ""
     echo "Network: Disabled (use run-redox-cloud-hypervisor-net for networking)"
     echo "Storage: virtio-blk with direct I/O"
     echo ""
-
-    # Set terminal to raw mode for serial console input.
-    # Cloud Hypervisor's --serial tty should do this itself, but in practice
-    # the terminal often stays in cooked mode (line-buffered, local echo),
-    # which means keystrokes are buffered by the host terminal driver and
-    # never reach the VM's UART until Enter is pressed — and even then,
-    # the double-echo (host + guest) makes the console unusable.
-    # Setting raw mode explicitly ensures immediate, clean I/O.
-    SAVED_TTY=""
-    if [ -t 0 ]; then
-      SAVED_TTY=$(stty -g 2>/dev/null || true)
-      stty raw -echo 2>/dev/null || true
-    fi
 
     # Cloud Hypervisor UEFI boot with performance tuning:
     # - --firmware: CLOUDHV.fd for UEFI
@@ -269,12 +247,7 @@ in
       --pci-segment pci_segment=0,mmio32_aperture_weight=4 \
       --serial tty \
       --console off \
-      "$@" || true
-
-    # Restore terminal
-    if [ -n "$SAVED_TTY" ]; then
-      stty "$SAVED_TTY" 2>/dev/null || true
-    fi
+      "$@"
   '';
 
   # Cloud Hypervisor runner with TAP networking
@@ -300,14 +273,7 @@ in
 
     # Create work directory
     WORK_DIR=$(mktemp -d)
-    SAVED_TTY=""
-    cleanup() {
-      if [ -n "$SAVED_TTY" ]; then
-        stty "$SAVED_TTY" 2>/dev/null || true
-      fi
-      rm -rf "$WORK_DIR"
-    }
-    trap cleanup EXIT
+    trap "rm -rf $WORK_DIR" EXIT
 
     IMAGE="$WORK_DIR/redox.img"
     FIRMWARE="${cloudhvFirmware}/FV/CLOUDHV.fd"
@@ -389,15 +355,8 @@ in
     echo "Network will be configured at boot with static IP."
     echo ""
     echo "Controls:"
-    echo "  Type directly into the serial console after boot"
-    echo "  To exit: run 'poweroff' in Redox, or kill from another terminal"
+    echo "  Ctrl+C: Quit Cloud Hypervisor"
     echo ""
-
-    # Set terminal to raw mode for serial console input
-    if [ -t 0 ]; then
-      SAVED_TTY=$(stty -g 2>/dev/null || true)
-      stty raw -echo 2>/dev/null || true
-    fi
 
     # Cloud Hypervisor with virtio-net (multi-queue for parallel packet processing):
     # - --disk: virtio-blk with direct=on for bypassing host page cache
@@ -415,12 +374,7 @@ in
       --net tap="$TAP_NAME",mac="$GUEST_MAC",num_queues="$CH_NET_QUEUES",queue_size="$CH_NET_QUEUE_SIZE" \
       --serial tty \
       --console off \
-      "$@" || true
-
-    # Restore terminal
-    if [ -n "$SAVED_TTY" ]; then
-      stty "$SAVED_TTY" 2>/dev/null || true
-    fi
+      "$@"
   '';
 
   # Cloud Hypervisor runner with shared filesystem via virtio-fs
@@ -445,12 +399,7 @@ in
     # Create writable copies
     WORK_DIR=$(mktemp -d)
 
-    SAVED_TTY=""
     cleanup() {
-      # Restore terminal first
-      if [ -n "$SAVED_TTY" ]; then
-        stty "$SAVED_TTY" 2>/dev/null || true
-      fi
       echo "Cleaning up..."
       # Kill virtiofsd if running
       if [ -n "$VIRTIOFSD_PID" ]; then
@@ -530,15 +479,8 @@ in
     echo "The guest accesses files via /scheme/$FS_TAG/"
     echo ""
     echo "Controls:"
-    echo "  Type directly into the serial console after boot"
-    echo "  To exit: run 'poweroff' in Redox, or kill from another terminal"
+    echo "  Ctrl+C: Quit"
     echo ""
-
-    # Set terminal to raw mode for serial console input
-    if [ -t 0 ]; then
-      SAVED_TTY=$(stty -g 2>/dev/null || true)
-      stty raw -echo 2>/dev/null || true
-    fi
 
     # Cloud Hypervisor with virtio-fs:
     # - --memory shared=on: Required for virtio-fs DAX
@@ -553,12 +495,7 @@ in
       --fs tag="$FS_TAG",socket="$VIRTIOFSD_SOCKET",num_queues=1,queue_size=512 \
       --serial tty \
       --console off \
-      "$@" || true
-
-    # Restore terminal
-    if [ -n "$SAVED_TTY" ]; then
-      stty "$SAVED_TTY" 2>/dev/null || true
-    fi
+      "$@"
   '';
 
   # Development mode runner with API socket for runtime control
@@ -575,15 +512,7 @@ in
 
     # Create writable copies
     WORK_DIR=$(mktemp -d)
-    SAVED_TTY=""
-    cleanup() {
-      if [ -n "$SAVED_TTY" ]; then
-        stty "$SAVED_TTY" 2>/dev/null || true
-      fi
-      rm -rf "$WORK_DIR"
-      rm -f "$CH_API_SOCKET"
-    }
-    trap cleanup EXIT
+    trap "rm -rf $WORK_DIR; rm -f $CH_API_SOCKET" EXIT
 
     IMAGE="$WORK_DIR/redox.img"
     FIRMWARE="${cloudhvFirmware}/FV/CLOUDHV.fd"
@@ -631,16 +560,8 @@ in
     echo "  nix run .#snapshot-redox -- /path/to/snapshot"
     echo ""
     echo "Controls:"
-    echo "  Type directly into the serial console after boot"
-    echo "  To exit: run 'poweroff' in Redox, or kill from another terminal"
-    echo "  For runtime control: use ch-remote with the API socket above"
+    echo "  Ctrl+C: Quit Cloud Hypervisor"
     echo ""
-
-    # Set terminal to raw mode for serial console input
-    if [ -t 0 ]; then
-      SAVED_TTY=$(stty -g 2>/dev/null || true)
-      stty raw -echo 2>/dev/null || true
-    fi
 
     # Cloud Hypervisor with API socket for runtime control:
     # - --api-socket: Enables pause/resume, snapshot/restore, hotplug
@@ -655,12 +576,7 @@ in
       --api-socket path="$CH_API_SOCKET" \
       --serial tty \
       --console off \
-      "$@" || true
-
-    # Restore terminal
-    if [ -n "$SAVED_TTY" ]; then
-      stty "$SAVED_TTY" 2>/dev/null || true
-    fi
+      "$@"
   '';
 
   # ch-remote wrapper: Pause VM
