@@ -1836,23 +1836,3 @@
   instead of `${pkgs.iptables}/bin/iptables` — failed on non-NixOS hosts
 - The "Scheme 'file' not found" warnings in boot log are NORMAL — they appear before redoxfs
   mounts the root filesystem. initnsmgr logs them as expected early-boot diagnostics.
-
-### Cloud Hypervisor serial console input fix (Mar 9 2026)
-- **Symptom**: User sees Redox shell prompt after `nix run .#run-redox` but can't type anything
-- **Root cause**: Cloud Hypervisor's `--serial tty` should set the host terminal to raw mode
-  for bidirectional serial I/O, but in practice the terminal often stays in cooked mode
-  (line-buffered with local echo). Keystrokes are buffered by the host terminal driver and
-  never properly reach the VM's UART, or the double-echo (host + guest) garbles the display.
-- **Contrast with QEMU runner**: The QEMU headless runner uses `expect` with `interact`
-  which properly sets raw mode on the terminal. Cloud Hypervisor runners just exec'd CH
-  directly without any terminal setup.
-- **Fix**: Added explicit `stty raw -echo` before launching Cloud Hypervisor in all four
-  interactive runners (headless, withNetwork, withSharedFs, withDev). Terminal state is
-  saved with `stty -g` and restored in cleanup trap on exit.
-- **Exit behavior change**: With raw mode, Ctrl-C no longer sends SIGINT to CH (it's sent
-  as ^C byte to the VM serial port instead). Exit via `poweroff` in Redox or `kill` from
-  another terminal. Updated help text in all runners.
-- **Guard**: `if [ -t 0 ]` ensures stty is only called when running interactively (not
-  when stdin is piped, which would break tests).
-- **`|| true` on CH invocation**: Prevents `set -e` from triggering before terminal restore
-  when CH exits with non-zero status.
