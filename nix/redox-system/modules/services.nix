@@ -59,7 +59,7 @@ in
       type = t.attrsOf initScriptType;
       default = {
         "00_base" = {
-          text = "notify /bin/ipcd";
+          text = "notify /bin/ipcd\nnotify /bin/ptyd";
           directory = "usr/lib/init.d";
         };
       };
