@@ -333,6 +333,15 @@ pub fn build_flake_eval_expr(
     system: &str,
 ) -> String {
     let flake_dir_abs = std::fs::canonicalize(flake_dir)
+        .map(|p| {
+            // Strip Redox `file:` prefix from canonicalized paths
+            let s = p.to_string_lossy();
+            if let Some(stripped) = s.strip_prefix("file:") {
+                PathBuf::from(stripped)
+            } else {
+                p
+            }
+        })
         .unwrap_or_else(|_| flake_dir.to_path_buf());
     let flake_nix = flake_dir_abs.join("flake.nix");
 
@@ -386,8 +395,14 @@ pub fn build_flake_eval_expr(
 ///
 /// Nix path literals are unquoted: `/nix/store/abc-hello`.
 /// Paths with special characters need to use `/.` prefix syntax.
+///
+/// On Redox, `std::fs::canonicalize()` may return paths with a `file:`
+/// prefix (e.g., `file:/tmp/foo`). This function strips the prefix so
+/// the resulting Nix path literal is valid.
 fn nix_path_literal(path: &Path) -> String {
     let s = path.to_string_lossy();
+    // Strip Redox `file:` prefix from canonicalized paths
+    let s = s.strip_prefix("file:").unwrap_or(&s);
     // Nix path literals are just the absolute path, unquoted.
     // But they must start with `/` or `./` to be recognized as paths.
     if s.starts_with('/') || s.starts_with("./") {
