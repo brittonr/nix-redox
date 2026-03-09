@@ -2712,93 +2712,93 @@ let
                       # Create .cargo dir (may not survive cp from Nix store)
                       mkdir -p /tmp/rg-build/.cargo
                       cat > /tmp/rg-build/.cargo/config.toml << CFGEOF
-[source.crates-io]
-replace-with = "vendored-sources"
+    [source.crates-io]
+    replace-with = "vendored-sources"
 
-[source.vendored-sources]
-directory = "vendor"
+    [source.vendored-sources]
+    directory = "vendor"
 
-[build]
-jobs = 1
-target = "x86_64-unknown-redox"
+    [build]
+    jobs = 1
+    target = "x86_64-unknown-redox"
 
-[target.x86_64-unknown-redox]
-linker = "/nix/system/profile/bin/cc"
-CFGEOF
+    [target.x86_64-unknown-redox]
+    linker = "/nix/system/profile/bin/cc"
+    CFGEOF
 
                       # Create the flake directory
                       mkdir -p /tmp/rg-flake
 
                       # Write builder script
                       cat > /tmp/rg-flake/build-ripgrep.sh << '"'"'BUILDEOF'"'"'
-set -e
-export PATH=/nix/system/profile/bin:/bin:/usr/bin
-export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
-export HOME="$TMPDIR"
-export CARGO_HOME="$TMPDIR/cargo-home"
-mkdir -p "$CARGO_HOME" "$out/bin"
+    set -e
+    export PATH=/nix/system/profile/bin:/bin:/usr/bin
+    export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+    export HOME="$TMPDIR"
+    export CARGO_HOME="$TMPDIR/cargo-home"
+    mkdir -p "$CARGO_HOME" "$out/bin"
 
-cd /tmp/rg-build
+    cd /tmp/rg-build
 
-# cargo timeout+retry — handles intermittent startup hangs
-# ALL cargo output to stderr so it does not pollute snix stdout
-MAX_TIME=300
-for attempt in 1 2 3; do
-  echo "[builder] ripgrep build attempt $attempt" >&2
-  cargo build --offline --bin rg -j1 >&2 2>&1 &
-  PID=$!
-  SECONDS=0
-  while kill -0 $PID 2>/dev/null; do
-    if [ $SECONDS -ge $MAX_TIME ]; then
-      echo "[builder] cargo timeout attempt $attempt" >&2
-      kill $PID 2>/dev/null; wait $PID 2>/dev/null
-      kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
-      rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
-      continue 2
-    fi
-    cat /scheme/sys/uname >/dev/null 2>/dev/null
-  done
-  wait $PID
-  CARGO_EXIT=$?
-  if [ $CARGO_EXIT -eq 0 ]; then
-    break
-  else
-    echo "[builder] cargo failed (exit=$CARGO_EXIT) attempt $attempt" >&2
-    if [ $attempt -eq 3 ]; then
-      exit $CARGO_EXIT
-    fi
-  fi
-done
+    # cargo timeout+retry — handles intermittent startup hangs
+    # ALL cargo output to stderr so it does not pollute snix stdout
+    MAX_TIME=300
+    for attempt in 1 2 3; do
+      echo "[builder] ripgrep build attempt $attempt" >&2
+      cargo build --offline --bin rg -j1 >&2 2>&1 &
+      PID=$!
+      SECONDS=0
+      while kill -0 $PID 2>/dev/null; do
+        if [ $SECONDS -ge $MAX_TIME ]; then
+          echo "[builder] cargo timeout attempt $attempt" >&2
+          kill $PID 2>/dev/null; wait $PID 2>/dev/null
+          kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
+          rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
+          continue 2
+        fi
+        cat /scheme/sys/uname >/dev/null 2>/dev/null
+      done
+      wait $PID
+      CARGO_EXIT=$?
+      if [ $CARGO_EXIT -eq 0 ]; then
+        break
+      else
+        echo "[builder] cargo failed (exit=$CARGO_EXIT) attempt $attempt" >&2
+        if [ $attempt -eq 3 ]; then
+          exit $CARGO_EXIT
+        fi
+      fi
+    done
 
-# Copy the built binary
-cp target/x86_64-unknown-redox/debug/rg "$out/bin/rg"
-echo "[builder] ripgrep build complete" >&2
-BUILDEOF
+    # Copy the built binary
+    cp target/x86_64-unknown-redox/debug/rg "$out/bin/rg"
+    echo "[builder] ripgrep build complete" >&2
+    BUILDEOF
 
                       # Write flake.nix
                       cat > /tmp/rg-flake/flake.nix << '"'"'FLAKEEOF'"'"'
-{
-  outputs = { self }: {
-    packages."x86_64-unknown-redox".ripgrep = derivation {
-      name = "ripgrep-14.1.1";
-      system = "x86_64-unknown-redox";
-      builder = "/nix/system/profile/bin/bash";
-      args = ["/tmp/rg-flake/build-ripgrep.sh"];
-    };
-  };
-}
-FLAKEEOF
+    {
+      outputs = { self }: {
+        packages."x86_64-unknown-redox".ripgrep = derivation {
+          name = "ripgrep-14.1.1";
+          system = "x86_64-unknown-redox";
+          builder = "/nix/system/profile/bin/bash";
+          args = ["/tmp/rg-flake/build-ripgrep.sh"];
+        };
+      };
+    }
+    FLAKEEOF
 
                       # Write flake.lock (no external inputs)
                       cat > /tmp/rg-flake/flake.lock << '"'"'LOCKEOF'"'"'
-{
-  "version": 7,
-  "root": "root",
-  "nodes": {
-    "root": {}
-  }
-}
-LOCKEOF
+    {
+      "version": 7,
+      "root": "root",
+      "nodes": {
+        "root": {}
+      }
+    }
+    LOCKEOF
 
                       # Run snix build .#ripgrep!
                       echo "=== Starting snix build .#ripgrep ==="

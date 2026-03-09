@@ -254,6 +254,7 @@ let
     inherit bootloader;
     memoryMB = 8192;
     cpus = 4;
+    defaultTimeout = 1500; # snix self-compile (168 crates) + ripgrep build need ~900s
   };
 
   mkBridgeTest = modularPkgs.infrastructure.mkBridgeTest;

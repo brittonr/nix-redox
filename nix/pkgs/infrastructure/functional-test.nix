@@ -31,6 +31,7 @@
   bootloader,
   memoryMB ? 1024,
   cpus ? 2,
+  defaultTimeout ? 120,
 }:
 
 let
@@ -41,7 +42,7 @@ pkgs.writeShellScriptBin "functional-test" ''
   set -uo pipefail
 
   # === Configuration ===
-  TIMEOUT="''${FUNCTIONAL_TEST_TIMEOUT:-120}"
+  TIMEOUT="''${FUNCTIONAL_TEST_TIMEOUT:-${toString defaultTimeout}}"
   MODE="auto"
   VERBOSE=0
 
@@ -54,7 +55,7 @@ pkgs.writeShellScriptBin "functional-test" ''
     echo "Options:"
     echo "  --qemu         Force QEMU TCG mode (no KVM required)"
     echo "  --ch           Force Cloud Hypervisor mode (KVM required)"
-    echo "  --timeout SEC  Set timeout in seconds (default: 120, env: FUNCTIONAL_TEST_TIMEOUT)"
+    echo "  --timeout SEC  Set timeout in seconds (default: ${toString defaultTimeout}, env: FUNCTIONAL_TEST_TIMEOUT)"
     echo "  --verbose      Show serial output in real time"
     echo "  --help         Show this help"
     exit 0
