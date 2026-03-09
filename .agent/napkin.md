@@ -1968,3 +1968,39 @@
   instead of `${pkgs.iptables}/bin/iptables` — failed on non-NixOS hosts
 - The "Scheme 'file' not found" warnings in boot log are NORMAL — they appear before redoxfs
   mounts the root filesystem. initnsmgr logs them as expected early-boot diagnostics.
+
+### Scheme daemon VM tests — 23/23 PASS (Mar 9 2026)
+- **Root cause of daemon hangs**: On Redox, ANY syscall from a scheme daemon's
+  event loop that targets another scheme (including `file:`) blocks the daemon
+  thread indefinitely. The kernel blocks the thread until the scheme response
+  arrives, but the daemon can't process the pending scheme request while blocked.
+  This means `fs::File::open()`, `fs::metadata()`, `Path::exists()` — ALL of
+  these are forbidden inside scheme handlers.
+- **Exception**: `Path::exists()` on the root listing (list_store_paths) works
+  because it runs during `getdents` for the ROOT directory. Hypothesis: the
+  kernel may special-case certain operations, or the timing is different for
+  simple stat() vs full open(). The root listing works but is fragile — should
+  be replaced with manifest-based listing for consistency.
+- **Lazy file handles**: `open_file_lazy()` records path + metadata but defers
+  `fs::File::open()` until first `read()`. Metadata (size, executable) comes
+  from the manifest at handle creation time. `fstat` returns synthetic metadata.
+  Applied to BOTH stored and profiled daemons.
+- **Manifest-based directory detection**: `is_directory_in_manifest()` checks
+  manifest entries before deciding whether to open as file or directory. If the
+  manifest says it's a dir (explicit "dir" entry or prefix of deeper entries),
+  use `open_dir_unchecked()` (no I/O). Only try file open for known file paths.
+  Unknown paths default to directory (safe: dir open doesn't do I/O).
+- **Profile bootstrap from install manifest**: Profiled loads `mapping.json` on
+  startup. When `mapping.json` doesn't exist but `manifest.json` does (packages
+  installed before daemon started), profiled seeds its mapping from the install
+  manifest. Persists the bootstrapped mapping immediately.
+- **Ion shell empty $() crash**: `let var = $(grep pattern file)` crashes Ion when
+  grep returns empty output — "Variable '' does not exist". Fix: use `grep ... > /dev/null`
+  and test `$?` instead of capturing output in a variable.
+- **Ion `let err = $(cat file)` crash**: Same issue when the file is empty or
+  the command produces no output. All `$(...)` assignments in Ion must be guarded
+  against empty output. Use file-based or exit-code-based testing instead.
+- **profiled process_control return type changed**: Now returns
+  `(String, Option<(String, Vec<ManifestEntry>)>)` — tests must access `.0` for
+  the message string. Tests were broken but only visible when cross-compilation
+  is bypassed (CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu).
