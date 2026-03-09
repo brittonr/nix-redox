@@ -24,6 +24,22 @@
   booting the image and checking serial output for `init: failed` errors. Nix eval/build
   success does NOT mean the init daemon can parse the commands.
 
+### vm-control extension (Mar 9 2026)
+- **Serial socket timing**: With `-serial unix:sock,server,nowait`, data is DROPPED if
+  no client is connected. Must connect serial socket BEFORE QMP — serial output starts
+  during OVMF init (~100ms), before QMP handshake completes. The 50ms poll interval
+  in `waitForFile` is fast enough to catch bootloader output on KVM.
+- **Graphical serial is read-only**: In Redox graphical mode, the `debug:` scheme
+  doesn't support `tcsetattr` (ENOTSUP). Ion's `liner` can't enter raw mode, so serial
+  input (commands) doesn't work. Serial READ (boot logs, expect patterns) works fine.
+- **Screenshot timing**: QMP `screendump` captures the VGA framebuffer at the instant
+  of the call. Need 5-8s delay after "Boot Complete" for Orbital to render the login
+  screen. At boot time, the framebuffer is all black (1-bit grayscale, 263 bytes).
+- **PPM conversion**: Use `magick` (ImageMagick 7) not `convert` (deprecated v6 compat).
+  Both work, but `magick` avoids the deprecation warning.
+- **snapshot=on**: QEMU's per-drive `snapshot=on` creates a temporary qcow2 overlay.
+  The original disk image is never modified. Much faster than copying the image.
+
 ### Graphical initfs exceeds 64 MiB default (Mar 9 2026)
 - `redox-initfs-ar` has a `--max-size` flag defaulting to 64 MiB (raw bytes, not human-readable)
 - Graphical profile initfs includes core daemons + graphics (vesad, inputd, fbbootlogd, fbcond, ps2d) + USB (xhcid, usbhubd, usbhidd) + drivers + ion×4 + redoxfs ≈ 60-65 MiB
