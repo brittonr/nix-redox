@@ -16,14 +16,33 @@
 let
   defaultMemory = toString (vmConfig.memorySize or 2048);
   defaultCpus = toString (vmConfig.cpus or 4);
+
+  # Helper to find an available port, starting from a preferred default
+  portFinder = ''
+    find_available_port() {
+      local preferred="$1"
+      local port="$preferred"
+      while ${pkgs.iproute2}/bin/ss -tln | grep -q ":$port " 2>/dev/null; do
+        echo "Port $port is in use, trying $((port + 1))..." >&2
+        port=$((port + 1))
+        if [ "$port" -gt 65535 ]; then
+          echo "ERROR: No available port found starting from $preferred" >&2
+          exit 1
+        fi
+      done
+      echo "$port"
+    }
+  '';
 in
 
 {
   # Graphical QEMU runner with serial logging and auto-resolution selection
   graphical = pkgs.writeShellScriptBin "run-redox-graphical" ''
-    # Configurable host ports (override if defaults conflict)
-    SSH_PORT=''${REDOX_SSH_PORT:-8022}
-    HTTP_PORT=''${REDOX_HTTP_PORT:-8080}
+    ${portFinder}
+
+    # Configurable host ports (override if defaults conflict, auto-detect if busy)
+    SSH_PORT=$(find_available_port "''${REDOX_SSH_PORT:-8022}")
+    HTTP_PORT=$(find_available_port "''${REDOX_HTTP_PORT:-8080}")
 
     # Create writable copies
     WORK_DIR=$(mktemp -d)
@@ -49,7 +68,7 @@ in
     echo "Close the QEMU window to quit."
     echo ""
 
-    # Use expect to auto-select resolution via serial while GTK window displays graphics
+    # Use expect to auto-select resolution via serial, then hand control to user
     ${pkgs.expect}/bin/expect -c "
       log_file -a $LOG_FILE
       set timeout 120
@@ -75,15 +94,15 @@ in
         -device hda-duplex \
         -serial mon:stdio
 
-      # Wait for the resolution selection screen and automatically select
+      # Wait for the resolution selection screen and automatically select.
+      # After sending Enter, fall through immediately to interact (no exp_continue).
       expect {
         \"Arrow keys and enter select mode\" {
           sleep 2
           send \"\r\"
-          exp_continue
         }
         timeout {
-          # Continue without intervention
+          # Boot bypassed resolution selection, continue
         }
       }
       interact
@@ -100,9 +119,11 @@ in
 
   # Headless QEMU runner with serial console
   headless = pkgs.writeShellScriptBin "run-redox" ''
-    # Configurable host ports (override if defaults conflict)
-    SSH_PORT=''${REDOX_SSH_PORT:-8022}
-    HTTP_PORT=''${REDOX_HTTP_PORT:-8080}
+    ${portFinder}
+
+    # Configurable host ports (override if defaults conflict, auto-detect if busy)
+    SSH_PORT=$(find_available_port "''${REDOX_SSH_PORT:-8022}")
+    HTTP_PORT=$(find_available_port "''${REDOX_HTTP_PORT:-8080}")
 
     # Create writable copies
     WORK_DIR=$(mktemp -d)
@@ -149,20 +170,15 @@ in
       -device e1000,netdev=net0 \
       -nographic
 
-      # Wait for the resolution selection screen and automatically select
+      # Wait for the resolution selection screen and automatically select.
+      # After sending Enter, fall through immediately to interact (no exp_continue).
       expect {
         \"Arrow keys and enter select mode\" {
           sleep 2
           send \"\r\"
-          exp_continue
-        }
-        \"About to start shell with stdio\" {
-          # Shell starting message - continue
-          exp_continue
         }
         timeout {
-          # If no specific pattern, just send enter and continue
-          send \"\r\"
+          # Boot bypassed resolution selection, continue
         }
       }
       interact
