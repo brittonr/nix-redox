@@ -1632,3 +1632,52 @@
   fails and rustc can't properly format the error, it panics. The "fatal runtime
   error: failed to initiate panic, error 0, aborting" message is from the Rust
   runtime's double-panic handler.
+
+### Flake installable support for snix build (Mar 7 2026)
+- **Implemented**: `snix build .#ripgrep` syntax — parse installable, resolve flake.lock, fetch
+  inputs, build eval expression, evaluate + build using existing pipeline
+- **New module**: `snix-redox/src/flake.rs` (890 lines + 370 lines tests = 1260 total)
+- **Key design decisions**:
+  - `fetch_and_unpack` in `fetchers.rs` made `pub` — reused for flake input fetching
+  - Installable positional arg added to `Build` command (index = 1) alongside existing --expr/--file
+  - Short attr form `ripgrep` auto-expands to `packages."<system>".ripgrep`
+  - Qualified attrs like `packages.x86_64-linux.hello` used as-is
+  - GitHub inputs → `https://github.com/{owner}/{repo}/archive/{rev}.tar.gz`
+  - GitLab inputs → `https://{host}/{owner}/{repo}/-/archive/{rev}/{repo}-{rev}.tar.gz`
+  - `path` type inputs → local path passthrough
+  - `follows` chains resolved by walking node inputs recursively
+- **FOD store path computation**: Uses `build_ca_path("source", CAHash::Nar(sha256), ...)` —
+  all flake inputs named "source" (matches Nix behavior for `fetchTarball`)
+- **Type annotation needed**: `build_ca_path` returns `StorePath<_>` — Rust can't infer the
+  generic parameter from context. Must annotate: `let store_path: StorePath<String> = ...`
+- **`nix_path_literal` for `./` paths**: Must check `s.starts_with("./")` before prepending
+  `./`, otherwise `./foo` becomes `././foo`
+- **31 new tests** covering all parsing, resolution, URL generation, and real flake.lock validation
+- **Total**: 360 tests pass (329 prior + 31 new), cross-compilation clean
+
+### Flake installable VM tests (Mar 8 2026)
+- **11 in-guest tests** prove the full flake pipeline works on Redox:
+  flake-build-simple, flake-build-store-path, flake-build-qualified,
+  flake-build-dir, flake-build-multi, flake-build-dep, flake-no-lock,
+  flake-no-flake-nix, flake-build-cached, flake-build-registered,
+  flake-build-path-input
+- **`bash` was missing from functional-test profile**: `redox-bash` was in development
+  profile but not in functional-test's systemPackages. The existing fetcher tests that
+  used bare `bash -c` were silently broken — Ion reported "command not found: bash" and
+  crashed the startup script, preventing all subsequent tests from running.
+  Fix: added `opt "redox-bash"` to systemPackages AND changed all `bash -c` calls to
+  `/nix/system/profile/bin/bash -c` for robustness.
+- **Nix `''${dep}` escaping**: In Nix `''` strings, `${dep}` gets interpolated by Nix.
+  For flake.nix content that snix-eval should see as `${dep}` Nix interpolation, use
+  `''${dep}` which produces literal `${dep}` after Nix string processing. Same pattern
+  as self-hosting-test.nix uses for snix build dependency tests.
+- **Redox `file:` prefix in canonicalize**: `std::fs::canonicalize()` may return `file:/path`
+  on Redox. Added defensive `strip_prefix("file:")` in both `nix_path_literal()` and
+  `build_flake_eval_expr()` to prevent broken Nix path literals like `./file:/tmp/...`.
+- **Heredoc quoting in bash-c blocks**: `'"'"'FLAKEEOF'"'"'` produces single-quoted heredoc
+  `'FLAKEEOF'` — prevents bash variable expansion in the heredoc body (preserves `$out`,
+  `${dep}` for the Nix evaluator to handle later).
+- **Path input test**: `type: "path"` in flake.lock → `fetch_locked_input` returns the raw
+  path string → used as Nix path literal in eval expression → snix-eval resolves relative to
+  CWD → works with both `./data` and absolute paths.
+- **Total**: 129 functional tests pass (118 prior + 11 new), 0 failures, 7.7s runtime
