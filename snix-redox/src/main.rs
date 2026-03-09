@@ -19,7 +19,10 @@ mod eval;
 mod fetchers;
 mod flake;
 mod local_build;
+mod profiled;
+mod sandbox;
 mod snix_io;
+mod stored;
 mod vendor;
 mod install;
 mod known_paths;
@@ -205,6 +208,34 @@ enum Command {
     Channel {
         #[command(subcommand)]
         command: ChannelCommand,
+    },
+
+    /// Run the store scheme daemon (Redox only)
+    ///
+    /// Registers the `store:` scheme and serves /nix/store/ paths
+    /// with lazy NAR extraction on first access.
+    Stored {
+        /// Local binary cache path for lazy extraction
+        #[arg(long, default_value = "/nix/cache", env = "SNIX_CACHE_PATH")]
+        cache_path: String,
+
+        /// Store directory path
+        #[arg(long, default_value = "/nix/store")]
+        store_dir: String,
+    },
+
+    /// Run the profile scheme daemon (Redox only)
+    ///
+    /// Registers the `profile:` scheme and presents union views
+    /// of installed packages (no symlinks needed).
+    Profiled {
+        /// Profiles directory
+        #[arg(long, default_value = "/nix/var/snix/profiles")]
+        profiles_dir: String,
+
+        /// Store directory path
+        #[arg(long, default_value = "/nix/store")]
+        store_dir: String,
     },
 }
 
@@ -719,6 +750,20 @@ fn main() {
                 rebuild::show_config(config.as_deref())
             }
         },
+        Command::Stored {
+            cache_path,
+            store_dir,
+        } => stored::run(stored::StoredConfig {
+            cache_path,
+            store_dir,
+        }),
+        Command::Profiled {
+            profiles_dir,
+            store_dir,
+        } => profiled::run(profiled::ProfiledConfig {
+            profiles_dir,
+            store_dir,
+        }),
     };
 
     if let Err(e) = result {
