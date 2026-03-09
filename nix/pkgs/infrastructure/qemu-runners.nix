@@ -21,6 +21,10 @@ in
 {
   # Graphical QEMU runner with serial logging and auto-resolution selection
   graphical = pkgs.writeShellScriptBin "run-redox-graphical" ''
+    # Configurable host ports (override if defaults conflict)
+    SSH_PORT=''${REDOX_SSH_PORT:-8022}
+    HTTP_PORT=''${REDOX_HTTP_PORT:-8080}
+
     # Create writable copies
     WORK_DIR=$(mktemp -d)
     trap "rm -rf $WORK_DIR" EXIT
@@ -60,7 +64,7 @@ in
         -kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI \
         -drive file=$IMAGE,format=raw,if=none,id=disk0 \
         -device virtio-blk-pci,drive=disk0 \
-        -netdev user,id=net0,hostfwd=tcp::8022-:22,hostfwd=tcp::8080-:80 \
+        -netdev user,id=net0,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$HTTP_PORT-:80 \
         -device e1000,netdev=net0 \
         -vga std \
         -display gtk \
@@ -86,7 +90,7 @@ in
     "
 
     echo ""
-    echo "Network: e1000 with user-mode NAT (ports: 8022->22, 8080->80)"
+    echo "Network: e1000 with user-mode NAT (ports: $SSH_PORT->22, $HTTP_PORT->80)"
     echo "QEMU has exited. Serial log saved to: $LOG_FILE"
     echo "Displaying last 50 lines of log:"
     echo "----------------------------------------"
@@ -96,6 +100,10 @@ in
 
   # Headless QEMU runner with serial console
   headless = pkgs.writeShellScriptBin "run-redox" ''
+    # Configurable host ports (override if defaults conflict)
+    SSH_PORT=''${REDOX_SSH_PORT:-8022}
+    HTTP_PORT=''${REDOX_HTTP_PORT:-8080}
+
     # Create writable copies
     WORK_DIR=$(mktemp -d)
     trap "rm -rf $WORK_DIR" EXIT
@@ -115,7 +123,7 @@ in
     echo "  Ctrl+A then X: Quit QEMU"
     echo ""
     echo "Network: e1000 with user-mode NAT"
-    echo "  - Host ports 8022->22 (SSH), 8080->80 (HTTP)"
+    echo "  - Host ports $SSH_PORT->22 (SSH), $HTTP_PORT->80 (HTTP)"
     echo "  - Guest IP via DHCP (typically 10.0.2.15)"
     echo "  - Gateway: 10.0.2.2"
     echo ""
@@ -137,7 +145,7 @@ in
       -kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI \
       -drive file=$IMAGE,format=raw,if=none,id=disk0 \
       -device virtio-blk-pci,drive=disk0 \
-      -netdev user,id=net0,hostfwd=tcp::8022-:22,hostfwd=tcp::8080-:80 \
+      -netdev user,id=net0,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$HTTP_PORT-:80 \
       -device e1000,netdev=net0 \
       -nographic
 
