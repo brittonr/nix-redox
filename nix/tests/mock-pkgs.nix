@@ -343,11 +343,39 @@ rec {
     ];
   };
 
-  # Orbital data
-  orbdata = pkgs.runCommand "mock-orbdata" { } ''
-    mkdir -p $out/share/fonts
-    echo "Mock font data" > $out/share/fonts/font.ttf
-  '';
+  # Orbital data (fonts, icons, cursors, config)
+  # Real orbdata has ui/ at the top level, which must be copied to /ui/ on the rootfs.
+  orbdata =
+    (pkgs.runCommand "mock-orbdata" { } ''
+      # ui/ tree — Orbital looks for /ui/orbital.toml, /ui/fonts/, etc.
+      mkdir -p $out/ui/fonts/Mono/Fira $out/ui/fonts/Sans/Fira $out/ui/icons/apps
+      cat > $out/ui/orbital.toml << 'EOF'
+      cursor = "/ui/left_ptr.png"
+      bottom_left_corner = "/ui/bottom_left_corner.png"
+      bottom_right_corner = "/ui/bottom_right_corner.png"
+      bottom_side = "/ui/bottom_side.png"
+      left_side = "/ui/left_side.png"
+      right_side = "/ui/right_side.png"
+      window_max = "/ui/window_max.png"
+      window_max_unfocused = "/ui/window_max_unfocused.png"
+      window_close = "/ui/window_close.png"
+      window_close_unfocused = "/ui/window_close_unfocused.png"
+      EOF
+      echo "mock cursor" > $out/ui/left_ptr.png
+      echo "mock background" > $out/ui/background.jpg
+      echo "mock font" > $out/ui/fonts/Mono/Fira/Regular.ttf
+      echo "mock font" > $out/ui/fonts/Sans/Fira/Regular.ttf
+      echo "mock icon" > $out/ui/icons/apps/utilities-terminal.png
+
+      # usr/ tree — also present in upstream orbdata
+      mkdir -p $out/usr/share/fonts $out/usr/share/icons $out/usr/share/applications
+      echo "mock font" > $out/usr/share/fonts/Regular.ttf
+      echo "mock icon" > $out/usr/share/icons/terminal.png
+      echo "mock mimeapps" > $out/usr/share/applications/mimeapps.list
+    '')
+    // {
+      pname = "orbdata";
+    };
 
   # Orbital terminal
   orbterm = mkMockPackageWithBins {

@@ -1040,15 +1040,17 @@ adios:
               cp "$f" $out/usr/bin/$(basename "$f") 2>/dev/null || true
             done
           fi
-          # Data packages (e.g. orbdata): copy ui/ and usr/ trees to root filesystem.
+          # Data packages (e.g. orbdata): merge ui/ and usr/ trees into root filesystem.
           # Orbital expects /ui/orbital.toml, /ui/fonts/, /ui/icons/, etc.
+          # Use "source/." to merge contents into existing directories rather than
+          # nesting (cp -r pkg/usr $out/usr would create $out/usr/usr/ if $out/usr exists).
           if [ -d "${pkg}/ui" ]; then
-            cp -r --no-clobber "${pkg}/ui" $out/ui 2>/dev/null || \
-              cp -r "${pkg}/ui/." $out/ui/
+            mkdir -p $out/ui
+            cp -rn "${pkg}/ui/." "$out/ui/"
           fi
           if [ -d "${pkg}/usr" ]; then
-            cp -r --no-clobber "${pkg}/usr" $out/usr 2>/dev/null || \
-              cp -r "${pkg}/usr/." $out/usr/
+            mkdir -p $out/usr
+            cp -rn "${pkg}/usr/." "$out/usr/"
           fi
         '') bootPackages
       );

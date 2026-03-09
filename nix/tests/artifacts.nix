@@ -463,6 +463,58 @@ in
     ];
   };
 
+  # Test: rootTree has orbdata assets when graphics enabled
+  # Orbital crashes without /ui/orbital.toml, /ui/fonts/, and cursor images.
+  # The build module must copy orbdata's ui/ and usr/ trees to the root filesystem.
+  rootTree-has-orbdata-assets = mkArtifactTest {
+    name = "rootTree-has-orbdata-assets";
+    description = "Verifies rootTree contains Orbital data files (config, fonts, cursors, icons) from orbdata package";
+    modules = [
+      {
+        "/graphics" = {
+          enable = true;
+        };
+      }
+    ];
+    checks = [
+      # orbital.toml — the config that Orbital loads at startup
+      {
+        file = "ui/orbital.toml";
+        contains = "cursor";
+      }
+      # Cursor image — Orbital exits if it can't load this
+      { file = "ui/left_ptr.png"; }
+      # Fonts — Orbital exits with "failed to read font" without these
+      { file = "ui/fonts/Mono/Fira/Regular.ttf"; }
+      { file = "ui/fonts/Sans/Fira/Regular.ttf"; }
+      # Icons — desktop launcher needs these
+      { file = "ui/icons/apps/utilities-terminal.png"; }
+      # Background image
+      { file = "ui/background.jpg"; }
+      # usr/share tree from orbdata
+      { file = "usr/share/applications/mimeapps.list"; }
+    ];
+  };
+
+  # Test: rootTree does NOT have /ui/ when graphics disabled
+  rootTree-no-orbdata-without-graphics = mkArtifactTest {
+    name = "rootTree-no-orbdata-without-graphics";
+    description = "Verifies rootTree omits /ui/ directory when graphics is disabled";
+    modules = [
+      {
+        "/graphics" = {
+          enable = false;
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "ui/orbital.toml";
+        notExists = true;
+      }
+    ];
+  };
+
   # === initfs Tests ===
   # Note: These are harder to test without actually building initfs,
   # but we can verify the build module logic indirectly
