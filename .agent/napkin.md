@@ -1681,3 +1681,25 @@
   path string → used as Nix path literal in eval expression → snix-eval resolves relative to
   CWD → works with both `./data` and absolute paths.
 - **Total**: 129 functional tests pass (118 prior + 11 new), 0 failures, 7.7s runtime
+
+### snix build .#ripgrep — real software built through Nix flake on Redox (Mar 8 2026)
+- **ripgrep 14.1.1 compiled end-to-end** inside a Redox VM through `snix build .#ripgrep`
+- Pipeline: snix eval flake.nix → derivationStrict → cargo build (33 crates) → link → rg ELF → works!
+- Build time: 1m 41s (JOBS=1) in Cloud Hypervisor VM with 4 CPUs + 8GB RAM
+- **ripgrep-source-bundle.nix**: Source + vendored deps (109MB) bundled at `/usr/src/ripgrep`
+  The cargo vendor includes windows/pcre2/jemalloc crates (~80MB) but cargo filters by target
+- **Builder stdout pollution**: `build_derivation()` on Redox uses `Stdio::inherit()` which
+  sends builder stdout through `$()` capture. ALL cargo output ended up in `$OUTPUT` variable
+  instead of just the store path. Fix: redirect ALL builder output to stderr (`>&2`), then
+  extract store path with `grep "/nix/store/" /tmp/output-file`
+- **No `tail` on Redox**: Not in uutils. Can't use `tail -1` to get last line.
+  Use `grep` to find the store path line instead.
+- **No `awk` on Redox**: Not in uutils or extrautils. Use `wc -c < file` for file size.
+- **ripgrep without pcre2+jemalloc is pure Rust**: 33 crates compiled, no C dependencies.
+  jemalloc only activates on `cfg(musl)`, pcre2 is an optional feature — neither triggers.
+- **Build scripts all work**: anyhow, crossbeam-utils, libc, proc-macro2, serde, serde_json
+  — all have build.rs that probe rustc features. All work with the --env-set patch.
+- **7 tests added**: rg-src-present, rg-vendor-present, rg-build, rg-version, rg-search,
+  rg-store-path, rg-binary-size — all pass (47/54 total, 7 pre-existing failures)
+- **Self-hosting test total**: 54 tests, 47 pass, 7 fail (same 7 pre-existing failures:
+  heredoc indentation issues in 3 tests + snix self-compile timeout in 4 tests)

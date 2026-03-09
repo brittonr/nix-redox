@@ -2674,6 +2674,196 @@ let
                       echo "FUNC_TEST:snix-eval-works:FAIL:no binary"
                     end
 
+                    # ══════════════════════════════════════════════
+                    #  SNIX BUILD .#RIPGREP — FLAKE BUILD OF REAL SOFTWARE
+                    # ══════════════════════════════════════════════
+                    # The ultimate demo: build ripgrep (a real 55-crate Rust
+                    # project) through a Nix flake, entirely inside Redox OS.
+                    # Pipeline: snix eval flake.nix → derivationStrict →
+                    #   cargo build (55 crates) → link → rg binary → works!
+                    echo ""
+                    echo "========================================"
+                    echo "  SNIX BUILD .#RIPGREP"
+                    echo "========================================"
+                    echo ""
+
+                    # Check if ripgrep source bundle is present
+                    if exists -d /usr/src/ripgrep
+                      echo "FUNC_TEST:rg-src-present:PASS"
+                    else
+                      echo "FUNC_TEST:rg-src-present:FAIL:source bundle not at /usr/src/ripgrep"
+                    end
+
+                    if exists -d /usr/src/ripgrep/vendor
+                      echo "FUNC_TEST:rg-vendor-present:PASS"
+                    else
+                      echo "FUNC_TEST:rg-vendor-present:FAIL:vendor dir not found"
+                    end
+
+                    # Create a flake project that builds ripgrep from the bundled source
+                    echo "--- snix build .#ripgrep ---"
+                    /nix/system/profile/bin/bash -c '
+                      set -x
+
+                      # Copy source to writable directory
+                      rm -rf /tmp/rg-build
+                      cp -r /usr/src/ripgrep /tmp/rg-build
+
+                      # Create .cargo dir (may not survive cp from Nix store)
+                      mkdir -p /tmp/rg-build/.cargo
+                      cat > /tmp/rg-build/.cargo/config.toml << CFGEOF
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "vendor"
+
+[build]
+jobs = 1
+target = "x86_64-unknown-redox"
+
+[target.x86_64-unknown-redox]
+linker = "/nix/system/profile/bin/cc"
+CFGEOF
+
+                      # Create the flake directory
+                      mkdir -p /tmp/rg-flake
+
+                      # Write builder script
+                      cat > /tmp/rg-flake/build-ripgrep.sh << '"'"'BUILDEOF'"'"'
+set -e
+export PATH=/nix/system/profile/bin:/bin:/usr/bin
+export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+export HOME="$TMPDIR"
+export CARGO_HOME="$TMPDIR/cargo-home"
+mkdir -p "$CARGO_HOME" "$out/bin"
+
+cd /tmp/rg-build
+
+# cargo timeout+retry — handles intermittent startup hangs
+# ALL cargo output to stderr so it does not pollute snix stdout
+MAX_TIME=300
+for attempt in 1 2 3; do
+  echo "[builder] ripgrep build attempt $attempt" >&2
+  cargo build --offline --bin rg -j1 >&2 2>&1 &
+  PID=$!
+  SECONDS=0
+  while kill -0 $PID 2>/dev/null; do
+    if [ $SECONDS -ge $MAX_TIME ]; then
+      echo "[builder] cargo timeout attempt $attempt" >&2
+      kill $PID 2>/dev/null; wait $PID 2>/dev/null
+      kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
+      rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
+      continue 2
+    fi
+    cat /scheme/sys/uname >/dev/null 2>/dev/null
+  done
+  wait $PID
+  CARGO_EXIT=$?
+  if [ $CARGO_EXIT -eq 0 ]; then
+    break
+  else
+    echo "[builder] cargo failed (exit=$CARGO_EXIT) attempt $attempt" >&2
+    if [ $attempt -eq 3 ]; then
+      exit $CARGO_EXIT
+    fi
+  fi
+done
+
+# Copy the built binary
+cp target/x86_64-unknown-redox/debug/rg "$out/bin/rg"
+echo "[builder] ripgrep build complete" >&2
+BUILDEOF
+
+                      # Write flake.nix
+                      cat > /tmp/rg-flake/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  outputs = { self }: {
+    packages."x86_64-unknown-redox".ripgrep = derivation {
+      name = "ripgrep-14.1.1";
+      system = "x86_64-unknown-redox";
+      builder = "/nix/system/profile/bin/bash";
+      args = ["/tmp/rg-flake/build-ripgrep.sh"];
+    };
+  };
+}
+FLAKEEOF
+
+                      # Write flake.lock (no external inputs)
+                      cat > /tmp/rg-flake/flake.lock << '"'"'LOCKEOF'"'"'
+{
+  "version": 7,
+  "root": "root",
+  "nodes": {
+    "root": {}
+  }
+}
+LOCKEOF
+
+                      # Run snix build .#ripgrep!
+                      echo "=== Starting snix build .#ripgrep ==="
+                      cd /tmp/rg-flake
+                      /bin/snix build ".#ripgrep" > /tmp/rg-output 2>/tmp/rg-build-err
+                      EXIT=$?
+                      # snix prints the output path on its last stdout line
+                      # Extract just the /nix/store/... path (builder output may leak to stdout)
+                      # Note: tail not available on Redox — use grep only
+                      OUTPUT=$(grep "/nix/store/" /tmp/rg-output)
+                      echo "=== snix build exit=$EXIT ==="
+                      echo "=== output=$OUTPUT ==="
+
+                      if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/rg" ]; then
+                        echo "FUNC_TEST:rg-build:PASS"
+
+                        # Test: rg --version
+                        VER=$("$OUTPUT/bin/rg" --version 2>&1 | head -1)
+                        if echo "$VER" | grep -q "ripgrep"; then
+                          echo "FUNC_TEST:rg-version:PASS"
+                          echo "  version output: $VER"
+                        else
+                          echo "FUNC_TEST:rg-version:FAIL:version=$VER"
+                        fi
+
+                        # Test: rg actually searches text
+                        echo "hello world" > /tmp/rg-test.txt
+                        echo "foo bar" >> /tmp/rg-test.txt
+                        echo "hello redox" >> /tmp/rg-test.txt
+                        RESULT=$("$OUTPUT/bin/rg" "hello" /tmp/rg-test.txt 2>&1)
+                        LINES=$(echo "$RESULT" | wc -l)
+                        if [ "$LINES" -ge 2 ]; then
+                          echo "FUNC_TEST:rg-search:PASS"
+                          echo "  search result: $RESULT"
+                        else
+                          echo "FUNC_TEST:rg-search:FAIL:lines=$LINES result=$RESULT"
+                        fi
+
+                        # Test: output is in /nix/store
+                        case "$OUTPUT" in
+                          /nix/store/*) echo "FUNC_TEST:rg-store-path:PASS" ;;
+                          *) echo "FUNC_TEST:rg-store-path:FAIL:$OUTPUT" ;;
+                        esac
+
+                        # Test: binary size is reasonable (should be >1MB for ripgrep)
+                        # Note: awk not available on Redox, use wc -c instead
+                        SIZE=$(wc -c < "$OUTPUT/bin/rg")
+                        if [ "$SIZE" -gt 1000000 ]; then
+                          echo "FUNC_TEST:rg-binary-size:PASS"
+                          echo "  rg binary: $SIZE bytes"
+                        else
+                          echo "FUNC_TEST:rg-binary-size:FAIL:too small=$SIZE"
+                        fi
+                      else
+                        echo "FUNC_TEST:rg-build:FAIL:exit=$EXIT"
+                        echo "FUNC_TEST:rg-version:FAIL:no binary"
+                        echo "FUNC_TEST:rg-search:FAIL:no binary"
+                        echo "FUNC_TEST:rg-store-path:FAIL:no binary"
+                        echo "FUNC_TEST:rg-binary-size:FAIL:no binary"
+                        echo "=== build stderr (last 20 lines) ==="
+                        tail -20 /tmp/rg-build-err 2>/dev/null
+                        echo "=== end stderr ==="
+                      fi
+                    '
+
                     echo ""
                     echo "FUNC_TESTS_COMPLETE"
   '';
@@ -2719,6 +2909,17 @@ selfHosting
             {
               source = pkgs.snix-source-bundle;
               target = "usr/src/snix-redox";
+            }
+          ]
+        else
+          [ ]
+      )
+      ++ (
+        if pkgs ? ripgrep-source-bundle then
+          [
+            {
+              source = pkgs.ripgrep-source-bundle;
+              target = "usr/src/ripgrep";
             }
           ]
         else
