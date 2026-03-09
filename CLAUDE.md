@@ -213,7 +213,7 @@ in mySystem.diskImage  # or .initfs, .toplevel
 - `nix/vendor/adios/` — Vendored adios module system
 - `nix/vendor/korora/` — Vendored Korora type system
 
-**Module tree (15 modules with explicit inputs):**
+**Module tree (16 modules with explicit inputs):**
 ```
 /pkgs          — Package injection (pkgs, hostPkgs, nixpkgsLib)
 /boot          — Kernel, bootloader, initfs config         (inputs: /pkgs)
@@ -229,7 +229,8 @@ in mySystem.diskImage  # or .initfs, .toplevel
 /programs      — Ion, helix, editor, httpd config           (no inputs)
 /logging       — Log levels, destinations, retention        (no inputs)
 /power         — ACPI, power/idle actions, panic behavior   (no inputs)
-/build         — Produces rootTree, initfs, diskImage       (inputs: all 14 above)
+/snix          — stored/profiled daemons, build sandboxing  (no inputs)
+/build         — Produces rootTree, initfs, diskImage       (inputs: all 15 above)
 ```
 
 **Type system (Korora compound types):**
@@ -258,6 +259,24 @@ in mySystem.diskImage  # or .initfs, .toplevel
 - `/programs` — `ion` (IonConfig struct), `helix` (HelixConfig struct), `editor`, `httpd` (HttpdConfig struct)
 - `/logging` — `level` (enum), `kernelLogLevel` (enum), `logToFile`, `logPath`, `maxLogSizeMB`, `persistAcrossBoot`
 - `/power` — `acpiEnable`, `powerAction` (enum), `idleAction` (enum), `idleTimeoutMinutes`, `rebootOnPanic`
+- `/snix` — `stored` (StoredConfig struct: enable, cachePath, storeDir), `profiled` (ProfiledConfig struct: enable, profilesDir, storeDir), `sandbox` (bool)
+
+### Redox Scheme Daemons (snix)
+
+snix includes three Redox-native scheme daemons that leverage the OS's namespace architecture:
+
+- **`stored`** (`snix stored`) — Serves `/nix/store/` paths via the `store:` scheme with lazy NAR extraction on first access. Packages register in PathInfoDb at install time but don't decompress until something actually opens a file.
+- **`profiled`** (`snix profiled`) — Presents union views of installed packages via the `profile:` scheme. No symlink farms — add/remove updates an in-memory BTreeMap and atomically persists a mapping.json. Mutations go through a `.control` write interface.
+- **sandbox** — Restricts builder processes to declared inputs using Redox's native `setrens()` namespace syscalls. FOD detection gates network access. Stubbed until `libredox` is a target dependency.
+
+**Fallback behavior**: When the daemons aren't running, snix behaves exactly as before — direct filesystem ops and symlink profiles. All scheme-specific code compiles only on Redox (`#[cfg(target_os = "redox")]`).
+
+**CLI flags**:
+- `snix build --no-sandbox` — Skip namespace sandboxing
+- `snix install --lazy` — Register without extracting (requires `stored` daemon)
+- `snix stored` / `snix profiled` — Run daemons manually
+
+**Profile**: `scheme-native` profile enables all three capabilities on top of the development profile.
 
 ### Running Tests
 

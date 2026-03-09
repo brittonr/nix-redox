@@ -36,6 +36,7 @@ use sha2::{Digest, Sha256};
 
 use crate::known_paths::KnownPaths;
 use crate::pathinfo::{self, PathInfo, PathInfoDb};
+use crate::sandbox;
 
 // ── Temp Build Directory ───────────────────────────────────────────────────
 
@@ -160,6 +161,21 @@ pub fn build_derivation(
     known_paths: &KnownPaths,
     db: &PathInfoDb,
 ) -> Result<BuildResult, BuildError> {
+    build_derivation_inner(drv, drv_path, known_paths, db, false)
+}
+
+/// Build a single derivation with optional sandbox control.
+///
+/// When `no_sandbox` is false and the platform supports it, the builder
+/// process runs inside a restricted Redox namespace. When true or when
+/// the platform doesn't support sandboxing, the build runs unsandboxed.
+fn build_derivation_inner(
+    drv: &nix_compat::derivation::Derivation,
+    drv_path: &StorePath<String>,
+    known_paths: &KnownPaths,
+    db: &PathInfoDb,
+    no_sandbox: bool,
+) -> Result<BuildResult, BuildError> {
     // Derive a human-readable name from the drv path
     let drv_name = drv_path
         .to_string()
@@ -220,6 +236,67 @@ pub fn build_derivation(
     cmd.env_clear();
     for (k, v) in &env {
         cmd.env(k, v);
+    }
+
+    // ── 5a. Set up build sandbox ───────────────────────────────────
+    // On Redox, restrict the builder's scheme namespace to only
+    // declared inputs. Falls back gracefully on ENOSYS/EPERM.
+    if !no_sandbox {
+        let primary_out_path = drv
+            .outputs
+            .get("out")
+            .and_then(|o| o.path.as_ref())
+            .map(|p| p.to_absolute_path())
+            .unwrap_or_default();
+        let sandbox_config = sandbox::config_from_derivation(
+            drv,
+            &primary_out_path,
+            &build_dir.path().to_string_lossy(),
+        );
+
+        // Resolve input derivation output hashes (sandbox module only has drv path hashes).
+        let mut resolved = sandbox_config.allowed_input_hashes;
+        for (input_drv_path, output_names) in &drv.input_derivations {
+            if let Some(input_drv) = known_paths.get_drv_by_drvpath(input_drv_path) {
+                for output_name in output_names {
+                    if let Some(output) = input_drv.outputs.get(output_name) {
+                        if let Some(ref sp) = output.path {
+                            resolved.insert(nixbase32::encode(sp.digest()));
+                        }
+                    }
+                }
+            }
+        }
+        let sandbox_config = sandbox::SandboxConfig {
+            allowed_input_hashes: resolved,
+            ..sandbox_config
+        };
+
+        #[cfg(target_os = "redox")]
+        {
+            use std::os::unix::process::CommandExt;
+            // SAFETY: setup_build_namespace() only calls Redox syscalls
+            // that are async-signal-safe. The closure runs between fork
+            // and exec in the child process.
+            unsafe {
+                cmd.pre_exec(move || {
+                    match sandbox::setup_build_namespace(&sandbox_config) {
+                        Ok(()) => Ok(()),
+                        Err(sandbox::SandboxError::Unavailable) => {
+                            // Kernel doesn't support namespaces yet — continue unsandboxed.
+                            Ok(())
+                        }
+                        Err(e) => {
+                            eprintln!("warning: sandbox setup failed: {e}");
+                            // Continue unsandboxed rather than failing the build.
+                            Ok(())
+                        }
+                    }
+                });
+            }
+        }
+        #[cfg(not(target_os = "redox"))]
+        let _ = sandbox_config;
     }
 
     // On Redox, cmd.output() creates pipes and reads with read2().
@@ -398,6 +475,16 @@ pub fn build_needed(
     known_paths: &KnownPaths,
     db: &PathInfoDb,
 ) -> Result<BuildResult, BuildError> {
+    build_needed_with_options(target_drv_path, known_paths, db, false)
+}
+
+/// Build a derivation and all its dependencies, with sandbox control.
+pub fn build_needed_with_options(
+    target_drv_path: &StorePath<String>,
+    known_paths: &KnownPaths,
+    db: &PathInfoDb,
+    no_sandbox: bool,
+) -> Result<BuildResult, BuildError> {
     let build_order = topological_sort(target_drv_path, known_paths)?;
 
     let mut last_result = None;
@@ -434,16 +521,19 @@ pub fn build_needed(
             build_order.len()
         );
 
-        let result = build_derivation(drv, drv_path, known_paths, db).map_err(|e| {
-            if drv_path != target_drv_path {
-                BuildError::DependencyFailed {
-                    drv_path: drv_path.to_absolute_path(),
-                    cause: Box::new(e),
-                }
-            } else {
-                e
-            }
-        })?;
+        let result =
+            build_derivation_inner(drv, drv_path, known_paths, db, no_sandbox).map_err(
+                |e| {
+                    if drv_path != target_drv_path {
+                        BuildError::DependencyFailed {
+                            drv_path: drv_path.to_absolute_path(),
+                            cause: Box::new(e),
+                        }
+                    } else {
+                        e
+                    }
+                },
+            )?;
 
         if drv_path == target_drv_path {
             last_result = Some(result);
@@ -765,6 +855,15 @@ pub fn run(
     expr: Option<String>,
     file: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    run_with_options(expr, file, false)
+}
+
+/// `snix build` with sandbox control.
+pub fn run_with_options(
+    expr: Option<String>,
+    file: Option<String>,
+    no_sandbox: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let source = match (expr, file) {
         (Some(e), _) => e,
         (_, Some(f)) => std::fs::read_to_string(&f)?,
@@ -788,7 +887,7 @@ pub fn run(
     let db = PathInfoDb::open()
         .map_err(|e| format!("opening pathinfo db: {e}"))?;
 
-    let result = build_needed(&drv_path, &known_paths, &db)?;
+    let result = build_needed_with_options(&drv_path, &known_paths, &db, no_sandbox)?;
 
     // Print output paths
     for (name, path) in &result.outputs {
@@ -1413,5 +1512,67 @@ mod tests {
 
         // Last element should be c (the target)
         assert_eq!(order.last().unwrap(), &sp);
+    }
+
+    // ── Sandbox Integration ────────────────────────────────────────────
+
+    #[test]
+    fn sandbox_config_built_for_derivation() {
+        use crate::sandbox;
+
+        let mut drv = Derivation::default();
+        drv.builder = "/bin/sh".to_string();
+        drv.system = "x86_64-linux".to_string();
+
+        let src = nix_compat::store_path::StorePath::<String>::from_absolute_path(
+            b"/nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-src",
+        )
+        .unwrap();
+        drv.input_sources.insert(src);
+
+        let config = sandbox::config_from_derivation(&drv, "/nix/store/out", "/tmp/build");
+
+        assert!(!config.needs_network);
+        assert!(config.allowed_input_hashes.contains("1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r"));
+        assert_eq!(config.output_dir, "/nix/store/out");
+    }
+
+    #[test]
+    fn sandbox_config_fod_gets_network() {
+        use crate::sandbox;
+
+        let mut drv = Derivation::default();
+        drv.builder = "builtin:fetchurl".to_string();
+        drv.system = "x86_64-linux".to_string();
+        drv.environment
+            .insert("outputHash".to_string(), "sha256-abc".into());
+
+        let config = sandbox::config_from_derivation(&drv, "/nix/store/out", "/tmp/build");
+        assert!(config.needs_network);
+    }
+
+    #[test]
+    fn build_needed_with_no_sandbox_flag() {
+        // Verify the no_sandbox path compiles and works (on Linux, sandbox is always a no-op)
+        let kp = KnownPaths::default();
+        let tmp = tempfile::tempdir().unwrap();
+        let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+
+        let (result, state) = crate::eval::evaluate_with_state(
+            r#"(derivation { name = "sandbox-test"; builder = "/bin/false"; system = "x86_64-linux"; }).drvPath"#,
+        )
+        .unwrap();
+
+        let drv_path = result.trim_matches('"');
+        let sp = StorePath::<String>::from_absolute_path(drv_path.as_bytes()).unwrap();
+
+        // Building will fail (builder is /bin/false) but the sandbox path should be exercised
+        let kp = state.known_paths.borrow();
+        let result_no_sandbox = build_needed_with_options(&sp, &kp, &db, true);
+        let result_with_sandbox = build_needed_with_options(&sp, &kp, &db, false);
+
+        // Both should fail the same way (builder fails, not sandbox setup)
+        assert!(result_no_sandbox.is_err());
+        assert!(result_with_sandbox.is_err());
     }
 }

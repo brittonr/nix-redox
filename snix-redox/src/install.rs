@@ -26,6 +26,101 @@ use crate::nar;
 use crate::pathinfo::PathInfoDb;
 use crate::store;
 
+// ─── Profiled Scheme Integration ───────────────────────────────────────────
+
+/// Check if the `profiled` daemon is running by trying to access its control file.
+///
+/// On Redox: attempts to open `profile:default/.control`.
+/// On other platforms: always returns false (no scheme support).
+fn profiled_is_running() -> bool {
+    #[cfg(target_os = "redox")]
+    {
+        // Try to access the profiled scheme. If it's running, the file exists.
+        std::fs::metadata("profile:default/.control").is_ok()
+    }
+    #[cfg(not(target_os = "redox"))]
+    {
+        false
+    }
+}
+
+/// Send an "add" command to the profiled daemon.
+///
+/// Writes a JSON command to `profile:default/.control`.
+/// Returns Ok(()) on success, Err if the write fails.
+fn profiled_add(name: &str, store_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let cmd = serde_json::json!({
+        "action": "add",
+        "name": name,
+        "storePath": store_path
+    });
+    #[cfg(target_os = "redox")]
+    {
+        std::fs::write("profile:default/.control", cmd.to_string())?;
+    }
+    #[cfg(not(target_os = "redox"))]
+    {
+        let _ = (name, store_path, cmd);
+        return Err("profiled not available on this platform".into());
+    }
+    Ok(())
+}
+
+/// Send a "remove" command to the profiled daemon.
+fn profiled_remove(name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let cmd = serde_json::json!({
+        "action": "remove",
+        "name": name
+    });
+    #[cfg(target_os = "redox")]
+    {
+        std::fs::write("profile:default/.control", cmd.to_string())?;
+    }
+    #[cfg(not(target_os = "redox"))]
+    {
+        let _ = (name, cmd);
+        return Err("profiled not available on this platform".into());
+    }
+    Ok(())
+}
+
+/// Check if the `stored` daemon is running.
+///
+/// On Redox: attempts to access the `store:` scheme root.
+/// On other platforms: always returns false.
+fn stored_is_running() -> bool {
+    #[cfg(target_os = "redox")]
+    {
+        std::fs::metadata("store:").is_ok()
+    }
+    #[cfg(not(target_os = "redox"))]
+    {
+        false
+    }
+}
+
+/// Read the package list from profiled daemon (via `.control` with list command).
+///
+/// Returns None if profiled is not running.
+fn profiled_list() -> Option<Vec<(String, String)>> {
+    #[cfg(target_os = "redox")]
+    {
+        let cmd = serde_json::json!({"action": "list"});
+        if std::fs::write("profile:default/.control", cmd.to_string()).is_ok() {
+            // Read response — profiled writes the result back on the control fd.
+            // For now, fall back to manifest-based listing since the scheme
+            // protocol is request/response on separate fds.
+            None
+        } else {
+            None
+        }
+    }
+    #[cfg(not(target_os = "redox"))]
+    {
+        None
+    }
+}
+
 /// Default profile directory.
 const PROFILE_DIR: &str = "/nix/var/snix/profiles/default";
 const PROFILE_BIN: &str = "/nix/var/snix/profiles/default/bin";
@@ -73,6 +168,21 @@ pub fn install(
     name: &str,
     source: &CacheSource,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    install_with_options(name, source, false)
+}
+
+/// Install a package with optional lazy mode.
+///
+/// When `lazy` is true and `stored` daemon is running, the package is
+/// registered in PathInfoDb and the profile mapping without extracting
+/// the NAR. The `stored` daemon will extract on first access.
+/// When `lazy` is true but `stored` is not running, falls back to eager
+/// extraction (lazy requires stored for on-demand access).
+pub fn install_with_options(
+    name: &str,
+    source: &CacheSource,
+    lazy: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     // 1. Look up package in index
     let index = source.read_index()?;
     let entry = index
@@ -88,20 +198,53 @@ pub fn install(
         return Ok(());
     }
 
-    // 3. Fetch from cache (extracts to /nix/store/)
-    if !Path::new(&entry.store_path).exists() {
-        eprintln!("installing {name} {}...", entry.version);
-        fetch_and_extract(&entry.store_path, source)?;
+    // 3. Fetch from cache — eager or lazy
+    let stored_running = stored_is_running();
+    if lazy && stored_running {
+        // Lazy install: register in PathInfoDb without extracting.
+        // The stored daemon will extract on first access via the store: scheme.
+        if !Path::new(&entry.store_path).exists() {
+            eprintln!("lazy-installing {name} {} (stored will extract on demand)...", entry.version);
+            register_without_extract(&entry.store_path, source)?;
+        } else {
+            eprintln!("'{name}' already in store...");
+        }
     } else {
-        eprintln!("'{name}' already in store, linking into profile...");
+        if lazy && !stored_running {
+            eprintln!("note: --lazy requires the stored daemon; falling back to eager install");
+        }
+        // Eager install: download, decompress, extract to /nix/store/
+        if !Path::new(&entry.store_path).exists() {
+            eprintln!("installing {name} {}...", entry.version);
+            fetch_and_extract(&entry.store_path, source)?;
+        } else {
+            eprintln!("'{name}' already in store, linking into profile...");
+        }
     }
 
     // 4. Add GC root to protect from garbage collection
     let root_name = format!("profile-{name}");
     store::add_root(&root_name, &entry.store_path)?;
 
-    // 5. Discover binaries and create profile symlinks
-    let binaries = link_package_binaries(&entry.store_path)?;
+    // 5. Link into profile — prefer profiled daemon, fall back to symlinks
+    let binaries = if profiled_is_running() {
+        // Use the profiled scheme daemon (no symlinks needed).
+        match profiled_add(name, &entry.store_path) {
+            Ok(()) => {
+                eprintln!("  registered via profiled daemon");
+                // Discover binaries for manifest metadata (informational only).
+                list_binaries(&PathBuf::from(&entry.store_path).join("bin"))
+                    .unwrap_or_default()
+            }
+            Err(e) => {
+                eprintln!("  warning: profiled command failed ({e}), falling back to symlinks");
+                link_package_binaries(&entry.store_path)?
+            }
+        }
+    } else {
+        // Fall back to traditional symlink-based profile.
+        link_package_binaries(&entry.store_path)?
+    };
 
     if binaries.is_empty() {
         eprintln!("  note: no binaries found in {}/bin/", entry.store_path);
@@ -112,7 +255,7 @@ pub fn install(
         }
     }
 
-    // 6. Update profile manifest
+    // 6. Update profile manifest (always, regardless of profiled/symlink mode)
     manifest.packages.insert(
         name.to_string(),
         InstalledPackage {
@@ -128,7 +271,11 @@ pub fn install(
     eprintln!();
     eprintln!("✓ installed {name} {}", entry.version);
     if !binaries.is_empty() {
-        eprintln!("  binaries available in {PROFILE_BIN}/");
+        if profiled_is_running() {
+            eprintln!("  binaries available via profile: scheme");
+        } else {
+            eprintln!("  binaries available in {PROFILE_BIN}/");
+        }
     }
 
     Ok(())
@@ -143,12 +290,31 @@ pub fn remove(name: &str) -> Result<(), Box<dyn std::error::Error>> {
         .remove(name)
         .ok_or_else(|| format!("'{name}' is not installed. Run `snix profile list` to see installed packages."))?;
 
-    // Remove profile symlinks
-    for bin in &pkg.binaries {
-        let link_path = PathBuf::from(PROFILE_BIN).join(bin);
-        if link_path.is_symlink() {
-            std::fs::remove_file(&link_path)?;
-            eprintln!("  unlinked {bin}");
+    // Remove from profile — prefer profiled daemon, fall back to symlinks
+    if profiled_is_running() {
+        match profiled_remove(name) {
+            Ok(()) => {
+                eprintln!("  removed via profiled daemon");
+            }
+            Err(e) => {
+                eprintln!("  warning: profiled command failed ({e}), falling back to symlink removal");
+                for bin in &pkg.binaries {
+                    let link_path = PathBuf::from(PROFILE_BIN).join(bin);
+                    if link_path.is_symlink() {
+                        std::fs::remove_file(&link_path)?;
+                        eprintln!("  unlinked {bin}");
+                    }
+                }
+            }
+        }
+    } else {
+        // Traditional symlink removal
+        for bin in &pkg.binaries {
+            let link_path = PathBuf::from(PROFILE_BIN).join(bin);
+            if link_path.is_symlink() {
+                std::fs::remove_file(&link_path)?;
+                eprintln!("  unlinked {bin}");
+            }
         }
     }
 
@@ -175,17 +341,30 @@ pub fn list_profile() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
 
+    let using_profiled = profiled_is_running();
+
     println!("{} packages installed:", manifest.packages.len());
+    if using_profiled {
+        println!("  (profiled daemon active — union view via profile: scheme)");
+    }
     println!();
     for (name, pkg) in &manifest.packages {
         println!("  {:<16} {:<12} ({} binaries)", name, pkg.version, pkg.binaries.len());
         for bin in &pkg.binaries {
-            println!("    → {PROFILE_BIN}/{bin}");
+            if using_profiled {
+                println!("    → profile:default/bin/{bin}");
+            } else {
+                println!("    → {PROFILE_BIN}/{bin}");
+            }
         }
     }
     println!();
-    println!("Profile: {PROFILE_DIR}");
-    println!("Add {PROFILE_BIN} to PATH to use installed binaries.");
+    if using_profiled {
+        println!("Profile: profile:default/ (via profiled daemon)");
+    } else {
+        println!("Profile: {PROFILE_DIR}");
+        println!("Add {PROFILE_BIN} to PATH to use installed binaries.");
+    }
 
     Ok(())
 }
@@ -316,6 +495,36 @@ pub fn install_recursive(
 }
 
 // ─── Fetch & Extract ───────────────────────────────────────────────────────
+
+/// Register a store path in PathInfoDb WITHOUT extracting the NAR.
+///
+/// Used for lazy installs when the stored daemon will handle extraction
+/// on first access. Fetches only the narinfo (small metadata file) to
+/// get the hash, size, and references for registration.
+fn register_without_extract(
+    store_path_str: &str,
+    source: &CacheSource,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let sp = StorePath::<String>::from_absolute_path(store_path_str.as_bytes())?;
+
+    // Fetch narinfo for metadata
+    let narinfo = source.fetch_narinfo(&sp)?;
+
+    // Register in PathInfoDb (no extraction — stored daemon handles that)
+    let db = PathInfoDb::open()?;
+    let nar_hash_hex = data_encoding::HEXLOWER.encode(&narinfo.nar_hash);
+    let references: Vec<String> = narinfo
+        .references
+        .iter()
+        .map(|r| r.to_absolute_path())
+        .collect();
+    let signatures: Vec<String> = narinfo.signatures.iter().map(|s| s.to_string()).collect();
+
+    store::register_path(&db, store_path_str, &nar_hash_hex, narinfo.nar_size, references, signatures)?;
+
+    eprintln!("✓ registered (lazy): {store_path_str}");
+    Ok(())
+}
 
 /// Fetch a store path from any cache source, decompress, verify hash, extract, and register.
 fn fetch_and_extract(
@@ -583,5 +792,40 @@ mod tests {
     fn cache_source_from_args_path_fallback() {
         let src = CacheSource::from_args(None, Some("/my/cache"));
         assert!(src.is_local());
+    }
+
+    // ── Scheme Integration Tests ───────────────────────────────────────
+
+    #[test]
+    fn profiled_not_running_on_linux() {
+        // On Linux, profiled_is_running() always returns false
+        // (no scheme support outside Redox).
+        assert!(!profiled_is_running());
+    }
+
+    #[test]
+    fn stored_not_running_on_linux() {
+        // On Linux, stored_is_running() always returns false.
+        assert!(!stored_is_running());
+    }
+
+    #[test]
+    fn profiled_add_fails_on_linux() {
+        // On non-Redox, profiled_add returns an error.
+        let result = profiled_add("test", "/nix/store/abc-test-1.0");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn profiled_remove_fails_on_linux() {
+        // On non-Redox, profiled_remove returns an error.
+        let result = profiled_remove("test");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn profiled_list_none_on_linux() {
+        // On non-Redox, profiled_list returns None.
+        assert!(profiled_list().is_none());
     }
 }
