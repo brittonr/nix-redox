@@ -86,7 +86,7 @@ dev
   "/services" = {
     initScripts = {
       "00_base" = {
-        text = "notify /bin/ipcd";
+        text = "notify /bin/ipcd\nnotify /bin/ptyd";
         directory = "usr/lib/init.d";
       };
       "30_custom" = {

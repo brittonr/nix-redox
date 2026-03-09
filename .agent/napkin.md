@@ -1819,3 +1819,20 @@
 - **443 host tests pass** (was 439 — 4 new from profiled/handles.rs).
 - Cross-compilation succeeds. Both `snix.nix` and `snix-source-bundle.nix` need the same
   updated vendor hash.
+
+### ptyd missing from rootfs init scripts — getty panic (Mar 9 2026)
+- **Symptom**: `getty: failed to create PTY: Error "No such device" 19` — no `pty:` scheme
+- **Root cause**: `services.nix` default `00_base` init script only started `ipcd`, NOT `ptyd`
+  - ptyd binary was present in initfs/bin/ and rootfs /bin/ (listed in `coreDaemons`)
+  - But no init script ever STARTED it — it sat there unused
+  - The comment said "ptyd, ipcd are rootfs services started by run.d" but only ipcd had a script
+- **Fix**: Added `notify /bin/ptyd` to `00_base` default in services.nix
+- **Secondary fix**: Changed smolnetd from `notify` to `nowait` in build/default.nix
+  - `notify` blocks until the daemon signals readiness — if smolnetd finds no NIC it exits
+    without notifying, which is logged as a failure but boot continues anyway
+  - `nowait` is more appropriate: start smolnetd in the background, don't wait for readiness
+  - This makes networking genuinely optional — headless Cloud Hypervisor (no --net) boots clean
+- **Also fixed**: `iptables` in setup-cloud-hypervisor-network used bare command name
+  instead of `${pkgs.iptables}/bin/iptables` — failed on non-NixOS hosts
+- The "Scheme 'file' not found" warnings in boot log are NORMAL — they appear before redoxfs
+  mounts the root filesystem. initnsmgr logs them as expected early-boot diagnostics.

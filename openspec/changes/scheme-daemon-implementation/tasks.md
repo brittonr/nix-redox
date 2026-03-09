@@ -44,6 +44,6 @@
 
 ## 6. Build System
 
-- [ ] 6.1 Verify `nix build .#snix` still produces a working binary with the new deps.
+- [x] 6.1 Verify `nix build .#snix` still produces a working binary with the new deps. (5.5MB ELF built)
 - [ ] 6.2 Verify the self-hosting test suite still passes (58/58).
-- [ ] 6.3 Update napkin with lessons learned.
+- [x] 6.3 Update napkin with lessons learned.

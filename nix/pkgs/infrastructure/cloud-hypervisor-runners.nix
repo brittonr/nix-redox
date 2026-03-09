@@ -133,18 +133,18 @@ in
       echo "  Setting up NAT (masquerading) via $DEFAULT_IFACE..."
 
       # Add MASQUERADE rule if not already present
-      if ! iptables -t nat -C POSTROUTING -s "$SUBNET" -o "$DEFAULT_IFACE" -j MASQUERADE 2>/dev/null; then
-        iptables -t nat -A POSTROUTING -s "$SUBNET" -o "$DEFAULT_IFACE" -j MASQUERADE
+      if ! ${pkgs.iptables}/bin/iptables -t nat -C POSTROUTING -s "$SUBNET" -o "$DEFAULT_IFACE" -j MASQUERADE 2>/dev/null; then
+        ${pkgs.iptables}/bin/iptables -t nat -A POSTROUTING -s "$SUBNET" -o "$DEFAULT_IFACE" -j MASQUERADE
       fi
 
       # Allow forwarding from TAP to internet
-      if ! iptables -C FORWARD -i "$TAP_NAME" -o "$DEFAULT_IFACE" -j ACCEPT 2>/dev/null; then
-        iptables -A FORWARD -i "$TAP_NAME" -o "$DEFAULT_IFACE" -j ACCEPT
+      if ! ${pkgs.iptables}/bin/iptables -C FORWARD -i "$TAP_NAME" -o "$DEFAULT_IFACE" -j ACCEPT 2>/dev/null; then
+        ${pkgs.iptables}/bin/iptables -A FORWARD -i "$TAP_NAME" -o "$DEFAULT_IFACE" -j ACCEPT
       fi
 
       # Allow return traffic
-      if ! iptables -C FORWARD -i "$DEFAULT_IFACE" -o "$TAP_NAME" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null; then
-        iptables -A FORWARD -i "$DEFAULT_IFACE" -o "$TAP_NAME" -m state --state RELATED,ESTABLISHED -j ACCEPT
+      if ! ${pkgs.iptables}/bin/iptables -C FORWARD -i "$DEFAULT_IFACE" -o "$TAP_NAME" -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null; then
+        ${pkgs.iptables}/bin/iptables -A FORWARD -i "$DEFAULT_IFACE" -o "$TAP_NAME" -m state --state RELATED,ESTABLISHED -j ACCEPT
       fi
     fi
 
