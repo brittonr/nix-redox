@@ -235,11 +235,18 @@ let
     snix-redox-src = ../../snix-redox;
   };
 
+  # ripgrep source bundle for flake-build-ripgrep test
+  ripgrepSourceBundle = import ../pkgs/infrastructure/ripgrep-source-bundle.nix {
+    inherit pkgs;
+    ripgrep-src = inputs.ripgrep-src;
+  };
+
   # Self-hosting test: boots self-hosting image, tests cargo build
   selfHostingTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/self-hosting-test.nix ];
     extraPkgs = extraPkgs // {
       snix-source-bundle = snixSourceBundle;
+      ripgrep-source-bundle = ripgrepSourceBundle;
     };
   };
   selfHostingTest = mkFunctionalTest {
