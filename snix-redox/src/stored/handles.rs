@@ -108,6 +108,19 @@ impl HandleTable {
             ));
         }
 
+        self.open_dir_unchecked(real_path, scheme_path)
+    }
+
+    /// Open a directory handle without filesystem verification.
+    ///
+    /// Used by scheme_root() and openat() where we know the path is valid
+    /// but can't call is_dir() because it might deadlock (the daemon would
+    /// recursively call itself through the filesystem).
+    pub fn open_dir_unchecked(
+        &mut self,
+        real_path: PathBuf,
+        scheme_path: String,
+    ) -> io::Result<usize> {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         self.handles.insert(
             id,

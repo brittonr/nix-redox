@@ -156,7 +156,7 @@ pub fn fetch_local(
     let mut buf_reader = BufReader::new(&mut hashing);
 
     eprintln!("extracting to {dest}...");
-    nar::extract(&mut buf_reader, &dest)?;
+    let manifest = nar::extract_with_manifest(&mut buf_reader, &dest)?;
 
     // Verify NAR hash
     let actual_hash = hashing.finalize();
@@ -180,7 +180,10 @@ pub fn fetch_local(
         .collect();
     let signatures: Vec<String> = narinfo.signatures.iter().map(|s| s.to_string()).collect();
 
-    store::register_path(&db, &dest, &nar_hash_hex, narinfo.nar_size, references, signatures)?;
+    store::register_path_with_files(
+        &db, &dest, &nar_hash_hex, narinfo.nar_size,
+        references, signatures, manifest,
+    )?;
 
     eprintln!("✓ verified and installed: {dest}");
     Ok(())

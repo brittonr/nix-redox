@@ -11,7 +11,7 @@ use redox_scheme::{CallerCtx, OpenResult, RequestKind, SignalBehavior, Socket};
 use syscall::data::Stat;
 use syscall::dirent::{DirEntry as RedoxDirEntry, DirentBuf, DirentKind};
 use syscall::error::{Error, Result, EACCES, EBADF, EIO, ENOENT, ENOTDIR};
-use syscall::flag::{O_DIRECTORY, O_STAT};
+use syscall::flag::O_DIRECTORY;
 use syscall::schemev2::NewFdFlags;
 
 use super::resolve::{self, ResolvedPath};
@@ -29,6 +29,23 @@ impl StoreSchemeHandler {
 }
 
 impl SchemeSync for StoreSchemeHandler {
+    fn scheme_root(&mut self) -> Result<usize> {
+        eprintln!("stored: scheme_root called");
+        // Use unchecked — we can't call is_dir() during scheme registration
+        // because the filesystem might not be fully accessible yet.
+        let fs_path = std::path::PathBuf::from(&self.daemon.config.store_dir);
+        let id = self
+            .daemon
+            .handles
+            .open_dir_unchecked(fs_path, String::new())
+            .map_err(|e| {
+                eprintln!("stored: scheme_root: {e}");
+                Error::new(EIO)
+            })?;
+        eprintln!("stored: scheme_root returning id={id}");
+        Ok(id)
+    }
+
     fn openat(
         &mut self,
         _dirfd: usize,
@@ -37,6 +54,7 @@ impl SchemeSync for StoreSchemeHandler {
         _fcntl_flags: u32,
         _ctx: &CallerCtx,
     ) -> Result<OpenResult> {
+
         let path = path.trim_matches('/');
 
         // Parse the scheme-relative path.
@@ -47,12 +65,14 @@ impl SchemeSync for StoreSchemeHandler {
 
         match &resolved {
             ResolvedPath::Root => {
-                // Open the store root as a directory.
+
+                // Use unchecked — avoid filesystem I/O that could deadlock
+                // if /nix/store/ resolution routes through this scheme.
                 let fs_path = std::path::PathBuf::from(&self.daemon.config.store_dir);
                 let id = self
                     .daemon
                     .handles
-                    .open_dir(fs_path, String::new())
+                    .open_dir_unchecked(fs_path, String::new())
                     .map_err(|e| {
                         eprintln!("stored: open root dir: {e}");
                         Error::new(EIO)
@@ -67,63 +87,38 @@ impl SchemeSync for StoreSchemeHandler {
             | ResolvedPath::SubPath {
                 store_path_name, ..
             } => {
-                // Verify registration in PathInfoDb (re-check on miss).
-                if !resolve::is_registered(
-                    &self.daemon.db,
-                    store_path_name,
-                    &self.daemon.config.store_dir,
-                ) {
-                    // Re-scan PathInfoDb in case the path was registered
-                    // by `snix install` while we were running.
-                    if let Ok(db) = crate::pathinfo::PathInfoDb::open() {
-                        self.daemon.db = db;
-                    }
-                    if !resolve::is_registered(
-                        &self.daemon.db,
-                        store_path_name,
-                        &self.daemon.config.store_dir,
-                    ) {
-                        return Err(Error::new(ENOENT));
-                    }
-                }
-
-                // Lazy extraction if not yet on disk.
-                if !resolve::is_extracted(
-                    store_path_name,
-                    &self.daemon.config.store_dir,
-                ) {
-                    super::lazy::ensure_extracted(
-                        store_path_name,
-                        &self.daemon.config.store_dir,
-                        &self.daemon.config.cache_path,
-                        &self.daemon.db,
-                        &self.daemon.extracting,
-                    )
-                    .map_err(|e| {
-                        eprintln!("stored: extraction failed: {e}");
-                        Error::new(EIO)
-                    })?;
-                }
-
-                // Resolve to filesystem path.
+                // Resolve to filesystem path. Skip existence checks —
+                // filesystem I/O from within the scheme handler blocks
+                // the event loop and can cause hangs on Redox. Instead,
+                // create handles optimistically and let errors surface
+                // when the caller actually reads/lists.
                 let fs_path = resolve::to_filesystem_path(
                     &resolved,
                     &self.daemon.config.store_dir,
                 )
                 .ok_or_else(|| Error::new(ENOENT))?;
 
-                if !fs_path.exists() {
-                    return Err(Error::new(ENOENT));
-                }
-
-                // O_STAT: caller just wants metadata, open without reading.
-                // O_DIRECTORY or actual directory: open as dir.
                 let scheme_path = path.to_string();
-                if fs_path.is_dir() || flags & O_DIRECTORY != 0 {
+
+                // StorePathRoot is always a directory. SubPath might be
+                // either a file or directory. Use O_DIRECTORY flag or
+                // the resolved path variant to decide — avoid is_dir()
+                // filesystem I/O which can stall the event loop.
+                let open_as_dir = match &resolved {
+                    ResolvedPath::StorePathRoot { .. } => true,
+                    _ if flags & O_DIRECTORY != 0 => true,
+                    _ => {
+                        // For SubPath without O_DIRECTORY, try file open.
+                        // If it fails (EISDIR), open as dir.
+                        false
+                    }
+                };
+
+                if open_as_dir {
                     let id = self
                         .daemon
                         .handles
-                        .open_dir(fs_path, scheme_path)
+                        .open_dir_unchecked(fs_path, scheme_path)
                         .map_err(|e| {
                             eprintln!("stored: open dir: {e}");
                             Error::new(ENOENT)
@@ -133,18 +128,30 @@ impl SchemeSync for StoreSchemeHandler {
                         flags: NewFdFlags::POSITIONED,
                     })
                 } else {
-                    let id = self
-                        .daemon
-                        .handles
-                        .open_file(fs_path, scheme_path)
-                        .map_err(|e| {
-                            eprintln!("stored: open file: {e}");
-                            Error::new(ENOENT)
-                        })?;
-                    Ok(OpenResult::ThisScheme {
-                        number: id,
-                        flags: NewFdFlags::POSITIONED,
-                    })
+                    // Try as file. If it's actually a directory, the
+                    // File::open will either succeed (Linux) or fail
+                    // (Redox EISDIR). Fall back to dir handle on error.
+                    match self.daemon.handles.open_file(
+                        fs_path.clone(),
+                        scheme_path.clone(),
+                    ) {
+                        Ok(id) => Ok(OpenResult::ThisScheme {
+                            number: id,
+                            flags: NewFdFlags::POSITIONED,
+                        }),
+                        Err(_) => {
+                            // Probably a directory — open as dir.
+                            let id = self
+                                .daemon
+                                .handles
+                                .open_dir_unchecked(fs_path, scheme_path)
+                                .map_err(|_| Error::new(ENOENT))?;
+                            Ok(OpenResult::ThisScheme {
+                                number: id,
+                                flags: NewFdFlags::POSITIONED,
+                            })
+                        }
+                    }
                 }
             }
         }
@@ -158,6 +165,7 @@ impl SchemeSync for StoreSchemeHandler {
         _fcntl_flags: u32,
         _ctx: &CallerCtx,
     ) -> Result<usize> {
+
         self.daemon.handles.read(id, buf, offset).map_err(|e| {
             eprintln!("stored: read({id}): {e}");
             Error::new(EBADF)
@@ -200,42 +208,47 @@ impl SchemeSync for StoreSchemeHandler {
     }
 
     fn fstat(&mut self, id: usize, stat: &mut Stat, _ctx: &CallerCtx) -> Result<()> {
-        let real_path = self
-            .daemon
-            .handles
-            .real_path(id)
-            .cloned()
-            .ok_or_else(|| Error::new(EBADF))?;
+        let is_dir = self.daemon.handles.is_dir(id);
 
-        let meta = std::fs::metadata(&real_path).map_err(|_| Error::new(EIO))?;
+        match is_dir {
+            Some(true) => {
+                // Directory: return synthetic stat without filesystem I/O.
+                stat.st_mode = 0o040555; // S_IFDIR | r-xr-xr-x
+                stat.st_size = 0;
+                stat.st_nlink = 2;
+            }
+            Some(false) => {
+                // File: get real metadata from the open file handle.
+                let real_path = self
+                    .daemon
+                    .handles
+                    .real_path(id)
+                    .cloned()
+                    .ok_or_else(|| Error::new(EBADF))?;
 
-        stat.st_size = meta.len();
+                // Use the file handle's metadata instead of stat()ing the path.
+                // This avoids extra filesystem I/O.
+                let size = self.daemon.handles.file_size(id).unwrap_or(0);
+                stat.st_size = size;
+                stat.st_mode = 0o100444; // S_IFREG | r--r--r--
 
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::MetadataExt;
-            stat.st_mode = meta.mode() as u16;
-            stat.st_uid = meta.uid();
-            stat.st_gid = meta.gid();
-            stat.st_ino = meta.ino();
-            stat.st_nlink = meta.nlink() as u32;
-            stat.st_blksize = meta.blksize() as u32;
-            stat.st_blocks = meta.blocks();
-            stat.st_atime = meta.atime() as u64;
-            stat.st_atime_nsec = meta.atime_nsec() as u32;
-            stat.st_mtime = meta.mtime() as u64;
-            stat.st_mtime_nsec = meta.mtime_nsec() as u32;
-            stat.st_ctime = meta.ctime() as u64;
-            stat.st_ctime_nsec = meta.ctime_nsec() as u32;
-        }
-
-        // Set directory bit if it's a directory.
-        if meta.is_dir() {
-            stat.st_mode |= 0o040000; // S_IFDIR
-        } else if meta.file_type().is_symlink() {
-            stat.st_mode |= 0o120000; // S_IFLNK
-        } else {
-            stat.st_mode |= 0o100000; // S_IFREG
+                #[cfg(unix)]
+                {
+                    // Try to get real metadata from the open fd.
+                    if let Ok(meta) = std::fs::metadata(&real_path) {
+                        use std::os::unix::fs::MetadataExt;
+                        stat.st_mode = (meta.mode() as u16) | 0o100000;
+                        stat.st_uid = meta.uid();
+                        stat.st_gid = meta.gid();
+                        stat.st_ino = meta.ino();
+                        stat.st_nlink = meta.nlink() as u32;
+                        stat.st_blksize = meta.blksize() as u32;
+                        stat.st_blocks = meta.blocks();
+                        stat.st_size = meta.len();
+                    }
+                }
+            }
+            None => return Err(Error::new(EBADF)),
         }
 
         Ok(())
@@ -247,6 +260,7 @@ impl SchemeSync for StoreSchemeHandler {
         mut buf: DirentBuf<&'buf mut [u8]>,
         opaque_offset: u64,
     ) -> Result<DirentBuf<&'buf mut [u8]>> {
+
         let is_dir = self.daemon.handles.is_dir(id).ok_or(Error::new(EBADF))?;
         if !is_dir {
             return Err(Error::new(ENOTDIR));
@@ -285,33 +299,57 @@ impl SchemeSync for StoreSchemeHandler {
                 }
             }
         } else {
-            // Directory within a store path.
-            let entries = self.daemon.handles.list_dir(id).map_err(|e| {
-                eprintln!("stored: list_dir({id}): {e}");
-                Error::new(EIO)
-            })?;
+            // Directory within a store path. Use manifest to avoid
+            // filesystem I/O (which hangs in Redox scheme daemons).
+            // Parse the scheme path to get store_path_name and subpath.
+            let resolved = resolve::parse_scheme_path(&scheme_path)
+                .map_err(|e| {
+                    eprintln!("stored: getdents parse error: {e}");
+                    Error::new(ENOENT)
+                })?;
 
-            let start = opaque_offset as usize;
-            for (i, entry) in entries.iter().enumerate().skip(start) {
-                let kind = if entry.is_dir {
-                    DirentKind::Directory
-                } else if entry.is_symlink {
-                    DirentKind::Symlink
-                } else {
-                    DirentKind::Regular
-                };
+            let (store_path_name, subpath) = match &resolved {
+                resolve::ResolvedPath::StorePathRoot { store_path_name } =>
+                    (store_path_name.as_str(), ""),
+                resolve::ResolvedPath::SubPath { store_path_name, subpath } =>
+                    (store_path_name.as_str(), subpath.as_str()),
+                _ => return Ok(buf),
+            };
 
-                if buf
-                    .entry(RedoxDirEntry {
-                        inode: 0,
-                        next_opaque_id: (i + 1) as u64,
-                        name: &entry.name,
-                        kind,
-                    })
-                    .is_err()
-                {
-                    break;
+            // Note: we can't load manifests on-demand because db.get()
+            // does filesystem I/O which hangs in Redox scheme daemons.
+            // Manifests are pre-loaded at daemon startup.
+            let entries = self.daemon.list_from_manifest(
+                store_path_name,
+                subpath,
+            );
+
+            if let Some(entries) = entries {
+                let start = opaque_offset as usize;
+                for (i, entry) in entries.iter().enumerate().skip(start) {
+                    let kind = if entry.is_dir {
+                        DirentKind::Directory
+                    } else if entry.is_symlink {
+                        DirentKind::Symlink
+                    } else {
+                        DirentKind::Regular
+                    };
+
+                    if buf
+                        .entry(RedoxDirEntry {
+                            inode: 0,
+                            next_opaque_id: (i + 1) as u64,
+                            name: &entry.name,
+                            kind,
+                        })
+                        .is_err()
+                    {
+                        break;
+                    }
                 }
+            } else {
+                eprintln!("stored: no manifest for {store_path_name}");
+                return Err(Error::new(ENOENT));
             }
         }
 
@@ -342,30 +380,57 @@ pub fn run_daemon(config: StoredConfig) -> Result<(), Box<dyn std::error::Error>
 
     // Register the `store` scheme with the kernel.
     eprintln!("stored: creating scheme socket...");
-    let socket = Socket::create()?;
+    let socket = match Socket::create() {
+        Ok(s) => {
+            eprintln!("stored: socket created successfully");
+            s
+        }
+        Err(e) => {
+            eprintln!("stored: Socket::create() failed: {e}");
+            eprintln!("stored: this requires /scheme/namespace/scheme-creation-cap");
+            return Err(format!("stored: Socket::create failed: {e}").into());
+        }
+    };
 
     eprintln!("stored: registering scheme 'store'...");
-    redox_scheme::scheme::register_sync_scheme(&socket, "store", &mut handler)?;
-    eprintln!("stored: scheme 'store' registered");
+    match redox_scheme::scheme::register_sync_scheme(&socket, "store", &mut handler) {
+        Ok(()) => eprintln!("stored: scheme 'store' registered"),
+        Err(e) => {
+            eprintln!("stored: register_sync_scheme failed: {e}");
+            eprintln!("stored: error code: {:?}", e);
+            return Err(format!("stored: registration failed: {e}").into());
+        }
+    }
 
     // Main event loop.
+    eprintln!("stored: entering event loop");
     loop {
         let req = match socket.next_request(SignalBehavior::Restart)? {
-            None => break,
+            None => {
+                eprintln!("stored: socket closed");
+                break;
+            }
             Some(req) => req,
         };
 
         match req.kind() {
             RequestKind::Call(call_req) => {
+
                 let response = call_req.handle_sync(&mut handler, &mut state);
+
                 if !socket.write_response(response, SignalBehavior::Restart)? {
+                    eprintln!("stored: write_response returned false");
                     break;
                 }
             }
             RequestKind::OnClose { id } => {
+
                 handler.on_close(id);
             }
-            _ => continue,
+            _ => {
+
+                continue;
+            }
         }
     }
 

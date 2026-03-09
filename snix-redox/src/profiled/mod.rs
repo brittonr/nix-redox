@@ -50,13 +50,35 @@ pub struct ProfileDaemon {
     pub profiles: mapping::ProfileStore,
     /// Daemon configuration.
     pub config: ProfiledConfig,
+    /// Cached manifests for all installed packages.
+    /// store_path → manifest entries. Used for directory listing
+    /// without filesystem I/O.
+    pub manifests: std::collections::BTreeMap<String, Vec<crate::nar::ManifestEntry>>,
 }
 
 impl ProfileDaemon {
     /// Create a new profile daemon, loading existing mappings from disk.
     pub fn new(config: ProfiledConfig) -> Result<Self, Box<dyn std::error::Error>> {
         let profiles = mapping::ProfileStore::load(&config.profiles_dir)?;
-        Ok(Self { profiles, config })
+
+        // Pre-load manifests from PathInfo `files` field for all installed packages.
+        let mut manifests = std::collections::BTreeMap::new();
+        let db = crate::pathinfo::PathInfoDb::open()?;
+        for profile_name in profiles.list_profiles() {
+            if let Some(mapping) = profiles.get(profile_name) {
+                for pkg in &mapping.packages {
+                    if !manifests.contains_key(&pkg.store_path) {
+                        if let Ok(Some(info)) = db.get(&pkg.store_path) {
+                            if !info.files.is_empty() {
+                                manifests.insert(pkg.store_path.clone(), info.files);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(Self { profiles, config, manifests })
     }
 
     /// Create a profile daemon for testing with a custom profiles directory.

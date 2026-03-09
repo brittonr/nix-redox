@@ -384,6 +384,7 @@ fn build_derivation_inner(
             deriver: Some(drv_path.to_absolute_path()),
             registration_time: pathinfo::current_timestamp(),
             signatures: vec![],
+            files: vec![],
         };
         db.register(&info)
             .map_err(|e| BuildError::Io(format!("registering {path}: {e}")))?;
@@ -451,6 +452,7 @@ fn build_result_from_existing(
             deriver: Some(drv_path.to_absolute_path()),
             registration_time: pathinfo::current_timestamp(),
             signatures: vec![],
+            files: vec![],
         };
         let _ = db.register(&info);
     }
@@ -833,6 +835,7 @@ fn build_builtin_fetcher(
         deriver: Some(drv_path.to_absolute_path()),
         registration_time: pathinfo::current_timestamp(),
         signatures: vec![],
+        files: vec![],
     };
     db.register(&info)
         .map_err(|e| BuildError::Io(format!("registering {out_path}: {e}")))?;

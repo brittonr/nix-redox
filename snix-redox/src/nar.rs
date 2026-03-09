@@ -10,11 +10,112 @@ use std::path::Path;
 
 use nix_compat::nar::reader;
 
+/// A file tree manifest entry collected during NAR extraction.
+///
+/// Used by the `stored` daemon to list directory contents without
+/// doing filesystem I/O (which blocks the scheme event loop on Redox).
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct ManifestEntry {
+    /// Path relative to the store path root (e.g., "bin/rg").
+    pub path: String,
+    /// Entry type: "file", "dir", or "symlink".
+    pub entry_type: String,
+    /// File size (0 for directories and symlinks).
+    pub size: u64,
+    /// Whether the file is executable.
+    pub executable: bool,
+}
+
 /// Extract a NAR from a reader to a destination path.
 /// The reader must implement BufRead + Send (nix-compat requirement).
 pub fn extract(r: &mut (dyn BufRead + Send), dest: &str) -> io::Result<()> {
     let node = reader::open(r)?;
     extract_node(node, Path::new(dest))
+}
+
+/// Extract a NAR and collect a manifest of all entries.
+///
+/// Returns the list of files/dirs/symlinks in the NAR. The daemon
+/// uses this to answer getdents without filesystem I/O.
+pub fn extract_with_manifest(
+    r: &mut (dyn BufRead + Send),
+    dest: &str,
+) -> io::Result<Vec<ManifestEntry>> {
+    let node = reader::open(r)?;
+    let mut manifest = Vec::new();
+    extract_node_manifest(node, Path::new(dest), "", &mut manifest)?;
+    Ok(manifest)
+}
+
+fn extract_node_manifest(
+    node: reader::Node<'_, '_>,
+    path: &Path,
+    rel_path: &str,
+    manifest: &mut Vec<ManifestEntry>,
+) -> io::Result<()> {
+    match node {
+        reader::Node::File { executable, mut reader } => {
+            let mut file = fs::File::create(path)?;
+            reader.copy(&mut file)?;
+
+            let mode = if executable { 0o555 } else { 0o444 };
+            fs::set_permissions(path, fs::Permissions::from_mode(mode))?;
+
+            let size = file.metadata().map(|m| m.len()).unwrap_or(0);
+
+            manifest.push(ManifestEntry {
+                path: rel_path.to_string(),
+                entry_type: "file".to_string(),
+                size,
+                executable,
+            });
+        }
+        reader::Node::Symlink { target } => {
+            let target_str = std::str::from_utf8(&target)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+            std::os::unix::fs::symlink(target_str, path)?;
+
+            manifest.push(ManifestEntry {
+                path: rel_path.to_string(),
+                entry_type: "symlink".to_string(),
+                size: 0,
+                executable: false,
+            });
+        }
+        reader::Node::Directory(mut dir_reader) => {
+            fs::create_dir_all(path)?;
+
+            if !rel_path.is_empty() {
+                manifest.push(ManifestEntry {
+                    path: rel_path.to_string(),
+                    entry_type: "dir".to_string(),
+                    size: 0,
+                    executable: false,
+                });
+            }
+
+            while let Some(entry) = dir_reader.next()? {
+                let name = std::str::from_utf8(entry.name)
+                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+                if name.contains('/') || name == "." || name == ".." {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("invalid NAR entry name: {name}"),
+                    ));
+                }
+
+                let entry_path = path.join(name);
+                let child_rel = if rel_path.is_empty() {
+                    name.to_string()
+                } else {
+                    format!("{rel_path}/{name}")
+                };
+                extract_node_manifest(entry.node, &entry_path, &child_rel, manifest)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn extract_node(node: reader::Node<'_, '_>, path: &Path) -> io::Result<()> {

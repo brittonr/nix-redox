@@ -44,6 +44,12 @@ pub struct PathInfo {
     /// Binary cache signatures (for future verification)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub signatures: Vec<String>,
+
+    /// File manifest — list of all files/dirs in this store path.
+    /// Populated during NAR extraction so scheme daemons can serve
+    /// getdents without filesystem I/O (which hangs on Redox).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<crate::nar::ManifestEntry>,
 }
 
 /// Filesystem-backed path info database.
@@ -88,6 +94,50 @@ impl PathInfoDb {
         fs::write(&file, json)
             .map_err(|e| PathInfoError::Io(format!("writing {}: {e}", file.display())))?;
         Ok(())
+    }
+
+    /// Save a file manifest for a store path.
+    ///
+    /// The manifest lists all files/dirs in the package so the stored
+    /// daemon can serve getdents without filesystem I/O.
+    pub fn save_manifest(
+        &self,
+        store_path: &str,
+        manifest: &[crate::nar::ManifestEntry],
+    ) -> Result<(), PathInfoError> {
+        let manifest_dir = self.pathinfo_dir.parent()
+            .unwrap_or(Path::new("/nix/var/snix"))
+            .join("manifests");
+        fs::create_dir_all(&manifest_dir)
+            .map_err(|e| PathInfoError::Io(format!("creating manifests dir: {e}")))?;
+
+        let hash = store_path_hash(store_path)?;
+        let file = manifest_dir.join(format!("{hash}.manifest.json"));
+        let json = serde_json::to_string(manifest)
+            .map_err(|e| PathInfoError::Io(format!("serializing manifest: {e}")))?;
+        fs::write(&file, json)
+            .map_err(|e| PathInfoError::Io(format!("writing {}: {e}", file.display())))?;
+        Ok(())
+    }
+
+    /// Load a file manifest for a store path.
+    pub fn load_manifest(
+        &self,
+        store_path: &str,
+    ) -> Result<Option<Vec<crate::nar::ManifestEntry>>, PathInfoError> {
+        let manifest_dir = self.pathinfo_dir.parent()
+            .unwrap_or(Path::new("/nix/var/snix"))
+            .join("manifests");
+        let hash = store_path_hash(store_path)?;
+        let file = manifest_dir.join(format!("{hash}.manifest.json"));
+        if !file.exists() {
+            return Ok(None);
+        }
+        let content = fs::read_to_string(&file)
+            .map_err(|e| PathInfoError::Io(format!("reading {}: {e}", file.display())))?;
+        let manifest: Vec<crate::nar::ManifestEntry> = serde_json::from_str(&content)
+            .map_err(|e| PathInfoError::Corrupt(format!("{}: {e}", file.display())))?;
+        Ok(Some(manifest))
     }
 
     /// Check whether a store path is registered.
@@ -233,6 +283,7 @@ mod tests {
             deriver: Some("/nix/store/5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r-hello-1.0.drv".to_string()),
             registration_time: "2026-02-20T12:00:00Z".to_string(),
             signatures: vec!["cache.nixos.org-1:abc...".to_string()],
+            files: vec![],
         }
     }
 
@@ -389,6 +440,7 @@ mod tests {
                 deriver: None,
                 registration_time: "2026-01-01T00:00:00Z".to_string(),
                 signatures: vec![],
+                files: vec![],
             };
             db.register(&info).unwrap();
         }
@@ -416,6 +468,7 @@ mod tests {
                 deriver: None,
                 registration_time: "2026-01-01T00:00:00Z".to_string(),
                 signatures: vec![],
+                files: vec![],
             };
             db.register(&info).unwrap();
         }
@@ -459,6 +512,7 @@ mod tests {
                 deriver: None,
                 registration_time: "t".to_string(),
                 signatures: vec![],
+                files: vec![],
             }).unwrap();
         }
 

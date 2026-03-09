@@ -51,6 +51,16 @@ impl ProfileSchemeHandler {
 }
 
 impl SchemeSync for ProfileSchemeHandler {
+    fn scheme_root(&mut self) -> Result<usize> {
+        // Open the scheme root (listing of all profiles).
+        let id = self.handles.open_dir(
+            String::new(),
+            String::new(),
+            String::new(),
+        );
+        Ok(id)
+    }
+
     fn openat(
         &mut self,
         _dirfd: usize,
@@ -99,28 +109,53 @@ impl SchemeSync for ProfileSchemeHandler {
                         flags: NewFdFlags::POSITIONED,
                     })
                 } else {
-                    // Try to resolve through the profile mapping.
+                    // Check if this is a directory path first (union of dirs
+                    // across packages). Uses manifests to avoid filesystem I/O.
                     let mapping = self
                         .daemon
                         .profiles
                         .get(name)
                         .ok_or_else(|| Error::new(ENOENT))?;
 
-                    let resolved = mapping.resolve_path(subpath).ok_or_else(|| {
-                        // Maybe it's a directory? Check by trying to list it.
-                        let entries = mapping.list_union(subpath);
-                        if !entries.is_empty() {
-                            // It's a directory path — return ENOTDIR to hint
-                            // the caller should use O_DIRECTORY. But most callers
-                            // will just see ENOENT.
-                            return Error::new(ENOENT);
+                    let entries = mapping.list_union_from_manifests(
+                        subpath,
+                        &self.daemon.manifests,
+                    );
+                    if !entries.is_empty() {
+                        // It's a directory — open as dir handle.
+                        let id = self.handles.open_dir(
+                            path.to_string(),
+                            name.to_string(),
+                            subpath.to_string(),
+                        );
+                        return Ok(OpenResult::ThisScheme {
+                            number: id,
+                            flags: NewFdFlags::POSITIONED,
+                        });
+                    }
+
+                    // Try to resolve as a file through the profile mapping.
+                    // resolve_path does filesystem I/O (exists check), but
+                    // that's ok because it goes through file: scheme, not
+                    // our profile: scheme. No self-deadlock.
+                    // However, on Redox scheme daemons ALL filesystem I/O
+                    // hangs. Use manifest-based resolution instead.
+                    let full_path = {
+                        let mut found = None;
+                        for pkg in mapping.packages.iter().rev() {
+                            if let Some(manifest) = self.daemon.manifests.get(&pkg.store_path) {
+                                if manifest.iter().any(|e| e.path == subpath && e.entry_type == "file") {
+                                    found = Some(std::path::PathBuf::from(&pkg.store_path).join(subpath));
+                                    break;
+                                }
+                            }
                         }
-                        Error::new(ENOENT)
-                    })?;
+                        found.ok_or_else(|| Error::new(ENOENT))?
+                    };
 
                     let id = self
                         .handles
-                        .open_file(resolved.full_path, path.to_string())
+                        .open_file(full_path, path.to_string())
                         .map_err(|e| {
                             eprintln!("profiled: open file: {e}");
                             Error::new(EIO)
@@ -254,7 +289,11 @@ impl SchemeSync for ProfileSchemeHandler {
             };
 
             // Collect all top-level entries across all packages.
-            let entries = mapping.list_union("");
+            // Use manifests to avoid filesystem I/O.
+            let entries = mapping.list_union_from_manifests(
+                "",
+                &self.daemon.manifests,
+            );
             // Also add .control as a synthetic entry.
             let mut all_entries: Vec<(&str, DirentKind)> = entries
                 .iter()
@@ -300,7 +339,10 @@ impl SchemeSync for ProfileSchemeHandler {
                 None => return Ok(buf),
             };
 
-            let entries = mapping.list_union(&subpath);
+            let entries = mapping.list_union_from_manifests(
+                &subpath,
+                &self.daemon.manifests,
+            );
             for (i, entry) in entries.iter().enumerate().skip(start) {
                 let kind = if entry.is_dir {
                     DirentKind::Directory
@@ -337,7 +379,13 @@ impl SchemeSync for ProfileSchemeHandler {
                     .profiles
                     .process_control(&ch.profile_name, &command)
                 {
-                    Ok(msg) => eprintln!("profiled: {msg}"),
+                    Ok((msg, files)) => {
+                        eprintln!("profiled: {msg}");
+                        // Store manifest data if provided in the command.
+                        if let Some((store_path, manifest)) = files {
+                            self.daemon.manifests.insert(store_path, manifest);
+                        }
+                    }
                     Err(e) => eprintln!("profiled: control error: {e}"),
                 }
             }
@@ -363,30 +411,57 @@ pub fn run_daemon(config: ProfiledConfig) -> Result<(), Box<dyn std::error::Erro
 
     // Register the `profile` scheme with the kernel.
     eprintln!("profiled: creating scheme socket...");
-    let socket = Socket::create()?;
+    let socket = match Socket::create() {
+        Ok(s) => {
+            eprintln!("profiled: socket created successfully");
+            s
+        }
+        Err(e) => {
+            eprintln!("profiled: Socket::create() failed: {e}");
+            eprintln!("profiled: this requires /scheme/namespace/scheme-creation-cap");
+            return Err(format!("profiled: Socket::create failed: {e}").into());
+        }
+    };
 
     eprintln!("profiled: registering scheme 'profile'...");
-    redox_scheme::scheme::register_sync_scheme(&socket, "profile", &mut handler)?;
-    eprintln!("profiled: scheme 'profile' registered");
+    match redox_scheme::scheme::register_sync_scheme(&socket, "profile", &mut handler) {
+        Ok(()) => eprintln!("profiled: scheme 'profile' registered"),
+        Err(e) => {
+            eprintln!("profiled: register_sync_scheme failed: {e}");
+            eprintln!("profiled: error code: {:?}", e);
+            return Err(format!("profiled: registration failed: {e}").into());
+        }
+    }
 
     // Main event loop.
+    eprintln!("profiled: entering event loop");
     loop {
         let req = match socket.next_request(SignalBehavior::Restart)? {
-            None => break,
+            None => {
+                eprintln!("profiled: socket closed");
+                break;
+            }
             Some(req) => req,
         };
 
         match req.kind() {
             RequestKind::Call(call_req) => {
+
                 let response = call_req.handle_sync(&mut handler, &mut state);
+
                 if !socket.write_response(response, SignalBehavior::Restart)? {
+                    eprintln!("profiled: write_response returned false");
                     break;
                 }
             }
             RequestKind::OnClose { id } => {
+
                 handler.on_close(id);
             }
-            _ => continue,
+            _ => {
+
+                continue;
+            }
         }
     }
 

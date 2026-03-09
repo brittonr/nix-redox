@@ -119,6 +119,63 @@ impl ProfileMapping {
         entries.sort_by(|a, b| a.name.cmp(&b.name));
         entries
     }
+
+    /// List all files at a given subpath using pre-loaded manifests.
+    ///
+    /// Same as `list_union` but doesn't touch the filesystem — uses
+    /// manifest data loaded at daemon startup. Falls back to empty
+    /// list if no manifests are available.
+    pub fn list_union_from_manifests(
+        &self,
+        subpath: &str,
+        manifests: &std::collections::BTreeMap<String, Vec<crate::nar::ManifestEntry>>,
+    ) -> Vec<UnionEntry> {
+        let mut seen = BTreeMap::new();
+
+        let prefix = if subpath.is_empty() {
+            String::new()
+        } else {
+            format!("{}/", subpath.trim_end_matches('/'))
+        };
+
+        for entry in &self.packages {
+            if let Some(manifest) = manifests.get(&entry.store_path) {
+                for m in manifest {
+                    let rel = if prefix.is_empty() {
+                        &m.path
+                    } else if let Some(stripped) = m.path.strip_prefix(&prefix) {
+                        stripped
+                    } else {
+                        continue;
+                    };
+
+                    // Only direct children.
+                    if let Some(slash_pos) = rel.find('/') {
+                        let dir_name = &rel[..slash_pos];
+                        seen.entry(dir_name.to_string()).or_insert(
+                            UnionEntry {
+                                name: dir_name.to_string(),
+                                is_dir: true,
+                                is_symlink: false,
+                                from_package: entry.name.clone(),
+                            },
+                        );
+                    } else if !rel.is_empty() {
+                        seen.insert(rel.to_string(), UnionEntry {
+                            name: rel.to_string(),
+                            is_dir: m.entry_type == "dir",
+                            is_symlink: m.entry_type == "symlink",
+                            from_package: entry.name.clone(),
+                        });
+                    }
+                }
+            }
+        }
+
+        let mut entries: Vec<UnionEntry> = seen.into_values().collect();
+        entries.sort_by(|a, b| a.name.cmp(&b.name));
+        entries
+    }
 }
 
 /// A file resolved through the profile mapping.
@@ -257,33 +314,43 @@ impl ProfileStore {
     }
 
     /// Process a control command (from writes to `.control`).
+    ///
+    /// Returns (message, optional_files) where files are the manifest
+    /// entries from an "add" command. The caller should store these
+    /// in the manifests cache.
     pub fn process_control(
         &mut self,
         profile: &str,
         command_json: &str,
-    ) -> Result<String, Box<dyn std::error::Error>> {
+    ) -> Result<(String, Option<(String, Vec<crate::nar::ManifestEntry>)>), Box<dyn std::error::Error>> {
         let cmd: ControlCommand = serde_json::from_str(command_json)?;
 
         match cmd.action.as_str() {
             "add" => {
                 let store_path = cmd
                     .store_path
+                    .clone()
                     .ok_or("'add' command requires 'storePath' field")?;
                 self.add_package(profile, &cmd.name, &store_path)?;
-                Ok(format!("added {} to profile {}", cmd.name, profile))
+                let files = if cmd.files.is_empty() {
+                    None
+                } else {
+                    Some((store_path, cmd.files))
+                };
+                Ok((format!("added {} to profile {}", cmd.name, profile), files))
             }
             "remove" => {
                 let removed = self.remove_package(profile, &cmd.name)?;
                 if removed {
-                    Ok(format!("removed {} from profile {}", cmd.name, profile))
+                    Ok((format!("removed {} from profile {}", cmd.name, profile), None))
                 } else {
-                    Ok(format!("{} not found in profile {}", cmd.name, profile))
+                    Ok((format!("{} not found in profile {}", cmd.name, profile), None))
                 }
             }
             "list" => {
                 let mapping = self.get(profile);
                 let json = serde_json::to_string_pretty(&mapping)?;
-                Ok(json)
+                Ok((json, None))
             }
             other => Err(format!("unknown control action: {other}").into()),
         }
@@ -298,6 +365,10 @@ struct ControlCommand {
     name: String,
     #[serde(default)]
     store_path: Option<String>,
+    /// File manifest for the package (so profiled can serve getdents
+    /// without filesystem I/O).
+    #[serde(default)]
+    files: Vec<crate::nar::ManifestEntry>,
 }
 
 /// Get current unix timestamp (seconds since epoch).

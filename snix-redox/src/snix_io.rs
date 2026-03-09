@@ -202,6 +202,7 @@ impl SnixRedoxIO {
                     deriver: None,
                     registration_time: pathinfo::current_timestamp(),
                     signatures: vec![],
+                    files: vec![],
                 };
                 let _ = db.register(&info);
             }

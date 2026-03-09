@@ -272,6 +272,16 @@ let
     defaultTimeout = 1500; # snix self-compile (168 crates) + ripgrep build need ~900s
   };
 
+  # Scheme daemon test: stored + profiled daemons serve store: and profile: schemes
+  schemeDaemonTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/scheme-daemon-test.nix ];
+    inherit extraPkgs;
+  };
+  schemeDaemonTest = mkFunctionalTest {
+    diskImage = schemeDaemonTestSystem.diskImage;
+    inherit bootloader;
+  };
+
   mkBridgeTest = modularPkgs.infrastructure.mkBridgeTest;
   bridgeTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/bridge-test.nix ];
@@ -388,6 +398,9 @@ in
 
     redox-self-hosting-test = selfHostingTestSystem.diskImage;
     self-hosting-test = selfHostingTest;
+
+    redox-scheme-daemon-test = schemeDaemonTestSystem.diskImage;
+    scheme-daemon-test = schemeDaemonTest;
 
     redox-rebuild = redoxRebuild;
     push-to-redox = pushToRedox;

@@ -49,10 +49,18 @@ fn profiled_is_running() -> bool {
 /// Writes a JSON command to `profile:default/.control`.
 /// Returns Ok(()) on success, Err if the write fails.
 fn profiled_add(name: &str, store_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    // Load the manifest from PathInfo to send to profiled.
+    let files = crate::pathinfo::PathInfoDb::open()
+        .ok()
+        .and_then(|db| db.get(store_path).ok().flatten())
+        .map(|info| info.files)
+        .unwrap_or_default();
+
     let cmd = serde_json::json!({
         "action": "add",
         "name": name,
-        "storePath": store_path
+        "storePath": store_path,
+        "files": files
     });
     #[cfg(target_os = "redox")]
     {
@@ -553,7 +561,7 @@ fn fetch_and_extract(
     let mut buf_reader = BufReader::new(&mut hashing);
 
     eprintln!("extracting to {dest}...");
-    nar::extract(&mut buf_reader, &dest)?;
+    let manifest = nar::extract_with_manifest(&mut buf_reader, &dest)?;
 
     // Verify hash
     let actual_hash = hashing.finalize();
@@ -577,7 +585,10 @@ fn fetch_and_extract(
         .collect();
     let signatures: Vec<String> = narinfo.signatures.iter().map(|s| s.to_string()).collect();
 
-    store::register_path(&db, &dest, &nar_hash_hex, narinfo.nar_size, references, signatures)?;
+    store::register_path_with_files(
+        &db, &dest, &nar_hash_hex, narinfo.nar_size,
+        references, signatures, manifest,
+    )?;
 
     eprintln!("✓ verified and installed: {dest}");
     Ok(())

@@ -274,6 +274,19 @@ pub fn register_path(
     references: Vec<String>,
     signatures: Vec<String>,
 ) -> Result<(), PathInfoError> {
+    register_path_with_files(db, store_path, nar_hash, nar_size, references, signatures, Vec::new())
+}
+
+/// Register a store path with a file manifest.
+pub fn register_path_with_files(
+    db: &PathInfoDb,
+    store_path: &str,
+    nar_hash: &str,
+    nar_size: u64,
+    references: Vec<String>,
+    signatures: Vec<String>,
+    files: Vec<crate::nar::ManifestEntry>,
+) -> Result<(), PathInfoError> {
     let info = PathInfo {
         store_path: store_path.to_string(),
         nar_hash: nar_hash.to_string(),
@@ -282,6 +295,7 @@ pub fn register_path(
         deriver: None,
         registration_time: pathinfo::current_timestamp(),
         signatures,
+        files,
     };
     db.register(&info)
 }
@@ -592,6 +606,7 @@ mod tests {
             deriver: None,
             registration_time: "2026-01-01T00:00:00Z".to_string(),
             signatures: vec![],
+            files: vec![],
         };
         db.register(&info).unwrap();
     }
