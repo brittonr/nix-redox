@@ -39,6 +39,21 @@
   Both work, but `magick` avoids the deprecation warning.
 - **snapshot=on**: QEMU's per-drive `snapshot=on` creates a temporary qcow2 overlay.
   The original disk image is never modified. Much faster than copying the image.
+- **QMP send-key**: Types into whatever VT has focus. Keystrokes arrive at the guest USB
+  keyboard (via -device usb-kbd). Tab in Orbital switches VTs, NOT focus — use mouse click
+  on input fields instead.
+- **Mouse input**: `input-send-event` with absolute coords (0–32767 range) requires USB
+  tablet device (-device usb-tablet). Convert pixel→abs: `round(px/displayWidth * 32767)`.
+  Send position + button in separate events with 30ms delay between.
+- **Typing timing**: Must wait for click to register (Orbital needs ~100ms to focus a field)
+  before sending keystrokes. Without delay, keystrokes go to previously focused widget.
+- **Shadow passwords**: `/etc/shadow` uses Argon2id hashes (PHC format: `$argon2id$v=19$...`).
+  `redox_users` crate's `verify_hash()` panics if shadow entry is plaintext. Empty password
+  `user;` is ok (skips verification), but non-empty must be hashed. The upstream
+  `redox-installer` handles hashing — our build module needs to do the same.
+- **orbterm config permission**: After login, orbterm tries to open a config file and gets
+  EPERM. The home dir exists but is empty, and Nix store files are read-only. Needs
+  investigation — may need writable config path or default config in rootTree.
 
 ### Graphical initfs exceeds 64 MiB default (Mar 9 2026)
 - `redox-initfs-ar` has a `--max-size` flag defaulting to 64 MiB (raw bytes, not human-readable)
