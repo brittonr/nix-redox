@@ -2,6 +2,46 @@
 
 ## Corrections & Lessons
 
+### Headless serial console fix — getty on debug: (Mar 9 2026)
+- **Root cause**: The startup script's `read` builtin does blocking I/O on `debug:` scheme.
+  Although the kernel's debug scheme DOES support reads (INPUT WaitQueue + COM1 IRQ handler
+  with `debug_input()` + `debug_notify()`), simple blocking reads from Ion's `read` builtin
+  don't work — data arrives but the reader never wakes up.
+- **Why blocking reads fail**: Unknown precisely, but the upstream Redox approach is event-driven.
+  The kernel's `fevent` for debug: returns `EventFlags::empty()` (no current events), but
+  `debug_notify()` triggers `EVENT_READ` asynchronously via `event::trigger()`.
+- **The fix**: Use `getty /scheme/debug/no-preserve -J` (matches upstream minimal.toml).
+  - `getty` opens debug: with `O_NONBLOCK`, creates a PTY pair via `/scheme/pty`
+  - Sets up an event queue on both the TTY fd and the PTY master fd
+  - Bridges data between debug: and PTY using event-driven non-blocking I/O
+  - Spawns `login` on the PTY slave → full terminal support (tcsetattr, liner, etc.)
+  - `-J` flag = don't clear screen (cosmetic, not functional)
+- **Architecture**: `30_console` init script in `usr/lib/init.d/` runs
+  `export XDG_CONFIG_HOME /etc` + `nowait getty /scheme/debug/no-preserve -J`
+  - Only added when `userutilsInstalled` (development, self-hosting, graphical profiles)
+  - Functional-test and minimal profiles WITHOUT userutils still use `startup.sh` directly
+- **init.toml change**: When getty handles the console, init.toml is empty (no shell service).
+  The old `[[services]] command = "/startup.sh" stdio = "debug"` conflicted with getty.
+- **90_exit_initfs change**: When getty is handling the console, `90_exit_initfs` just does
+  `stdio debug:` (for init's log output) without running `/startup.sh`.
+- **Ion initrc (XDG_CONFIG_HOME)**: getty/login don't set XDG_CONFIG_HOME, so Ion looks at
+  `~/.config/ion/initrc` (wrong). Fix: `export XDG_CONFIG_HOME /etc` in the 30_console init
+  script so Ion finds `/etc/ion/initrc`.
+- **Ion initrc (environment)**: Ion uses `let VAR = "value"\nexport VAR`, NOT bash's `export VAR=value`.
+  HOME/USER/SHELL are set by login — don't re-set them (Ion refuses `not allowed to set HOME`).
+  PATH set directly: `let PATH = "/nix/system/profile/bin:/bin:/usr/bin"\nexport PATH`.
+- **Ion initrc (prompt)**: Ion's PROMPT expansion with `\$USER` causes `Variable "" does not exist`
+  errors. Simple literal prompts like `"redox# "` work fine. The default in programs.nix
+  used `"\\$USER@\\$HOSTNAME \\$PWD# "` which evaluates to `\$USER@...` in the file but
+  Ion's double-quote handling of `\$` is unreliable. Use literal hostname in prompt.
+- **Ion initrc (aliases)**: Aliases containing `$` (like `$@args` or `$(...)`) cause Ion
+  expansion errors at source time. Filter them out; put complex aliases in `ion.initExtra`.
+- **Result**: Full interactive serial console with Ion liner, tab completion, history.
+  Login prompt works. All 48 profile-managed tools accessible via PATH.
+- **PREVIOUS NAPKIN ENTRY WAS WRONG**: The entry about "getty needs fevent" was incorrect.
+  `getty` works fine on `debug:` because it uses event-driven I/O, and the kernel's
+  `debug_notify()` triggers EVENT_READ when data arrives. The napkin led us astray.
+
 ### Shadow Argon2 hashing + orbterm config fix (Mar 9 2026)
 - **Root cause (shadow)**: `redox_users::verify_passwd()` expects Argon2id PHC-format hashes
   (`$argon2id$v=19$m=4096,t=3,p=1$base64salt$base64hash`). Plaintext passwords in shadow
