@@ -20,6 +20,49 @@ use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
+/// Bootstrap a ProfileMapping from an install manifest.json file.
+///
+/// The install manifest (created by `snix install`) has a different
+/// format than the profiled mapping. This converts between them so
+/// profiled can pick up packages installed before the daemon started.
+fn bootstrap_from_manifest(manifest_path: &Path) -> Result<ProfileMapping, Box<dyn std::error::Error>> {
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct InstallManifest {
+        #[serde(default)]
+        packages: BTreeMap<String, InstallEntry>,
+    }
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct InstallEntry {
+        #[allow(dead_code)]
+        name: String,
+        store_path: String,
+        #[allow(dead_code)]
+        #[serde(default)]
+        binaries: Vec<String>,
+    }
+
+    let content = fs::read_to_string(manifest_path)?;
+    let manifest: InstallManifest = serde_json::from_str(&content)?;
+
+    let mut mapping = ProfileMapping {
+        version: 1,
+        packages: Vec::new(),
+    };
+
+    for (key, entry) in &manifest.packages {
+        mapping.packages.push(ProfileEntry {
+            name: key.clone(),
+            store_path: entry.store_path.clone(),
+            installed_at: current_timestamp(),
+        });
+    }
+
+    Ok(mapping)
+}
+
 /// A single installed package in a profile.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -232,15 +275,46 @@ impl ProfileStore {
                                 )
                             })?;
                         profiles.insert(name, mapping);
+                    } else {
+                        // Bootstrap from install manifest if mapping.json
+                        // doesn't exist yet. This handles the case where
+                        // packages were installed before the profiled
+                        // daemon was started.
+                        let manifest_path = entry.path().join("manifest.json");
+                        if manifest_path.exists() {
+                            if let Ok(mapping) = bootstrap_from_manifest(&manifest_path) {
+                                eprintln!(
+                                    "profiled: bootstrapped '{}' from manifest ({} packages)",
+                                    name,
+                                    mapping.packages.len(),
+                                );
+                                profiles.insert(name, mapping);
+                            }
+                        }
                     }
                 }
             }
         }
 
-        Ok(Self {
+        let mut store = Self {
             profiles,
             profiles_dir: profiles_dir.to_string(),
-        })
+        };
+
+        // Persist any bootstrapped profiles (creates mapping.json
+        // from manifest.json so future loads don't need to re-bootstrap).
+        for name in store.profiles.keys().cloned().collect::<Vec<_>>() {
+            let mapping_path = PathBuf::from(profiles_dir)
+                .join(&name)
+                .join("mapping.json");
+            if !mapping_path.exists() {
+                if let Err(e) = store.persist(&name) {
+                    eprintln!("profiled: failed to persist bootstrapped profile '{name}': {e}");
+                }
+            }
+        }
+
+        Ok(store)
     }
 
     /// Get or create a profile by name.
@@ -621,14 +695,14 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut store = ProfileStore::load(tmp.path().to_str().unwrap()).unwrap();
 
-        let result = store
+        let (msg, _files) = store
             .process_control(
                 "default",
                 r#"{"action": "add", "name": "ripgrep", "storePath": "/nix/store/abc-rg"}"#,
             )
             .unwrap();
 
-        assert!(result.contains("added"));
+        assert!(msg.contains("added"));
         assert!(store.get("default").unwrap().get("ripgrep").is_some());
     }
 
@@ -641,11 +715,11 @@ mod tests {
             .add_package("default", "rg", "/nix/store/rg")
             .unwrap();
 
-        let result = store
+        let (msg, _files) = store
             .process_control("default", r#"{"action": "remove", "name": "rg"}"#)
             .unwrap();
 
-        assert!(result.contains("removed"));
+        assert!(msg.contains("removed"));
         assert!(store.get("default").unwrap().get("rg").is_none());
     }
 
@@ -658,11 +732,11 @@ mod tests {
             .add_package("default", "rg", "/nix/store/rg")
             .unwrap();
 
-        let result = store
+        let (msg, _files) = store
             .process_control("default", r#"{"action": "list", "name": ""}"#)
             .unwrap();
 
-        let parsed: serde_json::Value = serde_json::from_str(&result).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&msg).unwrap();
         assert!(parsed["packages"].is_array());
     }
 

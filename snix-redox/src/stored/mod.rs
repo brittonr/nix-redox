@@ -144,6 +144,69 @@ impl StoreDaemon {
         }
     }
 
+    /// Check if a subpath is a directory according to the manifest.
+    ///
+    /// Returns `true` if the manifest contains a "dir" entry for this
+    /// exact path, or if any manifest entry has this path as a prefix
+    /// (meaning files exist inside it). Returns `true` as fallback if
+    /// no manifest is available (safer to treat as dir than to attempt
+    /// a filesystem open that could hang the event loop).
+    pub fn is_directory_in_manifest(
+        &self,
+        store_path_name: &str,
+        subpath: &str,
+    ) -> bool {
+        let manifest = match self.manifests.get(store_path_name) {
+            Some(m) => m,
+            // No manifest → assume directory (safe default: open_dir_unchecked
+            // doesn't do I/O, whereas open_file does).
+            None => return true,
+        };
+
+        let subpath = subpath.trim_matches('/');
+
+        // Check for an exact "dir" entry.
+        for entry in manifest {
+            if entry.path == subpath && entry.entry_type == "dir" {
+                return true;
+            }
+        }
+
+        // Check if any entry has this as a prefix (e.g., "bin/rg" starts
+        // with "bin/", so "bin" is implicitly a directory).
+        let prefix = format!("{subpath}/");
+        for entry in manifest {
+            if entry.path.starts_with(&prefix) {
+                return true;
+            }
+        }
+
+        false
+    }
+
+    /// Look up file metadata (size, executable) from the manifest.
+    ///
+    /// Returns `(size, executable)`. Falls back to `(0, false)` if the
+    /// entry isn't in the manifest (the lazy file handle will get real
+    /// metadata on first read).
+    pub fn file_metadata_from_manifest(
+        &self,
+        store_path_name: &str,
+        subpath: &str,
+    ) -> (u64, bool) {
+        let manifest = match self.manifests.get(store_path_name) {
+            Some(m) => m,
+            None => return (0, false),
+        };
+        let subpath = subpath.trim_matches('/');
+        for entry in manifest {
+            if entry.path == subpath {
+                return (entry.size, entry.executable);
+            }
+        }
+        (0, false)
+    }
+
     /// List directory entries from the manifest for a given subpath.
     ///
     /// Returns `None` if no manifest is available for this store path.
@@ -212,5 +275,125 @@ pub fn run(config: StoredConfig) -> Result<(), Box<dyn std::error::Error>> {
     {
         let _ = config;
         Err("stored: scheme daemons are only supported on Redox OS".into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::nar::ManifestEntry;
+
+    fn make_entry(path: &str, entry_type: &str) -> ManifestEntry {
+        ManifestEntry {
+            path: path.to_string(),
+            entry_type: entry_type.to_string(),
+            size: 0,
+            executable: false,
+        }
+    }
+
+    /// Helper: create a StoreDaemon with pre-loaded manifests (no PathInfoDb).
+    fn daemon_with_manifest(
+        store_path_name: &str,
+        entries: Vec<ManifestEntry>,
+    ) -> StoreDaemon {
+        let mut manifests = BTreeMap::new();
+        manifests.insert(store_path_name.to_string(), entries);
+        StoreDaemon {
+            db: PathInfoDb::open_at(
+                std::path::PathBuf::from("/tmp/snix-test-nonexistent"),
+            )
+            .unwrap_or_else(|_| {
+                std::fs::create_dir_all("/tmp/snix-test-stored-db").ok();
+                PathInfoDb::open_at(
+                    std::path::PathBuf::from("/tmp/snix-test-stored-db"),
+                )
+                .unwrap()
+            }),
+            handles: handles::HandleTable::new(),
+            extracting: Mutex::new(std::collections::HashSet::new()),
+            config: StoredConfig::default(),
+            manifests,
+        }
+    }
+
+    #[test]
+    fn is_directory_explicit_dir_entry() {
+        let d = daemon_with_manifest("abc-pkg", vec![
+            make_entry("bin", "dir"),
+            make_entry("bin/rg", "file"),
+        ]);
+        assert!(d.is_directory_in_manifest("abc-pkg", "bin"));
+    }
+
+    #[test]
+    fn is_directory_implicit_from_children() {
+        // No explicit "bin" dir entry, but "bin/rg" implies "bin" is a directory.
+        let d = daemon_with_manifest("abc-pkg", vec![
+            make_entry("bin/rg", "file"),
+        ]);
+        assert!(d.is_directory_in_manifest("abc-pkg", "bin"));
+    }
+
+    #[test]
+    fn is_not_directory_for_file() {
+        let d = daemon_with_manifest("abc-pkg", vec![
+            make_entry("bin", "dir"),
+            make_entry("bin/rg", "file"),
+        ]);
+        assert!(!d.is_directory_in_manifest("abc-pkg", "bin/rg"));
+    }
+
+    #[test]
+    fn is_directory_unknown_manifest_defaults_true() {
+        let d = daemon_with_manifest("abc-pkg", vec![]);
+        // Unknown store path → default to true (safe: dir open doesn't do I/O).
+        assert!(d.is_directory_in_manifest("other-pkg", "bin"));
+    }
+
+    #[test]
+    fn is_directory_nested_subpath() {
+        let d = daemon_with_manifest("abc-pkg", vec![
+            make_entry("share/man/man1/rg.1", "file"),
+        ]);
+        assert!(d.is_directory_in_manifest("abc-pkg", "share"));
+        assert!(d.is_directory_in_manifest("abc-pkg", "share/man"));
+        assert!(d.is_directory_in_manifest("abc-pkg", "share/man/man1"));
+        assert!(!d.is_directory_in_manifest("abc-pkg", "share/man/man1/rg.1"));
+    }
+
+    #[test]
+    fn is_directory_trims_slashes() {
+        let d = daemon_with_manifest("abc-pkg", vec![
+            make_entry("bin/rg", "file"),
+        ]);
+        assert!(d.is_directory_in_manifest("abc-pkg", "bin/"));
+        assert!(d.is_directory_in_manifest("abc-pkg", "/bin/"));
+        assert!(d.is_directory_in_manifest("abc-pkg", "/bin"));
+    }
+
+    #[test]
+    fn list_from_manifest_root() {
+        let d = daemon_with_manifest("abc-pkg", vec![
+            make_entry("bin", "dir"),
+            make_entry("bin/rg", "file"),
+            make_entry("share", "dir"),
+            make_entry("share/man/man1/rg.1", "file"),
+        ]);
+        let entries = d.list_from_manifest("abc-pkg", "").unwrap();
+        let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["bin", "share"]);
+    }
+
+    #[test]
+    fn list_from_manifest_subdir() {
+        let d = daemon_with_manifest("abc-pkg", vec![
+            make_entry("bin", "dir"),
+            make_entry("bin/rg", "file"),
+            make_entry("bin/rg-readme", "file"),
+        ]);
+        let entries = d.list_from_manifest("abc-pkg", "bin").unwrap();
+        let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
+        assert_eq!(names, vec!["rg", "rg-readme"]);
     }
 }

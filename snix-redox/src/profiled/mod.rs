@@ -92,7 +92,11 @@ impl ProfileDaemon {
             store_dir: store_dir.to_string(),
         };
         let profiles = mapping::ProfileStore::load(&config.profiles_dir)?;
-        Ok(Self { profiles, config })
+        Ok(Self {
+            profiles,
+            config,
+            manifests: std::collections::BTreeMap::new(),
+        })
     }
 }
 

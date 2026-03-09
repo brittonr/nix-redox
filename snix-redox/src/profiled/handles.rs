@@ -12,15 +12,20 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// An open file resolved through the profile.
+///
+/// Lazy: `file` is `None` until the first `read()` call. This avoids
+/// filesystem I/O during `openat` which hangs Redox scheme daemons.
 pub struct FileHandle {
-    /// Underlying file on the real filesystem.
-    pub file: fs::File,
+    /// Underlying file on the real filesystem. `None` until first read.
+    pub file: Option<fs::File>,
     /// Absolute filesystem path.
     pub real_path: PathBuf,
     /// Scheme-relative path (e.g., `default/bin/rg`).
     pub scheme_path: String,
-    /// Cached file size.
+    /// Cached file size (from manifest).
     pub size: u64,
+    /// Whether the file is executable (from manifest).
+    pub executable: bool,
 }
 
 /// An open directory for listing.
@@ -64,23 +69,50 @@ impl HandleTable {
         }
     }
 
-    /// Open a file resolved through the profile mapping.
+    /// Create a lazy file handle (NO filesystem I/O).
+    ///
+    /// Safe to call from within a Redox scheme event loop.
+    pub fn open_file_lazy(
+        &mut self,
+        real_path: PathBuf,
+        scheme_path: String,
+        size: u64,
+        executable: bool,
+    ) -> usize {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        self.handles.insert(
+            id,
+            Handle::File(FileHandle {
+                file: None,
+                real_path,
+                scheme_path,
+                size,
+                executable,
+            }),
+        );
+        id
+    }
+
+    /// Open a file eagerly (does filesystem I/O).
+    ///
+    /// ⚠️ NOT safe from within Redox scheme handlers. Use `open_file_lazy`.
     pub fn open_file(
         &mut self,
         real_path: PathBuf,
         scheme_path: String,
     ) -> io::Result<usize> {
         let file = fs::File::open(&real_path)?;
-        let size = file.metadata()?.len();
+        let meta = file.metadata()?;
 
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         self.handles.insert(
             id,
             Handle::File(FileHandle {
-                file,
+                file: Some(file),
                 real_path,
                 scheme_path,
-                size,
+                size: meta.len(),
+                executable: false,
             }),
         );
         Ok(id)
@@ -119,7 +151,7 @@ impl HandleTable {
         id
     }
 
-    /// Read from a file handle.
+    /// Read from a file handle (lazy-opens on first read).
     pub fn read(
         &mut self,
         id: usize,
@@ -128,8 +160,12 @@ impl HandleTable {
     ) -> io::Result<usize> {
         match self.handles.get_mut(&id) {
             Some(Handle::File(fh)) => {
-                fh.file.seek(SeekFrom::Start(offset))?;
-                fh.file.read(buf)
+                if fh.file.is_none() {
+                    fh.file = Some(fs::File::open(&fh.real_path)?);
+                }
+                let file = fh.file.as_mut().unwrap();
+                file.seek(SeekFrom::Start(offset))?;
+                file.read(buf)
             }
             Some(Handle::Dir(_)) | Some(Handle::Control(_)) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,

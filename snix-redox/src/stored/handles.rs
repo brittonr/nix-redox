@@ -3,6 +3,13 @@
 //! Maps handle IDs (returned to callers as file descriptors) to
 //! underlying filesystem state. Each open file or directory through
 //! the `store:` scheme gets a handle entry.
+//!
+//! File handles are LAZY: they record the path and metadata at open
+//! time but defer the actual `fs::File::open()` until the first
+//! `read()` call. This is critical on Redox where filesystem I/O
+//! from within a scheme event loop hangs the daemon (the kernel
+//! blocks the calling thread until the response arrives, but the
+//! daemon can't process new requests while blocked).
 
 use std::collections::BTreeMap;
 use std::fs;
@@ -11,16 +18,20 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 /// An open file handle.
+///
+/// Created lazily — `file` is `None` until the first `read()` call.
+/// Metadata (size, executable) comes from the manifest at open time,
+/// avoiding any filesystem I/O during the `openat` handler.
 pub struct FileHandle {
-    /// The underlying file on the real filesystem.
-    pub file: fs::File,
+    /// The underlying file on the real filesystem. `None` until first read.
+    pub file: Option<fs::File>,
     /// Absolute filesystem path (e.g., `/nix/store/abc.../bin/rg`).
     pub real_path: PathBuf,
     /// Path relative to the store scheme (e.g., `abc.../bin/rg`).
     pub scheme_path: String,
-    /// File size (cached from stat at open time).
+    /// File size (from manifest, or 0 if unknown).
     pub size: u64,
-    /// Whether the file is executable.
+    /// Whether the file is executable (from manifest).
     pub executable: bool,
 }
 
@@ -52,7 +63,7 @@ pub enum Handle {
 /// Table of open handles with auto-incrementing IDs.
 pub struct HandleTable {
     next_id: AtomicUsize,
-    handles: BTreeMap<usize, Handle>,
+    pub handles: BTreeMap<usize, Handle>,
 }
 
 impl HandleTable {
@@ -63,7 +74,35 @@ impl HandleTable {
         }
     }
 
+    /// Create a lazy file handle from manifest metadata (NO filesystem I/O).
+    ///
+    /// The actual `fs::File::open()` is deferred until the first `read()`.
+    /// This is safe to call from within a Redox scheme event loop.
+    pub fn open_file_lazy(
+        &mut self,
+        real_path: PathBuf,
+        scheme_path: String,
+        size: u64,
+        executable: bool,
+    ) -> usize {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        self.handles.insert(
+            id,
+            Handle::File(FileHandle {
+                file: None,
+                real_path,
+                scheme_path,
+                size,
+                executable,
+            }),
+        );
+        id
+    }
+
     /// Open a file and return a handle ID.
+    ///
+    /// ⚠️ Does filesystem I/O — NOT safe from within Redox scheme handlers.
+    /// Use `open_file_lazy` instead for scheme daemon code.
     pub fn open_file(
         &mut self,
         real_path: PathBuf,
@@ -84,7 +123,7 @@ impl HandleTable {
         self.handles.insert(
             id,
             Handle::File(FileHandle {
-                file,
+                file: Some(file),
                 real_path,
                 scheme_path,
                 size: meta.len(),
@@ -134,6 +173,11 @@ impl HandleTable {
     }
 
     /// Read from a file handle at the given offset.
+    ///
+    /// Lazy-opens the file on first read. This is the only point where
+    /// filesystem I/O happens for file handles. On Redox, this means
+    /// the `read` scheme handler will do I/O — if this also hangs,
+    /// file content must be pre-loaded or served from a separate thread.
     pub fn read(
         &mut self,
         id: usize,
@@ -142,8 +186,13 @@ impl HandleTable {
     ) -> io::Result<usize> {
         match self.handles.get_mut(&id) {
             Some(Handle::File(fh)) => {
-                fh.file.seek(SeekFrom::Start(offset))?;
-                fh.file.read(buf)
+                // Lazy open: open the file on first read.
+                if fh.file.is_none() {
+                    fh.file = Some(fs::File::open(&fh.real_path)?);
+                }
+                let file = fh.file.as_mut().unwrap();
+                file.seek(SeekFrom::Start(offset))?;
+                file.read(buf)
             }
             Some(Handle::Dir(_)) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -196,6 +245,9 @@ impl HandleTable {
     }
 
     /// List directory entries. Populates the cache on first call.
+    ///
+    /// ⚠️ Does filesystem I/O — NOT safe from within Redox scheme handlers.
+    /// The scheme handler uses `StoreDaemon::list_from_manifest()` instead.
     pub fn list_dir(&mut self, id: usize) -> io::Result<&[DirEntryInfo]> {
         // Check it's a directory.
         match self.handles.get(&id) {
@@ -297,6 +349,47 @@ mod tests {
         // Read at offset
         let n = table.read(id, &mut buf, 6).unwrap();
         assert_eq!(&buf[..n], b"World!");
+    }
+
+    #[test]
+    fn lazy_file_handle() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file_path = tmp.path().join("lazy.txt");
+        fs::write(&file_path, "Lazy content").unwrap();
+
+        let mut table = HandleTable::new();
+        let id = table.open_file_lazy(
+            file_path,
+            "pkg/lazy.txt".to_string(),
+            12, // size from manifest
+            false,
+        );
+
+        // Metadata available immediately (from manifest).
+        assert_eq!(table.file_size(id).unwrap(), 12);
+        assert_eq!(table.scheme_path(id), Some("pkg/lazy.txt"));
+        assert_eq!(table.is_dir(id), Some(false));
+
+        // File not opened yet — first read triggers the open.
+        let mut buf = [0u8; 64];
+        let n = table.read(id, &mut buf, 0).unwrap();
+        assert_eq!(&buf[..n], b"Lazy content");
+    }
+
+    #[test]
+    fn lazy_file_nonexistent() {
+        let mut table = HandleTable::new();
+        let id = table.open_file_lazy(
+            PathBuf::from("/nonexistent/path"),
+            "bad".to_string(),
+            0,
+            false,
+        );
+
+        // Handle exists (metadata only), but read will fail.
+        assert_eq!(table.is_dir(id), Some(false));
+        let mut buf = [0u8; 64];
+        assert!(table.read(id, &mut buf, 0).is_err());
     }
 
     #[test]

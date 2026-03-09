@@ -14,6 +14,7 @@ use syscall::error::{Error, Result, EACCES, EBADF, EIO, ENOENT, ENOTDIR};
 use syscall::flag::O_DIRECTORY;
 use syscall::schemev2::NewFdFlags;
 
+use super::handles::Handle;
 use super::resolve::{self, ResolvedPath};
 use super::{StoreDaemon, StoredConfig};
 
@@ -101,17 +102,28 @@ impl SchemeSync for StoreSchemeHandler {
                 let scheme_path = path.to_string();
 
                 // StorePathRoot is always a directory. SubPath might be
-                // either a file or directory. Use O_DIRECTORY flag or
-                // the resolved path variant to decide — avoid is_dir()
-                // filesystem I/O which can stall the event loop.
+                // either a file or directory. Use O_DIRECTORY flag,
+                // the resolved path variant, OR the manifest to decide.
+                //
+                // CRITICAL: Do NOT call is_dir() or fs::File::open() on
+                // directories inside the event loop — on Redox, opening
+                // a directory path as a file can hang the daemon because
+                // the file: scheme request blocks the single-threaded
+                // event loop indefinitely. Instead, consult the manifest
+                // (pre-loaded in memory, no I/O) to determine the type.
                 let open_as_dir = match &resolved {
                     ResolvedPath::StorePathRoot { .. } => true,
                     _ if flags & O_DIRECTORY != 0 => true,
-                    _ => {
-                        // For SubPath without O_DIRECTORY, try file open.
-                        // If it fails (EISDIR), open as dir.
-                        false
+                    ResolvedPath::SubPath { store_path_name, subpath } => {
+                        // Check manifest: if the subpath matches a "dir"
+                        // entry or is a prefix of deeper entries, it's a
+                        // directory. Only fall through to file open for
+                        // paths that the manifest says are files.
+                        self.daemon.is_directory_in_manifest(
+                            store_path_name, subpath,
+                        )
                     }
+                    _ => false,
                 };
 
                 if open_as_dir {
@@ -128,30 +140,27 @@ impl SchemeSync for StoreSchemeHandler {
                         flags: NewFdFlags::POSITIONED,
                     })
                 } else {
-                    // Try as file. If it's actually a directory, the
-                    // File::open will either succeed (Linux) or fail
-                    // (Redox EISDIR). Fall back to dir handle on error.
-                    match self.daemon.handles.open_file(
-                        fs_path.clone(),
-                        scheme_path.clone(),
-                    ) {
-                        Ok(id) => Ok(OpenResult::ThisScheme {
-                            number: id,
-                            flags: NewFdFlags::POSITIONED,
-                        }),
-                        Err(_) => {
-                            // Probably a directory — open as dir.
-                            let id = self
-                                .daemon
-                                .handles
-                                .open_dir_unchecked(fs_path, scheme_path)
-                                .map_err(|_| Error::new(ENOENT))?;
-                            Ok(OpenResult::ThisScheme {
-                                number: id,
-                                flags: NewFdFlags::POSITIONED,
-                            })
+                    // Create a LAZY file handle — no filesystem I/O.
+                    // The actual open is deferred until the first read().
+                    // Metadata comes from the manifest (if available).
+                    let (size, executable) = match &resolved {
+                        ResolvedPath::SubPath { store_path_name, subpath } => {
+                            self.daemon.file_metadata_from_manifest(
+                                store_path_name, subpath,
+                            )
                         }
-                    }
+                        _ => (0, false),
+                    };
+                    let id = self.daemon.handles.open_file_lazy(
+                        fs_path,
+                        scheme_path,
+                        size,
+                        executable,
+                    );
+                    Ok(OpenResult::ThisScheme {
+                        number: id,
+                        flags: NewFdFlags::POSITIONED,
+                    })
                 }
             }
         }
@@ -218,35 +227,18 @@ impl SchemeSync for StoreSchemeHandler {
                 stat.st_nlink = 2;
             }
             Some(false) => {
-                // File: get real metadata from the open file handle.
-                let real_path = self
-                    .daemon
-                    .handles
-                    .real_path(id)
-                    .cloned()
-                    .ok_or_else(|| Error::new(EBADF))?;
-
-                // Use the file handle's metadata instead of stat()ing the path.
-                // This avoids extra filesystem I/O.
+                // File: return synthetic stat from manifest metadata.
+                // NO filesystem I/O — std::fs::metadata() hangs on
+                // Redox when called from within a scheme event loop.
                 let size = self.daemon.handles.file_size(id).unwrap_or(0);
                 stat.st_size = size;
-                stat.st_mode = 0o100444; // S_IFREG | r--r--r--
-
-                #[cfg(unix)]
-                {
-                    // Try to get real metadata from the open fd.
-                    if let Ok(meta) = std::fs::metadata(&real_path) {
-                        use std::os::unix::fs::MetadataExt;
-                        stat.st_mode = (meta.mode() as u16) | 0o100000;
-                        stat.st_uid = meta.uid();
-                        stat.st_gid = meta.gid();
-                        stat.st_ino = meta.ino();
-                        stat.st_nlink = meta.nlink() as u32;
-                        stat.st_blksize = meta.blksize() as u32;
-                        stat.st_blocks = meta.blocks();
-                        stat.st_size = meta.len();
-                    }
-                }
+                // Use 0o100555 for executable, 0o100444 for regular.
+                let executable = match self.daemon.handles.handles.get(&id) {
+                    Some(Handle::File(fh)) => fh.executable,
+                    _ => false,
+                };
+                stat.st_mode = if executable { 0o100555 } else { 0o100444 };
+                stat.st_nlink = 1;
             }
             None => return Err(Error::new(EBADF)),
         }

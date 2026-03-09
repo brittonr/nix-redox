@@ -140,12 +140,17 @@ impl SchemeSync for ProfileSchemeHandler {
                     // our profile: scheme. No self-deadlock.
                     // However, on Redox scheme daemons ALL filesystem I/O
                     // hangs. Use manifest-based resolution instead.
-                    let full_path = {
+                    // Find the file and its metadata from manifests (no I/O).
+                    let (full_path, size, executable) = {
                         let mut found = None;
                         for pkg in mapping.packages.iter().rev() {
                             if let Some(manifest) = self.daemon.manifests.get(&pkg.store_path) {
-                                if manifest.iter().any(|e| e.path == subpath && e.entry_type == "file") {
-                                    found = Some(std::path::PathBuf::from(&pkg.store_path).join(subpath));
+                                if let Some(entry) = manifest.iter().find(|e| e.path == subpath && e.entry_type == "file") {
+                                    found = Some((
+                                        std::path::PathBuf::from(&pkg.store_path).join(subpath),
+                                        entry.size,
+                                        entry.executable,
+                                    ));
                                     break;
                                 }
                             }
@@ -153,13 +158,13 @@ impl SchemeSync for ProfileSchemeHandler {
                         found.ok_or_else(|| Error::new(ENOENT))?
                     };
 
-                    let id = self
-                        .handles
-                        .open_file(full_path, path.to_string())
-                        .map_err(|e| {
-                            eprintln!("profiled: open file: {e}");
-                            Error::new(EIO)
-                        })?;
+                    // Lazy file handle — no filesystem I/O during openat.
+                    let id = self.handles.open_file_lazy(
+                        full_path,
+                        path.to_string(),
+                        size,
+                        executable,
+                    );
 
                     Ok(OpenResult::ThisScheme {
                         number: id,
@@ -223,19 +228,10 @@ impl SchemeSync for ProfileSchemeHandler {
     fn fstat(&mut self, id: usize, stat: &mut Stat, _ctx: &CallerCtx) -> Result<()> {
         match self.handles.get(id) {
             Some(Handle::File(fh)) => {
-                let meta = fh.file.metadata().map_err(|_| Error::new(EIO))?;
-                stat.st_size = meta.len();
-                stat.st_mode = 0o100444; // Regular file, read-only.
-
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::MetadataExt;
-                    stat.st_mode = meta.mode() as u16;
-                    stat.st_uid = meta.uid();
-                    stat.st_gid = meta.gid();
-                    stat.st_ino = meta.ino();
-                    stat.st_nlink = meta.nlink() as u32;
-                }
+                // Synthetic stat from manifest — NO filesystem I/O.
+                stat.st_size = fh.size;
+                stat.st_mode = if fh.executable { 0o100555 } else { 0o100444 };
+                stat.st_nlink = 1;
             }
             Some(Handle::Dir(_)) => {
                 stat.st_mode = 0o040555; // Directory, read+execute.
