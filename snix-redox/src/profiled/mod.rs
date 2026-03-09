@@ -18,6 +18,7 @@
 //! profile:default/.control          → write JSON commands to mutate
 //! ```
 
+pub mod handles;
 pub mod mapping;
 
 #[cfg(target_os = "redox")]

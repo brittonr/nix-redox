@@ -1795,3 +1795,27 @@
   all enabled. Minimal profile stays clean (all defaults are disabled).
 - **439 tests, 0 failures**: 8 new tests added for integration code (profiled detection,
   stored detection, sandbox config, no_sandbox flag). All existing 431 tests pass unmodified.
+
+### Scheme daemon implementation — SchemeSync for stored + profiled (Mar 9 2026)
+- **redox-scheme 0.11.0 API differs from base workspace git master**: The crates.io version
+  has extra `&CallerCtx` parameter on `read()` and `write()`, and `handle_sync()` requires
+  `&mut SchemeState` as a second argument. The base workspace (virtio-fsd) uses a git fork
+  that doesn't have these. Must check crates.io API, not base workspace source.
+- **`profiled/handles.rs` must be `git add`ed**: New files in flakes are invisible until tracked.
+  This is a KNOWN issue (documented 5+ times in this napkin) but still catches me.
+- **HandleTable methods take `id: usize` by value**: BTreeMap::get takes `&K`, so the method
+  must pass `&id` internally. But the public API takes `id` by value (Copy type). Don't pass
+  `&id` at call sites — the method handles the reference internally.
+- **SchemeState::new()**: Required for the scheme event loop. Created once before the loop,
+  passed to every `handle_sync()` call. It tracks internal scheme state (like open handle
+  metadata for the kernel).
+- **Binary size**: 5.5MB static ELF (was 4.8MB — scheme daemon code + redox_scheme/syscall adds ~700KB).
+- **Control handle on_close processes command**: When a `.control` handle is closed, the
+  accumulated write buffer is parsed as JSON and processed. This matches Redox's pattern where
+  write+close is the mutation cycle for scheme control interfaces.
+- **PathInfoDb reload on miss**: `stored` re-opens PathInfoDb when a store path hash isn't found
+  in the current in-memory index. This handles the race where `snix install` registers a new
+  path while `stored` is running.
+- **443 host tests pass** (was 439 — 4 new from profiled/handles.rs).
+- Cross-compilation succeeds. Both `snix.nix` and `snix-source-bundle.nix` need the same
+  updated vendor hash.

@@ -48,7 +48,7 @@ mkUserspace.mkBinary {
   binaryName = "snix";
 
   # Vendor hash — all dependencies are from crates.io (no git sources)
-  vendorHash = "sha256-Ierep0kjiO+fEFOORmUI0VDJKsMXGtCpcDBtD8tltyE=";
+  vendorHash = "sha256-uozZwcoaDf6xJn2sUr7RR/5QBMmVpi40vX9Z5LvHNyk=";
 
   meta = with lib; {
     description = "Nix evaluator and binary cache client for Redox OS";
