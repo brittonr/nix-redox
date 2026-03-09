@@ -229,6 +229,21 @@ let
     inherit bootloader;
   };
 
+  # Network install test: boots with networking, serves cache via HTTP
+  mkNetworkInstallTest = modularPkgs.infrastructure.mkNetworkInstallTest;
+  networkInstallTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/network-install-test.nix ];
+    inherit extraPkgs;
+  };
+  testBinaryCache = import ../pkgs/infrastructure/test-binary-cache.nix {
+    inherit pkgs lib;
+  };
+  networkInstallTest = mkNetworkInstallTest {
+    diskImage = networkInstallTestSystem.diskImage;
+    inherit bootloader;
+    testCache = testBinaryCache;
+  };
+
   # snix source bundle for self-compile test
   snixSourceBundle = import ../pkgs/infrastructure/snix-source-bundle.nix {
     inherit pkgs;
@@ -361,6 +376,9 @@ in
 
     redox-network-test = networkTestSystem.diskImage;
     inherit networkTest;
+
+    redox-network-install-test = networkInstallTestSystem.diskImage;
+    inherit networkInstallTest testBinaryCache;
 
     redox-bridge-test = bridgeTestSystem.diskImage;
     inherit bridgeTest;

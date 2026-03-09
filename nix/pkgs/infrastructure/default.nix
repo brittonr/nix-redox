@@ -141,6 +141,24 @@ in
         ;
     };
 
+  # Network install test factory - requires diskImage with network install test script
+  # + a pre-built test binary cache. Starts HTTP server + boots QEMU with SLiRP.
+  mkNetworkInstallTest =
+    {
+      diskImage,
+      bootloader,
+      testCache,
+    }:
+    import ./network-install-test.nix {
+      inherit
+        pkgs
+        lib
+        diskImage
+        bootloader
+        testCache
+        ;
+    };
+
   # Bridge test factory - requires diskImage with virtio-fsd + test script
   # Orchestrates host-side package push + guest-side snix install via virtio-fs
   mkBridgeTest =
