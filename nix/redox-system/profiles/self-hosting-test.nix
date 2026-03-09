@@ -2568,8 +2568,8 @@ let
                       echo "[snix-build] Vendor crates: $(ls vendor/ | wc -l)"
 
                       # Build with timeout — this is a BIG compile (168 crates + build-std).
-                      # The big crates (nix-compat, snix-eval, snix-redox) each take 2-5 min
-                      # in the VM, so 30 minutes total is needed.
+                      # JOBS=1 required: JOBS>1 hangs after ~136 crates due to Redox pipe/
+                      # waitpid issues with concurrent child processes. See napkin for details.
                       MAX_TIME=1800
                       cargo build --offline 2>&1 | while IFS= read -r line; do
                         echo "$line" >> /tmp/snix-build-log

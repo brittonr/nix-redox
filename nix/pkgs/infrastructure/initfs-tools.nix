@@ -29,7 +29,7 @@ let
         # FOD for generating Cargo.lock
         outputHashAlgo = "sha256";
         outputHashMode = "recursive";
-        outputHash = "sha256-ba7Cjm8UXoQGJkaqUy9vzXpOAxd68IDNzDjjc3VXOOk=";
+        outputHash = "sha256-TzyAu75ONkr6x+8zhdsMdUGYzu0yY6cayqbJNxvOhxk=";
         SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
       }
       ''
@@ -55,7 +55,7 @@ let
     name = "initfs-tools-vendor";
     src = initfsToolsSrc;
     sourceRoot = "initfs-tools-src/tools";
-    hash = "sha256-+rb3xo3gr205BZYk2jYWHmURU2s+t2c6zBzhfBgqWrY=";
+    hash = "sha256-RewY0RGuMUO3Ve04F4Khbwa7dhj7FI+OTy5li5BtfJc=";
   };
 
   # Create vendor directory (no sysroot merge needed for host tools)

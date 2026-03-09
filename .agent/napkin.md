@@ -1703,3 +1703,18 @@
   rg-store-path, rg-binary-size — all pass (47/54 total, 7 pre-existing failures)
 - **Self-hosting test total**: 54 tests, 47 pass, 7 fail (same 7 pre-existing failures:
   heredoc indentation issues in 3 tests + snix self-compile timeout in 4 tests)
+
+### Fix all 7 pre-existing test failures — 58/58 PASS (Mar 8 2026)
+- **Heredoc indentation fix** (3 tests): Ripgrep section had heredoc content
+  (CFGEOF, BUILDEOF, FLAKEEOF, LOCKEOF) at column 0 in the Nix `''` string.
+  This set minimum indent to 0 → no stripping → all 12 heredoc terminators at
+  4-space indent stayed at 4 spaces → bash couldn't find them. Fix: indent all
+  column-0 content by 4 spaces. After Nix strips 4, terminators land at column 0
+  and content is preserved. **Key rule**: EVERY non-empty line in a Nix `''`
+  string must have at least N spaces if you want N-space stripping. One column-0
+  line breaks ALL heredoc terminators at N-space indent.
+- **Timeout fix** (4 tests): snix self-compile (168 crates, ~7 min) + ripgrep
+  build exceeded the outer 120s default timeout. Added `defaultTimeout` parameter
+  to `mkFunctionalTest` (passed through `default.nix` wrapper), set to 1500s for
+  self-hosting tests. Regular functional tests keep 120s default.
+- **Result**: 58/58 pass, 0 fail, 0 skip in 820s. Zero pre-existing failures.

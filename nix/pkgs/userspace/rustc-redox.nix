@@ -442,6 +442,14 @@ pkgs.stdenv.mkDerivation {
     # the event, so the pipe fills and the child's write blocks.
     python3 ${./patch-cargo-read2-pipes.py} .
 
+    # Patch: Replace poll()-based token acquisition in the jobserver crate.
+    # Cargo uses a pipe-based jobserver for parallel builds (JOBS>1). The
+    # jobserver's acquire() falls back to poll() when read returns WouldBlock.
+    # On Redox, poll() on pipes hangs, causing cargo to stall after the initial
+    # batch of tokens is consumed. Fix: on Redox, ensure blocking mode and use
+    # plain blocking reads (no poll fallback).
+    python3 ${./patch-jobserver-poll.py} .
+
     # Patch: Pass env vars via --env-set flag to rustc.
     # On Redox, Command::env() doesn't propagate env vars through exec().
     # This means rustc doesn't see OUT_DIR, CARGO_PKG_*, or cargo:rustc-env
