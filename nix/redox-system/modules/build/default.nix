@@ -569,7 +569,9 @@ adios:
         + "\n";
 
       shadowContent =
-        lib.concatStringsSep "\n" (lib.mapAttrsToList (name: _: "${name};") (inputs.users.users or { }))
+        lib.concatStringsSep "\n" (
+          lib.mapAttrsToList (name: user: "${name};${user.password or ""}") (inputs.users.users or { })
+        )
         + "\n";
 
       # Services: init.toml, startup.sh
