@@ -2,6 +2,28 @@
 
 ## Corrections & Lessons
 
+### Orbital not displaying + serial console stuck (Mar 9 2026)
+- **Expect timeout**: `exp_continue` after auto-selecting resolution caused expect to wait
+  120 seconds before `interact`. User couldn't type at `redox#` prompt. Fix: remove `exp_continue`.
+- **VT conflict**: Our orbital init used `export VT 1` but initfs already has `inputd -A 1` (VT 1)
+  and `fbcond 2` (VT 2). Orbital on VT 1 conflided with input activation.
+  Upstream uses VT=3 to avoid all conflicts. Fix: `export VT 3` then `nowait orbital orblogin orbterm`.
+- **Inline VT=3 NOT supported**: Our init daemon (base fc162ac) does NOT support inline
+  `KEY=VALUE cmd` syntax — `nowait VT=3 orbital ...` tried to exec a file named `"VT=3"`.
+  Error: `init: failed to execute '"VT=3" "orbital"': No such file or directory`.
+  Must use `export VT 3` on a separate line. Upstream desktop-minimal.toml uses the inline
+  syntax which only works with the NEWER init daemon.
+- **audiod**: Use `nowait audiod` (not `notify`). `notify` blocks init waiting for readiness
+  signal; if audiod fails (no HW in headless mode), init logs a warning but continues.
+  `nowait` fires and forgets — no blocking in any mode.
+- **Bare names vs full paths**: `90_exit_initfs` sets `PATH /usr/bin` before `run.d`.
+  Boot-essential packages are copied to both `/bin/` and `/usr/bin/`. Bare names work.
+- **Upstream reference**: `config/desktop-minimal.toml` in redox-os/redox is the canonical
+  graphical init config. Key file: `/usr/lib/init.d/20_orbital`.
+- **ALWAYS boot-test init changes**: Changes to init scripts MUST be verified by actually
+  booting the image and checking serial output for `init: failed` errors. Nix eval/build
+  success does NOT mean the init daemon can parse the commands.
+
 ### Graphical initfs exceeds 64 MiB default (Mar 9 2026)
 - `redox-initfs-ar` has a `--max-size` flag defaulting to 64 MiB (raw bytes, not human-readable)
 - Graphical profile initfs includes core daemons + graphics (vesad, inputd, fbbootlogd, fbcond, ps2d) + USB (xhcid, usbhubd, usbhidd) + drivers + ion×4 + redoxfs ≈ 60-65 MiB

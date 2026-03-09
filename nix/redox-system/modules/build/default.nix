@@ -642,10 +642,15 @@ adios:
         // (lib.optionalAttrs graphicsEnabled {
           "20_orbital" = {
             text =
-              if pkgs ? orbutils then
-                "export VT 1\nnowait /bin/orbital /bin/orblogin /bin/orbterm"
-              else
-                "export VT 1\nnowait /bin/orbital /bin/login";
+              # VT=3 avoids conflict with inputd VT 1 and fbcond VT 2.
+              # Use 'export' + separate 'nowait' because our init daemon (base fc162ac)
+              # does NOT support inline KEY=VALUE syntax — it treats VT=3 as the executable.
+              # audiod uses 'nowait' (not 'notify') so it doesn't block init when no audio HW.
+              let
+                audioLine = lib.optionalString (inputs.hardware.audioEnable or false) "nowait audiod\n";
+                loginCmd = if pkgs ? orbutils then "orblogin orbterm" else "login";
+              in
+              "${audioLine}export VT 3\nnowait orbital ${loginCmd}";
             directory = "usr/lib/init.d";
           };
         })
