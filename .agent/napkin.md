@@ -1718,3 +1718,27 @@
   to `mkFunctionalTest` (passed through `default.nix` wrapper), set to 1500s for
   self-hosting tests. Regular functional tests keep 120s default.
 - **Result**: 58/58 pass, 0 fail, 0 skip in 820s. Zero pre-existing failures.
+
+### JOBS>1 investigation — root cause NOT in jobserver (Mar 9 2026)
+- **Hypothesis**: jobserver crate uses `poll()` to wait for tokens → poll broken on Redox
+- **Fix attempted**: `patch-jobserver-poll.py` — skip poll(), use blocking reads on Redox
+- **Result**: JOBS=2 STILL hangs after ~136/168 crates. Same hang point as JOBS=4.
+- **Key finding**: The hang is NOT in the jobserver. It occurs at the same dependency
+  layer regardless of job count — after compression crates (flate2, ruzstd, bzip2-rs,
+  lzma-rs, ureq), before large crates (serde_derive, nix-compat, snix-eval).
+- **What happens**: Cargo is alive (progress thread prints elapsed time), but no rustc
+  processes finish. The build log stays at 5285 bytes forever.
+- **Remaining theories**:
+  1. **waitpid() notification**: When cargo has 2 children and one finishes, the SIGCHLD
+     or waitpid notification doesn't reach cargo, so cargo never knows a slot is free
+  2. **Pipe I/O deadlock**: With 2 concurrent rustc→cargo pipe channels, the thread-based
+     read2 might still deadlock under some condition (e.g., thread scheduling starvation)
+  3. **Thread starvation**: Cargo with JOBS=2 has ~6 threads (main + 2 stdout readers +
+     2 stderr readers + jobserver helper). Redox scheduler might not handle this well.
+  4. **Memory pressure**: Two large rustc compilations (each using hundreds of MB) might
+     exhaust VM memory (8GB), causing swap/OOM that appears as a hang
+- **JOBS=1 stays**: The jobserver patch is good defense-in-depth (avoids broken poll()),
+  but the fundamental parallel hang requires deeper OS-level investigation.
+- **Diagnostic approach**: Added process monitoring but /scheme/sys/context output wasn't
+  captured by the serial console grep. Need to redirect diag output to a file and dump
+  it after the hang, or use a simpler approach.
