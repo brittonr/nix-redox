@@ -85,6 +85,7 @@ adios:
       usbEnabled = (inputs.hardware.usbEnable or false) || graphicsEnabled;
       audioEnabled = inputs.hardware.audioEnable or false;
       initfsEnableGraphics = (inputs.boot.initfsEnableGraphics or false) || graphicsEnabled;
+      initfsSizeMB = inputs.boot.initfsSizeMB or 64;
 
       # ===== NEW MODULE OPTIONS =====
 
@@ -1692,7 +1693,9 @@ adios:
           # Ion shell configuration
           echo 'let PROMPT = "ion> "' > initfs/etc/ion/initrc
 
-          redox-initfs-ar initfs ${pkgs.bootstrap}/bin/bootstrap -o initfs.img
+          redox-initfs-ar initfs ${pkgs.bootstrap}/bin/bootstrap -o initfs.img --max-size ${
+            toString (initfsSizeMB * 1024 * 1024)
+          }
           runHook postBuild
         '';
         installPhase = ''

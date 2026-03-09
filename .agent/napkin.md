@@ -2,6 +2,13 @@
 
 ## Corrections & Lessons
 
+### Graphical initfs exceeds 64 MiB default (Mar 9 2026)
+- `redox-initfs-ar` has a `--max-size` flag defaulting to 64 MiB (raw bytes, not human-readable)
+- Graphical profile initfs includes core daemons + graphics (vesad, inputd, fbbootlogd, fbcond, ps2d) + USB (xhcid, usbhubd, usbhidd) + drivers + ion×4 + redoxfs ≈ 60-65 MiB
+- Fix: added `initfsSizeMB` option to `/boot` module (default 64), graphical profile sets 128
+- Build module passes `--max-size ${toString (initfsSizeMB * 1024 * 1024)}` to `redox-initfs-ar`
+- Ion is copied 4 times (bin/ion, usr/bin/ion, bin/sh, usr/bin/sh) — 14.8 MiB for one shell
+
 ### Cross-compiling rustc+cargo for Redox (Mar 2 2026)
 
 **Goal**: Build a full Rust toolchain (rustc, cargo, rustdoc) targeting x86_64-unknown-redox.

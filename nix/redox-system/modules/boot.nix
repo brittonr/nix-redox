@@ -55,6 +55,11 @@ in
       default = 200;
       description = "EFI System Partition size in megabytes";
     };
+    initfsSizeMB = {
+      type = t.int;
+      default = 64;
+      description = "Maximum initfs image size in megabytes (default 64 MiB)";
+    };
   };
 
   impl = { options }: options;

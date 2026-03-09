@@ -12,6 +12,7 @@ dev
 // {
   "/boot" = (dev."/boot" or { }) // {
     diskSizeMB = 1024;
+    initfsSizeMB = 128;
   };
 
   "/graphics" = (dev."/graphics" or { }) // {
