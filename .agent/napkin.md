@@ -2,6 +2,25 @@
 
 ## Corrections & Lessons
 
+### Shadow Argon2 hashing + orbterm config fix (Mar 9 2026)
+- **Root cause (shadow)**: `redox_users::verify_passwd()` expects Argon2id PHC-format hashes
+  (`$argon2id$v=19$m=4096,t=3,p=1$base64salt$base64hash`). Plaintext passwords in shadow
+  cause a panic. Empty passwords (`user;`) skip verification — that's OK.
+- **Fix (shadow)**: Added `hashPassword` and `mkShadowFile` to `nix/redox-system/lib.nix`.
+  Uses `libargon2` CLI: `echo -n "$password" | argon2 "redox-$username" -id -t 3 -m 12 -p 1 -e`.
+  Deterministic salt `redox-$username` keeps builds reproducible. NOT production security.
+  Build module's `allGeneratedFiles."etc/shadow"` changed from `{ text = ...; }` to
+  `{ source = shadowFile; }` (pre-built derivation).
+- **Graphical profile**: Added `/users` override with `password = "redox"` for both root and user.
+  Default profile keeps `password = ""` (empty → no hash → orblogin skips verification).
+- **Root cause (orbterm)**: `Config::load()` uses `xdg::BaseDirectories::with_prefix("orbterm")`.
+  Init script sets `XDG_CONFIG_HOME=/etc`. When no config exists, orbterm tries to CREATE
+  `/etc/orbterm/config` via `xdg.place_config_file()`. Non-root user → EACCES (errno 13).
+- **Fix (orbterm)**: Pre-create `/etc/orbterm/config` in rootTree when `graphicsEnabled && pkgs ? orbterm`.
+  Default config: `font = ""\nfont_bold = ""`. `xdg.find_config_file()` finds it → no write needed.
+- **orbterm config format**: TOML with two fields: `font` (string) and `font_bold` (string).
+  Empty strings use system default fonts. Config at `$XDG_CONFIG_HOME/orbterm/config`.
+
 ### Orbital not displaying + serial console stuck (Mar 9 2026)
 - **Expect timeout**: `exp_continue` after auto-selecting resolution caused expect to wait
   120 seconds before `interact`. User couldn't type at `redox#` prompt. Fix: remove `exp_continue`.

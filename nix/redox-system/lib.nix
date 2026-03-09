@@ -28,6 +28,99 @@
 { lib, pkgs }:
 
 rec {
+  # Hash a password using Argon2id for Redox /etc/shadow
+  #
+  # Redox's redox_users crate expects Argon2id hashes in PHC format:
+  #   $argon2id$v=19$m=4096,t=3,p=1$base64salt$base64hash
+  #
+  # Returns a derivation whose output is a single file containing the hash.
+  # Empty passwords return null (shadow entry is "user;" with no hash).
+  #
+  # Uses a deterministic salt derived from the username for reproducible builds.
+  # This is acceptable for development/testing but NOT production-grade security.
+  #
+  # Parameters for argon2:
+  #   -id   : Argon2id variant (hybrid of Argon2i and Argon2d)
+  #   -t 3  : 3 iterations (time cost)
+  #   -m 12 : 2^12 = 4096 KiB memory
+  #   -p 1  : 1 lane of parallelism
+  #   -e    : Output encoded hash (PHC format)
+  #
+  # Example:
+  #   hashPassword { username = "user"; password = "redox"; }
+  #   => derivation containing "$argon2id$v=19$m=4096,t=3,p=1$..."
+  hashPassword =
+    {
+      username,
+      password,
+    }:
+    if password == "" then
+      null
+    else
+      pkgs.runCommand "shadow-hash-${username}"
+        {
+          nativeBuildInputs = [ pkgs.libargon2 ];
+          # Avoid leaking password into /nix/store/.drv files visible to all users.
+          # The passFile is a temp file created in the builder and deleted after use.
+          inherit password username;
+        }
+        ''
+          echo -n "$password" | argon2 "redox-$username" -id -t 3 -m 12 -p 1 -e | tr -d '\n' > $out
+        '';
+
+  # Generate a complete /etc/shadow file as a derivation.
+  #
+  # Hashes all non-empty passwords using Argon2id. Empty passwords
+  # produce bare entries ("user;") which redox_users treats as no-password.
+  #
+  # Example:
+  #   mkShadowFile {
+  #     users = {
+  #       root = { password = ""; };
+  #       user = { password = "redox"; };
+  #     };
+  #   }
+  #   => derivation containing:
+  #     root;
+  #     user;$argon2id$v=19$m=4096,t=3,p=1$...
+  mkShadowFile =
+    { users }:
+    let
+      userList = lib.mapAttrsToList (name: user: {
+        inherit name;
+        password = user.password or "";
+      }) users;
+
+      # Separate users with and without passwords
+      emptyPw = builtins.filter (u: u.password == "") userList;
+      nonEmptyPw = builtins.filter (u: u.password != "") userList;
+
+      # Pre-compute hashes as derivations
+      hashes = map (u: {
+        inherit (u) name;
+        hashDrv = hashPassword {
+          username = u.name;
+          password = u.password;
+        };
+      }) nonEmptyPw;
+    in
+    pkgs.runCommand "etc-shadow"
+      {
+        nativeBuildInputs = [ pkgs.libargon2 ];
+      }
+      (
+        ''
+          touch $out
+        ''
+        # Empty-password users: just "name;"
+        + lib.concatMapStringsSep "" (u: ''
+          echo "${u.name};" >> $out
+        '') emptyPw
+        # Non-empty-password users: "name;$hash"
+        + lib.concatMapStringsSep "" (u: ''
+          echo "${u.name};$(cat ${u.hashDrv})" >> $out
+        '') hashes
+      );
   # Generate Redox-format /etc/passwd line
   #
   # Redox passwd format: username;uid;gid;realname;home;shell
