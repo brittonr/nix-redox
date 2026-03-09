@@ -266,7 +266,7 @@ in
     checks = [
       {
         file = "etc/init.d/10_net";
-        contains = "nowait /bin/smolnetd";
+        contains = "notify /bin/smolnetd";
         mode = "555";
       }
       {

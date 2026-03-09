@@ -597,7 +597,7 @@ adios:
         // (lib.optionalAttrs networkingEnabled (
           {
             "10_net" = {
-              text = "nowait /bin/smolnetd";
+              text = "notify /bin/smolnetd";
               directory = "init.d";
             };
           }
