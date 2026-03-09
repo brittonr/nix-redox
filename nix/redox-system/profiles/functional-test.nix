@@ -2088,8 +2088,8 @@ in
 {
   "/environment" = {
     # NOTE: Do NOT include "userutils" here.
-    # When userutils (getty, login) is installed, init runs getty instead of
-    # /startup.sh, which means the test script never executes.
+    # When userutils (getty, login) is installed, startup.sh runs a login
+    # loop instead of the test script, which means tests never execute.
     systemPackages =
       opt "ion"
       ++ opt "uutils"

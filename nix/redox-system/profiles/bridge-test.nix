@@ -622,7 +622,7 @@ let
 in
 {
   "/environment" = {
-    # Base packages — do NOT include userutils (blocks startup script)
+    # Base packages — do NOT include userutils (replaces test script with login loop)
     # Do NOT include ripgrep/fd/bat — those come via the shared cache
     # extrautils provides grep (used by test script)
     systemPackages = opt "ion" ++ opt "uutils" ++ opt "extrautils" ++ opt "snix";

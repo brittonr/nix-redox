@@ -356,8 +356,8 @@ adios:
       managedPackages = builtins.filter (pkg: !isBootEssential pkg) allPackages;
 
       # Check if userutils (getty, login) is installed on rootFS
-      # This determines whether init.rc can use getty for serial console login
-      # or must fall back to running the shell directly via startup.sh
+      # When present, startup.sh runs a login loop for serial console
+      # authentication. When absent, startup.sh runs ion directly.
       userutilsInstalled =
         let
           uu = pkgs.userutils or null;
@@ -580,6 +580,12 @@ adios:
         restart = false
       '';
 
+      # Serial console startup script.
+      # Neither getty nor login work on the debug: scheme — getty needs fevent
+      # (the kernel doesn't signal UART data arrivals) and login needs tcsetattr
+      # (liner's line editor requires terminal raw mode, which debug: doesn't
+      # support — ENOTSUP errno 95). Graphical login goes through Orbital/orblogin
+      # which uses fbcon, a proper userspace scheme with full terminal support.
       startupContent = "#!/bin/sh\n" + (inputs.services.startupScriptText or "/bin/ion\n");
 
       # Network interface resolution (for static config)
@@ -1240,7 +1246,8 @@ adios:
             export CARGO_BUILD_JOBS 4
             export CARGO_HOME /root/.cargo
           ''}
-          ${if userutilsInstalled then "/bin/getty debug:" else "/startup.sh"}
+          stdio debug:
+          /startup.sh
         '';
       };
 

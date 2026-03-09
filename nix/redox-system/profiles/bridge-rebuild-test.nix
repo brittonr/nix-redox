@@ -214,7 +214,7 @@ in
 {
   "/environment" = {
     # Packages for the test VM
-    # MUST NOT include userutils — when present, init runs getty instead of /startup.sh
+    # MUST NOT include userutils — when present, startup.sh runs login instead of test script
     systemPackages = opt "ion" ++ opt "uutils" ++ opt "extrautils" ++ opt "snix";
   };
 

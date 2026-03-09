@@ -2883,7 +2883,7 @@ selfHosting
     startupScriptText = testScript;
   };
 
-  # No userutils — run the test script directly (not via getty)
+  # No userutils — run the test script directly (not via login loop)
   "/environment" = selfHosting."/environment" // {
     systemPackages = builtins.filter (
       p:

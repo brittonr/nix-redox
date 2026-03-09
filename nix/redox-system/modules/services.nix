@@ -82,7 +82,16 @@ in
         echo ""
         echo "Welcome to Redox OS!"
         echo ""
-        /bin/ion
+        # ion's interactive mode (and login) require terminal raw mode
+        # (tcsetattr) which the serial debug: scheme doesn't support.
+        # This basic prompt loop uses plain blocking I/O instead.
+        while true
+          echo -n "redox# "
+          read cmd
+          if not test "$cmd" = ""
+            eval $cmd
+          end
+        end
       '';
       description = "Content of the startup script";
     };
