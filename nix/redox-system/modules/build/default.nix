@@ -897,8 +897,7 @@ adios:
               ++ lib.optional (ion.initExtra or "" != "") (ion.initExtra)
               ++ [
                 # PROMPT must be set LAST so all variables exist.
-                # Use Ion-native prompt: variables are expanded at prompt display time.
-                ''let PROMPT = "${hostname}# "''
+                ''let PROMPT = "${ion.prompt}"''
               ]
             );
           mode = "0644";

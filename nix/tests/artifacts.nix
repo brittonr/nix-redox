@@ -838,7 +838,7 @@ in
       }
       {
         file = "etc/ion/initrc";
-        contains = "export EDITOR /bin/hx";
+        contains = ''let EDITOR = "/bin/hx"'';
       }
     ];
   };

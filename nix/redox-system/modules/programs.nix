@@ -35,7 +35,9 @@ in
       type = ionConfig;
       default = {
         enable = true;
-        prompt = "\\$USER@\\$HOSTNAME \\$PWD# ";
+        # Literal hostname — Ion's \$USER expansion inside double-quoted PROMPT
+        # causes "Variable does not exist" errors. Profiles can override.
+        prompt = "redox# ";
         initExtra = "";
       };
       description = "Ion shell configuration";

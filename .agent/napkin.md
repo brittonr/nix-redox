@@ -2,6 +2,19 @@
 
 ## Corrections & Lessons
 
+### Cloud Hypervisor serial input broken — terminal raw mode (Mar 9 2026)
+- **Symptom**: `nix run .#run-redox` shows boot output but user can't type anything
+- **Root cause**: Cloud Hypervisor `--serial tty` reads stdin, but the terminal is in
+  canonical (line-buffered) mode. Keystrokes are buffered by the kernel's tty layer and
+  never reach the VM. QEMU runners work because `expect`'s `interact` sets raw mode.
+- **Fix**: All four CH runner scripts (headless, withNetwork, withSharedFs, withDev) now:
+  1. Save terminal settings: `SAVED_TTY=$(stty -g)`
+  2. Set raw mode right before launching CH: `stty raw -echo`
+  3. Restore on exit via trap: `stty "$SAVED_TTY"`
+- Raw mode is set AFTER all `echo` output (so info messages render normally)
+- Only applied when stdin is a terminal (`[ -t 0 ]`) to avoid breaking piped usage
+- Trap catches EXIT, INT, and TERM to restore terminal even on Ctrl+C
+
 ### Headless serial console fix — getty on debug: (Mar 9 2026)
 - **Root cause**: The startup script's `read` builtin does blocking I/O on `debug:` scheme.
   Although the kernel's debug scheme DOES support reads (INPUT WaitQueue + COM1 IRQ handler

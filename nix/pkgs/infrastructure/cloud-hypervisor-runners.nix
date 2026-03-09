@@ -181,7 +181,20 @@ in
 
     # Create writable copies
     WORK_DIR=$(mktemp -d)
-    trap "rm -rf $WORK_DIR" EXIT
+
+    # Terminal raw mode for serial console I/O.
+    # Cloud Hypervisor --serial tty reads stdin, but the default canonical
+    # (line-buffered) mode swallows keystrokes until Enter. Raw mode passes
+    # each character through immediately.
+    SAVED_TTY=""
+    cleanup() {
+      [ -n "$SAVED_TTY" ] && stty "$SAVED_TTY" 2>/dev/null || true
+      rm -rf "$WORK_DIR"
+    }
+    trap cleanup EXIT INT TERM
+    if [ -t 0 ]; then
+      SAVED_TTY=$(stty -g)
+    fi
 
     IMAGE="$WORK_DIR/redox.img"
     FIRMWARE="${cloudhvFirmware}/FV/CLOUDHV.fd"
@@ -229,6 +242,9 @@ in
     echo "Storage: virtio-blk with direct I/O"
     echo ""
 
+    # Switch to raw mode right before launching (after all echo output)
+    [ -n "$SAVED_TTY" ] && stty raw -echo
+
     # Cloud Hypervisor UEFI boot with performance tuning:
     # - --firmware: CLOUDHV.fd for UEFI
     # - --disk: virtio-blk with direct=on for bypassing host page cache
@@ -273,7 +289,16 @@ in
 
     # Create work directory
     WORK_DIR=$(mktemp -d)
-    trap "rm -rf $WORK_DIR" EXIT
+
+    SAVED_TTY=""
+    cleanup() {
+      [ -n "$SAVED_TTY" ] && stty "$SAVED_TTY" 2>/dev/null || true
+      rm -rf "$WORK_DIR"
+    }
+    trap cleanup EXIT INT TERM
+    if [ -t 0 ]; then
+      SAVED_TTY=$(stty -g)
+    fi
 
     IMAGE="$WORK_DIR/redox.img"
     FIRMWARE="${cloudhvFirmware}/FV/CLOUDHV.fd"
@@ -358,6 +383,9 @@ in
     echo "  Ctrl+C: Quit Cloud Hypervisor"
     echo ""
 
+    # Switch to raw mode right before launching (after all echo output)
+    [ -n "$SAVED_TTY" ] && stty raw -echo
+
     # Cloud Hypervisor with virtio-net (multi-queue for parallel packet processing):
     # - --disk: virtio-blk with direct=on for bypassing host page cache
     # - --cpus: boot count + topology for better guest scheduler decisions
@@ -399,7 +427,9 @@ in
     # Create writable copies
     WORK_DIR=$(mktemp -d)
 
+    SAVED_TTY=""
     cleanup() {
+      [ -n "$SAVED_TTY" ] && stty "$SAVED_TTY" 2>/dev/null || true
       echo "Cleaning up..."
       # Kill virtiofsd if running
       if [ -n "$VIRTIOFSD_PID" ]; then
@@ -409,7 +439,10 @@ in
       rm -rf "$WORK_DIR"
       rm -f "$VIRTIOFSD_SOCKET"
     }
-    trap cleanup EXIT
+    trap cleanup EXIT INT TERM
+    if [ -t 0 ]; then
+      SAVED_TTY=$(stty -g)
+    fi
 
     IMAGE="$WORK_DIR/redox.img"
     FIRMWARE="${cloudhvFirmware}/FV/CLOUDHV.fd"
@@ -482,6 +515,9 @@ in
     echo "  Ctrl+C: Quit"
     echo ""
 
+    # Switch to raw mode right before launching (after all echo output)
+    [ -n "$SAVED_TTY" ] && stty raw -echo
+
     # Cloud Hypervisor with virtio-fs:
     # - --memory shared=on: Required for virtio-fs DAX
     # - --fs: Connects to virtiofsd socket, uses tag for guest identification
@@ -512,7 +548,17 @@ in
 
     # Create writable copies
     WORK_DIR=$(mktemp -d)
-    trap "rm -rf $WORK_DIR; rm -f $CH_API_SOCKET" EXIT
+
+    SAVED_TTY=""
+    cleanup() {
+      [ -n "$SAVED_TTY" ] && stty "$SAVED_TTY" 2>/dev/null || true
+      rm -rf "$WORK_DIR"
+      rm -f "$CH_API_SOCKET"
+    }
+    trap cleanup EXIT INT TERM
+    if [ -t 0 ]; then
+      SAVED_TTY=$(stty -g)
+    fi
 
     IMAGE="$WORK_DIR/redox.img"
     FIRMWARE="${cloudhvFirmware}/FV/CLOUDHV.fd"
@@ -562,6 +608,9 @@ in
     echo "Controls:"
     echo "  Ctrl+C: Quit Cloud Hypervisor"
     echo ""
+
+    # Switch to raw mode right before launching (after all echo output)
+    [ -n "$SAVED_TTY" ] && stty raw -echo
 
     # Cloud Hypervisor with API socket for runtime control:
     # - --api-socket: Enables pause/resume, snapshot/restore, hotplug
