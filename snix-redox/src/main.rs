@@ -93,6 +93,10 @@ enum Command {
         /// Bridge timeout in seconds (default: 300)
         #[arg(long)]
         timeout: Option<u64>,
+
+        /// Disable namespace sandboxing for the build (run unsandboxed)
+        #[arg(long)]
+        no_sandbox: bool,
     },
 
     /// Show a derivation in human-readable form
@@ -147,6 +151,10 @@ enum Command {
         /// Recursively fetch all dependencies
         #[arg(short, long)]
         recursive: bool,
+
+        /// Lazy install: register without extracting (requires stored daemon)
+        #[arg(long)]
+        lazy: bool,
     },
 
     /// Remove an installed package from the profile
@@ -526,6 +534,7 @@ fn main() {
             bridge,
             shared_dir,
             timeout,
+            no_sandbox,
         } => {
             // Check if we got a flake installable (contains '#')
             if let Some(ref inst_str) = installable {
@@ -546,7 +555,7 @@ fn main() {
             } else if bridge {
                 bridge_build::run(expr, file, attr, shared_dir, timeout)
             } else {
-                local_build::run(expr, file)
+                local_build::run_with_options(expr, file, no_sandbox)
             }
         }
         Command::ShowDerivation { path } => eval::show_derivation(&path),
@@ -580,6 +589,7 @@ fn main() {
             cache_url,
             cache_path,
             recursive,
+            lazy,
         } => {
             let source = cache_source::CacheSource::from_args(
                 cache_url.as_deref(),
@@ -588,7 +598,7 @@ fn main() {
             if recursive {
                 install::install_recursive(&name, &source)
             } else {
-                install::install(&name, &source)
+                install::install_with_options(&name, &source, lazy)
             }
         }
         Command::Remove { name } => install::remove(&name),

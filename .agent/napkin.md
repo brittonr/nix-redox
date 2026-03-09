@@ -1767,3 +1767,31 @@
 - **No new Cargo dependencies needed**: ureq (HTTP client) was already in Cargo.toml.
   No vendor hash change. 375 host tests pass (was 371, +4 new).
 - **129/129 functional tests still pass**: No regressions from the refactoring.
+
+### Scheme daemon integration — snix stored/profiled/sandbox (Mar 9 2026)
+- **Module system wiring**: New `/snix` adios module with `stored`, `profiled`, `sandbox` options.
+  Build module reads `inputs.snix.stored.enable or false` — the `or false` default is CRITICAL
+  because existing profiles don't set `/snix` options and would fail without defaults.
+- **Init script numbering**: stored=12, profiled=13 in init.d — after networking (10-17) but
+  before orbital (20). profiled needs store paths to exist → must start after stored.
+- **Nix syntax: `});` vs `))`**: `allInitScripts = ... // (lib.optionalAttrs ... { ... });` —
+  the `})` closes `lib.optionalAttrs {` and the `;` terminates the expression. Changing `});`
+  to `))` for chained `//` requires the `;` to move to the final `)`. Got syntax error first try.
+- **profiled_is_running() detection**: `std::fs::metadata("profile:default/.control")` on Redox.
+  On non-Redox, hardcoded `false`. The `#[cfg]` gating is simple but must cover ALL code paths
+  that reference scheme URLs or the non-Redox build fails.
+- **Lazy install fallback**: `--lazy` without `stored` running prints a warning and falls back
+  to eager extraction. This prevents user confusion when they use the flag without the daemon.
+- **No separate packages needed**: stored/profiled are subcommands of the `snix` binary
+  (`snix stored`, `snix profiled`), not separate crates. The build module generates init scripts
+  that invoke `snix stored --cache-path ... --store-dir ...`.
+- **SandboxConfig ownership for pre_exec**: `cmd.pre_exec()` takes `FnMut + Send + Sync + 'static`.
+  The `SandboxConfig` must be moved into the closure (owned, not borrowed). Build it before
+  the closure and `move` it in. On non-Redox, suppress with `#[cfg(not(target_os = "redox"))]`.
+- **build_derivation split**: Added `build_derivation_inner` with `no_sandbox` param. The public
+  `build_derivation()` is a thin wrapper calling `build_derivation_inner(drv, ..., false)`.
+  Same pattern for `build_needed` → `build_needed_with_options`.
+- **Profile: `scheme-native`**: New profile extending development with stored+profiled+sandbox
+  all enabled. Minimal profile stays clean (all defaults are disabled).
+- **439 tests, 0 failures**: 8 new tests added for integration code (profiled detection,
+  stored detection, sandbox config, no_sandbox flag). All existing 431 tests pass unmodified.
