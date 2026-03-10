@@ -108,9 +108,13 @@ impl StoreDaemon {
         let manifest_count = manifests.len();
         eprintln!("stored: loaded {manifest_count} manifests");
 
+        // Use a worker-backed handle table. The I/O worker runs file
+        // reads on a separate thread, avoiding the scheme event loop
+        // hang that occurs when doing file: I/O from within a scheme
+        // handler on Redox.
         Ok(Self {
             db,
-            handles: handles::HandleTable::new(),
+            handles: handles::HandleTable::with_io_worker(),
             extracting: Mutex::new(std::collections::HashSet::new()),
             config,
             manifests,

@@ -12,19 +12,25 @@
 //! daemon can't process new requests while blocked).
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::io::{self, Read, Seek, SeekFrom};
+use std::io::{self};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use crate::file_io_worker::FileIoWorker;
+
 /// An open file handle.
 ///
-/// Created lazily — `file` is `None` until the first `read()` call.
+/// Created lazily — `content` is `None` until the first `read()` call.
+/// On first read, the file content is loaded via the I/O worker thread
+/// (which can safely access the `file:` scheme without blocking the
+/// scheme event loop). Subsequent reads are served from the cached content.
+///
 /// Metadata (size, executable) comes from the manifest at open time,
 /// avoiding any filesystem I/O during the `openat` handler.
 pub struct FileHandle {
-    /// The underlying file on the real filesystem. `None` until first read.
-    pub file: Option<fs::File>,
+    /// Cached file content. `None` until the first `read()` call.
+    /// Populated by the I/O worker thread on first access.
+    pub content: Option<Vec<u8>>,
     /// Absolute filesystem path (e.g., `/nix/store/abc.../bin/rg`).
     pub real_path: PathBuf,
     /// Path relative to the store scheme (e.g., `abc.../bin/rg`).
@@ -61,9 +67,16 @@ pub enum Handle {
 }
 
 /// Table of open handles with auto-incrementing IDs.
+///
+/// Holds an optional `FileIoWorker` for servicing read requests
+/// without blocking the scheme event loop. On Redox, the worker is
+/// required; on other platforms (tests), reads fall back to direct I/O.
 pub struct HandleTable {
     next_id: AtomicUsize,
     pub handles: BTreeMap<usize, Handle>,
+    /// Background I/O worker for file reads. On Redox, this MUST be set
+    /// before any `read()` calls on lazy file handles.
+    io_worker: Option<FileIoWorker>,
 }
 
 impl HandleTable {
@@ -71,6 +84,19 @@ impl HandleTable {
         Self {
             next_id: AtomicUsize::new(1),
             handles: BTreeMap::new(),
+            io_worker: None,
+        }
+    }
+
+    /// Create a handle table with a background I/O worker.
+    ///
+    /// The worker thread handles all file reads, keeping filesystem
+    /// I/O off the scheme event loop thread.
+    pub fn with_io_worker() -> Self {
+        Self {
+            next_id: AtomicUsize::new(1),
+            handles: BTreeMap::new(),
+            io_worker: Some(FileIoWorker::spawn()),
         }
     }
 
@@ -89,7 +115,7 @@ impl HandleTable {
         self.handles.insert(
             id,
             Handle::File(FileHandle {
-                file: None,
+                content: None,
                 real_path,
                 scheme_path,
                 size,
@@ -108,8 +134,8 @@ impl HandleTable {
         real_path: PathBuf,
         scheme_path: String,
     ) -> io::Result<usize> {
-        let file = fs::File::open(&real_path)?;
-        let meta = file.metadata()?;
+        let data = std::fs::read(&real_path)?;
+        let meta = std::fs::metadata(&real_path)?;
 
         #[cfg(unix)]
         let executable = {
@@ -119,14 +145,15 @@ impl HandleTable {
         #[cfg(not(unix))]
         let executable = false;
 
+        let size = meta.len();
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         self.handles.insert(
             id,
             Handle::File(FileHandle {
-                file: Some(file),
+                content: Some(data),
                 real_path,
                 scheme_path,
-                size: meta.len(),
+                size,
                 executable,
             }),
         );
@@ -174,10 +201,12 @@ impl HandleTable {
 
     /// Read from a file handle at the given offset.
     ///
-    /// Lazy-opens the file on first read. This is the only point where
-    /// filesystem I/O happens for file handles. On Redox, this means
-    /// the `read` scheme handler will do I/O — if this also hangs,
-    /// file content must be pre-loaded or served from a separate thread.
+    /// On first read, the file content is loaded via the I/O worker
+    /// thread (if available) or via direct I/O (for tests). The worker
+    /// runs on a separate thread that can safely access the `file:`
+    /// scheme without blocking the scheme event loop.
+    ///
+    /// Subsequent reads are served from the cached content buffer.
     pub fn read(
         &mut self,
         id: usize,
@@ -186,13 +215,55 @@ impl HandleTable {
     ) -> io::Result<usize> {
         match self.handles.get_mut(&id) {
             Some(Handle::File(fh)) => {
-                // Lazy open: open the file on first read.
-                if fh.file.is_none() {
-                    fh.file = Some(fs::File::open(&fh.real_path)?);
+                // Load content on first read.
+                if fh.content.is_none() {
+                    let path = fh.real_path.clone();
+                    // Try I/O worker first (required on Redox to avoid
+                    // blocking the scheme event loop). Fall back to direct
+                    // I/O for tests and non-Redox platforms.
+                    //
+                    // We need to access self.io_worker, but we already
+                    // have a mutable borrow on self.handles via `fh`.
+                    // Extract what we need and re-borrow.
+                    drop(fh);
+                    let data = if let Some(ref worker) = self.io_worker {
+                        worker.preload_file(&path)?
+                    } else {
+                        std::fs::read(&path)?
+                    };
+                    // Re-borrow the handle to store the loaded content.
+                    match self.handles.get_mut(&id) {
+                        Some(Handle::File(fh)) => {
+                            fh.size = data.len() as u64;
+                            fh.content = Some(data);
+                        }
+                        _ => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::NotFound,
+                                format!("handle {id} vanished during load"),
+                            ));
+                        }
+                    }
                 }
-                let file = fh.file.as_mut().unwrap();
-                file.seek(SeekFrom::Start(offset))?;
-                file.read(buf)
+
+                // Serve from cached content.
+                match self.handles.get(&id) {
+                    Some(Handle::File(fh)) => {
+                        let content = fh.content.as_ref().unwrap();
+                        let start = offset as usize;
+                        if start >= content.len() {
+                            return Ok(0); // EOF
+                        }
+                        let available = &content[start..];
+                        let n = available.len().min(buf.len());
+                        buf[..n].copy_from_slice(&available[..n]);
+                        Ok(n)
+                    }
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!("handle {id} vanished"),
+                    )),
+                }
             }
             Some(Handle::Dir(_)) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -303,7 +374,7 @@ impl HandleTable {
 fn read_dir_entries(path: &std::path::Path) -> io::Result<Vec<DirEntryInfo>> {
     let mut entries = Vec::new();
 
-    for entry in fs::read_dir(path)? {
+    for entry in std::fs::read_dir(path)? {
         let entry = entry?;
         let meta = entry.metadata()?;
         let file_type = entry.file_type()?;
@@ -325,13 +396,12 @@ fn read_dir_entries(path: &std::path::Path) -> io::Result<Vec<DirEntryInfo>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Write;
 
     #[test]
     fn open_and_read_file() {
         let tmp = tempfile::tempdir().unwrap();
         let file_path = tmp.path().join("hello.txt");
-        fs::write(&file_path, "Hello World!").unwrap();
+        std::fs::write(&file_path, "Hello World!").unwrap();
 
         let mut table = HandleTable::new();
         let id = table
@@ -355,7 +425,7 @@ mod tests {
     fn lazy_file_handle() {
         let tmp = tempfile::tempdir().unwrap();
         let file_path = tmp.path().join("lazy.txt");
-        fs::write(&file_path, "Lazy content").unwrap();
+        std::fs::write(&file_path, "Lazy content").unwrap();
 
         let mut table = HandleTable::new();
         let id = table.open_file_lazy(
@@ -386,7 +456,8 @@ mod tests {
             false,
         );
 
-        // Handle exists (metadata only), but read will fail.
+        // Handle exists (metadata only), but read will fail
+        // because the worker (or direct fallback) can't open the file.
         assert_eq!(table.is_dir(id), Some(false));
         let mut buf = [0u8; 64];
         assert!(table.read(id, &mut buf, 0).is_err());
@@ -396,10 +467,10 @@ mod tests {
     fn open_and_list_dir() {
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path().join("mydir");
-        fs::create_dir(&dir).unwrap();
-        fs::write(dir.join("a.txt"), "alpha").unwrap();
-        fs::write(dir.join("b.txt"), "bravo").unwrap();
-        fs::create_dir(dir.join("sub")).unwrap();
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::write(dir.join("a.txt"), "alpha").unwrap();
+        std::fs::write(dir.join("b.txt"), "bravo").unwrap();
+        std::fs::create_dir(dir.join("sub")).unwrap();
 
         let mut table = HandleTable::new();
         let id = table
@@ -422,7 +493,7 @@ mod tests {
     fn close_handle() {
         let tmp = tempfile::tempdir().unwrap();
         let file_path = tmp.path().join("test.txt");
-        fs::write(&file_path, "data").unwrap();
+        std::fs::write(&file_path, "data").unwrap();
 
         let mut table = HandleTable::new();
         let id = table
@@ -442,8 +513,8 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let f1 = tmp.path().join("a");
         let f2 = tmp.path().join("b");
-        fs::write(&f1, "a").unwrap();
-        fs::write(&f2, "b").unwrap();
+        std::fs::write(&f1, "a").unwrap();
+        std::fs::write(&f2, "b").unwrap();
 
         let mut table = HandleTable::new();
         let id1 = table.open_file(f1, "a".to_string()).unwrap();
@@ -486,10 +557,10 @@ mod tests {
     fn dir_entries_sorted() {
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path().join("sorted");
-        fs::create_dir(&dir).unwrap();
-        fs::write(dir.join("zzz"), "").unwrap();
-        fs::write(dir.join("aaa"), "").unwrap();
-        fs::write(dir.join("mmm"), "").unwrap();
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::write(dir.join("zzz"), "").unwrap();
+        std::fs::write(dir.join("aaa"), "").unwrap();
+        std::fs::write(dir.join("mmm"), "").unwrap();
 
         let mut table = HandleTable::new();
         let id = table.open_dir(dir, "pkg".to_string()).unwrap();
@@ -503,8 +574,8 @@ mod tests {
     fn dir_entries_cached() {
         let tmp = tempfile::tempdir().unwrap();
         let dir = tmp.path().join("cached");
-        fs::create_dir(&dir).unwrap();
-        fs::write(dir.join("x"), "").unwrap();
+        std::fs::create_dir(&dir).unwrap();
+        std::fs::write(dir.join("x"), "").unwrap();
 
         let mut table = HandleTable::new();
         let id = table.open_dir(dir.clone(), "pkg".to_string()).unwrap();
@@ -514,7 +585,7 @@ mod tests {
         assert_eq!(entries1.len(), 1);
 
         // Add a file — but cache should not change.
-        fs::write(dir.join("y"), "").unwrap();
+        std::fs::write(dir.join("y"), "").unwrap();
         let entries2 = table.list_dir(id).unwrap();
         assert_eq!(entries2.len(), 1); // Still cached.
     }
@@ -523,7 +594,7 @@ mod tests {
     fn real_path_accessors() {
         let tmp = tempfile::tempdir().unwrap();
         let f = tmp.path().join("file");
-        fs::write(&f, "data").unwrap();
+        std::fs::write(&f, "data").unwrap();
 
         let mut table = HandleTable::new();
         let id = table.open_file(f.clone(), "pkg/file".to_string()).unwrap();

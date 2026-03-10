@@ -6,18 +6,21 @@
 //!   - `ControlHandle`: the `.control` write interface for mutations
 
 use std::collections::BTreeMap;
-use std::fs;
-use std::io::{self, Read, Seek, SeekFrom};
+use std::io::{self};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use crate::file_io_worker::FileIoWorker;
+
 /// An open file resolved through the profile.
 ///
-/// Lazy: `file` is `None` until the first `read()` call. This avoids
-/// filesystem I/O during `openat` which hangs Redox scheme daemons.
+/// Lazy: `content` is `None` until the first `read()` call. On first
+/// read, file content is loaded via the I/O worker thread (which can
+/// safely access the `file:` scheme). Subsequent reads are served
+/// from the cached content.
 pub struct FileHandle {
-    /// Underlying file on the real filesystem. `None` until first read.
-    pub file: Option<fs::File>,
+    /// Cached file content. `None` until first read.
+    pub content: Option<Vec<u8>>,
     /// Absolute filesystem path.
     pub real_path: PathBuf,
     /// Scheme-relative path (e.g., `default/bin/rg`).
@@ -59,6 +62,7 @@ pub enum Handle {
 pub struct HandleTable {
     next_id: AtomicUsize,
     handles: BTreeMap<usize, Handle>,
+    io_worker: Option<FileIoWorker>,
 }
 
 impl HandleTable {
@@ -66,6 +70,16 @@ impl HandleTable {
         Self {
             next_id: AtomicUsize::new(1),
             handles: BTreeMap::new(),
+            io_worker: None,
+        }
+    }
+
+    /// Create a handle table with a background I/O worker.
+    pub fn with_io_worker() -> Self {
+        Self {
+            next_id: AtomicUsize::new(1),
+            handles: BTreeMap::new(),
+            io_worker: Some(FileIoWorker::spawn()),
         }
     }
 
@@ -83,7 +97,7 @@ impl HandleTable {
         self.handles.insert(
             id,
             Handle::File(FileHandle {
-                file: None,
+                content: None,
                 real_path,
                 scheme_path,
                 size,
@@ -101,17 +115,17 @@ impl HandleTable {
         real_path: PathBuf,
         scheme_path: String,
     ) -> io::Result<usize> {
-        let file = fs::File::open(&real_path)?;
-        let meta = file.metadata()?;
+        let data = std::fs::read(&real_path)?;
+        let size = data.len() as u64;
 
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         self.handles.insert(
             id,
             Handle::File(FileHandle {
-                file: Some(file),
+                content: Some(data),
                 real_path,
                 scheme_path,
-                size: meta.len(),
+                size,
                 executable: false,
             }),
         );
@@ -151,7 +165,10 @@ impl HandleTable {
         id
     }
 
-    /// Read from a file handle (lazy-opens on first read).
+    /// Read from a file handle.
+    ///
+    /// On first read, loads file content via the I/O worker thread
+    /// (or direct I/O as fallback). Subsequent reads are from cache.
     pub fn read(
         &mut self,
         id: usize,
@@ -160,12 +177,44 @@ impl HandleTable {
     ) -> io::Result<usize> {
         match self.handles.get_mut(&id) {
             Some(Handle::File(fh)) => {
-                if fh.file.is_none() {
-                    fh.file = Some(fs::File::open(&fh.real_path)?);
+                if fh.content.is_none() {
+                    let path = fh.real_path.clone();
+                    drop(fh);
+                    let data = if let Some(ref worker) = self.io_worker {
+                        worker.preload_file(&path)?
+                    } else {
+                        std::fs::read(&path)?
+                    };
+                    match self.handles.get_mut(&id) {
+                        Some(Handle::File(fh)) => {
+                            fh.size = data.len() as u64;
+                            fh.content = Some(data);
+                        }
+                        _ => {
+                            return Err(io::Error::new(
+                                io::ErrorKind::NotFound,
+                                format!("handle {id} vanished during load"),
+                            ));
+                        }
+                    }
                 }
-                let file = fh.file.as_mut().unwrap();
-                file.seek(SeekFrom::Start(offset))?;
-                file.read(buf)
+                match self.handles.get(&id) {
+                    Some(Handle::File(fh)) => {
+                        let content = fh.content.as_ref().unwrap();
+                        let start = offset as usize;
+                        if start >= content.len() {
+                            return Ok(0);
+                        }
+                        let available = &content[start..];
+                        let n = available.len().min(buf.len());
+                        buf[..n].copy_from_slice(&available[..n]);
+                        Ok(n)
+                    }
+                    _ => Err(io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!("handle {id} vanished"),
+                    )),
+                }
             }
             Some(Handle::Dir(_)) | Some(Handle::Control(_)) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -243,7 +292,7 @@ mod tests {
     fn open_and_read_file() {
         let tmp = tempfile::tempdir().unwrap();
         let path = tmp.path().join("test.txt");
-        fs::write(&path, "hello").unwrap();
+        std::fs::write(&path, "hello").unwrap();
 
         let mut table = HandleTable::new();
         let id = table

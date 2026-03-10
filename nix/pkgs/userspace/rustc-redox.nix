@@ -450,11 +450,16 @@ pkgs.stdenv.mkDerivation {
     # plain blocking reads (no poll fallback).
     python3 ${./patch-jobserver-poll.py} .
 
-    # Patch: Pass env vars via --env-set flag to rustc.
-    # On Redox, Command::env() doesn't propagate env vars through exec().
-    # This means rustc doesn't see OUT_DIR, CARGO_PKG_*, or cargo:rustc-env
-    # values when processing env!() / option_env!() macros. Fix: also pass
-    # these as --env-set CLI flags, which rustc processes before env::var().
+    # Patch: Use execvpe() on Redox to propagate env vars through exec().
+    # Root cause: Rust std's do_exec() writes to the global `environ`
+    # pointer then calls execvp(). On Redox, the global pointer update
+    # doesn't reliably reach relibc's execv() reader. Fix: call execvpe()
+    # which passes the envp directly to execve(), bypassing the global
+    # environ entirely. This replaces the --env-set workaround.
+    python3 ${./patch-rustc-execvpe.py} .
+
+    # LEGACY: --env-set workaround (kept for defense-in-depth until
+    # execvpe is verified end-to-end in the self-hosting test suite).
     python3 ${./patch-cargo-env-set.py} .
 
     # Patch 7: cargo-util S_IRWXU type mismatch

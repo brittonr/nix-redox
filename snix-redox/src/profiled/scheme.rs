@@ -32,7 +32,7 @@ impl ProfileSchemeHandler {
     fn new(daemon: ProfileDaemon) -> Self {
         Self {
             daemon,
-            handles: HandleTable::new(),
+            handles: HandleTable::with_io_worker(),
         }
     }
 

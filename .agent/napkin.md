@@ -2004,3 +2004,59 @@
   `(String, Option<(String, Vec<ManifestEntry>)>)` — tests must access `.0` for
   the message string. Tests were broken but only visible when cross-compilation
   is bypassed (CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu).
+
+### exec() env propagation — proper fix via execvpe() (Mar 9 2026)
+- **Root cause**: Rust std's `do_exec()` writes to the `environ` extern symbol
+  then calls `execvp(file, argv)`. On Redox, relibc's `execvp` → `execv` →
+  `execve(path, argv, platform::environ)` reads from its own `environ` static,
+  but the value written by Rust std doesn't reliably reach relibc's reader.
+  Env vars set via `Command::env()` are lost in the child process.
+- **Fix**: Two-part patch:
+  1. `patch-relibc-execvpe.py` — adds `execvpe(file, argv, envp)` to relibc.
+     Like execvp but takes explicit envp (GNU extension). Does PATH search by
+     reading PATH from the provided envp array via `find_in_envp()`, then calls
+     `execve()` with the explicit envp. Bypasses the global `environ` entirely.
+  2. `patch-rustc-execvpe.py` — patches Rust std's `do_exec()` to use
+     `execvpe(prog, argv, envp)` on Redox when custom env is provided, instead
+     of `*environ = envp; execvp(prog, argv)`. Falls back to `execvp` when no
+     custom env (inheriting parent's env still works).
+- **Why not just fix `environ` propagation**: The environ symbol is declared as
+  `*const *const c_char` in Rust std but `*mut *mut c_char` in relibc. Both are
+  `static mut`. For DSO-linked binaries (rustc with librustc_driver.so), each
+  DSO has its own copy of relibc statics. The `__relibc_init_environ` injection
+  in ld_so should handle this, but something in the chain is broken. execvpe
+  sidesteps the entire global state issue.
+- **--env-set workaround kept temporarily**: patch-cargo-env-set.py remains as
+  defense-in-depth until execvpe is verified in the self-hosting test suite.
+  Can be removed once `cargo build` with `env!()` macros works without it.
+- **461 host tests pass**, 0 failures. Relibc and Rust std patches are additive.
+
+### read() on lazy file handles — I/O worker thread (Mar 9 2026)
+- **Root cause**: On Redox, scheme daemons can't do `file:` scheme I/O from
+  within the scheme event loop. `fs::File::open()` blocks the daemon thread
+  waiting for redoxfs to respond, but the daemon can't process its own scheme
+  requests while blocked. Lazy file handles deferred `open()` to first `read()`,
+  but that `read()` still happened inside the scheme handler.
+- **Fix**: `FileIoWorker` — background thread that handles all file reads.
+  - `file_io_worker.rs`: New module with `FileIoWorker` struct. Spawns a
+    dedicated thread that processes I/O requests via `mpsc` channels.
+  - `preload_file(path)`: Worker reads entire file into `Vec<u8>` and returns it.
+  - `read_file(path, offset, len)`: Worker opens (cached) file, seeks, reads.
+  - Worker maintains a `BTreeMap<PathBuf, fs::File>` cache of open file handles.
+  - The scheme handler blocks on `mpsc::Receiver::recv()` waiting for the worker's
+    result. This is safe because the worker thread is a DIFFERENT thread — the
+    kernel delivers file: scheme responses to the worker, not the scheme handler.
+- **Handle table changes**: Both `stored/handles.rs` and `profiled/handles.rs`:
+  - `FileHandle.file: Option<fs::File>` → `FileHandle.content: Option<Vec<u8>>`
+  - `HandleTable` gains `io_worker: Option<FileIoWorker>` field
+  - `HandleTable::with_io_worker()` constructor for scheme daemons
+  - `HandleTable::new()` for tests (falls back to direct `std::fs::read()`)
+  - `read()` on first access: sends preload request to worker, caches result
+  - Subsequent reads served from the in-memory `Vec<u8>` content buffer
+- **Memory tradeoff**: Entire file content cached in memory. For store paths
+  (binaries 5-90MB), this uses more memory than streaming. Acceptable because
+  scheme daemon reads are typically for small config files or binary headers,
+  not bulk data transfer. Large files accessed via `file:` scheme directly.
+- **8 new tests** in `file_io_worker::tests`: basic read, offset read, small
+  buffer, cached reopen, nonexistent file, preload, multiple files, clean drop.
+- **461 host tests pass** (8 new + 453 existing), 0 failures.

@@ -90,6 +90,7 @@ let
       python3 ${./patch-relibc-ld-so-align.py}
       python3 ${./patch-relibc-ld-so-cwd.py}
       python3 ${./patch-relibc-fcntl-lock.py}
+      python3 ${./patch-relibc-execvpe.py}
 
       runHook postPatch
     '';

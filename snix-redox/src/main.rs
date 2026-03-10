@@ -17,6 +17,7 @@ mod channel;
 mod derivation_builtins;
 mod eval;
 mod fetchers;
+mod file_io_worker;
 mod flake;
 mod local_build;
 mod profiled;
