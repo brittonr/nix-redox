@@ -58,3 +58,24 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ### Parallel cargo compilation hangs
 - See JOBS=1 workaround above. Needs OS-level investigation.
+
+## Redox Namespace Sandboxing (implemented)
+
+### How mkns/setns work
+- `mkns` creates a new namespace via `dup(current_ns_fd, buf)` — NOT a raw syscall.
+- Wire format: `[NsDup::ForkNs (8 bytes LE)] [name_len (8 bytes LE)] [name_bytes] ...`
+- `setns` is userspace-only — swaps `DynamicProcInfo.ns_fd`, no kernel call.
+- Namespace filtering is **scheme-level only** — `file:` is all-or-nothing.
+
+### libredox API
+- `libredox::call::mkns(&[IoSlice])` — needs `mkns` feature (pulls in `ioslice` crate).
+- `libredox::call::setns(fd)` — switches process namespace.
+- `libredox::call::setrens(0, 0)` — creates null namespace (memory+pipe only), used by virtio-fsd.
+- Error type: `libredox::error::Error`, errno via `.errno()`, constants in `libredox::errno::*`.
+
+### snix sandbox implementation
+- Normal builds: `file`, `memory`, `pipe`.
+- FODs: also `net`.
+- Falls back on ENOSYS (old kernel) — continues unsandboxed.
+- Runs in `pre_exec` closure (between fork and exec).
+- Per-path filtering (restrict file: to $out+$TMPDIR) needs proxy scheme daemon (future).
