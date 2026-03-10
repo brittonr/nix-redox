@@ -15,10 +15,13 @@
 //!
 //! Usage:
 //! ```no_run
+//! use snix_redox::file_io_worker::FileIoWorker;
+//! use std::path::PathBuf;
 //! let worker = FileIoWorker::spawn();
 //!
 //! // From within the scheme handler's read():
-//! let result = worker.read_file("/nix/store/abc/bin/rg", 0, 4096);
+//! let path = PathBuf::from("/nix/store/abc/bin/rg");
+//! let result = worker.read_file(&path, 0, 4096);
 //! match result {
 //!     Ok(data) => { /* copy to caller buffer */ }
 //!     Err(e) => { /* return EBADF or EIO */ }
