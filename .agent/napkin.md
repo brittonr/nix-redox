@@ -2082,3 +2082,32 @@
   `logical_env` lookup, which only checks `--env-set` entries and the process environment.
   The process environment may not be fully populated via execvpe() in all code paths
   (perhaps some DSO initialization issue corrupts the environ pointer after execvpe sets it).
+
+### Scheme-native E2E test — .control notification for stored (Mar 9 2026)
+- **I/O worker blocks on Redox**: `FileIoWorker::preload_file()` blocks forever
+  when called from within a scheme daemon. The worker thread exists (thread::spawn
+  succeeds) but never gets scheduled — the Redox kernel doesn't wake the worker
+  while the main scheme handler thread is blocked on `mpsc::Receiver::recv()`.
+  The `eprintln!("stored: sending to I/O worker...")` line is the last output
+  before the hang. The worker thread's channel receive loop never fires.
+- **Fix: .control notification (not I/O worker)**: Added `store:.control` write
+  interface (same pattern as `profile:default/.control`). `snix install` sends
+  manifest JSON to stored after registering in PathInfoDb. The manifest arrives
+  inline with the notification — no I/O from the scheme event loop.
+- **Notification payload**: `{ "storePath": "/nix/store/...", "files": [...] }`
+  where files is the `Vec<ManifestEntry>` from PathInfo. stored's `on_close`
+  parses JSON and inserts into `self.daemon.manifests`.
+- **`snix install` now notifies both daemons**: profiled (add command with
+  manifest) AND stored (manifest-only notification). stored_notify is fire-and-
+  forget (warning on failure, no abort).
+- **Test result**: 20/21 pass, 1 skip (rg-from-profile-works — profiled uses
+  scheme not symlinks). 1.6s total runtime. Daemons start via init scripts (not
+  manually), packages installed AFTER daemons are running, store: and profile:
+  schemes serve correct data.
+- **Ion `<<< $entry` (here-string) doesn't work**: Not valid Ion syntax. Use
+  `$(echo $entry | grep "pattern")` instead.
+- **`load_manifest_via_worker` method kept**: Still useful for non-Redox tests
+  (falls back to `std::fs::read`). On Redox it hangs, so scheme handler uses
+  .control notifications instead.
+- **PathInfoDb.dir() accessor added**: Needed for `load_manifest_via_worker` to
+  find the right PathInfoDb directory (not hardcoded global path).

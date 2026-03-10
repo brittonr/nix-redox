@@ -72,6 +72,11 @@ impl PathInfoDb {
         Ok(Self { pathinfo_dir })
     }
 
+    /// Return the directory where PathInfo JSON files are stored.
+    pub fn dir(&self) -> &Path {
+        &self.pathinfo_dir
+    }
+
     /// Look up metadata for a store path. Returns `None` if not registered.
     pub fn get(&self, store_path: &str) -> Result<Option<PathInfo>, PathInfoError> {
         let file = self.info_file(store_path)?;

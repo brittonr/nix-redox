@@ -282,6 +282,16 @@ let
     inherit bootloader;
   };
 
+  # Scheme-native E2E test: daemons auto-start via init, live install/remove
+  schemeNativeTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/scheme-native-test.nix ];
+    inherit extraPkgs;
+  };
+  schemeNativeTest = mkFunctionalTest {
+    diskImage = schemeNativeTestSystem.diskImage;
+    inherit bootloader;
+  };
+
   mkBridgeTest = modularPkgs.infrastructure.mkBridgeTest;
   bridgeTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/bridge-test.nix ];
@@ -401,6 +411,9 @@ in
 
     redox-scheme-daemon-test = schemeDaemonTestSystem.diskImage;
     scheme-daemon-test = schemeDaemonTest;
+
+    redox-scheme-native-test = schemeNativeTestSystem.diskImage;
+    scheme-native-test = schemeNativeTest;
 
     redox-rebuild = redoxRebuild;
     push-to-redox = pushToRedox;

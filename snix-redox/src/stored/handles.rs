@@ -60,10 +60,22 @@ pub struct DirEntryInfo {
     pub size: u64,
 }
 
+/// A control handle for receiving manifest data notifications.
+///
+/// Accumulates written data in a buffer. On close, the buffer
+/// is parsed as JSON containing manifest entries for a store path.
+pub struct ControlHandle {
+    /// Accumulated write buffer.
+    pub buffer: Vec<u8>,
+    /// Scheme-relative path (for fpath).
+    pub scheme_path: String,
+}
+
 /// The type of an open handle.
 pub enum Handle {
     File(FileHandle),
     Dir(DirHandle),
+    Control(ControlHandle),
 }
 
 /// Table of open handles with auto-incrementing IDs.
@@ -76,7 +88,8 @@ pub struct HandleTable {
     pub handles: BTreeMap<usize, Handle>,
     /// Background I/O worker for file reads. On Redox, this MUST be set
     /// before any `read()` calls on lazy file handles.
-    io_worker: Option<FileIoWorker>,
+    /// Public so StoreDaemon can use the worker for dynamic manifest loading.
+    pub io_worker: Option<FileIoWorker>,
 }
 
 impl HandleTable {
@@ -265,9 +278,9 @@ impl HandleTable {
                     )),
                 }
             }
-            Some(Handle::Dir(_)) => Err(io::Error::new(
+            Some(Handle::Dir(_)) | Some(Handle::Control(_)) => Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                "cannot read from a directory handle",
+                "cannot read from a directory/control handle",
             )),
             None => Err(io::Error::new(
                 io::ErrorKind::NotFound,
@@ -280,7 +293,7 @@ impl HandleTable {
     pub fn file_size(&self, id: usize) -> io::Result<u64> {
         match self.handles.get(&id) {
             Some(Handle::File(fh)) => Ok(fh.size),
-            Some(Handle::Dir(_)) => Ok(0),
+            Some(Handle::Dir(_)) | Some(Handle::Control(_)) => Ok(0),
             None => Err(io::Error::new(
                 io::ErrorKind::NotFound,
                 format!("invalid handle: {id}"),
@@ -293,6 +306,7 @@ impl HandleTable {
         match self.handles.get(&id) {
             Some(Handle::File(fh)) => Some(&fh.scheme_path),
             Some(Handle::Dir(dh)) => Some(&dh.scheme_path),
+            Some(Handle::Control(ch)) => Some(&ch.scheme_path),
             None => None,
         }
     }
@@ -300,7 +314,7 @@ impl HandleTable {
     /// Check if a handle is a directory.
     pub fn is_dir(&self, id: usize) -> Option<bool> {
         match self.handles.get(&id) {
-            Some(Handle::File(_)) => Some(false),
+            Some(Handle::File(_)) | Some(Handle::Control(_)) => Some(false),
             Some(Handle::Dir(_)) => Some(true),
             None => None,
         }
@@ -311,6 +325,7 @@ impl HandleTable {
         match self.handles.get(&id) {
             Some(Handle::File(fh)) => Some(&fh.real_path),
             Some(Handle::Dir(dh)) => Some(&dh.real_path),
+            Some(Handle::Control(_)) => None,
             None => None,
         }
     }
@@ -323,7 +338,7 @@ impl HandleTable {
         // Check it's a directory.
         match self.handles.get(&id) {
             Some(Handle::Dir(_)) => {}
-            Some(Handle::File(_)) => {
+            Some(Handle::File(_)) | Some(Handle::Control(_)) => {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
                     "not a directory",
@@ -354,9 +369,41 @@ impl HandleTable {
         }
     }
 
-    /// Close a handle, releasing resources.
-    pub fn close(&mut self, id: usize) -> bool {
-        self.handles.remove(&id).is_some()
+    /// Open a control handle for receiving manifest notifications.
+    pub fn open_control(&mut self, scheme_path: String) -> usize {
+        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        self.handles.insert(
+            id,
+            Handle::Control(ControlHandle {
+                buffer: Vec::new(),
+                scheme_path,
+            }),
+        );
+        id
+    }
+
+    /// Write data to a control handle buffer.
+    pub fn write(&mut self, id: usize, buf: &[u8]) -> io::Result<usize> {
+        match self.handles.get_mut(&id) {
+            Some(Handle::Control(ch)) => {
+                ch.buffer.extend_from_slice(buf);
+                Ok(buf.len())
+            }
+            Some(_) => Err(io::Error::new(
+                io::ErrorKind::PermissionDenied,
+                "store is read-only (use .control for notifications)",
+            )),
+            None => Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("invalid handle: {id}"),
+            )),
+        }
+    }
+
+    /// Close a handle, returning the control handle if it was one.
+    /// The caller should process any accumulated control data.
+    pub fn close(&mut self, id: usize) -> Option<Handle> {
+        self.handles.remove(&id)
     }
 
     /// Number of open handles.
@@ -501,11 +548,11 @@ mod tests {
             .unwrap();
 
         assert_eq!(table.len(), 1);
-        assert!(table.close(id));
+        assert!(table.close(id).is_some());
         assert_eq!(table.len(), 0);
 
-        // Double close returns false.
-        assert!(!table.close(id));
+        // Double close returns None.
+        assert!(table.close(id).is_none());
     }
 
     #[test]

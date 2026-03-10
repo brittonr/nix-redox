@@ -139,12 +139,92 @@ impl StoreDaemon {
 
     /// Load or refresh the manifest for a store path name.
     /// Reads from the PathInfo `files` field (no separate manifest file).
+    ///
+    /// ⚠️ Does filesystem I/O via `db.get()` — NOT safe from within
+    /// Redox scheme event loops. Use `load_manifest_via_worker()` instead.
     pub fn load_manifest(&mut self, store_path_name: &str) {
         let full_path = format!("{}/{}", self.config.store_dir, store_path_name);
         if let Ok(Some(info)) = self.db.get(&full_path) {
             if !info.files.is_empty() {
                 self.manifests.insert(store_path_name.to_string(), info.files);
             }
+        }
+    }
+
+    /// Load a manifest for a store path via the I/O worker thread.
+    ///
+    /// Safe to call from within Redox scheme event loops because the
+    /// actual file read happens on the worker's background thread,
+    /// not the scheme handler thread.
+    ///
+    /// Returns `true` if the manifest was loaded (or was already cached).
+    pub fn load_manifest_via_worker(&mut self, store_path_name: &str) -> bool {
+        // Already loaded?
+        if self.manifests.contains_key(store_path_name) {
+            return true;
+        }
+
+        eprintln!("stored: dynamic manifest load for {store_path_name}");
+
+        // Compute the PathInfoDb JSON file path for this store path.
+        let full_path = format!("{}/{}", self.config.store_dir, store_path_name);
+        let hash = match crate::pathinfo::store_path_hash(&full_path) {
+            Ok(h) => h,
+            Err(e) => {
+                eprintln!("stored: can't compute hash for {store_path_name}: {e}");
+                return false;
+            }
+        };
+
+        let pathinfo_file = self.db.dir().join(format!("{hash}.json"));
+        eprintln!("stored: reading {}", pathinfo_file.display());
+
+        // Read the file via the I/O worker (background thread) or
+        // direct I/O (tests without a worker).
+        let data: Vec<u8> = if let Some(worker) = &self.handles.io_worker {
+            eprintln!("stored: sending to I/O worker...");
+            match worker.preload_file(&pathinfo_file) {
+                Ok(d) => d,
+                Err(e) => {
+                    eprintln!(
+                        "stored: worker failed to read {}: {e}",
+                        pathinfo_file.display()
+                    );
+                    return false;
+                }
+            }
+        } else {
+            match std::fs::read(&pathinfo_file) {
+                Ok(d) => d,
+                Err(e) => {
+                    eprintln!(
+                        "stored: direct read failed for {}: {e}",
+                        pathinfo_file.display()
+                    );
+                    return false;
+                }
+            }
+        };
+
+        // Parse JSON on the scheme handler thread (CPU-only, no I/O).
+        let info: crate::pathinfo::PathInfo = match serde_json::from_slice(&data) {
+            Ok(i) => i,
+            Err(e) => {
+                eprintln!("stored: failed to parse pathinfo for {store_path_name}: {e}");
+                return false;
+            }
+        };
+
+        if !info.files.is_empty() {
+            eprintln!(
+                "stored: dynamically loaded manifest for {store_path_name} ({} entries)",
+                info.files.len()
+            );
+            self.manifests.insert(store_path_name.to_string(), info.files);
+            true
+        } else {
+            eprintln!("stored: pathinfo for {store_path_name} has no file manifest");
+            false
         }
     }
 
@@ -399,5 +479,81 @@ mod tests {
         let entries = d.list_from_manifest("abc-pkg", "bin").unwrap();
         let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, vec!["rg", "rg-readme"]);
+    }
+
+    #[test]
+    fn load_manifest_via_worker_already_cached() {
+        let mut d = daemon_with_manifest("abc-pkg", vec![
+            make_entry("bin/rg", "file"),
+        ]);
+        // Already cached → returns true without I/O.
+        assert!(d.load_manifest_via_worker("abc-pkg"));
+        assert!(d.manifests.contains_key("abc-pkg"));
+    }
+
+    #[test]
+    fn load_manifest_via_worker_not_in_pathinfodb() {
+        // Create a daemon with empty manifests and a real (but empty) PathInfoDb.
+        let dir = std::path::PathBuf::from("/tmp/snix-test-load-manifest-worker");
+        std::fs::create_dir_all(&dir).ok();
+        let mut d = StoreDaemon {
+            db: PathInfoDb::open_at(dir).unwrap(),
+            handles: handles::HandleTable::new(),
+            extracting: Mutex::new(std::collections::HashSet::new()),
+            config: StoredConfig::default(),
+            manifests: BTreeMap::new(),
+        };
+        // Store path not registered → returns false.
+        assert!(!d.load_manifest_via_worker("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-nonexistent"));
+    }
+
+    #[test]
+    fn load_manifest_via_worker_from_pathinfodb() {
+        // Create a PathInfoDb entry, then load the manifest dynamically.
+        let dir = std::path::PathBuf::from("/tmp/snix-test-load-manifest-dynamic");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).ok();
+
+        let db = PathInfoDb::open_at(dir.clone()).unwrap();
+
+        // Register a store path with file manifest data.
+        let store_path = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg";
+        let info = crate::pathinfo::PathInfo {
+            store_path: store_path.to_string(),
+            nar_hash: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            nar_size: 100,
+            references: vec![],
+            deriver: None,
+            registration_time: "2026-01-01T00:00:00Z".to_string(),
+            signatures: vec![],
+            files: vec![
+                make_entry("bin", "dir"),
+                make_entry("bin/hello", "file"),
+            ],
+        };
+        // register() writes the full PathInfo JSON including the files field.
+        db.register(&info).unwrap();
+
+        // Create a daemon with no pre-loaded manifests, pointing at this PathInfoDb.
+        let mut d = StoreDaemon {
+            db: PathInfoDb::open_at(dir).unwrap(),
+            handles: handles::HandleTable::new(), // No worker → falls back to direct read
+            extracting: Mutex::new(std::collections::HashSet::new()),
+            config: StoredConfig::default(),
+            manifests: BTreeMap::new(),
+        };
+
+        // Manifest not loaded yet.
+        assert!(!d.manifests.contains_key("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg"));
+
+        // Dynamic load via worker (falls back to direct read since no worker).
+        assert!(d.load_manifest_via_worker("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg"));
+
+        // Now the manifest should be cached.
+        assert!(d.manifests.contains_key("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg"));
+        let manifest = d.manifests.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg").unwrap();
+        assert_eq!(manifest.len(), 2);
+        assert_eq!(manifest[0].path, "bin");
+        assert_eq!(manifest[1].path, "bin/hello");
     }
 }

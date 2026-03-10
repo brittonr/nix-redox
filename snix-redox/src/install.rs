@@ -92,6 +92,30 @@ fn profiled_remove(name: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Notify the stored daemon about a new store path's manifest.
+///
+/// Sends the manifest data (file list) so stored can serve directory
+/// listings and file reads for packages installed after daemon startup.
+fn stored_notify(store_path: &str, files: &[crate::nar::ManifestEntry]) {
+    if files.is_empty() {
+        return;
+    }
+    let cmd = serde_json::json!({
+        "storePath": store_path,
+        "files": files
+    });
+    #[cfg(target_os = "redox")]
+    {
+        if let Err(e) = std::fs::write("store:.control", cmd.to_string()) {
+            eprintln!("  note: stored notification failed ({e}), will use filesystem fallback");
+        }
+    }
+    #[cfg(not(target_os = "redox"))]
+    {
+        let _ = (store_path, cmd);
+    }
+}
+
 /// Check if the `stored` daemon is running.
 ///
 /// On Redox: attempts to access the `store:` scheme root.
@@ -230,7 +254,19 @@ pub fn install_with_options(
         }
     }
 
-    // 4. Add GC root to protect from garbage collection
+    // 4. Notify stored daemon about the new manifest (if running).
+    //    This lets stored serve directory listings and file content
+    //    for packages installed after the daemon started.
+    if stored_running {
+        let files = crate::pathinfo::PathInfoDb::open()
+            .ok()
+            .and_then(|db| db.get(&entry.store_path).ok().flatten())
+            .map(|info| info.files)
+            .unwrap_or_default();
+        stored_notify(&entry.store_path, &files);
+    }
+
+    // 5. Add GC root to protect from garbage collection
     let root_name = format!("profile-{name}");
     store::add_root(&root_name, &entry.store_path)?;
 

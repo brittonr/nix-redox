@@ -14,9 +14,11 @@ use syscall::error::{Error, Result, EACCES, EBADF, EIO, ENOENT, ENOTDIR};
 use syscall::flag::O_DIRECTORY;
 use syscall::schemev2::NewFdFlags;
 
-use super::handles::Handle;
+use super::handles::{Handle};
 use super::resolve::{self, ResolvedPath};
 use super::{StoreDaemon, StoredConfig};
+
+use serde_json;
 
 /// Scheme handler wrapping the core store daemon.
 pub struct StoreSchemeHandler {
@@ -57,6 +59,15 @@ impl SchemeSync for StoreSchemeHandler {
     ) -> Result<OpenResult> {
 
         let path = path.trim_matches('/');
+
+        // Handle .control path for manifest notifications.
+        if path == ".control" {
+            let id = self.daemon.handles.open_control(".control".to_string());
+            return Ok(OpenResult::ThisScheme {
+                number: id,
+                flags: NewFdFlags::POSITIONED,
+            });
+        }
 
         // Parse the scheme-relative path.
         let resolved = resolve::parse_scheme_path(path).map_err(|e| {
@@ -183,14 +194,17 @@ impl SchemeSync for StoreSchemeHandler {
 
     fn write(
         &mut self,
-        _id: usize,
-        _buf: &[u8],
+        id: usize,
+        buf: &[u8],
         _offset: u64,
         _fcntl_flags: u32,
         _ctx: &CallerCtx,
     ) -> Result<usize> {
-        // Store is read-only.
-        Err(Error::new(EACCES))
+        // Only .control handles are writable.
+        self.daemon.handles.write(id, buf).map_err(|e| {
+            eprintln!("stored: write({id}): {e}");
+            Error::new(EACCES)
+        })
     }
 
     fn fsize(&mut self, id: usize, _ctx: &CallerCtx) -> Result<u64> {
@@ -217,27 +231,23 @@ impl SchemeSync for StoreSchemeHandler {
     }
 
     fn fstat(&mut self, id: usize, stat: &mut Stat, _ctx: &CallerCtx) -> Result<()> {
-        let is_dir = self.daemon.handles.is_dir(id);
-
-        match is_dir {
-            Some(true) => {
+        match self.daemon.handles.handles.get(&id) {
+            Some(Handle::Dir(_)) => {
                 // Directory: return synthetic stat without filesystem I/O.
                 stat.st_mode = 0o040555; // S_IFDIR | r-xr-xr-x
                 stat.st_size = 0;
                 stat.st_nlink = 2;
             }
-            Some(false) => {
+            Some(Handle::File(fh)) => {
                 // File: return synthetic stat from manifest metadata.
-                // NO filesystem I/O — std::fs::metadata() hangs on
-                // Redox when called from within a scheme event loop.
-                let size = self.daemon.handles.file_size(id).unwrap_or(0);
-                stat.st_size = size;
-                // Use 0o100555 for executable, 0o100444 for regular.
-                let executable = match self.daemon.handles.handles.get(&id) {
-                    Some(Handle::File(fh)) => fh.executable,
-                    _ => false,
-                };
+                let executable = fh.executable;
+                stat.st_size = fh.size;
                 stat.st_mode = if executable { 0o100555 } else { 0o100444 };
+                stat.st_nlink = 1;
+            }
+            Some(Handle::Control(_)) => {
+                stat.st_mode = 0o100222; // Write-only.
+                stat.st_size = 0;
                 stat.st_nlink = 1;
             }
             None => return Err(Error::new(EBADF)),
@@ -308,9 +318,8 @@ impl SchemeSync for StoreSchemeHandler {
                 _ => return Ok(buf),
             };
 
-            // Note: we can't load manifests on-demand because db.get()
-            // does filesystem I/O which hangs in Redox scheme daemons.
-            // Manifests are pre-loaded at daemon startup.
+            // Manifests are provided via .control notifications from
+            // snix install (same pattern as profiled). No on-demand I/O.
             let entries = self.daemon.list_from_manifest(
                 store_path_name,
                 subpath,
@@ -349,7 +358,49 @@ impl SchemeSync for StoreSchemeHandler {
     }
 
     fn on_close(&mut self, id: usize) {
-        self.daemon.handles.close(id);
+        if let Some(Handle::Control(ch)) = self.daemon.handles.close(id) {
+            if !ch.buffer.is_empty() {
+                let command = String::from_utf8_lossy(&ch.buffer);
+                // Parse JSON: { "storePath": "/nix/store/...", "files": [...] }
+                match serde_json::from_str::<serde_json::Value>(&command) {
+                    Ok(val) => {
+                        let store_path = val.get("storePath")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("");
+                        let store_path_name = store_path
+                            .strip_prefix(&format!("{}/", self.daemon.config.store_dir))
+                            .unwrap_or(store_path);
+
+                        if let Some(files_val) = val.get("files") {
+                            match serde_json::from_value::<Vec<crate::nar::ManifestEntry>>(
+                                files_val.clone()
+                            ) {
+                                Ok(files) if !files.is_empty() => {
+                                    eprintln!(
+                                        "stored: received manifest for {} ({} entries)",
+                                        store_path_name,
+                                        files.len()
+                                    );
+                                    self.daemon.manifests.insert(
+                                        store_path_name.to_string(),
+                                        files,
+                                    );
+                                }
+                                Ok(_) => {
+                                    eprintln!("stored: received empty manifest for {store_path_name}");
+                                }
+                                Err(e) => {
+                                    eprintln!("stored: failed to parse manifest: {e}");
+                                }
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("stored: failed to parse control command: {e}");
+                    }
+                }
+            }
+        }
     }
 }
 
