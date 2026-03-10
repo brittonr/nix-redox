@@ -22,6 +22,33 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - `let var = $(grep ...)` → "Variable '' does not exist" when grep returns nothing.
 - Use file-based or exit-code-based testing instead.
 
+## Recurring Mistakes (NEW)
+
+### `tail` does not exist on Redox
+- Test scripts using `tail -c 4096 /tmp/log` fail silently — no output.
+- Use `cat` or `head` (from extrautils) instead.
+
+### Cargo build pipe exit codes lost on Redox
+- `cargo build 2>&1 | while read` always exits 0 on Redox (pipe breaks).
+- Use file redirection instead: `cargo build > /tmp/log 2>&1 &`
+- Then `wait $PID` to get cargo's real exit code.
+
+### `mod build_proxy` must be in BOTH lib.rs AND main.rs
+- snix-redox has separate lib and bin crates with their own module trees.
+- Adding a module to lib.rs but not main.rs causes unresolved import errors
+  when the bin crate's modules reference it.
+
+### ld.so argv UTF-8 parsing bug
+- `ld.so: failed to parse argv[N]` when --env-set passes non-ASCII characters.
+- `CARGO_PKG_AUTHORS` with Polish characters (ł, ń) breaks generic-array build.
+- Self-hosting test shows 53/57 pass, 4 fail from this pre-existing bug.
+- Previously masked by pipe exit code bug (test reported 58/58 falsely).
+
+### /etc/snix/config must be read by snix
+- Module system writes `sandbox=disabled` to `/etc/snix/config`.
+- snix previously ignored this — sandbox was always CLI-flag-only.
+- Added `sandbox_disabled_by_config()` to read config + SNIX_NO_SANDBOX env.
+
 ## Active Workarounds (still needed)
 
 ### --env-set for cargo (PERMANENT until relibc DSO environ fix)

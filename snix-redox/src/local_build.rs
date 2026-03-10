@@ -250,9 +250,9 @@ fn build_derivation_inner(
     // Falls back gracefully: if the proxy can't start, the build runs
     // with the old scheme-level-only sandbox (file: included in mkns).
     #[cfg(target_os = "redox")]
-    let _proxy_guard: Option<crate::build_proxy::BuildFsProxy> = None;
+    let mut _proxy_guard: Option<crate::build_proxy::BuildFsProxy> = None;
 
-    if !no_sandbox {
+    if !no_sandbox && !sandbox_disabled_by_config() {
         let primary_out_path = drv
             .outputs
             .get("out")
@@ -913,6 +913,29 @@ pub fn run(
     file: Option<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     run_with_options(expr, file, false)
+}
+
+/// Check if sandbox is disabled by config file or environment variable.
+///
+/// Reads `/etc/snix/config` for `sandbox=disabled` and checks `SNIX_NO_SANDBOX=1`.
+/// Returns true if sandbox should be disabled.
+fn sandbox_disabled_by_config() -> bool {
+    // Environment variable override
+    if std::env::var("SNIX_NO_SANDBOX").unwrap_or_default() == "1" {
+        return true;
+    }
+
+    // Config file: /etc/snix/config
+    if let Ok(contents) = std::fs::read_to_string("/etc/snix/config") {
+        for line in contents.lines() {
+            let line = line.trim();
+            if line == "sandbox=disabled" {
+                return true;
+            }
+        }
+    }
+
+    false
 }
 
 /// `snix build` with sandbox control.

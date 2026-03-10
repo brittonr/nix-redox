@@ -2570,11 +2570,13 @@ let
                       # Build with timeout — this is a BIG compile (168 crates + build-std).
                       # JOBS=1 required: JOBS>1 hangs after ~136 crates due to Redox pipe/
                       # waitpid issues with concurrent child processes. See napkin for details.
+                      #
+                      # IMPORTANT: Use file redirection, NOT pipes. Pipes on Redox break
+                      # with deep process hierarchies (cargo→rustc→cc→lld). The pipe reader
+                      # exits early, losing cargo output and corrupting the exit code.
                       MAX_TIME=1800
-                      cargo build --offline 2>&1 | while IFS= read -r line; do
-                        echo "$line" >> /tmp/snix-build-log
-                        echo "$line"
-                      done &
+                      echo "[snix-build] About to run cargo build..." > /tmp/snix-build-log
+                      cargo build --offline >> /tmp/snix-build-log 2>&1 &
                       PID=$!
                       SECONDS=0
                       LAST_REPORT=0
@@ -2624,8 +2626,8 @@ let
                       end
                     else
                       echo "FUNC_TEST:snix-compile:FAIL:$snix_result"
-                      echo "=== snix build log (last 4KB) ==="
-                      /nix/system/profile/bin/bash -c 'tail -c 4096 /tmp/snix-build-log 2>/dev/null'
+                      echo "=== snix build log ==="
+                      cat /tmp/snix-build-log
                       echo "=== CC wrapper raw args ==="
                       cat /tmp/.cc-wrapper-raw-args
                       echo "=== CC wrapper last error ==="
@@ -2876,6 +2878,12 @@ selfHosting
   # Override boot to use a larger disk (source bundle + build artifacts)
   "/boot" = (selfHosting."/boot" or { }) // {
     diskSizeMB = 8192;
+  };
+
+  # Disable sandbox — per-path proxy is not yet validated for complex
+  # cargo builds with 100+ crates and deep process hierarchies.
+  "/snix" = {
+    sandbox = false;
   };
 
   # Disable interactive login — just run the test script
