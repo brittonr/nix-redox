@@ -11,6 +11,7 @@
 mod activate;
 mod bridge;
 mod bridge_build;
+mod build_proxy;
 mod cache;
 mod cache_source;
 mod channel;

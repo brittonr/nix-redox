@@ -401,6 +401,86 @@ let
         echo "FUNC_TEST:install-uses-profiled:FAIL:no-profile-dir"
     end
 
+    # ════════════════════════════════════════════════════════════
+    # FALLBACK TEST (direct filesystem access)
+    # ════════════════════════════════════════════════════════════
+    # Direct filesystem access to /nix/store/ works independently
+    # of the store: scheme daemon. The daemon is an overlay for
+    # scheme-based access; the underlying redoxfs serves files
+    # directly through the normal file: path.
+
+    if test -n $rg_store_path
+        # Direct filesystem access (not through scheme)
+        if exists -f $rg_store_path/bin/rg
+            $rg_store_path/bin/rg --version > /tmp/fallback-rg ^> /tmp/fallback-rg-err
+            if test $? = 0
+                echo "FUNC_TEST:fallback-direct-access:PASS"
+            else
+                echo "FUNC_TEST:fallback-direct-access:FAIL:rg-exists-but-fails"
+            end
+        else
+            echo "FUNC_TEST:fallback-direct-access:FAIL:file-not-found"
+        end
+    else
+        echo "FUNC_TEST:fallback-direct-access:SKIP"
+    end
+
+    # ════════════════════════════════════════════════════════════
+    # LAZY MANIFEST TEST
+    # ════════════════════════════════════════════════════════════
+    # Delete the extracted store path, then verify the store: scheme
+    # still serves directory listings from its in-memory manifest.
+    # The scheme avoids filesystem I/O in the event loop — it uses
+    # pre-loaded manifest data for directory listings.
+
+    if test -n $rg_store_path
+        # Verify the rg binary exists before deletion
+        if exists -f $rg_store_path/bin/rg
+            # Delete the entire extracted store path
+            rm -rf $rg_store_path
+            if not exists -d $rg_store_path
+                echo "FUNC_TEST:lazy-manifest-deleted:PASS"
+
+                # Directory listings via store: scheme still work
+                # because stored serves them from manifest metadata,
+                # not from the filesystem.
+                ls /scheme/store/$rg_name/bin/ > /tmp/lazy-ls ^> /tmp/lazy-ls-err
+                if test $? = 0
+                    let has_rg = $(cat /tmp/lazy-ls | grep "rg")
+                    if test -n $has_rg
+                        echo "FUNC_TEST:lazy-manifest-listing:PASS"
+                    else
+                        let content = $(cat /tmp/lazy-ls)
+                        echo "FUNC_TEST:lazy-manifest-listing:FAIL:no-rg content=$content"
+                    end
+                else
+                    let err = $(cat /tmp/lazy-ls-err)
+                    echo "FUNC_TEST:lazy-manifest-listing:FAIL:ls-failed err=$err"
+                end
+
+                # Re-install to restore the store path for the fallback test
+                /bin/snix install ripgrep > /tmp/reinstall-rg ^> /tmp/reinstall-rg-err
+                if test $? = 0
+                    echo "FUNC_TEST:lazy-manifest-reinstall:PASS"
+                else
+                    echo "FUNC_TEST:lazy-manifest-reinstall:FAIL"
+                end
+            else
+                echo "FUNC_TEST:lazy-manifest-deleted:FAIL:rm-failed"
+                echo "FUNC_TEST:lazy-manifest-listing:SKIP"
+                echo "FUNC_TEST:lazy-manifest-reinstall:SKIP"
+            end
+        else
+            echo "FUNC_TEST:lazy-manifest-deleted:SKIP"
+            echo "FUNC_TEST:lazy-manifest-listing:SKIP"
+            echo "FUNC_TEST:lazy-manifest-reinstall:SKIP"
+        end
+    else
+        echo "FUNC_TEST:lazy-manifest-deleted:SKIP"
+        echo "FUNC_TEST:lazy-manifest-listing:SKIP"
+        echo "FUNC_TEST:lazy-manifest-reinstall:SKIP"
+    end
+
     echo ""
     echo "FUNC_TESTS_COMPLETE"
     echo ""
