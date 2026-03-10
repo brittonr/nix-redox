@@ -1,13 +1,43 @@
 //! Namespace sandboxing for Redox build isolation.
 //!
-//! Restricts a builder process's scheme namespace so it can only access:
-//! - `file:` — for the output directory ($out) and temp ($TMPDIR)
-//! - `store:` — for reading declared input store paths
-//! - `net:` — only for fixed-output derivations (FODs) that need network
+//! Restricts a builder process's scheme namespace so it can only access
+//! the schemes needed for the build. Uses Redox's native namespace
+//! mechanism (`mkns` + `setns`) — the Redox equivalent of Linux
+//! namespaces + seccomp, but with a single, simpler API.
 //!
-//! Uses Redox's native `setrens` / namespace syscalls to restrict which
-//! schemes the child process can see. This is equivalent to Linux
-//! namespaces + seccomp but with a single mechanism.
+//! ## How it works
+//!
+//! Redox processes access all I/O through *schemes* (`file:`, `net:`,
+//! `display:`, etc.). Each process has a namespace fd that controls
+//! which schemes are visible. `mkns` creates a new namespace containing
+//! only the specified schemes; `setns` switches the current process to
+//! that namespace.
+//!
+//! ## What we restrict
+//!
+//! Normal builds get: `file`, `memory`, `pipe` (minimum viable set).
+//! Fixed-output derivations (FODs) also get `net` for URL fetching.
+//!
+//! Excluded from ALL builds: `display`, `disk`, `irq`, `debug`,
+//! `ptyd`, `audio`, `input`, etc. — a builder should never need these.
+//!
+//! ## Limitations
+//!
+//! Namespace filtering is at the **scheme level**, not per-path within
+//! a scheme. `file:` is either visible or not — we can't restrict it
+//! to just `$out` and `$TMPDIR`. Per-path filtering would require a
+//! proxy scheme daemon (future work).
+//!
+//! The `allowed_input_hashes` field in `SandboxConfig` is collected for
+//! future use when per-hash `store:` filtering becomes possible. For
+//! now, we don't include `store:` in the namespace — builders access
+//! store paths through `file:/nix/store/` which is under `file:`.
+//!
+//! ## Call site
+//!
+//! `setup_build_namespace()` runs in the child process between `fork()`
+//! and `exec()` (via `Command::pre_exec`). On failure, the caller in
+//! `local_build.rs` falls back to unsandboxed execution.
 //!
 //! Feature-gated behind `#[cfg(target_os = "redox")]`.
 //! On other platforms, all functions are no-ops.
@@ -20,6 +50,7 @@ use nix_compat::derivation::Derivation;
 #[derive(Debug)]
 pub struct SandboxConfig {
     /// Store path hashes the builder is allowed to read.
+    /// Collected for future per-hash filtering. Not enforced yet.
     pub allowed_input_hashes: HashSet<String>,
     /// Whether the builder needs network access (FOD).
     pub needs_network: bool,
@@ -31,9 +62,8 @@ pub struct SandboxConfig {
 
 /// Check if a derivation is a fixed-output derivation (FOD).
 ///
-/// FODs have `outputHash`, `outputHashAlgo`, and/or `outputHashMode`
-/// in their environment. They are allowed network access because they
-/// fetch content by URL and verify it by hash.
+/// FODs have `outputHash` in their environment. They are allowed network
+/// access because they fetch content by URL and verify it by hash.
 pub fn is_fixed_output(drv: &Derivation) -> bool {
     drv.environment.contains_key("outputHash")
 }
@@ -54,10 +84,8 @@ pub fn collect_allowed_inputs(drv: &Derivation) -> HashSet<String> {
     }
 
     // Input derivation outputs.
-    // Note: we add the derivation path hashes here. In practice,
-    // the namespace restriction would filter by resolved output
-    // hashes, but we don't have access to KnownPaths in this module.
-    // The caller (local_build.rs) should resolve these before calling.
+    // We add the derivation path hashes here. The caller (local_build.rs)
+    // resolves these to output hashes before passing to setup_build_namespace.
     for input_drv in drv.input_derivations.keys() {
         allowed.insert(nix_compat::nixbase32::encode(input_drv.digest()));
     }
@@ -79,34 +107,86 @@ pub fn config_from_derivation(
     }
 }
 
+/// Schemes that every build needs — without these, processes can't
+/// allocate memory or use pipes for stdout/stderr.
+const REQUIRED_SCHEMES: &[&str] = &["file", "memory", "pipe"];
+
+/// Additional schemes granted to fixed-output derivations.
+const FOD_SCHEMES: &[&str] = &["net"];
+
 /// Set up the build namespace for the current process.
 ///
-/// On Redox: will call `setrens()` to restrict scheme visibility once
-/// the `libredox` crate is added as a target-specific dependency.
+/// On Redox: creates a new namespace via `mkns` containing only the
+/// schemes the builder needs, then switches to it via `setns`.
 /// On other platforms: no-op (returns Ok).
 ///
 /// This MUST be called in the child process between fork() and exec().
 /// The parent process is not affected.
 ///
-/// Redox kernel namespace mechanism (for when this is wired up):
-///   - `setrens(name_ns, scheme_ns)` sets the process's namespace
-///   - `name_ns` controls which named resources are visible
-///   - `scheme_ns` controls which schemes are visible
-///   - 0 means "empty namespace" (nothing visible)
+/// # Scheme visibility
 ///
-/// For build sandboxing, we want:
-///   - `file:` visible (restricted to output + tmp dirs)
-///   - `store:` visible (restricted to allowed input hashes)
-///   - `net:` visible only for FODs
+/// Normal builds:
+///   - `file` — filesystem I/O ($out, $TMPDIR, /nix/store/*)
+///   - `memory` — anonymous memory mappings (required by allocator)
+///   - `pipe` — stdout/stderr/stdin pipes (required by shell/processes)
 ///
-/// Implementation will call `libredox::call::setrens(0, 0)` and fall
-/// back on `ENOSYS`/`EPERM`. Granular per-scheme filtering depends on
-/// kernel support — initially we'd open allowed scheme fds BEFORE
-/// `setrens()`, then pass them to the builder via inherited fds.
-pub fn setup_build_namespace(_config: &SandboxConfig) -> Result<(), SandboxError> {
-    // TODO: On Redox, call libredox::call::setrens(0, 0) to enter a
-    // null namespace. Requires adding `libredox` as a [target.'cfg(target_os = "redox")'.dependencies]
-    // in Cargo.toml. Until then, builds run unsandboxed (current behavior).
+/// Fixed-output derivations (FODs) additionally get:
+///   - `net` — network access for URL fetching
+///
+/// Everything else is excluded: `display`, `disk`, `irq`, `debug`,
+/// `ptyd`, `audio`, `input`, `orbital`, `rand`, etc.
+pub fn setup_build_namespace(config: &SandboxConfig) -> Result<(), SandboxError> {
+    #[cfg(target_os = "redox")]
+    {
+        setup_build_namespace_redox(config)
+    }
+
+    #[cfg(not(target_os = "redox"))]
+    {
+        let _ = config;
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "redox")]
+fn setup_build_namespace_redox(config: &SandboxConfig) -> Result<(), SandboxError> {
+    use ioslice::IoSlice;
+
+    // Build the list of schemes for this build's namespace.
+    let mut scheme_names: Vec<&[u8]> = REQUIRED_SCHEMES
+        .iter()
+        .map(|s| s.as_bytes())
+        .collect();
+
+    if config.needs_network {
+        for s in FOD_SCHEMES {
+            scheme_names.push(s.as_bytes());
+        }
+    }
+
+    let io_slices: Vec<IoSlice> = scheme_names
+        .iter()
+        .map(|name| IoSlice::new(name))
+        .collect();
+
+    // Create a new namespace containing only the listed schemes.
+    // This forks the current namespace fd, keeping only the specified
+    // scheme registrations.
+    let ns_fd = libredox::call::mkns(&io_slices).map_err(|e| {
+        if e.errno() == libredox::errno::ENOSYS {
+            SandboxError::Unavailable
+        } else {
+            SandboxError::SyscallFailed(format!("mkns: {e}"))
+        }
+    })?;
+
+    // Switch the current process to the restricted namespace.
+    // After this, any open() to a scheme not in the namespace will fail
+    // with ENOENT. Already-open fds are unaffected.
+    libredox::call::setns(ns_fd).map_err(|e| {
+        SandboxError::SyscallFailed(format!("setns: {e}"))
+    })?;
+
     Ok(())
 }
 
@@ -122,7 +202,7 @@ pub enum SandboxError {
 impl std::fmt::Display for SandboxError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Unavailable => write!(f, "namespace sandboxing unavailable"),
+            Self::Unavailable => write!(f, "namespace sandboxing unavailable on this kernel"),
             Self::SyscallFailed(msg) => write!(f, "sandbox syscall failed: {msg}"),
         }
     }
@@ -153,10 +233,8 @@ mod tests {
     #[test]
     fn is_fixed_output_true() {
         let mut drv = make_drv();
-        drv.environment.insert(
-            "outputHash".to_string(),
-            "sha256-abc123".into(),
-        );
+        drv.environment
+            .insert("outputHash".to_string(), "sha256-abc123".into());
         assert!(is_fixed_output(&drv));
     }
 
@@ -196,17 +274,28 @@ mod tests {
     #[test]
     fn config_from_derivation_fod() {
         let mut drv = make_drv();
-        drv.environment.insert(
-            "outputHash".to_string(),
-            "sha256-abc".into(),
-        );
+        drv.environment
+            .insert("outputHash".to_string(), "sha256-abc".into());
         let config = config_from_derivation(&drv, "/nix/store/out", "/tmp/build");
 
         assert!(config.needs_network);
     }
 
     #[test]
-    fn setup_namespace_noop_on_linux() {
+    fn required_schemes_has_essentials() {
+        assert!(REQUIRED_SCHEMES.contains(&"file"));
+        assert!(REQUIRED_SCHEMES.contains(&"memory"));
+        assert!(REQUIRED_SCHEMES.contains(&"pipe"));
+    }
+
+    #[test]
+    fn fod_schemes_has_net() {
+        assert!(FOD_SCHEMES.contains(&"net"));
+    }
+
+    #[test]
+    fn setup_namespace_noop_on_non_redox() {
+        // On non-Redox platforms (Linux, macOS), setup is always a no-op.
         let config = SandboxConfig {
             allowed_input_hashes: HashSet::new(),
             needs_network: false,
@@ -214,8 +303,23 @@ mod tests {
             tmp_dir: "/tmp".to_string(),
         };
 
-        // On Linux, this is a no-op.
         let result = setup_build_namespace(&config);
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn normal_build_excludes_net() {
+        let drv = make_drv();
+        let config = config_from_derivation(&drv, "/nix/store/out", "/tmp/build");
+        assert!(!config.needs_network);
+    }
+
+    #[test]
+    fn fod_build_includes_net() {
+        let mut drv = make_drv();
+        drv.environment
+            .insert("outputHash".to_string(), "sha256-abc".into());
+        let config = config_from_derivation(&drv, "/nix/store/out", "/tmp/build");
+        assert!(config.needs_network);
     }
 }

@@ -57,12 +57,13 @@ bytes = "1"
 bstr = "1"
 genawaiter = { version = "0.99.1", default-features = false }
 
-# Redox-only: scheme daemon support (stored, profiled)
+# Redox-only: scheme daemon support (stored, profiled) and sandboxing.
 # These crates use Redox syscalls directly and only compile on Redox.
 [target.'cfg(target_os = "redox")'.dependencies]
 redox-scheme = "0.11"
 redox_syscall = { version = "0.7", features = ["std"] }
-libredox = "0.1"
+libredox = { version = "0.1", features = ["mkns"] }
+ioslice = "0.6"
 
 [dev-dependencies]
 tempfile = "3"

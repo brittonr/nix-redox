@@ -1,7 +1,9 @@
-//! Local unsandboxed build execution for Redox OS.
+//! Local build execution for Redox OS.
 //!
 //! Executes derivation builders directly via `std::process::Command`.
-//! No sandbox, no daemon — just filesystem operations.
+//! On Redox, builds run inside a restricted scheme namespace (sandbox)
+//! that limits I/O to `file`, `memory`, and `pipe` schemes. FODs also
+//! get `net`. Use `--no-sandbox` to disable.
 //!
 //! Build flow:
 //! 1. Evaluate Nix expression → KnownPaths with derivations
