@@ -458,6 +458,14 @@ pkgs.stdenv.mkDerivation {
     # environ entirely.
     python3 ${./patch-rustc-execvpe.py} .
 
+    # Patch: --env-set workaround for env!() macros.
+    # execvpe() handles basic env propagation, but CARGO_PKG_* vars
+    # still don't survive exec() into rustc for env!() compile-time
+    # lookups (e.g., thiserror-impl uses env!("CARGO_PKG_VERSION_PATCH")).
+    # This patch makes cargo also pass env vars via rustc's --env-set
+    # CLI flag, which populates logical_env checked before std::env::var().
+    python3 ${./patch-cargo-env-set.py} .
+
     # Patch 7: cargo-util S_IRWXU type mismatch
     # On Redox, libc::S_IRWXU etc. are i32 (not u32 like Linux).
     # Cargo uses u32::from() which doesn't accept i32.

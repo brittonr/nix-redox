@@ -61,20 +61,18 @@ def patch_do_exec(root_dir):
         #[cfg(target_os = "redox")]
         {
             if let Some(envp) = maybe_envp {
-                extern "C" {
+                unsafe extern "C" {
                     fn execvpe(
                         file: *const libc::c_char,
-                        argv: *const *mut libc::c_char,
-                        envp: *const *mut libc::c_char,
+                        argv: *const *const libc::c_char,
+                        envp: *const *const libc::c_char,
                     ) -> libc::c_int;
                 }
-                unsafe {
-                    execvpe(
-                        self.get_program_cstr().as_ptr(),
-                        self.get_argv().as_ptr(),
-                        envp.as_ptr() as *const *mut libc::c_char,
-                    );
-                }
+                execvpe(
+                    self.get_program_cstr().as_ptr(),
+                    self.get_argv().as_ptr(),
+                    envp.as_ptr(),
+                );
             } else {
                 libc::execvp(
                     self.get_program_cstr().as_ptr(),

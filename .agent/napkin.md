@@ -2060,3 +2060,25 @@
 - **8 new tests** in `file_io_worker::tests`: basic read, offset read, small
   buffer, cached reopen, nonexistent file, preload, multiple files, clean drop.
 - **461 host tests pass** (8 new + 453 existing), 0 failures.
+
+### execvpe Rust 2024 edition compatibility (Mar 9 2026)
+- **`unsafe extern "C"` required**: Rust 2024 edition (library/std uses `--edition=2024`)
+  requires `unsafe` keyword on extern blocks. Plain `extern "C" { ... }` is a compile error.
+- **`*const *const c_char` not `*const *mut c_char`**: `self.get_argv().as_ptr()` returns
+  `*const *const c_char` and `envp.as_ptr()` returns `*const *const c_char`. The extern
+  declaration must match: `argv: *const *const libc::c_char`. The relibc side uses
+  `*const *mut c_char` (C convention), but at ABI level these are identical — the mutability
+  is Rust-only. No cast needed if the extern declaration matches the caller.
+- **`safe fn` not needed**: Since `do_exec` is already `unsafe fn`, the `unsafe extern "C"`
+  block's implicitly-unsafe functions can be called directly without an extra `unsafe` block.
+- **--env-set STILL REQUIRED**: execvpe() handles basic env propagation (49/58 tests pass
+  without --env-set), but `env!("CARGO_PKG_*")` macros in proc-macro crates like
+  `thiserror-impl` still fail. These macros check `logical_env` (populated by `--env-set`)
+  before `std::env::var()`. Without --env-set, thiserror-impl v2.0.18 fails with
+  `env!("CARGO_PKG_VERSION_PATCH") not defined`. With it, 53/57 pass (4 remaining are
+  snix self-compile cargo-build-safe flakiness, not env-related).
+- **Root cause still unknown**: Why does execvpe() work for basic env vars but not
+  CARGO_PKG_* in env!() macros? Hypothesis: env!() is resolved at compile time by rustc's
+  `logical_env` lookup, which only checks `--env-set` entries and the process environment.
+  The process environment may not be fully populated via execvpe() in all code paths
+  (perhaps some DSO initialization issue corrupts the environ pointer after execvpe sets it).
