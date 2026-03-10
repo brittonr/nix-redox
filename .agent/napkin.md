@@ -74,8 +74,18 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Error type: `libredox::error::Error`, errno via `.errno()`, constants in `libredox::errno::*`.
 
 ### snix sandbox implementation
-- Normal builds: `file`, `memory`, `pipe`.
+- Normal builds: `file`, `memory`, `pipe`, `rand`, `null`, `zero`.
 - FODs: also `net`.
 - Falls back on ENOSYS (old kernel) — continues unsandboxed.
 - Runs in `pre_exec` closure (between fork and exec).
 - Per-path filtering (restrict file: to $out+$TMPDIR) needs proxy scheme daemon (future).
+
+## TLS / ring Cross-Compilation
+
+### ring 0.17 from crates.io works for Redox
+- ring 0.17.14 cross-compiles to x86_64-unknown-redox via the Nix CC wrapper.
+- NO need for the Redox fork at gitlab.redox-os.org/redox-os/ring.
+- The Nix build provides the relibc sysroot; ring's build.rs finds it via clang --target.
+- `cargo check --target x86_64-unknown-redox` in devshell FAILS (picks up host glibc) — only Nix build works.
+- ureq 3.0 features = ["rustls"] pulls in rustls 0.23 + ring 0.17 + webpki-roots.
+- Binary size: ~6.6MB statically linked (release + LTO + panic=abort).
