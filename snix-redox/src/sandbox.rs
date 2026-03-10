@@ -15,11 +15,11 @@
 //!
 //! ## What we restrict
 //!
-//! Normal builds get: `file`, `memory`, `pipe` (minimum viable set).
+//! Normal builds get: `file`, `memory`, `pipe`, `rand` (minimum viable set).
 //! Fixed-output derivations (FODs) also get `net` for URL fetching.
 //!
 //! Excluded from ALL builds: `display`, `disk`, `irq`, `debug`,
-//! `ptyd`, `audio`, `input`, etc. — a builder should never need these.
+//! `ptyd`, `audio`, `input`, `orbital`, etc.
 //!
 //! ## Limitations
 //!
@@ -108,8 +108,11 @@ pub fn config_from_derivation(
 }
 
 /// Schemes that every build needs — without these, processes can't
-/// allocate memory or use pipes for stdout/stderr.
-const REQUIRED_SCHEMES: &[&str] = &["file", "memory", "pipe"];
+/// allocate memory, use pipes, or generate random numbers.
+/// `rand` is needed because Rust's getrandom reads from `rand:` on
+/// Redox (provided by randd). Without it, tempfile, hashing with
+/// random seeds, and crypto operations all fail.
+const REQUIRED_SCHEMES: &[&str] = &["file", "memory", "pipe", "rand"];
 
 /// Additional schemes granted to fixed-output derivations.
 const FOD_SCHEMES: &[&str] = &["net"];
@@ -129,12 +132,13 @@ const FOD_SCHEMES: &[&str] = &["net"];
 ///   - `file` — filesystem I/O ($out, $TMPDIR, /nix/store/*)
 ///   - `memory` — anonymous memory mappings (required by allocator)
 ///   - `pipe` — stdout/stderr/stdin pipes (required by shell/processes)
+///   - `rand` — random number generation (required by getrandom/tempfile)
 ///
 /// Fixed-output derivations (FODs) additionally get:
 ///   - `net` — network access for URL fetching
 ///
 /// Everything else is excluded: `display`, `disk`, `irq`, `debug`,
-/// `ptyd`, `audio`, `input`, `orbital`, `rand`, etc.
+/// `ptyd`, `audio`, `input`, `orbital`, etc.
 pub fn setup_build_namespace(config: &SandboxConfig) -> Result<(), SandboxError> {
     #[cfg(target_os = "redox")]
     {
@@ -286,6 +290,7 @@ mod tests {
         assert!(REQUIRED_SCHEMES.contains(&"file"));
         assert!(REQUIRED_SCHEMES.contains(&"memory"));
         assert!(REQUIRED_SCHEMES.contains(&"pipe"));
+        assert!(REQUIRED_SCHEMES.contains(&"rand"));
     }
 
     #[test]
