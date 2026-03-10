@@ -33,9 +33,9 @@ snix-eval = { path = "snix-eval-vendored/snix-eval", default-features = false, f
 nix-compat = { path = "nix-compat-redox", default-features = false, features = ["serde"] }
 
 # === Sync HTTP client (no tokio!) ===
-# Start with no TLS (HTTP only) to avoid ring C compilation.
-# For production: switch to features = ["rustls"] and build with mkUserspace.
-ureq = { version = "3", default-features = false }
+# Uses rustls + ring for TLS (HTTPS support). ring 0.17 cross-compiles to Redox
+# via the Nix CC wrapper (provides relibc sysroot). Root certs from webpki-roots.
+ureq = { version = "3.0", default-features = false, features = ["rustls"] }
 
 # === Compression for NAR files (pure Rust — no C cross-compile issues) ===
 ruzstd = "0.8"
