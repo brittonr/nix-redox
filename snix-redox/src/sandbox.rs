@@ -107,12 +107,14 @@ pub fn config_from_derivation(
     }
 }
 
-/// Schemes that every build needs — without these, processes can't
-/// allocate memory, use pipes, or generate random numbers.
-/// `rand` is needed because Rust's getrandom reads from `rand:` on
-/// Redox (provided by randd). Without it, tempfile, hashing with
-/// random seeds, and crypto operations all fail.
-const REQUIRED_SCHEMES: &[&str] = &["file", "memory", "pipe", "rand"];
+/// Schemes that every build needs.
+/// - `file` — filesystem I/O ($out, $TMPDIR, /nix/store/*)
+/// - `memory` — anonymous memory mappings (required by allocator)
+/// - `pipe` — stdout/stderr/stdin pipes
+/// - `rand` — random number generation (getrandom reads `rand:`)
+/// - `null` — /dev/null (builders redirect stderr there constantly)
+/// - `zero` — /dev/zero (occasionally used for zeroed reads)
+const REQUIRED_SCHEMES: &[&str] = &["file", "memory", "pipe", "rand", "null", "zero"];
 
 /// Additional schemes granted to fixed-output derivations.
 const FOD_SCHEMES: &[&str] = &["net"];
