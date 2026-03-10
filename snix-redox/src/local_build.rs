@@ -241,8 +241,17 @@ fn build_derivation_inner(
     }
 
     // ── 5a. Set up build sandbox ───────────────────────────────────
-    // On Redox, restrict the builder's scheme namespace to only
-    // declared inputs. Falls back gracefully on ENOSYS/EPERM.
+    // On Redox, restrict the builder's scheme namespace AND filesystem
+    // access. Two layers:
+    //   1. Scheme-level: mkns excludes file: from the child namespace
+    //   2. Path-level: a proxy daemon registers as file: in the child
+    //      namespace, filtering I/O to the derivation's declared inputs
+    //
+    // Falls back gracefully: if the proxy can't start, the build runs
+    // with the old scheme-level-only sandbox (file: included in mkns).
+    #[cfg(target_os = "redox")]
+    let _proxy_guard: Option<crate::build_proxy::BuildFsProxy> = None;
+
     if !no_sandbox {
         let primary_out_path = drv
             .outputs
@@ -250,6 +259,16 @@ fn build_derivation_inner(
             .and_then(|o| o.path.as_ref())
             .map(|p| p.to_absolute_path())
             .unwrap_or_default();
+
+        // Build the path-level allow-list from derivation inputs.
+        let allow_list = crate::build_proxy::build_allow_list(
+            drv,
+            known_paths,
+            &primary_out_path,
+            &build_dir.path().to_string_lossy(),
+        );
+
+        // Also build the scheme-level sandbox config (for fallback).
         let sandbox_config = sandbox::config_from_derivation(
             drv,
             &primary_out_path,
@@ -277,28 +296,52 @@ fn build_derivation_inner(
         #[cfg(target_os = "redox")]
         {
             use std::os::unix::process::CommandExt;
-            // SAFETY: setup_build_namespace() only calls Redox syscalls
-            // that are async-signal-safe. The closure runs between fork
-            // and exec in the child process.
-            unsafe {
-                cmd.pre_exec(move || {
-                    match sandbox::setup_build_namespace(&sandbox_config) {
-                        Ok(()) => Ok(()),
-                        Err(sandbox::SandboxError::Unavailable) => {
-                            // Kernel doesn't support namespaces yet — continue unsandboxed.
+
+            // Try to start the per-path proxy. If it works, the proxy
+            // registers as file: in a child namespace that excludes
+            // the real file: scheme. If it fails, fall back to the
+            // scheme-level-only sandbox (includes real file:).
+            match sandbox::setup_proxy_namespace(&sandbox_config, allow_list) {
+                Ok((child_ns_fd, proxy)) => {
+                    // Proxy is running. Child will use setns to switch
+                    // to the namespace where file: = our proxy.
+                    _proxy_guard = Some(proxy);
+                    unsafe {
+                        cmd.pre_exec(move || {
+                            libredox::call::setns(child_ns_fd).map_err(|e| {
+                                std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    format!("setns: {e}"),
+                                )
+                            })?;
                             Ok(())
-                        }
-                        Err(e) => {
-                            eprintln!("warning: sandbox setup failed: {e}");
-                            // Continue unsandboxed rather than failing the build.
-                            Ok(())
-                        }
+                        });
                     }
-                });
+                }
+                Err(e) => {
+                    eprintln!("warning: per-path proxy failed ({e}), falling back to scheme-level sandbox");
+                    // Fallback: use the old scheme-level sandbox (file: included).
+                    unsafe {
+                        cmd.pre_exec(move || {
+                            match sandbox::setup_build_namespace(&sandbox_config) {
+                                Ok(()) => Ok(()),
+                                Err(sandbox::SandboxError::Unavailable) => Ok(()),
+                                Err(e) => {
+                                    eprintln!("warning: sandbox setup failed: {e}");
+                                    Ok(())
+                                }
+                            }
+                        });
+                    }
+                }
             }
         }
+
         #[cfg(not(target_os = "redox"))]
-        let _ = sandbox_config;
+        {
+            let _ = sandbox_config;
+            let _ = allow_list;
+        }
     }
 
     // On Redox, cmd.output() creates pipes and reads with read2().
@@ -330,6 +373,15 @@ fn build_derivation_inner(
             String::from_utf8_lossy(&output.stderr).into_owned(),
         )
     };
+
+    // ── 5b. Shut down the filesystem proxy ───────────────────────────
+    // The builder has exited. Shut down the proxy thread (if running)
+    // before checking results. This closes the scheme socket and joins
+    // the thread. Must happen even on build failure.
+    #[cfg(target_os = "redox")]
+    if let Some(proxy) = _proxy_guard.take() {
+        proxy.shutdown();
+    }
 
     if !status.success() {
         return Err(BuildError::BuildFailed {

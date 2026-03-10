@@ -1,43 +1,39 @@
-//! Namespace sandboxing for Redox build isolation.
+//! Build sandboxing for Redox OS.
 //!
-//! Restricts a builder process's scheme namespace so it can only access
-//! the schemes needed for the build. Uses Redox's native namespace
-//! mechanism (`mkns` + `setns`) — the Redox equivalent of Linux
-//! namespaces + seccomp, but with a single, simpler API.
+//! Two layers of isolation for builder processes:
 //!
-//! ## How it works
+//! ## Layer 1: Scheme-level namespace filtering
 //!
-//! Redox processes access all I/O through *schemes* (`file:`, `net:`,
-//! `display:`, etc.). Each process has a namespace fd that controls
-//! which schemes are visible. `mkns` creates a new namespace containing
-//! only the specified schemes; `setns` switches the current process to
-//! that namespace.
+//! Uses Redox's `mkns`/`setns` to control which schemes a builder can
+//! access. Blocks `display:`, `disk:`, `irq:`, `audio:`, etc.
 //!
-//! ## What we restrict
+//! ## Layer 2: Per-path filesystem proxy (build_proxy module)
 //!
-//! Normal builds get: `file`, `memory`, `pipe`, `rand` (minimum viable set).
-//! Fixed-output derivations (FODs) also get `net` for URL fetching.
+//! A proxy daemon registers as `file:` in the builder's namespace,
+//! filtering every filesystem operation against an allow-list of
+//! declared inputs, `$out`, and `$TMPDIR`. The real `file:` scheme
+//! (redoxfs) is excluded from the builder's namespace — all file I/O
+//! routes through the proxy.
 //!
-//! Excluded from ALL builds: `display`, `disk`, `irq`, `debug`,
-//! `ptyd`, `audio`, `input`, `orbital`, etc.
+//! ## Sandbox modes
 //!
-//! ## Limitations
+//! | Mode | file: scheme | Filesystem access |
+//! |------|-------------|-------------------|
+//! | Full (proxy) | proxy daemon | allow-list only |
+//! | Fallback (scheme-only) | real redoxfs | everything |
+//! | Unsandboxed | real redoxfs | everything |
 //!
-//! Namespace filtering is at the **scheme level**, not per-path within
-//! a scheme. `file:` is either visible or not — we can't restrict it
-//! to just `$out` and `$TMPDIR`. Per-path filtering would require a
-//! proxy scheme daemon (future work).
+//! `local_build.rs` tries the full proxy first. If that fails (kernel
+//! doesn't support `register_scheme_to_ns` for "file", or proxy thread
+//! setup fails), it falls back to scheme-only sandboxing. If that also
+//! fails (`ENOSYS`), it runs unsandboxed.
 //!
-//! The `allowed_input_hashes` field in `SandboxConfig` is collected for
-//! future use when per-hash `store:` filtering becomes possible. For
-//! now, we don't include `store:` in the namespace — builders access
-//! store paths through `file:/nix/store/` which is under `file:`.
+//! ## Call sites
 //!
-//! ## Call site
-//!
-//! `setup_build_namespace()` runs in the child process between `fork()`
-//! and `exec()` (via `Command::pre_exec`). On failure, the caller in
-//! `local_build.rs` falls back to unsandboxed execution.
+//! - `setup_proxy_namespace()` — creates child namespace + starts proxy
+//!   (called from `local_build.rs` before fork)
+//! - `setup_build_namespace()` — legacy scheme-only sandbox, runs in
+//!   child's `pre_exec` (fallback path)
 //!
 //! Feature-gated behind `#[cfg(target_os = "redox")]`.
 //! On other platforms, all functions are no-ops.
@@ -107,7 +103,10 @@ pub fn config_from_derivation(
     }
 }
 
-/// Schemes that every build needs.
+/// Schemes that every build needs (legacy: includes `file`).
+///
+/// Used by `setup_build_namespace()` as a fallback when the per-path
+/// proxy is unavailable. Grants full filesystem access.
 /// - `file` — filesystem I/O ($out, $TMPDIR, /nix/store/*)
 /// - `memory` — anonymous memory mappings (required by allocator)
 /// - `pipe` — stdout/stderr/stdin pipes
@@ -115,6 +114,14 @@ pub fn config_from_derivation(
 /// - `null` — /dev/null (builders redirect stderr there constantly)
 /// - `zero` — /dev/zero (occasionally used for zeroed reads)
 const REQUIRED_SCHEMES: &[&str] = &["file", "memory", "pipe", "rand", "null", "zero"];
+
+/// Schemes for proxy-based sandbox (NO `file` — proxy registers as `file`).
+///
+/// Used by `setup_proxy_namespace()`. The proxy daemon registers itself
+/// as `file` in this namespace, so builders get filtered filesystem
+/// access instead of the raw redoxfs `file:` scheme.
+#[cfg(target_os = "redox")]
+const PROXY_REQUIRED_SCHEMES: &[&str] = &["memory", "pipe", "rand", "null", "zero"];
 
 /// Additional schemes granted to fixed-output derivations.
 const FOD_SCHEMES: &[&str] = &["net"];
@@ -194,6 +201,61 @@ fn setup_build_namespace_redox(config: &SandboxConfig) -> Result<(), SandboxErro
     })?;
 
     Ok(())
+}
+
+/// Create a child namespace with a per-path filesystem proxy.
+///
+/// This is the enhanced sandbox: instead of including `file:` in the
+/// child namespace (which grants access to the entire filesystem), we
+/// exclude `file:` and register a proxy daemon as `file:` in the child
+/// namespace. The proxy filters I/O against the allow-list.
+///
+/// Returns `(child_ns_fd, BuildFsProxy)` on success. The caller must:
+/// 1. Use `child_ns_fd` in `pre_exec` (child calls `setns(child_ns_fd)`)
+/// 2. Keep the `BuildFsProxy` alive until the builder exits
+/// 3. Call `proxy.shutdown()` after the builder exits
+///
+/// On failure, the caller should fall back to `setup_build_namespace()`
+/// which includes the real `file:` scheme (less restrictive but functional).
+#[cfg(target_os = "redox")]
+pub fn setup_proxy_namespace(
+    config: &SandboxConfig,
+    allow_list: crate::build_proxy::AllowList,
+) -> Result<(usize, crate::build_proxy::BuildFsProxy), SandboxError> {
+    use ioslice::IoSlice;
+
+    // Build the scheme list WITHOUT file:.
+    // The proxy will register as file: in this namespace.
+    let mut scheme_names: Vec<&[u8]> = PROXY_REQUIRED_SCHEMES
+        .iter()
+        .map(|s| s.as_bytes())
+        .collect();
+
+    if config.needs_network {
+        for s in FOD_SCHEMES {
+            scheme_names.push(s.as_bytes());
+        }
+    }
+
+    let io_slices: Vec<IoSlice> = scheme_names
+        .iter()
+        .map(|name| IoSlice::new(name))
+        .collect();
+
+    // Create the child namespace (no file: scheme).
+    let child_ns_fd = libredox::call::mkns(&io_slices).map_err(|e| {
+        if e.errno() == libredox::errno::ENOSYS {
+            SandboxError::Unavailable
+        } else {
+            SandboxError::SyscallFailed(format!("mkns (proxy): {e}"))
+        }
+    })?;
+
+    // Start the proxy and register it as file: in the child namespace.
+    let proxy = crate::build_proxy::BuildFsProxy::start(child_ns_fd, allow_list)
+        .map_err(|e| SandboxError::SyscallFailed(format!("proxy start: {e}")))?;
+
+    Ok((child_ns_fd, proxy))
 }
 
 /// Errors from sandbox setup.
@@ -328,5 +390,45 @@ mod tests {
             .insert("outputHash".to_string(), "sha256-abc".into());
         let config = config_from_derivation(&drv, "/nix/store/out", "/tmp/build");
         assert!(config.needs_network);
+    }
+
+    // ── Proxy scheme list tests ────────────────────────────────────────
+
+    #[test]
+    fn required_schemes_includes_file() {
+        // Legacy fallback list includes file: for full access.
+        assert!(REQUIRED_SCHEMES.contains(&"file"));
+        assert!(REQUIRED_SCHEMES.contains(&"memory"));
+        assert!(REQUIRED_SCHEMES.contains(&"pipe"));
+        assert!(REQUIRED_SCHEMES.contains(&"rand"));
+        assert!(REQUIRED_SCHEMES.contains(&"null"));
+        assert!(REQUIRED_SCHEMES.contains(&"zero"));
+    }
+
+    #[cfg(target_os = "redox")]
+    #[test]
+    fn proxy_schemes_excludes_file() {
+        // Proxy list does NOT include file: — the proxy registers as file:.
+        assert!(!PROXY_REQUIRED_SCHEMES.contains(&"file"));
+        assert!(PROXY_REQUIRED_SCHEMES.contains(&"memory"));
+        assert!(PROXY_REQUIRED_SCHEMES.contains(&"pipe"));
+        assert!(PROXY_REQUIRED_SCHEMES.contains(&"rand"));
+        assert!(PROXY_REQUIRED_SCHEMES.contains(&"null"));
+        assert!(PROXY_REQUIRED_SCHEMES.contains(&"zero"));
+    }
+
+    #[cfg(target_os = "redox")]
+    #[test]
+    fn proxy_schemes_is_required_minus_file() {
+        // PROXY_REQUIRED_SCHEMES should be exactly REQUIRED_SCHEMES minus "file".
+        let required: HashSet<&str> = REQUIRED_SCHEMES.iter().copied().collect();
+        let proxy: HashSet<&str> = PROXY_REQUIRED_SCHEMES.iter().copied().collect();
+
+        let diff: HashSet<&str> = required.difference(&proxy).copied().collect();
+        assert_eq!(diff.len(), 1);
+        assert!(diff.contains("file"));
+
+        let extra: HashSet<&str> = proxy.difference(&required).copied().collect();
+        assert!(extra.is_empty(), "proxy has schemes not in required: {extra:?}");
     }
 }

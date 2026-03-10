@@ -4,9 +4,6 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Recurring Mistakes (STILL catch me)
 
-### delegate_task workers don't persist file changes
-- Documented 6+ times across sessions. ALWAYS implement directly or verify with `git status` / `ls` after.
-
 ### New files must be `git add`ed for flakes
 - Every session. New `.nix` or `.rs` files invisible to `nix build` until tracked.
 
