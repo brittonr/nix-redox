@@ -455,12 +455,8 @@ pkgs.stdenv.mkDerivation {
     # pointer then calls execvp(). On Redox, the global pointer update
     # doesn't reliably reach relibc's execv() reader. Fix: call execvpe()
     # which passes the envp directly to execve(), bypassing the global
-    # environ entirely. This replaces the --env-set workaround.
+    # environ entirely.
     python3 ${./patch-rustc-execvpe.py} .
-
-    # LEGACY: --env-set workaround (kept for defense-in-depth until
-    # execvpe is verified end-to-end in the self-hosting test suite).
-    python3 ${./patch-cargo-env-set.py} .
 
     # Patch 7: cargo-util S_IRWXU type mismatch
     # On Redox, libc::S_IRWXU etc. are i32 (not u32 like Linux).
