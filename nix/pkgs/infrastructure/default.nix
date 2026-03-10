@@ -175,6 +175,21 @@ in
         ;
     };
 
+  # Standalone HTTP cache server for interactive use
+  serveCache = import ./serve-cache.nix { inherit pkgs lib; };
+
+  # HTTPS upstream cache test factory - tests snix fetch from cache.nixos.org over TLS
+  mkHttpsCacheTest =
+    { diskImage, bootloader }:
+    import ./https-cache-test.nix {
+      inherit
+        pkgs
+        lib
+        diskImage
+        bootloader
+        ;
+    };
+
   # Bridge rebuild test factory - end-to-end test with REAL build-bridge daemon
   # Guest sends config, host builds via nix, exports to shared cache, guest activates
   mkBridgeRebuildTest =
