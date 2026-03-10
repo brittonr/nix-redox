@@ -1,16 +1,18 @@
-# Build a small test binary cache for network install testing.
+# Build a test binary cache for network install testing.
 #
 # Creates a binary cache directory with:
 #   packages.json        — package index
 #   {hash}.narinfo       — per-path metadata
-#   nar/{hash}.nar.zst   — compressed NAR files
+#   {sha256hex}.nar.zst  — compressed NAR files (flat layout)
 #
-# Contains a mock "mock-hello" package — a simple shell script.
-# Exercises the full NAR/narinfo pipeline that snix consumes.
+# Contains mock-hello (trivial shell script) and ripgrep (real cross-compiled
+# Rust binary, ~6MB). Exercises the full NAR/narinfo pipeline that snix consumes.
 
 {
   pkgs,
   lib,
+  # Cross-compiled ripgrep for Redox (optional — omit to build with mock-hello only)
+  ripgrep ? null,
 }:
 
 let
@@ -27,26 +29,37 @@ let
   '';
 
   # Package info JSON consumed by build-binary-cache.py
-  packageInfo = pkgs.writeText "test-package-info.json" (
-    builtins.toJSON [
-      {
-        name = "mock-hello";
-        storePath = builtins.unsafeDiscardStringContext "${mockHello}";
-        pname = "mock-hello";
-        version = "1.0";
-      }
-    ]
-  );
+  packageEntries = [
+    {
+      name = "mock-hello";
+      storePath = builtins.unsafeDiscardStringContext "${mockHello}";
+      pname = "mock-hello";
+      version = "1.0";
+    }
+  ]
+  ++ lib.optionals (ripgrep != null) [
+    {
+      name = "ripgrep";
+      storePath = builtins.unsafeDiscardStringContext "${ripgrep}";
+      pname = "ripgrep";
+      version = "unstable";
+    }
+  ];
+
+  packageInfo = pkgs.writeText "test-package-info.json" (builtins.toJSON packageEntries);
 in
 pkgs.runCommand "test-binary-cache"
-  {
-    nativeBuildInputs = [
-      pkgs.python3
-      pkgs.zstd
-    ];
-    # Make mockHello available in sandbox
-    inherit mockHello;
-  }
+  (
+    {
+      nativeBuildInputs = [
+        pkgs.python3
+        pkgs.zstd
+      ];
+      # Make packages available in sandbox
+      inherit mockHello;
+    }
+    // lib.optionalAttrs (ripgrep != null) { inherit ripgrep; }
+  )
   ''
     mkdir -p $out
 

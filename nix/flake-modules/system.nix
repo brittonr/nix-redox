@@ -237,6 +237,7 @@ let
   };
   testBinaryCache = import ../pkgs/infrastructure/test-binary-cache.nix {
     inherit pkgs lib;
+    ripgrep = self'.packages.ripgrep or null;
   };
   networkInstallTest = mkNetworkInstallTest {
     diskImage = networkInstallTestSystem.diskImage;
@@ -312,6 +313,20 @@ let
     diskImage = bridgeRebuildTestSystem.diskImage;
     inherit buildBridge;
   };
+
+  # HTTPS upstream cache test: tests snix fetch from cache.nixos.org over TLS
+  mkHttpsCacheTest = modularPkgs.infrastructure.mkHttpsCacheTest;
+  httpsCacheTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/https-cache-test.nix ];
+    inherit extraPkgs;
+  };
+  httpsCacheTest = mkHttpsCacheTest {
+    diskImage = httpsCacheTestSystem.diskImage;
+    inherit bootloader;
+  };
+
+  # Standalone HTTP cache server
+  serveCache = modularPkgs.infrastructure.serveCache;
 
   # redox-rebuild CLI tool
   redoxRebuild = import ../pkgs/infrastructure/redox-rebuild.nix {
@@ -414,6 +429,11 @@ in
 
     redox-scheme-native-test = schemeNativeTestSystem.diskImage;
     scheme-native-test = schemeNativeTest;
+
+    redox-https-cache-test = httpsCacheTestSystem.diskImage;
+    inherit httpsCacheTest;
+
+    serve-cache = serveCache;
 
     redox-rebuild = redoxRebuild;
     push-to-redox = pushToRedox;

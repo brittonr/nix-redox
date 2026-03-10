@@ -161,6 +161,36 @@ let
         echo "FUNC_TEST:net-show:FAIL:no-output-file"
     end
 
+    # ── Test: install ripgrep from remote cache ────────────────
+    snix install ripgrep --cache-url $CACHE_URL ^> /tmp/rg_install_err
+    if exists -f /nix/var/snix/profiles/default/bin/rg
+        echo "FUNC_TEST:net-install-ripgrep:PASS"
+        echo "  ripgrep installed to profile"
+    else
+        echo "FUNC_TEST:net-install-ripgrep:FAIL:binary-not-in-profile"
+        if exists -f /tmp/rg_install_err
+            echo "  stderr: $(cat /tmp/rg_install_err)"
+        end
+    end
+
+    # ── Test: ripgrep binary executes ──────────────────────────
+    if exists -f /nix/var/snix/profiles/default/bin/rg
+        /nix/var/snix/profiles/default/bin/rg --version > /tmp/rg_version_out
+        if exists -f /tmp/rg_version_out
+            let rg_out = $(cat /tmp/rg_version_out)
+            if not test $rg_out = ""
+                echo "FUNC_TEST:net-ripgrep-runs:PASS"
+                echo "  Output: $rg_out"
+            else
+                echo "FUNC_TEST:net-ripgrep-runs:FAIL:no-output"
+            end
+        else
+            echo "FUNC_TEST:net-ripgrep-runs:FAIL:no-output-file"
+        end
+    else
+        echo "FUNC_TEST:net-ripgrep-runs:FAIL:binary-missing"
+    end
+
     echo ""
     echo "FUNC_TESTS_COMPLETE"
   '';

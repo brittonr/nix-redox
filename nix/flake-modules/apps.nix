@@ -173,6 +173,18 @@
       meta.description = "End-to-end test: guest sends config, host builds via nix, guest activates";
     };
 
+    https-cache-test = {
+      type = "app";
+      program = "${self'.packages.httpsCacheTest}/bin/https-cache-test";
+      meta.description = "Test snix HTTPS fetch from cache.nixos.org via QEMU SLiRP";
+    };
+
+    serve-cache = {
+      type = "app";
+      program = "${self'.packages.serve-cache}/bin/serve-cache";
+      meta.description = "Serve a Nix binary cache directory over HTTP";
+    };
+
     redox-rebuild = {
       type = "app";
       program = "${self'.packages.redox-rebuild}/bin/redox-rebuild";
