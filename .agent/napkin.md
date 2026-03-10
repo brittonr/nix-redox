@@ -2111,3 +2111,37 @@
   .control notifications instead.
 - **PathInfoDb.dir() accessor added**: Needed for `load_manifest_via_worker` to
   find the right PathInfoDb directory (not hardcoded global path).
+
+### Profiled execution test fix (Mar 9 2026)
+- **Root cause of SKIP**: `rg-from-profile-works` tested `/nix/var/snix/profiles/default/bin/rg`
+  (filesystem symlinks). When profiled runs as a scheme daemon, it serves content through
+  `profile:` scheme only — no filesystem symlinks created. Path doesn't exist → SKIP.
+- **Fix**: Replaced with two tests: `rg-from-store-executes` (runs rg via store path, checks
+  output contains "ripgrep") and `store-scheme-file-read` (reads rg binary bytes through
+  `/scheme/store/{hash}/bin/rg` via cat + wc -c, verifies size > 0).
+- The store path always exists on disk and is executable — no scheme dependency for exec.
+- Added comment in test explaining scheme-vs-filesystem distinction.
+- Test count: 22 unique tests (was 20 pass + 1 skip; now 22 pass, 0 skip, 0 fail).
+  The "23" earlier count was inflated by `<name>` placeholder in file header comments.
+
+### --env-set workaround disposition (Mar 9 2026)
+- **Decision**: PERMANENT (until upstream relibc fix).
+- **Evidence**: Mar 9 testing showed 49/58 pass without --env-set, 9 fail. All failures
+  in proc-macro crates using `env!("CARGO_PKG_*")` (thiserror-impl, serde_derive).
+- **Root cause**: DSO-linked rustc (librustc_driver.so) has separate relibc statics.
+  The envp passed by execvpe() may not reach the DSO's environ reader. env!() checks
+  logical_env (--env-set) before std::env::var().
+- **Removal condition**: Fix DSO environ initialization in relibc so all loaded .so
+  files share the same environ pointer as the main binary.
+- **Updated rustc-redox.nix** with expanded comment documenting the permanent rationale,
+  failure counts, and removal condition.
+
+### README rewrite (Mar 9 2026)
+- Full rewrite from 230 lines to 420+ lines covering all current features.
+- Added sections: snix (eval, build, install, scheme daemons, flake installables),
+  self-hosting (what works, known limits, test count), build bridge (virtio-fs
+  architecture, push-to-redox, network cache), redox-rebuild CLI.
+- Updated package table (38→48 packages), running modes (6 runners), test counts
+  (464 host, 163 nix checks, 133 functional, 66 self-hosting, 23 scheme-native,
+  8 network, 30 bridge).
+- Architecture section updated with C libraries, LLVM toolchain, snix-redox/ dir.

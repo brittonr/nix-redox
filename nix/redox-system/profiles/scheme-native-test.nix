@@ -248,16 +248,48 @@ let
         echo "FUNC_TEST:profiled-bin-has-rg:FAIL:ls-failed err=$err"
     end
 
-    # ── Test: rg binary works from profile ─────────────────────
-    if exists -f /nix/var/snix/profiles/default/bin/rg
-        /nix/var/snix/profiles/default/bin/rg --version > /tmp/rg-ver ^> /tmp/rg-ver-err
+    # ── Test: rg binary executes via store path ─────────────────
+    # When profiled runs as a scheme daemon, profile content is served
+    # through the profile: scheme (/scheme/profile/default/bin/rg), NOT
+    # as filesystem symlinks at /nix/var/snix/profiles/default/bin/.
+    # Execution goes through the store path, which always exists on disk.
+    if test -n $rg_store_path
+        $rg_store_path/bin/rg --version > /tmp/rg-ver ^> /tmp/rg-ver-err
         if test $? = 0
-            echo "FUNC_TEST:rg-from-profile-works:PASS"
+            grep "ripgrep" /tmp/rg-ver > /dev/null ^> /dev/null
+            if test $? = 0
+                echo "FUNC_TEST:rg-from-store-executes:PASS"
+            else
+                let ver = $(cat /tmp/rg-ver)
+                echo "FUNC_TEST:rg-from-store-executes:FAIL:no-ripgrep-in-output ver=$ver"
+            end
         else
-            echo "FUNC_TEST:rg-from-profile-works:FAIL:rg-failed"
+            let err = $(cat /tmp/rg-ver-err)
+            echo "FUNC_TEST:rg-from-store-executes:FAIL:rg-failed err=$err"
         end
     else
-        echo "FUNC_TEST:rg-from-profile-works:SKIP"
+        echo "FUNC_TEST:rg-from-store-executes:SKIP:no-store-path"
+    end
+
+    # ── Test: store scheme serves rg binary content ────────────
+    # Verify stored can serve full binary content (not just directory
+    # listings) for a dynamically-installed package.
+    if test -n $rg_name
+        cat /scheme/store/$rg_name/bin/rg > /tmp/rg-scheme-bin ^> /tmp/rg-scheme-bin-err
+        if test $? = 0
+            let rg_size = $(wc -c < /tmp/rg-scheme-bin)
+            if test $rg_size -gt 0
+                echo "FUNC_TEST:store-scheme-file-read:PASS"
+                echo "  rg binary size via scheme: $rg_size bytes"
+            else
+                echo "FUNC_TEST:store-scheme-file-read:FAIL:zero-bytes"
+            end
+        else
+            let err = $(cat /tmp/rg-scheme-bin-err)
+            echo "FUNC_TEST:store-scheme-file-read:FAIL:cat-failed err=$err"
+        end
+    else
+        echo "FUNC_TEST:store-scheme-file-read:SKIP:no-rg-name"
     end
 
     # ════════════════════════════════════════════════════════════

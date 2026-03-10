@@ -458,12 +458,29 @@ pkgs.stdenv.mkDerivation {
     # environ entirely.
     python3 ${./patch-rustc-execvpe.py} .
 
-    # Patch: --env-set workaround for env!() macros.
-    # execvpe() handles basic env propagation, but CARGO_PKG_* vars
-    # still don't survive exec() into rustc for env!() compile-time
-    # lookups (e.g., thiserror-impl uses env!("CARGO_PKG_VERSION_PATCH")).
-    # This patch makes cargo also pass env vars via rustc's --env-set
-    # CLI flag, which populates logical_env checked before std::env::var().
+    # Patch: --env-set workaround for env!() macros (PERMANENT).
+    #
+    # execvpe() (patched above) fixes basic env propagation through exec(),
+    # but CARGO_PKG_* vars still don't reach rustc's env!() lookup when
+    # compiling proc-macro crates. Without this patch, 9/58 self-hosting
+    # tests fail — specifically proc-macros that use env!("CARGO_PKG_*")
+    # (e.g., thiserror-impl v2.0.18 fails with "CARGO_PKG_VERSION_PATCH
+    # not defined at compile time").
+    #
+    # Root cause: env!() resolves at compile time via rustc's logical_env
+    # (populated by --env-set) before falling back to std::env::var().
+    # Even with execvpe(), the CARGO_PKG_* env vars don't appear in the
+    # rustc child process environment during proc-macro compilation.
+    # Hypothesis: DSO-linked rustc (librustc_driver.so) has a separate
+    # relibc static that doesn't pick up the envp from execvpe().
+    #
+    # This patch makes cargo pass env vars via --env-set in addition to
+    # Command::env(), ensuring rustc sees them in logical_env regardless
+    # of whether the process environment propagates correctly.
+    #
+    # Removal condition: fix DSO environ initialization in relibc so that
+    # all loaded .so files share the same environ pointer as the main binary.
+    # Until then, --env-set is required for proc-macro compilation.
     python3 ${./patch-cargo-env-set.py} .
 
     # Patch 7: cargo-util S_IRWXU type mismatch
