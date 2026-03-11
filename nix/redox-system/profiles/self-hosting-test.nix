@@ -2886,7 +2886,7 @@ let
                           TIMEOUT=600
                           while kill -0 $PID 2>/dev/null; do
                             if [ $SECONDS -ge $TIMEOUT ]; then
-                              echo "FUNC_TEST:parallel-jobs2:FAIL:timeout after ${TIMEOUT}s"
+                              echo "FUNC_TEST:parallel-jobs2:FAIL:timeout after ''${TIMEOUT}s"
                               kill $PID 2>/dev/null; wait $PID 2>/dev/null
                               kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
                               rm -rf /tmp/test-j2 /tmp/cargo-home-j2
@@ -2898,7 +2898,7 @@ let
                           RC=$?
                           if [ $RC -eq 0 ]; then
                             echo "FUNC_TEST:parallel-jobs2:PASS"
-                            echo "  JOBS=2 completed in ${SECONDS}s"
+                            echo "  JOBS=2 completed in ''${SECONDS}s"
                           else
                             echo "FUNC_TEST:parallel-jobs2:FAIL:exit=$RC"
                             cat /tmp/j2-out 2>/dev/null | head -10

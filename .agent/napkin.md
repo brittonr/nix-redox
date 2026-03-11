@@ -66,6 +66,15 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Verified in functional-test VM: clock-monotonic, timed-wait-returns, timed-wait-duration all PASS.
 - No `sleep` binary exists (not compiled in uutils), but `read -t N` works in bash.
 
+### Self-hosting test heredoc breakage (pre-existing)
+- 5 tests fail due to bash heredoc terminators broken by Nix `''` string indentation stripping:
+  real-program (RUSTEOF), multifile-build (LIBEOF), buildscript (BUILDEOF),
+  snix-compile (CARGOEOF), ripgrep (CFGEOF).
+- Root cause: Nix strips minimum indentation from `''` strings. Heredoc terminators must be at
+  exactly 0-indent-after-stripping for bash to find them.
+- Not related to env-set — discovered during 2026-03-11 validation run.
+- Fix: rewrite these test sections to use printf/echo instead of heredocs, or fix indentation.
+
 ## Active Workarounds (still needed)
 
 ### --env-set for cargo (PERMANENT until relibc DSO environ fix)
@@ -87,11 +96,17 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Active Bugs (not yet fixed)
 
-### Redox exec() env propagation — PARTIALLY FIXED
+### Redox exec() env propagation — PARTIALLY FIXED, --env-set STILL REQUIRED
 - `__relibc_init_environ` exists upstream in `src/start.rs` and `src/ld_so/linker.rs`.
 - ld.so injects parent environ into each DSO (including dlopen'd proc-macro .so files).
 - Basic env propagation through bash→bash exec verified working (2026-03-11).
-- `--env-set` workaround still active — needs validation with proc-macro crates (thiserror-impl, serde_derive) without it before removal.
+- **Validated 2026-03-11**: Removed `--env-set` patch and ran full self-hosting test.
+  - `buildrs` test: `option_env!("BUILD_TARGET")` returns None (`cfg=yes,env=missing,runtime=None`)
+  - Confirms: `Command::env()` vars don't reach rustc's `env!()`/`option_env!()` expansion
+  - Both compile-time (logical_env) and runtime (`std::env::var`) paths fail
+  - Root cause: DSO-linked rustc (librustc_driver.so) has separate relibc static with its own environ
+  - `--env-set` bypasses this by populating rustc's logical_env directly via CLI args
+  - **Removal condition unchanged**: fix DSO environ initialization so all .so files share environ pointer
 
 ### Kernel DMA page allocator bug
 - `zeroed_phys_contiguous` only initializes `span.count` pages, not full 2^order allocation.

@@ -481,6 +481,12 @@ pkgs.stdenv.mkDerivation {
     # Removal condition: fix DSO environ initialization in relibc so that
     # all loaded .so files share the same environ pointer as the main binary.
     # Until then, --env-set is required for proc-macro compilation.
+    #
+    # Validated 2026-03-11: Removed this patch and ran self-hosting test.
+    # Result: option_env!("BUILD_TARGET") returns None in buildrs test
+    # (cfg=yes,env=missing,runtime=None). Confirms Command::env() vars
+    # don't reach rustc's logical_env on Redox. DSO environ isolation is
+    # the root cause. --env-set remains necessary.
     python3 ${./patch-cargo-env-set.py} .
 
     # Patch 7: cargo-util S_IRWXU type mismatch
