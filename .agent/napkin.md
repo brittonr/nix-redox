@@ -14,6 +14,14 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### Heredoc indentation in Nix `''` strings
 - ONE column-0 line breaks ALL heredoc terminators. Every line needs ≥N spaces for N-space stripping.
 - `nix fmt` can silently re-indent and break heredocs. Verify after formatting.
+- **Inline Python in Nix strings breaks too**: `python3 -c "..."` and `python3 << 'EOF'` heredocs
+  get their indentation shifted by Nix stripping. Extract to .py files instead.
+- The heredoc fix commit (dfc720d1) fixed terminators but broke Python CONTENT indentation in
+  base.nix, bash-redox.nix, git-redox.nix, rustc-redox.nix. All extracted to .py files now.
+
+### Comments containing `''` in Nix strings
+- `# heredocs in Nix '' strings break` → the `''` terminates the Nix string.
+- Reword comments to avoid consecutive single quotes.
 
 ### Vendor hash must update in BOTH files
 - `snix.nix` AND `snix-source-bundle.nix` need the same hash when Cargo.lock changes.
@@ -112,8 +120,12 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Buddy allocator corruption on dealloc. Workaround: `round_to_p2_pages()` + `mem::forget()`.
 - Upstream kernel fix needed.
 
-### Parallel cargo compilation hangs
-- See JOBS=1 workaround above. Needs OS-level investigation.
+### Parallel cargo compilation — linker crash, NOT a hang (for simple crates)
+- JOBS=2 on hello-world: linker (`cc`/lld) crashes with `fatal runtime error: failed to initiate panic, error 0` / `relibc: abort() called`. Exit code 101. Tested 2026-03-11 on self-hosting-test VM.
+- This is a **crash** in the linker process, not a deadlock. The ~115-136 crate hang on large projects may be a different or related symptom.
+- Leading theory: stack overflow or memory corruption in lld when 2 instances run concurrently.
+- The `patch-rustc-main-stack.py` grows rustc's main thread stack to 16MB but does NOT apply to the `cc` wrapper or `lld`.
+- See JOBS=1 workaround above.
 
 ## Redox Namespace Sandboxing (implemented)
 

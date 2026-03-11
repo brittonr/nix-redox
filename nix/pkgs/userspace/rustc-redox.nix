@@ -265,6 +265,57 @@ let
     esac
   '';
 
+  # config.toml for bootstrap (external file avoids heredoc indentation issues)
+  # @OUT@ is replaced at build time with $out
+  configToml = pkgs.writeText "rustc-config.toml" ''
+    [build]
+    build = "x86_64-unknown-linux-gnu"
+    host = ["x86_64-unknown-redox"]
+    target = ["x86_64-unknown-redox"]
+    cargo = "${rustToolchain}/bin/cargo"
+    rustc = "${rustToolchain}/bin/rustc"
+    extended = true
+    tools = ["cargo", "rustdoc"]
+    submodules = false
+    vendor = true
+    docs = false
+    verbose = 1
+    profiler = false
+
+    [llvm]
+    download-ci-llvm = false
+    link-shared = false
+    static-libstdcpp = false
+
+    [rust]
+    codegen-tests = false
+    backtrace = false
+    lld = false
+    llvm-tools = false
+    channel = "nightly"
+    jemalloc = false
+    download-rustc = false
+
+    [target.x86_64-unknown-redox]
+    cc = "${ccWrapper}"
+    cxx = "${cxxWrapper}"
+    ar = "${ar}"
+    ranlib = "${ranlib}"
+    linker = "${ccWrapper}"
+    llvm-config = "${crossLlvmConfig}"
+    crt-static = true
+
+    [target.x86_64-unknown-linux-gnu]
+    llvm-config = "${hostLlvmDev}/bin/llvm-config"
+
+    [dist]
+    src-tarball = false
+
+    [install]
+    prefix = "@OUT@"
+    sysconfdir = "@OUT@/etc"
+  '';
+
 in
 pkgs.stdenv.mkDerivation {
   pname = "rustc-redox";
@@ -329,56 +380,14 @@ pkgs.stdenv.mkDerivation {
     # Patch 2: Sysroot detection for Redox
     # On Redox: dladdr() may not work, and argv[0] may not be a symlink.
     # Fallback: try current_exe() path (from /scheme/sys/exe), then known paths.
-    python3 << 'PYEOF'
-    path = "compiler/rustc_session/src/filesearch.rs"
-    with open(path) as f:
-        content = f.read()
-    old = '.unwrap_or_else(|| default_from_rustc_driver_dll().expect("Failed finding sysroot"))'
-    new = """.unwrap_or_else(|| {
-            default_from_rustc_driver_dll().unwrap_or_else(|_| {
-                // Redox fallback: try current_exe() to derive sysroot
-                if let Ok(exe) = std::env::current_exe() {
-                    if let Some(p) = exe.parent().and_then(|p| p.parent()) {
-                        let rustlib = p.join("lib").join("rustlib");
-                        if rustlib.exists() {
-                            return p.to_path_buf();
-                        }
-                    }
-                }
-                // Last resort: try well-known Redox paths
-                for candidate in ["/nix/system/profile", "/usr", "/"] {
-                    let p = PathBuf::from(candidate);
-                    if p.join("lib").join("rustlib").exists() {
-                        return p;
-                    }
-                }
-                PathBuf::from("/")
-            })
-        })"""
-    content = content.replace(old, new)
-    with open(path, 'w') as f:
-        f.write(content)
-    print(f"  Patched {path}: Redox sysroot fallback chain")
-  PYEOF
+    python3 ${./patch-rustc-sysroot.py}
 
     # Patch 3: crt_static_allows_dylibs — REMOVED
     # Upstream already has crt_static_allows_dylibs: true AND dynamic_linking: true.
     # The old patch was BREAKING this by setting it to false, preventing proc-macros.
 
     # Patch 4: CMAKE_SYSTEM_NAME for Redox (commit 97b598cb)
-    python3 << 'PYEOF'
-    path = "src/bootstrap/src/core/build_steps/llvm.rs"
-    with open(path) as f:
-        content = f.read()
-    # Add Redox handling before the "none" catch-all
-    content = content.replace(
-        '} else if target.contains("none") {',
-        '} else if target.contains("redox") {\n            cfg.define("CMAKE_SYSTEM_NAME", "UnixPaths");\n        } else if target.contains("none") {'
-    )
-    with open(path, 'w') as f:
-        f.write(content)
-    print(f"  Patched {path}")
-  PYEOF
+    python3 ${./patch-rustc-cmake.py}
 
     # Patch 5: Disable generate-arange-section for Redox target
     # The Redox target spec has generate_arange_section: true (inherited default).
@@ -386,23 +395,7 @@ pkgs.stdenv.mkDerivation {
     # from libLLVMAsmPrinter.a may be dead-stripped during static linking of
     # librustc_driver.so, causing LLVM to reject the unknown flag.
     # Fix: set generate_arange_section: false in the Redox base target options.
-    python3 << 'PYEOF'
-    path = "compiler/rustc_target/src/spec/base/redox.rs"
-    with open(path) as f:
-        content = f.read()
-    if "generate_arange_section" not in content:
-        # Insert before the closing of the TargetOptions block
-        # The file returns TargetOptions { ... }
-        content = content.replace(
-            "..Default::default()",
-            "generate_arange_section: false,\n        ..Default::default()"
-        )
-        with open(path, 'w') as f:
-            f.write(content)
-        print(f"  Patched {path}: disabled generate_arange_section")
-    else:
-        print(f"  {path}: already patched")
-  PYEOF
+    python3 ${./patch-rustc-arange.py}
 
     # Patch 6: Force-link LLVM X86 target in bootstrap RUSTFLAGS
     # Static linking of LLVM into librustc_driver.so dead-strips the X86 backend
@@ -492,18 +485,7 @@ pkgs.stdenv.mkDerivation {
     # Patch 7: cargo-util S_IRWXU type mismatch
     # On Redox, libc::S_IRWXU etc. are i32 (not u32 like Linux).
     # Cargo uses u32::from() which doesn't accept i32.
-    python3 << 'PYEOF'
-    path = "src/tools/cargo/crates/cargo-util/src/paths.rs"
-    with open(path) as f:
-        content = f.read()
-    content = content.replace(
-        'u32::from(libc::S_IRWXU | libc::S_IRWXG | libc::S_IRWXO)',
-        '(libc::S_IRWXU | libc::S_IRWXG | libc::S_IRWXO) as u32'
-    )
-    with open(path, 'w') as f:
-        f.write(content)
-    print(f"  Patched {path}")
-  PYEOF
+    python3 ${./patch-cargo-irwxu.py}
 
     # Patch 8: Strip "file:" URL scheme prefix from OS-returned paths.
     # On Redox, kernel syscalls (realpath, getcwd) return paths like
@@ -514,59 +496,10 @@ pkgs.stdenv.mkDerivation {
 
     echo "=== Generating config.toml ==="
 
-    # Generate config.toml with proper paths
-    python3 << PYEOF
-    config = """
-    [build]
-    build = "x86_64-unknown-linux-gnu"
-    host = ["x86_64-unknown-redox"]
-    target = ["x86_64-unknown-redox"]
-    cargo = "${rustToolchain}/bin/cargo"
-    rustc = "${rustToolchain}/bin/rustc"
-    extended = true
-    tools = ["cargo", "rustdoc"]
-    submodules = false
-    vendor = true
-    docs = false
-    verbose = 1
-    profiler = false
-
-    [llvm]
-    download-ci-llvm = false
-    link-shared = false
-    static-libstdcpp = false
-
-    [rust]
-    codegen-tests = false
-    backtrace = false
-    lld = false
-    llvm-tools = false
-    channel = "nightly"
-    jemalloc = false
-    download-rustc = false
-
-    [target.x86_64-unknown-redox]
-    cc = "${ccWrapper}"
-    cxx = "${cxxWrapper}"
-    ar = "${ar}"
-    ranlib = "${ranlib}"
-    linker = "${ccWrapper}"
-    llvm-config = "${crossLlvmConfig}"
-    crt-static = true
-
-    [target.x86_64-unknown-linux-gnu]
-    llvm-config = "${hostLlvmDev}/bin/llvm-config"
-
-    [dist]
-    src-tarball = false
-
-    [install]
-    prefix = "$out"
-    sysconfdir = "$out/etc"
-    """
-    with open("config.toml", "w") as f:
-        f.write(config)
-  PYEOF
+    # Generate config.toml (from external Nix writeText to avoid heredoc indentation issues)
+    cp ${configToml} config.toml
+    chmod u+w config.toml
+    sed -i "s|@OUT@|$out|g" config.toml
 
     # Verify config
     echo "=== config.toml ==="
