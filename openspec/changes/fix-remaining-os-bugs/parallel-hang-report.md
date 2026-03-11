@@ -1,9 +1,11 @@
 # Parallel Cargo Build Hang — Investigation Report
 
-## Status: Initial Investigation
+## Status: Root Cause Narrowed (2026-03-11)
 
 ## Symptom
-When `CARGO_BUILD_JOBS > 1`, cargo hangs indefinitely after compiling ~115-136 crates. The build progresses normally up to that point, then stops with all child processes blocked.
+When `CARGO_BUILD_JOBS > 1`:
+- **Simple crates (hello-world)**: The linker (`cc`/`lld`) crashes with `fatal runtime error: failed to initiate panic, error 0, aborting` / `relibc: abort() called`. Exit code 101. Cargo reports `error: linking with 'cc' failed: exit status: 1`.
+- **Large projects (~115-136 crates)**: Build hangs indefinitely (may be a different manifestation or a related issue where the crash causes cargo to wait forever for the dead child).
 
 ## What We Know
 
@@ -48,13 +50,36 @@ With JOBS>1, more memory is consumed. The kernel may not schedule blocked contex
 ### 4. Scheduler fairness
 The round-robin scheduler in `update_runnable()` might not fairly wake contexts when many are soft-blocked with wake timers or waiting on scheme I/O.
 
+## Key Finding (2026-03-11)
+
+The JOBS=2 crash is in the **linker process**, not cargo or rustc. The error trace:
+```
+error: linking with `cc` failed: exit status: 1
+  = note: "cc" "-m64" ... "-static" "-no-pie" ... "-nodefaultlibs"
+  = note:
+fatal runtime error: failed to initiate panic, error 0, aborting
+relibc: abort() called
+```
+
+This crash occurs even for a trivial `fn main() { println!("hello"); }` project. JOBS=1 works because only one `cc`/`lld` runs at a time. With JOBS=2, two linker invocations run concurrently and at least one crashes.
+
+## Leading Theories (Updated)
+
+### 1. Stack overflow in lld (MOST LIKELY)
+The Redox kernel gives main threads ~8KB of stack. `patch-rustc-main-stack.py` grows rustc's stack to 16MB by spawning a thread, but this patch does NOT apply to the `cc` wrapper or `lld`. When two `lld` instances run concurrently, memory pressure may reduce available stack, causing one to overflow and triggering the `failed to initiate panic` error (which fires when the panic handler itself can't run — classic stack overflow symptom).
+
+### 2. Concurrent process resource exhaustion
+Two simultaneous `cc` → `lld` invocations may exhaust a shared OS resource (file descriptors, memory mappings, pipe buffers). One process gets an error, tries to panic, but the panic handler fails due to the same resource constraint.
+
+### 3. DSO environ / ld.so initialization race
+Multiple concurrent `lld` processes may race on ld.so initialization of DSO statics, corrupting the runtime state and causing a crash in the panic handler.
+
 ## Next Steps
 
-1. **Run parallel-build-test profile** with a small project (task 3.4)
-2. **Add proc: scheme logging** for waitpid calls (which PID requested, which children exist)
-3. **Add pipe buffer state logging** when read/write blocks
-4. **Capture serial output** during a JOBS=2 hang
-5. **Compare process tree** between working (JOBS=1) and hanging (JOBS=2) runs
+1. **Apply the main-stack growth patch to the `cc` wrapper** — spawn lld in a thread with larger stack
+2. **Add stack size check** — print main thread stack size from lld to serial before linking
+3. **Test JOBS=2 with stack-grown lld** — if it passes, stack overflow is confirmed
+4. If stack overflow is NOT the cause, add strace to the linker invocation to see what syscall fails
 
 ## Created Files
 - `nix/redox-system/profiles/parallel-build-test.nix` — test profile with JOBS=1 baseline and JOBS=2 test with hard timeout

@@ -39,6 +39,14 @@ let
       nixfmt-rfc-style = {
         enable = true;
         package = pkgs.nixfmt-rfc-style;
+        # nixfmt breaks heredoc terminators and Python indentation inside Nix strings
+        excludes = [
+          "^nix/pkgs/"
+          "^nix/redox-system/"
+          "^nix/lib/stub-libs\\.nix$"
+          "^nix/lib/vendor\\.nix$"
+          "^nix/tests/mock-pkgs\\.nix$"
+        ];
       };
 
       check-merge-conflicts.enable = true;
