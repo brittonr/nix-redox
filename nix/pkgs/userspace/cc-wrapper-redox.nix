@@ -22,6 +22,7 @@ mkUserspace.mkBinary {
   src = pkgs.writeTextDir "src/main.rs" ''
     use std::os::unix::process::CommandExt;
     use std::process::Command;
+    use std::thread;
 
     fn main() {
         let sysroot = "/usr/lib/redox-sysroot";
@@ -29,21 +30,40 @@ mkUserspace.mkBinary {
 
         let args: Vec<String> = std::env::args().skip(1).collect();
 
-        let mut cmd = Command::new(lld);
-        cmd.arg(format!("{}/lib/crt0.o", sysroot));
-        cmd.arg(format!("{}/lib/crti.o", sysroot));
-        for arg in &args {
-            cmd.arg(arg);
-        }
-        cmd.arg("-L");
-        cmd.arg(format!("{}/lib", sysroot));
-        cmd.arg("-l:libc.a");
-        cmd.arg("-l:libpthread.a");
-        cmd.arg(format!("{}/lib/crtn.o", sysroot));
+        // Redox: the kernel only gives the main thread ~8KB of stack, which
+        // is not enough for lld. Spawn a thread with a larger stack and
+        // exec() lld from there.
+        let stack_size: usize = 16 * 1024 * 1024; // 16 MB
+        match thread::Builder::new()
+            .name("lld-main".into())
+            .stack_size(stack_size)
+            .spawn(move || {
+                let mut cmd = Command::new(lld);
+                cmd.arg(format!("{}/lib/crt0.o", sysroot));
+                cmd.arg(format!("{}/lib/crti.o", sysroot));
+                for arg in &args {
+                    cmd.arg(arg);
+                }
+                cmd.arg("-L");
+                cmd.arg(format!("{}/lib", sysroot));
+                cmd.arg("-l:libc.a");
+                cmd.arg("-l:libpthread.a");
+                cmd.arg(format!("{}/lib/crtn.o", sysroot));
 
-        let err = cmd.exec();
-        eprintln!("cc-wrapper: failed to exec {}: {}", lld, err);
-        std::process::exit(1);
+                let err = cmd.exec();
+                eprintln!("cc-wrapper: failed to exec {}: {}", lld, err);
+                std::process::exit(1);
+            })
+        {
+            Ok(handle) => {
+                let _ = handle.join();
+                std::process::exit(0);
+            }
+            Err(e) => {
+                eprintln!("cc-wrapper: failed to create thread: {}", e);
+                std::process::exit(1);
+            }
+        }
     }
   '';
 
