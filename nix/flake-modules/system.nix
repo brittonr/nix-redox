@@ -274,6 +274,19 @@ let
     defaultTimeout = 1500; # snix self-compile (168 crates) + ripgrep build need ~900s
   };
 
+  # Parallel build test: JOBS=1 baseline + JOBS=2 validation
+  parallelBuildTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/parallel-build-test.nix ];
+    inherit extraPkgs;
+  };
+  parallelBuildTest = mkFunctionalTest {
+    diskImage = parallelBuildTestSystem.diskImage;
+    inherit bootloader;
+    memoryMB = 4096;
+    cpus = 4;
+    defaultTimeout = 600; # JOBS=2 may hang — 10 min max
+  };
+
   # Scheme daemon test: stored + profiled daemons serve store: and profile: schemes
   schemeDaemonTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/scheme-daemon-test.nix ];
@@ -424,6 +437,9 @@ in
 
     redox-self-hosting-test = selfHostingTestSystem.diskImage;
     self-hosting-test = selfHostingTest;
+
+    redox-parallel-build-test = parallelBuildTestSystem.diskImage;
+    parallel-build-test = parallelBuildTest;
 
     redox-scheme-daemon-test = schemeDaemonTestSystem.diskImage;
     scheme-daemon-test = schemeDaemonTest;
