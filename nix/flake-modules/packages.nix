@@ -502,6 +502,28 @@ let
     inherit (redoxLib) stubLibs;
   };
 
+  proc-dump = import ../pkgs/userspace/proc-dump.nix {
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      redoxTarget
+      ;
+    inherit (modularPkgs.system) relibc;
+    inherit (redoxLib) stubLibs;
+  };
+
+  waitpid-stress = import ../pkgs/userspace/waitpid-stress.nix {
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      redoxTarget
+      ;
+    inherit (modularPkgs.system) relibc;
+    inherit (redoxLib) stubLibs;
+  };
+
   # pkgutils disabled: ring crate needs pregenerated assembly from git source
   # pkgutils = import ../pkgs/userspace/pkgutils.nix (
   #   standaloneCommon
@@ -643,6 +665,8 @@ in
       redox-rustc
       redox-sysroot
       lld-wrapper
+      proc-dump
+      waitpid-stress
       ;
 
     # Infrastructure (needed by module system)

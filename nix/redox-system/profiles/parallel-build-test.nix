@@ -28,6 +28,10 @@ let
           echo "FUNC_TESTS_START"
           echo ""
 
+          # ── Test: waitpid stress (isolate waitpid reliability) ─────────
+          echo "--- waitpid-stress ---"
+          /nix/system/profile/bin/waitpid-stress 50
+
           # ── Test: JOBS=1 baseline (should always pass) ─────────────────
           echo "--- parallel-jobs1-baseline ---"
           /nix/system/profile/bin/bash -c '
@@ -77,7 +81,7 @@ let
             rm -rf /tmp/test-parallel /tmp/cargo-home-j1
           '
 
-          # ── Test: JOBS=2 (may hang — has hard timeout) ─────────────────
+          # ── Test: JOBS=2 single crate ──────────────────────────────────
           echo "--- parallel-jobs2-build ---"
           /nix/system/profile/bin/bash -c '
             mkdir -p /tmp/test-parallel2
@@ -97,6 +101,7 @@ let
             echo "fn main() { println!(\"hello parallel\"); }" > src/main.rs
 
             export CARGO_BUILD_JOBS=2
+            export CARGO_DIAG_LOG=/tmp/cargo-diag-j2.log
             cargo build --offline > /tmp/j2-out 2>&1 &
             PID=$!
             SECONDS=0
@@ -104,13 +109,15 @@ let
             while kill -0 $PID 2>/dev/null; do
               if [ $SECONDS -ge $TIMEOUT ]; then
                 echo "FUNC_TEST:parallel-jobs2-build:FAIL:timeout after ''${TIMEOUT}s (PID=$PID)"
-                echo "  Process tree at hang:"
-                # On Redox, no ps command. List what we can.
-                ls /scheme/proc/ 2>/dev/null | head -20
+                echo "  proc-dump:"
+                proc-dump /tmp/proc-dump-j2.log 2>/dev/null
+                cat /tmp/proc-dump-j2.log 2>/dev/null | head -40
+                echo "  cargo heartbeat:"
+                cat /tmp/cargo-diag-j2.log 2>/dev/null | head -20
+                echo "  build output:"
+                cat /tmp/j2-out 2>/dev/null | head -30
                 kill $PID 2>/dev/null; wait $PID 2>/dev/null
                 kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
-                echo "  Build output:"
-                cat /tmp/j2-out 2>/dev/null | head -30
                 rm -rf /tmp/test-parallel2 /tmp/cargo-home-j2
                 exit 0
               fi
@@ -129,60 +136,98 @@ let
             rm -rf /tmp/test-parallel2 /tmp/cargo-home-j2
           '
 
-          # ── Test: JOBS=2 workspace (multiple concurrent link invocations) ──
-          echo "--- parallel-jobs2-workspace ---"
+          # ── Graduated workspace tests at JOBS=2 ───────────────────────
+          # Test workspaces of increasing size to find the hang threshold.
+          # Each crate depends on the previous one (chain dependency) to
+          # force sequential-ish compilation with parallel opportunities.
           /nix/system/profile/bin/bash -c '
-            mkdir -p /tmp/test-workspace
-            cd /tmp/test-workspace
-            export CARGO_HOME=/tmp/cargo-home-j2w
-            mkdir -p $CARGO_HOME
-            cp /root/.cargo/config.toml $CARGO_HOME/config.toml 2>/dev/null || true
+            run_workspace_test() {
+              local SIZE=$1
+              local TIMEOUT=$2
+              local TEST_NAME="parallel-jobs2-ws$SIZE"
+              local DIR="/tmp/test-ws$SIZE"
+              local CARGO_HOME_DIR="/tmp/cargo-home-ws$SIZE"
+              local DIAG_LOG="/tmp/cargo-diag-ws$SIZE.log"
+              local BUILD_LOG="/tmp/ws$SIZE-out.log"
+              local DUMP_LOG="/tmp/proc-dump-ws$SIZE.log"
 
-            # Create workspace with 3 binary crates
-            cat > Cargo.toml << WSEOF
-    [workspace]
-    members = ["crate-a", "crate-b", "crate-c"]
-    resolver = "2"
-    WSEOF
+              echo "--- $TEST_NAME ---"
 
-            for crate in crate-a crate-b crate-c; do
-              mkdir -p $crate/src
-              cat > $crate/Cargo.toml << CREOF
-    [package]
-    name = "$crate"
-    version = "0.1.0"
-    edition = "2021"
-    CREOF
-              echo "fn main() { println!(\"hello from $crate\"); }" > $crate/src/main.rs
-            done
+              mkdir -p "$DIR"
+              cd "$DIR"
+              export CARGO_HOME="$CARGO_HOME_DIR"
+              mkdir -p "$CARGO_HOME"
+              cp /root/.cargo/config.toml "$CARGO_HOME/config.toml" 2>/dev/null || true
 
-            export CARGO_BUILD_JOBS=2
-            cargo build --offline > /tmp/j2w-out 2>&1 &
-            PID=$!
-            SECONDS=0
-            TIMEOUT=300
-            while kill -0 $PID 2>/dev/null; do
-              if [ $SECONDS -ge $TIMEOUT ]; then
-                echo "FUNC_TEST:parallel-jobs2-workspace:FAIL:timeout after ''${TIMEOUT}s"
-                kill $PID 2>/dev/null; wait $PID 2>/dev/null
-                kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
-                cat /tmp/j2w-out 2>/dev/null | head -30
-                rm -rf /tmp/test-workspace /tmp/cargo-home-j2w
-                exit 0
+              # Generate workspace Cargo.toml — all independent binary crates
+              # so JOBS=2 actually runs two compilations in parallel
+              echo "[workspace]" > Cargo.toml
+              echo "resolver = \"2\"" >> Cargo.toml
+              printf "members = [" >> Cargo.toml
+              for ((i=1; i<=SIZE; i++)); do
+                if [ $i -gt 1 ]; then printf ", " >> Cargo.toml; fi
+                printf "\"crate-%03d\"" "$i" >> Cargo.toml
+              done
+              echo "]" >> Cargo.toml
+
+              # Each crate is an independent binary — no inter-crate deps
+              # This maximizes parallelism: with JOBS=2, two rustc+lld run concurrently
+              for ((i=1; i<=SIZE; i++)); do
+                local CNAME=$(printf "crate-%03d" "$i")
+                mkdir -p "$CNAME/src"
+                echo "[package]" > "$CNAME/Cargo.toml"
+                echo "name = \"$CNAME\"" >> "$CNAME/Cargo.toml"
+                echo "version = \"0.1.0\"" >> "$CNAME/Cargo.toml"
+                echo "edition = \"2021\"" >> "$CNAME/Cargo.toml"
+                echo "fn main() { println!(\"ws''${SIZE} crate $i\"); }" > "$CNAME/src/main.rs"
+              done
+
+              export CARGO_BUILD_JOBS=2
+              export CARGO_DIAG_LOG="$DIAG_LOG"
+              cargo build --offline > "$BUILD_LOG" 2>&1 &
+              PID=$!
+              SECONDS=0
+
+              while kill -0 $PID 2>/dev/null; do
+                if [ $SECONDS -ge $TIMEOUT ]; then
+                  echo "FUNC_TEST:$TEST_NAME:FAIL:timeout after ''${TIMEOUT}s"
+                  # Capture diagnostics before killing
+                  proc-dump "$DUMP_LOG" 2>/dev/null
+                  echo "  === proc-dump ==="
+                  cat "$DUMP_LOG" 2>/dev/null | head -60
+                  echo "  === cargo heartbeat (last 20 lines) ==="
+                  cat "$DIAG_LOG" 2>/dev/null | head -20
+                  echo "  === build output (last 30 lines) ==="
+                  cat "$BUILD_LOG" 2>/dev/null | head -30
+                  kill $PID 2>/dev/null; wait $PID 2>/dev/null
+                  kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
+                  rm -rf "$DIR" "$CARGO_HOME_DIR"
+                  return 1
+                fi
+                cat /scheme/sys/uname > /dev/null 2>&1
+              done
+              wait $PID
+              BUILD_RC=$?
+
+              if [ $BUILD_RC -eq 0 ]; then
+                echo "FUNC_TEST:$TEST_NAME:PASS"
+                echo "  JOBS=2 ws$SIZE build completed in ''${SECONDS}s"
+              else
+                echo "FUNC_TEST:$TEST_NAME:FAIL:exit=$BUILD_RC"
+                cat "$BUILD_LOG" 2>/dev/null | head -30
+                echo "  === cargo heartbeat ==="
+                cat "$DIAG_LOG" 2>/dev/null | head -20
               fi
-              cat /scheme/sys/uname > /dev/null 2>&1
-            done
-            wait $PID
-            BUILD_RC=$?
+              rm -rf "$DIR" "$CARGO_HOME_DIR"
+              return $BUILD_RC
+            }
 
-            if [ $BUILD_RC -eq 0 ]; then
-              echo "FUNC_TEST:parallel-jobs2-workspace:PASS"
-              echo "  JOBS=2 workspace build completed in ''${SECONDS}s"
-            else
-              echo "FUNC_TEST:parallel-jobs2-workspace:FAIL:exit=$BUILD_RC"
-              cat /tmp/j2w-out 2>/dev/null | head -30
-            fi
-            rm -rf /tmp/test-workspace /tmp/cargo-home-j2w
+            # Graduated sizes with appropriate timeouts
+            run_workspace_test 5 120
+            run_workspace_test 10 120
+            run_workspace_test 20 300
+            run_workspace_test 50 300
+            run_workspace_test 100 600
           '
 
           echo ""
@@ -208,12 +253,15 @@ selfHosting
   };
 
   "/environment" = selfHosting."/environment" // {
-    systemPackages = builtins.filter (
-      p:
-      let
-        name = p.pname or (builtins.parseDrvName p.name).name;
-      in
-      name != "userutils" && name != "redox-userutils"
-    ) (selfHosting."/environment".systemPackages or [ ]);
+    systemPackages =
+      builtins.filter (
+        p:
+        let
+          name = p.pname or (builtins.parseDrvName p.name).name;
+        in
+        name != "userutils" && name != "redox-userutils"
+      ) (selfHosting."/environment".systemPackages or [ ])
+      ++ opt "proc-dump"
+      ++ opt "waitpid-stress";
   };
 }

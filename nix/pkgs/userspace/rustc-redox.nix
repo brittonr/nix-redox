@@ -443,6 +443,13 @@ pkgs.stdenv.mkDerivation {
     # plain blocking reads (no poll fallback).
     python3 ${./patch-jobserver-poll.py} .
 
+    # Patch: Cargo heartbeat diagnostics for parallel build investigation.
+    # When CARGO_DIAG_LOG is set to a file path, cargo emits periodic
+    # status lines (~5s interval) showing active jobs, pending jobs,
+    # token count, and progress. Used to diagnose JOBS>1 hangs — reveals
+    # which job cargo is stuck waiting for.
+    python3 ${./patch-cargo-heartbeat.py} .
+
     # Patch: Use execvpe() on Redox to propagate env vars through exec().
     # Root cause: Rust std's do_exec() writes to the global `environ`
     # pointer then calls execvp(). On Redox, the global pointer update
