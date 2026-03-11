@@ -91,6 +91,7 @@ let
       python3 ${./patch-relibc-ld-so-cwd.py}
       python3 ${./patch-relibc-fcntl-lock.py}
       python3 ${./patch-relibc-execvpe.py}
+      python3 ${./patch-relibc-ld-so-argv-utf8.py}
 
       runHook postPatch
     '';

@@ -2560,6 +2560,8 @@ let
                       export CARGO_BUILD_JOBS=1
                       export CARGO_INCREMENTAL=0
                       export RUSTC=/nix/system/profile/bin/rustc
+                      # cc-rs crate defaults to "ar" but we only have llvm-ar
+                      export AR=/nix/system/profile/bin/llvm-ar
 
                       # Clean any stale lock files
                       rm -f /tmp/cargo-snix/.package-cache* 2>/dev/null
@@ -2628,14 +2630,6 @@ let
                       echo "FUNC_TEST:snix-compile:FAIL:$snix_result"
                       echo "=== snix build log ==="
                       cat /tmp/snix-build-log
-                      echo "=== CC wrapper raw args ==="
-                      cat /tmp/.cc-wrapper-raw-args
-                      echo "=== CC wrapper last error ==="
-                      cat /tmp/.cc-wrapper-last-err
-                      echo "=== CC wrapper stderr ==="
-                      cat /tmp/.cc-wrapper-stderr
-                      echo "=== CC wrapper shared cmd ==="
-                      cat /tmp/.cc-wrapper-shared-cmd
                     end
 
                     # Check if binary was produced

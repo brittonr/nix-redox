@@ -247,10 +247,45 @@ pkgs.runCommand "redox-sysroot"
 
     S=/usr/lib/redox-sysroot
     LLD=/nix/system/profile/bin/ld.lld
+    CLANG=/nix/system/profile/bin/clang
     ERR=/tmp/.cc-wrapper-stderr
 
     # Log raw input args for debugging
     printf '%s\n' "--- CC wrapper invocation ---" "$@" > /tmp/.cc-wrapper-raw-args
+
+    # Compile-only detection: if any arg is -c, -S, -E, -M, or -MM, this is
+    # a compile (not link) invocation. Pass through to clang with sysroot.
+    # Ring's build script (cc crate) calls `cc -E` for compiler detection
+    # and `cc -c` to compile .c → .o files.
+    #
+    # We use -isystem instead of --sysroot to avoid clang's sysroot logic
+    # overriding its resource header search. The clang resource headers
+    # (stddef.h, stdarg.h) are in the sysroot's lib/clang/21/include/ AND
+    # in the clang installation's lib/clang/21/include/.
+    for arg in "$@"; do
+      case "$arg" in
+        -c|-S|-E|-M|-MM)
+          # Find clang resource header dir (version-agnostic glob)
+          CLANG_RES=""
+          for d in "$S"/lib/clang/*/include; do
+            if [ -d "$d" ]; then
+              CLANG_RES="$d"
+              break
+            fi
+          done
+          # -no-canonical-prefixes: prevents clang from calling realpath()
+          # on itself. On Redox, realpath returns "file:/path" which breaks
+          # clang's executable self-discovery (InstalledDir becomes empty).
+          # -resource-dir: explicit path since clang can't find it without
+          # a working InstalledDir.
+          exec "$CLANG" \
+            -no-canonical-prefixes \
+            ''${CLANG_RES:+-resource-dir "''${CLANG_RES%/include}"} \
+            -isystem "$S/include" \
+            "$@"
+          ;;
+      esac
+    done
 
     # Expand response files (@file) into RAW_ARGS array
     RAW_ARGS=()

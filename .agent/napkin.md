@@ -38,11 +38,18 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Adding a module to lib.rs but not main.rs causes unresolved import errors
   when the bin crate's modules reference it.
 
-### ld.so argv UTF-8 parsing bug
-- `ld.so: failed to parse argv[N]` when --env-set passes non-ASCII characters.
-- `CARGO_PKG_AUTHORS` with Polish characters (ł, ń) breaks generic-array build.
-- Self-hosting test shows 53/57 pass, 4 fail from this pre-existing bug.
-- Previously masked by pipe exit code bug (test reported 58/58 falsely).
+### ld.so argv UTF-8 parsing bug (FIXED)
+- WAS: `ld.so: failed to parse argv[N]` when --env-set passes non-ASCII characters.
+- FIXED: `patch-relibc-ld-so-argv-utf8.py` uses `to_string_lossy()` instead of `_exit(1)`.
+- Root cause was `get_argv` in `start.rs` calling `_exit(1)` on non-UTF-8 argv.
+- Note: `get_env` already handled this gracefully with `if let Ok(...)`.
+
+### Clang can't fork -cc1 on Redox (FIXED)
+- Clang's `getMainExecutable` fails on Redox (no `/proc/self/exe`, `realpath` returns `file:/path`).
+- `InstalledDir` becomes empty → exec of `""` fails → "unable to execute command".
+- FIXED: CC wrapper passes `-no-canonical-prefixes` + explicit `-resource-dir`.
+- Also needs `-isystem` for sysroot C headers (not `--sysroot` which overrides resource headers).
+- `cc-rs` crate needs `AR=llvm-ar` (no bare `ar` binary on Redox).
 
 ### /etc/snix/config must be read by snix
 - Module system writes `sandbox=disabled` to `/etc/snix/config`.
