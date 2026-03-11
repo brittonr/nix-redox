@@ -83,7 +83,7 @@ pkgs.stdenv.mkDerivation {
       linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
       panic = "abort";
     }}
-    CARGOCONF
+  CARGOCONF
 
     runHook postConfigure
   '';

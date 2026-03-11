@@ -179,7 +179,7 @@ mkCLibrary.mkLibrary {
     install:
     clean:
     distclean:
-    DOCEOF
+  DOCEOF
         touch doc/make.1
 
         # Fix timestamps: touch everything uniformly AFTER patching.

@@ -33,13 +33,19 @@ let
     };
 
     # Exclude vendor directories, generated files, and files with bash heredocs
-    # that nixfmt would break by re-indenting terminators
+    # that nixfmt would break by re-indenting terminators.
+    # nixfmt moves heredoc terminators inside '' strings to different indentation
+    # than the '' closer, which breaks bash heredoc parsing after Nix stripping.
     settings.global.excludes = [
       "vendor/*"
       "vendor-combined/*"
       "result*"
       ".git/*"
-      "nix/redox-system/profiles/self-hosting-test.nix"
+      "nix/pkgs/**/*.nix"
+      "nix/redox-system/**/*.nix"
+      "nix/lib/stub-libs.nix"
+      "nix/lib/vendor.nix"
+      "nix/tests/mock-pkgs.nix"
     ];
   };
 

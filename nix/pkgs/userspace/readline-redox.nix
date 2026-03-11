@@ -88,7 +88,7 @@ mkCLibrary.mkAutotools {
     install:
     clean:
     distclean:
-    DOCEOF
+  DOCEOF
         fi
 
         # Use CC wrapper for working link tests

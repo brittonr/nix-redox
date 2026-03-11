@@ -92,7 +92,7 @@ mkCLibrary.mkLibrary {
     set(CMath_INCLUDE_DIR "")
     set(CMath_pow TRUE)
     set(CMath_FOUND TRUE)
-    CMATHEOF
+  CMATHEOF
     fi
 
     mkdir -p build && cd build

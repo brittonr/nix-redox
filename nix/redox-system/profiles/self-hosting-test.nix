@@ -1148,14 +1148,14 @@ let
 
                         println!("REAL_PROGRAM_OK: {} tests passed, {}", 8, msg);
                     }
-        RUSTEOF
+  RUSTEOF
 
                           cat > /tmp/realtest/Cargo.toml << '"'"'TOMLEOF'"'"'
                     [package]
                     name = "realtest"
                     version = "0.1.0"
                     edition = "2021"
-        TOMLEOF
+  TOMLEOF
 
                           cd /tmp/realtest
                           rm -f /root/.cargo/.package-cache* /root/.cargo/.global-cache* 2>/dev/null
@@ -1263,7 +1263,7 @@ let
                                 .join(" ")
                         }
                     }
-        LIBEOF
+  LIBEOF
 
                           cat > /tmp/multifile/src/main.rs << '"'"'MAINEOF'"'"'
                     use multifile::math::{gcd, lcm};
@@ -1285,7 +1285,7 @@ let
 
                         println!("MULTIFILE_OK: math+text modules working");
                     }
-        MAINEOF
+  MAINEOF
 
                           cat > /tmp/multifile/Cargo.toml << '"'"'TOMLEOF'"'"'
                     [package]
@@ -1300,7 +1300,7 @@ let
                     [lib]
                     name = "multifile"
                     path = "src/lib.rs"
-        TOMLEOF
+  TOMLEOF
 
                           cd /tmp/multifile
                           echo "[multifile] starting cargo build (offline)..."
@@ -1357,7 +1357,7 @@ let
                     fs::write(&dest_path, code).expect("write failed");
                     eprintln!("build.rs: wrote generated.rs");
                 }
-        BUILDEOF
+  BUILDEOF
 
                           cat > /tmp/buildscript/src/main.rs << MAINEOF
                 include!("/tmp/buildscript/out/generated.rs");
@@ -1366,7 +1366,7 @@ let
                     assert_eq!(BUILD_TARGET, "x86_64-unknown-redox");
                     println!("BUILDSCRIPT_OK: target={}, val={}", BUILD_TARGET, GENERATED_VALUE);
                 }
-        MAINEOF
+  MAINEOF
 
                           echo "[bs] Step 1: compile build.rs..."
                           rustc --edition=2021 /tmp/buildscript/build.rs \
@@ -2302,7 +2302,7 @@ let
             inherit dep;
           };
         in main
-        NIXEOF
+  NIXEOF
 
                           OUTPUT=$(/bin/snix build --file /tmp/snix-dep-test.nix 2>/tmp/snix-build-dep-err)
                           EXIT=$?
@@ -2329,7 +2329,7 @@ let
           args = ["-c" "export PATH=/nix/system/profile/bin:/bin:/usr/bin; mkdir -p $out/bin; echo SNIX_BUILT_AND_RAN > $out/bin/hello"];
           system = "x86_64-unknown-redox";
         }
-        NIXEOF
+  NIXEOF
 
                           OUTPUT=$(/bin/snix build --file /tmp/snix-exec-test.nix 2>/tmp/snix-build-exec-err)
                           EXIT=$?
@@ -2356,7 +2356,7 @@ let
           args = ["-c" "echo built-from-nix-file > $out"];
           system = "x86_64-unknown-redox";
         }
-        NIXEOF
+  NIXEOF
 
                           OUTPUT=$(/bin/snix build --file /tmp/snix-file-test.nix 2>/tmp/snix-build-file-err)
                           EXIT=$?
@@ -2421,12 +2421,12 @@ let
         name = "hello"
         version = "0.1.0"
         edition = "2021"
-        TOML
+  TOML
         cat > "$SRCDIR/src/main.rs" << RUST
         fn main() {
             println!("Hello from Nix-built Rust on Redox!");
         }
-        RUST
+  RUST
         mkdir -p "$SRCDIR/.cargo"
         cat > "$SRCDIR/.cargo/config.toml" << CFG
         [build]
@@ -2434,7 +2434,7 @@ let
         target = "x86_64-unknown-redox"
         [target.x86_64-unknown-redox]
         linker = "/nix/system/profile/bin/cc"
-        CFG
+  CFG
         cd "$SRCDIR"
         # cargo timeout+retry — handles intermittent startup hangs
         MAX_TIME=120
@@ -2464,7 +2464,7 @@ let
           fi
         done
         cp target/x86_64-unknown-redox/debug/hello "$out/bin/hello"
-        BUILDEOF
+  BUILDEOF
 
                           cat > /tmp/hello-cargo.nix << '"'"'HELLONIX'"'"'
         derivation {
@@ -2473,7 +2473,7 @@ let
           args = ["/tmp/build-hello-cargo.sh"];
           system = "x86_64-unknown-redox";
         }
-        HELLONIX
+  HELLONIX
 
                           # Clear stale cc-wrapper debug files
                           rm -f /tmp/.cc-wrapper-raw-args /tmp/.cc-wrapper-stderr /tmp/.cc-wrapper-shared-cmd /tmp/.cc-wrapper-last-err 2>/dev/null
@@ -2550,7 +2550,7 @@ let
 
         [target.x86_64-unknown-redox]
         linker = "/nix/system/profile/bin/cc"
-        CARGOEOF
+  CARGOEOF
 
                           # Use a fresh CARGO_HOME (no stale lock files from earlier tests)
                           rm -rf /tmp/cargo-snix
@@ -2720,7 +2720,7 @@ let
 
         [target.x86_64-unknown-redox]
         linker = "/nix/system/profile/bin/cc"
-        CFGEOF
+  CFGEOF
 
                           # Create the flake directory
                           mkdir -p /tmp/rg-flake
@@ -2769,7 +2769,7 @@ let
         # Copy the built binary
         cp target/x86_64-unknown-redox/debug/rg "$out/bin/rg"
         echo "[builder] ripgrep build complete" >&2
-        BUILDEOF
+  BUILDEOF
 
                           # Write flake.nix
                           cat > /tmp/rg-flake/flake.nix << '"'"'FLAKEEOF'"'"'
@@ -2783,7 +2783,7 @@ let
             };
           };
         }
-        FLAKEEOF
+  FLAKEEOF
 
                           # Write flake.lock (no external inputs)
                           cat > /tmp/rg-flake/flake.lock << '"'"'LOCKEOF'"'"'
@@ -2794,7 +2794,7 @@ let
             "root": {}
           }
         }
-        LOCKEOF
+  LOCKEOF
 
                           # Run snix build .#ripgrep!
                           echo "=== Starting snix build .#ripgrep ==="
@@ -2875,7 +2875,7 @@ let
     name = "j2test"
     version = "0.1.0"
     edition = "2021"
-    TOMLEOF
+  TOMLEOF
                           mkdir -p src
                           echo "fn main() { println!(\"parallel\"); }" > src/main.rs
 

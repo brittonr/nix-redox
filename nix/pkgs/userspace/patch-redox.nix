@@ -172,7 +172,7 @@ mkCLibrary.mkLibrary {
     void tzfree(timezone_t tz) { (void)tz; }
     struct tm *localtime_rz(timezone_t tz, const time_t *tp, struct tm *result) { (void)tz; return localtime_r(tp, result); }
     time_t mktime_z(timezone_t tz, struct tm *tmp) { (void)tz; return mktime(tmp); }
-    TIMERZEOF
+  TIMERZEOF
 
         # Also create lib/time.h with timezone_t typedef (for headers that need it)
         cat > lib/time.h << 'TIMEH'
@@ -185,7 +185,7 @@ mkCLibrary.mkLibrary {
     struct tm *localtime_rz(timezone_t tz, const time_t *tp, struct tm *result);
     time_t mktime_z(timezone_t tz, struct tm *tmp);
     #endif
-    TIMEH
+  TIMEH
 
         runHook postConfigure
   '';

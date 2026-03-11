@@ -136,7 +136,7 @@ mkCLibrary.mkLibrary {
     const char *locale_charset(void) {
         return "UTF-8";
     }
-    STUBEOF
+  STUBEOF
 
     echo "Compiling libintl stubs..."
     $CC $CFLAGS -c libintl_stubs.c -o libintl_stubs.o
@@ -193,7 +193,7 @@ mkCLibrary.mkLibrary {
         Version: ${version}
         Libs: -L\''${libdir} -lintl
         Cflags: -I\''${includedir}
-        EOF
+  EOF
 
         test -f $out/lib/libintl.a || { echo "ERROR: libintl.a not built"; exit 1; }
         test -f $out/include/libintl.h || { echo "ERROR: libintl.h not generated"; exit 1; }

@@ -215,7 +215,7 @@ pkgs.stdenv.mkDerivation {
     foreach(link ''${LLD_SYMLINKS_TO_CREATE})
       add_lld_symlink(''${link} lld)
     endforeach()
-    LLDCMAKE
+  LLDCMAKE
 
     # Remove driver registrations for disabled linker flavors
     sed -i '/LLD_HAS_DRIVER(coff)/d; /LLD_HAS_DRIVER(macho)/d; /LLD_HAS_DRIVER(mingw)/d' lld/tools/lld/lld.cpp

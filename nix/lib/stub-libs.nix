@@ -64,7 +64,7 @@ pkgs.stdenv.mkDerivation {
     void __deregister_frame(void* begin) { (void)begin; }
     void __register_frame_info(void* begin, void* ob) { (void)begin; (void)ob; }
     void __deregister_frame_info(void* begin) { (void)begin; }
-    EOF
+  EOF
 
     ${pkgs.llvmPackages.clang-unwrapped}/bin/clang \
       --target=${redoxTarget} \

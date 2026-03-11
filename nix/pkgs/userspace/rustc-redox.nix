@@ -359,7 +359,7 @@ pkgs.stdenv.mkDerivation {
     with open(path, 'w') as f:
         f.write(content)
     print(f"  Patched {path}: Redox sysroot fallback chain")
-    PYEOF
+  PYEOF
 
     # Patch 3: crt_static_allows_dylibs — REMOVED
     # Upstream already has crt_static_allows_dylibs: true AND dynamic_linking: true.
@@ -378,7 +378,7 @@ pkgs.stdenv.mkDerivation {
     with open(path, 'w') as f:
         f.write(content)
     print(f"  Patched {path}")
-    PYEOF
+  PYEOF
 
     # Patch 5: Disable generate-arange-section for Redox target
     # The Redox target spec has generate_arange_section: true (inherited default).
@@ -402,7 +402,7 @@ pkgs.stdenv.mkDerivation {
         print(f"  Patched {path}: disabled generate_arange_section")
     else:
         print(f"  {path}: already patched")
-    PYEOF
+  PYEOF
 
     # Patch 6: Force-link LLVM X86 target in bootstrap RUSTFLAGS
     # Static linking of LLVM into librustc_driver.so dead-strips the X86 backend
@@ -503,7 +503,7 @@ pkgs.stdenv.mkDerivation {
     with open(path, 'w') as f:
         f.write(content)
     print(f"  Patched {path}")
-    PYEOF
+  PYEOF
 
     # Patch 8: Strip "file:" URL scheme prefix from OS-returned paths.
     # On Redox, kernel syscalls (realpath, getcwd) return paths like
@@ -566,7 +566,7 @@ pkgs.stdenv.mkDerivation {
     """
     with open("config.toml", "w") as f:
         f.write(config)
-    PYEOF
+  PYEOF
 
     # Verify config
     echo "=== config.toml ==="

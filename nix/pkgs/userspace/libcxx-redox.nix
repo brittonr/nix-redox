@@ -254,7 +254,7 @@ pkgs.stdenv.mkDerivation {
 
         }
         #endif
-    STUBS
+  STUBS
         sed -i '/set(LIBCXX_SOURCES/a\  wchar_stubs_redox.cpp' libcxx/src/CMakeLists.txt
         echo "Patched libcxx: added wcstof/wcstold + locale stubs for Redox"
 
@@ -294,7 +294,7 @@ pkgs.stdenv.mkDerivation {
         }
         #endif
         #endif /* _LINK_H */
-    LINKH
+  LINKH
 
         # dl_iterate_phdr for static Redox binaries.
         # Uses the linker-defined __ehdr_start symbol to find program headers.
@@ -324,7 +324,7 @@ pkgs.stdenv.mkDerivation {
             return callback(&info, sizeof(info), data);
         }
         #endif
-    DLSTUB
+  DLSTUB
         # Add to libunwind's CMakeLists.txt source list
         sed -i '/set(LIBUNWIND_SOURCES/a\  dl_iterate_phdr_redox.c' libunwind/src/CMakeLists.txt
         echo "Patched libunwind: added link.h stub + dl_iterate_phdr for Redox"
@@ -342,24 +342,24 @@ pkgs.stdenv.mkDerivation {
         #define LLVM_LIBC_HDR_LIMITS_MACROS_H
         #include <limits.h>
         #endif
-    EOF
+  EOF
         cat > "$SRCDIR/libc-stubs/hdr/types/float128.h" << 'EOF'
         #ifndef LLVM_LIBC_HDR_TYPES_FLOAT128_H
         #define LLVM_LIBC_HDR_TYPES_FLOAT128_H
         #endif
-    EOF
+  EOF
         cat > "$SRCDIR/libc-stubs/hdr/fenv_macros.h" << 'EOF'
         #ifndef LLVM_LIBC_HDR_FENV_MACROS_H
         #define LLVM_LIBC_HDR_FENV_MACROS_H
         #include <fenv.h>
         #endif
-    EOF
+  EOF
         cat > "$SRCDIR/libc-stubs/hdr/math_macros.h" << 'EOF'
         #ifndef LLVM_LIBC_HDR_MATH_MACROS_H
         #define LLVM_LIBC_HDR_MATH_MACROS_H
         #include <math.h>
         #endif
-    EOF
+  EOF
 
         mkdir -p build && cd build
 
@@ -427,7 +427,7 @@ pkgs.stdenv.mkDerivation {
     #ifndef _LIBCPP_HAS_CLOCK_GETTIME
     #define _LIBCPP_HAS_CLOCK_GETTIME
     #endif
-    REDOX_FIXES
+  REDOX_FIXES
         fi
 
         cd "$SRCDIR"

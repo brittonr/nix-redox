@@ -72,7 +72,7 @@ mkCLibrary.mkAutotools {
     install:
     clean:
     distclean:
-    STUBMK
+  STUBMK
     done
 
     # libffi uses assembly for its closures. On x86_64-unknown-redox the ABI

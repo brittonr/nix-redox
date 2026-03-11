@@ -403,7 +403,7 @@ let
                 }
             }
         }
-        NC_MAIN
+      NC_MAIN
 
         cat > src/nc/modes.rs << 'NC_MODES'
         use std::io::{stdin, Read, Write};
@@ -588,7 +588,7 @@ let
             #[test]
             fn pass() {}
         }
-        NC_MODES
+      NC_MODES
       '';
       installPhase = ''
         runHook preInstall
@@ -687,11 +687,11 @@ let
         pub fn check() -> bool {
             SHOULD_TERMINATE.load(Ordering::SeqCst)
         }
-        CTRLC_EOF
+      CTRLC_EOF
                   # Regenerate checksum for patched ctrlc
                   ${pkgs.python3}/bin/python3 << 'PYTHON_PATCH'
         ${vendor.regenerateSingleCrateChecksum { crateDir = "vendor-combined/ctrlc"; }}
-        PYTHON_PATCH
+      PYTHON_PATCH
                 fi
       '';
       installPhase = ''

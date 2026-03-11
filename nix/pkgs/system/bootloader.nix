@@ -96,7 +96,7 @@ pkgs.stdenv.mkDerivation {
     mkdir -p .cargo
     cat > .cargo/config.toml << 'EOF'
     ${vendor.mkCargoConfig { }}
-    EOF
+  EOF
 
     runHook postConfigure
   '';

@@ -174,13 +174,13 @@ mkCLibrary.mkLibrary {
     install:
     clean:
     distclean:
-    DOCEOF
+  DOCEOF
     cat > man/Makefile.in << 'DOCEOF'
     all:
     install:
     clean:
     distclean:
-    DOCEOF
+  DOCEOF
 
     # autoreconf updates config.sub to recognize x86_64-unknown-redox
     autoreconf -fi 2>/dev/null || true

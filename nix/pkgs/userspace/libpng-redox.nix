@@ -128,7 +128,7 @@ mkCLibrary.mkLibrary {
     Requires: zlib
     Libs: -L''${libdir} -lpng16
     Cflags: -I''${includedir}
-    PCEOF
+  PCEOF
     fi
     # libpng.pc is a copy, not a symlink (avoids broken symlink issue)
     cp $out/lib/pkgconfig/libpng16.pc $out/lib/pkgconfig/libpng.pc
