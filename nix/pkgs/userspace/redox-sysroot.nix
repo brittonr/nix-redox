@@ -246,7 +246,11 @@ pkgs.runCommand "redox-sysroot"
     # for lld. Response file format: one arg per line, optionally quoted.
 
     S=/usr/lib/redox-sysroot
-    LLD=/nix/system/profile/bin/ld.lld
+    # Use lld-wrapper instead of bare ld.lld to get a 16MB stack for the linker.
+    # The Redox kernel only gives ~8KB main-thread stack, which overflows under
+    # parallel link invocations (JOBS>=2). lld-wrapper spawns a thread with a
+    # large stack and exec()s ld.lld from it.
+    LLD=/nix/system/profile/bin/lld-wrapper
     CLANG=/nix/system/profile/bin/clang
     ERR=/tmp/.cc-wrapper-stderr
 

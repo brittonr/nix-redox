@@ -491,6 +491,17 @@ let
     rustc-redox = redox-rustc;
   };
 
+  lld-wrapper = import ../pkgs/userspace/lld-wrapper.nix {
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      redoxTarget
+      ;
+    inherit (modularPkgs.system) relibc;
+    inherit (redoxLib) stubLibs;
+  };
+
   # pkgutils disabled: ring crate needs pregenerated assembly from git source
   # pkgutils = import ../pkgs/userspace/pkgutils.nix (
   #   standaloneCommon
@@ -631,6 +642,7 @@ in
       redox-llvm
       redox-rustc
       redox-sysroot
+      lld-wrapper
       ;
 
     # Infrastructure (needed by module system)

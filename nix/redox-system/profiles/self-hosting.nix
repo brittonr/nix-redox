@@ -47,7 +47,9 @@ dev
       # relibc sysroot (headers + libs for linking)
       ++ opt "redox-sysroot"
       # cmake for C/C++ projects
-      ++ opt "redox-cmake";
+      ++ opt "redox-cmake"
+      # Stack-growing lld launcher (fixes JOBS>=2 linker crashes)
+      ++ opt "lld-wrapper";
 
     variables = (dev."/environment".variables or { }) // {
       # Point cargo/rustc at the sysroot for linking
