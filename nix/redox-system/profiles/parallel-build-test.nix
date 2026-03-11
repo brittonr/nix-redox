@@ -129,6 +129,62 @@ let
             rm -rf /tmp/test-parallel2 /tmp/cargo-home-j2
           '
 
+          # ── Test: JOBS=2 workspace (multiple concurrent link invocations) ──
+          echo "--- parallel-jobs2-workspace ---"
+          /nix/system/profile/bin/bash -c '
+            mkdir -p /tmp/test-workspace
+            cd /tmp/test-workspace
+            export CARGO_HOME=/tmp/cargo-home-j2w
+            mkdir -p $CARGO_HOME
+            cp /root/.cargo/config.toml $CARGO_HOME/config.toml 2>/dev/null || true
+
+            # Create workspace with 3 binary crates
+            cat > Cargo.toml << WSEOF
+    [workspace]
+    members = ["crate-a", "crate-b", "crate-c"]
+    resolver = "2"
+    WSEOF
+
+            for crate in crate-a crate-b crate-c; do
+              mkdir -p $crate/src
+              cat > $crate/Cargo.toml << CREOF
+    [package]
+    name = "$crate"
+    version = "0.1.0"
+    edition = "2021"
+    CREOF
+              echo "fn main() { println!(\"hello from $crate\"); }" > $crate/src/main.rs
+            done
+
+            export CARGO_BUILD_JOBS=2
+            cargo build --offline > /tmp/j2w-out 2>&1 &
+            PID=$!
+            SECONDS=0
+            TIMEOUT=300
+            while kill -0 $PID 2>/dev/null; do
+              if [ $SECONDS -ge $TIMEOUT ]; then
+                echo "FUNC_TEST:parallel-jobs2-workspace:FAIL:timeout after ''${TIMEOUT}s"
+                kill $PID 2>/dev/null; wait $PID 2>/dev/null
+                kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
+                cat /tmp/j2w-out 2>/dev/null | head -30
+                rm -rf /tmp/test-workspace /tmp/cargo-home-j2w
+                exit 0
+              fi
+              cat /scheme/sys/uname > /dev/null 2>&1
+            done
+            wait $PID
+            BUILD_RC=$?
+
+            if [ $BUILD_RC -eq 0 ]; then
+              echo "FUNC_TEST:parallel-jobs2-workspace:PASS"
+              echo "  JOBS=2 workspace build completed in ''${SECONDS}s"
+            else
+              echo "FUNC_TEST:parallel-jobs2-workspace:FAIL:exit=$BUILD_RC"
+              cat /tmp/j2w-out 2>/dev/null | head -30
+            fi
+            rm -rf /tmp/test-workspace /tmp/cargo-home-j2w
+          '
+
           echo ""
           echo "FUNC_TESTS_COMPLETE"
           echo ""
