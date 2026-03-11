@@ -56,6 +56,16 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - snix previously ignored this — sandbox was always CLI-flag-only.
 - Added `sandbox_disabled_by_config()` to read config + SNIX_NO_SANDBOX env.
 
+## Stale Claims (verified fixed)
+
+### nanosleep works correctly (2026-03-11)
+- AGENTS.md said "nanosleep() hangs forever" — this is WRONG on current kernel/relibc.
+- SYS_NANOSLEEP (syscall 162) properly implemented: sets context.wake + context.block.
+- Scheduler wakes blocked contexts when switch_time >= wake (every ~6.75ms PIT tick).
+- clock_gettime(CLOCK_MONOTONIC) reads HPET/PIT hardware — always advances.
+- Verified in functional-test VM: clock-monotonic, timed-wait-returns, timed-wait-duration all PASS.
+- No `sleep` binary exists (not compiled in uutils), but `read -t N` works in bash.
+
 ## Active Workarounds (still needed)
 
 ### --env-set for cargo (PERMANENT until relibc DSO environ fix)
@@ -77,10 +87,11 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Active Bugs (not yet fixed)
 
-### Redox exec() env propagation
-- `Command::env()` vars don't propagate through exec for DSO-linked binaries.
-- `execvpe()` added but doesn't fully fix it for proc-macro crates.
-- Workaround: `--env-set` (see above).
+### Redox exec() env propagation — PARTIALLY FIXED
+- `__relibc_init_environ` exists upstream in `src/start.rs` and `src/ld_so/linker.rs`.
+- ld.so injects parent environ into each DSO (including dlopen'd proc-macro .so files).
+- Basic env propagation through bash→bash exec verified working (2026-03-11).
+- `--env-set` workaround still active — needs validation with proc-macro crates (thiserror-impl, serde_derive) without it before removal.
 
 ### Kernel DMA page allocator bug
 - `zeroed_phys_contiguous` only initializes `span.count` pages, not full 2^order allocation.
