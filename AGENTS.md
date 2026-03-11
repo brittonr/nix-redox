@@ -182,8 +182,8 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - `env!("CARGO_PKG_*")` in proc-macro crates needs `--env-set` workaround (permanent)
 
 ### Key Patches (all still required)
-**relibc** (9 patches): abort-dso, chdir-cwd, execvpe, fcntl-lock, ld-so-align,
-ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-read
+**relibc** (10 patches): abort-dso, chdir-cwd, execvpe, fcntl-lock, ld-so-align,
+ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-read
 **cargo** (4 patches): env-set, read2-pipes, redox-paths, blake3-redox (in vendor)
 **rustc** (4 patches): execvpe, read2-pipes, rustc-flags, allocator-shim
 
@@ -226,6 +226,14 @@ ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-read
 - `acpid` is spawned by pcid-spawner — do NOT notify directly
 - `audiod` uses `nowait` (no HW in headless = no readiness signal)
 - VT=3 for Orbital (VT=1 conflicts with inputd, VT=2 with fbcond)
+
+### Clang on Redox
+- Clang works for C/asm compilation on Redox with `-no-canonical-prefixes` + explicit `-resource-dir`
+- Without `-no-canonical-prefixes`: `realpath` returns `file:/path` → InstalledDir empty → cc1 exec fails
+- Without explicit `-resource-dir`: clang can't find stddef.h/stdarg.h (resource headers)
+- `cc-rs` crate needs `AR=/nix/system/profile/bin/llvm-ar` — no bare `ar` binary on Redox
+- `-isystem $S/include` for sysroot C headers — do NOT use `--sysroot` (overrides resource header search)
+- Compile-only detection in CC wrapper: `-c`, `-S`, `-E`, `-M`, `-MM` → pass to clang, rest → ld.lld
 
 ### Shadow Passwords
 - Must be Argon2id PHC format (`$argon2id$v=19$...`) — plaintext causes panic
