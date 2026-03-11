@@ -100,6 +100,7 @@ let
     redox-rustc = self'.packages.redox-rustc or null;
     redox-libstdcxx-shim = self'.packages.redox-libstdcxx-shim or null;
     redox-sysroot = self'.packages.redox-sysroot or null;
+    lld-wrapper = self'.packages.lld-wrapper or null;
   };
 
   # Pre-built system configurations using profiles
