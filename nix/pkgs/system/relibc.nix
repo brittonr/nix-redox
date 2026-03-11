@@ -92,6 +92,8 @@ let
       python3 ${./patch-relibc-fcntl-lock.py}
       python3 ${./patch-relibc-execvpe.py}
       python3 ${./patch-relibc-ld-so-argv-utf8.py}
+      python3 ${./patch-relibc-fork-lock.py} .
+      python3 ${./patch-relibc-fork-noalloc.py} .
 
       runHook postPatch
     '';
@@ -152,27 +154,27 @@ pkgs.stdenv.mkDerivation {
   RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
 
   configurePhase = ''
-    runHook preConfigure
+      runHook preConfigure
 
-    # Copy source with write permissions
-    cp -r ${patchedSrc}/* .
-    chmod -R u+w .
+      # Copy source with write permissions
+      cp -r ${patchedSrc}/* .
+      chmod -R u+w .
 
-    # Use pre-merged vendor directory
-    cp -rL ${mergedVendor} vendor-combined
-    chmod -R u+w vendor-combined
+      # Use pre-merged vendor directory
+      cp -rL ${mergedVendor} vendor-combined
+      chmod -R u+w vendor-combined
 
-    # Set up cargo config
-    mkdir -p .cargo
-    cat > .cargo/config.toml << 'EOF'
-    ${vendor.mkCargoConfig { inherit gitSources; }}
-  EOF
+      # Set up cargo config
+      mkdir -p .cargo
+      cat > .cargo/config.toml << 'EOF'
+      ${vendor.mkCargoConfig { inherit gitSources; }}
+    EOF
 
-    substituteInPlace Makefile \
-      --replace-quiet 'git submodule sync --recursive' 'true' \
-      --replace-quiet 'git submodule update --init --recursive' 'true'
+      substituteInPlace Makefile \
+        --replace-quiet 'git submodule sync --recursive' 'true' \
+        --replace-quiet 'git submodule update --init --recursive' 'true'
 
-    runHook postConfigure
+      runHook postConfigure
   '';
 
   buildPhase = ''
