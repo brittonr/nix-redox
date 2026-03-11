@@ -83,7 +83,7 @@ mkCLibrary.mkLibrary {
     cpu_family = 'x86_64'
     cpu = 'x86_64'
     endian = 'little'
-    CROSS
+  CROSS
 
     meson setup build \
       --cross-file cross-file.txt \

@@ -71,7 +71,7 @@ mkCLibrary.mkLibrary {
     cat > man/Makefile.in << 'MANMK'
     all:
     install:
-    MANMK
+  MANMK
 
     # Prevent autotools regeneration
     find . -name configure -exec touch {} +
@@ -141,7 +141,7 @@ mkCLibrary.mkLibrary {
     Version: ${version}
     Libs: -L\''${libdir} -liconv
     Cflags: -I\''${includedir}
-    EOF
+  EOF
 
     # Verify
     test -f $out/lib/libiconv.a || { echo "ERROR: libiconv.a not built"; exit 1; }

@@ -485,7 +485,7 @@ mkCLibrary.mkLibrary {
     Version: ${version}
     Libs: -L\''${libdir} -lharfbuzz
     Cflags: -I\''${includedir}/harfbuzz
-    EOF
+  EOF
 
     test -f $out/lib/libharfbuzz.a || { echo "ERROR: libharfbuzz.a not built"; exit 1; }
     echo "harfbuzz libraries:"

@@ -101,7 +101,7 @@ mkCLibrary.mkLibrary {
     Description: Secure Sockets Layer and cryptography libraries and tools
     Version: 1.1.1
     Requires: libssl libcrypto
-    EOF
+  EOF
 
     cat > $out/lib/pkgconfig/libssl.pc << EOF
     prefix=$out
@@ -113,7 +113,7 @@ mkCLibrary.mkLibrary {
     Version: 1.1.1
     Libs: -L\''${libdir} -lssl
     Cflags: -I\''${includedir}
-    EOF
+  EOF
 
     cat > $out/lib/pkgconfig/libcrypto.pc << EOF
     prefix=$out
@@ -125,7 +125,7 @@ mkCLibrary.mkLibrary {
     Version: 1.1.1
     Libs: -L\''${libdir} -lcrypto
     Cflags: -I\''${includedir}
-    EOF
+  EOF
 
     runHook postInstall
   '';

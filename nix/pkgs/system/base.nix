@@ -284,7 +284,7 @@ let
           f.write(content)
 
       print("Python patching complete")
-      EOF
+    EOF
               echo "GraphicScreen page-aligned allocation patch applied"
             fi
 
@@ -489,7 +489,7 @@ pkgs.stdenv.mkDerivation {
       linker = "ld.lld";
       panic = "abort";
     }}
-    CARGOCONF
+  CARGOCONF
 
     runHook postConfigure
   '';

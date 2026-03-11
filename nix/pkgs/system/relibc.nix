@@ -166,7 +166,7 @@ pkgs.stdenv.mkDerivation {
     mkdir -p .cargo
     cat > .cargo/config.toml << 'EOF'
     ${vendor.mkCargoConfig { inherit gitSources; }}
-    EOF
+  EOF
 
     substituteInPlace Makefile \
       --replace-quiet 'git submodule sync --recursive' 'true' \

@@ -1787,14 +1787,14 @@ adios:
           # Write pcid config to new location (etc/pcid.d/ instead of etc/pcid/)
           cat > initfs/etc/pcid.d/initfs.toml << 'PCID_EOF'
           ${pcidToml}
-          PCID_EOF
+        PCID_EOF
 
           # Write numbered init.d scripts (new init system format)
           ${lib.concatStringsSep "\n" (
             lib.mapAttrsToList (name: content: ''
               cat > initfs/etc/init.d/${name} << 'INIT_SCRIPT_EOF'
               ${content}
-              INIT_SCRIPT_EOF
+        INIT_SCRIPT_EOF
             '') (lib.filterAttrs (_: content: content != "") initScriptFiles)
           )}
 

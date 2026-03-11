@@ -92,7 +92,7 @@ mkCLibrary.mkLibrary {
     Version: ${version}
     Libs: -L''${libdir} -lsqlite3
     Cflags: -I''${includedir}
-    EOF
+  EOF
 
     # Verify
     test -f $out/lib/libsqlite3.a || { echo "ERROR: libsqlite3.a not built"; exit 1; }

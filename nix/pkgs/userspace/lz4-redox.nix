@@ -86,7 +86,7 @@ mkCLibrary.mkLibrary {
     Version: ${version}
     Libs: -L''${libdir} -llz4
     Cflags: -I''${includedir}
-    EOF
+  EOF
 
     # Verify
     test -f $out/lib/liblz4.a || { echo "ERROR: liblz4.a not built"; exit 1; }

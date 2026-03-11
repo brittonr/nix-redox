@@ -261,7 +261,7 @@ let
           f.write(content)
 
       print("ImageAligned patching complete")
-      PATCH_EOF
+    PATCH_EOF
               echo "ImageAligned patch applied"
             fi
 
@@ -340,7 +340,7 @@ pkgs.stdenv.mkDerivation {
       linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
       panic = "abort";
     }}
-    CARGOCONF
+  CARGOCONF
 
     runHook postConfigure
   '';

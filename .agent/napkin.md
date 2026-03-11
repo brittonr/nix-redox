@@ -66,14 +66,13 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Verified in functional-test VM: clock-monotonic, timed-wait-returns, timed-wait-duration all PASS.
 - No `sleep` binary exists (not compiled in uutils), but `read -t N` works in bash.
 
-### Self-hosting test heredoc breakage (pre-existing)
-- 5 tests fail due to bash heredoc terminators broken by Nix `''` string indentation stripping:
-  real-program (RUSTEOF), multifile-build (LIBEOF), buildscript (BUILDEOF),
-  snix-compile (CARGOEOF), ripgrep (CFGEOF).
+### Heredoc terminators in Nix '' strings (FIXED 2026-03-11)
+- 120 heredoc terminators across 45 .nix files were broken by Nix `''` indentation stripping.
 - Root cause: Nix strips minimum indentation from `''` strings. Heredoc terminators must be at
   exactly 0-indent-after-stripping for bash to find them.
-- Not related to env-set — discovered during 2026-03-11 validation run.
-- Fix: rewrite these test sections to use printf/echo instead of heredocs, or fix indentation.
+- Fix: moved all heredoc terminators to match the `'';` closer's indentation level.
+- Added broad treefmt + git-hooks excludes (`nix/pkgs/`, `nix/redox-system/`, etc.)
+  because nixfmt re-indents content inside `''` strings and breaks the terminator alignment.
 
 ## Active Workarounds (still needed)
 

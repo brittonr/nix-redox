@@ -411,7 +411,7 @@ pkgs.stdenv.mkDerivation {
     int uv_is_active(const uv_handle_t* h) { (void)h; return 0; }
     int uv_is_readable(const uv_stream_t* s) { (void)s; return 0; }
     int uv_is_writable(const uv_stream_t* s) { (void)s; return 0; }
-    UVCODE
+  UVCODE
     # Write minimal CMakeLists.txt — just builds stub.c into a static lib
     printf 'project(libuv C)\nadd_library(cmlibuv STATIC stub.c)\ntarget_include_directories(cmlibuv PUBLIC include)\n' > ../Utilities/cmlibuv/CMakeLists.txt
 

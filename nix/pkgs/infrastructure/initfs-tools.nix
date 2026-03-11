@@ -102,7 +102,7 @@ pkgs.stdenv.mkDerivation {
     mkdir -p .cargo
     cat > .cargo/config.toml << 'EOF'
     ${vendor.mkCargoConfig { }}
-    EOF
+  EOF
 
     # Ensure tools directory exists and is writable before copying lockfile
     mkdir -p tools

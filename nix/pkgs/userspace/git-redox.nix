@@ -201,7 +201,7 @@ pkgs.stdenv.mkDerivation {
     with open('compat/terminal.c', 'w') as f:
         f.writelines(out)
     print('terminal.c patched' if inserted else 'WARNING: terminal.c patch point not found')
-    PYEOF
+  PYEOF
 
         # 6. Makefile: remove hard link attempts (Redox lacks hard links)
         # Delete lines containing 'ln "$<"' or 'ln "$$' (hard link attempts)
@@ -248,7 +248,7 @@ pkgs.stdenv.mkDerivation {
     NEEDS_SSL_WITH_CURL = 1
     NEEDS_CRYPTO_WITH_SSL = 1
     BLK_SHA1 = 1
-    CFGEOF
+  CFGEOF
   '';
 
   buildPhase = ''

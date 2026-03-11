@@ -104,7 +104,7 @@ mkCLibrary.mkLibrary {
     )
     with open("glib/gatomic.h", "w") as f:
         f.write(content)
-    PYEOF
+  PYEOF
 
         # 3. Python 3.12+ removed distutils; gdbus-codegen uses it
         find . -name 'utils.py' -path '*/codegen/*' -exec sed -i 's/import distutils\.version/import packaging.version/' {} \;
@@ -179,7 +179,7 @@ mkCLibrary.mkLibrary {
 
     with open("_stubs/arpa/nameser_compat.h", "w") as f:
         f.write("#pragma once\n#include <arpa/nameser.h>\n")
-    PYEOF
+  PYEOF
 
         # 5. Create modified meson cross file with stub header path
         STUBS_DIR="$(pwd)/_stubs"
@@ -224,7 +224,7 @@ mkCLibrary.mkLibrary {
     )
     with open("gio/meson.build", "w") as f:
         f.write(gio)
-    PYEOF
+  PYEOF
 
         # 9. Patch GIO source files for Redox compatibility
         # gunixmounts.c: the internal functions _g_get_unix_mounts,
@@ -264,7 +264,7 @@ mkCLibrary.mkLibrary {
 
     with open("gio/gunixmounts.c", "w") as f:
         f.write(content)
-    PYEOF
+  PYEOF
 
         # 10. Create Redox stubs for missing POSIX *at() functions.
         # relibc doesn't implement openat/unlinkat/fchownat/linkat.
@@ -310,7 +310,7 @@ mkCLibrary.mkLibrary {
         (void)olddirfd; (void)newdirfd; (void)flags;
         return link(oldpath, newpath);
     }
-    STUBEOF
+  STUBEOF
 
         # Wire _redox_stubs.c into gio/meson.build
         ${pkgs.python3}/bin/python3 << 'PYEOF'
@@ -323,7 +323,7 @@ mkCLibrary.mkLibrary {
     )
     with open("gio/meson.build", "w") as f:
         f.write(content)
-    PYEOF
+  PYEOF
 
         meson setup build \
           --cross-file cross-file.txt \

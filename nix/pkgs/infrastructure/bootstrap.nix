@@ -96,7 +96,7 @@ let
             *(.rel.eh_frame*)
         }
       }
-      LINKERSCRIPT
+    LINKERSCRIPT
 
       runHook postPatch
     '';
@@ -166,7 +166,7 @@ pkgs.stdenv.mkDerivation {
       panic = "abort";
       lto = "fat";
     }}
-    CARGOCONF
+  CARGOCONF
 
     runHook postConfigure
   '';

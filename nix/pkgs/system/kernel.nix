@@ -103,7 +103,7 @@ pkgs.stdenv.mkDerivation {
     mkdir -p .cargo
     cat > .cargo/config.toml << 'EOF'
     ${vendor.mkCargoConfig { }}
-    EOF
+  EOF
 
     # Use llvm-objcopy instead of target-prefixed objcopy
     sed -i 's/\$(GNU_TARGET)-objcopy/llvm-objcopy/g' Makefile

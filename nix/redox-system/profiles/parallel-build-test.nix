@@ -41,7 +41,7 @@ let
     name = "parallel-test"
     version = "0.1.0"
     edition = "2021"
-    TOMLEOF
+  TOMLEOF
 
           mkdir -p src
           echo "fn main() { println!(\"hello\"); }" > src/main.rs
@@ -89,7 +89,7 @@ let
     name = "parallel-test2"
     version = "0.1.0"
     edition = "2021"
-    TOMLEOF
+  TOMLEOF
 
           mkdir -p src
           echo "fn main() { println!(\"hello parallel\"); }" > src/main.rs

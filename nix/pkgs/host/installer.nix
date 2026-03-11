@@ -87,7 +87,7 @@ pkgs.stdenv.mkDerivation {
 
     [net]
     offline = true
-    EOF
+  EOF
 
     export HOME=$(mktemp -d)
 

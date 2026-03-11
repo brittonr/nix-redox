@@ -1738,7 +1738,7 @@ let
       system = "x86_64-linux";
       inherit src;
     }).outPath
-    NIXEOF
+  NIXEOF
     '
     /bin/snix eval --file /tmp/fetch_input.nix > /tmp/fetch_input_out ^> /tmp/fetch_input_err
     if test $? = 0
@@ -1796,7 +1796,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cat > /tmp/testflake/flake.lock << '"'"'LOCKEOF'"'"'
     {
       "version": 7,
@@ -1805,7 +1805,7 @@ let
         "root": {}
       }
     }
-    LOCKEOF
+  LOCKEOF
       cd /tmp/testflake
       OUTPUT=$(/bin/snix build ".#hello" 2>/tmp/flake-simple-err)
       EXIT=$?
@@ -1868,7 +1868,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cat > /tmp/testflake-dir/flake.lock << '"'"'LOCKEOF'"'"'
     {
       "version": 7,
@@ -1877,7 +1877,7 @@ let
         "root": {}
       }
     }
-    LOCKEOF
+  LOCKEOF
       cd /tmp/testflake-dir
       OUTPUT=$(/bin/snix build ".#mypkg" 2>/tmp/flake-dir-err)
       EXIT=$?
@@ -1918,7 +1918,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cat > /tmp/testflake-multi/flake.lock << '"'"'LOCKEOF'"'"'
     {
       "version": 7,
@@ -1927,7 +1927,7 @@ let
         "root": {}
       }
     }
-    LOCKEOF
+  LOCKEOF
       cd /tmp/testflake-multi
       OUT_A=$(/bin/snix build ".#alpha" 2>/dev/null)
       OUT_B=$(/bin/snix build ".#beta" 2>/dev/null)
@@ -1968,7 +1968,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cat > /tmp/testflake-dep/flake.lock << '"'"'LOCKEOF'"'"'
     {
       "version": 7,
@@ -1977,7 +1977,7 @@ let
         "root": {}
       }
     }
-    LOCKEOF
+  LOCKEOF
       cd /tmp/testflake-dep
       OUTPUT=$(/bin/snix build ".#combined" 2>/tmp/flake-dep-err)
       EXIT=$?
@@ -1999,7 +1999,7 @@ let
       mkdir -p /tmp/testflake-nolock
       cat > /tmp/testflake-nolock/flake.nix << '"'"'FLAKEEOF'"'"'
     { outputs = { self }: { packages."x86_64-unknown-redox".x = 1; }; }
-    FLAKEEOF
+  FLAKEEOF
       cd /tmp/testflake-nolock
       /bin/snix build ".#x" >/dev/null 2>/tmp/flake-nolock-err
       EXIT=$?
@@ -2087,7 +2087,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cat > /tmp/testflake-path/flake.lock << '"'"'LOCKEOF'"'"'
     {
       "version": 7,
@@ -2107,7 +2107,7 @@ let
         }
       }
     }
-    LOCKEOF
+  LOCKEOF
       cd /tmp/testflake-path
       OUTPUT=$(/bin/snix build ".#greet" 2>/tmp/flake-path-err)
       EXIT=$?
@@ -2157,7 +2157,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cat > /tmp/sandbox-test/flake.lock << '"'"'LOCKEOF'"'"'
     {
       "version": 7,
@@ -2168,7 +2168,7 @@ let
         }
       }
     }
-    LOCKEOF
+  LOCKEOF
       cd /tmp/sandbox-test
       OUTPUT=$(/bin/snix build ".#hello" 2>/tmp/sandbox-basic-err)
       EXIT=$?
@@ -2222,7 +2222,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cat > /tmp/sandbox-restrict/flake.lock << '"'"'LOCKEOF'"'"'
     {
       "version": 7,
@@ -2233,7 +2233,7 @@ let
         }
       }
     }
-    LOCKEOF
+  LOCKEOF
       cd /tmp/sandbox-restrict
 
       # Sandboxed: debug: should be blocked
@@ -2283,7 +2283,7 @@ let
         }
       }
     }
-    LOCKEOF
+  LOCKEOF
     '
 
     # ── Test 1.3: exec() resolves through the proxy ───────────────────
@@ -2303,7 +2303,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cd /tmp/proxy-test
       OUTPUT=$(/bin/snix build ".#probe" 2>/tmp/proxy-test/exec-err)
       EXIT=$?
@@ -2350,7 +2350,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cd /tmp/proxy-test
       OUTPUT=$(/bin/snix build ".#iobench" 2>/tmp/proxy-test/io-err)
       EXIT=$?
@@ -2396,7 +2396,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cd /tmp/proxy-test
       OUTPUT=$(/bin/snix build ".#passwdtest" 2>/tmp/proxy-test/passwd-err)
       EXIT=$?
@@ -2451,7 +2451,7 @@ let
           };
         };
     }
-    FLAKEEOF
+  FLAKEEOF
       cd /tmp/proxy-test
       OUTPUT=$(/bin/snix build ".#reader" 2>/tmp/proxy-test/input-err)
       EXIT=$?
@@ -2498,7 +2498,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cd /tmp/proxy-test
       OUTPUT=$(/bin/snix build ".#undeclared" 2>/tmp/proxy-test/undecl-err)
       EXIT=$?
@@ -2544,7 +2544,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cd /tmp/proxy-test
       OUTPUT=$(/bin/snix build ".#writeread" 2>/tmp/proxy-test/wr-err)
       EXIT=$?
@@ -2590,7 +2590,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cd /tmp/proxy-test
       OUTPUT=$(/bin/snix build ".#hello" 2>/tmp/proxy-test/compat-err)
       EXIT=$?
@@ -2636,7 +2636,7 @@ let
         };
       };
     }
-    FLAKEEOF
+  FLAKEEOF
       cd /tmp/proxy-test
       OUTPUT=$(/bin/snix build --no-sandbox ".#nosb" 2>/tmp/proxy-test/nosb-err)
       EXIT=$?

@@ -77,7 +77,7 @@ mkCLibrary.mkLibrary {
     install:
     clean:
     distclean:
-    DOCEOF
+  DOCEOF
         # Also create a dummy man page so the top-level Makefile doesn't fail
         touch doc/make.1
 

@@ -81,7 +81,7 @@ mkCLibrary.mkLibrary {
     Version: 1.5.7
     Libs: -L\''${libdir} -lzstd
     Cflags: -I\''${includedir}
-    EOF
+  EOF
     runHook postInstall
   '';
 

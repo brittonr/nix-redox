@@ -85,7 +85,7 @@ mkCLibrary.mkLibrary {
     Version: ${version}
     Libs: -L''${libdir} -lgif
     Cflags: -I''${includedir}
-    EOF
+  EOF
 
     # Verify
     test -f $out/lib/libgif.a || { echo "ERROR: libgif.a not built"; exit 1; }
