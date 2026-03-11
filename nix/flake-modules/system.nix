@@ -101,6 +101,8 @@ let
     redox-libstdcxx-shim = self'.packages.redox-libstdcxx-shim or null;
     redox-sysroot = self'.packages.redox-sysroot or null;
     lld-wrapper = self'.packages.lld-wrapper or null;
+    proc-dump = self'.packages.proc-dump or null;
+    waitpid-stress = self'.packages.waitpid-stress or null;
   };
 
   # Pre-built system configurations using profiles
@@ -284,7 +286,7 @@ let
     inherit bootloader;
     memoryMB = 4096;
     cpus = 4;
-    defaultTimeout = 600; # JOBS=2 may hang — 10 min max
+    defaultTimeout = 1800; # graduated workspace tests up to 100 crates — 30 min max
   };
 
   # Scheme daemon test: stored + profiled daemons serve store: and profile: schemes
