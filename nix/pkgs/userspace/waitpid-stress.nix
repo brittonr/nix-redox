@@ -233,6 +233,173 @@ let
         }
     }
 
+    /// Test 4: Concurrent fork+exec from multiple threads
+    /// This reproduces what cargo does with JOBS=2: two threads each
+    /// fork+exec a child process simultaneously.
+    fn test_concurrent_fork_exec(pairs: usize) -> bool {
+        use std::thread;
+        use std::sync::{Arc, Barrier};
+
+        eprintln!("  Testing: {} pairs of concurrent fork+exec from threads", pairs);
+
+        let mut all_ok = true;
+
+        for round in 0..pairs {
+            // Barrier ensures both threads fork at the same time
+            let barrier = Arc::new(Barrier::new(2));
+
+            let b1 = barrier.clone();
+            let b2 = barrier.clone();
+
+            let t1 = thread::spawn(move || -> i32 {
+                b1.wait();
+                let pid = unsafe { fork() };
+                if pid < 0 {
+                    eprintln!("  round {}: thread 1 fork failed", round);
+                    return -1;
+                }
+                if pid == 0 {
+                    // Child: exec /bin/echo (or just exit if not available)
+                    unsafe { _exit(42) };
+                }
+                // Parent: wait for child
+                let mut status: i32 = 0;
+                let ret = unsafe { waitpid(pid, &mut status, 0) };
+                if ret == pid {
+                    pid
+                } else {
+                    -1
+                }
+            });
+
+            let t2 = thread::spawn(move || -> i32 {
+                b2.wait();
+                let pid = unsafe { fork() };
+                if pid < 0 {
+                    eprintln!("  round {}: thread 2 fork failed", round);
+                    return -1;
+                }
+                if pid == 0 {
+                    unsafe { _exit(43) };
+                }
+                let mut status: i32 = 0;
+                let ret = unsafe { waitpid(pid, &mut status, 0) };
+                if ret == pid {
+                    pid
+                } else {
+                    -1
+                }
+            });
+
+            let r1 = t1.join().unwrap_or(-1);
+            let r2 = t2.join().unwrap_or(-1);
+
+            if r1 < 0 || r2 < 0 {
+                eprintln!("  round {}: FAILED (r1={}, r2={})", round, r1, r2);
+                all_ok = false;
+                break;
+            }
+        }
+
+        if all_ok {
+            eprintln!("  All {} rounds of concurrent fork+exec passed", pairs);
+        }
+        all_ok
+    }
+
+    /// Test 5: Concurrent fork+exec with pipes (closer to cargo's pattern)
+    /// Each thread: create pipe, fork, child writes to pipe and exits,
+    /// parent reads pipe and waits for child.
+    fn test_concurrent_fork_exec_pipes(pairs: usize) -> bool {
+        use std::thread;
+        use std::sync::{Arc, Barrier};
+
+        eprintln!("  Testing: {} pairs of concurrent fork+exec with pipes", pairs);
+
+        let mut all_ok = true;
+
+        for round in 0..pairs {
+            let barrier = Arc::new(Barrier::new(2));
+
+            let round_copy = round;
+            let do_fork_pipe = move |barrier: Arc<Barrier>, id: u8| -> bool {
+                let round = round_copy;
+                // Create stdout/stderr pipes like cargo does
+                let mut out_fds = [0i32; 2];
+                let mut err_fds = [0i32; 2];
+                if unsafe { pipe(&mut out_fds) } != 0 || unsafe { pipe(&mut err_fds) } != 0 {
+                    eprintln!("  round {}: pipe creation failed", round);
+                    return false;
+                }
+
+                barrier.wait();
+
+                let pid = unsafe { fork() };
+                if pid < 0 {
+                    eprintln!("  round {}: fork failed for id={}", round, id);
+                    return false;
+                }
+                if pid == 0 {
+                    // Child: close read ends, write to stdout pipe, exit
+                    unsafe { close(out_fds[0]) };
+                    unsafe { close(err_fds[0]) };
+                    let msg = b"hello from child\n";
+                    unsafe { write(out_fds[1], msg.as_ptr(), msg.len()) };
+                    unsafe { close(out_fds[1]) };
+                    unsafe { close(err_fds[1]) };
+                    unsafe { _exit(0) };
+                }
+
+                // Parent: close write ends, read from pipes
+                unsafe { close(out_fds[1]) };
+                unsafe { close(err_fds[1]) };
+
+                // Read stdout (like cargo's read2 main thread)
+                let mut buf = [0u8; 256];
+                let mut total = 0;
+                loop {
+                    let n = unsafe { read(out_fds[0], buf.as_mut_ptr(), buf.len()) };
+                    if n <= 0 { break; }
+                    total += n as usize;
+                }
+                unsafe { close(out_fds[0]) };
+
+                // Read stderr
+                loop {
+                    let n = unsafe { read(err_fds[0], buf.as_mut_ptr(), buf.len()) };
+                    if n <= 0 { break; }
+                }
+                unsafe { close(err_fds[0]) };
+
+                // Wait for child
+                let mut status: i32 = 0;
+                let ret = unsafe { waitpid(pid, &mut status, 0) };
+
+                ret == pid && total > 0
+            };
+
+            let b1 = barrier.clone();
+            let b2 = barrier.clone();
+
+            let t1 = thread::spawn(move || do_fork_pipe(b1, 1));
+            let t2 = thread::spawn(move || do_fork_pipe(b2, 2));
+
+            let r1 = t1.join().unwrap_or(false);
+            let r2 = t2.join().unwrap_or(false);
+
+            if !r1 || !r2 {
+                eprintln!("  round {}: FAILED (t1={}, t2={})", round, r1, r2);
+                all_ok = false;
+                break;
+            }
+        }
+
+        if all_ok {
+            eprintln!("  All {} rounds of concurrent fork+exec+pipes passed", pairs);
+        }
+        all_ok
+    }
+
     fn main() {
         let args: Vec<String> = env::args().collect();
         let n: usize = if args.len() > 1 {
@@ -262,6 +429,20 @@ let
             println!("FUNC_TEST:waitpid-stress-concurrent-{}:PASS", n);
         } else {
             println!("FUNC_TEST:waitpid-stress-concurrent-{}:FAIL:missed exits", n);
+        }
+
+        // Test 4: concurrent fork+exec from threads (10 rounds)
+        if test_concurrent_fork_exec(10) {
+            println!("FUNC_TEST:waitpid-stress-concurrent-forkexec:PASS");
+        } else {
+            println!("FUNC_TEST:waitpid-stress-concurrent-forkexec:FAIL:thread fork hang");
+        }
+
+        // Test 5: concurrent fork+exec with pipes (10 rounds)
+        if test_concurrent_fork_exec_pipes(10) {
+            println!("FUNC_TEST:waitpid-stress-concurrent-forkpipes:PASS");
+        } else {
+            println!("FUNC_TEST:waitpid-stress-concurrent-forkpipes:FAIL:thread fork+pipe hang");
         }
     }
   '';

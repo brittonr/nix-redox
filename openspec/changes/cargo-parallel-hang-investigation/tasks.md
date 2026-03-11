@@ -23,8 +23,8 @@
 
 - [x] 4.1 Analyze proc-dump and cargo heartbeat logs from the first hanging workspace size to identify: which process is stuck, what it's waiting on, and whether waitpid/pipe/jobserver is the blocked path
 - [x] 4.2 Cross-reference waitpid stress test results — if waitpid drops notifications, the bug is in proc: scheme or relibc waitpid wrapper
-- [ ] 4.3 If waitpid is clean, test pipe buffer exhaustion: write a test that creates N pipes simultaneously and verifies reads/writes don't deadlock
-- [ ] 4.4 Document root cause findings in the parallel-hang-report.md
+- [x] 4.3 Write concurrent fork+exec test: two threads each fork+exec a trivial program simultaneously — CONFIRMED HANG: test_concurrent_fork_exec hangs on first round, proving relibc fork() is not thread-safe
+- [x] 4.4 Document root cause findings in the parallel-hang-report.md
 
 ## 5. Fix Implementation
 

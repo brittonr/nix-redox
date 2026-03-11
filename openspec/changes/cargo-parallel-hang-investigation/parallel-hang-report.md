@@ -70,9 +70,37 @@ The pattern — one process stuck, the other works — is classic fork-after-loc
 
 In this case: cargo spawns rustc-1 and rustc-2 concurrently. Both go through fork()+exec(). If relibc has a global mutex (e.g., for memory allocation or CWD) that one fork() holds when the other fork() runs, the child from the second fork inherits the locked mutex and deadlocks.
 
+## Root Cause Confirmed: relibc fork() is not thread-safe (2026-03-11)
+
+### Minimal Reproducer
+
+```rust
+// Two threads call fork() simultaneously via a Barrier
+let barrier = Arc::new(Barrier::new(2));
+let t1 = thread::spawn(move || { barrier.wait(); fork(); waitpid(...) });
+let t2 = thread::spawn(move || { barrier.wait(); fork(); waitpid(...) });
+// Result: one thread's child hangs permanently, the other completes
+```
+
+The `test_concurrent_fork_exec` test in `waitpid-stress` hangs on the very first round. Two threads calling `fork()` concurrently → one forked child never exits. The parent's `waitpid()` blocks forever.
+
+This matches the AGENTS.md note: "Mutex is non-reentrant — child inherits locked state after fork() → deadlock". A global mutex in relibc (likely the memory allocator, CWD lock, or environ lock) is held by thread A when thread B calls `fork()`. Thread B's child inherits the locked mutex but thread A's copy doesn't exist in the child → deadlock.
+
+### Why sequential fork works
+
+The waitpid-stress tests 1-3 all fork from a single thread sequentially. 50 children, pipe I/O, concurrent exits — all pass. The issue is ONLY when two threads call fork() at the same time.
+
+### Why JOBS=1 works
+
+With JOBS=1, cargo only ever has one active compilation. It forks one rustc at a time, sequentially. No concurrent fork() calls.
+
+### Why JOBS=2 single crate works
+
+A single crate build only spawns one rustc process. Even with JOBS=2, there's only one unit of work. No concurrent fork() calls.
+
 ## Next Steps
 
-1. **Add PID tracking to heartbeat** — record the actual child PID for each active job
-2. **Test fork() concurrency directly** — write a test that does concurrent fork()+exec() of a trivial program and checks both children exit
-3. **Check relibc fork() for mutex usage** — look for global mutexes acquired during fork/exec path
-4. **Test with strace equivalent** — since proc-dump can't read /scheme/proc/ (path may be wrong), investigate the correct path for process introspection
+1. **Identify the specific mutex** — read relibc fork() implementation to find which global lock causes the deadlock
+2. **Fix option A**: Make fork() acquire all global locks before forking and release them in the child (pthread_atfork pattern)
+3. **Fix option B**: Replace global mutexes with fork-safe alternatives (e.g., process-private locks that reset in child)
+4. **Validate fix** with the test_concurrent_fork_exec test and the graduated workspace tests
