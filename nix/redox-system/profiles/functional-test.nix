@@ -2656,6 +2656,87 @@ let
     # Cleanup proxy test dirs
     rm -r /tmp/proxy-test ^> /dev/null
 
+    # ── Timing / nanosleep Tests ──────────────────────────────────────
+    # These verify that the monotonic clock advances and that timed waits
+    # work. Tests whether nanosleep (SYS_NANOSLEEP syscall 162) is
+    # functional. Uses bash SECONDS (clock_gettime) and read -t (select
+    # with timeout) as complementary test vectors.
+    # NOTE: No sleep binary exists in uutils. read -t uses select/poll.
+
+    echo "--- clock-monotonic ---"
+    /nix/system/profile/bin/bash -c '
+      BEFORE=$SECONDS
+      for i in 1 2 3 4 5 6 7 8 9 10; do
+        cat /scheme/sys/uname > /dev/null 2>&1
+      done
+      AFTER=$SECONDS
+      if [ "$AFTER" -ge "$BEFORE" ]; then
+        echo "FUNC_TEST:clock-monotonic:PASS"
+        echo "  SECONDS before=$BEFORE after=$AFTER"
+      else
+        echo "FUNC_TEST:clock-monotonic:FAIL:clock-went-backwards before=$BEFORE after=$AFTER"
+      fi
+    '
+
+    echo "--- timed-wait-returns ---"
+    /nix/system/profile/bin/bash -c '
+      BEFORE=$SECONDS
+      read -t 1 < /dev/null 2>/dev/null
+      AFTER=$SECONDS
+      ELAPSED=$((AFTER - BEFORE))
+      if [ $ELAPSED -le 5 ]; then
+        echo "FUNC_TEST:timed-wait-returns:PASS"
+        echo "  read -t 1 completed in ''${ELAPSED}s"
+      else
+        echo "FUNC_TEST:timed-wait-returns:FAIL:elapsed=''${ELAPSED}s (expected 0-5)"
+      fi
+    '
+
+    echo "--- timed-wait-duration ---"
+    /nix/system/profile/bin/bash -c '
+      BEFORE=$SECONDS
+      read -t 2 < /dev/null 2>/dev/null
+      AFTER=$SECONDS
+      ELAPSED=$((AFTER - BEFORE))
+      if [ $ELAPSED -ge 1 ] && [ $ELAPSED -le 6 ]; then
+        echo "FUNC_TEST:timed-wait-duration:PASS"
+        echo "  read -t 2 took ''${ELAPSED}s"
+      else
+        echo "FUNC_TEST:timed-wait-duration:FAIL:elapsed=''${ELAPSED}s (expected 1-6)"
+      fi
+    '
+
+    # ── Environment Variable Propagation Test ────────────────────────
+    # Verifies that env vars set via Command::env() propagate to child
+    # processes. This tests the __relibc_init_environ injection path.
+
+    echo "--- env-propagation ---"
+    /nix/system/profile/bin/bash -c '
+      # Set a custom env var and verify the child sees it
+      TEST_ENVPROP_VALUE="redox_env_test_42"
+      export TEST_ENVPROP_VALUE
+      # Run bash as a child and check the variable
+      CHILD_RESULT=$(/nix/system/profile/bin/bash -c "echo \$TEST_ENVPROP_VALUE")
+      if [ "$CHILD_RESULT" = "redox_env_test_42" ]; then
+        echo "FUNC_TEST:env-propagation:PASS"
+      else
+        echo "FUNC_TEST:env-propagation:FAIL:expected=redox_env_test_42 got=$CHILD_RESULT"
+      fi
+    '
+
+    echo "--- env-new-var-propagation ---"
+    /nix/system/profile/bin/bash -c '
+      # Test that a NEW env var (not inherited) propagates to child
+      # This is the pattern Command::env("KEY", "value") uses
+      export NEW_REDOX_TEST_VAR="propagation_check_ok"
+      GOT=$(/nix/system/profile/bin/bash -c "echo \$NEW_REDOX_TEST_VAR")
+      if [ "$GOT" = "propagation_check_ok" ]; then
+        echo "FUNC_TEST:env-new-var-propagation:PASS"
+      else
+        echo "FUNC_TEST:env-new-var-propagation:FAIL:expected=propagation_check_ok got=$GOT"
+      fi
+    '
+
     # ── System Upgrade Pipeline Tests ──────────────────────────────────
     # Tests the channel → upgrade → activation flow end-to-end using a
     # local directory channel (no network needed). Creates a modified

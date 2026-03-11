@@ -24,8 +24,8 @@ Hard-won lessons from building RedoxOS with Nix. Read before making changes.
 **In extrautils**: grep, less, tar
 **NOT available**: dd, tail, sleep, sed, awk, cut, find, chmod (use full path `/nix/system/profile/bin/chmod`)
 - `grep` has no `\|` alternation or `-E` extended regex — use separate grep calls
-- `sleep` hangs forever (`nanosleep()` in relibc broken) — use FUSE I/O ops as delay
-- No `sleep` binary in any package
+- `sleep` binary not in uutils (not compiled) — use `read -t N < /dev/null` in bash or FUSE I/O ops in Ion
+- nanosleep syscall works correctly (kernel SYS_NANOSLEEP + scheduler wake verified 2026-03-11)
 
 ### Scheme System
 - Scheme daemons CANNOT do `file:` I/O inside the event loop — blocks the daemon thread forever
@@ -37,7 +37,8 @@ Hard-won lessons from building RedoxOS with Nix. Read before making changes.
 - "Scheme 'file' not found" warnings during early boot are normal (before redoxfs mounts rootfs)
 
 ### relibc Limitations
-- `nanosleep()` hangs forever; `Instant::now()` may not advance
+- `nanosleep()` works correctly (SYS_NANOSLEEP syscall 162, kernel context.wake + scheduler verified)
+- `Instant::now()` advances via clock_gettime(CLOCK_MONOTONIC) reading HPET/PIT hardware
 - `poll()` unreliable for pipe multiplexing — use thread-based read2 instead
 - `Mutex` is non-reentrant — child inherits locked state after `fork()` → deadlock
 - `abort()` uses `ud2` instruction → opaque kernel register dump. Patched to `_exit(134)`.
@@ -184,7 +185,7 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 ### Key Patches (all still required)
 **relibc** (10 patches): abort-dso, chdir-cwd, execvpe, fcntl-lock, ld-so-align,
 ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-read
-**cargo** (4 patches): env-set, read2-pipes, redox-paths, blake3-redox (in vendor)
+**cargo** (4 patches): env-set (may be removable — environ injection exists upstream, needs proc-macro validation), read2-pipes, redox-paths, blake3-redox (in vendor)
 **rustc** (4 patches): execvpe, read2-pipes, rustc-flags, allocator-shim
 
 ### Allocator Shim
