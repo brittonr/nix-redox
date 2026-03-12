@@ -27,6 +27,8 @@ let
     name = "kernel-src-patched";
     src = kernel-src;
 
+    nativeBuildInputs = [ pkgs.python3 ];
+
     phases = [
       "unpackPhase"
       "patchPhase"
@@ -52,6 +54,10 @@ let
           --replace-fail 'fdt = { git = "https://github.com/repnop/fdt.git", rev = "2fb1409edd1877c714a0aa36b6a7c5351004be54" }' \
                          'fdt = { path = "${fdt-src}" }'
       fi
+
+      # Fix zeroed_phys_contiguous: initialize ALL 2^order frames and
+      # use bulk deallocate_p2frame on free (prevents buddy allocator corruption)
+      python3 ${./patches/patch-kernel-p2frame-init.py} .
 
       runHook postPatch
     '';

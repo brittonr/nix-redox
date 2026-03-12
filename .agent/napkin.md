@@ -56,6 +56,13 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Stale Claims (verified fixed)
 
+### Kernel DMA page allocator bug (FIXED 2026-03-12)
+- `zeroed_phys_contiguous` now initializes ALL 2^order frames via `patch-kernel-p2frame-init.py`.
+- `handle_free_action` uses bulk `deallocate_p2frame(base, order)` instead of per-frame loop.
+- `alloc_order: Option<u32>` added to `Provider::Allocated` to track actual allocation size.
+- `round_to_p2_pages()` in virtio-fsd retained as defense in depth.
+- Verified: boot-test passes, bridge-test passes (41/42, 1 pre-existing unrelated failure).
+
 ### nanosleep works correctly (2026-03-11)
 - SYS_NANOSLEEP (syscall 162) properly implemented: sets context.wake + context.block.
 - No `sleep` binary exists (not compiled in uutils), but `read -t N` works in bash.
@@ -118,10 +125,8 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - The parallel-build-test (100 crates, JOBS=2) uses `linker = ld.lld` and PASSES.
 - Fix: either make cc wrapper use lld-wrapper, or grow clang's stack for the lld thread.
 
-### Kernel DMA page allocator bug
-- `zeroed_phys_contiguous` only initializes `span.count` pages, not full 2^order allocation.
-- Buddy allocator corruption on dealloc. Workaround: `round_to_p2_pages()` + `mem::forget()`.
-- Upstream kernel fix needed.
+### Kernel DMA page allocator bug (FIXED — see Stale Claims)
+- Fixed via `patch-kernel-p2frame-init.py`. See "Stale Claims" section below.
 
 ### ring env!("CARGO_PKG_NAME") fails in snix builds
 - Even with `__relibc_init_environ` version script fix, ring crate fails when built via snix.

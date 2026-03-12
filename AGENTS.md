@@ -206,8 +206,8 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 
 ### virtio-fsd
 - Response buffers MUST be `sizeof(FuseOutHeader) + requested_size` (virtiofsd uses descriptor size for preadv2 length)
-- DMA buffers `core::mem::forget()`ed to avoid kernel `deallocate_p2frame` bug
-- Non-power-of-two page allocations: kernel only initializes `span.count` pages, excess have zeroed PageInfo → buddy allocator corruption. `round_to_p2_pages()` works around this.
+- Non-power-of-two phys_contiguous bug FIXED via `patch-kernel-p2frame-init.py` — kernel now initializes all 2^order frames and uses bulk `deallocate_p2frame` on free
+- `round_to_p2_pages()` retained as defense in depth (drivers should not depend on kernel correctness for DMA safety)
 - Redox open flags must be translated to Linux FUSE flags via `redox_to_fuse_flags()`
 - `--cache=never` on virtiofsd for live push detection (otherwise dir entries cached)
 
