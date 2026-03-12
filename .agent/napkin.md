@@ -98,17 +98,16 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Active Workarounds (still needed)
 
-### --env-set for cargo (still needed for ring crate)
+### --env-set for cargo (still needed — environ universally broken)
 - `patch-cargo-env-set.py` passes env vars via rustc `--env-set` flag.
-- Partial fix landed (2026-03-12): DSO environ injection works for simple builds.
-- Still needed: ring crate fails `env!("CARGO_PKG_NAME")` after build.rs fork+exec of cc/clang.
-  The 510 errors are all "attribute value must be a literal" from `prefixed.rs` — ring's `prefix!()`
-  macro uses `env!("CARGO_PKG_NAME")` for symbol prefixing, and gets "not defined at compile time".
-- Hypothesis: build.rs fork+exec of cc corrupts environ state in parent cargo process,
-  so subsequent rustc invocations for the lib target lose CARGO_PKG_* vars.
-- Without --env-set: 49/59 self-hosting tests pass (10 fail — all ring/snix/rg-related).
-- With --env-set: 57/58 pass (only parallel-jobs2 fails — separate linker issue).
-- Removal condition: fix the post-build.rs environ corruption.
+- Environ propagation is universally broken for DSO-linked rustc on Redox.
+- `option_env!("LD_LIBRARY_PATH")` returns None even for simple cargo builds.
+- --env-set covers CARGO_PKG_*, OUT_DIR, and cargo:rustc-env values.
+- Ring fails because it needs env!("CARGO_PKG_NAME") which IS in --env-set,
+  but the ring build also exercises paths where process environ matters.
+- Without --env-set: tests that use env!("CARGO_PKG_NAME") fail across the board.
+- With --env-set: 48/50+ pass (only env-propagation tests fail — by design).
+- Removal condition: fix DSO environ propagation in ld_so/relibc.
 
 ### cargo-build-safe timeout wrapper
 - 90s timeout + retry for intermittent cargo hangs (flock and other blocking).
@@ -131,12 +130,19 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### Kernel DMA page allocator bug (FIXED — see Stale Claims)
 - Fixed via `patch-kernel-p2frame-init.py`. See "Stale Claims" section below.
 
-### ring env!("CARGO_PKG_NAME") fails in snix builds
-- Even with `__relibc_init_environ` version script fix, ring crate fails when built via snix.
-- The same cargo→rustc chain works for simpler crates (hello world, proc-macros, build.rs deps).
-- Unique to ring: build.rs compiles ~30 C/asm files via cc crate (fork+exec clang many times)
-  before rustc compiles the lib target. Something in that process corrupts environ.
-- Blocked on: understanding why build.rs fork+exec affects parent cargo's environ for later rustc calls.
+### Environ propagation universally broken for DSO-linked rustc (2026-03-12)
+- `option_env!("LD_LIBRARY_PATH")` returns None for ALL cargo builds (simple or complex)
+- Process environ does NOT propagate from cargo→rustc at all
+- `env!("CARGO_PKG_NAME")` works ONLY via `--env-set` CLI flag (logical_env, not process env)
+- This is NOT ring-specific — ring fails because --env-set doesn't cover all ring needs
+- librustc_driver.so exports `__relibc_init_environ` in .dynsym (verified via llvm-nm)
+- ld_so's run_init() should write environ to DSO, but something in the chain fails
+- Possible causes: (a) ld_so's `platform::environ` is null when run_init() runs,
+  (b) DSO's init_array sees non-null platform::environ and skips __relibc_init_environ,
+  (c) symbol interposition routes getenv() to main binary's relibc (not DSO's),
+  (d) some other startup ordering issue
+- The old hypothesis "build.rs fork+exec corrupts parent environ" was WRONG
+- Blocked on: diagnosing exactly where in the ld_so→DSO environ chain the value is lost
 
 ## Redox Namespace Sandboxing (implemented)
 
