@@ -162,10 +162,10 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
   (`pkg.pname or (builtins.parseDrvName pkg.name).name` — unit2nix names are `rust_NAME`)
 - tokei, lsd, shellharden, smith, exampled now wired into extraPkgs + development profile
 
-### Pre-existing: strace-redox auto-vendor broken
-- `libc` crate not in auto-vendor output (git dependency not handled)
-- Blocks default image build (development profile includes strace-redox)
-- Minimal and functional-test images build fine
+### strace-redox auto-vendor broken (FIXED 2026-03-12)
+- `libc` crate was a git dependency (`gitlab.redox-os.org/redox-os/liblibc.git?branch=rust-2022-03-18`)
+- Auto-vendor (`unit2nixVendor`) only handles crates.io registry deps, not git deps
+- Fix: switched to `vendorHash` + `gitSources` (same pattern as findutils, contain, etc.)
 
 ## TLS / ring Cross-Compilation
 
