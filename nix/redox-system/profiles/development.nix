@@ -28,6 +28,11 @@ in
       ++ opt "hexyl"
       ++ opt "zoxide"
       ++ opt "dust"
+      ++ opt "tokei"
+      ++ opt "lsd"
+      ++ opt "shellharden"
+      ++ opt "smith"
+      ++ opt "exampled"
       # System management
       ++ opt "snix"
       ++ opt "redox-curl"
