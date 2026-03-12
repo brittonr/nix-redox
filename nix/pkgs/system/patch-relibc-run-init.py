@@ -26,20 +26,57 @@ NEW_FN = """\
     fn run_init(&self, obj: &DSO) {
         use crate::platform::{self, types::*};
 
-        // Accept any binding — Rust's version scripts may export this as local
-        // even when explicitly listed in global section.
-        if let Some((symbol, _)) = obj.get_sym("__relibc_init_environ") {
+        // DEBUG: trace environ injection into DSOs
+        let environ_ptr = unsafe { core::ptr::addr_of!(platform::environ).read() };
+        let environ_is_null = environ_ptr.is_null();
+        let environ_count = if environ_is_null {
+            0usize
+        } else {
+            let mut count = 0usize;
             unsafe {
-                symbol
-                    .as_ptr()
-                    .cast::<*mut *mut c_char>()
-                    .write(platform::environ);
+                let mut p = environ_ptr;
+                while !(*p).is_null() {
+                    count += 1;
+                    p = p.add(1);
+                }
+            }
+            count
+        };
+
+        // Accept any binding
+        match obj.get_sym("__relibc_init_environ") {
+            Some((symbol, binding)) => {
+                eprintln!(
+                    "[ld.so environ-diag] FOUND __relibc_init_environ in DSO (binding={:?}), \
+                     ld_so environ={:p} null={} count={}, writing to sym addr={:p}",
+                    binding, environ_ptr, environ_is_null, environ_count,
+                    symbol.as_ptr()
+                );
+                unsafe {
+                    symbol
+                        .as_ptr()
+                        .cast::<*mut *mut c_char>()
+                        .write(environ_ptr);
+                }
+                // Verify write
+                let readback = unsafe {
+                    symbol.as_ptr().cast::<*mut *mut c_char>().read()
+                };
+                eprintln!(
+                    "[ld.so environ-diag] readback after write: {:p} (match={})",
+                    readback, readback == environ_ptr
+                );
+            }
+            None => {
+                eprintln!(
+                    "[ld.so environ-diag] __relibc_init_environ NOT FOUND in DSO, \
+                     ld_so environ={:p} null={} count={}",
+                    environ_ptr, environ_is_null, environ_count
+                );
             }
         }
 
         // Inject process fds into DSO statics BEFORE calling .init_array.
-        // The DSO's .init_array constructor (__relibc_dso_init) reads these
-        // and initializes its STATIC_PROC_INFO and DYNAMIC_PROC_INFO.
         #[cfg(target_os = "redox")]
         {
             if let Some((symbol, _)) = obj.get_sym("__relibc_init_ns_fd") {
