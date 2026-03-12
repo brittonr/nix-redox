@@ -19,26 +19,20 @@
 //!
 //! Two DMA buffers are pre-allocated once during FUSE session init and reused
 //! for every request. Buffer sizes are rounded up to a power-of-two number
-//! of pages to work around a Redox kernel buddy allocator bug.
+//! of pages as defense in depth against the kernel buddy allocator bug
+//! described below.
 //!
-//! ### Kernel bug: non-power-of-two phys_contiguous deallocation
+//! ### Kernel bug: non-power-of-two phys_contiguous deallocation (FIXED)
 //!
-//! The kernel's `zeroed_phys_contiguous` allocates 2^order pages via
-//! `allocate_p2frame(order)` but only initializes `span.count` pages with
-//! `RC_USED_NOT_FREE` refcount. When `span.count` is not a power of two
-//! (e.g., 257 pages → 512 allocated), the excess pages (257–511) retain
-//! zeroed PageInfo — making `as_free()` return `Some` even though they
-//! aren't on any freelist. On munmap, `handle_free_action` frees only the
-//! mapped pages one-by-one. When the last mapped page (e.g., frame 256)
-//! is freed, the buddy allocator checks its sibling (frame 257), sees it
-//! as "free" (zeroed refcount), and attempts to merge — following stale
-//! prev/next pointers that corrupt the freelist. In debug kernels this
-//! panics at `debug_assert_eq!(freelist.for_orders[..], Some(sibling))`;
-//! in release kernels it silently wipes freelist entries.
+//! **Status:** Fixed in kernel via `patch-kernel-p2frame-init.py`. The kernel
+//! now initializes ALL 2^order frames and uses bulk `deallocate_p2frame` on
+//! free. The `round_to_p2_pages` workaround below is retained as defense in
+//! depth — drivers should not depend on kernel correctness for DMA safety.
 //!
-//! By ensuring our allocations are power-of-two pages, `span.count` equals
-//! `2^order` and ALL allocated pages are properly initialized. The buffers
-//! can then be safely dropped without ManuallyDrop.
+//! The original bug: `zeroed_phys_contiguous` allocated 2^order pages via
+//! `allocate_p2frame(order)` but only initialized `span.count` pages with
+//! `RC_USED_NOT_FREE` refcount. Excess pages retained zeroed PageInfo,
+//! causing buddy allocator corruption during merge on deallocation.
 
 use common::dma::Dma;
 use virtio_core::spec::{Buffer, ChainBuilder, DescriptorFlags};
