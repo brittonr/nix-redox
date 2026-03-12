@@ -15,6 +15,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   redox-ssh-src,
   ...
 }:
@@ -30,6 +31,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -43,7 +45,7 @@ mkUserspace.mkMultiBinary {
     "ssh-keygen"
   ];
 
-  vendorHash = "sha256-+TYh5NZd1hwuphs1gDnkBVNRdzAir7Qw4NIW5KeJxQo=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   meta = with lib; {
     description = "SSH client, server, and keygen for Redox OS";

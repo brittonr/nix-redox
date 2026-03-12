@@ -36,6 +36,9 @@ let
     modularPkgs
     ;
 
+  # unit2nix vendor function — parses Cargo.lock at eval time, no vendorHash needed
+  unit2nixVendor = import "${inputs.unit2nix}/lib/vendor.nix";
+
   # Common args for all standalone packages
   standaloneCommon = {
     inherit
@@ -44,6 +47,7 @@ let
       rustToolchain
       sysrootVendor
       redoxTarget
+      unit2nixVendor
       ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;

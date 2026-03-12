@@ -15,6 +15,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   smith-src,
   ...
 }:
@@ -30,6 +31,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -39,7 +41,7 @@ mkUserspace.mkBinary {
   src = smith-src;
   binaryName = "smith";
 
-  vendorHash = "sha256-4wrPYMd0/HnI29n3DQI1taDdRGAwingd0sN/DW5dOvw=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   meta = with lib; {
     description = "Simple text editor for Redox OS";

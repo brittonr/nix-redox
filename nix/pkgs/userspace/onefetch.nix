@@ -15,6 +15,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   onefetch-src,
   ...
 }:
@@ -30,6 +31,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -41,7 +43,7 @@ mkUserspace.mkBinary {
   binaryName = "onefetch";
 
   # Dummy hash — will be replaced after first build attempt
-  vendorHash = "sha256-Pz0EnqKdsVf3tVbL+Kx7gMNot7Fb/pWIFBR1nN+vJCo=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   meta = with lib; {
     description = "Git repository summary tool";

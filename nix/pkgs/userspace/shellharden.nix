@@ -15,6 +15,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   shellharden-src,
   ...
 }:
@@ -30,6 +31,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -40,7 +42,7 @@ mkUserspace.mkBinary {
   src = shellharden-src;
   binaryName = "shellharden";
 
-  vendorHash = "sha256-kMY+esMOsQZC979jntcqF35KVJCBuNLXHb0WYOV5YHA=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   meta = with lib; {
     description = "Shell script linter and formatter";

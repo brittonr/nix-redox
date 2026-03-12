@@ -18,6 +18,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   fd-src,
 }:
 
@@ -32,6 +33,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -104,7 +106,7 @@ mkUserspace.mkBinary {
   binaryName = "fd";
 
   # Vendor hash for fd dependencies
-  vendorHash = "sha256-0LzraGDujLMs60/Ytq2hcG/3RYbo8sJkurYVhRpa2D8=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   # Build fd without jemalloc (not supported on Redox)
   # Use --no-default-features to disable jemalloc, then enable completions only

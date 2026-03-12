@@ -15,6 +15,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   exampled-src,
   ...
 }:
@@ -30,6 +31,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -39,7 +41,7 @@ mkUserspace.mkBinary {
   src = exampled-src;
   binaryName = "exampled";
 
-  vendorHash = "sha256-5uLYdgmbCLMl13DNGZWGYSRQPcAFUp26BqT+gCH/jII=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   meta = with lib; {
     description = "Example scheme daemon for Redox OS";
