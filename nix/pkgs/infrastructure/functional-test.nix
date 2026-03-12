@@ -147,8 +147,8 @@ pkgs.writeShellScriptBin "functional-test" ''
     ${pkgs.qemu}/bin/qemu-system-x86_64 \
       -M pc \
       -cpu qemu64 \
-      -m 1024 \
-      -smp 2 \
+      -m ${toString memoryMB} \
+      -smp ${toString cpus} \
       -serial file:"$SERIAL_LOG" \
       -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
       -bios "$OVMF" \

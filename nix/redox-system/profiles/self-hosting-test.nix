@@ -1782,6 +1782,193 @@ let
                           echo "FUNC_TEST:cargo-buildrs:FAIL:$buildrs_res"
                         end
 
+                        # ── Test: env!("CARGO_PKG_NAME") propagation ────────────
+                        # Tests whether CARGO_PKG_NAME reaches rustc's env!() macro
+                        # without the --env-set workaround. This is the root cause
+                        # of ring build failures.
+                        echo ""
+                        echo "--- env-pkg-name: env!(CARGO_PKG_NAME) propagation ---"
+                        /nix/system/profile/bin/bash -c '
+                          rm -rf /tmp/env-pkg-test
+                          mkdir -p /tmp/env-pkg-test/src
+
+                          cat > /tmp/env-pkg-test/Cargo.toml << TOMLEOF
+    [package]
+    name = "envpkgtest"
+    version = "0.1.0"
+    edition = "2021"
+  TOMLEOF
+
+                          cat > /tmp/env-pkg-test/src/main.rs << RSEOF
+    fn main() {
+        // env!() is resolved at compile time by rustc.
+        // CARGO_PKG_NAME works via --env-set (CLI flag).
+        // LD_LIBRARY_PATH is NOT in --env-set — tests actual environ propagation.
+        let name = env!("CARGO_PKG_NAME");
+        let version = env!("CARGO_PKG_VERSION");
+        // option_env! returns None if the var is not in rustc compile-time env
+        let ld_lib = option_env!("LD_LIBRARY_PATH");
+        let cargo_home = option_env!("CARGO_HOME");
+        println!("ENV_PKG_OK: name={} version={}", name, version);
+        println!("ENV_PROPAGATION: LD_LIBRARY_PATH={:?} CARGO_HOME={:?}", ld_lib, cargo_home);
+    }
+  RSEOF
+
+                          cd /tmp/env-pkg-test
+                          /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>/tmp/env-pkg-stderr
+                          CARGO_EXIT=$?
+                          if [ $CARGO_EXIT -eq 0 ]; then
+                            BIN=./target/x86_64-unknown-redox/debug/envpkgtest
+                            if [ -f "$BIN" ]; then
+                              OUTPUT=$($BIN 2>&1)
+                              echo "$OUTPUT"
+                              # Check both: env!() works AND process env propagation
+                              if echo "$OUTPUT" | grep -q "ENV_PKG_OK"; then
+                                echo "FUNC_TEST:env-pkg-name:PASS"
+                                # Also report whether environ propagated (for diagnostics)
+                                if echo "$OUTPUT" | grep -q "LD_LIBRARY_PATH=Some"; then
+                                  echo "FUNC_TEST:env-propagation-simple:PASS"
+                                else
+                                  echo "FUNC_TEST:env-propagation-simple:FAIL:environ not propagated"
+                                  echo "  (env!() works via --env-set but process env is broken)"
+                                fi
+                              else
+                                echo "FUNC_TEST:env-pkg-name:FAIL:compile-fail"
+                                echo "FUNC_TEST:env-propagation-simple:FAIL:env!() failed"
+                              fi
+                            else
+                              echo "FUNC_TEST:env-pkg-name:FAIL:no-binary"
+                              echo "FUNC_TEST:env-propagation-simple:FAIL:no-binary"
+                            fi
+                          else
+                            echo "FUNC_TEST:env-pkg-name:FAIL:cargo-exit=$CARGO_EXIT"
+                            echo "FUNC_TEST:env-propagation-simple:FAIL:cargo-exit=$CARGO_EXIT"
+                            head -c 2000 /tmp/env-pkg-stderr 2>/dev/null
+                          fi
+                          rm -rf /tmp/env-pkg-test
+                        '
+
+                        # ── Test: env!("CARGO_PKG_NAME") after heavy-fork build.rs ──
+                        # Simulates ring's build pattern: build.rs that fork+exec's
+                        # cc/clang many times, then the lib target uses env!().
+                        # This isolates whether fork activity in build.rs breaks
+                        # env propagation for subsequent rustc invocations.
+                        echo ""
+                        echo "--- env-heavy-fork: env!() after build.rs fork storm ---"
+                        /nix/system/profile/bin/bash -c '
+                          rm -rf /tmp/heavyfork
+                          mkdir -p /tmp/heavyfork/src
+
+                          cat > /tmp/heavyfork/Cargo.toml << TOMLEOF
+    [package]
+    name = "heavyfork"
+    version = "0.1.0"
+    edition = "2021"
+  TOMLEOF
+
+                          # build.rs that dumps env AND forks clang 20 times
+                          cat > /tmp/heavyfork/build.rs << RSEOF
+    use std::process::Command;
+    fn main() {
+        // Dump env vars visible to build.rs (process environ)
+        eprintln!("=== BUILD.RS ENVIRON DUMP ===");
+        let mut count = 0;
+        for (k, v) in std::env::vars() {
+            if k.starts_with("CARGO") || k.starts_with("LD_") || k == "PATH"
+                || k == "HOME" || k == "RUSTC" || k == "OUT_DIR" {
+                eprintln!("  ENV: {}={}", k, v);
+            }
+            count += 1;
+        }
+        eprintln!("  TOTAL env vars: {}", count);
+        eprintln!("=== END ENVIRON DUMP ===");
+
+        // Fork+exec clang 20 times (simulating ring build.rs)
+        for i in 0..20 {
+            let status = Command::new("/nix/system/profile/bin/clang")
+                .args(&["--version"])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status();
+            match status {
+                Ok(s) => eprintln!("build.rs: clang fork {} exit={}", i, s),
+                Err(e) => eprintln!("build.rs: clang fork {} err={}", i, e),
+            }
+        }
+        // Also emit a cargo:rustc-env to test both paths
+        println!("cargo:rustc-env=BUILD_FORKS=20");
+    }
+  RSEOF
+
+                          # Library with env!("CARGO_PKG_NAME") — same pattern as ring
+                          cat > /tmp/heavyfork/src/lib.rs << RSEOF
+    // This is what ring does: use env!("CARGO_PKG_NAME") for symbol prefixing
+    pub const PKG_NAME: &str = env!("CARGO_PKG_NAME");
+    pub const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
+    // Also check cargo:rustc-env from build.rs
+    pub const BUILD_FORKS: &str = env!("BUILD_FORKS");
+    // Check actual environ propagation (NOT covered by --env-set)
+    pub const LD_LIB: Option<&str> = option_env!("LD_LIBRARY_PATH");
+    pub const CARGO_HOME_ENV: Option<&str> = option_env!("CARGO_HOME");
+  RSEOF
+
+                          cat > /tmp/heavyfork/src/main.rs << RSEOF
+    fn main() {
+        println!("HEAVY_FORK_OK: name={} version={} forks={}",
+            heavyfork::PKG_NAME,
+            heavyfork::PKG_VERSION,
+            heavyfork::BUILD_FORKS);
+        println!("ENV_PROPAGATION: LD_LIBRARY_PATH={:?} CARGO_HOME={:?}",
+            heavyfork::LD_LIB,
+            heavyfork::CARGO_HOME_ENV);
+    }
+  RSEOF
+
+                          cd /tmp/heavyfork
+                          echo "[heavyfork] starting cargo build..."
+                          /nix/system/profile/bin/bash /tmp/cargo-build-safe -vv 2>/tmp/heavyfork-stderr
+                          CARGO_EXIT=$?
+                          echo "[heavyfork] cargo exit=$CARGO_EXIT"
+
+                          # Show build.rs environ dump from stderr
+                          if grep -q "BUILD.RS ENVIRON DUMP" /tmp/heavyfork-stderr 2>/dev/null; then
+                            echo "=== build.rs environ dump ==="
+                            grep -A100 "BUILD.RS ENVIRON DUMP" /tmp/heavyfork-stderr | head -50
+                            echo "=== end ==="
+                          fi
+
+                          if [ $CARGO_EXIT -eq 0 ]; then
+                            BIN=./target/x86_64-unknown-redox/debug/heavyfork
+                            if [ -f "$BIN" ]; then
+                              OUTPUT=$($BIN 2>&1)
+                              echo "$OUTPUT"
+                              if echo "$OUTPUT" | grep -q "HEAVY_FORK_OK"; then
+                                echo "FUNC_TEST:env-heavy-fork:PASS"
+                                # Check if env propagation survived the fork storm
+                                if echo "$OUTPUT" | grep -q "LD_LIBRARY_PATH=Some"; then
+                                  echo "FUNC_TEST:env-propagation-heavy:PASS"
+                                else
+                                  echo "FUNC_TEST:env-propagation-heavy:FAIL:environ lost after fork storm"
+                                fi
+                              else
+                                echo "FUNC_TEST:env-heavy-fork:FAIL:compile-fail"
+                                echo "FUNC_TEST:env-propagation-heavy:FAIL:env!() failed"
+                              fi
+                            else
+                              echo "FUNC_TEST:env-heavy-fork:FAIL:no-binary"
+                              echo "FUNC_TEST:env-propagation-heavy:FAIL:no-binary"
+                            fi
+                          else
+                            echo "FUNC_TEST:env-heavy-fork:FAIL:cargo-exit=$CARGO_EXIT"
+                            echo "FUNC_TEST:env-propagation-heavy:FAIL:cargo-exit=$CARGO_EXIT"
+                            # Show last errors (looking for "not defined at compile time")
+                            echo "=== heavyfork stderr ==="
+                            head -c 4000 /tmp/heavyfork-stderr 2>/dev/null
+                            echo "=== end ==="
+                          fi
+                          rm -rf /tmp/heavyfork
+                        '
+
                         # ══════════════════════════════════════════════════════════
                         # Phase 3: Crate Dependencies
                         # ══════════════════════════════════════════════════════════
