@@ -332,14 +332,11 @@ mod tests {
 
     #[test]
     fn test_derivation_parsing() {
-        let drv_path = format!(
-            "{}/testdata/4wvvbi4jwn0prsdxb7vs673qa5h9gr7x-foo.drv",
-            env!("CARGO_MANIFEST_DIR")
-        );
-
-        let bytes = std::fs::read(&drv_path).expect("failed to read test derivation file");
+        // Embed fixture at compile time so the test works in any working directory
+        // (including Nix sandbox builds where CARGO_MANIFEST_DIR is ephemeral).
+        let bytes: &[u8] = include_bytes!("../testdata/4wvvbi4jwn0prsdxb7vs673qa5h9gr7x-foo.drv");
         // Trim trailing whitespace — pre-commit hooks may add a trailing newline
-        let trimmed = bytes.strip_suffix(b"\n").unwrap_or(&bytes);
+        let trimmed = bytes.strip_suffix(b"\n").unwrap_or(bytes);
 
         let drv = nix_compat::derivation::Derivation::from_aterm_bytes(trimmed);
         assert!(drv.is_ok(), "failed to parse derivation: {:?}", drv.err());
@@ -517,3 +514,4 @@ mod tests {
         assert!(result.is_err());
     }
 }
+// touch

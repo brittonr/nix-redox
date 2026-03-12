@@ -254,3 +254,8 @@
 {"text":"archive and commit","timestamp":1773315949066}
 {"text":"what next","timestamp":1773316238084}
 {"text":"1","timestamp":1773316296856}
+{"text":"continue","timestamp":1773319933847}
+{"text":"whats the current status of this project? go into detail about the truth of the nix/snix builds","timestamp":1773322677628}
+{"text":"where  could we make this more stable and deterministic?","timestamp":1773322883024}
+{"text":"could we use ../unit2nix/ to help with some of this?","timestamp":1773323034596}
+{"text":"lets begin. if we need to update anything in unit2test let me know","timestamp":1773323394819}
