@@ -646,9 +646,35 @@ let
 
                         # ── environ-diag: trace ld_so environ injection ──
                         echo "--- environ-diag: ld_so environ trace ---"
-                        # Compile a tiny program that checks option_env at compile time.
-                        # We set DIAG_TEST_VAR in the environment. rustc is DSO-linked,
-                        # so ld_so's run_init() diagnostic will print to stderr.
+
+                        # Part A: compile a program that checks runtime env::var()
+                        # This tests if the COMPILED binary can read env vars at runtime.
+                        echo 'fn main() {' > /tmp/env_runtime.rs
+                        echo '    eprintln!("=== runtime env dump ===");' >> /tmp/env_runtime.rs
+                        echo '    for (k, v) in std::env::vars() {' >> /tmp/env_runtime.rs
+                        echo '        if k.starts_with("DIAG") || k.starts_with("LD_") || k.starts_with("PATH") || k.starts_with("HOME") {' >> /tmp/env_runtime.rs
+                        echo '            eprintln!("  {}={}", k, v);' >> /tmp/env_runtime.rs
+                        echo '        }' >> /tmp/env_runtime.rs
+                        echo '    }' >> /tmp/env_runtime.rs
+                        echo '    eprintln!("  total env vars: {}", std::env::vars().count());' >> /tmp/env_runtime.rs
+                        echo '    eprintln!("=== end runtime env ===");' >> /tmp/env_runtime.rs
+                        echo '    let val = std::env::var("DIAG_TEST_VAR").unwrap_or("NOTFOUND".into());' >> /tmp/env_runtime.rs
+                        echo '    println!("RUNTIME_DIAG_TEST_VAR={}", val);' >> /tmp/env_runtime.rs
+                        echo '}' >> /tmp/env_runtime.rs
+
+                        /nix/system/profile/bin/bash -c 'rustc /tmp/env_runtime.rs --edition 2021 -o /tmp/env_runtime_bin -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld -C link-arg=-L/usr/lib/redox-sysroot/lib 2>/tmp/env-runtime-stderr; echo "runtime-rustc-exit=$?"'
+                        if exists -f /tmp/env_runtime_bin
+                          /nix/system/profile/bin/bash -c 'DIAG_TEST_VAR=hello_runtime /tmp/env_runtime_bin >/tmp/env-runtime-out 2>/tmp/env-runtime-err'
+                          echo "=== runtime env test ==="
+                          cat /tmp/env-runtime-out
+                          cat /tmp/env-runtime-err
+                          echo "=== end runtime env test ==="
+                        else
+                          echo "runtime env test: compile failed"
+                          cat /tmp/env-runtime-stderr
+                        end
+
+                        # Part B: compile-time option_env!() test
                         echo 'fn main() {' > /tmp/env_diag.rs
                         echo '    match option_env!("DIAG_TEST_VAR") {' >> /tmp/env_diag.rs
                         echo '        Some(v) => println!("DIAG_TEST_VAR={}", v),' >> /tmp/env_diag.rs
@@ -668,10 +694,11 @@ let
                         if exists -f /tmp/env_diag_bin
                           /tmp/env_diag_bin > /tmp/env-diag-run-out ^>/tmp/env-diag-run-err
                           echo "Runtime output: $(cat /tmp/env-diag-run-out)"
+                          # Part B passes if option_env!() saw the var at compile time
                           if grep -q "DIAG_TEST_VAR=hello" /tmp/env-diag-run-out
                             echo "FUNC_TEST:environ-diag:PASS"
                           else
-                            echo "FUNC_TEST:environ-diag:FAIL:var not propagated"
+                            echo "FUNC_TEST:environ-diag:FAIL:option_env-returned-none"
                           end
                         else
                           echo "FUNC_TEST:environ-diag:FAIL:compile-fail"
