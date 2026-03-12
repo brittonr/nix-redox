@@ -41,6 +41,34 @@ let
     in
     ws;
 
+  # Per-crate cross-compilation test: build ripgrep for Redox using
+  # unit2nix + buildRustCrate instead of cargo build.
+  # Each of ripgrep's 33 crates is a separate Nix derivation with caching.
+  ripgrepCrossTest =
+    let
+      inputs = self.inputs;
+      env = import ./redox-env.nix {
+        inherit pkgs lib inputs;
+        system = pkgs.system;
+      };
+      unit2nix = inputs.unit2nix;
+      buildFromUnitGraph = import "${unit2nix}/lib/build-from-unit-graph.nix";
+      redoxBRC = import ../lib/redox-buildRustCrate.nix {
+        inherit pkgs lib;
+        inherit (env) rustToolchain;
+        inherit (env.modularPkgs.system) relibc;
+        inherit (env.redoxLib) stubLibs;
+      };
+      ws = buildFromUnitGraph {
+        inherit pkgs;
+        src = inputs.ripgrep-src;
+        resolvedJson = ../pkgs/infrastructure/ripgrep-redox-plan.json;
+        buildRustCrateForPkgs = _: redoxBRC;
+        skipStalenessCheck = true;
+      };
+    in
+    ws;
+
 in
 {
   checks = {
@@ -81,6 +109,9 @@ in
 
     # snix clippy lint
     snix-clippy = snixHostTests.clippy.allWorkspaceMembers;
+
+    # Per-crate cross-compilation: ripgrep for Redox (33 crates, each cached)
+    ripgrep-cross = ripgrepCrossTest.workspaceMembers.ripgrep.build;
 
     # Complete system images
     redox-default-build = packages.redox-default;
