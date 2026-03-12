@@ -75,11 +75,11 @@ let
       # On a native host, pkgs.buildPackages == pkgs, so both calls get
       # the same object. We break this by wrapping pkgs with a distinct
       # buildPackages that has a marker attribute.
+      # hostPkgs must have buildPackages pointing to itself (recursively)
+      # so that mkBuiltByPackageIdByPkgs never escapes back to unmarked pkgs.
       hostPkgs = pkgs // {
         __isHostPkgs = true;
-        buildPackages = pkgs // {
-          __isHostPkgs = true;
-        };
+        buildPackages = hostPkgs; # self-referential: always stays in host set
       };
       crossPkgs = pkgs // {
         buildPackages = hostPkgs;
@@ -132,8 +132,20 @@ let
         src = inputs.exampled-src;
         plan = ../pkgs/infrastructure/exampled-redox-plan.json;
       };
-      # TODO: these need proc-macro platform routing fix
-      # bat, fd, lsd, tokei, zoxide
+      tokei = mkCross {
+        src = inputs.tokei-src;
+        plan = ../pkgs/infrastructure/tokei-redox-plan.json;
+      };
+      zoxide = mkCross {
+        src = inputs.zoxide-src;
+        plan = ../pkgs/infrastructure/zoxide-redox-plan.json;
+      };
+      lsd = mkCross {
+        src = inputs.lsd-src;
+        plan = ../pkgs/infrastructure/lsd-redox-plan.json;
+      };
+      # TODO: need extraCrateOverrides for crate patches
+      # bat (sys-info unsupported on Redox), fd (faccess needs patching)
     };
 
 in
@@ -187,6 +199,9 @@ in
     shellharden-cross = crossBuild.shellharden.workspaceMembers.shellharden.build;
     smith-cross = crossBuild.smith.workspaceMembers.smith.build;
     exampled-cross = crossBuild.exampled.workspaceMembers.exampled.build;
+    tokei-cross = crossBuild.tokei.workspaceMembers.tokei.build;
+    zoxide-cross = crossBuild.zoxide.workspaceMembers.zoxide.build;
+    # lsd-cross: blocked on rustix crate needing linux_raw_sys feature override
 
     # Complete system images
     redox-default-build = packages.redox-default;

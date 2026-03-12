@@ -1,0 +1,4686 @@
+{
+  "version": 1,
+  "workspaceRoot": "/tmp/u2n-tokei2",
+  "roots": [
+    "path+file:///tmp/u2n-tokei2#tokei@14.0.0"
+  ],
+  "workspaceMembers": {
+    "tokei": "path+file:///tmp/u2n-tokei2#tokei@14.0.0"
+  },
+  "target": "x86_64-unknown-redox",
+  "cargoLockHash": "8ab3b2817d708a741d2d05ea7572aed91d449daa5c1c376114093fd846a8ef05",
+  "inputsHash": "883770caf16b42a2094212d04230af7e7808ec56ed828e680dee313cc5a6acc7",
+  "crates": {
+    "path+file:///tmp/u2n-tokei2#tokei@14.0.0": {
+      "crateName": "tokei",
+      "version": "14.0.0",
+      "edition": "2021",
+      "sha256": null,
+      "source": {
+        "type": "local",
+        "path": "."
+      },
+      "features": [
+        "cli",
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.3",
+          "externCrateName": "aho_corasick"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#arbitrary@1.3.2",
+          "externCrateName": "arbitrary"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#clap@4.5.53",
+          "externCrateName": "clap"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#clap-cargo@0.18.3",
+          "externCrateName": "clap_cargo"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#colored@2.1.0",
+          "externCrateName": "colored"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-channel@0.5.13",
+          "externCrateName": "crossbeam_channel"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#dashmap@6.0.1",
+          "externCrateName": "dashmap"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#encoding_rs_io@0.1.7",
+          "externCrateName": "encoding_rs_io"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#env_logger@0.11.5",
+          "externCrateName": "env_logger"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#etcetera@0.8.0",
+          "externCrateName": "etcetera"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#grep-searcher@0.1.13",
+          "externCrateName": "grep_searcher"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ignore@0.4.22",
+          "externCrateName": "ignore"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.22",
+          "externCrateName": "log"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#num-format@0.4.4",
+          "externCrateName": "num_format"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#once_cell@1.19.0",
+          "externCrateName": "once_cell"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#parking_lot@0.12.3",
+          "externCrateName": "parking_lot"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rayon@1.10.0",
+          "externCrateName": "rayon"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex@1.10.6",
+          "externCrateName": "regex"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.208",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.125",
+          "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#table_formatter@0.6.1",
+          "externCrateName": "table_formatter"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#term_size@0.3.2",
+          "externCrateName": "term_size"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml@0.8.19",
+          "externCrateName": "toml"
+        }
+      ],
+      "buildDependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ignore@0.4.22",
+          "externCrateName": "ignore"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#json5@0.4.1",
+          "externCrateName": "json5"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.125",
+          "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tera@1.20.0",
+          "externCrateName": "tera"
+        }
+      ],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [
+        {
+          "name": "tokei",
+          "path": "src/main.rs"
+        }
+      ],
+      "links": null,
+      "authors": [
+        "Erin Power <xampprocky@gmail.com>"
+      ],
+      "description": "Count your code, quickly.",
+      "homepage": "https://tokei.rs",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/XAMPPRocky/tokei.git"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.3": {
+      "crateName": "aho-corasick",
+      "version": "1.1.3",
+      "edition": "2021",
+      "sha256": "8e60d3430d3a69478ad0993f19238d2df97c507009a52b3c10addcd7f6bcb916",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "perf-literal",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.4",
+          "externCrateName": "memchr"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "Fast multiple substring searching.",
+      "homepage": "https://github.com/BurntSushi/aho-corasick",
+      "license": "Unlicense OR MIT",
+      "repository": "https://github.com/BurntSushi/aho-corasick"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#anstream@0.6.15": {
+      "crateName": "anstream",
+      "version": "0.6.15",
+      "edition": "2021",
+      "sha256": "64e15c1ab1f89faffbf04a634d5e1962e9074f2741eef6d97f3c4e322426d526",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "auto",
+        "default",
+        "wincon"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anstyle@1.0.13",
+          "externCrateName": "anstyle"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anstyle-parse@0.2.5",
+          "externCrateName": "anstyle_parse"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anstyle-query@1.1.1",
+          "externCrateName": "anstyle_query"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#colorchoice@1.0.2",
+          "externCrateName": "colorchoice"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#is_terminal_polyfill@1.70.1",
+          "externCrateName": "is_terminal_polyfill"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#utf8parse@0.2.2",
+          "externCrateName": "utf8parse"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "A simple cross platform library for writing colored text to a terminal.",
+      "homepage": "https://github.com/rust-cli/anstyle",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-cli/anstyle.git"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#anstyle-parse@0.2.5": {
+      "crateName": "anstyle-parse",
+      "version": "0.2.5",
+      "edition": "2021",
+      "sha256": "eb47de1e80c2b463c735db5b217a0ddc39d612e7ac9e2e96a5aed1f57616c1cb",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "utf8"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#utf8parse@0.2.2",
+          "externCrateName": "utf8parse"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Parse ANSI Style Escapes",
+      "homepage": "https://github.com/rust-cli/anstyle",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-cli/anstyle.git"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#anstyle-query@1.1.1": {
+      "crateName": "anstyle-query",
+      "version": "1.1.1",
+      "edition": "2021",
+      "sha256": "6d36fc52c7f6c869915e99412912f22093507da8d9e942ceaf66fe4b7c14422a",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Look up colored console capabilities",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-cli/anstyle"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#anstyle@1.0.13": {
+      "crateName": "anstyle",
+      "version": "1.0.13",
+      "edition": "2021",
+      "sha256": "5192cca8006f1fd4f7237516f40fa183bb07f8fbdfedaa0036de5ea9b0b45e78",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "ANSI text styling",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-cli/anstyle.git"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#arbitrary@1.3.2": {
+      "crateName": "arbitrary",
+      "version": "1.3.2",
+      "edition": "2021",
+      "sha256": "7d5a26814d8dcb93b0e5a0ff3c6d80a8843bafb21b39e8e18a6f05471870e110",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "derive",
+        "derive_arbitrary"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#derive_arbitrary@1.3.2",
+          "externCrateName": "derive_arbitrary"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rust-Fuzz Project Developers",
+        "Nick Fitzgerald <fitzgen@gmail.com>",
+        "Manish Goregaokar <manishsmail@gmail.com>",
+        "Simonas Kazlauskas <arbitrary@kazlauskas.me>",
+        "Brian L. Troutwine <brian@troutwine.us>",
+        "Corey Farwell <coreyf@rwell.org>"
+      ],
+      "description": "The trait for generating structured data from unstructured data",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-fuzz/arbitrary/"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#arrayvec@0.7.6": {
+      "crateName": "arrayvec",
+      "version": "0.7.6",
+      "edition": "2018",
+      "sha256": "7c02d123df017efcdfbd739ef81735b36c5ba83ec3c59c80a9d7ecc718f92e50",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "bluss"
+      ],
+      "description": "A vector with fixed capacity, backed by an array (it can be stored on the stack too). Implements fixed capacity ArrayVec and ArrayString.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/bluss/arrayvec"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#autocfg@1.3.0": {
+      "crateName": "autocfg",
+      "version": "1.3.0",
+      "edition": "2015",
+      "sha256": "0c4b4d0bd25bd0b74681c0ad21497610ce1b7c91b1022cd21c80c6fbdd9476b0",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Josh Stone <cuviper@gmail.com>"
+      ],
+      "description": "Automatic cfg for Rust compiler features",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/cuviper/autocfg"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.6.0": {
+      "crateName": "bitflags",
+      "version": "2.6.0",
+      "edition": "2021",
+      "sha256": "b048fb63fd8b5923fc5aa7b340d8e156aec7ec02f0c78fa8a6ddc2613f6f71de",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rust Project Developers"
+      ],
+      "description": "A macro to generate structures which behave like bitflags. ",
+      "homepage": "https://github.com/bitflags/bitflags",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/bitflags/bitflags"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#bstr@1.10.0": {
+      "crateName": "bstr",
+      "version": "1.10.0",
+      "edition": "2021",
+      "sha256": "40723b8fb387abc38f4f4a37c09073622e41dd12327033091ef8950659e6dc0c",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.4",
+          "externCrateName": "memchr"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "A string type that is not required to be valid UTF-8.",
+      "homepage": "https://github.com/BurntSushi/bstr",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/BurntSushi/bstr"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#byteorder@1.5.0": {
+      "crateName": "byteorder",
+      "version": "1.5.0",
+      "edition": "2021",
+      "sha256": "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "Library for reading/writing numbers in big-endian and little-endian.",
+      "homepage": "https://github.com/BurntSushi/byteorder",
+      "license": "Unlicense OR MIT",
+      "repository": "https://github.com/BurntSushi/byteorder"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.0": {
+      "crateName": "cfg-if",
+      "version": "1.0.0",
+      "edition": "2018",
+      "sha256": "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Alex Crichton <alex@alexcrichton.com>"
+      ],
+      "description": "A macro to ergonomically define an item depending on a large number of #[cfg] parameters. Structured like an if-else chain, the first matching branch is the item that gets emitted. ",
+      "homepage": "https://github.com/alexcrichton/cfg-if",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/alexcrichton/cfg-if"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#chrono-tz-build@0.3.0": {
+      "crateName": "chrono-tz-build",
+      "version": "0.3.0",
+      "edition": "2021",
+      "sha256": "0c088aee841df9c3041febbb73934cfc39708749bf96dc827e3359cd39ef11b1",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#parse-zoneinfo@0.3.1",
+          "externCrateName": "parse_zoneinfo"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#phf@0.11.2",
+          "externCrateName": "phf"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#phf_codegen@0.11.2",
+          "externCrateName": "phf_codegen"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "internal build script for chrono-tz",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/chronotope/chrono-tz"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#chrono-tz@0.9.0": {
+      "crateName": "chrono-tz",
+      "version": "0.9.0",
+      "edition": "2021",
+      "sha256": "93698b29de5e97ad0ae26447b344c482a7284c737d9ddc5f9e52b74a336671bb",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#chrono@0.4.38",
+          "externCrateName": "chrono"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#phf@0.11.2",
+          "externCrateName": "phf"
+        }
+      ],
+      "buildDependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#chrono-tz-build@0.3.0",
+          "externCrateName": "chrono_tz_build"
+        }
+      ],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "TimeZone implementations for chrono from the IANA database",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/chronotope/chrono-tz"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#chrono@0.4.38": {
+      "crateName": "chrono",
+      "version": "0.4.38",
+      "edition": "2021",
+      "sha256": "a21f936df1771bf62b77f047b726c4625ff2e8aa607c01ec06e5a05bd8463401",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "android-tzdata",
+        "clock",
+        "iana-time-zone",
+        "now",
+        "std",
+        "winapi",
+        "windows-targets"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#iana-time-zone@0.1.60",
+          "externCrateName": "iana_time_zone"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#num-traits@0.2.19",
+          "externCrateName": "num_traits"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Date and time library for Rust",
+      "homepage": "https://github.com/chronotope/chrono",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/chronotope/chrono"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#clap-cargo@0.18.3": {
+      "crateName": "clap-cargo",
+      "version": "0.18.3",
+      "edition": "2021",
+      "sha256": "936551935c8258754bb8216aec040957d261f977303754b9bf1a213518388006",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "clap",
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anstyle@1.0.13",
+          "externCrateName": "anstyle"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#clap@4.5.53",
+          "externCrateName": "clap"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Re-usable CLI flags for `cargo` plugins",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/crate-ci/clap-cargo"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#clap@4.5.53": {
+      "crateName": "clap",
+      "version": "4.5.53",
+      "edition": "2021",
+      "sha256": "c9e340e012a1bf4935f5282ed1436d1489548e8f72308207ea5df0e23d2d03f8",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "cargo",
+        "color",
+        "default",
+        "derive",
+        "error-context",
+        "help",
+        "std",
+        "string",
+        "suggestions",
+        "usage",
+        "wrap_help"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#clap_builder@4.5.53",
+          "externCrateName": "clap_builder"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#clap_derive@4.5.49",
+          "externCrateName": "clap_derive"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "A simple to use, efficient, and full-featured Command Line Argument Parser",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/clap-rs/clap"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#clap_builder@4.5.53": {
+      "crateName": "clap_builder",
+      "version": "4.5.53",
+      "edition": "2021",
+      "sha256": "d76b5d13eaa18c901fd2f7fca939fefe3a0727a953561fefdf3b2922b8569d00",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "cargo",
+        "color",
+        "error-context",
+        "help",
+        "std",
+        "string",
+        "suggestions",
+        "usage",
+        "wrap_help"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anstream@0.6.15",
+          "externCrateName": "anstream"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anstyle@1.0.13",
+          "externCrateName": "anstyle"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#clap_lex@0.7.6",
+          "externCrateName": "clap_lex"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#strsim@0.11.1",
+          "externCrateName": "strsim"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#terminal_size@0.4.1",
+          "externCrateName": "terminal_size"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "A simple to use, efficient, and full-featured Command Line Argument Parser",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/clap-rs/clap"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#clap_derive@4.5.49": {
+      "crateName": "clap_derive",
+      "version": "4.5.49",
+      "edition": "2021",
+      "sha256": "2a0b5487afeab2deb2ff4e03a807ad1a03ac532ff5a2cee5d86884440c7f7671",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0",
+          "externCrateName": "heck"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.86",
+          "externCrateName": "proc_macro2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.36",
+          "externCrateName": "quote"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.74",
+          "externCrateName": "syn"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": true,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "proc-macro"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Parse command line argument by defining a struct, derive crate.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/clap-rs/clap"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#clap_lex@0.7.6": {
+      "crateName": "clap_lex",
+      "version": "0.7.6",
+      "edition": "2021",
+      "sha256": "a1d728cc89cf3aee9ff92b05e62b19ee65a02b5702cff7d5a377e32c6ae29d8d",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Minimal, flexible command line parser",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/clap-rs/clap"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#colorchoice@1.0.2": {
+      "crateName": "colorchoice",
+      "version": "1.0.2",
+      "edition": "2021",
+      "sha256": "d3fd119d74b830634cea2a0f58bbd0d54540518a14397557951e79340abc28c0",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Global override of color control",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-cli/anstyle"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#colored@2.1.0": {
+      "crateName": "colored",
+      "version": "2.1.0",
+      "edition": "2021",
+      "sha256": "cbf2150cce219b664a8a70df7a1f933836724b503f8a413af9365b4dcc4d90b8",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#lazy_static@1.5.0",
+          "externCrateName": "lazy_static"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Thomas Wickham <mackwic@gmail.com>"
+      ],
+      "description": "The most simple way to add colors in your terminal",
+      "homepage": "https://github.com/mackwic/colored",
+      "license": "MPL-2.0",
+      "repository": "https://github.com/mackwic/colored"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#crossbeam-channel@0.5.13": {
+      "crateName": "crossbeam-channel",
+      "version": "0.5.13",
+      "edition": "2021",
+      "sha256": "33480d6946193aa8033910124896ca395333cae7e2d1113d1fef6c3272217df2",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-utils@0.8.20",
+          "externCrateName": "crossbeam_utils"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Multi-producer multi-consumer channels for message passing",
+      "homepage": "https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-channel",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/crossbeam-rs/crossbeam"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#crossbeam-deque@0.8.5": {
+      "crateName": "crossbeam-deque",
+      "version": "0.8.5",
+      "edition": "2021",
+      "sha256": "613f8cc01fe9cf1a3eb3d7f488fd2fa8388403e97039e2f73692932e291a770d",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-epoch@0.9.18",
+          "externCrateName": "crossbeam_epoch"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-utils@0.8.20",
+          "externCrateName": "crossbeam_utils"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Concurrent work-stealing deque",
+      "homepage": "https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-deque",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/crossbeam-rs/crossbeam"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#crossbeam-epoch@0.9.18": {
+      "crateName": "crossbeam-epoch",
+      "version": "0.9.18",
+      "edition": "2021",
+      "sha256": "5b82ac4a3c2ca9c3460964f020e1402edd5753411d7737aa39c3714ad1b5420e",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-utils@0.8.20",
+          "externCrateName": "crossbeam_utils"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Epoch-based garbage collection",
+      "homepage": "https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-epoch",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/crossbeam-rs/crossbeam"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#crossbeam-utils@0.8.20": {
+      "crateName": "crossbeam-utils",
+      "version": "0.8.20",
+      "edition": "2021",
+      "sha256": "22ec99545bb0ed0ea7bb9b8e1e9122ea386ff8a48c0922e43f36d45ab09e0e80",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Utilities for concurrent programming",
+      "homepage": "https://github.com/crossbeam-rs/crossbeam/tree/master/crossbeam-utils",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/crossbeam-rs/crossbeam"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#dashmap@6.0.1": {
+      "crateName": "dashmap",
+      "version": "6.0.1",
+      "edition": "2018",
+      "sha256": "804c8821570c3f8b70230c2ba75ffa5c0f9a4189b9a432b6656c536712acae28",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "serde"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.0",
+          "externCrateName": "cfg_if"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-utils@0.8.20",
+          "externCrateName": "crossbeam_utils"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.14.5",
+          "externCrateName": "hashbrown"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#lock_api@0.4.12",
+          "externCrateName": "lock_api"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#once_cell@1.19.0",
+          "externCrateName": "once_cell"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#parking_lot_core@0.9.10",
+          "externCrateName": "parking_lot_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.208",
+          "externCrateName": "serde"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Acrimon <joel.wejdenstal@gmail.com>"
+      ],
+      "description": "Blazing fast concurrent HashMap for Rust.",
+      "homepage": "https://github.com/xacrimon/dashmap",
+      "license": "MIT",
+      "repository": "https://github.com/xacrimon/dashmap"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#derive_arbitrary@1.3.2": {
+      "crateName": "derive_arbitrary",
+      "version": "1.3.2",
+      "edition": "2021",
+      "sha256": "67e77553c4162a157adbf834ebae5b415acbecbeafc7a74b0e886657506a7611",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.86",
+          "externCrateName": "proc_macro2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.36",
+          "externCrateName": "quote"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.74",
+          "externCrateName": "syn"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": true,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "proc-macro"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rust-Fuzz Project Developers",
+        "Nick Fitzgerald <fitzgen@gmail.com>",
+        "Manish Goregaokar <manishsmail@gmail.com>",
+        "Andre Bogus <bogusandre@gmail.com>",
+        "Corey Farwell <coreyf@rwell.org>"
+      ],
+      "description": "Derives arbitrary traits",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/rust-fuzz/arbitrary"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#deunicode@1.6.0": {
+      "crateName": "deunicode",
+      "version": "1.6.0",
+      "edition": "2021",
+      "sha256": "339544cc9e2c4dc3fc7149fd630c5f22263a4fdf18a98afd0075784968b5cf00",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "default"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Kornel Lesinski <kornel@geekhood.net>",
+        "Amit Chowdhury <amitc97@gmail.com>"
+      ],
+      "description": "Convert Unicode strings to pure ASCII by intelligently transliterating them. Suppors Emoji and Chinese.",
+      "homepage": "https://lib.rs/crates/deunicode",
+      "license": "BSD-3-Clause",
+      "repository": "https://github.com/kornelski/deunicode/"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#either@1.13.0": {
+      "crateName": "either",
+      "version": "1.13.0",
+      "edition": "2018",
+      "sha256": "60b1af1c220855b6ceac025d3f6ecdd2b7c4894bfe9cd9bda4fbb4bc7c0d4cf0",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "use_std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "bluss"
+      ],
+      "description": "The enum `Either` with variants `Left` and `Right` is a general purpose sum type with two cases. ",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rayon-rs/either"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#encoding_rs@0.8.34": {
+      "crateName": "encoding_rs",
+      "version": "0.8.34",
+      "edition": "2018",
+      "sha256": "b45de904aa0b010bce2ab45264d0631681847fa7b6f2eaa7dab7619943bc4f59",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.0",
+          "externCrateName": "cfg_if"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Henri Sivonen <hsivonen@hsivonen.fi>"
+      ],
+      "description": "A Gecko-oriented implementation of the Encoding Standard",
+      "homepage": "https://docs.rs/encoding_rs/",
+      "license": "(Apache-2.0 OR MIT) AND BSD-3-Clause",
+      "repository": "https://github.com/hsivonen/encoding_rs"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#encoding_rs_io@0.1.7": {
+      "crateName": "encoding_rs_io",
+      "version": "0.1.7",
+      "edition": "2015",
+      "sha256": "1cc3c5651fb62ab8aa3103998dade57efdd028544bd300516baa31840c252a83",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#encoding_rs@0.8.34",
+          "externCrateName": "encoding_rs"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "Streaming transcoding for encoding_rs",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/BurntSushi/encoding_rs_io"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#env_filter@0.1.2": {
+      "crateName": "env_filter",
+      "version": "0.1.2",
+      "edition": "2021",
+      "sha256": "4f2c92ceda6ceec50f43169f9ee8424fe2db276791afde7b2cd8bc084cb376ab",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "regex"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.22",
+          "externCrateName": "log"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex@1.10.6",
+          "externCrateName": "regex"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Filter log events using environment variables ",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-cli/env_logger"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#env_logger@0.11.5": {
+      "crateName": "env_logger",
+      "version": "0.11.5",
+      "edition": "2021",
+      "sha256": "e13fa619b91fb2381732789fc5de83b45675e882f66623b7d8cb4f643017018d",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "auto-color",
+        "color",
+        "default",
+        "humantime",
+        "regex"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anstream@0.6.15",
+          "externCrateName": "anstream"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#anstyle@1.0.13",
+          "externCrateName": "anstyle"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#env_filter@0.1.2",
+          "externCrateName": "env_filter"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#humantime@2.1.0",
+          "externCrateName": "humantime"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.22",
+          "externCrateName": "log"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "A logging implementation for `log` which is configured via an environment variable. ",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-cli/env_logger"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#equivalent@1.0.1": {
+      "crateName": "equivalent",
+      "version": "1.0.1",
+      "edition": "2015",
+      "sha256": "5443807d6dff69373d433ab9ef5378ad8df50ca6298caf15de6e52e24aaf54d5",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Traits for key comparison in maps.",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/cuviper/equivalent"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#errno@0.3.9": {
+      "crateName": "errno",
+      "version": "0.3.9",
+      "edition": "2018",
+      "sha256": "534c5cf6194dfab3db3242765c03bbe257cf92f22b38f6bc0c58d59108a820ba",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.156",
+          "externCrateName": "libc"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Chris Wong <lambda.fairy@gmail.com>"
+      ],
+      "description": "Cross-platform interface to the `errno` variable.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/lambda-fairy/rust-errno"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#etcetera@0.8.0": {
+      "crateName": "etcetera",
+      "version": "0.8.0",
+      "edition": "2018",
+      "sha256": "136d1b5283a1ab77bd9257427ffd09d8667ced0570b6f938942bc7568ed5b943",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.0",
+          "externCrateName": "cfg_if"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#home@0.5.9",
+          "externCrateName": "home"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "An unopinionated library for obtaining configuration, data, cache, & other directories",
+      "homepage": "https://github.com/lunacookies/etcetera",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/lunacookies/etcetera"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.2.15": {
+      "crateName": "getrandom",
+      "version": "0.2.15",
+      "edition": "2018",
+      "sha256": "c4567c8db10ae91089c99af84c68c38da3ec2f087c3f82960bcdbf3656b6f4d7",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.0",
+          "externCrateName": "cfg_if"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.156",
+          "externCrateName": "libc"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rand Project Developers"
+      ],
+      "description": "A small cross-platform library for retrieving random data from system source",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-random/getrandom"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#globset@0.4.14": {
+      "crateName": "globset",
+      "version": "0.4.14",
+      "edition": "2021",
+      "sha256": "57da3b9b5b85bd66f31093f8c408b90a74431672542466497dcbdfdc02034be1",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "log"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.3",
+          "externCrateName": "aho_corasick"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bstr@1.10.0",
+          "externCrateName": "bstr"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.22",
+          "externCrateName": "log"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex-automata@0.4.7",
+          "externCrateName": "regex_automata"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex-syntax@0.8.4",
+          "externCrateName": "regex_syntax"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "Cross platform single glob and glob set matching. Glob set matching is the process of matching one or more glob patterns against a single candidate path simultaneously, and returning all of the globs that matched. ",
+      "homepage": "https://github.com/BurntSushi/ripgrep/tree/master/crates/globset",
+      "license": "Unlicense OR MIT",
+      "repository": "https://github.com/BurntSushi/ripgrep/tree/master/crates/globset"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#globwalk@0.9.1": {
+      "crateName": "globwalk",
+      "version": "0.9.1",
+      "edition": "2021",
+      "sha256": "0bf760ebf69878d9fd8f110c89703d90ce35095324d1f1edcb595c63945ee757",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.6.0",
+          "externCrateName": "bitflags"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ignore@0.4.22",
+          "externCrateName": "ignore"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#walkdir@2.5.0",
+          "externCrateName": "walkdir"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Gilad Naaman <gilad@naaman.io>"
+      ],
+      "description": "Glob-matched recursive file system walking.",
+      "license": "MIT",
+      "repository": "https://github.com/gilnaa/globwalk"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#grep-matcher@0.1.7": {
+      "crateName": "grep-matcher",
+      "version": "0.1.7",
+      "edition": "2021",
+      "sha256": "47a3141a10a43acfedc7c98a60a834d7ba00dfe7bec9071cbfc19b55b292ac02",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.4",
+          "externCrateName": "memchr"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "A trait for regular expressions, with a focus on line oriented search. ",
+      "homepage": "https://github.com/BurntSushi/ripgrep/tree/master/crates/matcher",
+      "license": "Unlicense OR MIT",
+      "repository": "https://github.com/BurntSushi/ripgrep/tree/master/crates/matcher"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#grep-searcher@0.1.13": {
+      "crateName": "grep-searcher",
+      "version": "0.1.13",
+      "edition": "2021",
+      "sha256": "ba536ae4f69bec62d8839584dd3153d3028ef31bb229f04e09fb5a9e5a193c54",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bstr@1.10.0",
+          "externCrateName": "bstr"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#encoding_rs@0.8.34",
+          "externCrateName": "encoding_rs"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#encoding_rs_io@0.1.7",
+          "externCrateName": "encoding_rs_io"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#grep-matcher@0.1.7",
+          "externCrateName": "grep_matcher"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.22",
+          "externCrateName": "log"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.4",
+          "externCrateName": "memchr"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memmap2@0.9.4",
+          "externCrateName": "memmap"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "Fast line oriented regex searching as a library. ",
+      "homepage": "https://github.com/BurntSushi/ripgrep/tree/master/crates/searcher",
+      "license": "Unlicense OR MIT",
+      "repository": "https://github.com/BurntSushi/ripgrep/tree/master/crates/searcher"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.14.5": {
+      "crateName": "hashbrown",
+      "version": "0.14.5",
+      "edition": "2021",
+      "sha256": "e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "raw"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Amanieu d'Antras <amanieu@gmail.com>"
+      ],
+      "description": "A Rust port of Google's SwissTable hash map",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/hashbrown"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#heck@0.5.0": {
+      "crateName": "heck",
+      "version": "0.5.0",
+      "edition": "2021",
+      "sha256": "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "heck is a case conversion library.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/withoutboats/heck"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#home@0.5.9": {
+      "crateName": "home",
+      "version": "0.5.9",
+      "edition": "2021",
+      "sha256": "e3d1354bf6b7235cb4a0576c2619fd4ed18183f689b12b006a0ee7329eeff9a5",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Brian Anderson <andersrb@gmail.com>"
+      ],
+      "description": "Shared definitions of home directories.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/cargo"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#humansize@2.1.3": {
+      "crateName": "humansize",
+      "version": "2.1.3",
+      "edition": "2021",
+      "sha256": "6cb51c9a029ddc91b07a787f1d86b53ccfa49b0e86688c946ebe8d3555685dd7",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libm@0.2.8",
+          "externCrateName": "libm"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Leopold Arkham <leopold.arkham@gmail.com>"
+      ],
+      "description": "A configurable crate to easily represent sizes in a human-readable format.",
+      "homepage": "https://github.com/LeopoldArkham/humansize",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/LeopoldArkham/humansize"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#humantime@2.1.0": {
+      "crateName": "humantime",
+      "version": "2.1.0",
+      "edition": "2018",
+      "sha256": "9a3a5bfb195931eeb336b2a7b4d761daec841b97f947d34394601737a7bba5e4",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Paul Colomiets <paul@colomiets.name>"
+      ],
+      "description": "    A parser and formatter for std::time::{Duration, SystemTime} ",
+      "homepage": "https://github.com/tailhook/humantime",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/tailhook/humantime"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#iana-time-zone@0.1.60": {
+      "crateName": "iana-time-zone",
+      "version": "0.1.60",
+      "edition": "2018",
+      "sha256": "e7ffbb5a1b541ea2561f8c41c087286cc091e21e556a4f09a8f6cbf17b69b141",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "fallback"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Straw <strawman@astraw.com>",
+        "René Kijewski <rene.kijewski@fu-berlin.de>",
+        "Ryan Lopopolo <rjl@hyperbo.la>"
+      ],
+      "description": "get the IANA time zone for the current system",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/strawlab/iana-time-zone"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#ignore@0.4.22": {
+      "crateName": "ignore",
+      "version": "0.4.22",
+      "edition": "2021",
+      "sha256": "b46810df39e66e925525d6e38ce1e7f6e1d208f72dc39757880fcb66e2c58af1",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-deque@0.8.5",
+          "externCrateName": "crossbeam_deque"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#globset@0.4.14",
+          "externCrateName": "globset"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.22",
+          "externCrateName": "log"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.4",
+          "externCrateName": "memchr"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex-automata@0.4.7",
+          "externCrateName": "regex_automata"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#same-file@1.0.6",
+          "externCrateName": "same_file"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#walkdir@2.5.0",
+          "externCrateName": "walkdir"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "A fast library for efficiently matching ignore files such as `.gitignore` against file paths. ",
+      "homepage": "https://github.com/BurntSushi/ripgrep/tree/master/crates/ignore",
+      "license": "Unlicense OR MIT",
+      "repository": "https://github.com/BurntSushi/ripgrep/tree/master/crates/ignore"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.4.0": {
+      "crateName": "indexmap",
+      "version": "2.4.0",
+      "edition": "2021",
+      "sha256": "93ead53efc7ea8ed3cfb0c79fc8023fbb782a5432b52830b6518941cebe6505c",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#equivalent@1.0.1",
+          "externCrateName": "equivalent"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.14.5",
+          "externCrateName": "hashbrown"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "A hash table with consistent order and fast iteration.",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/indexmap-rs/indexmap"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#is_terminal_polyfill@1.70.1": {
+      "crateName": "is_terminal_polyfill",
+      "version": "1.70.1",
+      "edition": "2021",
+      "sha256": "7943c866cc5cd64cbc25b2e01621d07fa8eb2a1a23160ee81ce38704e97b8ecf",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Polyfill for `is_terminal` stdlib feature for use with older MSRVs",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/polyfill-rs/is_terminal_polyfill"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#itertools@0.11.0": {
+      "crateName": "itertools",
+      "version": "0.11.0",
+      "edition": "2018",
+      "sha256": "b1c173a5686ce8bfa551b3563d0c2170bf24ca44da99c7ca4bfdab5418c3fe57",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "use_alloc",
+        "use_std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#either@1.13.0",
+          "externCrateName": "either"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "bluss"
+      ],
+      "description": "Extra iterator adaptors, iterator methods, free functions, and macros.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-itertools/itertools"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#itoa@1.0.11": {
+      "crateName": "itoa",
+      "version": "1.0.11",
+      "edition": "2018",
+      "sha256": "49f1f14873335454500d59611f1cf4a4b0f786f9ac11f4312a78e4cf2566695b",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "Fast integer primitive to string conversion",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/dtolnay/itoa"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#json5@0.4.1": {
+      "crateName": "json5",
+      "version": "0.4.1",
+      "edition": "2018",
+      "sha256": "96b0db21af676c1ce64250b5f40f3ce2cf27e4e47cb91ed91eb6fe9350b430c1",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pest@2.7.11",
+          "externCrateName": "pest"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pest_derive@2.7.11",
+          "externCrateName": "pest_derive"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.208",
+          "externCrateName": "serde"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Callum Oakley <hello@callumoakley.net>"
+      ],
+      "description": "A Rust JSON5 serializer and deserializer which speaks Serde.",
+      "license": "ISC",
+      "repository": "https://github.com/callum-oakley/json5-rs"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#lazy_static@1.5.0": {
+      "crateName": "lazy_static",
+      "version": "1.5.0",
+      "edition": "2015",
+      "sha256": "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Marvin Löbel <loebel.marvin@gmail.com>"
+      ],
+      "description": "A macro for declaring lazily evaluated statics in Rust.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang-nursery/lazy-static.rs"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.156": {
+      "crateName": "libc",
+      "version": "0.2.156",
+      "edition": "2015",
+      "sha256": "a5f43f184355eefb8d17fc948dbecf6c13be3c141f20d834ae842193a448c72a",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "extra_traits",
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rust Project Developers"
+      ],
+      "description": "Raw FFI bindings to platform libraries like libc. ",
+      "homepage": "https://github.com/rust-lang/libc",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/libc"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#libm@0.2.8": {
+      "crateName": "libm",
+      "version": "0.2.8",
+      "edition": "2018",
+      "sha256": "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Jorge Aparicio <jorge@japaric.io>"
+      ],
+      "description": "libm in pure Rust",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/libm"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#lock_api@0.4.12": {
+      "crateName": "lock_api",
+      "version": "0.4.12",
+      "edition": "2021",
+      "sha256": "07af8b9cdd281b7915f413fa73f29ebd5d55d0d3f0155584dade1ff18cea1b17",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "atomic_usize",
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#scopeguard@1.2.0",
+          "externCrateName": "scopeguard"
+        }
+      ],
+      "buildDependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#autocfg@1.3.0",
+          "externCrateName": "autocfg"
+        }
+      ],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Amanieu d'Antras <amanieu@gmail.com>"
+      ],
+      "description": "Wrappers to create fully-featured Mutex and RwLock types. Compatible with no_std.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/Amanieu/parking_lot"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#log@0.4.22": {
+      "crateName": "log",
+      "version": "0.4.22",
+      "edition": "2021",
+      "sha256": "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rust Project Developers"
+      ],
+      "description": "A lightweight logging facade for Rust ",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/log"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.4": {
+      "crateName": "memchr",
+      "version": "2.7.4",
+      "edition": "2021",
+      "sha256": "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "default",
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Gallant <jamslam@gmail.com>",
+        "bluss"
+      ],
+      "description": "Provides extremely fast (uses SIMD on x86_64, aarch64 and wasm32) routines for 1, 2 or 3 byte search and single substring search. ",
+      "homepage": "https://github.com/BurntSushi/memchr",
+      "license": "Unlicense OR MIT",
+      "repository": "https://github.com/BurntSushi/memchr"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#memmap2@0.9.4": {
+      "crateName": "memmap2",
+      "version": "0.9.4",
+      "edition": "2018",
+      "sha256": "fe751422e4a8caa417e13c3ea66452215d7d63e19e604f4980461212f3ae1322",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.156",
+          "externCrateName": "libc"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Dan Burkert <dan@danburkert.com>",
+        "Yevhenii Reizner <razrfalcon@gmail.com>"
+      ],
+      "description": "Cross-platform Rust API for memory-mapped file IO",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/RazrFalcon/memmap2-rs"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#num-format@0.4.4": {
+      "crateName": "num-format",
+      "version": "0.4.4",
+      "edition": "2021",
+      "sha256": "a652d9771a63711fd3c3deb670acfbe5c30a4072e664d7a3bf5a9e1056ac72c3",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#arrayvec@0.7.6",
+          "externCrateName": "arrayvec"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#itoa@1.0.11",
+          "externCrateName": "itoa"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Brian Myers <brian.carl.myers@gmail.com>"
+      ],
+      "description": "A Rust crate for producing string-representations of numbers, formatted according to international standards",
+      "homepage": "https://github.com/bcmyers/num-format",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/bcmyers/num-format"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#num-traits@0.2.19": {
+      "crateName": "num-traits",
+      "version": "0.2.19",
+      "edition": "2021",
+      "sha256": "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#autocfg@1.3.0",
+          "externCrateName": "autocfg"
+        }
+      ],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rust Project Developers"
+      ],
+      "description": "Numeric traits for generic mathematics",
+      "homepage": "https://github.com/rust-num/num-traits",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-num/num-traits"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#once_cell@1.19.0": {
+      "crateName": "once_cell",
+      "version": "1.19.0",
+      "edition": "2021",
+      "sha256": "3fdb12b2476b595f9358c5161aa467c2438859caa136dec86c26fdd2efe17b92",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "default",
+        "race",
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Aleksey Kladov <aleksey.kladov@gmail.com>"
+      ],
+      "description": "Single assignment cells and lazy values.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/matklad/once_cell"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#parking_lot@0.12.3": {
+      "crateName": "parking_lot",
+      "version": "0.12.3",
+      "edition": "2021",
+      "sha256": "f1bf18183cf54e8d6059647fc3063646a1801cf30896933ec2311622cc4b9a27",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#lock_api@0.4.12",
+          "externCrateName": "lock_api"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#parking_lot_core@0.9.10",
+          "externCrateName": "parking_lot_core"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Amanieu d'Antras <amanieu@gmail.com>"
+      ],
+      "description": "More compact and efficient implementations of the standard synchronization primitives.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/Amanieu/parking_lot"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#parking_lot_core@0.9.10": {
+      "crateName": "parking_lot_core",
+      "version": "0.9.10",
+      "edition": "2021",
+      "sha256": "1e401f977ab385c9e4e3ab30627d6f26d00e2c73eef317493c4ec6d468726cf8",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.0",
+          "externCrateName": "cfg_if"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.156",
+          "externCrateName": "libc"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.5.3",
+          "externCrateName": "syscall"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#smallvec@1.13.2",
+          "externCrateName": "smallvec"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Amanieu d'Antras <amanieu@gmail.com>"
+      ],
+      "description": "An advanced API for creating custom synchronization primitives.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/Amanieu/parking_lot"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#parse-zoneinfo@0.3.1": {
+      "crateName": "parse-zoneinfo",
+      "version": "0.3.1",
+      "edition": "2021",
+      "sha256": "1f2a05b18d44e2957b88f96ba460715e295bc1d7510468a2f3d3b44535d26c24",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex@1.10.6",
+          "externCrateName": "regex"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Parse zoneinfo files from the IANA database",
+      "license": "MIT",
+      "repository": "https://github.com/chronotope/chrono-tz"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#percent-encoding@2.3.1": {
+      "crateName": "percent-encoding",
+      "version": "2.3.1",
+      "edition": "2018",
+      "sha256": "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "default",
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The rust-url developers"
+      ],
+      "description": "Percent encoding and decoding",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/servo/rust-url/"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#pest@2.7.11": {
+      "crateName": "pest",
+      "version": "2.7.11",
+      "edition": "2021",
+      "sha256": "cd53dff83f26735fdc1ca837098ccf133605d794cdae66acfc2bfac3ec809d95",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "memchr",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.4",
+          "externCrateName": "memchr"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@1.0.63",
+          "externCrateName": "thiserror"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ucd-trie@0.1.6",
+          "externCrateName": "ucd_trie"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Dragoș Tiselice <dragostiselice@gmail.com>"
+      ],
+      "description": "The Elegant Parser",
+      "homepage": "https://pest.rs/",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/pest-parser/pest"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#pest_derive@2.7.11": {
+      "crateName": "pest_derive",
+      "version": "2.7.11",
+      "edition": "2021",
+      "sha256": "2a548d2beca6773b1c244554d36fcf8548a8a58e74156968211567250e48e49a",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pest@2.7.11",
+          "externCrateName": "pest"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pest_generator@2.7.11",
+          "externCrateName": "pest_generator"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": true,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "proc-macro"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Dragoș Tiselice <dragostiselice@gmail.com>"
+      ],
+      "description": "pest's derive macro",
+      "homepage": "https://pest.rs/",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/pest-parser/pest"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#pest_generator@2.7.11": {
+      "crateName": "pest_generator",
+      "version": "2.7.11",
+      "edition": "2021",
+      "sha256": "3c93a82e8d145725dcbaf44e5ea887c8a869efdcc28706df2d08c69e17077183",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pest@2.7.11",
+          "externCrateName": "pest"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pest_meta@2.7.11",
+          "externCrateName": "pest_meta"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.86",
+          "externCrateName": "proc_macro2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.36",
+          "externCrateName": "quote"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.74",
+          "externCrateName": "syn"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Dragoș Tiselice <dragostiselice@gmail.com>"
+      ],
+      "description": "pest code generator",
+      "homepage": "https://pest.rs/",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/pest-parser/pest"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#pest_meta@2.7.11": {
+      "crateName": "pest_meta",
+      "version": "2.7.11",
+      "edition": "2021",
+      "sha256": "a941429fea7e08bedec25e4f6785b6ffaacc6b755da98df5ef3e7dcf4a124c4f",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#once_cell@1.19.0",
+          "externCrateName": "once_cell"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pest@2.7.11",
+          "externCrateName": "pest"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Dragoș Tiselice <dragostiselice@gmail.com>"
+      ],
+      "description": "pest meta language parser and validator",
+      "homepage": "https://pest.rs/",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/pest-parser/pest"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#phf@0.11.2": {
+      "crateName": "phf",
+      "version": "0.11.2",
+      "edition": "2021",
+      "sha256": "ade2d8b8f33c7333b51bcf0428d37e217e9f32192ae4772156f65063b8ce03dc",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#phf_shared@0.11.2",
+          "externCrateName": "phf_shared"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Steven Fackler <sfackler@gmail.com>"
+      ],
+      "description": "Runtime support for perfect hash function data structures",
+      "license": "MIT",
+      "repository": "https://github.com/rust-phf/rust-phf"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#phf_codegen@0.11.2": {
+      "crateName": "phf_codegen",
+      "version": "0.11.2",
+      "edition": "2021",
+      "sha256": "e8d39688d359e6b34654d328e262234662d16cc0f60ec8dcbe5e718709342a5a",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#phf_generator@0.11.2",
+          "externCrateName": "phf_generator"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#phf_shared@0.11.2",
+          "externCrateName": "phf_shared"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Steven Fackler <sfackler@gmail.com>"
+      ],
+      "description": "Codegen library for PHF types",
+      "license": "MIT",
+      "repository": "https://github.com/rust-phf/rust-phf"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#phf_generator@0.11.2": {
+      "crateName": "phf_generator",
+      "version": "0.11.2",
+      "edition": "2021",
+      "sha256": "48e4cc64c2ad9ebe670cb8fd69dd50ae301650392e81c05f9bfcb2d5bdbc24b0",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#phf_shared@0.11.2",
+          "externCrateName": "phf_shared"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rand@0.8.5",
+          "externCrateName": "rand"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Steven Fackler <sfackler@gmail.com>"
+      ],
+      "description": "PHF generation logic",
+      "license": "MIT",
+      "repository": "https://github.com/rust-phf/rust-phf"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#phf_shared@0.11.2": {
+      "crateName": "phf_shared",
+      "version": "0.11.2",
+      "edition": "2021",
+      "sha256": "90fcb95eef784c2ac79119d1dd819e162b5da872ce6f3c3abe1e8ca1c082f72b",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#siphasher@0.3.11",
+          "externCrateName": "siphasher"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Steven Fackler <sfackler@gmail.com>"
+      ],
+      "description": "Support code shared by PHF libraries",
+      "license": "MIT",
+      "repository": "https://github.com/rust-phf/rust-phf"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#ppv-lite86@0.2.20": {
+      "crateName": "ppv-lite86",
+      "version": "0.2.20",
+      "edition": "2021",
+      "sha256": "77957b295656769bb8ad2b6a6b09d897d94f05c41b069aede1fcdaa675eaea04",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "simd",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.7.35",
+          "externCrateName": "zerocopy"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The CryptoCorrosion Contributors"
+      ],
+      "description": "Implementation of the crypto-simd API for x86",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/cryptocorrosion/cryptocorrosion"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.86": {
+      "crateName": "proc-macro2",
+      "version": "1.0.86",
+      "edition": "2021",
+      "sha256": "5e719e8df665df0d1c8fbfd238015744736151d4445ec0836b8e628aae103b77",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "proc-macro"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.12",
+          "externCrateName": "unicode_ident"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "David Tolnay <dtolnay@gmail.com>",
+        "Alex Crichton <alex@alexcrichton.com>"
+      ],
+      "description": "A substitute implementation of the compiler's `proc_macro` API to decouple token-based libraries from the procedural macro use case.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/dtolnay/proc-macro2"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.36": {
+      "crateName": "quote",
+      "version": "1.0.36",
+      "edition": "2018",
+      "sha256": "0fa76aaf39101c457836aec0ce2316dbdc3ab723cdda1c6bd4e6ad4208acaca7",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "proc-macro"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.86",
+          "externCrateName": "proc_macro2"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "Quasi-quoting macro quote!(...)",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/dtolnay/quote"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#rand@0.8.5": {
+      "crateName": "rand",
+      "version": "0.8.5",
+      "edition": "2018",
+      "sha256": "34af8d1a0e25924bc5b7c43c079c942339d8f0a8b57c39049bef581b46327404",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "default",
+        "getrandom",
+        "libc",
+        "rand_chacha",
+        "small_rng",
+        "std",
+        "std_rng"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.156",
+          "externCrateName": "libc"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rand_chacha@0.3.1",
+          "externCrateName": "rand_chacha"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rand_core@0.6.4",
+          "externCrateName": "rand_core"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rand Project Developers",
+        "The Rust Project Developers"
+      ],
+      "description": "Random number generators and other randomness functionality. ",
+      "homepage": "https://rust-random.github.io/book",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-random/rand"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#rand_chacha@0.3.1": {
+      "crateName": "rand_chacha",
+      "version": "0.3.1",
+      "edition": "2018",
+      "sha256": "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ppv-lite86@0.2.20",
+          "externCrateName": "ppv_lite86"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rand_core@0.6.4",
+          "externCrateName": "rand_core"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rand Project Developers",
+        "The Rust Project Developers",
+        "The CryptoCorrosion Contributors"
+      ],
+      "description": "ChaCha random number generator ",
+      "homepage": "https://rust-random.github.io/book",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-random/rand"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#rand_core@0.6.4": {
+      "crateName": "rand_core",
+      "version": "0.6.4",
+      "edition": "2018",
+      "sha256": "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "getrandom",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.2.15",
+          "externCrateName": "getrandom"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rand Project Developers",
+        "The Rust Project Developers"
+      ],
+      "description": "Core random number generator traits and tools for implementation. ",
+      "homepage": "https://rust-random.github.io/book",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-random/rand"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#rayon-core@1.12.1": {
+      "crateName": "rayon-core",
+      "version": "1.12.1",
+      "edition": "2021",
+      "sha256": "1465873a3dfdaa8ae7cb14b4383657caab0b3e8a0aa9ae8e04b044854c8dfce2",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-deque@0.8.5",
+          "externCrateName": "crossbeam_deque"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#crossbeam-utils@0.8.20",
+          "externCrateName": "crossbeam_utils"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": "rayon-core",
+      "authors": [
+        "Niko Matsakis <niko@alum.mit.edu>",
+        "Josh Stone <cuviper@gmail.com>"
+      ],
+      "description": "Core APIs for Rayon",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rayon-rs/rayon"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#rayon@1.10.0": {
+      "crateName": "rayon",
+      "version": "1.10.0",
+      "edition": "2021",
+      "sha256": "b418a60154510ca1a002a752ca9714984e21e4241e804d32555251faf8b78ffa",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#either@1.13.0",
+          "externCrateName": "either"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rayon-core@1.12.1",
+          "externCrateName": "rayon_core"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Niko Matsakis <niko@alum.mit.edu>",
+        "Josh Stone <cuviper@gmail.com>"
+      ],
+      "description": "Simple work-stealing parallelism for Rust",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rayon-rs/rayon"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.5.3": {
+      "crateName": "redox_syscall",
+      "version": "0.5.3",
+      "edition": "2018",
+      "sha256": "2a908a6e00f1fdd0dfd9c0eb08ce85126f6d8bbda50017e74bc4a4b7d4a926a4",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.6.0",
+          "externCrateName": "bitflags"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": "syscall",
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Jeremy Soller <jackpot51@gmail.com>"
+      ],
+      "description": "A Rust library to access raw Redox system calls",
+      "license": "MIT",
+      "repository": "https://gitlab.redox-os.org/redox-os/syscall"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#regex-automata@0.4.7": {
+      "crateName": "regex-automata",
+      "version": "0.4.7",
+      "edition": "2021",
+      "sha256": "38caf58cc5ef2fed281f89292ef23f6365465ed9a41b7a7754eb4e26496c92df",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "dfa-onepass",
+        "hybrid",
+        "meta",
+        "nfa",
+        "nfa-backtrack",
+        "nfa-pikevm",
+        "nfa-thompson",
+        "perf",
+        "perf-inline",
+        "perf-literal",
+        "perf-literal-multisubstring",
+        "perf-literal-substring",
+        "std",
+        "syntax",
+        "unicode",
+        "unicode-age",
+        "unicode-bool",
+        "unicode-case",
+        "unicode-gencat",
+        "unicode-perl",
+        "unicode-script",
+        "unicode-segment",
+        "unicode-word-boundary"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.3",
+          "externCrateName": "aho_corasick"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.4",
+          "externCrateName": "memchr"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex-syntax@0.8.4",
+          "externCrateName": "regex_syntax"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rust Project Developers",
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "Automata construction and matching using regular expressions.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/regex/tree/master/regex-automata"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#regex-syntax@0.8.4": {
+      "crateName": "regex-syntax",
+      "version": "0.8.4",
+      "edition": "2021",
+      "sha256": "7a66a03ae7c801facd77a29370b4faec201768915ac14a721ba36f20bc9c209b",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std",
+        "unicode",
+        "unicode-age",
+        "unicode-bool",
+        "unicode-case",
+        "unicode-gencat",
+        "unicode-perl",
+        "unicode-script",
+        "unicode-segment"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rust Project Developers",
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "A regular expression parser.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/regex/tree/master/regex-syntax"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#regex@1.10.6": {
+      "crateName": "regex",
+      "version": "1.10.6",
+      "edition": "2021",
+      "sha256": "4219d74c6b67a3654a9fbebc4b419e22126d13d2f3c4a07ee0cb61ff79a79619",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "perf",
+        "perf-backtrack",
+        "perf-cache",
+        "perf-dfa",
+        "perf-inline",
+        "perf-literal",
+        "perf-onepass",
+        "std",
+        "unicode",
+        "unicode-age",
+        "unicode-bool",
+        "unicode-case",
+        "unicode-gencat",
+        "unicode-perl",
+        "unicode-script",
+        "unicode-segment"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#aho-corasick@1.1.3",
+          "externCrateName": "aho_corasick"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.4",
+          "externCrateName": "memchr"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex-automata@0.4.7",
+          "externCrateName": "regex_automata"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex-syntax@0.8.4",
+          "externCrateName": "regex_syntax"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rust Project Developers",
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "An implementation of regular expressions for Rust. This implementation uses finite automata and guarantees linear time matching on all inputs. ",
+      "homepage": "https://github.com/rust-lang/regex",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/regex"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#rustix@0.38.34": {
+      "crateName": "rustix",
+      "version": "0.38.34",
+      "edition": "2021",
+      "sha256": "70dc5ec042f7a43c4a73241207cecc9873a06d45debb38b329f8541d85c2730f",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "default",
+        "libc-extra-traits",
+        "std",
+        "termios",
+        "use-libc-auxv"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.6.0",
+          "externCrateName": "bitflags"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#errno@0.3.9",
+          "externCrateName": "libc_errno"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.156",
+          "externCrateName": "libc"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Dan Gohman <dev@sunfishcode.online>",
+        "Jakub Konka <kubkon@jakubkonka.com>"
+      ],
+      "description": "Safe Rust bindings to POSIX/Unix/Linux/Winsock-like syscalls",
+      "license": "Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/bytecodealliance/rustix"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#ryu@1.0.18": {
+      "crateName": "ryu",
+      "version": "1.0.18",
+      "edition": "2018",
+      "sha256": "f3cb5ba0dc43242ce17de99c180e96db90b235b8a9fdc9543c96d2209116bd9f",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "Fast floating point to string conversion",
+      "license": "Apache-2.0 OR BSL-1.0",
+      "repository": "https://github.com/dtolnay/ryu"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#same-file@1.0.6": {
+      "crateName": "same-file",
+      "version": "1.0.6",
+      "edition": "2018",
+      "sha256": "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "A simple crate for determining whether two file paths point to the same file. ",
+      "homepage": "https://github.com/BurntSushi/same-file",
+      "license": "Unlicense/MIT",
+      "repository": "https://github.com/BurntSushi/same-file"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#scopeguard@1.2.0": {
+      "crateName": "scopeguard",
+      "version": "1.2.0",
+      "edition": "2015",
+      "sha256": "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "bluss"
+      ],
+      "description": "A RAII scope guard that will run a given closure when it goes out of scope, even if the code between panics (assuming unwinding panic).  Defines the macros `defer!`, `defer_on_unwind!`, `defer_on_success!` as shorthands for guards with one of the implemented strategies. ",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/bluss/scopeguard"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.208": {
+      "crateName": "serde",
+      "version": "1.0.208",
+      "edition": "2018",
+      "sha256": "cff085d2cb684faa248efb494c39b68e522822ac0de72ccf08109abde717cfb2",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "derive",
+        "rc",
+        "serde_derive",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.208",
+          "externCrateName": "serde_derive"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Erick Tryzelaar <erick.tryzelaar@gmail.com>",
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "A generic serialization/deserialization framework",
+      "homepage": "https://serde.rs",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/serde-rs/serde"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.208": {
+      "crateName": "serde_derive",
+      "version": "1.0.208",
+      "edition": "2015",
+      "sha256": "24008e81ff7613ed8e5ba0cfaf24e2c2f1e5b8a0495711e44fcd4882fca62bcf",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.86",
+          "externCrateName": "proc_macro2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.36",
+          "externCrateName": "quote"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.74",
+          "externCrateName": "syn"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": true,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "proc-macro"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Erick Tryzelaar <erick.tryzelaar@gmail.com>",
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "Macros 1.1 implementation of #[derive(Serialize, Deserialize)]",
+      "homepage": "https://serde.rs",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/serde-rs/serde"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.125": {
+      "crateName": "serde_json",
+      "version": "1.0.125",
+      "edition": "2021",
+      "sha256": "83c8e735a073ccf5be70aa8066aa984eaf2fa000db6c8d0100ae605b366d31ed",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#itoa@1.0.11",
+          "externCrateName": "itoa"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.4",
+          "externCrateName": "memchr"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ryu@1.0.18",
+          "externCrateName": "ryu"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.208",
+          "externCrateName": "serde"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Erick Tryzelaar <erick.tryzelaar@gmail.com>",
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "A JSON serialization file format",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/serde-rs/json"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#serde_spanned@0.6.7": {
+      "crateName": "serde_spanned",
+      "version": "0.6.7",
+      "edition": "2021",
+      "sha256": "eb5b1b31579f3811bf615c144393417496f152e12ac8b7663bf664f4a815306d",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "serde"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.208",
+          "externCrateName": "serde"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Serde-compatible spanned Value",
+      "homepage": "https://github.com/toml-rs/toml",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/toml-rs/toml"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#siphasher@0.3.11": {
+      "crateName": "siphasher",
+      "version": "0.3.11",
+      "edition": "2018",
+      "sha256": "38b58827f4464d87d377d175e90bf58eb00fd8716ff0a62f80356b5e61555d0d",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Frank Denis <github@pureftpd.org>"
+      ],
+      "description": "SipHash-2-4, SipHash-1-3 and 128-bit variants in pure Rust",
+      "homepage": "https://docs.rs/siphasher",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/jedisct1/rust-siphash"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#slug@0.1.6": {
+      "crateName": "slug",
+      "version": "0.1.6",
+      "edition": "2021",
+      "sha256": "882a80f72ee45de3cc9a5afeb2da0331d58df69e4e7d8eeb5d3c7784ae67e724",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#deunicode@1.6.0",
+          "externCrateName": "deunicode"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "cdylib",
+        "rlib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Steven Allen <steven@stebalien.com>"
+      ],
+      "description": "Convert a unicode string to a slug",
+      "homepage": "https://github.com/Stebalien/slug-rs",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/Stebalien/slug-rs"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#smallvec@1.13.2": {
+      "crateName": "smallvec",
+      "version": "1.13.2",
+      "edition": "2018",
+      "sha256": "3c5e1a9a646d36c3599cd173a41282daf47c44583ad367b8e6837255952e5c67",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Servo Project Developers"
+      ],
+      "description": "'Small vector' optimization: store up to a small number of items on the stack",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/servo/rust-smallvec"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#strsim@0.11.1": {
+      "crateName": "strsim",
+      "version": "0.11.1",
+      "edition": "2015",
+      "sha256": "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Danny Guo <danny@dannyguo.com>",
+        "maxbachmann <oss@maxbachmann.de>"
+      ],
+      "description": "Implementations of string similarity metrics. Includes Hamming, Levenshtein, OSA, Damerau-Levenshtein, Jaro, Jaro-Winkler, and Sørensen-Dice. ",
+      "homepage": "https://github.com/rapidfuzz/strsim-rs",
+      "license": "MIT",
+      "repository": "https://github.com/rapidfuzz/strsim-rs"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.74": {
+      "crateName": "syn",
+      "version": "2.0.74",
+      "edition": "2021",
+      "sha256": "1fceb41e3d546d0bd83421d3409b1460cc7444cd389341a4c880fe7a042cb3d7",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "clone-impls",
+        "default",
+        "derive",
+        "full",
+        "parsing",
+        "printing",
+        "proc-macro"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.86",
+          "externCrateName": "proc_macro2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.36",
+          "externCrateName": "quote"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.12",
+          "externCrateName": "unicode_ident"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "Parser for Rust source code",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/dtolnay/syn"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#table_formatter@0.6.1": {
+      "crateName": "table_formatter",
+      "version": "0.6.1",
+      "edition": "2021",
+      "sha256": "beef5d3fd5472c911d41286849de6a9aee93327f7fae9fb9148fe9ff0102c17d",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#colored@2.1.0",
+          "externCrateName": "colored"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#itertools@0.11.0",
+          "externCrateName": "itertools"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@1.0.63",
+          "externCrateName": "thiserror"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Embers-of-the-fire <wangbh533@126.com>"
+      ],
+      "description": "A simple text table formatter written in Rust",
+      "homepage": "https://github.com/Embers-of-the-Fire/rust-table-formatter",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/Embers-of-the-Fire/rust-table-formatter.git"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#tera@1.20.0": {
+      "crateName": "tera",
+      "version": "1.20.0",
+      "edition": "2018",
+      "sha256": "ab9d851b45e865f178319da0abdbfe6acbc4328759ff18dafc3a41c16b4cd2ee",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "builtins",
+        "chrono",
+        "chrono-tz",
+        "default",
+        "humansize",
+        "percent-encoding",
+        "rand",
+        "slug",
+        "urlencode"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#chrono@0.4.38",
+          "externCrateName": "chrono"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#chrono-tz@0.9.0",
+          "externCrateName": "chrono_tz"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#globwalk@0.9.1",
+          "externCrateName": "globwalk"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#humansize@2.1.3",
+          "externCrateName": "humansize"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#lazy_static@1.5.0",
+          "externCrateName": "lazy_static"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#percent-encoding@2.3.1",
+          "externCrateName": "percent_encoding"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pest@2.7.11",
+          "externCrateName": "pest"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pest_derive@2.7.11",
+          "externCrateName": "pest_derive"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rand@0.8.5",
+          "externCrateName": "rand"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#regex@1.10.6",
+          "externCrateName": "regex"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.208",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.125",
+          "externCrateName": "serde_json"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#slug@0.1.6",
+          "externCrateName": "slug"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unic-segment@0.9.0",
+          "externCrateName": "unic_segment"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Vincent Prouillet <hello@prouilletvincent.com>"
+      ],
+      "description": "Template engine based on Jinja2/Django templates",
+      "homepage": "https://keats.github.io/tera/",
+      "license": "MIT",
+      "repository": "https://github.com/Keats/tera"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#term_size@0.3.2": {
+      "crateName": "term_size",
+      "version": "0.3.2",
+      "edition": "2015",
+      "sha256": "1e4129646ca0ed8f45d09b929036bafad5377103edd06e50bf574b353d2b08d9",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.156",
+          "externCrateName": "libc"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Kevin K. <kbknapp@gmail.com>",
+        "Benjamin Sago <ogham@bsago.me>"
+      ],
+      "description": "functions for determining terminal sizes and dimensions",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/kbknapp/term_size-rs.git"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#terminal_size@0.4.1": {
+      "crateName": "terminal_size",
+      "version": "0.4.1",
+      "edition": "2021",
+      "sha256": "5352447f921fda68cf61b4101566c0bdb5104eff6804d0678e5227580ab6a4e9",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustix@0.38.34",
+          "externCrateName": "rustix"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Chin <achin@eminence32.net>"
+      ],
+      "description": "Gets the size of your Linux or Windows terminal",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/eminence/terminal-size"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#thiserror-impl@1.0.63": {
+      "crateName": "thiserror-impl",
+      "version": "1.0.63",
+      "edition": "2021",
+      "sha256": "a4558b58466b9ad7ca0f102865eccc95938dca1a74a856f2b57b6629050da261",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.86",
+          "externCrateName": "proc_macro2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.36",
+          "externCrateName": "quote"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.74",
+          "externCrateName": "syn"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": true,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "proc-macro"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "Implementation detail of the `thiserror` crate",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/dtolnay/thiserror"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#thiserror@1.0.63": {
+      "crateName": "thiserror",
+      "version": "1.0.63",
+      "edition": "2021",
+      "sha256": "c0342370b38b6a11b6cc11d6a805569958d54cfa061a29969c3b5ce2ea405724",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror-impl@1.0.63",
+          "externCrateName": "thiserror_impl"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "derive(Error)",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/dtolnay/thiserror"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#toml@0.8.19": {
+      "crateName": "toml",
+      "version": "0.8.19",
+      "edition": "2021",
+      "sha256": "a1ed1f98e3fdc28d6d910e6737ae6ab1a93bf1985935a1193e68f93eeb68d24e",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "display",
+        "parse"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.208",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_spanned@0.6.7",
+          "externCrateName": "serde_spanned"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml_datetime@0.6.8",
+          "externCrateName": "toml_datetime"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml_edit@0.22.20",
+          "externCrateName": "toml_edit"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Alex Crichton <alex@alexcrichton.com>"
+      ],
+      "description": "A native Rust encoder and decoder of TOML-formatted files and streams. Provides implementations of the standard Serialize/Deserialize traits for TOML data to facilitate deserializing and serializing Rust structures. ",
+      "homepage": "https://github.com/toml-rs/toml",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/toml-rs/toml"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#toml_datetime@0.6.8": {
+      "crateName": "toml_datetime",
+      "version": "0.6.8",
+      "edition": "2021",
+      "sha256": "0dd7358ecb8fc2f8d014bf86f6f638ce72ba252a2c3a2572f2a795f1d23efb41",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "serde"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.208",
+          "externCrateName": "serde"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Alex Crichton <alex@alexcrichton.com>"
+      ],
+      "description": "A TOML-compatible datetime type",
+      "homepage": "https://github.com/toml-rs/toml",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/toml-rs/toml"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#toml_edit@0.22.20": {
+      "crateName": "toml_edit",
+      "version": "0.22.20",
+      "edition": "2021",
+      "sha256": "583c44c02ad26b0c3f3066fe629275e50627026c51ac2e595cca4c230ce1ce1d",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "display",
+        "parse",
+        "serde"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.4.0",
+          "externCrateName": "indexmap"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.208",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_spanned@0.6.7",
+          "externCrateName": "serde_spanned"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml_datetime@0.6.8",
+          "externCrateName": "toml_datetime"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#winnow@0.6.18",
+          "externCrateName": "winnow"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andronik Ordian <write@reusable.software>",
+        "Ed Page <eopage@gmail.com>"
+      ],
+      "description": "Yet another format-preserving TOML parser.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/toml-rs/toml"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#ucd-trie@0.1.6": {
+      "crateName": "ucd-trie",
+      "version": "0.1.6",
+      "edition": "2021",
+      "sha256": "ed646292ffc8188ef8ea4d1e0e0150fb15a5c2e12ad9b8fc191ae7a8a7f3c4b9",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "A trie for storing Unicode codepoint sets and maps. ",
+      "homepage": "https://github.com/BurntSushi/ucd-generate",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/BurntSushi/ucd-generate"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#unic-char-property@0.9.0": {
+      "crateName": "unic-char-property",
+      "version": "0.9.0",
+      "edition": "2018",
+      "sha256": "a8c57a407d9b6fa02b4795eb81c5b6652060a15a7903ea981f3d723e6c0be221",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unic-char-range@0.9.0",
+          "externCrateName": "unic_char_range"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The UNIC Project Developers"
+      ],
+      "description": "UNIC — Unicode Character Tools — Character Property taxonomy, contracts and build macros",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/open-i18n/rust-unic/"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#unic-char-range@0.9.0": {
+      "crateName": "unic-char-range",
+      "version": "0.9.0",
+      "edition": "2018",
+      "sha256": "0398022d5f700414f6b899e10b8348231abf9173fa93144cbc1a43b9793c1fbc",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The UNIC Project Developers"
+      ],
+      "description": "UNIC — Unicode Character Tools — Character Range and Iteration",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/open-i18n/rust-unic/"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#unic-common@0.9.0": {
+      "crateName": "unic-common",
+      "version": "0.9.0",
+      "edition": "2018",
+      "sha256": "80d7ff825a6a654ee85a63e80f92f054f904f21e7d12da4e22f9834a4aaa35bc",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The UNIC Project Developers"
+      ],
+      "description": "UNIC — Common Utilities",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/open-i18n/rust-unic/"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#unic-segment@0.9.0": {
+      "crateName": "unic-segment",
+      "version": "0.9.0",
+      "edition": "2018",
+      "sha256": "e4ed5d26be57f84f176157270c112ef57b86debac9cd21daaabbe56db0f88f23",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unic-ucd-segment@0.9.0",
+          "externCrateName": "unic_ucd_segment"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The UNIC Project Developers"
+      ],
+      "description": "UNIC — Unicode Text Segmentation Algorithms",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/open-i18n/rust-unic/"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#unic-ucd-segment@0.9.0": {
+      "crateName": "unic-ucd-segment",
+      "version": "0.9.0",
+      "edition": "2018",
+      "sha256": "2079c122a62205b421f499da10f3ee0f7697f012f55b675e002483c73ea34700",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unic-char-property@0.9.0",
+          "externCrateName": "unic_char_property"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unic-char-range@0.9.0",
+          "externCrateName": "unic_char_range"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unic-ucd-version@0.9.0",
+          "externCrateName": "unic_ucd_version"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The UNIC Project Developers"
+      ],
+      "description": "UNIC — Unicode Character Database — Segmentation Properties",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/open-i18n/rust-unic/"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#unic-ucd-version@0.9.0": {
+      "crateName": "unic-ucd-version",
+      "version": "0.9.0",
+      "edition": "2018",
+      "sha256": "96bd2f2237fe450fcd0a1d2f5f4e91711124f7857ba2e964247776ebeeb7b0c4",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unic-common@0.9.0",
+          "externCrateName": "unic_common"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The UNIC Project Developers"
+      ],
+      "description": "UNIC — Unicode Character Database — Version",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/open-i18n/rust-unic/"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.12": {
+      "crateName": "unicode-ident",
+      "version": "1.0.12",
+      "edition": "2018",
+      "sha256": "3354b9ac3fae1ff6755cb6db53683adb661634f67557942dea4facebec0fee4b",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "Determine whether characters have the XID_Start or XID_Continue properties according to Unicode Standard Annex #31",
+      "license": "(MIT OR Apache-2.0) AND Unicode-DFS-2016",
+      "repository": "https://github.com/dtolnay/unicode-ident"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#utf8parse@0.2.2": {
+      "crateName": "utf8parse",
+      "version": "0.2.2",
+      "edition": "2018",
+      "sha256": "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Joe Wilm <joe@jwilm.com>",
+        "Christian Duerr <contact@christianduerr.com>"
+      ],
+      "description": "Table-driven UTF-8 parser",
+      "license": "Apache-2.0 OR MIT",
+      "repository": "https://github.com/alacritty/vte"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#walkdir@2.5.0": {
+      "crateName": "walkdir",
+      "version": "2.5.0",
+      "edition": "2018",
+      "sha256": "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#same-file@1.0.6",
+          "externCrateName": "same_file"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Andrew Gallant <jamslam@gmail.com>"
+      ],
+      "description": "Recursively walk a directory.",
+      "homepage": "https://github.com/BurntSushi/walkdir",
+      "license": "Unlicense/MIT",
+      "repository": "https://github.com/BurntSushi/walkdir"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#winnow@0.6.18": {
+      "crateName": "winnow",
+      "version": "0.6.18",
+      "edition": "2021",
+      "sha256": "68a9bda4691f099d435ad181000724da8e5899daa10713c2d432552b9ccd3a6f",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "default",
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "A byte-oriented, zero-copy, parser combinators library",
+      "license": "MIT",
+      "repository": "https://github.com/winnow-rs/winnow"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#zerocopy-derive@0.7.35": {
+      "crateName": "zerocopy-derive",
+      "version": "0.7.35",
+      "edition": "2018",
+      "sha256": "fa4f8080344d4671fb4e831a13ad1e68092748387dfc4f55e356242fae12ce3e",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.86",
+          "externCrateName": "proc_macro2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.36",
+          "externCrateName": "quote"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.74",
+          "externCrateName": "syn"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": true,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "proc-macro"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Joshua Liebow-Feeser <joshlf@google.com>"
+      ],
+      "description": "Custom derive for traits from the zerocopy crate",
+      "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/google/zerocopy"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.7.35": {
+      "crateName": "zerocopy",
+      "version": "0.7.35",
+      "edition": "2018",
+      "sha256": "1b9b4fd18abc82b8136838da5d50bae7bdea537c574d8dc1a34ed098d6c166f0",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "byteorder",
+        "default",
+        "derive",
+        "simd",
+        "zerocopy-derive"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#byteorder@1.5.0",
+          "externCrateName": "byteorder"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zerocopy-derive@0.7.35",
+          "externCrateName": "zerocopy_derive"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Joshua Liebow-Feeser <joshlf@google.com>"
+      ],
+      "description": "Utilities for zero-copy parsing and serialization",
+      "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/google/zerocopy"
+    }
+  }
+}
