@@ -46,6 +46,23 @@ NEW_FN = """\
         // Accept any binding
         match obj.get_sym("__relibc_init_environ") {
             Some((symbol, binding)) => {
+                // Dump first 5 env var names for debugging
+                if !environ_is_null {
+                    let mut dump_p = environ_ptr;
+                    let mut dump_i = 0usize;
+                    unsafe {
+                        while !(*dump_p).is_null() && dump_i < 5 {
+                            let cstr = core::ffi::CStr::from_ptr(*dump_p);
+                            if let Ok(s) = core::str::from_utf8(cstr.to_bytes()) {
+                                // Only print key (before '=')
+                                let key = s.split('=').next().unwrap_or(s);
+                                eprintln!("[ld.so environ-diag]   env[{}] key={}", dump_i, key);
+                            }
+                            dump_p = dump_p.add(1);
+                            dump_i += 1;
+                        }
+                    }
+                }
                 eprintln!(
                     "[ld.so environ-diag] FOUND __relibc_init_environ in DSO (binding={:?}), \
                      ld_so environ={:p} null={} count={}, writing to sym addr={:p}",
