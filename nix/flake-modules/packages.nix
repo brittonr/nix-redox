@@ -39,7 +39,7 @@ let
   # unit2nix vendor function — parses Cargo.lock at eval time, no vendorHash needed
   unit2nixVendor = import "${inputs.unit2nix}/lib/vendor.nix";
 
-  # Common args for all standalone packages
+  # Common args for all standalone packages (mk-userspace path)
   standaloneCommon = {
     inherit
       pkgs
@@ -51,6 +51,95 @@ let
       ;
     inherit (modularPkgs.system) relibc;
     inherit (redoxLib) stubLibs vendor;
+  };
+
+  # === Per-crate cross-compilation via unit2nix ===
+  #
+  # Builds Rust packages from pre-generated JSON build plans.
+  # Each crate is a separate Nix derivation = per-crate caching.
+  # Replaces the old mk-userspace.nix whole-cargo-build path for
+  # packages that have build plans checked in.
+
+  buildFromUnitGraph = import "${inputs.unit2nix}/lib/build-from-unit-graph.nix";
+
+  redoxBRC = import ../lib/redox-buildRustCrate.nix {
+    inherit pkgs lib rustToolchain;
+    inherit (modularPkgs.system) relibc;
+    inherit (redoxLib) stubLibs;
+  };
+
+  # Host buildRustCrate for build scripts and proc-macros (run on build machine).
+  hostBRC = pkgs.buildRustCrate.override {
+    rustc = rustToolchain;
+    cargo = rustToolchain;
+  };
+
+  # Cross-compilation dispatch: target crates → redoxBRC, build-time → hostBRC.
+  # hostPkgs has a marker to distinguish from crossPkgs in the dispatch function.
+  hostPkgs = pkgs // {
+    __isHostPkgs = true;
+    buildPackages = hostPkgs;
+  };
+  crossPkgs = pkgs // {
+    buildPackages = hostPkgs;
+  };
+  buildRustCrateForPkgs = cratePkgs: if cratePkgs ? __isHostPkgs then hostBRC else redoxBRC;
+
+  # Build a package from a checked-in JSON build plan.
+  mkCrossPackage =
+    {
+      pname,
+      src,
+      plan,
+      member ? pname,
+      extraCrateOverrides ? { },
+    }:
+    let
+      ws = buildFromUnitGraph {
+        inherit extraCrateOverrides;
+        pkgs = crossPkgs;
+        inherit src;
+        resolvedJson = plan;
+        buildRustCrateForPkgs = buildRustCrateForPkgs;
+        skipStalenessCheck = true;
+      };
+    in
+    ws.workspaceMembers.${member}.build // { inherit pname; };
+
+  # Shared crate-level overrides for cross-builds.
+  cratePatches = {
+    # rustix: force libc backend to avoid linux_raw_sys dependency.
+    # Needed for packages whose plans exclude linux_raw_sys.
+    rustixOverride = {
+      rustix = _: {
+        CARGO_CFG_RUSTIX_USE_LIBC = "1";
+        postPatch = ''
+          sed -i 's/use_feature("linux_like");/if !cfg_use_libc { use_feature("linux_like"); }/' build.rs
+          sed -i 's/use_feature("linux_kernel");/if !cfg_use_libc { use_feature("linux_kernel"); }/' build.rs
+        '';
+      };
+    };
+    # faccess: redirect Redox to generic fallback (faccessat not in relibc).
+    faccessOverride = {
+      faccess = _: {
+        postPatch = ''
+          sed -i 's/#\[cfg(unix)\]/#[cfg(all(unix, not(target_os = "redox")))]/g' src/lib.rs
+          sed -i 's/#\[cfg(not(any(unix, windows)))\]/#[cfg(any(target_os = "redox", not(any(unix, windows))))]/g' src/lib.rs
+        '';
+      };
+    };
+    # fd-find: nix crate's User/Group are gated out for Redox.
+    fdOverride = {
+      fd-find = _: {
+        postPatch = ''
+          for f in src/filter/mod.rs src/config.rs src/main.rs src/cli.rs src/walk.rs; do
+            if [ -f "$f" ]; then
+              sed -i 's/#\[cfg(unix)\]/#[cfg(all(unix, not(target_os = "redox")))]/g' "$f"
+            fi
+          done
+        '';
+      };
+    };
   };
 
   # === Standalone packages (special handling, not in modularPkgs) ===
@@ -123,47 +212,53 @@ let
     }
   );
 
-  ripgrep = import ../pkgs/userspace/ripgrep.nix (
-    standaloneCommon
-    // {
-      inherit (inputs) ripgrep-src;
-    }
-  );
+  # === Per-crate cross-compiled packages (unit2nix) ===
+  #
+  # These use pre-generated JSON build plans for per-crate Nix caching.
+  # Each crate is a separate derivation — unchanged deps reuse store paths.
 
-  fd = import ../pkgs/userspace/fd.nix (
-    standaloneCommon
-    // {
-      inherit (inputs) fd-src;
-    }
-  );
+  ripgrep = mkCrossPackage {
+    pname = "ripgrep";
+    src = inputs.ripgrep-src;
+    plan = ../pkgs/infrastructure/ripgrep-redox-plan.json;
+    member = "ripgrep";
+  };
 
-  bat = import ../pkgs/userspace/bat.nix (
-    standaloneCommon
-    // {
-      inherit (inputs) bat-src;
-    }
-  );
+  fd = mkCrossPackage {
+    pname = "fd";
+    src = inputs.fd-src;
+    plan = ../pkgs/infrastructure/fd-redox-plan.json;
+    member = "fd-find";
+    extraCrateOverrides = cratePatches.faccessOverride // cratePatches.fdOverride;
+  };
 
-  hexyl = import ../pkgs/userspace/hexyl.nix (
-    standaloneCommon
-    // {
-      inherit (inputs) hexyl-src;
-    }
-  );
+  bat = mkCrossPackage {
+    pname = "bat";
+    src = inputs.bat-src;
+    plan = ../pkgs/infrastructure/bat-redox-plan.json;
+    member = "bat";
+  };
 
-  zoxide = import ../pkgs/userspace/zoxide.nix (
-    standaloneCommon
-    // {
-      inherit (inputs) zoxide-src;
-    }
-  );
+  hexyl = mkCrossPackage {
+    pname = "hexyl";
+    src = inputs.hexyl-src;
+    plan = ../pkgs/infrastructure/hexyl-redox-plan.json;
+    member = "hexyl";
+  };
 
-  dust = import ../pkgs/userspace/dust.nix (
-    standaloneCommon
-    // {
-      inherit (inputs) dust-src;
-    }
-  );
+  zoxide = mkCrossPackage {
+    pname = "zoxide";
+    src = inputs.zoxide-src;
+    plan = ../pkgs/infrastructure/zoxide-redox-plan.json;
+    member = "zoxide";
+  };
+
+  dust = mkCrossPackage {
+    pname = "dust";
+    src = inputs.dust-src;
+    plan = ../pkgs/infrastructure/dust-redox-plan.json;
+    member = "du-dust";
+  };
 
   snix = import ../pkgs/userspace/snix.nix (
     standaloneCommon
@@ -172,33 +267,34 @@ let
     }
   );
 
-  tokei = import ../pkgs/userspace/tokei.nix (
-    standaloneCommon
-    // {
-      inherit (inputs) tokei-src;
-    }
-  );
+  tokei = mkCrossPackage {
+    pname = "tokei";
+    src = inputs.tokei-src;
+    plan = ../pkgs/infrastructure/tokei-redox-plan.json;
+    member = "tokei";
+  };
 
-  lsd = import ../pkgs/userspace/lsd.nix (
-    standaloneCommon
-    // {
-      inherit (inputs) lsd-src;
-    }
-  );
+  lsd = mkCrossPackage {
+    pname = "lsd";
+    src = inputs.lsd-src;
+    plan = ../pkgs/infrastructure/lsd-redox-plan.json;
+    member = "lsd";
+    extraCrateOverrides = cratePatches.rustixOverride;
+  };
 
-  shellharden = import ../pkgs/userspace/shellharden.nix (
-    standaloneCommon
-    // {
-      inherit (inputs) shellharden-src;
-    }
-  );
+  shellharden = mkCrossPackage {
+    pname = "shellharden";
+    src = inputs.shellharden-src;
+    plan = ../pkgs/infrastructure/shellharden-redox-plan.json;
+    member = "shellharden";
+  };
 
-  smith = import ../pkgs/userspace/smith.nix (
-    standaloneCommon
-    // {
-      inherit (inputs) smith-src;
-    }
-  );
+  smith = mkCrossPackage {
+    pname = "smith";
+    src = inputs.smith-src;
+    plan = ../pkgs/infrastructure/smith-redox-plan.json;
+    member = "smith";
+  };
 
   strace-redox = import ../pkgs/userspace/strace-redox.nix (
     standaloneCommon
@@ -236,12 +332,12 @@ let
   #   }
   # );
 
-  exampled = import ../pkgs/userspace/exampled.nix (
-    standaloneCommon
-    // {
-      inherit (inputs) exampled-src;
-    }
-  );
+  exampled = mkCrossPackage {
+    pname = "exampled";
+    src = inputs.exampled-src;
+    plan = ../pkgs/infrastructure/exampled-redox-plan.json;
+    member = "exampled";
+  };
 
   redox-games = import ../pkgs/userspace/games.nix (
     standaloneCommon

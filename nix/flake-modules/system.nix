@@ -82,6 +82,11 @@ let
     hexyl = self'.packages.hexyl or null;
     zoxide = self'.packages.zoxide or null;
     dust = self'.packages.dust or null;
+    tokei = self'.packages.tokei or null;
+    lsd = self'.packages.lsd or null;
+    shellharden = self'.packages.shellharden or null;
+    smith = self'.packages.smith or null;
+    exampled = self'.packages.exampled or null;
     snix = self'.packages.snix or null;
     redox-curl = self'.packages.redox-curl or null;
 
