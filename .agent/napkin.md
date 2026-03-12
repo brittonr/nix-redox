@@ -84,6 +84,9 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
   (2) cargo job manager hang on multi-crate workspaces → `patch-relibc-fork-lock.py`
       (futex-based CLONE_LOCK replaced with AtomicI32 + sched_yield)
 - Validated 2026-03-12: JOBS=2, 100-crate workspace built in 240s. All 12 parallel-build-test PASS.
+- Full test suite validated 2026-03-12: ALL self-hosting tests bumped to JOBS=2.
+  57/58 PASS (snix 193 crates, ripgrep 33 crates, all individual cargo tests).
+  Only failure: parallel-jobs2 (cc-wrapper linker crash, pre-existing).
 - WAS previously listed as "JOBS=1 workaround needed" and "linker crash, NOT a hang" — both wrong.
 
 ### DSO environ injection partially working (2026-03-12)
