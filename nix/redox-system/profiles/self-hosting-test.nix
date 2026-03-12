@@ -662,7 +662,7 @@ let
                         echo '    println!("RUNTIME_DIAG_TEST_VAR={}", val);' >> /tmp/env_runtime.rs
                         echo '}' >> /tmp/env_runtime.rs
 
-                        /nix/system/profile/bin/bash -c 'rustc /tmp/env_runtime.rs --edition 2021 -o /tmp/env_runtime_bin -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld -C link-arg=-L/usr/lib/redox-sysroot/lib 2>/tmp/env-runtime-stderr; echo "runtime-rustc-exit=$?"'
+                        /nix/system/profile/bin/bash -c 'rustc /tmp/env_runtime.rs --edition 2021 -o /tmp/env_runtime_bin --crate-type bin -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld -C link-arg=-L/usr/lib/redox-sysroot/lib 2>/tmp/env-runtime-stderr; echo "runtime-rustc-exit=$?"'
                         if exists -f /tmp/env_runtime_bin
                           /nix/system/profile/bin/bash -c 'DIAG_TEST_VAR=hello_runtime /tmp/env_runtime_bin >/tmp/env-runtime-out 2>/tmp/env-runtime-err'
                           echo "=== runtime env test ==="
@@ -674,36 +674,38 @@ let
                           cat /tmp/env-runtime-stderr
                         end
 
-                        # Part B: compile-time option_env!() test
+                        # Part B: compile-time env!() assertion test
+                        # env!() FAILS compilation if the var is not set — no need to run binary
+                        echo 'fn main() { println!("{}", env!("DIAG_TEST_VAR")); }' > /tmp/env_assert.rs
+
+                        /nix/system/profile/bin/bash -c 'DIAG_TEST_VAR=hello_from_environ rustc /tmp/env_assert.rs --edition 2021 -o /tmp/env_assert_bin --crate-type bin -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld -C link-arg=-L/usr/lib/redox-sysroot/lib >/tmp/env-assert-stdout 2>/tmp/env-assert-stderr; echo "env-assert-exit=$?"'
+
+                        echo "=== env!() assertion stderr ==="
+                        cat /tmp/env-assert-stderr
+                        echo "=== end env!() stderr ==="
+
+                        /nix/system/profile/bin/bash -c 'grep -q "env-assert-exit=0" /tmp/env-assert-stdout 2>/dev/null'
+                        if test $? = 0
+                          echo "env!() compilation succeeded - var IS visible to rustc"
+                          echo "FUNC_TEST:environ-diag:PASS"
+                        else
+                          echo "env!() compilation FAILED - var NOT visible to rustc"
+                          echo "FUNC_TEST:environ-diag:FAIL:env-macro-failed"
+                        end
+
+                        # Part C: option_env!() test (just for comparison)
                         echo 'fn main() {' > /tmp/env_diag.rs
                         echo '    match option_env!("DIAG_TEST_VAR") {' >> /tmp/env_diag.rs
-                        echo '        Some(v) => println!("DIAG_TEST_VAR={}", v),' >> /tmp/env_diag.rs
-                        echo '        None => println!("DIAG_TEST_VAR=NONE"),' >> /tmp/env_diag.rs
+                        echo '        Some(v) => println!("COMPILE_TIME_DIAG={}", v),' >> /tmp/env_diag.rs
+                        echo '        None => println!("COMPILE_TIME_DIAG=NONE"),' >> /tmp/env_diag.rs
                         echo '    }' >> /tmp/env_diag.rs
                         echo '}' >> /tmp/env_diag.rs
 
-                        # Run rustc directly (not cargo) with the env var set
-                        # The ld_so environ-diag output goes to stderr
-                        export DIAG_TEST_VAR hello_from_environ
-                        /nix/system/profile/bin/bash -c 'DIAG_TEST_VAR=hello_from_environ rustc /tmp/env_diag.rs --edition 2021 -o /tmp/env_diag_bin -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld -C link-arg=-L/usr/lib/redox-sysroot/lib >/tmp/env-diag-stdout 2>/tmp/env-diag-stderr; echo "rustc-exit=$?"'
+                        /nix/system/profile/bin/bash -c 'DIAG_TEST_VAR=hello_from_environ rustc /tmp/env_diag.rs --edition 2021 -o /tmp/env_diag_bin --crate-type bin -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld -C link-arg=-L/usr/lib/redox-sysroot/lib >/tmp/env-diag-stdout 2>/tmp/env-diag-stderr; echo "rustc-exit=$?"'
 
                         echo "=== ld_so environ-diag stderr ==="
                         cat /tmp/env-diag-stderr
                         echo "=== end stderr ==="
-
-                        if exists -f /tmp/env_diag_bin
-                          /tmp/env_diag_bin > /tmp/env-diag-run-out ^>/tmp/env-diag-run-err
-                          echo "Runtime output: $(cat /tmp/env-diag-run-out)"
-                          # Part B passes if option_env!() saw the var at compile time
-                          if grep -q "DIAG_TEST_VAR=hello" /tmp/env-diag-run-out
-                            echo "FUNC_TEST:environ-diag:PASS"
-                          else
-                            echo "FUNC_TEST:environ-diag:FAIL:option_env-returned-none"
-                          end
-                        else
-                          echo "FUNC_TEST:environ-diag:FAIL:compile-fail"
-                          cat /tmp/env-diag-stderr
-                        end
 
                         # ── Cargo crash diagnostics ──
                         # Cargo build crashes when it invokes rustc as subprocess.
