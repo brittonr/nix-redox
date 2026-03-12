@@ -84,18 +84,25 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Active Workarounds (still needed)
 
-### --env-set for cargo (PERMANENT until relibc DSO environ fix)
+### --env-set for cargo (PARTIALLY FIXED 2026-03-12)
 - `patch-cargo-env-set.py` passes env vars via rustc `--env-set` flag.
-- Without it: thiserror-impl, serde_derive fail on `env!("CARGO_PKG_*")`.
-- Removal condition: fix DSO environ initialization so all .so files share environ pointer.
+- Partial fix: added `__relibc_init_environ` to version script global section.
+  DSO environ injection now works for basic cargo→rustc chains (buildrs test passes without --env-set).
+- Still needed: ring crate fails `env!("CARGO_PKG_NAME")` after build.rs runs cc.
+  Hypothesis: build.rs fork+exec of cc/clang corrupts environ state in parent process,
+  so subsequent rustc invocations lose CARGO_PKG_* vars.
+- Removal condition: fix the post-build.rs environ corruption.
 
 ### cargo-build-safe timeout wrapper
 - 90s timeout + retry for intermittent cargo hangs (flock and other blocking).
 - Not the same as CWD bug (fixed) or fcntl locks (patched to no-op).
 
-### JOBS=1 for cargo on Redox
-- JOBS>1 hangs after ~115-136 crates. Root cause unknown — not jobserver, not fcntl.
-- Theories: waitpid notification, pipe deadlock, thread starvation, memory pressure.
+### JOBS>1 for cargo on Redox — FIXED (2026-03-12)
+- Two root causes found and fixed:
+  (1) lld stack overflow at JOBS>=2 → `lld-wrapper` (16MB stack thread + exec)
+  (2) cargo job manager hang on multi-crate workspaces → `patch-relibc-fork-lock.py`
+      (futex-based CLONE_LOCK replaced with AtomicI32 + sched_yield)
+- Validated 2026-03-12: JOBS=2, 100-crate workspace built in 240s. All 12 tests PASS.
 
 ### Stdio::inherit() for build_derivation on Redox
 - `cmd.output()` creates pipes that crash deep process hierarchies (snix→bash→cargo→rustc→cc→lld).
@@ -120,12 +127,10 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Buddy allocator corruption on dealloc. Workaround: `round_to_p2_pages()` + `mem::forget()`.
 - Upstream kernel fix needed.
 
-### Parallel cargo compilation — linker crash, NOT a hang (for simple crates)
-- JOBS=2 on hello-world: linker (`cc`/lld) crashes with `fatal runtime error: failed to initiate panic, error 0` / `relibc: abort() called`. Exit code 101. Tested 2026-03-11 on self-hosting-test VM.
-- This is a **crash** in the linker process, not a deadlock. The ~115-136 crate hang on large projects may be a different or related symptom.
-- Leading theory: stack overflow or memory corruption in lld when 2 instances run concurrently.
-- The `patch-rustc-main-stack.py` grows rustc's main thread stack to 16MB but does NOT apply to the `cc` wrapper or `lld`.
-- See JOBS=1 workaround above.
+### Parallel cargo compilation — FIXED (2026-03-12)
+- WAS: JOBS=2 linker crash + multi-crate hang.
+- FIXED: lld-wrapper (stack overflow) + patch-relibc-fork-lock.py (futex lost-wake).
+- Validated: 100-crate workspace at JOBS=2, all passing. Moved to "Stale Claims" section.
 
 ## Redox Namespace Sandboxing (implemented)
 

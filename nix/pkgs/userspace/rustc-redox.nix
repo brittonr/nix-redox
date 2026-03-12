@@ -78,7 +78,7 @@ let
           -Wl,--version-script=*)
             vs="''${arg#-Wl,--version-script=}"
             if [ -f "$vs" ]; then
-              ${pkgs.gnused}/bin/sed -i '/^[[:space:]]*local:/i\    __relibc_init_ns_fd;\n    __relibc_init_proc_fd;\n    __relibc_init_cwd_ptr;\n    __relibc_init_cwd_len;' "$vs"
+              ${pkgs.gnused}/bin/sed -i '/^[[:space:]]*local:/i\    __relibc_init_ns_fd;\n    __relibc_init_proc_fd;\n    __relibc_init_cwd_ptr;\n    __relibc_init_cwd_len;\n    __relibc_init_environ;' "$vs"
             fi
             ;;
         esac
@@ -486,7 +486,15 @@ pkgs.stdenv.mkDerivation {
     # Result: option_env!("BUILD_TARGET") returns None in buildrs test
     # (cfg=yes,env=missing,runtime=None). Confirms Command::env() vars
     # don't reach rustc's logical_env on Redox. DSO environ isolation is
-    # the root cause. --env-set remains necessary.
+    # the root cause. --env-set still needed for complex builds (ring crate).
+    #
+    # Partial fix (2026-03-12): Added __relibc_init_environ to version script
+    # global section. This enables environ injection for DSOs and fixes basic
+    # cargo:rustc-env propagation (buildrs test passes without --env-set).
+    # However, ring crate still fails — env!("CARGO_PKG_NAME") returns
+    # "not defined" during ring lib compilation after build.rs runs cc.
+    # Hypothesis: build.rs fork+exec of cc corrupts environ state in the
+    # parent cargo process, so subsequent rustc invocations lose CARGO_PKG_*.
     python3 ${./patch-cargo-env-set.py} .
 
     # Patch 7: cargo-util S_IRWXU type mismatch
