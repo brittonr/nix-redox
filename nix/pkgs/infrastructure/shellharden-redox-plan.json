@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "workspaceRoot": "/tmp/u2n-shellharden",
+  "roots": [
+    "path+file:///tmp/u2n-shellharden#shellharden@4.3.1"
+  ],
+  "workspaceMembers": {
+    "shellharden": "path+file:///tmp/u2n-shellharden#shellharden@4.3.1"
+  },
+  "target": "x86_64-unknown-redox",
+  "cargoLockHash": "1389e5b5657752912809fbcc85a3210cb3959ada5864581925f39c8939c2db41",
+  "inputsHash": "6e6b855d5603d9891d66d5ef75361a6ae5a62c71ff008b6bb3ec90fd58edb9fd",
+  "crates": {
+    "path+file:///tmp/u2n-shellharden#shellharden@4.3.1": {
+      "crateName": "shellharden",
+      "version": "4.3.1",
+      "edition": "2015",
+      "sha256": null,
+      "source": {
+        "type": "local",
+        "path": "."
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [],
+      "crateBin": [
+        {
+          "name": "shellharden",
+          "path": "src/main.rs"
+        }
+      ],
+      "links": null,
+      "authors": [
+        "Andreas Nordal"
+      ],
+      "description": "The corrective bash syntax highlighter",
+      "license": "MPL-2.0",
+      "repository": "https://github.com/anordal/shellharden/"
+    }
+  }
+}

@@ -41,10 +41,9 @@ let
     in
     ws;
 
-  # Per-crate cross-compilation test: build ripgrep for Redox using
-  # unit2nix + buildRustCrate instead of cargo build.
-  # Each of ripgrep's 33 crates is a separate Nix derivation with caching.
-  ripgrepCrossTest =
+  # Per-crate cross-compilation for Redox via unit2nix.
+  # Each crate is a separate Nix derivation with per-crate caching.
+  crossBuild =
     let
       inputs = self.inputs;
       env = import ./redox-env.nix {
@@ -59,15 +58,83 @@ let
         inherit (env.modularPkgs.system) relibc;
         inherit (env.redoxLib) stubLibs;
       };
-      ws = buildFromUnitGraph {
-        inherit pkgs;
-        src = inputs.ripgrep-src;
-        resolvedJson = ../pkgs/infrastructure/ripgrep-redox-plan.json;
-        buildRustCrateForPkgs = _: redoxBRC;
-        skipStalenessCheck = true;
+
+      # Host (native) buildRustCrate for build scripts and proc-macros.
+      # These run on the build machine, not the target (Redox).
+      hostBRC = pkgs.buildRustCrate.override {
+        rustc = env.rustToolchain;
+        cargo = env.rustToolchain;
       };
+
+      # Cross-compilation dispatch for buildRustCrateForPkgs.
+      #
+      # buildFromUnitGraph calls this twice:
+      # 1. With the outer pkgs → target crates (Redox cross-compilation)
+      # 2. With pkgs.buildPackages → build-time crates (host Linux)
+      #
+      # On a native host, pkgs.buildPackages == pkgs, so both calls get
+      # the same object. We break this by wrapping pkgs with a distinct
+      # buildPackages that has a marker attribute.
+      hostPkgs = pkgs // {
+        __isHostPkgs = true;
+        buildPackages = pkgs // {
+          __isHostPkgs = true;
+        };
+      };
+      crossPkgs = pkgs // {
+        buildPackages = hostPkgs;
+      };
+      buildRustCrateForPkgs' =
+        cratePkgs:
+        if cratePkgs ? __isHostPkgs then
+          hostBRC # Build platform: build scripts, proc-macros
+        else
+          redoxBRC; # Target platform: Redox cross-compilation
+
+      # Build a package from its checked-in build plan.
+      mkCross =
+        {
+          src,
+          plan,
+          extraCrateOverrides ? { },
+        }:
+        buildFromUnitGraph {
+          inherit extraCrateOverrides;
+          pkgs = crossPkgs;
+          inherit src;
+          resolvedJson = plan;
+          buildRustCrateForPkgs = buildRustCrateForPkgs';
+          skipStalenessCheck = true;
+        };
     in
-    ws;
+    {
+      ripgrep = mkCross {
+        src = inputs.ripgrep-src;
+        plan = ../pkgs/infrastructure/ripgrep-redox-plan.json;
+      };
+      dust = mkCross {
+        src = inputs.dust-src;
+        plan = ../pkgs/infrastructure/dust-redox-plan.json;
+      };
+      hexyl = mkCross {
+        src = inputs.hexyl-src;
+        plan = ../pkgs/infrastructure/hexyl-redox-plan.json;
+      };
+      shellharden = mkCross {
+        src = inputs.shellharden-src;
+        plan = ../pkgs/infrastructure/shellharden-redox-plan.json;
+      };
+      smith = mkCross {
+        src = inputs.smith-src;
+        plan = ../pkgs/infrastructure/smith-redox-plan.json;
+      };
+      exampled = mkCross {
+        src = inputs.exampled-src;
+        plan = ../pkgs/infrastructure/exampled-redox-plan.json;
+      };
+      # TODO: these need proc-macro platform routing fix
+      # bat, fd, lsd, tokei, zoxide
+    };
 
 in
 {
@@ -110,8 +177,16 @@ in
     # snix clippy lint
     snix-clippy = snixHostTests.clippy.allWorkspaceMembers;
 
-    # Per-crate cross-compilation: ripgrep for Redox (33 crates, each cached)
-    ripgrep-cross = ripgrepCrossTest.workspaceMembers.ripgrep.build;
+    # Per-crate cross-compilation: Rust packages for Redox (each crate cached)
+    # Packages with no proc-macro deps or complex build.rs work directly.
+    # Packages with proc-macro dep chains (bat, lsd, tokei, zoxide) need
+    # proper pkgsCross or a unit2nix fix for proc-macro platform routing.
+    ripgrep-cross = crossBuild.ripgrep.workspaceMembers.ripgrep.build;
+    dust-cross = crossBuild.dust.workspaceMembers.du-dust.build;
+    hexyl-cross = crossBuild.hexyl.workspaceMembers.hexyl.build;
+    shellharden-cross = crossBuild.shellharden.workspaceMembers.shellharden.build;
+    smith-cross = crossBuild.smith.workspaceMembers.smith.build;
+    exampled-cross = crossBuild.exampled.workspaceMembers.exampled.build;
 
     # Complete system images
     redox-default-build = packages.redox-default;

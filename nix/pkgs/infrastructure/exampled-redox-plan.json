@@ -1,0 +1,316 @@
+{
+  "version": 1,
+  "workspaceRoot": "/tmp/u2n-exampled",
+  "roots": [
+    "path+file:///tmp/u2n-exampled#exampled@0.1.0"
+  ],
+  "workspaceMembers": {
+    "exampled": "path+file:///tmp/u2n-exampled#exampled@0.1.0"
+  },
+  "target": "x86_64-unknown-redox",
+  "cargoLockHash": "5c3aa8826c338c7a8b337f734f93e0a8eee5d86ebbb989a408935ee694e25d1c",
+  "inputsHash": "2f910efbe2ea71101371fd6228e6f9dce91c1be15aeffd294266929e19fe6edf",
+  "crates": {
+    "path+file:///tmp/u2n-exampled#exampled@0.1.0": {
+      "crateName": "exampled",
+      "version": "0.1.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "local",
+        "path": "."
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.12",
+          "externCrateName": "libredox"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox-daemon@0.1.3",
+          "externCrateName": "redox_daemon"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox-scheme@0.9.0",
+          "externCrateName": "redox_scheme"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_event@0.4.1",
+          "externCrateName": "event"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.0",
+          "externCrateName": "syscall"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [],
+      "crateBin": [
+        {
+          "name": "exampled",
+          "path": "src/main.rs"
+        }
+      ],
+      "links": null,
+      "authors": [
+        "Jeremy Soller <jackpot51@gmail.com>"
+      ]
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.9.1": {
+      "crateName": "bitflags",
+      "version": "2.9.1",
+      "edition": "2021",
+      "sha256": "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rust Project Developers"
+      ],
+      "description": "A macro to generate structures which behave like bitflags. ",
+      "homepage": "https://github.com/bitflags/bitflags",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/bitflags/bitflags"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.174": {
+      "crateName": "libc",
+      "version": "0.2.174",
+      "edition": "2021",
+      "sha256": "1171693293099992e19cddea4e8b849964e9846f4acee11b3948bcc337be8776",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rust Project Developers"
+      ],
+      "description": "Raw FFI bindings to platform libraries like libc.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/libc"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.12": {
+      "crateName": "libredox",
+      "version": "0.1.12",
+      "edition": "2021",
+      "sha256": "3d0b95e02c851351f877147b7deea7b1afb1df71b63aa5f8270716e0c5720616",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "call",
+        "default",
+        "redox_syscall",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.9.1",
+          "externCrateName": "bitflags"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.174",
+          "externCrateName": "libc"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.0",
+          "externCrateName": "syscall"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "4lDO2 <4lDO2@protonmail.com>"
+      ],
+      "description": "Redox stable ABI",
+      "license": "MIT",
+      "repository": "https://gitlab.redox-os.org/redox-os/libredox.git"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#redox-daemon@0.1.3": {
+      "crateName": "redox-daemon",
+      "version": "0.1.3",
+      "edition": "2021",
+      "sha256": "7fbdeffdb03cf2961b211a2023e683d71f2c225ea93404da5dc34b0dc94f0341",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.174",
+          "externCrateName": "libc"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.12",
+          "externCrateName": "libredox"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "4lDO2 <4lDO2@protonmail.com>"
+      ],
+      "description": "Tiny daemon library for Redox",
+      "license": "MIT",
+      "repository": "https://gitlab.redox-os.org/redox-os/redox-daemon"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#redox-scheme@0.9.0": {
+      "crateName": "redox-scheme",
+      "version": "0.9.0",
+      "edition": "2021",
+      "sha256": "5eb0cee524a5c6e4db180250f699e101ee25f3f79ad2618527e539e028cb6722",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.12",
+          "externCrateName": "libredox"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.0",
+          "externCrateName": "syscall"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "4lDO2 <4lDO2@protonmail.com>"
+      ],
+      "description": "Library for writing Redox scheme daemons",
+      "license": "MIT",
+      "repository": "https://gitlab.redox-os.org/redox-os/redox-scheme"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#redox_event@0.4.1": {
+      "crateName": "redox_event",
+      "version": "0.4.1",
+      "edition": "2021",
+      "sha256": "69609faa5d5992247a4ef379917bb3e39be281405d6a0ccd4f942429400b956f",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "wrappers"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.9.1",
+          "externCrateName": "bitflags"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.12",
+          "externCrateName": "libredox"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": "event",
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Jeremy Soller <jackpot51@gmail.com>"
+      ],
+      "description": "A Rust library to use Redox I/O events",
+      "license": "MIT",
+      "repository": "https://gitlab.redox-os.org/redox-os/event"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.0": {
+      "crateName": "redox_syscall",
+      "version": "0.7.0",
+      "edition": "2021",
+      "sha256": "49f3fe0889e69e2ae9e41f4d6c4c0181701d00e4697b356fb1f74173a5e0ee27",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "userspace"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.9.1",
+          "externCrateName": "bitflags"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": "syscall",
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Jeremy Soller <jackpot51@gmail.com>"
+      ],
+      "description": "A Rust library to access raw Redox system calls",
+      "license": "MIT",
+      "repository": "https://gitlab.redox-os.org/redox-os/syscall"
+    }
+  }
+}

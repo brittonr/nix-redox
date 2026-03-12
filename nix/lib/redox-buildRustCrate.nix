@@ -37,10 +37,25 @@ let
   #
   # We translate: strip -Wl, prefixes, filter gcc-specific flags, add CRT.
   redoxLinker = pkgs.writeShellScript "redox-ld" ''
+    # Detect -shared (proc-macro builds) vs normal static executables.
+    # Proc-macros are .so files loaded by rustc — they need different
+    # linker flags (no CRT, no -static, dynamic linking).
+    is_shared=0
+    for arg in "$@"; do
+      if [ "$arg" = "-shared" ]; then
+        is_shared=1
+        break
+      fi
+    done
+
     args=()
-    # Add CRT objects and library paths first
-    args+=("${sysroot}/lib/crt0.o")
-    args+=("${sysroot}/lib/crti.o")
+
+    if [ "$is_shared" = "0" ]; then
+      # Static executable: add CRT objects and library paths
+      args+=("${sysroot}/lib/crt0.o")
+      args+=("${sysroot}/lib/crti.o")
+    fi
+
     args+=("-L${sysroot}/lib")
     args+=("-L${stubLibs}/lib")
 
@@ -60,6 +75,7 @@ let
           done
           ;;
         -lgcc) ;; # Symbols are in libgcc_eh.a (in stubLibs)
+        -lgcc_s) ;; # Not available for Redox, symbols in libgcc_eh.a
         -no-pie) ;; # Incompatible with -static
         -m64) ;; # x86_64 is implied by the ELF objects
         -nodefaultlibs) ;; # GCC-specific, not relevant for lld
@@ -67,9 +83,12 @@ let
       esac
     done
 
-    # Add CRT finale and dedup control
-    args+=("-lc")
-    args+=("${sysroot}/lib/crtn.o")
+    if [ "$is_shared" = "0" ]; then
+      # Static executable: add CRT finale and dedup control
+      args+=("-lc")
+      args+=("${sysroot}/lib/crtn.o")
+    fi
+
     args+=("--allow-multiple-definition")
 
     exec ${lld}/bin/ld.lld "''${args[@]}"
