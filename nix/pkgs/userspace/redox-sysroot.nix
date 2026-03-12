@@ -366,7 +366,7 @@ pkgs.runCommand "redox-sysroot"
             vs="''${ARGS[$i]#--version-script=}"
             if [ -f "$vs" ]; then
               # Add relibc init symbols before "local: *;" to prevent hiding them
-              sed -i '/^[[:space:]]*local:/i\    __relibc_init_ns_fd;\n    __relibc_init_proc_fd;\n    __relibc_init_cwd_ptr;\n    __relibc_init_cwd_len;' "$vs" 2>/dev/null
+              sed -i '/^[[:space:]]*local:/i\    __relibc_init_ns_fd;\n    __relibc_init_proc_fd;\n    __relibc_init_cwd_ptr;\n    __relibc_init_cwd_len;\n    __relibc_init_environ;' "$vs" 2>/dev/null
             fi
             ;;
         esac

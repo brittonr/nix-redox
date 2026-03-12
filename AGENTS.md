@@ -53,8 +53,8 @@ Hard-won lessons from building RedoxOS with Nix. Read before making changes.
 
 ### Dynamic Linking
 - Each DSO gets its own copy of relibc statics (CWD, ns_fd, proc_fd, environ)
-- `ld_so run_init()` injects ns_fd, proc_fd, CWD into DSOs via `__relibc_init_*` symbols
-- Version scripts must include `__relibc_init_ns_fd`, `__relibc_init_proc_fd`, `__relibc_init_cwd_ptr`, `__relibc_init_cwd_len`
+- `ld_so run_init()` injects ns_fd, proc_fd, CWD, environ into DSOs via `__relibc_init_*` symbols
+- Version scripts must include `__relibc_init_ns_fd`, `__relibc_init_proc_fd`, `__relibc_init_cwd_ptr`, `__relibc_init_cwd_len`, `__relibc_init_environ`
 - Rust generates `local: *;` version scripts that hide these symbols — must inject into global section
 - PT_GNU_STACK has `p_align=0` → guard with `core::cmp::max(p_align, 1)` to prevent division by zero
 - `libstdcxx-shim.so` provides libstdc++.so.6 symbols from libc++.a (rustc's LLVM needs it)

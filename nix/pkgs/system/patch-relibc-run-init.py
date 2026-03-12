@@ -26,7 +26,9 @@ NEW_FN = """\
     fn run_init(&self, obj: &DSO) {
         use crate::platform::{self, types::*};
 
-        if let Some((symbol, SymbolBinding::Global)) = obj.get_sym("__relibc_init_environ") {
+        // Accept any binding — Rust's version scripts may export this as local
+        // even when explicitly listed in global section.
+        if let Some((symbol, _)) = obj.get_sym("__relibc_init_environ") {
             unsafe {
                 symbol
                     .as_ptr()
