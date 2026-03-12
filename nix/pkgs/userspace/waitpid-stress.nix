@@ -259,17 +259,11 @@ let
                     return -1;
                 }
                 if pid == 0 {
-                    // Child: exec /bin/echo (or just exit if not available)
                     unsafe { _exit(42) };
                 }
-                // Parent: wait for child
                 let mut status: i32 = 0;
                 let ret = unsafe { waitpid(pid, &mut status, 0) };
-                if ret == pid {
-                    pid
-                } else {
-                    -1
-                }
+                if ret == pid { pid } else { -1 }
             });
 
             let t2 = thread::spawn(move || -> i32 {
@@ -284,11 +278,7 @@ let
                 }
                 let mut status: i32 = 0;
                 let ret = unsafe { waitpid(pid, &mut status, 0) };
-                if ret == pid {
-                    pid
-                } else {
-                    -1
-                }
+                if ret == pid { pid } else { -1 }
             });
 
             let r1 = t1.join().unwrap_or(-1);

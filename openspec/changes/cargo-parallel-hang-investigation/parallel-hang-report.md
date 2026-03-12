@@ -1,106 +1,81 @@
 # Parallel Cargo Build Hang — Investigation Report
 
-## Status: Root Cause Pattern Identified (2026-03-11)
+## Status: FIXED ✓ (2026-03-12)
 
-## Findings Summary
+## Root Cause
 
-The JOBS>1 hang occurs on the **very first concurrent pair** of rustc processes, not at some threshold of ~115 crates as previously believed. One of the first two rustc processes spawned concurrently hangs permanently, while the second job slot continues normally and completes all remaining crates serially.
+**Redox kernel futex bug: lost wake after CoW address space duplication.**
 
-## Evidence
+relibc's `CLONE_LOCK` (an `RwLock<()>`) serializes `fork()` (write lock) and thread creation (read lock). The RwLock uses futex-based waiting. When thread A holds the write lock and calls `fork_impl()`, the kernel CoW-duplicates the entire address space, including thread B's in-kernel futex_wait state. After `fork_impl` returns and thread A unlocks, `futex_wake()` fails to wake thread B because the wake targets the wrong physical page (the original pre-CoW page, not thread B's actual page).
 
-### Heartbeat Diagnostics (CARGO_DIAG_LOG)
+### Why it manifests as "one fork works, the other hangs"
 
-**ws5 (5 independent binary crates, JOBS=2):**
+1. Thread A and B both call `fork()` concurrently
+2. Thread A acquires `CLONE_LOCK.write()` first
+3. Thread B's `CLONE_LOCK.write()` fails the CAS, enters `futex_wait()` on the lock state
+4. Thread A runs `fork_impl()` — this CoW-duplicates the address space, including the page containing `CLONE_LOCK`
+5. Thread A's `fork_impl` returns, guard drops, `CLONE_LOCK.unlock()` stores 0, calls `futex_wake()`
+6. **BUG**: `futex_wake()` wakes waiters on the ORIGINAL physical page, but thread B's `futex_wait()` may now reference a DIFFERENT physical page (due to CoW). Thread B is never woken.
+
+### Key evidence
+
+- `CLONE_LOCK.write()` is where thread B hangs (confirmed by tracing: "pre-CLONE_LOCK" printed, "CLONE_LOCK acquired" never printed)
+- `fork_impl()` works perfectly when called concurrently WITHOUT any locking (both forks succeed, all children exit normally)
+- The allocator's `pthread_atfork` hooks are never registered (`enable_alloc_after_fork()` is never called), so there is NO allocator lock serialization
+- All single-threaded fork tests pass (50 children, pipe I/O, concurrent exits)
+- The hang is 100% reproducible with just 2 threads and a Barrier
+
+## Fix
+
+Replace `CLONE_LOCK` (futex-based `RwLock`) with a yield-based RW lock using `AtomicI32` + `sched_yield()`:
+
 ```
-[heartbeat t=5s]  active=1 pending=0 tokens=0 finished=4/5 jobs=[crate-001(id=3)]
-[heartbeat t=10s] active=1 pending=0 tokens=0 finished=4/5 jobs=[crate-001(id=3)]
-[heartbeat t=55s] active=1 pending=0 tokens=0 finished=4/5 jobs=[crate-001(id=3)]
-```
-→ 4/5 completed. crate-001 stuck forever.
-
-**ws20 (20 independent binary crates, JOBS=2):**
-```
-[heartbeat t=5s]  active=2 pending=17 tokens=1 finished=1/20 ...
-[heartbeat t=60s] active=2 pending=0  tokens=1 finished=18/20 ...
-[heartbeat t=65s] active=1 pending=0  tokens=0 finished=19/20 jobs=[crate-001(id=1)]
-[heartbeat t=100s] active=1 pending=0 tokens=0 finished=19/20 jobs=[crate-001(id=1)]
-```
-→ Two jobs run concurrently. 19/20 completed. crate-001 stuck forever.
-
-**ws100 (100 independent binary crates, JOBS=2):**
-```
-[heartbeat t=5s] active=2 pending=98 tokens=1 finished=0/100 jobs=[crate-023(id=1), crate-092(id=0)]
-...
-[heartbeat t=100s] active=2 pending=79 tokens=1 finished=19/100 jobs=[crate-023(id=1), crate-094(id=20)]
-```
-→ crate-023 stuck from the start. Second slot chews through 19 crates in 100s.
-
-### Pattern
-
-1. Cargo spawns 2 rustc processes (first concurrent pair)
-2. One hangs permanently — cargo sees it as "active" but gets no output/exit
-3. The second slot runs normally, picking up new crates as they queue
-4. After all other crates finish, cargo waits forever for the stuck one
-5. This is 100% reproducible — happens on every run
-
-### What Was Ruled Out
-
-| Theory | Evidence Against |
-|--------|-----------------|
-| **waitpid notification loss** | All 3 waitpid stress tests PASS (50 children, immediate/pipe/concurrent) |
-| **Threshold-based (115 crates)** | Happens at 5 crates — the issue is concurrency, not scale |
-| **Jobserver token starvation** | Heartbeat shows tokens=1 during concurrent phase — token management works |
-| **Cargo job queue deadlock** | Cargo's queue drains correctly for all non-stuck jobs |
-| **lld stack overflow** | Single-crate JOBS=2 PASS — lld-wrapper stack growth works |
-| **Chain dependency serialization** | Independent crates expose the issue; chains masked it (always active=1) |
-
-### Remaining Theories
-
-1. **relibc fork()/exec() race condition** — Two concurrent fork+exec sequences corrupt shared relibc state. First fork succeeds, second fork leaves the child in a broken state.
-
-2. **Pipe creation race** — Concurrent pipe() calls create overlapping file descriptors. One rustc gets a corrupt pipe, hangs reading stdout/stderr.
-
-3. **read2 thread + fork interaction** — Cargo's read2 spawns a background thread per job. The background thread from job A may inherit state into job B's fork(), causing the child to deadlock on a lock held by the (now-dead) thread clone.
-
-4. **Mutex deadlock across fork** — AGENTS.md notes: "Mutex is non-reentrant — child inherits locked state after fork() → deadlock". If the first rustc is forking a child (cc) while the second rustc is also being forked, the second child may inherit a locked mutex.
-
-### Most Likely: Mutex deadlock across fork (#4)
-
-The pattern — one process stuck, the other works — is classic fork-after-lock behavior. Process A acquires a lock, process B forks while A holds the lock. B's child inherits the locked mutex but the thread that would unlock it doesn't exist in the child. B's child hangs on the next access to that lock.
-
-In this case: cargo spawns rustc-1 and rustc-2 concurrently. Both go through fork()+exec(). If relibc has a global mutex (e.g., for memory allocation or CWD) that one fork() holds when the other fork() runs, the child from the second fork inherits the locked mutex and deadlocks.
-
-## Root Cause Confirmed: relibc fork() is not thread-safe (2026-03-11)
-
-### Minimal Reproducer
-
-```rust
-// Two threads call fork() simultaneously via a Barrier
-let barrier = Arc::new(Barrier::new(2));
-let t1 = thread::spawn(move || { barrier.wait(); fork(); waitpid(...) });
-let t2 = thread::spawn(move || { barrier.wait(); fork(); waitpid(...) });
-// Result: one thread's child hangs permanently, the other completes
+Patch: nix/pkgs/system/patch-relibc-fork-lock.py
 ```
 
-The `test_concurrent_fork_exec` test in `waitpid-stress` hangs on the very first round. Two threads calling `fork()` concurrently → one forked child never exits. The parent's `waitpid()` blocks forever.
+- `AtomicI32` state: 0 = unlocked, >0 = reader count (thread creation), -1 = exclusive (fork)
+- Writers (fork): CAS(0, -1), yield on failure
+- Readers (rlct_clone): CAS(n, n+1) where n >= 0, yield on failure
+- No futex involvement — immune to the CoW page issue
 
-This matches the AGENTS.md note: "Mutex is non-reentrant — child inherits locked state after fork() → deadlock". A global mutex in relibc (likely the memory allocator, CWD lock, or environ lock) is held by thread A when thread B calls `fork()`. Thread B's child inherits the locked mutex but thread A's copy doesn't exist in the child → deadlock.
+## Test Results
 
-### Why sequential fork works
+All 12 tests pass:
 
-The waitpid-stress tests 1-3 all fork from a single thread sequentially. 50 children, pipe I/O, concurrent exits — all pass. The issue is ONLY when two threads call fork() at the same time.
+```
+FUNC_TEST:waitpid-stress-immediate-50:PASS
+FUNC_TEST:waitpid-stress-pipeio-50:PASS
+FUNC_TEST:waitpid-stress-concurrent-50:PASS
+FUNC_TEST:waitpid-stress-concurrent-forkexec:PASS    ← was hanging
+FUNC_TEST:waitpid-stress-concurrent-forkpipes:PASS   ← was hanging
+FUNC_TEST:parallel-jobs1-baseline:PASS
+FUNC_TEST:parallel-jobs2-build:PASS
+FUNC_TEST:parallel-jobs2-ws5:PASS                    ← was hanging
+FUNC_TEST:parallel-jobs2-ws10:PASS                   ← was hanging
+FUNC_TEST:parallel-jobs2-ws20:PASS                   ← was hanging
+FUNC_TEST:parallel-jobs2-ws50:PASS                   ← was hanging
+FUNC_TEST:parallel-jobs2-ws100:PASS                  ← was hanging
+Total time: 268s
+```
 
-### Why JOBS=1 works
+## Investigation Timeline
 
-With JOBS=1, cargo only ever has one active compilation. It forks one rustc at a time, sequentially. No concurrent fork() calls.
+1. Added heartbeat diagnostics to cargo's job queue — identified stuck job pattern
+2. Built waitpid stress tests — ruled out waitpid notification loss
+3. Built graduated workspace tests (5/10/20/50/100 crates) — showed bug is concurrency, not scale
+4. Added `test_concurrent_fork_exec` — reproduced without cargo (two threads + Barrier + fork)
+5. Read relibc source — found `CLONE_LOCK` RwLock, `fork_hooks`, allocator atfork
+6. Patched `alloc::format!` in fork_impl — no effect (allocator hooks never registered)
+7. Added tracing inside `Sys::fork()` — pinpointed hang to `CLONE_LOCK.write()` acquisition
+8. Tested with spinlock — still hung (spin loop starves fork_impl on same CPU)
+9. Tested with NO locking — all tests pass! fork_impl is thread-safe
+10. Replaced CLONE_LOCK with yield-based RW lock — all tests pass
 
-### Why JOBS=2 single crate works
+## Broader Impact
 
-A single crate build only spawns one rustc process. Even with JOBS=2, there's only one unit of work. No concurrent fork() calls.
+This is likely a Redox kernel bug affecting ALL futex-based synchronization across fork:
+- Any `futex_wait()` in progress when `fork_impl()` does CoW address space duplication may be lost
+- The bug only manifests when the futex variable's page gets COW-split during the fork
+- Other futex-based primitives (Mutex, Condvar, Barrier) could hit the same issue in multi-threaded fork scenarios
 
-## Next Steps
-
-1. **Identify the specific mutex** — read relibc fork() implementation to find which global lock causes the deadlock
-2. **Fix option A**: Make fork() acquire all global locks before forking and release them in the child (pthread_atfork pattern)
-3. **Fix option B**: Replace global mutexes with fork-safe alternatives (e.g., process-private locks that reset in child)
-4. **Validate fix** with the test_concurrent_fork_exec test and the graduated workspace tests
+The yield-based lock is a correct workaround for CLONE_LOCK specifically. A kernel-level fix for the futex CoW interaction would be the proper long-term solution.

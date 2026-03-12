@@ -1,19 +1,20 @@
 #!/usr/bin/env python3
 """
-Patch relibc fork() to reset CLONE_LOCK in the child process.
+Patch relibc fork() to use a yield-based lock instead of futex-based RwLock.
 
-When two threads call fork() concurrently, one child can inherit
-CLONE_LOCK in the EXCLUSIVE (write-locked) state. Since the other
-thread doesn't exist in the child, the lock is never released,
-causing any subsequent operation that touches CLONE_LOCK to deadlock.
+Root cause: CLONE_LOCK uses futex-based RwLock. When a thread holds the
+write lock and calls fork_impl(), the CoW address space duplication
+copies the other thread's futex_wait kernel state. After unlock,
+futex_wake() fails to wake the waiter — a Redox kernel bug where the
+wake targets the wrong physical page after CoW.
 
-Fix: After fork returns in the child (pid == 0), reset CLONE_LOCK's
-internal state to 0 (unlocked). This is the standard pthread_atfork
-pattern — locks acquired before fork must be released in both parent
-and child.
+Fix: Replace CLONE_LOCK with an AtomicI32-based RW lock using
+sched_yield() instead of futex for waiting. This avoids the kernel
+futex bug entirely.
 
-We also reset the CLONE_LOCK via the atfork mechanism: acquire before
-fork (prepare), release in both parent and child.
+- Positive value = reader count (concurrent thread creations)
+- -1 = exclusive writer (fork in progress)
+- 0 = unlocked
 
 Target file: src/platform/redox/mod.rs (relibc source)
 """
@@ -28,17 +29,30 @@ def patch_file(path):
 
     original = content
 
-    # Replace the fork() implementation to use atfork-style locking:
-    # Acquire CLONE_LOCK before fork, release in both parent and child.
-    #
-    # The current code acquires CLONE_LOCK.write() and relies on the
-    # guard drop to release it. But in the child, the guard drop happens
-    # while the lock state may already be corrupted by the concurrent
-    # thread's state being copied.
-    #
-    # Fix: After fork_impl returns, if we're in the child (pid == 0),
-    # force CLONE_LOCK to unlocked state before the guard drops.
+    # 0. Remove unused RwLock import (CLONE_LOCK was the only user)
+    old_import = "\n    sync::rwlock::RwLock,\n"
+    new_import = "\n"
+    if old_import in content:
+        content = content.replace(old_import, new_import)
+        print("  Patched: removed unused RwLock import")
 
+    # 1. Replace CLONE_LOCK declaration
+    old_decl = "static CLONE_LOCK: RwLock<()> = RwLock::new(());"
+    new_decl = """// Yield-based RW lock for fork/clone serialization.
+// Replaces futex-based RwLock which has a lost-wake bug on Redox:
+// CoW address space duplication during fork copies futex_wait kernel
+// state, causing futex_wake to target the wrong physical page.
+// Values: 0 = unlocked, >0 = reader count, -1 = exclusive (fork)
+static FORK_CLONE_LOCK: core::sync::atomic::AtomicI32 = core::sync::atomic::AtomicI32::new(0);"""
+
+    if old_decl in content:
+        content = content.replace(old_decl, new_decl)
+        print("  Patched: CLONE_LOCK declaration → FORK_CLONE_LOCK AtomicI32")
+    else:
+        print(f"  WARNING: CLONE_LOCK declaration not found")
+        return False
+
+    # 2. Replace fork() to use yield-based exclusive lock
     old_fork = """    unsafe fn fork() -> Result<pid_t> {
         // TODO: Find way to avoid lock.
         let _guard = CLONE_LOCK.write();
@@ -47,36 +61,84 @@ def patch_file(path):
     }"""
 
     new_fork = """    unsafe fn fork() -> Result<pid_t> {
-        // Acquire the clone lock exclusively before forking.
-        // This prevents thread creation during fork.
-        let _guard = CLONE_LOCK.write();
+        use core::sync::atomic::Ordering as AtomOrd;
+
+        // Acquire exclusive lock (writers block readers and other writers)
+        loop {
+            match FORK_CLONE_LOCK.compare_exchange_weak(
+                0, -1, AtomOrd::Acquire, AtomOrd::Relaxed
+            ) {
+                Ok(_) => break,
+                Err(_) => { let _ = syscall::sched_yield(); }
+            }
+        }
 
         let pid = fork_impl(&redox_rt::proc::ForkArgs::Managed)? as pid_t;
 
         if pid == 0 {
-            // CHILD PROCESS: Reset CLONE_LOCK to unlocked state.
-            //
-            // After fork, only the calling thread exists in the child.
-            // If another thread was waiting on or interacting with
-            // CLONE_LOCK in the parent, the child inherits a potentially
-            // corrupted lock state. Force it to unlocked so the child
-            // can use fork/clone normally.
-            //
-            // Safety: We're the only thread in the child process.
-            // The _guard will drop after this, calling unlock(), which
-            // is fine on an already-unlocked lock (it will be a no-op
-            // or just set state to 0 again).
-            CLONE_LOCK.force_unlock_after_fork();
+            // Child: only one thread, reset lock directly
+            FORK_CLONE_LOCK.store(0, AtomOrd::Release);
         }
+
+        // Release exclusive lock
+        FORK_CLONE_LOCK.store(0, AtomOrd::Release);
 
         Ok(pid)
     }"""
 
     if old_fork in content:
         content = content.replace(old_fork, new_fork)
-        print("  Patched: fork() now resets CLONE_LOCK in child")
+        print("  Patched: fork() → yield-based exclusive lock")
     else:
-        print(f"  WARNING: fork() pattern not found in {path}")
+        print(f"  WARNING: fork() pattern not found")
+        return False
+
+    # 3. Replace rlct_clone() to use yield-based shared lock
+    old_clone = """    unsafe fn rlct_clone(
+        stack: *mut usize,
+        os_specific: &mut OsSpecific,
+    ) -> Result<crate::pthread::OsTid> {
+        let _guard = CLONE_LOCK.read();
+        let res = unsafe { redox_rt::thread::rlct_clone_impl(stack, os_specific) };
+
+        res.map(|thread_fd| crate::pthread::OsTid { thread_fd })
+            .map_err(|error| Errno(error.errno))
+    }"""
+
+    new_clone = """    unsafe fn rlct_clone(
+        stack: *mut usize,
+        os_specific: &mut OsSpecific,
+    ) -> Result<crate::pthread::OsTid> {
+        use core::sync::atomic::Ordering as AtomOrd;
+
+        // Acquire shared lock (readers block writers but not other readers)
+        loop {
+            let cur = FORK_CLONE_LOCK.load(AtomOrd::Relaxed);
+            if cur >= 0 {
+                match FORK_CLONE_LOCK.compare_exchange_weak(
+                    cur, cur + 1, AtomOrd::Acquire, AtomOrd::Relaxed
+                ) {
+                    Ok(_) => break,
+                    Err(_) => continue,
+                }
+            }
+            let _ = syscall::sched_yield();
+        }
+
+        let res = unsafe { redox_rt::thread::rlct_clone_impl(stack, os_specific) };
+
+        // Release shared lock
+        FORK_CLONE_LOCK.fetch_sub(1, AtomOrd::Release);
+
+        res.map(|thread_fd| crate::pthread::OsTid { thread_fd })
+            .map_err(|error| Errno(error.errno))
+    }"""
+
+    if old_clone in content:
+        content = content.replace(old_clone, new_clone)
+        print("  Patched: rlct_clone() → yield-based shared lock")
+    else:
+        print(f"  WARNING: rlct_clone() pattern not found")
         return False
 
     if content != original:
@@ -87,112 +149,9 @@ def patch_file(path):
 
 
 def patch_rwlock(path):
-    """Add force_unlock_after_fork() method to RwLock"""
-    with open(path, "r") as f:
-        content = f.read()
-
-    original = content
-
-    # Add a method to InnerRwLock that forces state to 0 (unlocked)
-    old_unlock_end = """    pub fn unlock(&self) {
-        let state = self.state.load(Ordering::Relaxed);
-
-        if state & COUNT_MASK == EXCLUSIVE {
-            // Unlocking a write lock.
-
-            // This discards the writer-waiting bit, in order to ensure some level of fairness
-            // between read and write locks.
-            self.state.store(0, Ordering::Release);
-
-            let _ = crate::sync::futex_wake(&self.state, i32::MAX);
-        } else {
-            // Unlocking a read lock. Subtract one from the reader count, but preserve the
-            // WAITING_WR bit.
-
-            if self.state.fetch_sub(1, Ordering::Release) & COUNT_MASK == 1 {
-                let _ = crate::sync::futex_wake(&self.state, i32::MAX);
-            }
-        }
-    }
-}"""
-
-    new_unlock_end = """    pub fn unlock(&self) {
-        let state = self.state.load(Ordering::Relaxed);
-
-        if state & COUNT_MASK == EXCLUSIVE {
-            // Unlocking a write lock.
-
-            // This discards the writer-waiting bit, in order to ensure some level of fairness
-            // between read and write locks.
-            self.state.store(0, Ordering::Release);
-
-            let _ = crate::sync::futex_wake(&self.state, i32::MAX);
-        } else {
-            // Unlocking a read lock. Subtract one from the reader count, but preserve the
-            // WAITING_WR bit.
-
-            if self.state.fetch_sub(1, Ordering::Release) & COUNT_MASK == 1 {
-                let _ = crate::sync::futex_wake(&self.state, i32::MAX);
-            }
-        }
-    }
-
-    /// Reset lock to unlocked state after fork().
-    ///
-    /// In a child process after fork, this is the only thread.
-    /// Any lock state inherited from the parent is stale — other
-    /// threads that held or waited on the lock don't exist here.
-    /// Force to unlocked so the child can proceed normally.
-    pub fn force_unlock_after_fork(&self) {
-        self.state.store(0, Ordering::Release);
-    }
-}"""
-
-    if old_unlock_end in content:
-        content = content.replace(old_unlock_end, new_unlock_end)
-        print("  Patched: added force_unlock_after_fork() to InnerRwLock")
-    else:
-        print(f"  WARNING: InnerRwLock unlock pattern not found")
-        return False
-
-    # Also add the method to RwLock<T> (the wrapper)
-    old_rwlock_try_write = """    pub fn try_write(&self) -> Option<WriteGuard<'_, T>> {
-        if self.inner.try_acquire_write_lock().is_ok() {
-            Some(unsafe { WriteGuard::new(self) })
-        } else {
-            None
-        }
-    }
-}"""
-
-    new_rwlock_try_write = """    pub fn try_write(&self) -> Option<WriteGuard<'_, T>> {
-        if self.inner.try_acquire_write_lock().is_ok() {
-            Some(unsafe { WriteGuard::new(self) })
-        } else {
-            None
-        }
-    }
-
-    /// Reset lock to unlocked state after fork().
-    /// Safety: Must only be called in a child process where this
-    /// is the only thread. See InnerRwLock::force_unlock_after_fork.
-    pub fn force_unlock_after_fork(&self) {
-        self.inner.force_unlock_after_fork();
-    }
-}"""
-
-    if old_rwlock_try_write in content:
-        content = content.replace(old_rwlock_try_write, new_rwlock_try_write)
-        print("  Patched: added force_unlock_after_fork() to RwLock<T>")
-    else:
-        print(f"  WARNING: RwLock try_write pattern not found")
-        return False
-
-    if content != original:
-        with open(path, "w") as f:
-            f.write(content)
-        return True
-    return False
+    """No-op: RwLock patches not needed since we replaced CLONE_LOCK"""
+    print(f"  Skipped: RwLock patch not needed (using yield-based lock)")
+    return True
 
 
 def main():
@@ -202,7 +161,6 @@ def main():
 
     src_dir = sys.argv[1]
 
-    # Patch 1: Reset CLONE_LOCK in child after fork
     mod_rs = os.path.join(src_dir, "src", "platform", "redox", "mod.rs")
     if not os.path.exists(mod_rs):
         print(f"ERROR: {mod_rs} not found")
@@ -211,16 +169,7 @@ def main():
     if not patch_file(mod_rs):
         sys.exit(1)
 
-    # Patch 2: Add force_unlock_after_fork to RwLock
-    rwlock_rs = os.path.join(src_dir, "src", "sync", "rwlock.rs")
-    if not os.path.exists(rwlock_rs):
-        print(f"ERROR: {rwlock_rs} not found")
-        sys.exit(1)
-    print(f"Patching {rwlock_rs}...")
-    if not patch_rwlock(rwlock_rs):
-        sys.exit(1)
-
-    print("Done! CLONE_LOCK will be reset in child process after fork.")
+    print("Done! CLONE_LOCK replaced with yield-based RW lock.")
 
 
 if __name__ == "__main__":

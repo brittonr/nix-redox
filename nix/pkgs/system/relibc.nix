@@ -93,7 +93,6 @@ let
       python3 ${./patch-relibc-execvpe.py}
       python3 ${./patch-relibc-ld-so-argv-utf8.py}
       python3 ${./patch-relibc-fork-lock.py} .
-      python3 ${./patch-relibc-fork-noalloc.py} .
 
       runHook postPatch
     '';
