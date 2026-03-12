@@ -106,6 +106,63 @@ let
           buildRustCrateForPkgs = buildRustCrateForPkgs';
           skipStalenessCheck = true;
         };
+
+      # Shared crate-level overrides for cross-builds.
+      #
+      # rustix: The build plan resolves deps for Redox, which excludes
+      # linux_raw_sys.  But when a package has clap as a buildDependency,
+      # rustix gets built for the HOST (Linux) via hostBRC.  The host
+      # build.rs sees CARGO_CFG_TARGET_OS=linux and emits linux_like +
+      # linux_kernel cfg flags, whose code paths reference linux_raw_sys.
+      #
+      # Fix: force libc backend (CARGO_CFG_RUSTIX_USE_LIBC=1) to avoid
+      # the linux_raw backend, AND patch build.rs to suppress linux_like /
+      # linux_kernel when libc is forced — those code paths in the libc
+      # backend also reference linux_raw_sys for constants.
+      #
+      # Only needed for packages whose plans lack linux_raw_sys.
+      # Packages with older rustix versions that include linux_raw_sys
+      # in the plan (e.g., bat with rustix 0.38.11) don't need this.
+      #
+      # faccess: uses faccessat(2) on cfg(unix), but relibc doesn't
+      # implement faccessat.  Redirect Redox to the generic fallback.
+      cratePatches = {
+        # rustix override for plans that exclude linux_raw_sys
+        rustixOverride = {
+          rustix = _: {
+            CARGO_CFG_RUSTIX_USE_LIBC = "1";
+            postPatch = ''
+              # Guard linux_like/linux_kernel emission on !cfg_use_libc.
+              # When libc is forced (cross-build), the dep graph may not
+              # include linux_raw_sys, so these code paths must be skipped.
+              sed -i 's/use_feature("linux_like");/if !cfg_use_libc { use_feature("linux_like"); }/' build.rs
+              sed -i 's/use_feature("linux_kernel");/if !cfg_use_libc { use_feature("linux_kernel"); }/' build.rs
+            '';
+          };
+        };
+        # faccess override for Redox (faccessat not in relibc)
+        faccessOverride = {
+          faccess = _: {
+            postPatch = ''
+              sed -i 's/#\[cfg(unix)\]/#[cfg(all(unix, not(target_os = "redox")))]/g' src/lib.rs
+              sed -i 's/#\[cfg(not(any(unix, windows)))\]/#[cfg(any(target_os = "redox", not(any(unix, windows))))]/g' src/lib.rs
+            '';
+          };
+        };
+        # fd-find override: nix crate's User/Group are gated out for Redox,
+        # so fd's owner filtering module (which uses them) must be excluded.
+        fdOverride = {
+          fd-find = _: {
+            postPatch = ''
+              for f in src/filter/mod.rs src/config.rs src/main.rs src/cli.rs src/walk.rs; do
+                if [ -f "$f" ]; then
+                  sed -i 's/#\[cfg(unix)\]/#[cfg(all(unix, not(target_os = "redox")))]/g' "$f"
+                fi
+              done
+            '';
+          };
+        };
+      };
     in
     {
       ripgrep = mkCross {
@@ -143,9 +200,19 @@ let
       lsd = mkCross {
         src = inputs.lsd-src;
         plan = ../pkgs/infrastructure/lsd-redox-plan.json;
+        extraCrateOverrides = cratePatches.rustixOverride;
       };
-      # TODO: need extraCrateOverrides for crate patches
-      # bat (sys-info unsupported on Redox), fd (faccess needs patching)
+      bat = mkCross {
+        src = inputs.bat-src;
+        plan = ../pkgs/infrastructure/bat-redox-plan.json;
+        # bat's rustix 0.38.11 includes linux_raw_sys in the plan,
+        # so no rustix override needed.
+      };
+      fd = mkCross {
+        src = inputs.fd-src;
+        plan = ../pkgs/infrastructure/fd-redox-plan.json;
+        extraCrateOverrides = cratePatches.faccessOverride // cratePatches.fdOverride;
+      };
     };
 
 in
@@ -189,10 +256,9 @@ in
     # snix clippy lint
     snix-clippy = snixHostTests.clippy.allWorkspaceMembers;
 
-    # Per-crate cross-compilation: Rust packages for Redox (each crate cached)
-    # Packages with no proc-macro deps or complex build.rs work directly.
-    # Packages with proc-macro dep chains (bat, lsd, tokei, zoxide) need
-    # proper pkgsCross or a unit2nix fix for proc-macro platform routing.
+    # Per-crate cross-compilation: Rust packages for Redox (each crate cached).
+    # Each crate is a separate Nix derivation — unchanged deps reuse store paths.
+    # Packages with crate-level issues use extraCrateOverrides (see cratePatches).
     ripgrep-cross = crossBuild.ripgrep.workspaceMembers.ripgrep.build;
     dust-cross = crossBuild.dust.workspaceMembers.du-dust.build;
     hexyl-cross = crossBuild.hexyl.workspaceMembers.hexyl.build;
@@ -201,7 +267,9 @@ in
     exampled-cross = crossBuild.exampled.workspaceMembers.exampled.build;
     tokei-cross = crossBuild.tokei.workspaceMembers.tokei.build;
     zoxide-cross = crossBuild.zoxide.workspaceMembers.zoxide.build;
-    # lsd-cross: blocked on rustix crate needing linux_raw_sys feature override
+    lsd-cross = crossBuild.lsd.workspaceMembers.lsd.build;
+    bat-cross = crossBuild.bat.workspaceMembers.bat.build;
+    fd-cross = crossBuild.fd.workspaceMembers.fd-find.build;
 
     # Complete system images
     redox-default-build = packages.redox-default;
