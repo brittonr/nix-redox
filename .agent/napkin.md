@@ -16,8 +16,6 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - `nix fmt` can silently re-indent and break heredocs. Verify after formatting.
 - **Inline Python in Nix strings breaks too**: `python3 -c "..."` and `python3 << 'EOF'` heredocs
   get their indentation shifted by Nix stripping. Extract to .py files instead.
-- The heredoc fix commit (dfc720d1) fixed terminators but broke Python CONTENT indentation in
-  base.nix, bash-redox.nix, git-redox.nix, rustc-redox.nix. All extracted to .py files now.
 
 ### Comments containing `''` in Nix strings
 - `# heredocs in Nix '' strings break` → the `''` terminates the Nix string.
@@ -29,8 +27,6 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### Ion `$()` crashes on empty output
 - `let var = $(grep ...)` → "Variable '' does not exist" when grep returns nothing.
 - Use file-based or exit-code-based testing instead.
-
-## Recurring Mistakes (NEW)
 
 ### `tail` does not exist on Redox
 - Test scripts using `tail -c 4096 /tmp/log` fail silently — no output.
@@ -46,63 +42,66 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Adding a module to lib.rs but not main.rs causes unresolved import errors
   when the bin crate's modules reference it.
 
-### ld.so argv UTF-8 parsing bug (FIXED)
-- WAS: `ld.so: failed to parse argv[N]` when --env-set passes non-ASCII characters.
-- FIXED: `patch-relibc-ld-so-argv-utf8.py` uses `to_string_lossy()` instead of `_exit(1)`.
-- Root cause was `get_argv` in `start.rs` calling `_exit(1)` on non-UTF-8 argv.
-- Note: `get_env` already handled this gracefully with `if let Ok(...)`.
-
-### Clang can't fork -cc1 on Redox (FIXED)
-- Clang's `getMainExecutable` fails on Redox (no `/proc/self/exe`, `realpath` returns `file:/path`).
-- `InstalledDir` becomes empty → exec of `""` fails → "unable to execute command".
-- FIXED: CC wrapper passes `-no-canonical-prefixes` + explicit `-resource-dir`.
-- Also needs `-isystem` for sysroot C headers (not `--sysroot` which overrides resource headers).
-- `cc-rs` crate needs `AR=llvm-ar` (no bare `ar` binary on Redox).
-
 ### /etc/snix/config must be read by snix
 - Module system writes `sandbox=disabled` to `/etc/snix/config`.
 - snix previously ignored this — sandbox was always CLI-flag-only.
 - Added `sandbox_disabled_by_config()` to read config + SNIX_NO_SANDBOX env.
 
+### Nix derivation caching vs. dirty flake tree
+- Nix flakes evaluate from the git working tree but cache based on content hash.
+- `git add` alone doesn't force re-evaluation. If the derivation input hash hasn't changed
+  (because the file was already tracked with same content), nix reuses the cached build.
+- When debugging "my patch didn't take effect": check if the drv path actually changed
+  with `nix eval --raw '.#pkg.drvPath'` before and after.
+
 ## Stale Claims (verified fixed)
 
 ### nanosleep works correctly (2026-03-11)
-- AGENTS.md said "nanosleep() hangs forever" — this is WRONG on current kernel/relibc.
 - SYS_NANOSLEEP (syscall 162) properly implemented: sets context.wake + context.block.
-- Scheduler wakes blocked contexts when switch_time >= wake (every ~6.75ms PIT tick).
-- clock_gettime(CLOCK_MONOTONIC) reads HPET/PIT hardware — always advances.
-- Verified in functional-test VM: clock-monotonic, timed-wait-returns, timed-wait-duration all PASS.
 - No `sleep` binary exists (not compiled in uutils), but `read -t N` works in bash.
 
 ### Heredoc terminators in Nix '' strings (FIXED 2026-03-11)
-- 120 heredoc terminators across 45 .nix files were broken by Nix `''` indentation stripping.
-- Root cause: Nix strips minimum indentation from `''` strings. Heredoc terminators must be at
-  exactly 0-indent-after-stripping for bash to find them.
-- Fix: moved all heredoc terminators to match the `'';` closer's indentation level.
-- Added broad treefmt + git-hooks excludes (`nix/pkgs/`, `nix/redox-system/`, etc.)
-  because nixfmt re-indents content inside `''` strings and breaks the terminator alignment.
+- 120 heredoc terminators across 45 .nix files fixed.
+- Added broad treefmt + git-hooks excludes for .nix files with heredocs.
 
-## Active Workarounds (still needed)
+### ld.so argv UTF-8 parsing (FIXED)
+- `patch-relibc-ld-so-argv-utf8.py` uses `to_string_lossy()` instead of `_exit(1)`.
 
-### --env-set for cargo (PARTIALLY FIXED 2026-03-12)
-- `patch-cargo-env-set.py` passes env vars via rustc `--env-set` flag.
-- Partial fix: added `__relibc_init_environ` to version script global section.
-  DSO environ injection now works for basic cargo→rustc chains (buildrs test passes without --env-set).
-- Still needed: ring crate fails `env!("CARGO_PKG_NAME")` after build.rs runs cc.
-  Hypothesis: build.rs fork+exec of cc/clang corrupts environ state in parent process,
-  so subsequent rustc invocations lose CARGO_PKG_* vars.
-- Removal condition: fix the post-build.rs environ corruption.
+### Clang fork -cc1 on Redox (FIXED)
+- CC wrapper passes `-no-canonical-prefixes` + explicit `-resource-dir`.
+- `cc-rs` crate needs `AR=llvm-ar`.
 
-### cargo-build-safe timeout wrapper
-- 90s timeout + retry for intermittent cargo hangs (flock and other blocking).
-- Not the same as CWD bug (fixed) or fcntl locks (patched to no-op).
-
-### JOBS>1 for cargo on Redox — FIXED (2026-03-12)
+### JOBS>1 parallel cargo builds (FIXED 2026-03-12)
 - Two root causes found and fixed:
   (1) lld stack overflow at JOBS>=2 → `lld-wrapper` (16MB stack thread + exec)
   (2) cargo job manager hang on multi-crate workspaces → `patch-relibc-fork-lock.py`
       (futex-based CLONE_LOCK replaced with AtomicI32 + sched_yield)
-- Validated 2026-03-12: JOBS=2, 100-crate workspace built in 240s. All 12 tests PASS.
+- Validated 2026-03-12: JOBS=2, 100-crate workspace built in 240s. All 12 parallel-build-test PASS.
+- WAS previously listed as "JOBS=1 workaround needed" and "linker crash, NOT a hang" — both wrong.
+
+### DSO environ injection partially working (2026-03-12)
+- Added `__relibc_init_environ` to version script global section (rustc-redox.nix + redox-sysroot.nix).
+- `libc.so` now exports `__relibc_init_environ` as global BSS symbol.
+- ld.so binding check relaxed from `SymbolBinding::Global` to `_` (any binding).
+- Validated: `cargo-buildrs:PASS` and `cargo-proc-macro:PASS` without --env-set patch.
+- Basic cargo→rustc env propagation through DSO-linked rustc works.
+
+## Active Workarounds (still needed)
+
+### --env-set for cargo (still needed for ring crate)
+- `patch-cargo-env-set.py` passes env vars via rustc `--env-set` flag.
+- Partial fix landed (2026-03-12): DSO environ injection works for simple builds.
+- Still needed: ring crate fails `env!("CARGO_PKG_NAME")` after build.rs fork+exec of cc/clang.
+  The 510 errors are all "attribute value must be a literal" from `prefixed.rs` — ring's `prefix!()`
+  macro uses `env!("CARGO_PKG_NAME")` for symbol prefixing, and gets "not defined at compile time".
+- Hypothesis: build.rs fork+exec of cc corrupts environ state in parent cargo process,
+  so subsequent rustc invocations for the lib target lose CARGO_PKG_* vars.
+- Without --env-set: 49/59 self-hosting tests pass (10 fail — all ring/snix/rg-related).
+- With --env-set: 57/58 pass (only parallel-jobs2 fails — separate linker issue).
+- Removal condition: fix the post-build.rs environ corruption.
+
+### cargo-build-safe timeout wrapper
+- 90s timeout + retry for intermittent cargo hangs (flock and other blocking).
 
 ### Stdio::inherit() for build_derivation on Redox
 - `cmd.output()` creates pipes that crash deep process hierarchies (snix→bash→cargo→rustc→cc→lld).
@@ -110,55 +109,44 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Active Bugs (not yet fixed)
 
-### Redox exec() env propagation — PARTIALLY FIXED, --env-set STILL REQUIRED
-- `__relibc_init_environ` exists upstream in `src/start.rs` and `src/ld_so/linker.rs`.
-- ld.so injects parent environ into each DSO (including dlopen'd proc-macro .so files).
-- Basic env propagation through bash→bash exec verified working (2026-03-11).
-- **Validated 2026-03-11**: Removed `--env-set` patch and ran full self-hosting test.
-  - `buildrs` test: `option_env!("BUILD_TARGET")` returns None (`cfg=yes,env=missing,runtime=None`)
-  - Confirms: `Command::env()` vars don't reach rustc's `env!()`/`option_env!()` expansion
-  - Both compile-time (logical_env) and runtime (`std::env::var`) paths fail
-  - Root cause: DSO-linked rustc (librustc_driver.so) has separate relibc static with its own environ
-  - `--env-set` bypasses this by populating rustc's logical_env directly via CLI args
-  - **Removal condition unchanged**: fix DSO environ initialization so all .so files share environ pointer
+### Self-hosting test parallel-jobs2 linker crash (exit=101)
+- `cargo build` with JOBS=2 in self-hosting test: `cc` wrapper linker crashes with
+  `fatal runtime error: failed to initiate panic, error 0` / `relibc: abort() called`.
+- This is the `cc` wrapper path (cargo config uses `linker = cc`), NOT `ld.lld` directly.
+- The `lld-wrapper` fix only applies when lld is invoked as a standalone process.
+  When lld runs INSIDE clang (via cc wrapper), it doesn't get the 16MB stack.
+- The parallel-build-test (100 crates, JOBS=2) uses `linker = ld.lld` and PASSES.
+- Fix: either make cc wrapper use lld-wrapper, or grow clang's stack for the lld thread.
 
 ### Kernel DMA page allocator bug
 - `zeroed_phys_contiguous` only initializes `span.count` pages, not full 2^order allocation.
 - Buddy allocator corruption on dealloc. Workaround: `round_to_p2_pages()` + `mem::forget()`.
 - Upstream kernel fix needed.
 
-### Parallel cargo compilation — FIXED (2026-03-12)
-- WAS: JOBS=2 linker crash + multi-crate hang.
-- FIXED: lld-wrapper (stack overflow) + patch-relibc-fork-lock.py (futex lost-wake).
-- Validated: 100-crate workspace at JOBS=2, all passing. Moved to "Stale Claims" section.
+### ring env!("CARGO_PKG_NAME") fails in snix builds
+- Even with `__relibc_init_environ` version script fix, ring crate fails when built via snix.
+- The same cargo→rustc chain works for simpler crates (hello world, proc-macros, build.rs deps).
+- Unique to ring: build.rs compiles ~30 C/asm files via cc crate (fork+exec clang many times)
+  before rustc compiles the lib target. Something in that process corrupts environ.
+- Blocked on: understanding why build.rs fork+exec affects parent cargo's environ for later rustc calls.
 
 ## Redox Namespace Sandboxing (implemented)
 
 ### How mkns/setns work
 - `mkns` creates a new namespace via `dup(current_ns_fd, buf)` — NOT a raw syscall.
-- Wire format: `[NsDup::ForkNs (8 bytes LE)] [name_len (8 bytes LE)] [name_bytes] ...`
 - `setns` is userspace-only — swaps `DynamicProcInfo.ns_fd`, no kernel call.
 - Namespace filtering is **scheme-level only** — `file:` is all-or-nothing.
-
-### libredox API
-- `libredox::call::mkns(&[IoSlice])` — needs `mkns` feature (pulls in `ioslice` crate).
-- `libredox::call::setns(fd)` — switches process namespace.
-- `libredox::call::setrens(0, 0)` — creates null namespace (memory+pipe only), used by virtio-fsd.
-- Error type: `libredox::error::Error`, errno via `.errno()`, constants in `libredox::errno::*`.
 
 ### snix sandbox implementation
 - Normal builds: `file`, `memory`, `pipe`, `rand`, `null`, `zero`.
 - FODs: also `net`.
 - Falls back on ENOSYS (old kernel) — continues unsandboxed.
-- Runs in `pre_exec` closure (between fork and exec).
-- Per-path filtering (restrict file: to $out+$TMPDIR) needs proxy scheme daemon (future).
+- Per-path filtering needs proxy scheme daemon (future).
 
 ## TLS / ring Cross-Compilation
 
-### ring 0.17 from crates.io works for Redox
+### ring 0.17 from crates.io works for Redox (cross-compile only)
 - ring 0.17.14 cross-compiles to x86_64-unknown-redox via the Nix CC wrapper.
-- NO need for the Redox fork at gitlab.redox-os.org/redox-os/ring.
-- The Nix build provides the relibc sysroot; ring's build.rs finds it via clang --target.
+- NO need for the Redox fork.
 - `cargo check --target x86_64-unknown-redox` in devshell FAILS (picks up host glibc) — only Nix build works.
-- ureq 3.0 features = ["rustls"] pulls in rustls 0.23 + ring 0.17 + webpki-roots.
-- Binary size: ~6.6MB statically linked (release + LTO + panic=abort).
+- Self-hosted ring compilation fails (see active bug above).
