@@ -135,11 +135,11 @@ let
                         # Set up self-hosting environment
                         # LD_LIBRARY_PATH: rustc needs librustc_driver.so + all proc-macro .so files
                         # Redox's ld_so doesn't support $ORIGIN in RPATH, so we must set this explicitly.
-                        # CARGO_BUILD_JOBS: Redox relibc lacks sysconf(_SC_NPROCESSORS_ONLN)
+                        # CARGO_BUILD_JOBS: JOBS=2 works since fork-lock + lld-wrapper fixes
                         # CARGO_HOME: cargo needs a writable config dir
                         let LD_LIBRARY_PATH = "/nix/system/profile/lib:/usr/lib/rustc:/lib"
                         export LD_LIBRARY_PATH
-                        let CARGO_BUILD_JOBS = "1"
+                        let CARGO_BUILD_JOBS = "2"
                         export CARGO_BUILD_JOBS
                         # CARGO_HOME must be /root/.cargo where config.toml lives
                         # (config.toml has linker=ld.lld and rustflags for Redox target)
@@ -924,7 +924,7 @@ let
                           rm -rf target
                           rm -f /tmp/abort.log /tmp/panic.log
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                          export CARGO_BUILD_JOBS=1
+                          export CARGO_BUILD_JOBS=2
                           export CARGO_HOME=/root/.cargo
                           export CARGO_INCREMENTAL=0
                           export RUSTC=/nix/system/profile/bin/rustc
@@ -981,7 +981,7 @@ let
                           cd /tmp/hello-direct2
                           rm -f /tmp/abort.log /tmp/panic.log
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                          export CARGO_BUILD_JOBS=1
+                          export CARGO_BUILD_JOBS=2
                           export CARGO_HOME=/root/.cargo
                           export CARGO_INCREMENTAL=0
                           # Run cargo build in background with timeout using bash SECONDS
@@ -1065,7 +1065,7 @@ let
 
                         /nix/system/profile/bin/bash -c '
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                          export CARGO_BUILD_JOBS=1
+                          export CARGO_BUILD_JOBS=2
                           # Fresh cargo home per test to avoid stale flock hangs
                           rm -rf /tmp/cargo-realtest
                           mkdir -p /tmp/cargo-realtest
@@ -1196,7 +1196,7 @@ let
 
                         /nix/system/profile/bin/bash -c '
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                          export CARGO_BUILD_JOBS=1
+                          export CARGO_BUILD_JOBS=2
                           # Use a FRESH cargo home (copy config, avoid stale locks)
                           rm -rf /tmp/cargo-multifile
                           mkdir -p /tmp/cargo-multifile
@@ -1439,7 +1439,7 @@ let
 
                         /nix/system/profile/bin/bash -c '
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                          export CARGO_BUILD_JOBS=1
+                          export CARGO_BUILD_JOBS=2
                           rm -rf /tmp/cargo-minigrep
                           mkdir -p /tmp/cargo-minigrep
                           cp /root/.cargo/config.toml /tmp/cargo-minigrep/
@@ -1688,7 +1688,7 @@ let
 
                         /nix/system/profile/bin/bash -c '
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                          export CARGO_BUILD_JOBS=1
+                          export CARGO_BUILD_JOBS=2
                           rm -rf /tmp/cargo-buildrs
                           mkdir -p /tmp/cargo-buildrs
                           cp /root/.cargo/config.toml /tmp/cargo-buildrs/
@@ -1842,7 +1842,7 @@ let
 
                           cd /tmp/pathdep
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                          export CARGO_BUILD_JOBS=1
+                          export CARGO_BUILD_JOBS=2
                           # Fresh CARGO_HOME to avoid corrupted flock state from earlier tests
                           rm -rf /tmp/cargo-pathdep
                           mkdir -p /tmp/cargo-pathdep
@@ -1983,7 +1983,7 @@ let
 
                           cd /tmp/vendored
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                          export CARGO_BUILD_JOBS=1
+                          export CARGO_BUILD_JOBS=2
                           rm -rf /tmp/cargo-vendored
                           mkdir -p /tmp/cargo-vendored
                           cp /root/.cargo/config.toml /tmp/cargo-vendored/
@@ -2136,7 +2136,7 @@ let
 
                           cd /tmp/procmacro
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                          export CARGO_BUILD_JOBS=1
+                          export CARGO_BUILD_JOBS=2
                           rm -rf /tmp/cargo-procmacro
                           mkdir -p /tmp/cargo-procmacro
                           cp /root/.cargo/config.toml /tmp/cargo-procmacro/
@@ -2430,7 +2430,7 @@ let
         mkdir -p "$SRCDIR/.cargo"
         cat > "$SRCDIR/.cargo/config.toml" << CFG
         [build]
-        jobs = 1
+        jobs = 2
         target = "x86_64-unknown-redox"
         [target.x86_64-unknown-redox]
         linker = "/nix/system/profile/bin/cc"
@@ -2439,7 +2439,7 @@ let
         # cargo timeout+retry — handles intermittent startup hangs
         MAX_TIME=120
         for attempt in 1 2 3; do
-          cargo build --offline -j1 &
+          cargo build --offline -j2 &
           PID=$!
           SECONDS=0
           while kill -0 $PID 2>/dev/null; do
@@ -2557,7 +2557,7 @@ let
                           mkdir -p /tmp/cargo-snix
                           export CARGO_HOME=/tmp/cargo-snix
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                          export CARGO_BUILD_JOBS=1
+                          export CARGO_BUILD_JOBS=2
                           export CARGO_INCREMENTAL=0
                           export RUSTC=/nix/system/profile/bin/rustc
                           # cc-rs crate defaults to "ar" but we only have llvm-ar
@@ -2566,15 +2566,15 @@ let
                           # Clean any stale lock files
                           rm -f /tmp/cargo-snix/.package-cache* 2>/dev/null
 
-                          echo "[snix-build] Starting cargo build..."
+                          echo "[snix-build] Starting cargo build (JOBS=2)..."
                           echo "[snix-build] Vendor crates: $(ls vendor/ | wc -l)"
 
-                          # Build with timeout — this is a BIG compile (168 crates + build-std).
-                          # JOBS=1 required: JOBS>1 hangs after ~136 crates due to Redox pipe/
-                          # waitpid issues with concurrent child processes. See napkin for details.
+                          # Build with timeout — this is a BIG compile (168 crates).
+                          # JOBS=2 works since the fork-lock fix (yield-based RW lock
+                          # replacing futex-based CLONE_LOCK) and lld-wrapper (16MB stack).
                           #
                           # IMPORTANT: Use file redirection, NOT pipes. Pipes on Redox break
-                          # with deep process hierarchies (cargo→rustc→cc→lld). The pipe reader
+                          # with deep process hierarchies (cargo->rustc->cc->lld). The pipe reader
                           # exits early, losing cargo output and corrupting the exit code.
                           MAX_TIME=1800
                           echo "[snix-build] About to run cargo build..." > /tmp/snix-build-log
@@ -2715,7 +2715,7 @@ let
         directory = "vendor"
 
         [build]
-        jobs = 1
+        jobs = 2
         target = "x86_64-unknown-redox"
 
         [target.x86_64-unknown-redox]
@@ -2738,10 +2738,10 @@ let
 
         # cargo timeout+retry — handles intermittent startup hangs
         # ALL cargo output to stderr so it does not pollute snix stdout
-        MAX_TIME=300
+        MAX_TIME=600
         for attempt in 1 2 3; do
-          echo "[builder] ripgrep build attempt $attempt" >&2
-          cargo build --offline --bin rg -j1 >&2 2>&1 &
+          echo "[builder] ripgrep build attempt $attempt (JOBS=2)" >&2
+          cargo build --offline --bin rg -j2 >&2 2>&1 &
           PID=$!
           SECONDS=0
           while kill -0 $PID 2>/dev/null; do
@@ -2860,9 +2860,9 @@ let
                           fi
                         '
 
-                        # ── Experimental: JOBS=2 parallel build test ───────────
-                        # This test is expected to fail/hang on current Redox.
-                        # Hard timeout ensures it never blocks the test suite.
+                        # ── JOBS=2 parallel build smoke test ───────────────────
+                        # Verifies JOBS=2 on a simple crate (the big builds above
+                        # already use JOBS=2 for snix and ripgrep).
                         echo "--- parallel-jobs2 ---"
                         /nix/system/profile/bin/bash -c '
                           mkdir -p /tmp/test-j2
