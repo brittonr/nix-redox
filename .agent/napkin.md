@@ -130,19 +130,26 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### Kernel DMA page allocator bug (FIXED — see Stale Claims)
 - Fixed via `patch-kernel-p2frame-init.py`. See "Stale Claims" section below.
 
-### Environ propagation universally broken for DSO-linked rustc (2026-03-12)
-- `option_env!("LD_LIBRARY_PATH")` returns None for ALL cargo builds (simple or complex)
-- Process environ does NOT propagate from cargo→rustc at all
-- `env!("CARGO_PKG_NAME")` works ONLY via `--env-set` CLI flag (logical_env, not process env)
-- This is NOT ring-specific — ring fails because --env-set doesn't cover all ring needs
-- librustc_driver.so exports `__relibc_init_environ` in .dynsym (verified via llvm-nm)
-- ld_so's run_init() should write environ to DSO, but something in the chain fails
-- Possible causes: (a) ld_so's `platform::environ` is null when run_init() runs,
-  (b) DSO's init_array sees non-null platform::environ and skips __relibc_init_environ,
-  (c) symbol interposition routes getenv() to main binary's relibc (not DSO's),
-  (d) some other startup ordering issue
-- The old hypothesis "build.rs fork+exec corrupts parent environ" was WRONG
-- Blocked on: diagnosing exactly where in the ld_so→DSO environ chain the value is lost
+### Environ propagation: ld_so chain works, rustc compile-time env broken (2026-03-12)
+- `option_env!("LD_LIBRARY_PATH")` returns None for ALL cargo builds
+- `env!("CARGO_PKG_NAME")` works ONLY via `--env-set` CLI flag
+- PROVEN: ld_so→DSO→init_array environ chain works correctly:
+  - ld_so's platform::environ has correct values (38 vars, non-null)
+  - get_sym("__relibc_init_environ") finds symbol with Global binding in DSO
+  - Write to DSO's __relibc_init_environ succeeds (readback verified)
+  - DSO init_array finds platform::environ null, assigns from injected value
+  - relibc_start_v1 skips environ setup (already non-null from init_array)
+  - rustc-spy confirms cargo passes LD_LIBRARY_PATH in child env
+- The runtime environ IS correctly set up. Bug is in compile-time env resolution.
+- option_env!() → std::env::var_os() → getenv() → relibc getenv() → environ_iter()
+  → reads platform::environ — should see the values but doesn't
+- Possible remaining causes:
+  (a) DSO's std::env::var_os() calls its own getenv() not main binary's (symbol scope)
+  (b) GOT entry for `environ` in DSO resolves to wrong copy
+  (c) RwLock in std ENV_LOCK blocks or poisons
+  (d) CStr::from_ptr fails on the environ data format
+- Next: add build.rs that calls std::env::vars() at RUNTIME to confirm if the
+  rustc process can read env vars through the normal Rust API
 
 ## Redox Namespace Sandboxing (implemented)
 
