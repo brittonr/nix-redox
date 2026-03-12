@@ -151,6 +151,22 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Falls back on ENOSYS (old kernel) — continues unsandboxed.
 - Per-path filtering needs proxy scheme daemon (future).
 
+## unit2nix Migration (2026-03-12)
+
+### 11 Rust packages migrated from mk-userspace to per-crate builds
+- ripgrep, bat, fd, hexyl, zoxide, dust, tokei, lsd, shellharden, smith, exampled
+- crossBuild infrastructure now lives in packages.nix (single source of truth)
+- checks.nix cross-check aliases reference packages.* directly
+- Old per-package .nix files deleted (-785 lines)
+- `pname` attribute set via `//` on unit2nix output for image builder compatibility
+  (`pkg.pname or (builtins.parseDrvName pkg.name).name` — unit2nix names are `rust_NAME`)
+- tokei, lsd, shellharden, smith, exampled now wired into extraPkgs + development profile
+
+### Pre-existing: strace-redox auto-vendor broken
+- `libc` crate not in auto-vendor output (git dependency not handled)
+- Blocks default image build (development profile includes strace-redox)
+- Minimal and functional-test images build fine
+
 ## TLS / ring Cross-Compilation
 
 ### ring 0.17 from crates.io works for Redox (cross-compile only)
