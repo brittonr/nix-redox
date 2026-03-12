@@ -426,6 +426,27 @@
         "type": "github"
       }
     },
+    "flake-parts_2": {
+      "inputs": {
+        "nixpkgs-lib": [
+          "unit2nix",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1772408722,
+        "narHash": "sha256-rHuJtdcOjK7rAHpHphUb1iCvgkU3GpfvicLMwwnfMT0=",
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "rev": "f20dc5d9b8027381c474144ecabc9034d6a839a3",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "flake-parts",
+        "type": "github"
+      }
+    },
     "games-src": {
       "flake": false,
       "locked": {
@@ -1232,6 +1253,7 @@
         "tokei-src": "tokei-src",
         "treefmt-nix": "treefmt-nix",
         "uefi-src": "uefi-src",
+        "unit2nix": "unit2nix",
         "userutils-src": "userutils-src",
         "uutils-src": "uutils-src",
         "zoxide-src": "zoxide-src"
@@ -1437,6 +1459,27 @@
         "ref": "master",
         "repo": "uefi",
         "type": "gitlab"
+      }
+    },
+    "unit2nix": {
+      "inputs": {
+        "flake-parts": "flake-parts_2",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1773319156,
+        "narHash": "sha256-fAKOpByhwQiwcoDKP4IF38KWEdKXrlnaXYFKULt8MZU=",
+        "owner": "brittonr",
+        "repo": "unit2nix",
+        "rev": "0439549f23aaac0614c68678cd9f3ff40953bd04",
+        "type": "github"
+      },
+      "original": {
+        "owner": "brittonr",
+        "repo": "unit2nix",
+        "type": "github"
       }
     },
     "userutils-src": {

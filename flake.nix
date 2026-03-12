@@ -54,6 +54,12 @@
       url = "github:ipetkov/crane";
     };
 
+    # Per-crate Nix builds for host-side testing of snix-redox
+    unit2nix = {
+      url = "github:brittonr/unit2nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+
     # Redox source repositories
     relibc-src = {
       url = "gitlab:redox-os/relibc/master?host=gitlab.redox-os.org";

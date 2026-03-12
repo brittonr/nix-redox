@@ -14,6 +14,7 @@
   pkgs,
   lib,
   self',
+  self,
   ...
 }:
 let
@@ -21,6 +22,24 @@ let
 
   # Import the module system test suite
   moduleSystemTests = import ../tests { inherit pkgs lib; };
+
+  # Host-side snix tests via unit2nix
+  # Builds snix-redox per-crate for x86_64-unknown-linux-gnu and runs #[test]s.
+  # The build plan was generated with:
+  #   cd snix-redox && CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu \
+  #     unit2nix --include-dev --force -o build-plan.json
+  # (with test=false temporarily removed from Cargo.toml)
+  snixHostTests =
+    let
+      unit2nix = self.inputs.unit2nix;
+      buildFromUnitGraph = unit2nix.lib.${pkgs.system}.buildFromUnitGraph;
+      ws = buildFromUnitGraph {
+        inherit pkgs;
+        src = ../../snix-redox;
+        resolvedJson = ../../snix-redox/build-plan.json;
+      };
+    in
+    ws;
 
 in
 {
@@ -54,8 +73,14 @@ in
     sodium-build = packages.sodium;
     netutils-build = packages.netutils;
 
-    # snix
+    # snix (cross-compiled for Redox)
     snix-build = packages.snix;
+
+    # snix host-side unit tests (502 tests, runs on linux, no VM needed)
+    snix-test = snixHostTests.test.check."snix-redox";
+
+    # snix clippy lint
+    snix-clippy = snixHostTests.clippy.allWorkspaceMembers;
 
     # Complete system images
     redox-default-build = packages.redox-default;
