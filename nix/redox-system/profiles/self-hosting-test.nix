@@ -644,6 +644,40 @@ let
                           echo "FUNC_TEST:rustc-direct-link:FAIL:exit=$direct_link_exit"
                         end
 
+                        # ── environ-diag: trace ld_so environ injection ──
+                        echo "--- environ-diag: ld_so environ trace ---"
+                        # Compile a tiny program that checks option_env at compile time.
+                        # We set DIAG_TEST_VAR in the environment. rustc is DSO-linked,
+                        # so ld_so's run_init() diagnostic will print to stderr.
+                        echo 'fn main() {' > /tmp/env_diag.rs
+                        echo '    match option_env!("DIAG_TEST_VAR") {' >> /tmp/env_diag.rs
+                        echo '        Some(v) => println!("DIAG_TEST_VAR={}", v),' >> /tmp/env_diag.rs
+                        echo '        None => println!("DIAG_TEST_VAR=NONE"),' >> /tmp/env_diag.rs
+                        echo '    }' >> /tmp/env_diag.rs
+                        echo '}' >> /tmp/env_diag.rs
+
+                        # Run rustc directly (not cargo) with the env var set
+                        # The ld_so environ-diag output goes to stderr
+                        export DIAG_TEST_VAR hello_from_environ
+                        /nix/system/profile/bin/bash -c 'DIAG_TEST_VAR=hello_from_environ rustc /tmp/env_diag.rs --edition 2021 -o /tmp/env_diag_bin -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld -C link-arg=-L/usr/lib/redox-sysroot/lib >/tmp/env-diag-stdout 2>/tmp/env-diag-stderr; echo "rustc-exit=$?"'
+
+                        echo "=== ld_so environ-diag stderr ==="
+                        cat /tmp/env-diag-stderr
+                        echo "=== end stderr ==="
+
+                        if exists -f /tmp/env_diag_bin
+                          /tmp/env_diag_bin > /tmp/env-diag-run-out ^>/tmp/env-diag-run-err
+                          echo "Runtime output: $(cat /tmp/env-diag-run-out)"
+                          if grep -q "DIAG_TEST_VAR=hello" /tmp/env-diag-run-out
+                            echo "FUNC_TEST:environ-diag:PASS"
+                          else
+                            echo "FUNC_TEST:environ-diag:FAIL:var not propagated"
+                          end
+                        else
+                          echo "FUNC_TEST:environ-diag:FAIL:compile-fail"
+                          cat /tmp/env-diag-stderr
+                        end
+
                         # ── Cargo crash diagnostics ──
                         # Cargo build crashes when it invokes rustc as subprocess.
                         # Build a compiled RUSTC wrapper that logs args/env before exec.
