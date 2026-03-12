@@ -130,26 +130,27 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### Kernel DMA page allocator bug (FIXED — see Stale Claims)
 - Fixed via `patch-kernel-p2frame-init.py`. See "Stale Claims" section below.
 
-### Environ propagation: ld_so chain works, rustc compile-time env broken (2026-03-12)
-- `option_env!("LD_LIBRARY_PATH")` returns None for ALL cargo builds
-- `env!("CARGO_PKG_NAME")` works ONLY via `--env-set` CLI flag
-- PROVEN: ld_so→DSO→init_array environ chain works correctly:
-  - ld_so's platform::environ has correct values (38 vars, non-null)
-  - get_sym("__relibc_init_environ") finds symbol with Global binding in DSO
-  - Write to DSO's __relibc_init_environ succeeds (readback verified)
-  - DSO init_array finds platform::environ null, assigns from injected value
-  - relibc_start_v1 skips environ setup (already non-null from init_array)
-  - rustc-spy confirms cargo passes LD_LIBRARY_PATH in child env
-- The runtime environ IS correctly set up. Bug is in compile-time env resolution.
-- option_env!() → std::env::var_os() → getenv() → relibc getenv() → environ_iter()
-  → reads platform::environ — should see the values but doesn't
-- Possible remaining causes:
-  (a) DSO's std::env::var_os() calls its own getenv() not main binary's (symbol scope)
-  (b) GOT entry for `environ` in DSO resolves to wrong copy
-  (c) RwLock in std ENV_LOCK blocks or poisons
-  (d) CStr::from_ptr fails on the environ data format
-- Next: add build.rs that calls std::env::vars() at RUNTIME to confirm if the
-  rustc process can read env vars through the normal Rust API
+### Environ propagation: DSO chain correct, env!() still fails (2026-03-12)
+- PROVEN by env!() compile error: `environment variable 'DIAG_TEST_VAR' not defined at compile time`
+- PROVEN by ld_so diagnostic: DIAG_TEST_VAR IS in ld_so environ at index 2 (of 15 vars)
+- Full symbol chain verified via disassembly:
+  - DSO's getenv (local, 0x7988c90) reads GOT[0x8058e90] → 0x80ebcb0 (environ addr)
+  - GOT has R_X86_64_RELATIVE relocation pointing to DSO's environ at 0x80ebcb0
+  - init_array writes to platform::environ which IS the symbol at 0x80ebcb0
+  - Same address! getenv reads from what init_array wrote to.
+- DSO's std::env::var_os → calls DSO's local getenv (R_X86_64_RELATIVE, not PLT)
+- DSO's getenv → reads DSO's local environ at 0x80ebcb0 (confirmed by relocation)
+- init_array → writes to DSO's platform::environ at 0x80ebcb0 (confirmed by diagnostic)
+- EVERYTHING IS CORRECT but env!() still can't find the var
+- Remaining hypothesis: TIMING — something clears DSO's environ between init_array
+  and macro expansion. Candidates:
+  (a) relibc_start_v1's init_array() call (line 220 in start.rs) — runs AFTER the
+      DSO init_arrays already ran, could it reset DSO's environ?
+  (b) A second DSO's init_array overwrites the first DSO's environ with null
+  (c) The main binary's CRT setup zeroes BSS (including DSO's BSS?) — unlikely
+  (d) Memory corruption from ld_so handing off to main binary
+- ALSO: compiled test binaries crash at RIP=0x0 — ld.lld "cannot find entry symbol _start"
+  even with --crate-type bin. Need to fix this separately.
 
 ## Redox Namespace Sandboxing (implemented)
 
