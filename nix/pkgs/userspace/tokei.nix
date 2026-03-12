@@ -15,6 +15,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   tokei-src,
   ...
 }:
@@ -30,6 +31,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -40,7 +42,7 @@ mkUserspace.mkBinary {
   src = tokei-src;
   binaryName = "tokei";
 
-  vendorHash = "sha256-x1Oi+B6DpbsCqnX0Lp5LsmoVHNvdibwj/IEgFvhepqY=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   meta = with lib; {
     description = "Count lines of code quickly";

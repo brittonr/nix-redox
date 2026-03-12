@@ -18,6 +18,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   zoxide-src,
 }:
 
@@ -32,6 +33,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -44,7 +46,7 @@ mkUserspace.mkBinary {
 
   # Vendor hash for zoxide dependencies
   # This will need to be computed on first build
-  vendorHash = "sha256-8R8Lb4GMdm1ek31/jqE/1eNLZykuYL5LtaDv3hVfCJo=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   # Build zoxide with default features
   cargoBuildFlags = "--bin zoxide";

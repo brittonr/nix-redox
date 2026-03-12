@@ -23,6 +23,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   snix-redox-src,
 }:
 
@@ -37,6 +38,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -48,7 +50,7 @@ mkUserspace.mkBinary {
   binaryName = "snix";
 
   # Vendor hash — all dependencies are from crates.io (no git sources)
-  vendorHash = "sha256-/XLkVwe6hHD/IaLhYVdAlxryHrVt/dJabWD1whcFk4g=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   meta = with lib; {
     description = "Nix evaluator and binary cache client for Redox OS";

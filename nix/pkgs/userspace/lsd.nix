@@ -15,6 +15,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   lsd-src,
   ...
 }:
@@ -30,6 +31,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -40,7 +42,7 @@ mkUserspace.mkBinary {
   src = lsd-src;
   binaryName = "lsd";
 
-  vendorHash = "sha256-TcC8ZY8Xv0076bLrprXGPh5nyGnR2NRnGeuTSEK4+Gg=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   # Disable default features that may need Unix-specific functionality
   cargoBuildFlags = "--bin lsd --no-default-features";

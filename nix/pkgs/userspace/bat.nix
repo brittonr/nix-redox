@@ -18,6 +18,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   bat-src,
 }:
 
@@ -32,6 +33,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -62,7 +64,7 @@ mkUserspace.mkBinary {
 
   # Vendor hash for bat dependencies
   # This will need to be computed on first build
-  vendorHash = "sha256-FUfmai1q5Rrwcoca5xJZijBKm85DF7BM4MweKnVD11E=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   # Build bat with minimal features for Redox compatibility
   # Use regex-fancy (pure Rust) instead of regex-onig (requires C library with glibc fortify)

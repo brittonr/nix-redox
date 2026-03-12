@@ -15,6 +15,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   ripgrep-src,
 }:
 
@@ -29,6 +30,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -39,8 +41,7 @@ mkUserspace.mkBinary {
   src = ripgrep-src;
   binaryName = "rg";
 
-  # Vendor hash for ripgrep dependencies
-  vendorHash = "sha256-9atn5qyBDy4P6iUoHFhg+TV6Ur71fiah4oTJbBMeEy4=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   # Build ripgrep without PCRE2 (requires C library)
   # Use default features which work on Redox

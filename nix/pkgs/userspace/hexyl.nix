@@ -18,6 +18,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   hexyl-src,
 }:
 
@@ -32,6 +33,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -44,7 +46,7 @@ mkUserspace.mkBinary {
 
   # Vendor hash for hexyl dependencies
   # This will need to be computed on first build
-  vendorHash = "sha256-MbRTnw7Vb9Lg/aHNXNg6Ziq7hF9lReqBtUVTCHvHOD8=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   # hexyl has minimal features, build with defaults
   cargoBuildFlags = "--bin hexyl";

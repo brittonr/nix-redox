@@ -15,6 +15,7 @@
   relibc,
   stubLibs,
   vendor,
+  unit2nixVendor,
   strace-redox-src,
   ...
 }:
@@ -30,6 +31,7 @@ let
       relibc
       stubLibs
       vendor
+      unit2nixVendor
       ;
   };
 
@@ -39,7 +41,7 @@ mkUserspace.mkBinary {
   src = strace-redox-src;
   binaryName = "strace";
 
-  vendorHash = "sha256-mz5MtGbCxzaQ2pmP5oswxJcUi7l8agSkD/wikkl3g/M=";
+  # No vendorHash — auto-vendored from Cargo.lock via unit2nix
 
   meta = with lib; {
     description = "System call tracer for Redox OS";

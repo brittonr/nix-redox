@@ -31,6 +31,8 @@
   stubLibs,
   vendor,
   craneLib ? null,
+  # unit2nix vendor function (from unit2nix flake input)
+  unit2nixVendor ? null,
   # Accept but ignore (passed via userspaceArgs/standaloneCommon)
   ...
 }:
@@ -61,12 +63,16 @@ let
 in
 rec {
   # Build a generic Rust package for Redox
+  #
+  # Vendoring: provide EITHER vendorHash (legacy) OR nothing (auto-vendor).
+  # When vendorHash is null and unit2nixVendor is available, crate sources are
+  # fetched individually from Cargo.lock checksums — no hash to maintain.
   mkPackage =
     {
       pname,
       version ? "unstable",
       src,
-      vendorHash,
+      vendorHash ? null,
       cargoBuildFlags ? "",
       preConfigure ? "",
       postConfigure ? "",
@@ -79,21 +85,41 @@ rec {
       meta ? { },
     }:
     let
-      # Vendor project dependencies
-      projectVendor = pkgs.rustPlatform.fetchCargoVendor {
-        name = "${pname}-cargo-vendor";
-        inherit src;
-        hash = vendorHash;
-      };
+      useAutoVendor = vendorHash == null && unit2nixVendor != null;
+
+      # Auto-vendor: parse Cargo.lock at eval time, fetch each crate individually
+      autoVendored =
+        if useAutoVendor then
+          unit2nixVendor {
+            inherit pkgs lib;
+            cargoLock = src + "/Cargo.lock";
+          }
+        else
+          null;
+
+      # Legacy vendor: FOD with vendorHash
+      projectVendor =
+        if !useAutoVendor then
+          pkgs.rustPlatform.fetchCargoVendor {
+            name = "${pname}-cargo-vendor";
+            inherit src;
+            hash = vendorHash;
+          }
+        else
+          null;
 
       # Create vendor directory:
-      # - With prebuilt sysroot: just the project vendor (no sysroot merge needed)
-      # - Without: merged project + sysroot vendor (legacy path)
-      mergedVendor = vendor.mkMergedVendor {
-        name = pname;
-        inherit projectVendor;
-        sysrootVendor = if needsBuildStd then sysrootVendor else null;
-      };
+      # - Auto-vendor: use linkFarm directly (already a valid vendor dir)
+      # - Legacy: merged project + sysroot vendor
+      mergedVendor =
+        if useAutoVendor then
+          autoVendored.vendoredSources
+        else
+          vendor.mkMergedVendor {
+            name = pname;
+            inherit projectVendor;
+            sysrootVendor = if needsBuildStd then sysrootVendor else null;
+          };
     in
     pkgs.stdenv.mkDerivation {
       inherit pname version;
