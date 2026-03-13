@@ -130,25 +130,21 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### Kernel DMA page allocator bug (FIXED — see Stale Claims)
 - Fixed via `patch-kernel-p2frame-init.py`. See "Stale Claims" section below.
 
-### Environ propagation: DSO chain correct, env!() still fails (2026-03-12)
-- PROVEN by env!() compile error: `environment variable 'DIAG_TEST_VAR' not defined at compile time`
-- PROVEN by ld_so diagnostic: DIAG_TEST_VAR IS in ld_so environ at index 2 (of 15 vars)
-- Full symbol chain verified via disassembly:
-  - DSO's getenv (local, 0x7988c90) reads GOT[0x8058e90] → 0x80ebcb0 (environ addr)
-  - GOT has R_X86_64_RELATIVE relocation pointing to DSO's environ at 0x80ebcb0
-  - init_array writes to platform::environ which IS the symbol at 0x80ebcb0
-  - Same address! getenv reads from what init_array wrote to.
-- DSO's std::env::var_os → calls DSO's local getenv (R_X86_64_RELATIVE, not PLT)
-- DSO's getenv → reads DSO's local environ at 0x80ebcb0 (confirmed by relocation)
-- init_array → writes to DSO's platform::environ at 0x80ebcb0 (confirmed by diagnostic)
-- EVERYTHING IS CORRECT but env!() still can't find the var
-- Remaining hypothesis: TIMING — something clears DSO's environ between init_array
-  and macro expansion. Candidates:
-  (a) relibc_start_v1's init_array() call (line 220 in start.rs) — runs AFTER the
-      DSO init_arrays already ran, could it reset DSO's environ?
-  (b) A second DSO's init_array overwrites the first DSO's environ with null
-  (c) The main binary's CRT setup zeroes BSS (including DSO's BSS?) — unlikely
-  (d) Memory corruption from ld_so handing off to main binary
+### ROOT CAUSE FOUND: DSO environ never set (2026-03-12)
+- **PROVEN**: init_array that sets environ runs in MAIN BINARY (&environ=0x4e0030),
+  NOT in the DSO (&environ=0x14ce5500)
+- **PROVEN**: getenv reads from DSO's environ (0x14ce5500) which is still null
+- **WHY**: The DSO's init_array reads __relibc_init_environ through GLOB_DAT (symbol
+  interposition) → resolves to MAIN BINARY's __relibc_init_environ. At the time the
+  DSO's init_array runs, the main binary's __relibc_init_environ is still NULL
+  (run_init processes objects in dependency order: DSO before main binary).
+  So the DSO's init_array sees __relibc_init_environ=null and skips the assignment.
+  Only the MAIN BINARY's init_array succeeds because it runs AFTER ld_so wrote to
+  the main binary's __relibc_init_environ.
+- **FIX**: ld_so's run_init should write directly to `environ` symbol in each DSO
+  (not just to __relibc_init_environ). Or make getenv self-initializing by falling
+  back to __relibc_init_environ when environ is null. Or change ld_so to process
+  the main binary BEFORE dependencies (so GLOB_DAT resolves to a non-null value).
 - ALSO: compiled test binaries crash at RIP=0x0 — ld.lld "cannot find entry symbol _start"
   even with --crate-type bin. Need to fix this separately.
 
