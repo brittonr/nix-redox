@@ -1890,12 +1890,17 @@ let
                               if echo "$OUTPUT" | grep -q "ENV_PKG_OK"; then
                                 echo "FUNC_TEST:env-pkg-name:PASS"
                                 # Also report whether environ propagated (for diagnostics)
-                                if echo "$OUTPUT" | grep -q "LD_LIBRARY_PATH=Some"; then
-                                  echo "FUNC_TEST:env-propagation-simple:PASS"
-                                else
-                                  echo "FUNC_TEST:env-propagation-simple:FAIL:environ not propagated"
-                                  echo "  (env!() works via --env-set but process env is broken)"
-                                fi
+                                # Use bash case instead of grep -q (Redox grep misparses
+                                # patterns containing = as invalid parameters)
+                                case "$OUTPUT" in
+                                  *"LD_LIBRARY_PATH=Some"*)
+                                    echo "FUNC_TEST:env-propagation-simple:PASS"
+                                    ;;
+                                  *)
+                                    echo "FUNC_TEST:env-propagation-simple:FAIL:environ not propagated"
+                                    echo "  (env!() works via --env-set but process env is broken)"
+                                    ;;
+                                esac
                               else
                                 echo "FUNC_TEST:env-pkg-name:FAIL:compile-fail"
                                 echo "FUNC_TEST:env-propagation-simple:FAIL:env!() failed"
@@ -2009,11 +2014,16 @@ let
                               if echo "$OUTPUT" | grep -q "HEAVY_FORK_OK"; then
                                 echo "FUNC_TEST:env-heavy-fork:PASS"
                                 # Check if env propagation survived the fork storm
-                                if echo "$OUTPUT" | grep -q "LD_LIBRARY_PATH=Some"; then
-                                  echo "FUNC_TEST:env-propagation-heavy:PASS"
-                                else
-                                  echo "FUNC_TEST:env-propagation-heavy:FAIL:environ lost after fork storm"
-                                fi
+                                # Use bash case instead of grep -q (Redox grep misparses
+                                # patterns containing = as invalid parameters)
+                                case "$OUTPUT" in
+                                  *"LD_LIBRARY_PATH=Some"*)
+                                    echo "FUNC_TEST:env-propagation-heavy:PASS"
+                                    ;;
+                                  *)
+                                    echo "FUNC_TEST:env-propagation-heavy:FAIL:environ lost after fork storm"
+                                    ;;
+                                esac
                               else
                                 echo "FUNC_TEST:env-heavy-fork:FAIL:compile-fail"
                                 echo "FUNC_TEST:env-propagation-heavy:FAIL:env!() failed"

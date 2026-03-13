@@ -98,16 +98,14 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Active Workarounds (still needed)
 
-### --env-set for cargo (still needed — environ universally broken)
+### --env-set for cargo (defense-in-depth — DSO environ now fixed)
 - `patch-cargo-env-set.py` passes env vars via rustc `--env-set` flag.
-- Environ propagation is universally broken for DSO-linked rustc on Redox.
-- `option_env!("LD_LIBRARY_PATH")` returns None even for simple cargo builds.
-- --env-set covers CARGO_PKG_*, OUT_DIR, and cargo:rustc-env values.
-- Ring fails because it needs env!("CARGO_PKG_NAME") which IS in --env-set,
-  but the ring build also exercises paths where process environ matters.
-- Without --env-set: tests that use env!("CARGO_PKG_NAME") fail across the board.
-- With --env-set: 48/50+ pass (only env-propagation tests fail — by design).
-- Removal condition: fix DSO environ propagation in ld_so/relibc.
+- DSO environ propagation FIXED (2026-03-13) by `patch-relibc-environ-dso-init.py`:
+  broadcasts environ to __relibc_init_environ after relibc_start_v1.
+- Combined with getenv self-init (patch-relibc-dso-environ.py), DSOs now see
+  the full process environ. env-propagation-simple and env-propagation-heavy PASS.
+- --env-set kept as defense-in-depth (second path for env vars to reach rustc).
+- Can be removed once DSO environ has more runtime mileage.
 
 ### cargo-build-safe timeout wrapper
 - 90s timeout + retry for intermittent cargo hangs (flock and other blocking).
@@ -130,19 +128,19 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### Kernel DMA page allocator bug (FIXED — see Stale Claims)
 - Fixed via `patch-kernel-p2frame-init.py`. See "Stale Claims" section below.
 
-### FIXED: DSO environ — getenv self-init from __relibc_init_environ (2026-03-12)
-- **ROOT CAUSE**: DSO's init_array reads __relibc_init_environ via GLOB_DAT → resolves
-  to main binary's copy. ld_so processes DSOs before main binary, so main binary's
-  __relibc_init_environ is still NULL when DSO's init_array runs.
-- **FIX**: patch-relibc-dso-environ.py — getenv() checks if environ is null and
-  falls back to __relibc_init_environ. By the time getenv runs (after all init_arrays
-  and relibc_start_v1 complete), the main binary's __relibc_init_environ is valid.
-- **RESULT**: 60/62 tests pass (up from 54/62). env!() and option_env!() now work.
-  snix build, cargo build, ripgrep compilation all succeed.
-- **REMAINING**: env-propagation-simple and env-propagation-heavy still fail
-  (separate issue from DSO environ — likely exec() env propagation).
-- ALSO: compiled test binaries crash at RIP=0x0 — ld.lld "cannot find entry symbol _start"
-  even with --crate-type bin. Need to fix this separately.
+### FIXED: DSO environ — full fix with __relibc_init_environ broadcast (2026-03-13)
+- **ROOT CAUSE**: ld_so's run_init() writes platform::environ (NULL at load time) into
+  each DSO's __relibc_init_environ. Later, relibc_start_v1 sets platform::environ
+  from kernel envp, but __relibc_init_environ is never updated. DSOs see NULL via
+  GLOB_DAT to main binary's copy.
+- **FIX** (two patches):
+  1. patch-relibc-environ-dso-init.py — in relibc_start_v1, after setting environ,
+     also writes `__relibc_init_environ = platform::environ`. DSOs see this via GLOB_DAT.
+  2. patch-relibc-dso-environ.py — getenv() self-initializes from __relibc_init_environ
+     when environ is null (lazy init on first getenv call in DSO).
+- **RESULT**: 62/62 tests pass. env-propagation-simple and env-propagation-heavy both PASS.
+  option_env!("LD_LIBRARY_PATH") works in librustc_driver.so.
+- Diagnostic patches (environ-diag.py, getenv-diag.py) removed from production build.
 
 ## Redox Namespace Sandboxing (implemented)
 

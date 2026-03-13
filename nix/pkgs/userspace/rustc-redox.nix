@@ -458,43 +458,29 @@ pkgs.stdenv.mkDerivation {
     # environ entirely.
     python3 ${./patch-rustc-execvpe.py} .
 
-    # Patch: --env-set workaround for env!() macros (PERMANENT).
+    # Patch: --env-set workaround for env!() macros (defense-in-depth).
     #
-    # execvpe() (patched above) fixes basic env propagation through exec(),
-    # but CARGO_PKG_* vars still don't reach rustc's env!() lookup when
-    # compiling proc-macro crates. Without this patch, 9/58 self-hosting
-    # tests fail — specifically proc-macros that use env!("CARGO_PKG_*")
-    # (e.g., thiserror-impl v2.0.18 fails with "CARGO_PKG_VERSION_PATCH
-    # not defined at compile time").
-    #
-    # Root cause: env!() resolves at compile time via rustc's logical_env
-    # (populated by --env-set) before falling back to std::env::var().
-    # Even with execvpe(), the CARGO_PKG_* env vars don't appear in the
-    # rustc child process environment during proc-macro compilation.
-    # Hypothesis: DSO-linked rustc (librustc_driver.so) has a separate
-    # relibc static that doesn't pick up the envp from execvpe().
-    #
-    # This patch makes cargo pass env vars via --env-set in addition to
+    # Makes cargo pass env vars via --env-set CLI flag in addition to
     # Command::env(), ensuring rustc sees them in logical_env regardless
     # of whether the process environment propagates correctly.
     #
-    # Removal condition: fix DSO environ initialization in relibc so that
-    # all loaded .so files share the same environ pointer as the main binary.
-    # Until then, --env-set is required for proc-macro compilation.
+    # History: This was originally REQUIRED because DSO-linked rustc
+    # (librustc_driver.so) had a null environ pointer — each DSO gets its
+    # own relibc statics, and ld_so wrote NULL into __relibc_init_environ
+    # before relibc_start_v1 set the real environ from kernel envp.
     #
-    # Validated 2026-03-11: Removed this patch and ran self-hosting test.
-    # Result: option_env!("BUILD_TARGET") returns None in buildrs test
-    # (cfg=yes,env=missing,runtime=None). Confirms Command::env() vars
-    # don't reach rustc's logical_env on Redox. DSO environ isolation is
-    # the root cause. --env-set still needed for complex builds (ring crate).
+    # Fixed (2026-03-13): patch-relibc-environ-dso-init.py broadcasts
+    # environ to __relibc_init_environ after relibc_start_v1 sets it.
+    # Combined with getenv self-init (patch-relibc-dso-environ.py), DSOs
+    # now see the full process environ. Validated: env-propagation-simple
+    # and env-propagation-heavy tests pass (option_env! returns correct
+    # values in DSO context, even after build.rs fork storms).
     #
-    # Partial fix (2026-03-12): Added __relibc_init_environ to version script
-    # global section. This enables environ injection for DSOs and fixes basic
-    # cargo:rustc-env propagation (buildrs test passes without --env-set).
-    # However, ring crate still fails — env!("CARGO_PKG_NAME") returns
-    # "not defined" during ring lib compilation after build.rs runs cc.
-    # Hypothesis: build.rs fork+exec of cc corrupts environ state in the
-    # parent cargo process, so subsequent rustc invocations lose CARGO_PKG_*.
+    # Kept as defense-in-depth: --env-set provides a second path for env
+    # vars to reach rustc, protecting against any remaining edge cases
+    # in relibc's environ propagation (e.g., if a future patch breaks
+    # the __relibc_init_environ chain). Can be removed once DSO environ
+    # has more runtime mileage.
     python3 ${./patch-cargo-env-set.py} .
 
     # Patch 7: cargo-util S_IRWXU type mismatch
