@@ -392,8 +392,6 @@ pkgs.stdenv.mkDerivation {
     ./patches/patch-cargo-heartbeat.patch
     # Use execvpe() on Redox for env propagation through exec()
     ./patches/patch-rustc-execvpe.patch
-    # --env-set workaround for env!() macros (defense-in-depth)
-    ./patches/patch-cargo-env-set.patch
     # cargo-util S_IRWXU type mismatch (i32 vs u32 on Redox)
     ./patches/patch-cargo-irwxu.patch
     # Strip "file:" URL scheme prefix from OS-returned paths (std + cargo)
