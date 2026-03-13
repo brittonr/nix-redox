@@ -130,21 +130,17 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### Kernel DMA page allocator bug (FIXED — see Stale Claims)
 - Fixed via `patch-kernel-p2frame-init.py`. See "Stale Claims" section below.
 
-### ROOT CAUSE FOUND: DSO environ never set (2026-03-12)
-- **PROVEN**: init_array that sets environ runs in MAIN BINARY (&environ=0x4e0030),
-  NOT in the DSO (&environ=0x14ce5500)
-- **PROVEN**: getenv reads from DSO's environ (0x14ce5500) which is still null
-- **WHY**: The DSO's init_array reads __relibc_init_environ through GLOB_DAT (symbol
-  interposition) → resolves to MAIN BINARY's __relibc_init_environ. At the time the
-  DSO's init_array runs, the main binary's __relibc_init_environ is still NULL
-  (run_init processes objects in dependency order: DSO before main binary).
-  So the DSO's init_array sees __relibc_init_environ=null and skips the assignment.
-  Only the MAIN BINARY's init_array succeeds because it runs AFTER ld_so wrote to
-  the main binary's __relibc_init_environ.
-- **FIX**: ld_so's run_init should write directly to `environ` symbol in each DSO
-  (not just to __relibc_init_environ). Or make getenv self-initializing by falling
-  back to __relibc_init_environ when environ is null. Or change ld_so to process
-  the main binary BEFORE dependencies (so GLOB_DAT resolves to a non-null value).
+### FIXED: DSO environ — getenv self-init from __relibc_init_environ (2026-03-12)
+- **ROOT CAUSE**: DSO's init_array reads __relibc_init_environ via GLOB_DAT → resolves
+  to main binary's copy. ld_so processes DSOs before main binary, so main binary's
+  __relibc_init_environ is still NULL when DSO's init_array runs.
+- **FIX**: patch-relibc-dso-environ.py — getenv() checks if environ is null and
+  falls back to __relibc_init_environ. By the time getenv runs (after all init_arrays
+  and relibc_start_v1 complete), the main binary's __relibc_init_environ is valid.
+- **RESULT**: 60/62 tests pass (up from 54/62). env!() and option_env!() now work.
+  snix build, cargo build, ripgrep compilation all succeed.
+- **REMAINING**: env-propagation-simple and env-propagation-heavy still fail
+  (separate issue from DSO environ — likely exec() env propagation).
 - ALSO: compiled test binaries crash at RIP=0x0 — ld.lld "cannot find entry symbol _start"
   even with --crate-type bin. Need to fix this separately.
 
