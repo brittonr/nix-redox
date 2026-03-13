@@ -67,6 +67,13 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - SYS_NANOSLEEP (syscall 162) properly implemented: sets context.wake + context.block.
 - No `sleep` binary exists (not compiled in uutils), but `read -t N` works in bash.
 
+### Self-hosting test parallel-jobs2 linker crash (FIXED 2026-03-13)
+- Was crashing with `fatal runtime error: failed to initiate panic, error 0`.
+- Previous napkin claimed "lld runs INSIDE clang" — WRONG. The cc wrapper calls lld-wrapper
+  directly (not clang for linking). The crash was the fork-lock bug, not a stack issue.
+- Fixed by patch-relibc-fork-lock.py (yield-based CLONE_LOCK).
+- Validated: self-hosting-test 62/62 PASS including parallel-jobs2 (2026-03-13).
+
 ### Heredoc terminators in Nix '' strings (FIXED 2026-03-11)
 - 120 heredoc terminators across 45 .nix files fixed.
 - Added broad treefmt + git-hooks excludes for .nix files with heredocs.
@@ -84,9 +91,8 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
   (2) cargo job manager hang on multi-crate workspaces → `patch-relibc-fork-lock.py`
       (futex-based CLONE_LOCK replaced with AtomicI32 + sched_yield)
 - Validated 2026-03-12: JOBS=2, 100-crate workspace built in 240s. All 12 parallel-build-test PASS.
-- Full test suite validated 2026-03-12: ALL self-hosting tests bumped to JOBS=2.
-  57/58 PASS (snix 193 crates, ripgrep 33 crates, all individual cargo tests).
-  Only failure: parallel-jobs2 (cc-wrapper linker crash, pre-existing).
+- Validated 2026-03-13: self-hosting-test 62/62 PASS at JOBS=2 (snix 193 crates, ripgrep 33 crates,
+  parallel-jobs2, all individual cargo tests). No failures.
 - WAS previously listed as "JOBS=1 workaround needed" and "linker crash, NOT a hang" — both wrong.
 
 ### DSO environ injection partially working (2026-03-12)
@@ -115,15 +121,6 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - `#[cfg(target_os = "redox")]` uses `Stdio::inherit()` + `.status()` instead.
 
 ## Active Bugs (not yet fixed)
-
-### Self-hosting test parallel-jobs2 linker crash (exit=101)
-- `cargo build` with JOBS=2 in self-hosting test: `cc` wrapper linker crashes with
-  `fatal runtime error: failed to initiate panic, error 0` / `relibc: abort() called`.
-- This is the `cc` wrapper path (cargo config uses `linker = cc`), NOT `ld.lld` directly.
-- The `lld-wrapper` fix only applies when lld is invoked as a standalone process.
-  When lld runs INSIDE clang (via cc wrapper), it doesn't get the 16MB stack.
-- The parallel-build-test (100 crates, JOBS=2) uses `linker = ld.lld` and PASSES.
-- Fix: either make cc wrapper use lld-wrapper, or grow clang's stack for the lld thread.
 
 ### Kernel DMA page allocator bug (FIXED — see Stale Claims)
 - Fixed via `patch-kernel-p2frame-init.py`. See "Stale Claims" section below.

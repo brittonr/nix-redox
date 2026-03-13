@@ -21,17 +21,17 @@
 
 ## 3. Diagnose parallel cargo hang
 
-- [ ] 3.1 Add kernel instrumentation: logging in waitpid (proc: scheme ProcCall::Waitpid), pipe_read/pipe_write, and context switch. Deferred — requires kernel source patching and full rebuild.
-- [ ] 3.2 Build an instrumented kernel image. Deferred — depends on 3.1.
+- [x] 3.1 Deferred permanently — root cause found via cargo-parallel-hang-investigation (futex CoW bug in CLONE_LOCK), kernel instrumentation not needed
+- [x] 3.2 Deferred permanently — depends on 3.1
 - [x] 3.3 Created `parallel-build-test.nix` profile with JOBS=1 baseline and JOBS=2 test with 5-minute hard timeout. Cannot hang CI.
-- [ ] 3.4 Boot parallel build test, capture serial log. Requires self-hosting image build (long).
-- [ ] 3.5 Analyze serial log for hang root cause. Depends on 3.4.
+- [x] 3.4 Done via cargo-parallel-hang-investigation: parallel-build-test 12/12 PASS, self-hosting-test 62/62 PASS at JOBS=2
+- [x] 3.5 Done: root cause is futex-based CLONE_LOCK lost-wake during CoW. Fixed by patch-relibc-fork-lock.py
 - [x] 3.6 Written initial investigation report at `parallel-hang-report.md`. Documents kernel analysis, theories (pipe deadlock, waitpid notification loss, thread starvation, scheduler fairness), and next steps.
 
 ## 4. Fix or harden parallel builds
 
-- [ ] 4.1 If root cause identified and fixable: write the fix as a relibc patch or kernel patch, wire it into the build. Blocked on 3.4-3.5 (kernel investigation).
-- [ ] 4.2 If root cause is in the kernel and not fixable this cycle: harden `cargo-build-safe` wrapper. Blocked on 3.4-3.5.
+- [x] 4.1 Done: patch-relibc-fork-lock.py replaces CLONE_LOCK with yield-based AtomicI32 lock. All parallel build tests pass.
+- [x] 4.2 N/A — root cause fixed in relibc, cargo-build-safe wrapper no longer needed for this issue
 - [x] 4.3 Added JOBS=2 cargo build to `self-hosting-test.nix` with 10-minute (600s) timeout. Reports PASS or FAIL, never hangs. Background process + busy-wait polling pattern (no sleep on Redox).
 - [x] 4.4 Updated AGENTS.md: corrected nanosleep/Instant::now claims, noted sleep binary not in uutils (not broken). Updated napkin.md: added "Stale Claims" section for nanosleep, updated exec() env propagation to "PARTIALLY FIXED".
 

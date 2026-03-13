@@ -28,17 +28,17 @@
 
 ## 5. Fix Implementation
 
-- [ ] 5.1 Write the fix patch targeting the identified root cause (relibc poll/waitpid/pipe or cargo job manager)
-- [ ] 5.2 Add patch to the build pipeline (`nix/pkgs/system/patch-*.py` or `nix/pkgs/userspace/patch-*.py`)
-- [ ] 5.3 Verify JOBS=1 still works (no regression) on self-hosting-test profile
-- [ ] 5.4 Verify JOBS=2 workspace builds complete for all graduated sizes (5 through 100 crates)
+- [x] 5.1 Done: `patch-relibc-fork-lock.py` — yield-based AtomicI32 RW lock replacing futex-based CLONE_LOCK
+- [x] 5.2 Done: patch wired into `nix/pkgs/system/patch-relibc-fork-lock.py`
+- [x] 5.3 Done: self-hosting-test 62/62 PASS (2026-03-13), JOBS=2 throughout
+- [x] 5.4 Done: parallel-build-test 12/12 PASS including ws5/10/20/50/100 at JOBS=2
 
 ## 6. Validation and Cleanup
 
-- [ ] 6.1 Run parallel-build-test at JOBS=2 with 3-crate workspace — must pass within 120s
-- [ ] 6.2 Run parallel-build-test at JOBS=2 with 20-crate workspace — must pass within 300s
-- [ ] 6.3 Run parallel-build-test at JOBS=2 with 100-crate workspace — must pass within 600s
-- [ ] 6.4 Update self-hosting-test and self-hosting profiles to set `CARGO_BUILD_JOBS=2`
-- [ ] 6.5 Run snix self-compilation (193 crates) at JOBS=2 on self-hosting-test — must complete within 20 minutes
-- [ ] 6.6 Update AGENTS.md: move JOBS>1 from "Active Workarounds" to fixed, document root cause and fix
-- [ ] 6.7 Update napkin: mark JOBS>1 hang as resolved with root cause summary
+- [x] 6.1 Done: parallel-build-test ws5 PASS (2026-03-12)
+- [x] 6.2 Done: parallel-build-test ws20 PASS (2026-03-12)
+- [x] 6.3 Done: parallel-build-test ws100 PASS in 240s (2026-03-12)
+- [x] 6.4 Done: self-hosting-test uses CARGO_BUILD_JOBS=2 throughout, self-hosting uses CARGO_BUILD_JOBS=4
+- [x] 6.5 Done: snix self-compilation (193 crates) at JOBS=2 passes as part of self-hosting-test (snix-compile test)
+- [x] 6.6 Done: AGENTS.md documents fork-lock fix, CLONE_LOCK root cause, yield-based replacement
+- [x] 6.7 Done: napkin has "JOBS>1 parallel cargo builds (FIXED 2026-03-12)" entry
