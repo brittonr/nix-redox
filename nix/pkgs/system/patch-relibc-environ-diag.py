@@ -25,6 +25,9 @@ NEW_INIT = """\
 
         // Only print diagnostics when ld_so injected a value (DSO-linked binaries).
         // Static binaries have __relibc_init_environ=null, skip to reduce boot spam.
+        let environ_addr = core::ptr::addr_of!(platform::environ) as usize;
+        let init_environ_addr = core::ptr::addr_of!(__relibc_init_environ) as usize;
+
         if !injected.is_null() {
             let injected_count = {
                 let mut c = 0usize;
@@ -36,8 +39,9 @@ NEW_INIT = """\
                 c
             };
             eprintln!(
-                "[relibc init_array environ-diag] platform::environ={:p} null={}, \
-                 __relibc_init_environ={:p} count={}",
+                "[relibc init_array environ-diag] &environ={:#x} &init_environ={:#x} \
+                 environ={:p} null={}, init_environ={:p} count={}",
+                environ_addr, init_environ_addr,
                 before_environ, before_environ.is_null(),
                 injected, injected_count,
             );
@@ -47,14 +51,15 @@ NEW_INIT = """\
             platform::environ = injected;
             if !injected.is_null() {
                 eprintln!(
-                    "[relibc init_array environ-diag] ASSIGNED: platform::environ now={:p}",
+                    "[relibc init_array environ-diag] ASSIGNED: &environ={:#x} now={:p}",
+                    environ_addr,
                     core::ptr::addr_of!(platform::environ).read(),
                 );
             }
         } else if !injected.is_null() {
             eprintln!(
-                "[relibc init_array environ-diag] SKIPPED: platform::environ already {:p}",
-                before_environ,
+                "[relibc init_array environ-diag] SKIPPED: &environ={:#x} already {:p}",
+                environ_addr, before_environ,
             );
         }
     }"""
