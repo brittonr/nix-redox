@@ -34,12 +34,42 @@ let
     name = "relibc-src-patched";
     src = relibc-src;
 
-    nativeBuildInputs = [ pkgs.python3 ];
-
     phases = [
       "unpackPhase"
       "patchPhase"
       "installPhase"
+    ];
+
+    patches = [
+      # DSO namespace fd injection — each DSO gets its own DYNAMIC_PROC_INFO copy,
+      # only ld_so initializes from auxv. Without injection, DSOs get ns_fd=None
+      # causing EBADF on scheme access (e.g., File::open("/scheme/rand")).
+      ./patches/relibc/patch-relibc-ns-fd.patch
+      ./patches/relibc/patch-relibc-run-init.patch
+      # DSO environ propagation — getenv() self-initializes from __relibc_init_environ
+      ./patches/relibc/patch-relibc-dso-environ.patch
+      # Broadcast environ to __relibc_init_environ after relibc_start_v1
+      ./patches/relibc/patch-relibc-environ-dso-init.patch
+      # Pre-fault thread stack pages after mmap
+      ./patches/relibc/patch-relibc-prefault-stack.patch
+      # Main thread gets 8MB mmap'd stack (kernel only gives ~8KB)
+      ./patches/relibc/patch-relibc-grow-main-stack.patch
+      # chdir() uses try_lock() to prevent post-fork deadlock
+      ./patches/relibc/patch-relibc-chdir-deadlock.patch
+      # abort() uses _exit(134) instead of ud2 instruction
+      ./patches/relibc/patch-relibc-abort-dso.patch
+      # Guard p_align=0 in PT_GNU_STACK (prevents division by zero)
+      ./patches/relibc/patch-relibc-ld-so-align.patch
+      # CWD injection for DSOs via ld_so run_init()
+      ./patches/relibc/patch-relibc-ld-so-cwd.patch
+      # fcntl file locking no-op (Redox kernel lacks POSIX file locks)
+      ./patches/relibc/patch-relibc-fcntl-lock.patch
+      # Add execvpe() for PATH search with explicit envp
+      ./patches/relibc/patch-relibc-execvpe.patch
+      # ld_so argv UTF-8: to_string_lossy() instead of _exit(1)
+      ./patches/relibc/patch-relibc-ld-so-argv-utf8.patch
+      # Replace futex-based CLONE_LOCK with AtomicI32 + sched_yield()
+      ./patches/relibc/patch-relibc-fork-lock.patch
     ];
 
     postUnpack = ''
@@ -57,9 +87,7 @@ let
       chmod -R u+w $sourceRoot/dlmalloc-rs
     '';
 
-    patchPhase = ''
-      runHook prePatch
-
+    postPatch = ''
       # Fix shell script interpreters for Nix sandbox
       patchShebangs .
 
@@ -69,34 +97,6 @@ let
       sed -i 's/export AR=x86_64-unknown-redox-ar/export AR=llvm-ar/g' config.mk
       sed -i 's/export NM=x86_64-unknown-redox-nm/export NM=llvm-nm/g' config.mk
       sed -i 's/export OBJCOPY=x86_64-unknown-redox-objcopy/export OBJCOPY=llvm-objcopy/g' config.mk
-
-      # ── Fix: inject namespace fd into shared libraries ──────────────
-      # When ld_so loads a dynamically-linked program, each DSO (shared library)
-      # gets its own copy of DYNAMIC_PROC_INFO (it's a private static in redox-rt).
-      # Only the ld_so binary initializes its copy (from auxv). The DSOs' copies
-      # remain at default (ns_fd = None), causing EBADF on scheme access like
-      # File::open("/scheme/rand") from within .so code.
-      #
-      # Fix: add __relibc_init_ns_fd global symbol to redox-rt (checked first by
-      # current_namespace_fd), and have ld_so write the ns_fd to each DSO's copy
-      # during run_init (same pattern as __relibc_init_environ).
-
-      python3 ${./patch-relibc-ns-fd.py}
-      python3 ${./patch-relibc-run-init.py}
-      python3 ${./patch-relibc-dso-environ.py}
-      python3 ${./patch-relibc-environ-dso-init.py}
-      python3 ${./patch-relibc-prefault-stack.py}
-      python3 ${./patch-relibc-grow-main-stack.py}
-      python3 ${./patch-relibc-chdir-deadlock.py}
-      python3 ${./patch-relibc-abort-dso.py}
-      python3 ${./patch-relibc-ld-so-align.py}
-      python3 ${./patch-relibc-ld-so-cwd.py}
-      python3 ${./patch-relibc-fcntl-lock.py}
-      python3 ${./patch-relibc-execvpe.py}
-      python3 ${./patch-relibc-ld-so-argv-utf8.py}
-      python3 ${./patch-relibc-fork-lock.py} .
-
-      runHook postPatch
     '';
 
     installPhase = ''

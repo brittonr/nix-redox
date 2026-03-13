@@ -1,0 +1,114 @@
+diff -ruN a/redox-rt/src/lib.rs b/redox-rt/src/lib.rs
+--- a/redox-rt/src/lib.rs	2026-03-13 12:36:26.952320659 -0400
++++ b/redox-rt/src/lib.rs	2026-03-13 12:36:27.008178488 -0400
+@@ -296,6 +296,17 @@
+ #[unsafe(no_mangle)]
+ pub static mut __relibc_init_proc_fd: usize = usize::MAX;
+ 
++/// CWD string pointer injected by ld_so for shared libraries.
++/// When a DSO's path::CWD is None, it falls back to this value.
++#[used]
++#[unsafe(no_mangle)]
++pub static mut __relibc_init_cwd_ptr: usize = 0;
++
++/// CWD string length injected by ld_so for shared libraries.
++#[used]
++#[unsafe(no_mangle)]
++pub static mut __relibc_init_cwd_len: usize = 0;
++
+ #[inline]
+ pub fn current_namespace_fd() -> usize {
+     // Check ld_so-injected ns_fd first (for shared libraries).
+diff -ruN a/src/ld_so/linker.rs b/src/ld_so/linker.rs
+--- a/src/ld_so/linker.rs	2026-03-13 12:36:26.954463458 -0400
++++ b/src/ld_so/linker.rs	2026-03-13 12:36:27.008222090 -0400
+@@ -1029,6 +1029,21 @@
+                     symbol.as_ptr().cast::<usize>().write(proc_fd);
+                 }
+             }
++
++            // Inject CWD into the DSO so relative path resolution works.
++            // Each DSO has its own path::CWD static (initialized to None).
++            // Without this injection, open("src/main.rs") returns ENOENT.
++            if let Some((ptr_sym, _)) = obj.get_sym("__relibc_init_cwd_ptr") {
++                if let Some((len_sym, _)) = obj.get_sym("__relibc_init_cwd_len") {
++                    if let Some(cwd) = crate::platform::sys::path::clone_cwd() {
++                        let cwd_leaked: &'static str = alloc::boxed::Box::leak(cwd);
++                        unsafe {
++                            ptr_sym.as_ptr().cast::<usize>().write(cwd_leaked.as_ptr() as usize);
++                            len_sym.as_ptr().cast::<usize>().write(cwd_leaked.len());
++                        }
++                    }
++                }
++            }
+         }
+ 
+         obj.run_init();
+diff -ruN a/src/platform/redox/path.rs b/src/platform/redox/path.rs
+--- a/src/platform/redox/path.rs	2026-03-13 12:36:26.954623038 -0400
++++ b/src/platform/redox/path.rs	2026-03-13 12:36:27.008255553 -0400
+@@ -92,7 +92,14 @@
+ pub fn canonicalize(path: &str) -> Result<String> {
+     let _siglock = tmp_disable_signals();
+     let cwd_guard = CWD.lock();
+-    canonicalize_with_cwd_internal(cwd_guard.as_deref(), path)
++    let cwd = match cwd_guard.as_deref() {
++        Some(c) => Some(alloc::string::String::from(c)),
++        None => {
++            drop(cwd_guard);
++            get_injected_cwd()
++        }
++    };
++    canonicalize_with_cwd_internal(cwd.as_deref(), path)
+ }
+ 
+ // TODO: arraystring?
+@@ -108,6 +115,27 @@
+     CWD.lock().clone()
+ }
+ 
++/// Read CWD from ld_so-injected statics (for shared libraries).
++/// Each DSO has its own CWD static initialized to None. The dynamic
++/// linker injects the main binary's CWD via __relibc_init_cwd_ptr/len
++/// so relative path resolution works in DSO code.
++fn get_injected_cwd() -> Option<alloc::string::String> {
++    unsafe {
++        let ptr = redox_rt::__relibc_init_cwd_ptr;
++        let len = redox_rt::__relibc_init_cwd_len;
++        if ptr != 0 && len != 0 {
++            let bytes = core::slice::from_raw_parts(ptr as *const u8, len);
++            if let Ok(s) = core::str::from_utf8(bytes) {
++                // Initialize our CWD from the injected value so subsequent
++                // calls don't need to check the injected statics again.
++                set_cwd_manual(s.into());
++                return Some(alloc::string::String::from(s));
++            }
++        }
++    }
++    None
++}
++
+ // TODO: Move to redox-rt, or maybe part of it?
+ pub fn open(path: &str, flags: usize) -> Result<usize> {
+     // TODO: SYMLOOP_MAX
+@@ -117,7 +145,19 @@
+     let mut path = path;
+ 
+     for _ in 0..MAX_LEVEL {
+-        let canon = canonicalize_with_cwd_internal(CWD.lock().as_deref(), path)?;
++        let cwd_val = {
++            let guard = CWD.lock();
++            match guard.as_deref() {
++                Some(c) => Some(alloc::string::String::from(c)),
++                None => {
++                    // Drop the lock BEFORE calling get_injected_cwd(),
++                    // which calls set_cwd_manual() → CWD.lock() internally.
++                    drop(guard);
++                    get_injected_cwd()
++                }
++            }
++        };
++        let canon = canonicalize_with_cwd_internal(cwd_val.as_deref(), path)?;
+ 
+         let open_res = if canon.starts_with(libcscheme::LIBC_SCHEME) {
+             libcscheme::open(&canon, flags)

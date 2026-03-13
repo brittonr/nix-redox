@@ -1,0 +1,28 @@
+diff -ruN a/src/platform/redox/mod.rs b/src/platform/redox/mod.rs
+--- a/src/platform/redox/mod.rs	2026-03-13 12:36:26.992794250 -0400
++++ b/src/platform/redox/mod.rs	2026-03-13 12:36:27.046022276 -0400
+@@ -294,6 +294,24 @@
+     }
+ 
+     fn fcntl(fd: c_int, cmd: c_int, args: c_ulonglong) -> Result<c_int> {
++        use crate::header::fcntl::{F_GETLK, F_SETLK, F_SETLKW, F_OFD_GETLK, F_OFD_SETLK, F_OFD_SETLKW};
++        // Redox does not implement POSIX file locking. Forwarding F_SETLKW to
++        // the kernel hangs indefinitely (e.g., cargo's .package-cache lock).
++        // Return success immediately, matching the flock() no-op.
++        match cmd {
++            F_SETLK | F_SETLKW | F_OFD_SETLK | F_OFD_SETLKW => return Ok(0),
++            F_GETLK | F_OFD_GETLK => {
++                // For GETLK, set l_type = F_UNLCK to indicate no conflicting lock
++                if args != 0 {
++                    unsafe {
++                        let flock = args as *mut crate::header::fcntl::flock;
++                        (*flock).l_type = 2; // F_UNLCK
++                    }
++                }
++                return Ok(0);
++            }
++            _ => {}
++        }
+         Ok(syscall::fcntl(fd as usize, cmd as usize, args as usize)? as c_int)
+     }
+ 

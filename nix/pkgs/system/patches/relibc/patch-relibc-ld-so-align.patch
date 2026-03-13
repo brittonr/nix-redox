@@ -1,0 +1,20 @@
+diff -ruN a/src/ld_so/dso.rs b/src/ld_so/dso.rs
+--- a/src/ld_so/dso.rs	2026-03-13 12:36:26.917050508 -0400
++++ b/src/ld_so/dso.rs	2026-03-13 12:36:26.970325853 -0400
+@@ -489,10 +489,14 @@
+         let bounds = {
+             let mut bounds_opt: Option<(usize, usize)> = None;
+             for ph in elf.elf_program_headers() {
+-                let voff = ph.p_vaddr(endian) % ph.p_align(endian);
++                // Guard against p_align=0 (valid per ELF spec for non-PT_LOAD segments
++                // like PT_NOTE, PT_GNU_STACK, PT_GNU_RELRO). Treat 0 as 1 to avoid
++                // division-by-zero in the modulo and next_multiple_of operations.
++                let align = core::cmp::max(ph.p_align(endian), 1);
++                let voff = ph.p_vaddr(endian) % align;
+                 let vaddr = (ph.p_vaddr(endian) - voff) as usize;
+                 let vsize = ((ph.p_memsz(endian) + voff) as usize)
+-                    .next_multiple_of(ph.p_align(endian) as usize);
++                    .next_multiple_of(align as usize);
+ 
+                 match ph.p_type(endian) {
+                     elf::PT_DYNAMIC => {

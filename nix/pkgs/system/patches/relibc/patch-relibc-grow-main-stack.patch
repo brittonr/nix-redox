@@ -1,0 +1,89 @@
+diff -ruN a/src/start.rs b/src/start.rs
+--- a/src/start.rs	2026-03-13 12:36:26.803294663 -0400
++++ b/src/start.rs	2026-03-13 12:36:26.858183194 -0400
+@@ -8,7 +8,7 @@
+ 
+ use crate::{
+     ALLOCATOR,
+-    header::{libgen, stdio, stdlib},
++    header::{libgen, stdio, stdlib, sys_mman},
+     ld_so::{self, linker::Linker},
+     platform::{self, Pal, Sys, get_auxvs, types::*},
+     sync::mutex::Mutex,
+@@ -263,6 +263,76 @@
+         }
+     }
+ 
++    // Grow the main thread stack before calling main().
++    // The Redox kernel only gives ~8KB to the initial thread, which is
++    // too small for compilers and other stack-heavy programs. Allocate
++    // an 8MB stack via mmap, pre-fault all pages (Redox doesn't reliably
++    // demand-page anonymous mappings), and run main() on the new stack.
++    #[cfg(target_arch = "x86_64")]
++    {
++        const NEW_STACK_SIZE: usize = 8 * 1024 * 1024; // 8 MB
++
++        let stack_ptr = unsafe {
++            sys_mman::mmap(
++                core::ptr::null_mut(),
++                NEW_STACK_SIZE,
++                sys_mman::PROT_READ | sys_mman::PROT_WRITE,
++                sys_mman::MAP_PRIVATE | sys_mman::MAP_ANONYMOUS,
++                -1,
++                0,
++            )
++        };
++
++        if stack_ptr != sys_mman::MAP_FAILED {
++            // Pre-fault every page so the kernel allocates physical memory.
++            // Without this, stack growth may cause a kernel trap instead of
++            // a page fault that allocates a new physical page.
++            unsafe {
++                let base = stack_ptr as *mut u8;
++                let mut offset = 0;
++                while offset < NEW_STACK_SIZE {
++                    core::ptr::write_volatile(base.add(offset), 0);
++                    offset += 4096;
++                }
++            }
++
++            // Stack grows downward. Align top to 16 bytes for SysV ABI.
++            // The `call` instruction will push 8 bytes (return address),
++            // making RSP = 16n+8 at the callee entry — as the ABI requires.
++            let new_rsp = (stack_ptr as usize + NEW_STACK_SIZE) & !15;
++
++            let main_fn_ptr = main as usize;
++            let exit_code: i32;
++
++            // Switch RSP to the new stack, call main(), switch back.
++            // RBX is callee-saved, so main() preserves it for us.
++            unsafe {
++                core::arch::asm!(
++                    "push rbx",
++                    "mov rbx, rsp",
++                    "mov rsp, {new_rsp}",
++                    "call {main_fn}",
++                    "mov rsp, rbx",
++                    "pop rbx",
++                    new_rsp = in(reg) new_rsp,
++                    main_fn = in(reg) main_fn_ptr,
++                    in("rdi") argc as i64,
++                    in("rsi") platform::argv as usize,
++                    in("rdx") platform::environ as usize,
++                    lateout("rax") exit_code,
++                    out("rcx") _,
++                    out("r8") _,
++                    out("r9") _,
++                    out("r10") _,
++                    out("r11") _,
++                );
++            }
++
++            unsafe { stdlib::exit(exit_code) };
++        }
++        // mmap failed — fall through to run main() on the original stack
++    }
++
+     // not argv or envp, because programs like bash try to modify this *const* pointer :|
+     unsafe { stdlib::exit(main(argc, platform::argv, platform::environ)) };
+ 

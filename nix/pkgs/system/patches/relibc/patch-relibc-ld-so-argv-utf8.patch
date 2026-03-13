@@ -1,0 +1,22 @@
+diff -ruN a/src/ld_so/start.rs b/src/ld_so/start.rs
+--- a/src/ld_so/start.rs	2026-03-13 12:36:27.067963634 -0400
++++ b/src/ld_so/start.rs	2026-03-13 12:36:27.122516325 -0400
+@@ -54,13 +54,11 @@
+     let mut argv = Vec::new();
+     while unsafe { *ptr != 0 } {
+         let arg = unsafe { *ptr };
+-        match unsafe { CStr::from_ptr(arg as *const c_char).to_str() } {
+-            Ok(arg_str) => argv.push(arg_str.to_owned()),
+-            _ => {
+-                eprintln!("ld.so: failed to parse argv[{}]", argv.len());
+-                unistd::_exit(1);
+-            }
+-        }
++        let cstr = unsafe { CStr::from_ptr(arg as *const c_char) };
++        // Use lossy conversion instead of crashing on non-UTF-8 argv entries.
++        // POSIX allows arbitrary bytes in argv, and ld_so only uses argv[0].
++        // The loaded program reads argv from the stack directly, not from this Vec.
++        argv.push(cstr.to_string_lossy().into_owned());
+         ptr = unsafe { ptr.add(1) };
+     }
+ 

@@ -1,0 +1,22 @@
+diff -ruN a/src/pthread/mod.rs b/src/pthread/mod.rs
+--- a/src/pthread/mod.rs	2026-03-13 12:36:26.768275513 -0400
++++ b/src/pthread/mod.rs	2026-03-13 12:36:26.820501189 -0400
+@@ -162,6 +162,18 @@
+     new_tcb.pthread.stack_base = stack_base;
+     new_tcb.pthread.stack_size = stack_size;
+ 
++    // Pre-fault all stack pages: the Redox kernel may not demand-page
++    // anonymous mmap regions properly, causing crashes when the stack
++    // grows beyond the initially committed pages.
++    unsafe {
++        let page_size = 4096usize;
++        let mut offset = 0;
++        while offset < stack_size {
++            core::ptr::write_volatile((stack_base as *mut u8).add(offset), 0);
++            offset += page_size;
++        }
++    }
++
+     new_tcb.masters_ptr = current_tcb.masters_ptr;
+     new_tcb.masters_len = current_tcb.masters_len;
+     new_tcb.linker_ptr = current_tcb.linker_ptr;

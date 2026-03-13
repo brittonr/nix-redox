@@ -1,0 +1,21 @@
+diff -ruN a/src/tools/cargo/crates/cargo-util/src/paths.rs b/src/tools/cargo/crates/cargo-util/src/paths.rs
+--- a/src/tools/cargo/crates/cargo-util/src/paths.rs	2026-03-13 12:37:41.645644679 -0400
++++ b/src/tools/cargo/crates/cargo-util/src/paths.rs	2026-03-13 12:37:48.844347176 -0400
+@@ -212,7 +212,7 @@
+         use std::os::unix::fs::PermissionsExt;
+ 
+         // these constants are u16 on macOS
+-        let mask = u32::from(libc::S_IRWXU | libc::S_IRWXG | libc::S_IRWXO);
++        let mask = (libc::S_IRWXU | libc::S_IRWXG | libc::S_IRWXO) as u32;
+         let mode = meta.permissions().mode() & mask;
+ 
+         std::fs::Permissions::from_mode(mode)
+@@ -952,7 +952,7 @@
+ 
+         let new_perms = std::fs::metadata(tmp.path()).unwrap().permissions();
+ 
+-        let mask = u32::from(libc::S_IRWXU | libc::S_IRWXG | libc::S_IRWXO);
++        let mask = (libc::S_IRWXU | libc::S_IRWXG | libc::S_IRWXO) as u32;
+         assert_eq!(original_perms.mode(), new_perms.mode() & mask);
+     }
+ 

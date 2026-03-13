@@ -1,0 +1,87 @@
+diff -ruN a/src/header/unistd/mod.rs b/src/header/unistd/mod.rs
+--- a/src/header/unistd/mod.rs	2026-03-13 12:36:27.030148600 -0400
++++ b/src/header/unistd/mod.rs	2026-03-13 12:36:27.084363417 -0400
+@@ -403,6 +403,83 @@
+     }
+ }
+ 
++/// execvpe — execute a file with PATH search and explicit envp.
++///
++/// GNU extension. Like execvp but takes an explicit environment
++/// array instead of using the global `environ`. This avoids the
++/// race/visibility bug on Redox where updating the global environ
++/// pointer from Rust std doesn't reach relibc's execv() reader.
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn execvpe(
++    file: *const c_char,
++    argv: *const *mut c_char,
++    envp: *const *mut c_char,
++) -> c_int {
++    let file = unsafe { CStr::from_ptr(file) };
++
++    if file.to_bytes().contains(&b'/')
++        || (cfg!(target_os = "redox") && file.to_bytes().contains(&b':'))
++    {
++        // Absolute or scheme path — call execve directly with explicit envp.
++        unsafe { execve(file.as_ptr(), argv, envp) }
++    } else {
++        let mut error = errno::ENOENT;
++
++        // Search PATH for the executable. Use the envp array to find PATH,
++        // not the global environ (which may be stale).
++        let path_val = unsafe { find_in_envp(envp, b"PATH") };
++        if let Some(path_env) = path_val {
++            for path in path_env.split(|b| *b == PATH_SEPARATOR) {
++                let file_bytes = file.to_bytes();
++                let length = file_bytes.len() + path.len() + 2;
++                let mut program = alloc::vec::Vec::with_capacity(length);
++                program.extend_from_slice(path);
++                program.push(b'/');
++                program.extend_from_slice(file_bytes);
++                program.push(b'\0');
++
++                let program_c = CStr::from_bytes_with_nul(&program).unwrap();
++                unsafe { execve(program_c.as_ptr(), argv, envp) };
++
++                match platform::ERRNO.get() {
++                    errno::ENOENT => (),
++                    other => error = other,
++                }
++            }
++        }
++
++        platform::ERRNO.set(error);
++        -1
++    }
++}
++
++/// Search an envp array for a variable by name. Returns a slice of the
++/// value (after the '=') or None if not found.
++unsafe fn find_in_envp<'a>(envp: *const *mut c_char, name: &[u8]) -> Option<&'a [u8]> {
++    if envp.is_null() {
++        return None;
++    }
++    let mut ptr = envp;
++    while !unsafe { (*ptr).is_null() } {
++        let entry = unsafe { *ptr } as *const u8;
++        // Compute string length manually (avoids cross-module strlen import).
++        let mut len = 0usize;
++        while unsafe { *entry.add(len) } != 0 {
++            len += 1;
++        }
++        let entry_bytes = unsafe { core::slice::from_raw_parts(entry, len) };
++        // Check if entry starts with "name="
++        if entry_bytes.len() > name.len()
++            && entry_bytes[..name.len()] == *name
++            && entry_bytes[name.len()] == b'='
++        {
++            return Some(&entry_bytes[name.len() + 1..]);
++        }
++        ptr = unsafe { ptr.add(1) };
++    }
++    None
++}
++
+ /// See <https://pubs.opengroup.org/onlinepubs/9799919799/functions/fchdir.html>.
+ #[unsafe(no_mangle)]
+ pub extern "C" fn fchdir(fildes: c_int) -> c_int {

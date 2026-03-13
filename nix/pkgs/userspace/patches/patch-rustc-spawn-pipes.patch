@@ -1,0 +1,58 @@
+diff -ruN a/library/std/src/sys/process/unix/unix.rs b/library/std/src/sys/process/unix/unix.rs
+--- a/library/std/src/sys/process/unix/unix.rs	2026-03-13 12:37:01.595954248 -0400
++++ b/library/std/src/sys/process/unix/unix.rs	2026-03-13 12:37:09.260764077 -0400
+@@ -11,6 +11,7 @@
+ use libc::{gid_t, uid_t};
+ 
+ use super::common::*;
++#[allow(unused_imports)]
+ use crate::io::{self, Error, ErrorKind};
+ use crate::num::NonZero;
+ use crate::process::StdioPipes;
+@@ -52,6 +53,7 @@
+ ////////////////////////////////////////////////////////////////////////////////
+ 
+ impl Command {
++    #[allow(unused_mut)]
+     pub fn spawn(
+         &mut self,
+         default: Stdio,
+@@ -117,7 +119,10 @@
+             // pipe I/O up to PIPE_BUF bytes should be atomic, and then
+             // we want to be sure we *don't* run at_exit destructors as
+             // we're being torn down regardless
++            #[cfg(not(target_os = "redox"))]
+             rtassert!(output.write(&bytes).is_ok());
++            #[cfg(target_os = "redox")]
++            let _ = &bytes; // suppress unused warning
+             unsafe { libc::_exit(1) }
+         }
+ 
+@@ -132,6 +137,19 @@
+ 
+         // Safety: We obtained the pidfd (on Linux) using SOCK_SEQPACKET, so it's valid.
+         let mut p = unsafe { Process::new(pid, pidfd) };
++        // REDOX PATCH: Skip CLOEXEC error pipe on Redox.
++        // On Redox, blocking pipe reads crash (Invalid opcode) when the
++        // child process runs for non-trivial time. Close the pipe and
++        // return success. If exec() failed, waitpid() will report exit.
++        #[cfg(target_os = "redox")]
++        {
++            drop(input);
++            #[allow(unused_mut)]
++            return Ok((p, ours));
++        }
++
++        #[cfg(not(target_os = "redox"))]
++        {
+         let mut bytes = [0; 8];
+ 
+         // loop to handle EINTR
+@@ -162,6 +180,7 @@
+                 }
+             }
+         }
++        }
+     }
+ 
+     // WatchOS and TVOS headers mark the `fork`/`exec*` functions with

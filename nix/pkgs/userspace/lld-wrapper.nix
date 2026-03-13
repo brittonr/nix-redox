@@ -6,7 +6,7 @@
 #   fatal runtime error: failed to initiate panic, error 0, aborting
 #
 # Fix: spawn a thread with 16MB stack and exec() lld from it.
-# Same pattern as patch-rustc-main-stack.py for rustc.
+# Same pattern as patch-rustc-main-stack.patch for rustc.
 #
 # Cross-compiled for Redox using rustc directly (no cargo needed for a
 # single-file binary with no dependencies beyond std).

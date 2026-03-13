@@ -1,0 +1,35 @@
+diff -ruN a/compiler/rustc_codegen_ssa/src/back/command.rs b/compiler/rustc_codegen_ssa/src/back/command.rs
+--- a/compiler/rustc_codegen_ssa/src/back/command.rs	2026-03-13 12:36:56.028376898 -0400
++++ b/compiler/rustc_codegen_ssa/src/back/command.rs	2026-03-13 12:37:03.773712880 -0400
+@@ -96,7 +96,14 @@
+     }
+ 
+     pub(crate) fn output(&mut self) -> io::Result<Output> {
+-        self.command().output()
++        // On Redox, poll() crashes when reading from piped child processes.
++        // Use inherited stdio (linker output goes to terminal) and status()
++        // to avoid triggering Rust std's read2()/poll() code path.
++        let status = self.command()
++            .stdout(process::Stdio::inherit())
++            .stderr(process::Stdio::inherit())
++            .status()?;
++        Ok(Output { status, stdout: Vec::new(), stderr: Vec::new() })
+     }
+ 
+     pub(crate) fn command(&self) -> process::Command {
+diff -ruN a/compiler/rustc_codegen_ssa/src/back/link.rs b/compiler/rustc_codegen_ssa/src/back/link.rs
+--- a/compiler/rustc_codegen_ssa/src/back/link.rs	2026-03-13 12:36:56.028431971 -0400
++++ b/compiler/rustc_codegen_ssa/src/back/link.rs	2026-03-13 12:37:03.774121376 -0400
+@@ -1589,9 +1589,9 @@
+     // The theory is that this is then accepted on all linkers and the linker
+     // will read all its options out of there instead of looking at the command line.
+     if !cmd.very_likely_to_exceed_some_spawn_limit() {
+-        match cmd.command().stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+-            Ok(child) => {
+-                let output = child.wait_with_output();
++        match cmd.command().stdout(Stdio::inherit()).stderr(Stdio::inherit()).spawn() {
++            Ok(mut child) => {
++                let output = child.wait().map(|status| std::process::Output { status, stdout: Vec::new(), stderr: Vec::new() });
+                 flush_linked_file(&output, out_filename)?;
+                 return output;
+             }

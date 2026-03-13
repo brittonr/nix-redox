@@ -1,0 +1,58 @@
+diff -ruN a/library/std/src/sys/fs/unix.rs b/library/std/src/sys/fs/unix.rs
+--- a/library/std/src/sys/fs/unix.rs	2026-03-13 12:37:46.643572269 -0400
++++ b/library/std/src/sys/fs/unix.rs	2026-03-13 12:37:54.529628839 -0400
+@@ -2062,11 +2062,21 @@
+     if r.is_null() {
+         return Err(io::Error::last_os_error());
+     }
+-    Ok(PathBuf::from(OsString::from_vec(unsafe {
++    let path_buf = PathBuf::from(OsString::from_vec(unsafe {
+         let buf = CStr::from_ptr(r).to_bytes().to_vec();
+         libc::free(r as *mut _);
+         buf
+-    })))
++    }));
++    // On Redox OS, realpath() returns paths with "file:" URL scheme prefix
++    // (e.g., "file:/tmp/hello"). Strip it to get a standard absolute path.
++    #[cfg(target_os = "redox")]
++    {
++        let s = path_buf.to_string_lossy();
++        if s.starts_with("file:") {
++            return Ok(PathBuf::from(&s[5..]));
++        }
++    }
++    Ok(path_buf)
+ }
+ 
+ fn open_from(from: &Path) -> io::Result<(crate::fs::File, crate::fs::Metadata)> {
+diff -ruN a/library/std/src/sys/pal/unix/os.rs b/library/std/src/sys/pal/unix/os.rs
+--- a/library/std/src/sys/pal/unix/os.rs	2026-03-13 12:37:46.644340871 -0400
++++ b/library/std/src/sys/pal/unix/os.rs	2026-03-13 12:37:54.529733516 -0400
+@@ -150,6 +150,8 @@
+ 
+ #[cfg(not(target_os = "espidf"))]
+ pub fn getcwd() -> io::Result<PathBuf> {
++    fn getcwd_raw() -> io::Result<PathBuf> {
++
+     let mut buf = Vec::with_capacity(512);
+     loop {
+         unsafe {
+@@ -173,6 +175,18 @@
+             buf.reserve(1);
+         }
+     }
++    }
++    let result = getcwd_raw()?;
++    // On Redox OS, getcwd() returns paths with "file:" URL scheme prefix.
++    // Strip it to get a standard absolute path.
++    #[cfg(target_os = "redox")]
++    {
++        let s = result.to_string_lossy();
++        if s.starts_with("file:") {
++            return Ok(PathBuf::from(&s[5..]));
++        }
++    }
++    Ok(result)
+ }
+ 
+ #[cfg(target_os = "espidf")]

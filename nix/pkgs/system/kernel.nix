@@ -27,12 +27,16 @@ let
     name = "kernel-src-patched";
     src = kernel-src;
 
-    nativeBuildInputs = [ pkgs.python3 ];
-
     phases = [
       "unpackPhase"
       "patchPhase"
       "installPhase"
+    ];
+
+    # Fix zeroed_phys_contiguous: initialize ALL 2^order frames and
+    # use bulk deallocate_p2frame on free (prevents buddy allocator corruption)
+    patches = [
+      ./patches/kernel/patch-kernel-p2frame-init.patch
     ];
 
     postUnpack = ''
@@ -45,21 +49,13 @@ let
       chmod -R u+w $sourceRoot/redox-path
     '';
 
-    patchPhase = ''
-      runHook prePatch
-
+    postPatch = ''
       # Replace fdt git dependency with path
       if grep -q 'fdt = { git = "https://github.com/repnop/fdt.git"' Cargo.toml; then
         substituteInPlace Cargo.toml \
           --replace-fail 'fdt = { git = "https://github.com/repnop/fdt.git", rev = "2fb1409edd1877c714a0aa36b6a7c5351004be54" }' \
                          'fdt = { path = "${fdt-src}" }'
       fi
-
-      # Fix zeroed_phys_contiguous: initialize ALL 2^order frames and
-      # use bulk deallocate_p2frame on free (prevents buddy allocator corruption)
-      python3 ${./patches/patch-kernel-p2frame-init.py} .
-
-      runHook postPatch
     '';
 
     installPhase = ''

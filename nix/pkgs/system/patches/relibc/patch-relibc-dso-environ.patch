@@ -1,0 +1,25 @@
+diff -ruN a/src/header/stdlib/mod.rs b/src/header/stdlib/mod.rs
+--- a/src/header/stdlib/mod.rs	2026-03-13 12:36:26.693499858 -0400
++++ b/src/header/stdlib/mod.rs	2026-03-13 12:36:26.746431548 -0400
+@@ -454,6 +454,21 @@
+ /// See <https://pubs.opengroup.org/onlinepubs/9799919799/functions/getenv.html>.
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn getenv(name: *const c_char) -> *mut c_char {
++    // DSO environ fix: If platform::environ is null, try to initialize it from
++    // __relibc_init_environ. This handles the case where the DSO's init_array
++    // couldn't set environ due to GLOB_DAT symbol interposition (the init_array
++    // reads __relibc_init_environ from the main binary's copy via GOT, which
++    // may be null if the main binary's run_init hasn't happened yet).
++    if unsafe { platform::environ.is_null() } {
++        unsafe {
++            unsafe extern "C" {
++                static __relibc_init_environ: *mut *mut c_char;
++            }
++            if !__relibc_init_environ.is_null() {
++                platform::environ = __relibc_init_environ;
++            }
++        }
++    }
+     unsafe { find_env(name) }
+         .map(|val| val.1)
+         .unwrap_or(ptr::null_mut())

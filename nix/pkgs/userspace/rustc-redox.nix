@@ -367,133 +367,42 @@ pkgs.stdenv.mkDerivation {
     ls -la build/cache/${stage0Date}/
   '';
 
+  patches = [
+    # Sysroot detection fallback for Redox (dladdr/argv[0] may not work)
+    ./patches/patch-rustc-sysroot.patch
+    # CMAKE_SYSTEM_NAME for Redox as UnixPaths
+    ./patches/patch-rustc-cmake.patch
+    # Disable generate-arange-section (dead-stripped cl::opt causes LLVM rejection)
+    ./patches/patch-rustc-arange.patch
+    # Force-link LLVM X86 target (constructors dead-stripped in librustc_driver.so)
+    ./patches/patch-bootstrap-force-link.patch
+    # Grow main thread stack (kernel gives ~8KB, rustc needs ~12KB)
+    ./patches/patch-rustc-main-stack.patch
+    # Avoid piped linker output (Redox poll() crash)
+    ./patches/patch-rustc-linker-pipes.patch
+    # Skip CLOEXEC error pipe reading in spawn() (crashes on Redox)
+    ./patches/patch-rustc-spawn-pipes.patch
+    # Replace poll()-based read2() with sequential reads (poll() crashes)
+    ./patches/patch-rustc-read2-pipes.patch
+    # Replace poll()-based read2() in cargo-util (poll() hangs build scripts)
+    ./patches/patch-cargo-read2-pipes.patch
+    # Replace poll()-based jobserver token acquisition (poll() on pipes hangs)
+    ./patches/patch-jobserver-poll.patch
+    # Cargo heartbeat diagnostics (CARGO_DIAG_LOG for parallel build debugging)
+    ./patches/patch-cargo-heartbeat.patch
+    # Use execvpe() on Redox for env propagation through exec()
+    ./patches/patch-rustc-execvpe.patch
+    # --env-set workaround for env!() macros (defense-in-depth)
+    ./patches/patch-cargo-env-set.patch
+    # cargo-util S_IRWXU type mismatch (i32 vs u32 on Redox)
+    ./patches/patch-cargo-irwxu.patch
+    # Strip "file:" URL scheme prefix from OS-returned paths (std + cargo)
+    ./patches/patch-std-redox-paths.patch
+    ./patches/patch-cargo-redox-paths.patch
+  ];
+
   configurePhase = ''
     runHook preConfigure
-
-    echo "=== Applying Redox patches ==="
-
-    # Patch 1: available_parallelism — SKIPPED
-    # The upstream libc crate for Redox doesn't define _SC_NPROCESSORS_ONLN.
-    # The Redox fork patches the vendored libc, but we use the upstream tarball.
-    # std handles the fallback gracefully (returns Err or defaults to 1).
-
-    # Patch 2: Sysroot detection for Redox
-    # On Redox: dladdr() may not work, and argv[0] may not be a symlink.
-    # Fallback: try current_exe() path (from /scheme/sys/exe), then known paths.
-    python3 ${./patch-rustc-sysroot.py}
-
-    # Patch 3: crt_static_allows_dylibs — REMOVED
-    # Upstream already has crt_static_allows_dylibs: true AND dynamic_linking: true.
-    # The old patch was BREAKING this by setting it to false, preventing proc-macros.
-
-    # Patch 4: CMAKE_SYSTEM_NAME for Redox (commit 97b598cb)
-    python3 ${./patch-rustc-cmake.py}
-
-    # Patch 5: Disable generate-arange-section for Redox target
-    # The Redox target spec has generate_arange_section: true (inherited default).
-    # When rustc passes -generate-arange-section to LLVM, the cl::opt registration
-    # from libLLVMAsmPrinter.a may be dead-stripped during static linking of
-    # librustc_driver.so, causing LLVM to reject the unknown flag.
-    # Fix: set generate_arange_section: false in the Redox base target options.
-    python3 ${./patch-rustc-arange.py}
-
-    # Patch 6: Force-link LLVM X86 target in bootstrap RUSTFLAGS
-    # Static linking of LLVM into librustc_driver.so dead-strips the X86 backend
-    # because registration functions are only referenced via constructors.
-    # This causes "no targets registered" at runtime. Fix: patch the bootstrap
-    # to add -Wl,-u,<symbol> for Redox targets.
-    python3 ${./patch-bootstrap-force-link.py}
-
-    # Patch 6b: Grow main thread stack on Redox
-    # The Redox kernel gives main threads ~8KB of stack, but rustc needs ~12KB
-    # just for session setup before spawning its worker thread. Since the kernel
-    # doesn't respect PT_GNU_STACK, we patch main() to spawn a 16MB thread.
-    python3 ${./patch-rustc-main-stack.py}
-
-    # Patch: Avoid piped linker output (Redox poll() bug causes crash).
-    # Rust std's read2() uses poll() to read from piped stdout/stderr.
-    # On Redox, poll() has a bug that causes Invalid opcode (ud2) when
-    # the child process runs for more than trivial time.
-    # Fix: Use Stdio::inherit() so linker output goes directly to terminal.
-    python3 ${./patch-rustc-linker-pipes.py} .
-
-    # Patch: Skip CLOEXEC error pipe reading in spawn() on Redox.
-    # After fork, the parent reads from a CLOEXEC pipe to detect exec failures.
-    # On Redox, this pipe read also crashes. Skip it and rely on waitpid().
-    python3 ${./patch-rustc-spawn-pipes.py} .
-
-    # Patch: Replace poll()-based read2() with sequential reads on Redox.
-    # read2() multiplexes stdout/stderr reading with poll(). On Redox,
-    # poll() crashes. Use simple sequential reads instead.
-    python3 ${./patch-rustc-read2-pipes.py} .
-
-    # Patch: Replace poll()-based read2() in cargo-util with sequential reads.
-    # cargo-util has its OWN read2() (separate from std's) that uses libc::poll()
-    # for build script output capture (exec_with_streaming). On Redox, poll() on
-    # pipes after fork+exec doesn't reliably deliver events, causing build scripts
-    # to hang. The build script writes to its stdout pipe but cargo never polls
-    # the event, so the pipe fills and the child's write blocks.
-    python3 ${./patch-cargo-read2-pipes.py} .
-
-    # Patch: Replace poll()-based token acquisition in the jobserver crate.
-    # Cargo uses a pipe-based jobserver for parallel builds (JOBS>1). The
-    # jobserver's acquire() falls back to poll() when read returns WouldBlock.
-    # On Redox, poll() on pipes hangs, causing cargo to stall after the initial
-    # batch of tokens is consumed. Fix: on Redox, ensure blocking mode and use
-    # plain blocking reads (no poll fallback).
-    python3 ${./patch-jobserver-poll.py} .
-
-    # Patch: Cargo heartbeat diagnostics for parallel build investigation.
-    # When CARGO_DIAG_LOG is set to a file path, cargo emits periodic
-    # status lines (~5s interval) showing active jobs, pending jobs,
-    # token count, and progress. Used to diagnose JOBS>1 hangs — reveals
-    # which job cargo is stuck waiting for.
-    python3 ${./patch-cargo-heartbeat.py} .
-
-    # Patch: Use execvpe() on Redox to propagate env vars through exec().
-    # Root cause: Rust std's do_exec() writes to the global `environ`
-    # pointer then calls execvp(). On Redox, the global pointer update
-    # doesn't reliably reach relibc's execv() reader. Fix: call execvpe()
-    # which passes the envp directly to execve(), bypassing the global
-    # environ entirely.
-    python3 ${./patch-rustc-execvpe.py} .
-
-    # Patch: --env-set workaround for env!() macros (defense-in-depth).
-    #
-    # Makes cargo pass env vars via --env-set CLI flag in addition to
-    # Command::env(), ensuring rustc sees them in logical_env regardless
-    # of whether the process environment propagates correctly.
-    #
-    # History: This was originally REQUIRED because DSO-linked rustc
-    # (librustc_driver.so) had a null environ pointer — each DSO gets its
-    # own relibc statics, and ld_so wrote NULL into __relibc_init_environ
-    # before relibc_start_v1 set the real environ from kernel envp.
-    #
-    # Fixed (2026-03-13): patch-relibc-environ-dso-init.py broadcasts
-    # environ to __relibc_init_environ after relibc_start_v1 sets it.
-    # Combined with getenv self-init (patch-relibc-dso-environ.py), DSOs
-    # now see the full process environ. Validated: env-propagation-simple
-    # and env-propagation-heavy tests pass (option_env! returns correct
-    # values in DSO context, even after build.rs fork storms).
-    #
-    # Kept as defense-in-depth: --env-set provides a second path for env
-    # vars to reach rustc, protecting against any remaining edge cases
-    # in relibc's environ propagation (e.g., if a future patch breaks
-    # the __relibc_init_environ chain). Can be removed once DSO environ
-    # has more runtime mileage.
-    python3 ${./patch-cargo-env-set.py} .
-
-    # Patch 7: cargo-util S_IRWXU type mismatch
-    # On Redox, libc::S_IRWXU etc. are i32 (not u32 like Linux).
-    # Cargo uses u32::from() which doesn't accept i32.
-    python3 ${./patch-cargo-irwxu.py}
-
-    # Patch 8: Strip "file:" URL scheme prefix from OS-returned paths.
-    # On Redox, kernel syscalls (realpath, getcwd) return paths like
-    # "file:/tmp/hello" instead of "/tmp/hello". This breaks path handling
-    # throughout the standard library and cargo. Fix both std and cargo.
-    python3 ${./patch-std-redox-paths.py} .
-    python3 ${./patch-cargo-redox-paths.py} .
 
     echo "=== Generating config.toml ==="
 

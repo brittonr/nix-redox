@@ -1,0 +1,27 @@
+diff -ruN a/src/start.rs b/src/start.rs
+--- a/src/start.rs	2026-03-13 12:36:26.729017703 -0400
++++ b/src/start.rs	2026-03-13 12:36:26.783901585 -0400
+@@ -215,6 +215,23 @@
+         unsafe { platform::environ = platform::OUR_ENVIRON.unsafe_mut().as_mut_ptr() };
+     }
+ 
++    // Broadcast environ to DSOs: update __relibc_init_environ so that DSOs
++    // can lazily initialize their local environ via the getenv() fallback.
++    //
++    // Timeline of the problem:
++    //   1. ld_so loads DSOs and calls run_init() → writes its own environ
++    //      (NULL at that point) into each DSO's __relibc_init_environ
++    //   2. relibc_start_v1 (here) sets platform::environ from kernel envp
++    //   3. __relibc_init_environ in the main binary is still NULL
++    //   4. DSO getenv() fallback reads __relibc_init_environ via GLOB_DAT
++    //      (resolves to main binary's copy) → NULL → fails
++    //
++    // Fix: write the now-valid environ pointer into __relibc_init_environ.
++    // DSOs reference this symbol via GLOB_DAT, so they see the update.
++    unsafe {
++        __relibc_init_environ = platform::environ;
++    }
++
+     let auxvs = unsafe { get_auxvs(sp.auxv().cast()) };
+     unsafe { crate::platform::init(auxvs) };
+     init_array();

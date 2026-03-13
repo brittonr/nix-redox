@@ -1,0 +1,269 @@
+diff -ruN a/src/context/memory.rs b/src/context/memory.rs
+--- a/src/context/memory.rs	2026-03-13 12:36:27.183471045 -0400
++++ b/src/context/memory.rs	2026-03-13 12:36:27.198202489 -0400
+@@ -176,7 +176,7 @@
+                 Provider::Allocated {
+                     phys_contiguous: true,
+                     ..
+-                } => continue,
++                } => continue,  // alloc_order covered by ..
+ 
+                 Provider::PhysBorrowed { base } => Grant::physmap(
+                     base,
+@@ -188,6 +188,7 @@
+                 Provider::Allocated {
+                     ref cow_file_ref,
+                     phys_contiguous: false,
++                    ..
+                 } => Grant::copy_mappings(
+                     grant_base,
+                     grant_base,
+@@ -1056,6 +1057,9 @@
+     Allocated {
+         cow_file_ref: Option<GrantFileRef>,
+         phys_contiguous: bool,
++        /// When phys_contiguous is true, stores the allocation order so
++        /// deallocation can free all 2^order frames in one call.
++        alloc_order: Option<u32>,
+     },
+ 
+     /// The grant is owned, but possibly shared.
+@@ -1115,6 +1119,7 @@
+                 provider: Provider::Allocated {
+                     cow_file_ref: None,
+                     phys_contiguous: false,
++                    alloc_order: None,
+                 },
+             },
+         }
+@@ -1219,13 +1224,22 @@
+         let alloc_order = span.count.next_power_of_two().trailing_zeros();
+         let base = crate::memory::allocate_p2frame(alloc_order).ok_or(Enomem)?;
+ 
+-        for (i, page) in span.pages().enumerate() {
++        // Initialize ALL 2^order frames with RefCount::One, not just span.count.
++        // Excess frames beyond span.count are "dark pages" — owned by the allocation
++        // but not mapped into userspace. Without this, the buddy allocator sees their
++        // zeroed PageInfo as "free" and corrupts the freelist during merge.
++        let total_frames = 1usize << alloc_order;
++        for i in 0..total_frames {
+             let frame = base.next_by(i);
+-
+             get_page_info(frame)
+                 .expect("PageInfo must exist for allocated frame")
+                 .refcount
+                 .store(RefCount::One.to_raw(), Ordering::Relaxed);
++        }
++
++        // Map only the requested span.count pages into the process address space.
++        for (i, page) in span.pages().enumerate() {
++            let frame = base.next_by(i);
+ 
+             unsafe {
+                 let result = mapper
+@@ -1246,6 +1260,7 @@
+                 provider: Provider::Allocated {
+                     cow_file_ref: None,
+                     phys_contiguous: true,
++                    alloc_order: Some(alloc_order),
+                 },
+             },
+         })
+@@ -1295,6 +1310,7 @@
+                     Provider::Allocated {
+                         cow_file_ref: None,
+                         phys_contiguous: false,
++                        alloc_order: None,
+                     }
+                 },
+             },
+@@ -1752,6 +1768,7 @@
+                     CopyMappingsMode::Owned { cow_file_ref } => Provider::Allocated {
+                         cow_file_ref,
+                         phys_contiguous: false,
++                        alloc_order: None,
+                     },
+                     CopyMappingsMode::Borrowed => Provider::AllocatedShared {
+                         is_pinned_userscheme_borrow: false,
+@@ -1899,6 +1916,11 @@
+             Provider::FmapBorrowed { .. } => Some(true),
+         };
+ 
++        let phys_contig_alloc_order = match self.info.provider {
++            Provider::Allocated { alloc_order, phys_contiguous: true, .. } => alloc_order,
++            _ => None,
++        };
++
+         if is_phys_contiguous {
+             let (phys_base, _) = mapper.translate(self.base.start_address()).unwrap();
+             let base_frame = Frame::containing(phys_base);
+@@ -1914,9 +1936,10 @@
+                 }
+             }
+ 
+-            flusher.queue(
++            flusher.queue_with_order(
+                 base_frame,
+                 Some(NonZeroUsize::new(self.info.page_count).unwrap()),
++                phys_contig_alloc_order,
+                 TlbShootdownActions::FREE,
+             );
+         } else {
+@@ -2004,6 +2027,7 @@
+                     } => Provider::Allocated {
+                         cow_file_ref: cow_file_ref.clone(),
+                         phys_contiguous: false,
++                        alloc_order: None,
+                     },
+                     Provider::AllocatedShared { .. } => Provider::AllocatedShared {
+                         is_pinned_userscheme_borrow: false,
+@@ -2047,6 +2071,7 @@
+                     } => Provider::Allocated {
+                         cow_file_ref: None,
+                         phys_contiguous: false,
++                        alloc_order: None,
+                     },
+                     Provider::AllocatedShared { .. } => Provider::AllocatedShared {
+                         is_pinned_userscheme_borrow: false,
+@@ -2060,6 +2085,7 @@
+                             description: Arc::clone(&file_ref.description),
+                         }),
+                         phys_contiguous: false,
++                        alloc_order: None,
+                     },
+                     Provider::External {
+                         ref address_space,
+@@ -2158,10 +2184,12 @@
+                 Provider::Allocated {
+                     cow_file_ref: None,
+                     phys_contiguous: false,
++                    alloc_order: None,
+                 },
+                 Provider::Allocated {
+                     cow_file_ref: None,
+                     phys_contiguous: false,
++                    alloc_order: None,
+                 },
+             ) => true,
+             //(Provider::PhysBorrowed { base: ref lhs }, Provider::PhysBorrowed { base: ref rhs }) => lhs.next_by(self.page_count) == rhs.clone(),
+@@ -2190,6 +2218,7 @@
+             Provider::Allocated {
+                 ref cow_file_ref,
+                 phys_contiguous,
++                ..
+             } => {
+                 // !GRANT_SHARED is equivalent to "GRANT_PRIVATE"
+                 flags.set(GrantFlags::GRANT_SCHEME, cow_file_ref.is_some());
+@@ -2721,6 +2750,17 @@
+         phys_contiguous_count: Option<NonZeroUsize>,
+         actions: TlbShootdownActions,
+     );
++    fn queue_with_order(
++        &mut self,
++        frame: Frame,
++        phys_contiguous_count: Option<NonZeroUsize>,
++        alloc_order: Option<u32>,
++        actions: TlbShootdownActions,
++    ) {
++        // Default: ignore alloc_order, fall back to queue()
++        let _ = alloc_order;
++        self.queue(frame, phys_contiguous_count, actions);
++    }
+ }
+ pub struct NopFlusher;
+ impl GenericFlusher for NopFlusher {
+@@ -2731,12 +2771,38 @@
+         actions: TlbShootdownActions,
+     ) {
+         if actions.contains(TlbShootdownActions::FREE) {
+-            handle_free_action(frame, phys_contiguous_count);
++            handle_free_action(frame, phys_contiguous_count, None);
++        }
++    }
++    fn queue_with_order(
++        &mut self,
++        frame: Frame,
++        phys_contiguous_count: Option<NonZeroUsize>,
++        alloc_order: Option<u32>,
++        actions: TlbShootdownActions,
++    ) {
++        if actions.contains(TlbShootdownActions::FREE) {
++            handle_free_action(frame, phys_contiguous_count, alloc_order);
+         }
+     }
+ }
+-fn handle_free_action(base: Frame, phys_contiguous_count: Option<NonZeroUsize>) {
+-    if let Some(count) = phys_contiguous_count {
++fn handle_free_action(base: Frame, phys_contiguous_count: Option<NonZeroUsize>, alloc_order: Option<u32>) {
++    if let Some(order) = alloc_order {
++        // Bulk deallocation: decrement refcounts on all 2^order frames (both
++        // mapped and dark pages), then free the entire block in one call.
++        // We discard remove_ref()'s return value because deallocate_p2frame
++        // handles the actual freeing for the whole block at once.
++        let total_frames = 1usize << order;
++        for i in 0..total_frames {
++            let frame = base.next_by(i);
++            let _ = get_page_info(frame)
++                .expect("phys_contiguous frames all need PageInfos")
++                .remove_ref();
++        }
++        unsafe {
++            crate::memory::deallocate_p2frame(base, order);
++        }
++    } else if let Some(count) = phys_contiguous_count {
+         for i in 0..count.get() {
+             let frame = base.next_by(i);
+             let new_rc = get_page_info(frame)
+@@ -2744,7 +2810,6 @@
+                 .remove_ref();
+ 
+             if new_rc.is_none() {
+-                // FIXME use a single deallocate_p2frame when possible
+                 unsafe {
+                     deallocate_frame(frame);
+                 }
+@@ -2775,6 +2840,7 @@
+     Free {
+         base: Frame,
+         phys_contiguous_count: Option<NonZeroUsize>,
++        alloc_order: Option<u32>,
+     },
+     Other {
+         actions: TlbShootdownActions,
+@@ -2854,11 +2920,12 @@
+             let PageQueueEntry::Free {
+                 base,
+                 phys_contiguous_count,
++                alloc_order,
+             } = entry
+             else {
+                 continue;
+             };
+-            handle_free_action(base, phys_contiguous_count);
++            handle_free_action(base, phys_contiguous_count, alloc_order);
+         }
+     }
+ }
+@@ -2869,12 +2936,22 @@
+         phys_contiguous_count: Option<NonZeroUsize>,
+         actions: TlbShootdownActions,
+     ) {
++        self.queue_with_order(frame, phys_contiguous_count, None, actions);
++    }
++    fn queue_with_order(
++        &mut self,
++        frame: Frame,
++        phys_contiguous_count: Option<NonZeroUsize>,
++        alloc_order: Option<u32>,
++        actions: TlbShootdownActions,
++    ) {
+         let actions = actions & !TlbShootdownActions::NEW_MAPPING;
+ 
+         let entry = if actions.contains(TlbShootdownActions::FREE) {
+             PageQueueEntry::Free {
+                 base: frame,
+                 phys_contiguous_count,
++                alloc_order,
+             }
+         } else {
+             PageQueueEntry::Other { actions }

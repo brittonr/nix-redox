@@ -1,0 +1,29 @@
+diff -ruN a/src/bootstrap/src/core/builder/cargo.rs b/src/bootstrap/src/core/builder/cargo.rs
+--- a/src/bootstrap/src/core/builder/cargo.rs	2026-03-13 12:36:45.001270458 -0400
++++ b/src/bootstrap/src/core/builder/cargo.rs	2026-03-13 12:36:52.707969083 -0400
+@@ -287,6 +287,25 @@
+             if let Some(rpath) = rpath {
+                 self.rustflags.arg(&format!("-Clink-args={rpath}"));
+             }
++
++            // Force-include LLVM X86 target registration symbols (Redox cross-compile fix).
++            // Static linking of LLVM into librustc_driver.so dead-strips the X86 backend
++            // because registration functions are only called via constructors.
++            if target.contains("redox") {
++                for sym in [
++                    "LLVMInitializeX86Target",
++                    "LLVMInitializeX86TargetInfo",
++                    "LLVMInitializeX86TargetMC",
++                    "LLVMInitializeX86AsmPrinter",
++                    "LLVMInitializeX86AsmParser",
++                ] {
++                    self.rustflags.arg(&format!("-Clink-args=-Wl,-u,{sym}"));
++                }
++                // Redox kernel gives the main thread a very small stack (~8KB).
++                // rustc needs at least 8MB for session setup before spawning the
++                // worker thread. Set PT_GNU_STACK memsiz so the kernel allocates more.
++                self.rustflags.arg("-Clink-args=-Wl,-z,stack-size=8388608");
++            }
+         }
+ 
+         for arg in linker_args(builder, compiler.host, LldThreads::Yes) {

@@ -1,0 +1,76 @@
+diff -ruN a/src/tools/cargo/src/cargo/core/compiler/job_queue/mod.rs b/src/tools/cargo/src/cargo/core/compiler/job_queue/mod.rs
+--- a/src/tools/cargo/src/cargo/core/compiler/job_queue/mod.rs	2026-03-13 12:37:24.726730488 -0400
++++ b/src/tools/cargo/src/cargo/core/compiler/job_queue/mod.rs	2026-03-13 12:37:31.896525139 -0400
+@@ -202,6 +202,8 @@
+     /// How many jobs we've finished
+     finished: usize,
+     per_package_future_incompat_reports: Vec<FutureIncompatReportPackage>,
++    /// REDOX PATCH: heartbeat diagnostic counter (increments every 500ms timeout)
++    heartbeat_counter: u32,
+ }
+ 
+ /// Count of warnings, used to print a summary after the job succeeds
+@@ -506,6 +508,7 @@
+             ),
+             finished: 0,
+             per_package_future_incompat_reports: Vec::new(),
++            heartbeat_counter: 0,
+         };
+ 
+         // Create a helper thread for acquiring jobserver tokens
+@@ -741,13 +744,54 @@
+                         events.push(message);
+                         break;
+                     }
+-                    None => continue,
++                    None => {
++                        // REDOX PATCH: emit heartbeat diagnostic every ~5s
++                        self.heartbeat_counter += 1;
++                        if self.heartbeat_counter % 10 == 0 {
++                            self.emit_heartbeat_diagnostic();
++                        }
++                        continue;
++                    }
+                 }
+             }
+         }
+         events
+     }
+ 
++    /// REDOX PATCH: Write diagnostic heartbeat to CARGO_DIAG_LOG file.
++    fn emit_heartbeat_diagnostic(&self) {
++        use std::io::Write;
++        let log_path = match std::env::var("CARGO_DIAG_LOG") {
++            Ok(p) if !p.is_empty() => p,
++            _ => return,
++        };
++        let mut f = match std::fs::OpenOptions::new()
++            .create(true)
++            .append(true)
++            .open(&log_path)
++        {
++            Ok(f) => f,
++            Err(_) => return,
++        };
++        let elapsed_secs = self.heartbeat_counter as f64 * 0.5;
++        let active_list: Vec<String> = self
++            .active
++            .iter()
++            .map(|(id, unit)| format!("{}(id={})", unit.pkg.name(), id.0))
++            .collect();
++        let _ = writeln!(
++            f,
++            "[heartbeat t={:.0}s] active={} pending={} tokens={} finished={}/{} jobs=[{}]",
++            elapsed_secs,
++            self.active.len(),
++            self.pending_queue.len(),
++            self.tokens.len(),
++            self.finished,
++            self.total_units,
++            active_list.join(", "),
++        );
++    }
++
+     /// This is the "main" loop, where Cargo does all work to run the
+     /// compiler.
+     ///

@@ -1,0 +1,12 @@
+diff -ruN a/src/bootstrap/src/core/build_steps/llvm.rs b/src/bootstrap/src/core/build_steps/llvm.rs
+--- a/src/bootstrap/src/core/build_steps/llvm.rs	2026-03-13 12:36:33.754963287 -0400
++++ b/src/bootstrap/src/core/build_steps/llvm.rs	2026-03-13 12:36:41.666681852 -0400
+@@ -683,6 +683,8 @@
+             cfg.define("CMAKE_SYSTEM_NAME", "visionOS");
+         } else if target.contains("watchos") {
+             cfg.define("CMAKE_SYSTEM_NAME", "watchOS");
++        } else if target.contains("redox") {
++            cfg.define("CMAKE_SYSTEM_NAME", "UnixPaths");
+         } else if target.contains("none") {
+             // "none" should be the last branch
+             cfg.define("CMAKE_SYSTEM_NAME", "Generic");

@@ -1,0 +1,27 @@
+diff -ruN a/src/header/stdlib/mod.rs b/src/header/stdlib/mod.rs
+--- a/src/header/stdlib/mod.rs	2026-03-13 12:36:26.879218743 -0400
++++ b/src/header/stdlib/mod.rs	2026-03-13 12:36:26.932296919 -0400
+@@ -2,7 +2,7 @@
+ //!
+ //! See <https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/stdlib.h.html>.
+ 
+-use core::{convert::TryFrom, intrinsics, iter, mem, ptr, slice};
++use core::{convert::TryFrom, iter, mem, ptr, slice};
+ use rand::{
+     Rng, SeedableRng,
+     distributions::{Alphanumeric, Distribution, Uniform},
+@@ -116,8 +116,12 @@
+ /// See <https://pubs.opengroup.org/onlinepubs/9799919799/functions/abort.html>.
+ #[unsafe(no_mangle)]
+ pub unsafe extern "C" fn abort() -> ! {
+-    log::error!("Abort");
+-    intrinsics::abort();
++    // Write to stderr directly via raw syscall. Do NOT use log::error!() here
++    // because the logging framework may be uninitialized in DSO copies of
++    // relibc (the log level filter is BSS-zeroed → Off, so the message is
++    // silently discarded).
++    let _ = Sys::write(2, b"relibc: abort() called\n");
++    Sys::exit(134)
+ }
+ 
+ #[cfg(not(target_pointer_width = "64"))]

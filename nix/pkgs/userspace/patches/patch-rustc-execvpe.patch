@@ -1,0 +1,68 @@
+diff -ruN a/library/std/src/sys/process/unix/unix.rs b/library/std/src/sys/process/unix/unix.rs
+--- a/library/std/src/sys/process/unix/unix.rs	2026-03-13 12:37:29.710852021 -0400
++++ b/library/std/src/sys/process/unix/unix.rs	2026-03-13 12:37:37.575865527 -0400
+@@ -408,23 +408,53 @@
+         // want to be sure to restore the global environment back to what it
+         // once was, ensuring that our temporary override, when free'd, doesn't
+         // corrupt our process's environment.
+-        let mut _reset = None;
+-        if let Some(envp) = maybe_envp {
+-            struct Reset(*const *const libc::c_char);
++        // On Redox, updating the global `environ` pointer then calling
++        // execvp() doesn't reliably propagate env vars to the child.
++        // Use execvpe() which passes the envp directly to execve(),
++        // bypassing the global environ entirely.
++        #[cfg(target_os = "redox")]
++        {
++            if let Some(envp) = maybe_envp {
++                unsafe extern "C" {
++                    fn execvpe(
++                        file: *const libc::c_char,
++                        argv: *const *const libc::c_char,
++                        envp: *const *const libc::c_char,
++                    ) -> libc::c_int;
++                }
++                execvpe(
++                    self.get_program_cstr().as_ptr(),
++                    self.get_argv().as_ptr(),
++                    envp.as_ptr(),
++                );
++            } else {
++                libc::execvp(
++                    self.get_program_cstr().as_ptr(),
++                    self.get_argv().as_ptr(),
++                );
++            }
++        }
+ 
+-            impl Drop for Reset {
+-                fn drop(&mut self) {
+-                    unsafe {
+-                        *sys::env::environ() = self.0;
++        #[cfg(not(target_os = "redox"))]
++        {
++            let mut _reset = None;
++            if let Some(envp) = maybe_envp {
++                struct Reset(*const *const libc::c_char);
++
++                impl Drop for Reset {
++                    fn drop(&mut self) {
++                        unsafe {
++                            *sys::env::environ() = self.0;
++                        }
+                     }
+                 }
++
++                _reset = Some(Reset(*sys::env::environ()));
++                *sys::env::environ() = envp.as_ptr();
+             }
+ 
+-            _reset = Some(Reset(*sys::env::environ()));
+-            *sys::env::environ() = envp.as_ptr();
++            libc::execvp(self.get_program_cstr().as_ptr(), self.get_argv().as_ptr());
+         }
+-
+-        libc::execvp(self.get_program_cstr().as_ptr(), self.get_argv().as_ptr());
+         Err(io::Error::last_os_error())
+     }
+ 

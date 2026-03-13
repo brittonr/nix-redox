@@ -1,0 +1,11 @@
+diff -ruN a/compiler/rustc_target/src/spec/base/redox.rs b/compiler/rustc_target/src/spec/base/redox.rs
+--- a/compiler/rustc_target/src/spec/base/redox.rs	2026-03-13 12:36:39.481703587 -0400
++++ b/compiler/rustc_target/src/spec/base/redox.rs	2026-03-13 12:36:47.125800322 -0400
+@@ -14,6 +14,7 @@
+         crt_static_respected: true,
+         crt_static_allows_dylibs: true,
+         late_link_args: TargetOptions::link_args(LinkerFlavor::Gnu(Cc::Yes, Lld::No), &["-lgcc"]),
++        generate_arange_section: false,
+         ..Default::default()
+     }
+ }

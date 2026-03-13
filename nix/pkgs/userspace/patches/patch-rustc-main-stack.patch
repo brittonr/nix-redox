@@ -1,0 +1,35 @@
+diff -ruN a/compiler/rustc/src/main.rs b/compiler/rustc/src/main.rs
+--- a/compiler/rustc/src/main.rs	2026-03-13 12:36:50.503661720 -0400
++++ b/compiler/rustc/src/main.rs	2026-03-13 12:36:58.198879279 -0400
+@@ -74,5 +74,31 @@
+         }
+     }
+ 
++    // Redox: the kernel only gives the main thread ~8KB of stack, which is not
++    // enough for rustc's session setup before the worker thread is spawned.
++    // Spawn a thread with a larger stack and run the compiler there.
++    // rustc_driver::main() calls process::exit() internally, so the whole
++    // process terminates when the spawned thread finishes.
++    #[cfg(target_os = "redox")]
++    {
++        let stack_size = 16 * 1024 * 1024; // 16 MB
++        match std::thread::Builder::new()
++            .name("rustc-main".into())
++            .stack_size(stack_size)
++            .spawn(|| rustc_driver::main())
++        {
++            Ok(handle) => {
++                let _ = handle.join();
++                // If we get here, the thread exited without calling process::exit
++                std::process::exit(0);
++            }
++            Err(e) => {
++                eprintln!("rustc: failed to create main thread: {e}");
++                std::process::exit(1);
++            }
++        }
++    }
++
++    #[cfg(not(target_os = "redox"))]
+     rustc_driver::main()
+ }

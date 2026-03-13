@@ -1,0 +1,96 @@
+diff -ruN a/src/ld_so/linker.rs b/src/ld_so/linker.rs
+--- a/src/ld_so/linker.rs	2026-03-13 12:36:26.658466271 -0400
++++ b/src/ld_so/linker.rs	2026-03-13 12:36:26.709564392 -0400
+@@ -947,12 +947,87 @@
+     fn run_init(&self, obj: &DSO) {
+         use crate::platform::{self, types::*};
+ 
+-        if let Some((symbol, SymbolBinding::Global)) = obj.get_sym("__relibc_init_environ") {
++        // DEBUG: trace environ injection into DSOs
++        let environ_ptr = unsafe { core::ptr::addr_of!(platform::environ).read() };
++        let environ_is_null = environ_ptr.is_null();
++        let environ_count = if environ_is_null {
++            0usize
++        } else {
++            let mut count = 0usize;
+             unsafe {
+-                symbol
+-                    .as_ptr()
+-                    .cast::<*mut *mut c_char>()
+-                    .write(platform::environ);
++                let mut p = environ_ptr;
++                while !(*p).is_null() {
++                    count += 1;
++                    p = p.add(1);
++                }
++            }
++            count
++        };
++
++        // Accept any binding
++        match obj.get_sym("__relibc_init_environ") {
++            Some((symbol, binding)) => {
++                // Dump first 5 env var names for debugging
++                if !environ_is_null {
++                    let mut dump_p = environ_ptr;
++                    let mut dump_i = 0usize;
++                    unsafe {
++                        while !(*dump_p).is_null() && dump_i < 5 {
++                            let cstr = core::ffi::CStr::from_ptr(*dump_p);
++                            if let Ok(s) = core::str::from_utf8(cstr.to_bytes()) {
++                                // Only print key (before '=')
++                                let key = s.split('=').next().unwrap_or(s);
++                                eprintln!("[ld.so environ-diag]   env[{}] key={}", dump_i, key);
++                            }
++                            dump_p = dump_p.add(1);
++                            dump_i += 1;
++                        }
++                    }
++                }
++                eprintln!(
++                    "[ld.so environ-diag] FOUND __relibc_init_environ in DSO (binding={:?}),                      ld_so environ={:p} null={} count={}, writing to sym addr={:p}",
++                    binding, environ_ptr, environ_is_null, environ_count,
++                    symbol.as_ptr()
++                );
++                unsafe {
++                    symbol
++                        .as_ptr()
++                        .cast::<*mut *mut c_char>()
++                        .write(environ_ptr);
++                }
++                // Verify write
++                let readback = unsafe {
++                    symbol.as_ptr().cast::<*mut *mut c_char>().read()
++                };
++                eprintln!(
++                    "[ld.so environ-diag] readback after write: {:p} (match={})",
++                    readback, readback == environ_ptr
++                );
++            }
++            None => {
++                eprintln!(
++                    "[ld.so environ-diag] __relibc_init_environ NOT FOUND in DSO,                      ld_so environ={:p} null={} count={}",
++                    environ_ptr, environ_is_null, environ_count
++                );
++            }
++        }
++
++        // Inject process fds into DSO statics BEFORE calling .init_array.
++        #[cfg(target_os = "redox")]
++        {
++            if let Some((symbol, _)) = obj.get_sym("__relibc_init_ns_fd") {
++                let ns_fd = redox_rt::current_namespace_fd();
++                if ns_fd != usize::MAX {
++                    unsafe {
++                        symbol.as_ptr().cast::<usize>().write(ns_fd);
++                    }
++                }
++            }
++            if let Some((symbol, _)) = obj.get_sym("__relibc_init_proc_fd") {
++                let proc_fd = redox_rt::current_proc_fd().as_raw_fd();
++                unsafe {
++                    symbol.as_ptr().cast::<usize>().write(proc_fd);
++                }
+             }
+         }
+ 

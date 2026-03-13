@@ -1,0 +1,20 @@
+diff -ruN a/src/platform/redox/path.rs b/src/platform/redox/path.rs
+--- a/src/platform/redox/path.rs	2026-03-13 12:36:26.842893924 -0400
++++ b/src/platform/redox/path.rs	2026-03-13 12:36:26.895479595 -0400
+@@ -25,7 +25,15 @@
+ // same time forbid signal handlers from running in the meantime, to avoid reentrant deadlock.
+ pub fn chdir(path: &str) -> Result<()> {
+     let _siglock = tmp_disable_signals();
+-    let mut cwd_guard = CWD.lock();
++    // Use try_lock to avoid deadlock in post-fork children. After fork(), the
++    // child inherits the parent's CWD Mutex state. If any parent thread held
++    // CWD.lock() at fork time, the child's copy is stuck in LOCKED state with
++    // no thread to unlock it. try_lock() detects this and force-resets the
++    // mutex. Safe because the child is single-threaded after fork().
++    let mut cwd_guard = CWD.try_lock().unwrap_or_else(|| {
++        unsafe { CWD.manual_unlock(); }
++        CWD.lock()
++    });
+ 
+     let canon = canonicalize_using_cwd(cwd_guard.as_deref(), path).ok_or(Error::new(ENOENT))?;
+     let canon_with_scheme = canonicalize_with_cwd_internal(cwd_guard.as_deref(), path)?;

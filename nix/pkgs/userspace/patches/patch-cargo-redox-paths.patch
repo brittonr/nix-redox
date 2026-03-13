@@ -1,0 +1,73 @@
+diff -ruN a/src/tools/cargo/src/cargo/core/manifest.rs b/src/tools/cargo/src/cargo/core/manifest.rs
+--- a/src/tools/cargo/src/cargo/core/manifest.rs	2026-03-13 12:37:52.933152257 -0400
++++ b/src/tools/cargo/src/cargo/core/manifest.rs	2026-03-13 12:38:00.197819553 -0400
+@@ -372,6 +372,9 @@
+ 
+ impl From<PathBuf> for TargetSourcePath {
+     fn from(path: PathBuf) -> Self {
++        // On Redox OS, paths may have "file:" URL scheme prefix.
++        // Strip it to get a standard absolute path.
++        let path = crate::util::redox_strip_file_prefix(path);
+         assert!(path.is_absolute(), "`{}` is not absolute", path.display());
+         TargetSourcePath::Path(path)
+     }
+diff -ruN a/src/tools/cargo/src/cargo/sources/directory.rs b/src/tools/cargo/src/cargo/sources/directory.rs
+--- a/src/tools/cargo/src/cargo/sources/directory.rs	2026-03-13 12:37:52.933702920 -0400
++++ b/src/tools/cargo/src/cargo/sources/directory.rs	2026-03-13 12:38:00.197901627 -0400
+@@ -80,9 +80,11 @@
+ 
+ impl<'gctx> DirectorySource<'gctx> {
+     pub fn new(path: &Path, id: SourceId, gctx: &'gctx GlobalContext) -> DirectorySource<'gctx> {
++        // On Redox OS, paths from URL conversion may have "file:" prefix
++        let root = crate::util::redox_strip_file_prefix(path.to_path_buf());
+         DirectorySource {
+             source_id: id,
+-            root: path.to_path_buf(),
++            root,
+             gctx,
+             packages: HashMap::new(),
+             updated: false,
+diff -ruN a/src/tools/cargo/src/cargo/util/into_url.rs b/src/tools/cargo/src/cargo/util/into_url.rs
+--- a/src/tools/cargo/src/cargo/util/into_url.rs	2026-03-13 12:37:52.934066652 -0400
++++ b/src/tools/cargo/src/cargo/util/into_url.rs	2026-03-13 12:38:00.197920162 -0400
+@@ -29,8 +29,11 @@
+ 
+ impl<'a> IntoUrl for &'a Path {
+     fn into_url(self) -> CargoResult<Url> {
+-        Url::from_file_path(self)
+-            .map_err(|()| anyhow::format_err!("invalid path url `{}`", self.display()))
++        // On Redox OS, paths may have "file:" prefix from canonicalize().
++        // Strip it before converting to URL.
++        let clean = crate::util::redox_strip_file_prefix(self.to_path_buf());
++        Url::from_file_path(&clean)
++            .map_err(|()| anyhow::format_err!("invalid path url `{}`", clean.display()))
+     }
+ }
+ 
+diff -ruN a/src/tools/cargo/src/cargo/util/mod.rs b/src/tools/cargo/src/cargo/util/mod.rs
+--- a/src/tools/cargo/src/cargo/util/mod.rs	2026-03-13 12:37:52.933961335 -0400
++++ b/src/tools/cargo/src/cargo/util/mod.rs	2026-03-13 12:38:00.197873284 -0400
+@@ -138,7 +138,7 @@
+ #[cfg(not(windows))]
+ #[inline]
+ pub fn try_canonicalize<P: AsRef<Path>>(path: P) -> std::io::Result<PathBuf> {
+-    std::fs::canonicalize(&path)
++    std::fs::canonicalize(&path).map(redox_strip_file_prefix)
+ }
+ 
+ #[cfg(windows)]
+@@ -206,3 +206,14 @@
+         );
+     }
+ }
++
++/// On Redox OS, various sources (canonicalize, URL to_file_path, etc.)
++/// return paths with "file:" URL scheme prefix. Strip it.
++pub fn redox_strip_file_prefix(path: std::path::PathBuf) -> std::path::PathBuf {
++    let s = path.to_string_lossy();
++    if s.starts_with("file:") {
++        std::path::PathBuf::from(&s[5..])
++    } else {
++        path
++    }
++}

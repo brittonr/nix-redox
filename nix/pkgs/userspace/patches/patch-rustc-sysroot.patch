@@ -1,0 +1,30 @@
+diff -ruN a/compiler/rustc_session/src/filesearch.rs b/compiler/rustc_session/src/filesearch.rs
+--- a/compiler/rustc_session/src/filesearch.rs	2025-10-02 11:23:49.000000000 -0400
++++ b/compiler/rustc_session/src/filesearch.rs	2026-03-13 12:36:35.921258856 -0400
+@@ -249,5 +249,25 @@
+     }
+ 
+     from_env_args_next()
+-        .unwrap_or_else(|| default_from_rustc_driver_dll().expect("Failed finding sysroot"))
++        .unwrap_or_else(|| {
++        default_from_rustc_driver_dll().unwrap_or_else(|_| {
++            // Redox fallback: try current_exe() to derive sysroot
++            if let Ok(exe) = std::env::current_exe() {
++                if let Some(p) = exe.parent().and_then(|p| p.parent()) {
++                    let rustlib = p.join("lib").join("rustlib");
++                    if rustlib.exists() {
++                        return p.to_path_buf();
++                    }
++                }
++            }
++            // Last resort: try well-known Redox paths
++            for candidate in ["/nix/system/profile", "/usr", "/"] {
++                let p = PathBuf::from(candidate);
++                if p.join("lib").join("rustlib").exists() {
++                    return p;
++                }
++            }
++            PathBuf::from("/")
++        })
++    })
+ }
