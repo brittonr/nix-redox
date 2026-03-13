@@ -678,13 +678,21 @@ let
                         # env!() FAILS compilation if the var is not set — no need to run binary
                         echo 'fn main() { println!("{}", env!("DIAG_TEST_VAR")); }' > /tmp/env_assert.rs
 
-                        /nix/system/profile/bin/bash -c 'DIAG_TEST_VAR=hello_from_environ rustc /tmp/env_assert.rs --edition 2021 -o /tmp/env_assert_bin --crate-type bin -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld -C link-arg=-L/usr/lib/redox-sysroot/lib 2>/tmp/env-assert-stderr; EXIT=$?; echo "env-assert-exit=$EXIT"; echo "env-assert-exit=$EXIT" > /tmp/env-assert-stdout'
-
-                        echo "=== env!() assertion stderr ==="
-                        cat /tmp/env-assert-stderr
-                        echo "=== end env!() stderr ==="
-
-                        /nix/system/profile/bin/bash -c 'if grep -q "env-assert-exit=0" /tmp/env-assert-stdout 2>/dev/null; then echo "env!() compilation succeeded - var IS visible to rustc"; echo "FUNC_TEST:environ-diag:PASS"; else echo "env!() compilation FAILED - var NOT visible to rustc"; echo "FUNC_TEST:environ-diag:FAIL:env-macro-failed"; fi'
+                        /nix/system/profile/bin/bash -c '
+                          DIAG_TEST_VAR=hello_from_environ rustc /tmp/env_assert.rs --edition 2021 -o /tmp/env_assert_bin --crate-type bin -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld -C link-arg=-L/usr/lib/redox-sysroot/lib 2>/tmp/env-assert-stderr
+                          EXIT=$?
+                          echo "env-assert-exit=$EXIT"
+                          echo "=== env!() assertion stderr ==="
+                          cat /tmp/env-assert-stderr
+                          echo "=== end env!() stderr ==="
+                          if [ "$EXIT" = "0" ]; then
+                            echo "env!() compilation succeeded - var IS visible to rustc"
+                            echo "FUNC_TEST:environ-diag:PASS"
+                          else
+                            echo "env!() compilation FAILED - var NOT visible to rustc"
+                            echo "FUNC_TEST:environ-diag:FAIL:env-macro-failed"
+                          fi
+                        '
 
                         # Part C: option_env!() test (just for comparison)
                         echo 'fn main() {' > /tmp/env_diag.rs
