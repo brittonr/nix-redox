@@ -85,6 +85,7 @@ let
       python3 ${./patch-relibc-run-init.py}
       python3 ${./patch-relibc-environ-diag.py}
       python3 ${./patch-relibc-getenv-diag.py}
+      python3 ${./patch-relibc-dso-environ.py}
       python3 ${./patch-relibc-prefault-stack.py}
       python3 ${./patch-relibc-grow-main-stack.py}
       python3 ${./patch-relibc-chdir-deadlock.py}
