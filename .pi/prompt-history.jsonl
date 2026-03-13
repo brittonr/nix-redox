@@ -278,3 +278,6 @@
 {"text":"1, then write an openspec for 2","timestamp":1773416252649}
 {"text":"lets move all our patches to .patch files that we apply using nix","timestamp":1773419380866}
 {"text":"commit and confirm it works","timestamp":1773420201666}
+{"text":"continue","timestamp":1773428417473}
+{"text":"what next","timestamp":1773428681128}
+{"text":"1. Remove --env-set defense-in-depth — DSO environ propagation was fully fixed\n (62/62 tests pass). The --env-set cargo patch is explicitly marked \"can be removed\n once DSO environ has more runtime mileage.\" That mileage happened during the\n parallel-builds validation. Could validate removal now.\n 2. cargo-build-safe timeout wrapper — still needed for intermittent flock hangs. The\n flock issue in relibc (fcntl patched to no-op) is a deeper problem that could be\n investigated.\n 3. Per-path sandbox — namespace sandbox is implemented but file: is all-or-nothing.\n The napkin notes per-path filtering needs a proxy scheme daemon. That's a bigger\n feature.","timestamp":1773428813109}

@@ -81,6 +81,13 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### ld.so argv UTF-8 parsing (FIXED)
 - `patch-relibc-ld-so-argv-utf8.py` uses `to_string_lossy()` instead of `_exit(1)`.
 
+### --env-set cargo patch (REMOVED 2026-03-13)
+- Was `patch-cargo-env-set.patch` — passed env vars via rustc `--env-set` flag.
+- DSO environ propagation fixed the root cause. 62/62 self-hosting tests validated
+  at JOBS=2 (snix 193 crates, ripgrep 33 crates, proc-macros, build scripts).
+- Removed: patch file deleted, reference removed from rustc-redox.nix.
+- DSO environ is now the sole mechanism for env var propagation to rustc.
+
 ### Clang fork -cc1 on Redox (FIXED)
 - CC wrapper passes `-no-canonical-prefixes` + explicit `-resource-dir`.
 - `cc-rs` crate needs `AR=llvm-ar`.
@@ -103,15 +110,6 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Basic cargo→rustc env propagation through DSO-linked rustc works.
 
 ## Active Workarounds (still needed)
-
-### --env-set for cargo (defense-in-depth — DSO environ now fixed)
-- `patch-cargo-env-set.py` passes env vars via rustc `--env-set` flag.
-- DSO environ propagation FIXED (2026-03-13) by `patch-relibc-environ-dso-init.py`:
-  broadcasts environ to __relibc_init_environ after relibc_start_v1.
-- Combined with getenv self-init (patch-relibc-dso-environ.py), DSOs now see
-  the full process environ. env-propagation-simple and env-propagation-heavy PASS.
-- --env-set kept as defense-in-depth (second path for env vars to reach rustc).
-- Can be removed once DSO environ has more runtime mileage.
 
 ### cargo-build-safe timeout wrapper
 - 90s timeout + retry for intermittent cargo hangs (flock and other blocking).

@@ -44,7 +44,7 @@ Hard-won lessons from building RedoxOS with Nix. Read before making changes.
 - `abort()` uses `ud2` instruction → opaque kernel register dump. Patched to `_exit(134)`.
 - `flock()` can hang — cargo-build-safe wrapper with 90s timeout still needed
 - `fcntl` F_SETLK/F_SETLKW patched to no-op (return Ok(0))
-- `exec()` env propagation fixed for DSO-linked binaries — `--env-set` kept as defense-in-depth
+- `exec()` env propagation fixed for DSO-linked binaries (DSO environ patches)
 - `execvpe()` added to relibc; DSO environ fix (patch-relibc-environ-dso-init.py) broadcasts environ to __relibc_init_environ after relibc_start_v1
 - `mbstate_t` is empty struct `{}` — `{0}` initialization invalid in C++, use `= {}`
 - Missing POSIX functions: `*at` variants (openat, unlinkat, utimensat), `strtof_l` family, `REG_STARTEND`
@@ -180,12 +180,12 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 ### What Doesn't
 - `CARGO_BUILD_JOBS > 1` had two issues: (1) lld stack overflow — fixed by `lld-wrapper` (16MB stack thread + exec); (2) cargo job manager hangs on multi-crate workspace builds — fixed by `patch-relibc-fork-lock.py` (see below)
 - `cargo` intermittently hangs on flock — cargo-build-safe wrapper with 90s timeout needed
-- `env!("CARGO_PKG_*")` in proc-macro crates: `--env-set` kept as defense-in-depth (DSO environ now works)
+- `env!("CARGO_PKG_*")` in proc-macro crates: works via DSO environ propagation
 
 ### Key Patches (all still required)
 **relibc** (13 patches): abort-dso, chdir-cwd, dso-environ, environ-dso-init, execvpe, fcntl-lock, fork-lock,
 ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-read
-**cargo** (4 patches): env-set (defense-in-depth since DSO environ fix 2026-03-13), read2-pipes, redox-paths, blake3-redox (in vendor)
+**cargo** (3 patches): read2-pipes, redox-paths, blake3-redox (in vendor)
 **rustc** (4 patches): execvpe, read2-pipes, rustc-flags, allocator-shim
 
 ### Fork Thread Safety (CLONE_LOCK)

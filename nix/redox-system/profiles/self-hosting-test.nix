@@ -1848,8 +1848,8 @@ let
 
                         # ── Test: env!("CARGO_PKG_NAME") propagation ────────────
                         # Tests whether CARGO_PKG_NAME reaches rustc's env!() macro
-                        # without the --env-set workaround. This is the root cause
-                        # of ring build failures.
+                        # via DSO environ propagation. Broken environ was the root
+                        # cause of ring build failures.
                         echo ""
                         echo "--- env-pkg-name: env!(CARGO_PKG_NAME) propagation ---"
                         /nix/system/profile/bin/bash -c '
@@ -1866,8 +1866,7 @@ let
                           cat > /tmp/env-pkg-test/src/main.rs << RSEOF
     fn main() {
         // env!() is resolved at compile time by rustc.
-        // CARGO_PKG_NAME works via --env-set (CLI flag).
-        // LD_LIBRARY_PATH is NOT in --env-set — tests actual environ propagation.
+        // Both CARGO_PKG_NAME and LD_LIBRARY_PATH reach rustc via DSO environ propagation.
         let name = env!("CARGO_PKG_NAME");
         let version = env!("CARGO_PKG_VERSION");
         // option_env! returns None if the var is not in rustc compile-time env
@@ -1898,7 +1897,7 @@ let
                                     ;;
                                   *)
                                     echo "FUNC_TEST:env-propagation-simple:FAIL:environ not propagated"
-                                    echo "  (env!() works via --env-set but process env is broken)"
+                                    echo "  (env!() compiled but LD_LIBRARY_PATH not visible — DSO environ broken)"
                                     ;;
                                 esac
                               else
@@ -1976,7 +1975,7 @@ let
     pub const PKG_VERSION: &str = env!("CARGO_PKG_VERSION");
     // Also check cargo:rustc-env from build.rs
     pub const BUILD_FORKS: &str = env!("BUILD_FORKS");
-    // Check actual environ propagation (NOT covered by --env-set)
+    // Check environ propagation survives heavy fork load (DSO environ stress test)
     pub const LD_LIB: Option<&str> = option_env!("LD_LIBRARY_PATH");
     pub const CARGO_HOME_ENV: Option<&str> = option_env!("CARGO_HOME");
   RSEOF
