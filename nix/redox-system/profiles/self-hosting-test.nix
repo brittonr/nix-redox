@@ -684,14 +684,7 @@ let
                         cat /tmp/env-assert-stderr
                         echo "=== end env!() stderr ==="
 
-                        /nix/system/profile/bin/bash -c 'grep -q "env-assert-exit=0" /tmp/env-assert-stdout 2>/dev/null'
-                        if test $? = 0
-                          echo "env!() compilation succeeded - var IS visible to rustc"
-                          echo "FUNC_TEST:environ-diag:PASS"
-                        else
-                          echo "env!() compilation FAILED - var NOT visible to rustc"
-                          echo "FUNC_TEST:environ-diag:FAIL:env-macro-failed"
-                        end
+                        /nix/system/profile/bin/bash -c 'if grep -q "env-assert-exit=0" /tmp/env-assert-stdout 2>/dev/null; then echo "env!() compilation succeeded - var IS visible to rustc"; echo "FUNC_TEST:environ-diag:PASS"; else echo "env!() compilation FAILED - var NOT visible to rustc"; echo "FUNC_TEST:environ-diag:FAIL:env-macro-failed"; fi'
 
                         # Part C: option_env!() test (just for comparison)
                         echo 'fn main() {' > /tmp/env_diag.rs
