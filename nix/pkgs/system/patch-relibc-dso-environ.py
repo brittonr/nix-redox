@@ -42,7 +42,7 @@ pub unsafe extern "C" fn getenv(name: *const c_char) -> *mut c_char {
     // may be null if the main binary's run_init hasn't happened yet).
     if unsafe { platform::environ.is_null() } {
         unsafe {
-            extern "C" {
+            unsafe extern "C" {
                 static __relibc_init_environ: *mut *mut c_char;
             }
             if !__relibc_init_environ.is_null() {
