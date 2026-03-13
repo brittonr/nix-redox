@@ -32,7 +32,7 @@ pub unsafe extern "C" fn getenv(name: *const c_char) -> *mut c_char {
                     }
                 }
             }
-            let environ_addr = unsafe { core::ptr::addr_of!(platform::environ) as usize };
+            let environ_addr = core::ptr::addr_of!(platform::environ) as usize;
             eprintln!(
                 "[relibc getenv-diag] looking up {:?}, &environ={:#x} environ={:p} null={} count={}",
                 name_str, environ_addr, env_ptr, env_null, count
