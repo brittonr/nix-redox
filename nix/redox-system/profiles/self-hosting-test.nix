@@ -146,11 +146,6 @@ let
                         let CARGO_HOME = "/root/.cargo"
                         export CARGO_HOME
 
-                        # Create a cargo-build wrapper with timeout+retry
-                        # Cargo sometimes hangs on relibc's broken flock() implementation.
-                        # This wrapper runs cargo in background, kills after 90s, retries once.
-                        /nix/system/profile/bin/bash -c 'printf "#!/nix/system/profile/bin/bash\nMAX_TIME=90\nfor attempt in 1 2; do\n  cargo build --offline \"\$@\" &\n  PID=\$!\n  SECONDS=0\n  while kill -0 \$PID 2>/dev/null; do\n    if [ \$SECONDS -ge \$MAX_TIME ]; then\n      echo \"[cargo-safe] timeout attempt \$attempt\" >&2\n      kill \$PID 2>/dev/null; wait \$PID 2>/dev/null\n      kill -9 \$PID 2>/dev/null; wait \$PID 2>/dev/null\n      rm -f \"\$CARGO_HOME/.package-cache\"* 2>/dev/null\n      continue 2\n    fi\n    cat /scheme/sys/uname >/dev/null 2>/dev/null\n  done\n  wait \$PID\n  exit \$?\ndone\necho \"[cargo-safe] both attempts timed out\" >&2\nexit 124\n" > /tmp/cargo-build-safe && chmod +x /tmp/cargo-build-safe'
-
                         # Test: check if rand scheme is available (needed by rustc for std::random)
                         # On Redox, random is provided by the randd daemon via /scheme/rand.
                         # List all available schemes to check.
@@ -1224,7 +1219,8 @@ let
                           cd /tmp/realtest
                           rm -f /root/.cargo/.package-cache* /root/.cargo/.global-cache* 2>/dev/null
                           echo "[realtest] starting cargo build..."
-                          /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>/tmp/realtest-stderr
+                          cargo build --offline >/dev/null 2>/tmp/realtest-stderr &
+                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
                           CARGO_EXIT=$?
                           echo "cargo-exit=$CARGO_EXIT" > /tmp/realtest-result
 
@@ -1368,7 +1364,8 @@ let
 
                           cd /tmp/multifile
                           echo "[multifile] starting cargo build (offline)..."
-                          /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>/tmp/multifile-stderr
+                          cargo build --offline >/dev/null 2>/tmp/multifile-stderr &
+                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
                           CARGO_EXIT=$?
 
                           if [ $CARGO_EXIT -eq 0 ]; then
@@ -1610,7 +1607,8 @@ let
                           cd /tmp/minigrep
                           rm -f /root/.cargo/.package-cache* /root/.cargo/.global-cache* 2>/dev/null
                           echo "[minigrep] cargo build..."
-                          /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>/tmp/minigrep-stderr
+                          cargo build --offline >/dev/null 2>/tmp/minigrep-stderr &
+                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
                           MG_EXIT=$?
                           echo "[minigrep] cargo exit: $MG_EXIT"
 
@@ -1802,7 +1800,8 @@ let
 
                           cd /tmp/buildrs-test
                           echo "[buildrs] starting cargo build with build.rs..."
-                          /nix/system/profile/bin/bash /tmp/cargo-build-safe -vv 2>/tmp/buildrs-stderr
+                          cargo build --offline -vv >/dev/null 2>/tmp/buildrs-stderr &
+                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
                           CARGO_EXIT=$?
                           echo "[buildrs] cargo exit code: $CARGO_EXIT"
                           echo "cargo-exit=$CARGO_EXIT" > /tmp/buildrs-result
@@ -1878,7 +1877,8 @@ let
   RSEOF
 
                           cd /tmp/env-pkg-test
-                          /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>/tmp/env-pkg-stderr
+                          cargo build --offline >/dev/null 2>/tmp/env-pkg-stderr &
+                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
                           CARGO_EXIT=$?
                           if [ $CARGO_EXIT -eq 0 ]; then
                             BIN=./target/x86_64-unknown-redox/debug/envpkgtest
@@ -1994,7 +1994,8 @@ let
 
                           cd /tmp/heavyfork
                           echo "[heavyfork] starting cargo build..."
-                          /nix/system/profile/bin/bash /tmp/cargo-build-safe -vv 2>/tmp/heavyfork-stderr
+                          cargo build --offline -vv >/dev/null 2>/tmp/heavyfork-stderr &
+                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
                           CARGO_EXIT=$?
                           echo "[heavyfork] cargo exit=$CARGO_EXIT"
 
@@ -2114,7 +2115,8 @@ let
                           rm -f /root/.cargo/.package-cache* 2>/dev/null
                           rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
 
-                          /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>/tmp/pathdep-stderr
+                          cargo build --offline >/dev/null 2>/tmp/pathdep-stderr &
+                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
                           CARGO_EXIT=$?
 
                           BIN=./target/x86_64-unknown-redox/debug/pathdep
@@ -2254,8 +2256,9 @@ let
                           rm -f /root/.cargo/.package-cache* 2>/dev/null
                           rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
 
-                          # Merge stderr into stdout so errors show on serial console
-                          /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>&1
+                          # Merge stderr into stdout, redirect to file
+                          cargo build --offline >/tmp/vendored-build-log 2>&1 &
+                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
                           CARGO_EXIT=$?
                           echo "[vendored] cargo exit=$CARGO_EXIT"
 
@@ -2407,8 +2410,9 @@ let
                           rm -f /root/.cargo/.package-cache* 2>/dev/null
                           rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
 
-                          # Merge stderr into stdout so errors show on serial console
-                          /nix/system/profile/bin/bash /tmp/cargo-build-safe 2>&1
+                          # Merge stderr into stdout, redirect to file
+                          cargo build --offline >/tmp/procmacro-build-log 2>&1 &
+                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
                           CARGO_EXIT=$?
                           echo "[procmacro] cargo exit=$CARGO_EXIT"
 
