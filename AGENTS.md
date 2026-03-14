@@ -42,7 +42,8 @@ Hard-won lessons from building RedoxOS with Nix. Read before making changes.
 - `poll()` unreliable for pipe multiplexing — use thread-based read2 instead
 - `Mutex` is non-reentrant — child inherits locked state after `fork()` → deadlock
 - `abort()` uses `ud2` instruction → opaque kernel register dump. Patched to `_exit(134)`.
-- `flock()` can hang — cargo-build-safe wrapper with 90s timeout still needed
+- `flock()` is a no-op in upstream relibc (returns Ok(()) immediately)
+- Foreground process execution hangs on KVM — parent must poll with scheme I/O (see Active Workarounds)
 - `fcntl` F_SETLK/F_SETLKW patched to no-op (return Ok(0))
 - `exec()` env propagation fixed for DSO-linked binaries (DSO environ patches)
 - `execvpe()` added to relibc; DSO environ fix (patch-relibc-environ-dso-init.py) broadcasts environ to __relibc_init_environ after relibc_start_v1
@@ -179,7 +180,7 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 
 ### What Doesn't
 - `CARGO_BUILD_JOBS > 1` had two issues: (1) lld stack overflow — fixed by `lld-wrapper` (16MB stack thread + exec); (2) cargo job manager hangs on multi-crate workspace builds — fixed by `patch-relibc-fork-lock.py` (see below)
-- `cargo` intermittently hangs on flock — cargo-build-safe wrapper with 90s timeout needed
+- `cargo` foreground execution hangs on KVM — use poll-wait pattern (background + `kill -0` loop with scheme I/O)
 - `env!("CARGO_PKG_*")` in proc-macro crates: works via DSO environ propagation
 
 ### Key Patches (all still required)

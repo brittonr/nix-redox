@@ -111,8 +111,11 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Active Workarounds (still needed)
 
-### cargo-build-safe timeout wrapper
-- 90s timeout + retry for intermittent cargo hangs (flock and other blocking).
+### Poll-wait pattern for cargo builds (replaces cargo-build-safe)
+- Redox waitpid via proc: scheme hangs when parent is idle (foreground exec + bare `wait` both deadlock on KVM)
+- Fix: background cargo + `kill -0` poll loop with `cat /scheme/sys/uname` scheme I/O + `wait $PID`
+- Root cause is NOT flock (already no-op in upstream relibc) — it's process scheduling
+- Old cargo-build-safe's timeout+retry masked this; the polling loop was the actual fix
 
 ### Stdio::inherit() for build_derivation on Redox
 - `cmd.output()` creates pipes that crash deep process hierarchies (snix→bash→cargo→rustc→cc→lld).
