@@ -30,6 +30,10 @@ pkgs.runCommand "ripgrep-source-bundle" { } ''
     # cargo filters by target at build time)
     cp -r ${vendoredDeps} $out/vendor
 
+    # Builder script and Nix derivation for snix build --file
+    cp ${./build-ripgrep.sh} $out/build-ripgrep.sh
+    cp ${./build-ripgrep.nix} $out/build.nix
+
     # Cargo config for offline vendored builds
     cat > $out/.cargo/config.toml << 'EOF'
   [source.crates-io]
@@ -39,7 +43,7 @@ pkgs.runCommand "ripgrep-source-bundle" { } ''
   directory = "vendor"
 
   [build]
-  jobs = 1
+  jobs = 2
   target = "x86_64-unknown-redox"
 
   [target.x86_64-unknown-redox]
