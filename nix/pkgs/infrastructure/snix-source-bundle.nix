@@ -27,6 +27,10 @@ pkgs.runCommand "snix-source-bundle" { } ''
   # Copy vendored dependencies
   cp -r ${vendoredDeps} $out/vendor
 
+  # Builder script and Nix derivation for snix build --file
+  cp ${./build-snix.sh} $out/build-snix.sh
+  cp ${./build-snix.nix} $out/build.nix
+
   # Cargo config for offline vendored builds
   cat > $out/.cargo/config.toml <<'EOF'
   [source.crates-io]
@@ -34,5 +38,12 @@ pkgs.runCommand "snix-source-bundle" { } ''
 
   [source.vendored-sources]
   directory = "vendor"
+
+  [build]
+  jobs = 2
+  target = "x86_64-unknown-redox"
+
+  [target.x86_64-unknown-redox]
+  linker = "/nix/system/profile/bin/cc"
   EOF
 ''

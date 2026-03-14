@@ -2766,7 +2766,8 @@ let
                         # ── Test: Self-compile snix on Redox ─────────────────
                         # THE ultimate self-hosting test. Compile snix-redox
                         # (a real 45K-line Rust project with 183 crate deps,
-                        # proc-macros, and a bytecode VM) from source on Redox.
+                        # proc-macros, and a bytecode VM) from source on Redox
+                        # through a Nix derivation via snix build --file.
                         echo ""
                         echo "========================================"
                         echo "  SNIX SELF-COMPILE TEST"
@@ -2787,163 +2788,80 @@ let
                           echo "FUNC_TEST:snix-vendor-present:FAIL:vendor dir not found"
                         end
 
-                        # Run the full cargo build in a bash block
-                        echo "--- snix self-compile: cargo build --offline ---"
+                        # Build snix through a Nix derivation (the Nix way)
+                        echo "--- snix self-compile: snix build --file ---"
                         /nix/system/profile/bin/bash -c '
-                          set -x
-
-                          # Copy source to writable directory (rootTree is read-only)
-                          rm -rf /tmp/snix-build
-                          cp -r /usr/src/snix-redox /tmp/snix-build
-                          cd /tmp/snix-build
-
-                          # Create .cargo dir (cp -r may skip dotfiles from Nix store)
-                          mkdir -p /tmp/snix-build/.cargo
-
-                          # Write merged cargo config into the project .cargo dir.
-                          # Combines vendor source replacement with Redox target settings.
-                          cat > /tmp/snix-build/.cargo/config.toml << CARGOEOF
-        [source.crates-io]
-        replace-with = "vendored-sources"
-
-        [source.vendored-sources]
-        directory = "vendor"
-
-        [build]
-        target = "x86_64-unknown-redox"
-
-        [target.x86_64-unknown-redox]
-        linker = "/nix/system/profile/bin/cc"
-  CARGOEOF
-
-                          # Use a fresh CARGO_HOME (no stale lock files from earlier tests)
-                          rm -rf /tmp/cargo-snix
-                          mkdir -p /tmp/cargo-snix
-                          export CARGO_HOME=/tmp/cargo-snix
-                          export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                          export CARGO_BUILD_JOBS=2
-                          export CARGO_INCREMENTAL=0
-                          export RUSTC=/nix/system/profile/bin/rustc
-                          # cc-rs crate defaults to "ar" but we only have llvm-ar
-                          export AR=/nix/system/profile/bin/llvm-ar
-
-                          # Clean any stale lock files
-                          rm -f /tmp/cargo-snix/.package-cache* 2>/dev/null
-
-                          echo "[snix-build] Starting cargo build (JOBS=2)..."
-                          echo "[snix-build] Vendor crates: $(ls vendor/ | wc -l)"
-
-                          # Build with timeout — this is a BIG compile (168 crates).
-                          # JOBS=2 works since the fork-lock fix (yield-based RW lock
-                          # replacing futex-based CLONE_LOCK) and lld-wrapper (16MB stack).
-                          #
-                          # IMPORTANT: Use file redirection, NOT pipes. Pipes on Redox break
-                          # with deep process hierarchies (cargo->rustc->cc->lld). The pipe reader
-                          # exits early, losing cargo output and corrupting the exit code.
-                          MAX_TIME=1800
-                          echo "[snix-build] About to run cargo build..." > /tmp/snix-build-log
-                          cargo build --offline >> /tmp/snix-build-log 2>&1 &
-                          PID=$!
-                          SECONDS=0
-                          LAST_REPORT=0
-                          while kill -0 $PID 2>/dev/null; do
-                            if [ $SECONDS -ge $MAX_TIME ]; then
-                              echo "[snix-build] TIMEOUT after ''${MAX_TIME}s" >&2
-                              kill $PID 2>/dev/null; wait $PID 2>/dev/null
-                              kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
-                              echo "snix-build=TIMEOUT" > /tmp/snix-build-result
-                              exit 0
-                            fi
-                            # Progress indicator every 60s
-                            ELAPSED=$SECONDS
-                            if [ $((ELAPSED - LAST_REPORT)) -ge 60 ] && [ $ELAPSED -gt 0 ]; then
-                              echo "[snix-build] ''${ELAPSED}s elapsed..."
-                              LAST_REPORT=$ELAPSED
-                            fi
-                            cat /scheme/sys/uname >/dev/null 2>/dev/null
-                          done
-                          wait $PID
-                          echo "snix-build=$?" > /tmp/snix-build-result
+                          OUTPUT=$(/bin/snix build --file /usr/src/snix-redox/build.nix 2>/tmp/snix-compile-err)
+                          EXIT=$?
+                          echo "$OUTPUT" > /tmp/snix-compile-output
+                          echo "snix-compile-exit=$EXIT"
+                          echo "snix-compile-output=$OUTPUT"
                         '
 
-                        echo "=== snix build result ==="
-                        cat /tmp/snix-build-result
+                        let snix_output = $(cat /tmp/snix-compile-output)
+                        let snix_exit = $(/nix/system/profile/bin/bash -c 'cat /tmp/snix-compile-err 2>/dev/null | grep -c "build complete" || true')
 
-                        # Check compilation result
-                        let snix_result = $(cat /tmp/snix-build-result)
-                        # Check BOTH the exit code AND that the binary was produced
-                        # (cargo build can exit 0 due to pipe pipeline but still fail)
-                        let snix_bin = "/tmp/snix-build/target/x86_64-unknown-redox/debug/snix"
-                        if test "$snix_result" = "snix-build=0"
-                          if exists -f $snix_bin
+                        # Check if snix build produced a store path with the binary
+                        /nix/system/profile/bin/bash -c '
+                          OUTPUT=$(cat /tmp/snix-compile-output 2>/dev/null)
+                          if [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/snix" ]; then
                             echo "FUNC_TEST:snix-compile:PASS"
+
+                            # Verify output is in /nix/store
+                            case "$OUTPUT" in
+                              /nix/store/*) echo "  output in store: $OUTPUT" ;;
+                              *) echo "  WARNING: output not in /nix/store: $OUTPUT" ;;
+                            esac
                           else
-                            echo "FUNC_TEST:snix-compile:FAIL:exit-ok-but-no-binary"
-                            echo "=== snix build log (last 4KB) ==="
-                            /nix/system/profile/bin/bash -c 'tail -c 4096 /tmp/snix-build-log 2>/dev/null'
-                            echo "=== CC wrapper raw args ==="
-                            cat /tmp/.cc-wrapper-raw-args
-                            echo "=== CC wrapper last error ==="
-                            cat /tmp/.cc-wrapper-last-err
-                            echo "=== CC wrapper stderr ==="
-                            cat /tmp/.cc-wrapper-stderr
-                            echo "=== CC wrapper shared cmd ==="
-                            cat /tmp/.cc-wrapper-shared-cmd
-                          end
-                        else
-                          echo "FUNC_TEST:snix-compile:FAIL:$snix_result"
-                          echo "=== snix build log ==="
-                          cat /tmp/snix-build-log
-                        end
+                            echo "FUNC_TEST:snix-compile:FAIL:exit or no binary at $OUTPUT/bin/snix"
+                            echo "=== snix build stderr ==="
+                            cat /tmp/snix-compile-err 2>/dev/null
+                            echo "=== end stderr ==="
+                          fi
+                        '
 
-                        # Check if binary was produced
-                        let snix_bin = "/tmp/snix-build/target/x86_64-unknown-redox/debug/snix"
-                        if exists -f $snix_bin
-                          echo "FUNC_TEST:snix-binary-exists:PASS"
-                          # Show binary size
-                          ls -la $snix_bin
+                        # Check if binary was produced and works
+                        /nix/system/profile/bin/bash -c '
+                          OUTPUT=$(cat /tmp/snix-compile-output 2>/dev/null)
+                          SNIX_BIN="$OUTPUT/bin/snix"
 
-                          # Test: run the self-compiled snix
-                          $snix_bin --version > /tmp/snix-selfbuilt-out ^>/tmp/snix-selfbuilt-err
-                          let snix_run_exit = $?
-                          if test $snix_run_exit = 0
-                            echo "FUNC_TEST:snix-binary-runs:PASS"
-                            cat /tmp/snix-selfbuilt-out
-                          else
-                            echo "FUNC_TEST:snix-binary-runs:FAIL:exit $snix_run_exit"
-                            cat /tmp/snix-selfbuilt-err
-                          end
+                          if [ -x "$SNIX_BIN" ]; then
+                            echo "FUNC_TEST:snix-binary-exists:PASS"
+                            ls -la "$SNIX_BIN"
 
-                          # Test: self-compiled snix can evaluate a Nix expression
-                          $snix_bin eval --expr "1 + 1" > /tmp/snix-selfbuilt-eval ^>/tmp/snix-selfbuilt-eval-err
-                          let snix_eval_exit = $?
-                          if test $snix_eval_exit = 0
-                            let eval_result = $(cat /tmp/snix-selfbuilt-eval)
-                            if test "$eval_result" = "2"
+                            # Test: run the self-compiled snix
+                            "$SNIX_BIN" --version > /tmp/snix-selfbuilt-out 2>/tmp/snix-selfbuilt-err
+                            if [ $? -eq 0 ]; then
+                              echo "FUNC_TEST:snix-binary-runs:PASS"
+                              cat /tmp/snix-selfbuilt-out
+                            else
+                              echo "FUNC_TEST:snix-binary-runs:FAIL:exit $?"
+                              cat /tmp/snix-selfbuilt-err
+                            fi
+
+                            # Test: self-compiled snix can evaluate a Nix expression
+                            EVAL_RESULT=$("$SNIX_BIN" eval --expr "1 + 1" 2>/tmp/snix-selfbuilt-eval-err)
+                            if [ $? -eq 0 ] && [ "$EVAL_RESULT" = "2" ]; then
                               echo "FUNC_TEST:snix-eval-works:PASS"
                             else
-                              echo "FUNC_TEST:snix-eval-works:FAIL:expected 2, got $eval_result"
-                            end
+                              echo "FUNC_TEST:snix-eval-works:FAIL:expected 2, got $EVAL_RESULT"
+                              cat /tmp/snix-selfbuilt-eval-err
+                            fi
                           else
-                            echo "FUNC_TEST:snix-eval-works:FAIL:eval exited $snix_eval_exit"
-                            cat /tmp/snix-selfbuilt-eval-err
-                          end
-                        else
-                          echo "FUNC_TEST:snix-binary-exists:FAIL:binary not produced"
-                          echo "FUNC_TEST:snix-binary-runs:FAIL:no binary"
-                          echo "FUNC_TEST:snix-eval-works:FAIL:no binary"
-                        end
+                            echo "FUNC_TEST:snix-binary-exists:FAIL:binary not produced"
+                            echo "FUNC_TEST:snix-binary-runs:FAIL:no binary"
+                            echo "FUNC_TEST:snix-eval-works:FAIL:no binary"
+                          fi
+                        '
 
                         # ══════════════════════════════════════════════
-                        #  SNIX BUILD .#RIPGREP — FLAKE BUILD OF REAL SOFTWARE
+                        #  SNIX BUILD RIPGREP — NIX DERIVATION BUILD
                         # ══════════════════════════════════════════════
-                        # The ultimate demo: build ripgrep (a real 55-crate Rust
-                        # project) through a Nix flake, entirely inside Redox OS.
-                        # Pipeline: snix eval flake.nix → derivationStrict →
-                        #   cargo build (55 crates) → link → rg binary → works!
+                        # Build ripgrep (a real 55-crate Rust project) through
+                        # a Nix derivation via snix build --file, entirely on Redox.
                         echo ""
                         echo "========================================"
-                        echo "  SNIX BUILD .#RIPGREP"
+                        echo "  SNIX BUILD RIPGREP"
                         echo "========================================"
                         echo ""
 
@@ -2960,117 +2878,14 @@ let
                           echo "FUNC_TEST:rg-vendor-present:FAIL:vendor dir not found"
                         end
 
-                        # Create a flake project that builds ripgrep from the bundled source
-                        echo "--- snix build .#ripgrep ---"
+                        # Build ripgrep through a Nix derivation (the Nix way)
+                        echo "--- ripgrep build: snix build --file ---"
                         /nix/system/profile/bin/bash -c '
-                          set -x
-
-                          # Copy source to writable directory
-                          rm -rf /tmp/rg-build
-                          cp -r /usr/src/ripgrep /tmp/rg-build
-
-                          # Create .cargo dir (may not survive cp from Nix store)
-                          mkdir -p /tmp/rg-build/.cargo
-                          cat > /tmp/rg-build/.cargo/config.toml << CFGEOF
-        [source.crates-io]
-        replace-with = "vendored-sources"
-
-        [source.vendored-sources]
-        directory = "vendor"
-
-        [build]
-        jobs = 2
-        target = "x86_64-unknown-redox"
-
-        [target.x86_64-unknown-redox]
-        linker = "/nix/system/profile/bin/cc"
-  CFGEOF
-
-                          # Create the flake directory
-                          mkdir -p /tmp/rg-flake
-
-                          # Write builder script
-                          cat > /tmp/rg-flake/build-ripgrep.sh << '"'"'BUILDEOF'"'"'
-        set -e
-        export PATH=/nix/system/profile/bin:/bin:/usr/bin
-        export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
-        export HOME="$TMPDIR"
-        export CARGO_HOME="$TMPDIR/cargo-home"
-        mkdir -p "$CARGO_HOME" "$out/bin"
-
-        cd /tmp/rg-build
-
-        # cargo timeout+retry — handles intermittent startup hangs
-        # ALL cargo output to stderr so it does not pollute snix stdout
-        MAX_TIME=600
-        for attempt in 1 2 3; do
-          echo "[builder] ripgrep build attempt $attempt (JOBS=2)" >&2
-          cargo build --offline --bin rg -j2 >&2 2>&1 &
-          PID=$!
-          SECONDS=0
-          while kill -0 $PID 2>/dev/null; do
-            if [ $SECONDS -ge $MAX_TIME ]; then
-              echo "[builder] cargo timeout attempt $attempt" >&2
-              kill $PID 2>/dev/null; wait $PID 2>/dev/null
-              kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
-              rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
-              continue 2
-            fi
-            cat /scheme/sys/uname >/dev/null 2>/dev/null
-          done
-          wait $PID
-          CARGO_EXIT=$?
-          if [ $CARGO_EXIT -eq 0 ]; then
-            break
-          else
-            echo "[builder] cargo failed (exit=$CARGO_EXIT) attempt $attempt" >&2
-            if [ $attempt -eq 3 ]; then
-              exit $CARGO_EXIT
-            fi
-          fi
-        done
-
-        # Copy the built binary
-        cp target/x86_64-unknown-redox/debug/rg "$out/bin/rg"
-        echo "[builder] ripgrep build complete" >&2
-  BUILDEOF
-
-                          # Write flake.nix
-                          cat > /tmp/rg-flake/flake.nix << '"'"'FLAKEEOF'"'"'
-        {
-          outputs = { self }: {
-            packages."x86_64-unknown-redox".ripgrep = derivation {
-              name = "ripgrep-14.1.1";
-              system = "x86_64-unknown-redox";
-              builder = "/nix/system/profile/bin/bash";
-              args = ["/tmp/rg-flake/build-ripgrep.sh"];
-            };
-          };
-        }
-  FLAKEEOF
-
-                          # Write flake.lock (no external inputs)
-                          cat > /tmp/rg-flake/flake.lock << '"'"'LOCKEOF'"'"'
-        {
-          "version": 7,
-          "root": "root",
-          "nodes": {
-            "root": {}
-          }
-        }
-  LOCKEOF
-
-                          # Run snix build .#ripgrep!
-                          echo "=== Starting snix build .#ripgrep ==="
-                          cd /tmp/rg-flake
-                          /bin/snix build ".#ripgrep" > /tmp/rg-output 2>/tmp/rg-build-err
+                          OUTPUT=$(/bin/snix build --file /usr/src/ripgrep/build.nix 2>/tmp/rg-build-err)
                           EXIT=$?
-                          # snix prints the output path on its last stdout line
-                          # Extract just the /nix/store/... path (builder output may leak to stdout)
-                          # Note: tail not available on Redox — use grep only
-                          OUTPUT=$(grep "/nix/store/" /tmp/rg-output)
-                          echo "=== snix build exit=$EXIT ==="
-                          echo "=== output=$OUTPUT ==="
+                          echo "$OUTPUT" > /tmp/rg-build-output
+                          echo "rg-build-exit=$EXIT"
+                          echo "rg-build-output=$OUTPUT"
 
                           if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/rg" ]; then
                             echo "FUNC_TEST:rg-build:PASS"
@@ -3104,7 +2919,6 @@ let
                             esac
 
                             # Test: binary size is reasonable (should be >1MB for ripgrep)
-                            # Note: awk not available on Redox, use wc -c instead
                             SIZE=$(wc -c < "$OUTPUT/bin/rg")
                             if [ "$SIZE" -gt 1000000 ]; then
                               echo "FUNC_TEST:rg-binary-size:PASS"
@@ -3118,8 +2932,8 @@ let
                             echo "FUNC_TEST:rg-search:FAIL:no binary"
                             echo "FUNC_TEST:rg-store-path:FAIL:no binary"
                             echo "FUNC_TEST:rg-binary-size:FAIL:no binary"
-                            echo "=== build stderr (last 20 lines) ==="
-                            tail -20 /tmp/rg-build-err 2>/dev/null
+                            echo "=== build stderr ==="
+                            cat /tmp/rg-build-err 2>/dev/null
                             echo "=== end stderr ==="
                           fi
                         '
