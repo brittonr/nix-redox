@@ -20,6 +20,8 @@
 //!
 //! Only compiled on Redox (`#[cfg(target_os = "redox")]`).
 
+use std::fs::File;
+use std::os::unix::io::AsRawFd;
 use std::panic;
 use std::thread::{self, JoinHandle};
 
@@ -55,16 +57,17 @@ impl BuildFsProxy {
         allow_list: AllowList,
     ) -> Result<Self, BuildFsProxyError> {
         // Create a scheme socket.
+        eprintln!("buildfs: creating socket");
         let socket = Socket::create().map_err(|e| {
             BuildFsProxyError::SetupFailed(format!("Socket::create: {e}"))
         })?;
+        eprintln!("buildfs: socket created");
 
         // Get the raw fd before moving the socket into the thread.
-        // We need it for shutdown (close the fd to stop the event loop).
         let socket_fd = socket.inner().raw();
 
-        // Create the handler.
-        let mut handler = BuildFsHandler::new(allow_list);
+        // Create handler (root_fd filled in after registration).
+        let mut handler = BuildFsHandler::new(allow_list, 0);
         let mut state = SchemeState::new();
 
         // Get the root handle ID from the scheme handler.
@@ -72,34 +75,41 @@ impl BuildFsProxy {
             BuildFsProxyError::SetupFailed(format!("scheme_root: {e}"))
         })?;
 
-        // Register as "file" in the CHILD namespace (not the parent's).
-        //
-        // register_sync_scheme() internally calls getns() which returns
-        // the parent's namespace — where file: already exists (redoxfs).
-        // Instead, we use the low-level API:
-        //   1. create_this_scheme_fd() — get a capability fd from the socket
-        //   2. register_scheme_to_ns(child_ns_fd, ...) — register in child ns
-        //
-        // The proxy thread runs in the parent namespace (so std::fs hits
-        // real redoxfs), but the scheme is registered in the child namespace
-        // (so the builder's file: operations route to our proxy).
+        // Register as "file" in the CHILD namespace.
+        eprintln!("buildfs: creating cap fd");
         let cap_fd = socket.create_this_scheme_fd(0, cap_id, 0, 0).map_err(|e| {
             BuildFsProxyError::SetupFailed(
                 format!("create_this_scheme_fd: {e}"),
             )
         })?;
 
+        eprintln!("buildfs: registering in ns_fd={}", child_ns_fd);
         libredox::call::register_scheme_to_ns(child_ns_fd, "file", cap_fd)
             .map_err(|e| {
                 BuildFsProxyError::SetupFailed(
                     format!("register_scheme_to_ns('file'): {e}"),
                 )
             })?;
+        eprintln!("buildfs: registered");
+
+        // Pre-open "/" to get a direct fd to redoxfs.
+        // Must be done AFTER socket creation but BEFORE starting the event loop.
+        // This fd bypasses initnsmgr for file I/O in the handler.
+        eprintln!("buildfs: pre-opening /");
+        let root_file = File::open("/").map_err(|e| {
+            BuildFsProxyError::SetupFailed(format!("open /: {e}"))
+        })?;
+        let root_fd = root_file.as_raw_fd() as usize;
+        eprintln!("buildfs: root_fd={}", root_fd);
+        handler.root_fd = root_fd;
 
         // Spawn the event loop thread.
+        // Move root_file into the thread to keep it alive (it owns the fd
+        // that handler.root_fd references).
         let thread = thread::Builder::new()
             .name("buildfs-proxy".to_string())
             .spawn(move || {
+                let _root_file = root_file; // Keep alive until thread exits.
                 let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
                     run_event_loop(socket, handler, state);
                 }));
@@ -153,18 +163,30 @@ fn run_event_loop(
     mut handler: BuildFsHandler,
     mut state: SchemeState,
 ) {
+    eprintln!("buildfs: event loop started");
     loop {
         let req = match socket.next_request(SignalBehavior::Restart) {
-            Ok(Some(req)) => req,
-            Ok(None) => break,
-            Err(_) => break,
+            Ok(Some(req)) => {
+                eprintln!("buildfs: got request");
+                req
+            }
+            Ok(None) => {
+                eprintln!("buildfs: socket closed");
+                break;
+            }
+            Err(e) => {
+                eprintln!("buildfs: next_request error: {e}");
+                break;
+            }
         };
 
         match req.kind() {
             RequestKind::Call(call_req) => {
                 let response = call_req.handle_sync(&mut handler, &mut state);
                 match socket.write_response(response, SignalBehavior::Restart) {
-                    Ok(true) => {}
+                    Ok(true) => {
+                        eprintln!("buildfs: response sent");
+                    }
                     Ok(false) => break,
                     Err(_) => break,
                 }
@@ -175,4 +197,5 @@ fn run_event_loop(
             _ => continue,
         }
     }
+    eprintln!("buildfs: event loop exited");
 }

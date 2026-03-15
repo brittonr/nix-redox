@@ -28,12 +28,13 @@ Hard-won lessons from building RedoxOS with Nix. Read before making changes.
 - nanosleep syscall works correctly (kernel SYS_NANOSLEEP + scheduler wake verified 2026-03-11)
 
 ### Scheme System
-- Scheme daemons CANNOT do `file:` I/O inside the event loop — blocks the daemon thread forever
-- The `file:` I/O deadlock affects ALL threads in the process, not just the event loop thread — the kernel prevents any context in a scheme-socket-owning process from making `file:` requests (verified 2026-03-15: worker threads with correct parent namespace still deadlock on File::open)
-- A `file:` proxy scheme that needs to read from the real filesystem MUST use a separate process (not thread) for real I/O, or pre-read files before starting the event loop
-- Kernel exec through a userspace `file:` scheme has unresolved error-path bugs: returning ENOENT for the builder binary writes the response successfully but the child process never exits (exec error path doesn't clean up, verified 2026-03-15)
+- Scheme daemons CANNOT do `file:` I/O through the namespace manager (initnsmgr) inside the event loop
+- Root cause: initnsmgr is SINGLE-THREADED — it processes one request at a time. If initnsmgr forwards to your scheme (blocking), and your scheme tries to open a file (which goes through initnsmgr), you get a circular deadlock: initnsmgr→proxy→initnsmgr
+- This affects ALL threads in the process, not just the event loop thread — `File::open()` always routes through `SYS_OPENAT(current_namespace_fd(), ...)` which goes to initnsmgr
+- FIX: Pre-open `/` before starting the proxy to get a direct redoxfs fd. Use `SYS_OPENAT(root_fd, path, ...)` for real file I/O — this bypasses initnsmgr entirely, routing directly to redoxfs through the kernel
+- initnsmgr source: `base-src/bootstrap/src/initnsmgr.rs` — the event loop calls `handle_sync()` then `write_response()` sequentially, no concurrency
 - Use `.control` write interface for notifications (write+close = mutation cycle)
-- Use `FileIoWorker` background thread or inline manifest data for reads (NOTE: FileIoWorker doesn't help for file: schemes — the deadlock is process-wide)
+- `FileIoWorker` background thread doesn't help for file: schemes — use the pre-opened root fd pattern instead
 - `std::fs::canonicalize()` returns `file:/path` on Redox — strip prefix defensively
 - `debug:` scheme supports reads via EVENT_READ, but simple blocking reads from Ion's `read` don't work
 - `getty` works on `debug:` because it uses event-driven non-blocking I/O with event queues

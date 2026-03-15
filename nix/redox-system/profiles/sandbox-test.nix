@@ -61,8 +61,28 @@ let
                         echo "--- snix-build-simple: basic derivation ---"
                         /nix/system/profile/bin/bash -c '
                           mkdir -p /nix/store /nix/var/snix/pathinfo
-                          OUTPUT=$(/bin/snix build --expr "derivation { name = \"snix-build-test\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"-c\" \"echo snix-build-works > \\\$out\"]; system = \"x86_64-unknown-redox\"; }" 2>/tmp/snix-build-simple-err)
+                          echo "[snix-test] starting snix build..."
+                          # Run snix with timeout: fork a background monitor that kills snix after 30s
+                          /bin/snix build --expr "derivation { name = \"snix-build-test\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"-c\" \"echo snix-build-works > \\\$out\"]; system = \"x86_64-unknown-redox\"; }" > /tmp/snix-build-simple-raw &
+                          SNIX_PID=$!
+                          echo "[snix-test] snix pid=$SNIX_PID"
+                          # Wait up to 30 seconds
+                          WAITED=0
+                          while kill -0 $SNIX_PID 2>/dev/null; do
+                            if [ $WAITED -ge 30 ]; then
+                              echo "[snix-test] TIMEOUT: snix still running after 30s, killing"
+                              kill -9 $SNIX_PID 2>/dev/null
+                              wait $SNIX_PID 2>/dev/null
+                              break
+                            fi
+                            read -t 1 < /dev/null || true
+                            WAITED=$((WAITED + 1))
+                          done
+                          wait $SNIX_PID 2>/dev/null
                           EXIT=$?
+                          echo "[snix-test] exit=$EXIT"
+                          cat /tmp/snix-build-simple-raw
+                          OUTPUT=$(grep "^/nix/store" /tmp/snix-build-simple-raw 2>/dev/null | head -1)
                           echo "$OUTPUT" > /tmp/snix-build-simple-output
                           if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -f "$OUTPUT" ]; then
                             CONTENT=$(cat "$OUTPUT")
@@ -73,7 +93,6 @@ let
                             fi
                           else
                             echo "FUNC_TEST:snix-build-simple:FAIL:exit=$EXIT output=$OUTPUT"
-                            cat /tmp/snix-build-simple-err 2>/dev/null
                           fi
                         '
 
