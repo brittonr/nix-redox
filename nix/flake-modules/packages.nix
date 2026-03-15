@@ -465,12 +465,64 @@ let
       done
     '';
 
-  snix = import ../pkgs/userspace/snix.nix (
-    standaloneCommon
-    // {
-      snix-redox-src = ../../snix-redox;
-    }
-  );
+  snix = mkCrossPackage {
+    pname = "snix-redox";
+    src = ../../snix-redox;
+    plan = ../pkgs/userspace/snix-build-plan.json;
+    member = "snix-redox";
+  };
+
+  # === Per-crate helix build (unit2nix) ===
+  #
+  # 191 crates, 11 workspace members. Only helix-term produces a binary (hx).
+  # Renamed to `helix` in the output to match the existing package interface.
+  helixPerCrate =
+    let
+      ws = buildFromUnitGraph {
+        pkgs = crossPkgs;
+        src = inputs.helix-src;
+        resolvedJson = ../pkgs/userspace/helix-build-plan.json;
+        buildRustCrateForPkgs = buildRustCrateForPkgs;
+        skipStalenessCheck = true;
+        extraCrateOverrides = {
+          helix-term = _: {
+            # Prevent build.rs from trying to fetch+compile tree-sitter grammars
+            HELIX_DISABLE_AUTO_GRAMMAR_BUILD = "1";
+          };
+          # helix-loader and helix-view include files from workspace root
+          # (../../languages.toml, ../../theme.toml) via include_bytes!().
+          # Give them the full workspace source so relative paths resolve.
+          helix-loader = _: {
+            src = inputs.helix-src;
+            workspace_member = "helix-loader";
+          };
+          helix-view = _: {
+            src = inputs.helix-src;
+            workspace_member = "helix-view";
+          };
+          # tree-sitter compiles C code via cc crate. Must cross-compile
+          # for Redox, not the host — otherwise picks up glibc headers
+          # and references __fprintf_chk etc. that don't exist in relibc.
+          tree-sitter = _: {
+            CC_x86_64_unknown_redox = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
+            CFLAGS_x86_64_unknown_redox = builtins.concatStringsSep " " [
+              "--target=${redoxTarget}"
+              "-D__redox__"
+              "-U_FORTIFY_SOURCE"
+              "-D_FORTIFY_SOURCE=0"
+              "-I${modularPkgs.system.relibc}/${redoxTarget}/include"
+              "--sysroot=${modularPkgs.system.relibc}/${redoxTarget}"
+            ];
+          };
+        };
+      };
+      hxBin = ws.workspaceMembers.helix-term.build;
+    in
+    # Rename hx → helix to match existing package interface
+    pkgs.runCommand "helix" { } ''
+      mkdir -p $out/bin
+      cp ${hxBin}/bin/hx $out/bin/helix
+    '';
 
   tokei = mkCrossPackage {
     pname = "tokei";
@@ -862,9 +914,9 @@ in
     inherit sysroot sysrootVendor;
 
     # Userspace packages
+    helix = helixPerCrate;
     inherit (modularPkgs.userspace)
       ion
-      helix
       binutils
       netutils
       netcfg-setup
