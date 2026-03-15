@@ -131,6 +131,12 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - `adios.lib.importModules` auto-discovers .nix files in modules/ — but only tracked ones
 - New source files (`.rs`) in flake-referenced paths also need `git add`
 
+### Dotfiles in Copy Operations
+- `cp -r dir/*` does NOT match dotfiles (`.cargo/`, `.config/`, etc.) — bash glob skips them
+- Use `cp -r dir/.` to copy ALL contents including dotfiles
+- The build module's `extraPaths` copies use this pattern for disk image assembly
+- Source bundles with `.cargo/config.toml` silently lost their config when `/*` was used
+
 ### Vendor Hash Workflow
 - Dummy hash `sha256-0000...` triggers mismatch error revealing the real hash
 - Nix 2.31 FOD reference check: test fixture files with `/nix/store/` paths → `fixed-output derivations must not reference store paths`
