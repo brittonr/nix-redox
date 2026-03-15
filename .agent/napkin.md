@@ -28,6 +28,12 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - `let var = $(grep ...)` → "Variable '' does not exist" when grep returns nothing.
 - Use file-based or exit-code-based testing instead.
 
+### `cp -r dir/*` drops dotfiles
+- The build module's extraPaths used `cp -r ${ep.source}/*` which skips dotfiles.
+- Both `.cargo/config.toml` for ripgrep-source-bundle and snix-source-bundle were silently dropped.
+- Fixed by using `cp -r ${ep.source}/.` instead.
+- This caused snix-compile AND all 5 rg-build tests to fail (6 tests total).
+
 ### `tail` does not exist on Redox
 - Test scripts using `tail -c 4096 /tmp/log` fail silently — no output.
 - Use `cat` or `head` (from extrautils) instead.

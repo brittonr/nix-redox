@@ -63,8 +63,9 @@ CARGO_EXIT=$?
 
 if [ $CARGO_EXIT -ne 0 ]; then
   echo "[build-snix] cargo build failed (exit=$CARGO_EXIT)" >&2
-  echo "=== build log (last 4KB) ===" >&2
-  tail -c 4096 "$TMPDIR/snix-build-log" 2>/dev/null >&2
+  echo "=== build log ($(wc -l < "$TMPDIR/snix-build-log") lines, $(wc -c < "$TMPDIR/snix-build-log") bytes) ===" >&2
+  cat "$TMPDIR/snix-build-log" >&2
+  echo "=== end build log ===" >&2
   exit $CARGO_EXIT
 fi
 

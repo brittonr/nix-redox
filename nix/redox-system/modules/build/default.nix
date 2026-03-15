@@ -1564,7 +1564,8 @@ adios:
               builtins.map (ep: ''
                 echo "Copying extra path to ${ep.target}..."
                 mkdir -p "$out/${ep.target}"
-                cp -r ${ep.source}/* "$out/${ep.target}/"
+                # Use /. instead of /* to include dotfiles (.cargo/, etc.)
+                cp -r ${ep.source}/. "$out/${ep.target}/"
               '') (inputs.filesystem.extraPaths or [ ])
             )}
 
