@@ -92,6 +92,15 @@ impl BuildFsProxy {
             })?;
         eprintln!("buildfs: registered");
 
+        // Close cap_fd now that registration is complete. The kernel
+        // duplicated the capability internally during register_scheme_to_ns.
+        // Leaving cap_fd open leaks it to fork'd children (it has no
+        // CLOEXEC), and the child closing it on exit can disrupt the
+        // scheme registration or block the child's _exit path — causing
+        // cmd.output() in the parent to hang (pipe write-ends never close,
+        // or waitpid never returns).
+        let _ = syscall::close(cap_fd);
+
         // Pre-open "/" to get a direct fd to redoxfs.
         // Must be done AFTER socket creation but BEFORE starting the event loop.
         // This fd bypasses initnsmgr for file I/O in the handler.
@@ -125,6 +134,13 @@ impl BuildFsProxy {
             thread: Some(thread),
             socket_fd: Some(socket_fd),
         })
+    }
+
+    /// Return the raw scheme socket fd so the caller can close the
+    /// child's inherited copy in `pre_exec`. The parent's copy is
+    /// unaffected (pre_exec runs in the child after fork).
+    pub fn socket_fd(&self) -> Option<usize> {
+        self.socket_fd
     }
 
     /// Shut down the proxy: close the socket and join the thread.
