@@ -96,25 +96,15 @@ impl BuildFsHandler {
 
     /// Check if a path resolves through symlinks to something allowed.
     ///
-    /// Follows symlinks (up to 40 hops to avoid loops) and checks
-    /// the final target against the allow-list.
+    /// NOTE: We cannot call `fs::canonicalize()` inside the scheme event
+    /// loop — it does `file:` I/O which deadlocks the kernel (the kernel
+    /// prevents any context in a scheme-socket-owning process from making
+    /// `file:` requests). We only check the literal path against the
+    /// allow-list. Symlink resolution happens implicitly when we open
+    /// the real file (which must be done by a separate process, not a
+    /// thread in the scheme daemon process).
     fn check_with_symlink_resolution(&self, path: &Path) -> Permission {
-        // First check the literal path.
-        let perm = self.allow_list.check(path);
-        if perm != Permission::Denied {
-            return perm;
-        }
-
-        // Try resolving symlinks. On Redox, canonicalize() may prepend
-        // "file:" — strip it if present.
-        match fs::canonicalize(path) {
-            Ok(resolved) => {
-                let resolved_str = resolved.to_string_lossy();
-                let clean = resolved_str.strip_prefix("file:").unwrap_or(&resolved_str);
-                self.allow_list.check(Path::new(clean))
-            }
-            Err(_) => Permission::Denied,
-        }
+        self.allow_list.check(path)
     }
 }
 

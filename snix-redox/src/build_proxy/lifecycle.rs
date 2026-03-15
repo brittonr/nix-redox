@@ -5,6 +5,19 @@
 //! event loop processing requests. The socket close (triggered when the
 //! builder exits or snix calls shutdown) terminates the loop.
 //!
+//! ## Known limitation: file: I/O deadlock
+//!
+//! The proxy thread (and ALL threads in the snix process) CANNOT do
+//! `file:` I/O while owning the scheme socket. The kernel prevents any
+//! context in a scheme-socket-owning process from making `file:` requests,
+//! even to a different `file:` scheme instance in a different namespace.
+//!
+//! This means the handler CANNOT open real files to forward them.
+//! A working implementation requires either:
+//! - A separate proxy process (fork, not thread) for real file I/O
+//! - Pre-reading all files into memory before starting the event loop
+//! - Kernel changes to allow cross-namespace file: I/O from scheme owners
+//!
 //! Only compiled on Redox (`#[cfg(target_os = "redox")]`).
 
 use std::panic;
@@ -50,41 +63,38 @@ impl BuildFsProxy {
         // We need it for shutdown (close the fd to stop the event loop).
         let socket_fd = socket.inner().raw();
 
-        // Create the handler and register the scheme.
+        // Create the handler.
         let mut handler = BuildFsHandler::new(allow_list);
         let mut state = SchemeState::new();
 
-        // Register as "file" in the child's namespace.
-        // This is the critical step — the child's file: operations
-        // will route to our proxy instead of redoxfs.
-        let cap_id = match redox_scheme::scheme::register_sync_scheme(
-            &socket, "file", &mut handler,
-        ) {
-            Ok(()) => {
-                eprintln!("buildfs: registered as 'file' in current namespace");
-                // Now register into the child namespace specifically.
-                // The register_sync_scheme registered in the current ns,
-                // but we need it in the child ns. Use register_scheme_to_ns.
-                //
-                // Actually, register_sync_scheme calls register_scheme_inner
-                // which uses getns() → current namespace. We need to register
-                // in the CHILD namespace. Let's use the lower-level API.
-                //
-                // For now, the registration approach:
-                // 1. We call register_sync_scheme which also calls scheme_root
-                // 2. But it registers in our current namespace, not child's
-                //
-                // We need to re-register in the child namespace.
-                // The cap_fd from socket.create_this_scheme_fd is what we need.
-                // Let's handle this more carefully.
-                ()
-            }
-            Err(e) => {
-                return Err(BuildFsProxyError::SetupFailed(
-                    format!("register_sync_scheme('file'): {e}"),
-                ));
-            }
-        };
+        // Get the root handle ID from the scheme handler.
+        let cap_id = handler.scheme_root().map_err(|e| {
+            BuildFsProxyError::SetupFailed(format!("scheme_root: {e}"))
+        })?;
+
+        // Register as "file" in the CHILD namespace (not the parent's).
+        //
+        // register_sync_scheme() internally calls getns() which returns
+        // the parent's namespace — where file: already exists (redoxfs).
+        // Instead, we use the low-level API:
+        //   1. create_this_scheme_fd() — get a capability fd from the socket
+        //   2. register_scheme_to_ns(child_ns_fd, ...) — register in child ns
+        //
+        // The proxy thread runs in the parent namespace (so std::fs hits
+        // real redoxfs), but the scheme is registered in the child namespace
+        // (so the builder's file: operations route to our proxy).
+        let cap_fd = socket.create_this_scheme_fd(0, cap_id, 0, 0).map_err(|e| {
+            BuildFsProxyError::SetupFailed(
+                format!("create_this_scheme_fd: {e}"),
+            )
+        })?;
+
+        libredox::call::register_scheme_to_ns(child_ns_fd, "file", cap_fd)
+            .map_err(|e| {
+                BuildFsProxyError::SetupFailed(
+                    format!("register_scheme_to_ns('file'): {e}"),
+                )
+            })?;
 
         // Spawn the event loop thread.
         let thread = thread::Builder::new()
@@ -124,7 +134,7 @@ impl BuildFsProxy {
         // Join the thread.
         if let Some(thread) = self.thread.take() {
             match thread.join() {
-                Ok(()) => eprintln!("buildfs: proxy thread exited cleanly"),
+                Ok(()) => {}
                 Err(e) => eprintln!("buildfs: proxy thread join error: {e:?}"),
             }
         }
@@ -143,19 +153,11 @@ fn run_event_loop(
     mut handler: BuildFsHandler,
     mut state: SchemeState,
 ) {
-    eprintln!("buildfs: entering event loop");
-
     loop {
         let req = match socket.next_request(SignalBehavior::Restart) {
             Ok(Some(req)) => req,
-            Ok(None) => {
-                eprintln!("buildfs: socket closed, exiting");
-                break;
-            }
-            Err(e) => {
-                eprintln!("buildfs: next_request error: {e}");
-                break;
-            }
+            Ok(None) => break,
+            Err(_) => break,
         };
 
         match req.kind() {
@@ -163,14 +165,8 @@ fn run_event_loop(
                 let response = call_req.handle_sync(&mut handler, &mut state);
                 match socket.write_response(response, SignalBehavior::Restart) {
                     Ok(true) => {}
-                    Ok(false) => {
-                        eprintln!("buildfs: write_response returned false, exiting");
-                        break;
-                    }
-                    Err(e) => {
-                        eprintln!("buildfs: write_response error: {e}");
-                        break;
-                    }
+                    Ok(false) => break,
+                    Err(_) => break,
                 }
             }
             RequestKind::OnClose { id } => {
@@ -179,9 +175,4 @@ fn run_event_loop(
             _ => continue,
         }
     }
-
-    eprintln!(
-        "buildfs: event loop ended ({} handles still open)",
-        handler.handles.len()
-    );
 }
