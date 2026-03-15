@@ -54,6 +54,7 @@ let
     // modularPkgs.system
     // {
       kernel = self'.packages.kernelPerCrate;
+      base = self'.packages.basePerCrate;
     }
     // modularPkgs.userspace
     // modularPkgs.infrastructure
