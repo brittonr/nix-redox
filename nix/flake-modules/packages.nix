@@ -350,6 +350,121 @@ let
       '';
     };
 
+  # === Per-crate base build (unit2nix) ===
+  #
+  # Builds the 46 base system binaries (init, drivers, daemons) with
+  # per-crate Nix caching. Changing one driver rebuilds only that crate
+  # and its direct dependents — the ~170 registry deps are cached.
+  basePerCrate =
+    let
+      patchedBaseSrc = modularPkgs.system.base.src;
+
+      # External path deps: the patched Cargo.toml replaces git deps with
+      # absolute /nix/store paths. Pure evaluation can't resolve those from
+      # the JSON, so we override src per crate to point to flake inputs.
+      externalSrcOverrides = {
+        fdt = _: {
+          src = inputs.fdt-src;
+        };
+        redox-log = _: {
+          src = inputs.redox-log-src;
+        };
+        drm = _: {
+          src = inputs.drm-rs-src;
+        };
+        drm-ffi = _: {
+          src = inputs.drm-rs-src + "/drm-ffi";
+        };
+        drm-sys = _: {
+          src = inputs.drm-rs-src + "/drm-ffi/drm-sys";
+        };
+        # redox-rt uses `#[path = "../../src/platform/auxv_defs.rs"]` so it
+        # needs the full relibc source tree, not just its subdirectory.
+        # buildRustCrate unpacks into a flat dir and compiles from there,
+        # so we give it the whole tree and set workspace_member to navigate.
+        generic-rt = _: {
+          src = inputs.relibc-src;
+          workspace_member = "generic-rt";
+        };
+        redox-rt = _: {
+          src = inputs.relibc-src;
+          workspace_member = "redox-rt";
+        };
+      };
+
+      ws = buildFromUnitGraph {
+        pkgs = crossPkgs;
+        src = patchedBaseSrc;
+        resolvedJson = ../pkgs/system/base-build-plan.json;
+        buildRustCrateForPkgs = buildRustCrateForPkgs;
+        skipStalenessCheck = true;
+        extraCrateOverrides = externalSrcOverrides;
+      };
+
+      # Workspace members that produce binaries (46 total).
+      # Lib-only members (common, config, daemon, etc.) are internal deps.
+      binMembers = [
+        "ac97d"
+        "acpid"
+        "ahcid"
+        "audiod"
+        "bcm2835-sdhcid"
+        "bgad"
+        "e1000d"
+        "fbbootlogd"
+        "fbcond"
+        "hwd"
+        "ided"
+        "ihdad"
+        "ihdgd"
+        "init"
+        "inputd"
+        "ipcd"
+        "ixgbed"
+        "lived"
+        "logd"
+        "nvmed"
+        "pcid"
+        "pcid-spawner"
+        "ps2d"
+        "ptyd"
+        "ramfs"
+        "randd"
+        "redox-initfs-tools"
+        "redox_netstack"
+        "redoxerd"
+        "rtcd"
+        "rtl8139d"
+        "rtl8168d"
+        "sb16d"
+        "usbctl"
+        "usbhidd"
+        "usbhubd"
+        "usbscsid"
+        "vboxd"
+        "vesad"
+        "virtio-blkd"
+        "virtio-fsd"
+        "virtio-gpud"
+        "virtio-netd"
+        "xhcid"
+        "zerod"
+      ];
+
+      memberBuilds = map (name: ws.workspaceMembers.${name}.build) binMembers;
+    in
+    # Collect all workspace member binaries into a single output.
+    # Must copy (not symlink) because Redox can't follow symlinks to
+    # /nix/store paths — the store doesn't exist on the target rootfs.
+    pkgs.runCommand "redox-base-percrate-unstable" { } ''
+      mkdir -p $out/bin
+      for pkg in ${lib.concatMapStringsSep " " toString memberBuilds}; do
+        for bin in "$pkg"/bin/*; do
+          [ -f "$bin" ] && cp "$bin" $out/bin/
+        done
+      done
+    '';
+
   snix = import ../pkgs/userspace/snix.nix (
     standaloneCommon
     // {
@@ -862,8 +977,8 @@ in
     # Infrastructure (needed by module system)
     inherit (modularPkgs.infrastructure) initfsTools bootstrap;
 
-    # Per-crate kernel (unit2nix incremental build)
-    inherit kernelPerCrate;
+    # Per-crate builds (unit2nix incremental)
+    inherit kernelPerCrate basePerCrate;
 
     # Default package
     default = modularPkgs.host.fstools;
