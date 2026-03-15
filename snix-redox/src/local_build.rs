@@ -344,26 +344,11 @@ fn build_derivation_inner(
         }
     }
 
-    // On Redox, cmd.output() creates pipes and reads with read2().
-    // Deep process hierarchies (builder→cargo→rustc→cc→lld) crash when
-    // the CC wrapper closes pipe fds — the grandparent's poll/read2
-    // enters an unrecoverable state. Fix: use inherited stdio + status()
-    // so builder output goes to the terminal, avoiding pipes entirely.
-    //
-    // On other platforms (tests), use cmd.output() for captured stderr.
-    #[cfg(target_os = "redox")]
-    let (status, captured_stderr) = {
-        let s = cmd
-            .stdout(std::process::Stdio::inherit())
-            .stderr(std::process::Stdio::inherit())
-            .status()
-            .map_err(|e| {
-                BuildError::Io(format!("executing builder '{}': {e}", drv.builder))
-            })?;
-        (s, String::new())
-    };
-
-    #[cfg(not(target_os = "redox"))]
+    // With the LAPIC timer fix, the scheduler reliably wakes HLTing
+    // CPUs on KVM. cmd.output() pipe-based process wait should now work
+    // on Redox for deep process hierarchies (builder→cargo→rustc→cc→lld).
+    // Previously this crashed because the scheduler never ran to drain
+    // pipes — not a pipe bug per se, but a scheduling starvation issue.
     let (status, captured_stderr) = {
         let output = cmd.output().map_err(|e| {
             BuildError::Io(format!("executing builder '{}': {e}", drv.builder))
