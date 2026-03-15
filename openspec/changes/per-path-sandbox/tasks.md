@@ -1,7 +1,7 @@
 ## 1. Validate Proxy with Simple Builds
 
-- [ ] 1.1 Create a `sandbox-test` profile variant in `nix/redox-system/profiles/` that clones self-hosting-test but with `sandbox = true` and runs only the simplest builds first (hello world, single-crate with no deps, single-crate with 1 dep). Wire it as `nix run .#sandbox-test`.
-- [ ] 1.2 Run `sandbox-test` and collect the first round of failures. Document each failure mode: which syscall, which flags, which path triggered the error.
+- [x] 1.1 Create a `sandbox-test` profile variant in `nix/redox-system/profiles/` that clones self-hosting-test but with `sandbox = true` and runs only the simplest builds first (hello world, single-crate with no deps, single-crate with 1 dep). Wire it as `nix run .#sandbox-test`.
+- [x] 1.2 Run `sandbox-test` and collect the first round of failures. Document each failure mode: which syscall, which flags, which path triggered the error.
 - [ ] 1.3 Add `translate_open_flags()` function to `handler.rs` that explicitly maps each Redox open flag (`O_RDONLY=0x10000`, `O_CREAT=0x02000000`, `O_RDWR`, `O_TRUNC`, `O_DIRECTORY`, `O_APPEND`) to the handler's write-intent determination. Replace the current inline `wants_write` logic in `openat`.
 - [ ] 1.4 Add recursive `mkdir_p` to `handler.rs` `openat`: when `O_CREAT` is set and the path is under a read-write prefix, create missing parent directories before opening the file. Only create dirs under `$out` and `$TMPDIR` — never under read-only prefixes.
 - [ ] 1.5 Re-run `sandbox-test` after flag translation and mkdir fixes. All simple builds should pass.

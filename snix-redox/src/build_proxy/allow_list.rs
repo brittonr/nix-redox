@@ -158,6 +158,28 @@ use nix_compat::derivation::Derivation;
 
 use crate::known_paths::KnownPaths;
 
+/// System paths that every builder needs read-only access to.
+///
+/// On Redox, these provide:
+///   - `/nix/system/profile` — system tools (bash, coreutils, cc, etc.)
+///   - `/usr/lib` — dynamic linker (ld64.so.1) and runtime libraries
+///   - `/lib` — additional shared libraries
+///   - `/etc` — system configuration (timezone, hostname, snix config)
+///   - `/nix/store` — entire store (read-only, matching Nix sandbox semantics)
+///
+/// The full-store read-only access matches how Nix sandbox works on Linux:
+/// the entire /nix/store is bind-mounted read-only. Per-derivation filtering
+/// (only declared inputs) would be stricter but requires resolving the
+/// transitive closure of the builder binary's shared libraries, which the
+/// allow-list doesn't support yet.
+const SYSTEM_READ_ONLY_PATHS: &[&str] = &[
+    "/nix/system/profile",
+    "/nix/store",
+    "/usr/lib",
+    "/lib",
+    "/etc",
+];
+
 /// Build an `AllowList` from a derivation's declared inputs.
 ///
 /// Read-write:
@@ -165,8 +187,10 @@ use crate::known_paths::KnownPaths;
 ///   - `tmp_dir` — the derivation's `$TMPDIR`
 ///
 /// Read-only:
+///   - System paths needed for execution (builder binary, dynamic linker, etc.)
 ///   - Resolved output paths of all `input_derivations`
 ///   - All `input_sources` (plain store path inputs)
+///   - The builder binary path itself
 pub fn build_allow_list(
     drv: &Derivation,
     known_paths: &KnownPaths,
@@ -178,6 +202,20 @@ pub fn build_allow_list(
     // Read-write: output directory and temp directory.
     list.read_write.insert(normalize_path(output_dir));
     list.read_write.insert(normalize_path(tmp_dir));
+
+    // Read-only: system paths needed for builder execution.
+    // The builder binary, dynamic linker, shared libraries, and
+    // the entire store (matching Nix sandbox semantics on Linux).
+    for path in SYSTEM_READ_ONLY_PATHS {
+        list.read_only.insert(normalize_path(path));
+    }
+
+    // Read-only: the builder binary itself (may not be under /nix/).
+    if !drv.builder.is_empty() {
+        // Add the builder path and its parent directory.
+        let builder_path = normalize_path(&drv.builder);
+        list.read_only.insert(builder_path);
+    }
 
     // Read-only: input sources.
     for src in &drv.input_sources {
@@ -395,8 +433,18 @@ mod tests {
         assert!(list.can_write(Path::new("/nix/store/out-hash-name/bin/foo")));
         assert!(list.can_write(Path::new("/tmp/build-1/scratch.o")));
 
-        // Nothing else is allowed.
-        assert!(!list.can_read(Path::new("/etc/passwd")));
+        // System paths are read-only (builder needs them).
+        assert!(list.can_read(Path::new("/nix/system/profile/bin/bash")));
+        assert!(list.can_read(Path::new("/nix/store/abc-any-store-path/lib/foo")));
+        assert!(list.can_read(Path::new("/usr/lib/ld64.so.1")));
+        assert!(list.can_read(Path::new("/etc/snix/config")));
+
+        // System paths are NOT writable.
+        assert!(!list.can_write(Path::new("/nix/system/profile/bin/bash")));
+        assert!(!list.can_write(Path::new("/nix/store/abc-any-store-path/lib/foo")));
+
+        // Home dirs are not allowed.
+        assert!(!list.can_read(Path::new("/home/user/.ssh/id_rsa")));
     }
 
     #[test]

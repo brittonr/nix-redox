@@ -29,8 +29,11 @@ Hard-won lessons from building RedoxOS with Nix. Read before making changes.
 
 ### Scheme System
 - Scheme daemons CANNOT do `file:` I/O inside the event loop — blocks the daemon thread forever
+- The `file:` I/O deadlock affects ALL threads in the process, not just the event loop thread — the kernel prevents any context in a scheme-socket-owning process from making `file:` requests (verified 2026-03-15: worker threads with correct parent namespace still deadlock on File::open)
+- A `file:` proxy scheme that needs to read from the real filesystem MUST use a separate process (not thread) for real I/O, or pre-read files before starting the event loop
+- Kernel exec through a userspace `file:` scheme has unresolved error-path bugs: returning ENOENT for the builder binary writes the response successfully but the child process never exits (exec error path doesn't clean up, verified 2026-03-15)
 - Use `.control` write interface for notifications (write+close = mutation cycle)
-- Use `FileIoWorker` background thread or inline manifest data for reads
+- Use `FileIoWorker` background thread or inline manifest data for reads (NOTE: FileIoWorker doesn't help for file: schemes — the deadlock is process-wide)
 - `std::fs::canonicalize()` returns `file:/path` on Redox — strip prefix defensively
 - `debug:` scheme supports reads via EVENT_READ, but simple blocking reads from Ion's `read` don't work
 - `getty` works on `debug:` because it uses event-driven non-blocking I/O with event queues
