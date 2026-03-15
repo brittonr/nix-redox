@@ -68,6 +68,17 @@ let
     inherit (redoxLib) stubLibs;
   };
 
+  # Kernel buildRustCrate for x86_64-unknown-kernel target.
+  kernelTargetSpec = "${inputs.kernel-src}/targets/x86_64-unknown-kernel.json";
+  kernelBRC = import ../lib/kernel-buildRustCrate.nix {
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      kernelTargetSpec
+      ;
+  };
+
   # Host buildRustCrate for build scripts and proc-macros (run on build machine).
   hostBRC = pkgs.buildRustCrate.override {
     rustc = rustToolchain;
@@ -84,6 +95,12 @@ let
     buildPackages = hostPkgs;
   };
   buildRustCrateForPkgs = cratePkgs: if cratePkgs ? __isHostPkgs then hostBRC else redoxBRC;
+
+  # Kernel cross-compilation dispatch: target crates → kernelBRC, build-time → hostBRC.
+  kernelCrossPkgs = pkgs // {
+    buildPackages = hostPkgs;
+  };
+  kernelBRCForPkgs = cratePkgs: if cratePkgs ? __isHostPkgs then hostBRC else kernelBRC;
 
   # Build a package from a checked-in JSON build plan.
   mkCrossPackage =
@@ -259,6 +276,79 @@ let
     plan = ../pkgs/infrastructure/dust-redox-plan.json;
     member = "du-dust";
   };
+
+  # === Per-crate kernel build (unit2nix) ===
+  #
+  # Builds the Redox kernel with per-crate Nix caching. When only kernel
+  # source changes, the 38 registry deps + 3 stdlib crates are cached,
+  # rebuilding only kernel + rmm (~10-15s instead of ~74s).
+  kernelPerCrate =
+    let
+      # The kernel source with patches applied (same as kernel.nix's patchedSrc)
+      patchedKernelSrc = modularPkgs.system.kernel.src;
+      rustSrcPath = "${rustToolchain}/lib/rustlib/src/rust";
+
+      ws = buildFromUnitGraph {
+        pkgs = kernelCrossPkgs;
+        src = patchedKernelSrc;
+        resolvedJson = ../pkgs/system/kernel-build-plan.json;
+        buildRustCrateForPkgs = kernelBRCForPkgs;
+        skipStalenessCheck = true;
+        inherit rustSrcPath;
+        extraCrateOverrides = {
+          # The kernel crate needs nasm for build.rs and linker script args.
+          kernel = attrs: {
+            nativeBuildInputs = (attrs.nativeBuildInputs or [ ]) ++ [
+              pkgs.nasm
+            ];
+            # Linker script and page size args passed to rustc for the final link.
+            extraRustcOpts = (attrs.extraRustcOpts or [ ]) ++ [
+              "-C"
+              "link-arg=-T"
+              "-C"
+              "link-arg=${patchedKernelSrc}/linkers/x86_64.ld"
+              "-C"
+              "link-arg=-z"
+              "-C"
+              "link-arg=max-page-size=0x1000"
+            ];
+            # Prevent fixup phase from stripping debug info — we split it
+            # into a .sym file in the post-processing derivation.
+            dontStrip = true;
+            # buildRustCrate needs the assembly files for the build script
+            postPatch = ''
+              # Ensure assembly files are in the right place
+              if [ ! -d src/asm ]; then
+                echo "warning: no src/asm directory" >&2
+              fi
+            '';
+          };
+        };
+      };
+
+      kernelCrate = ws.workspaceMembers.kernel.build;
+    in
+    # Post-process: strip debug info into separate .sym file
+    pkgs.stdenv.mkDerivation {
+      pname = "redox-kernel-percrate";
+      version = "unstable";
+      dontUnpack = true;
+      nativeBuildInputs = [ pkgs.llvmPackages.llvm ];
+      installPhase = ''
+        mkdir -p $out/boot
+
+        # Find the kernel binary produced by buildRustCrate
+        KBIN=$(find ${kernelCrate} -name "kernel" -type f | head -1)
+        if [ -z "$KBIN" ]; then
+          echo "ERROR: kernel binary not found in ${kernelCrate}" >&2
+          find ${kernelCrate} -type f | head -20 >&2
+          exit 1
+        fi
+
+        llvm-objcopy --only-keep-debug "$KBIN" $out/boot/kernel.sym
+        llvm-objcopy --strip-debug "$KBIN" $out/boot/kernel
+      '';
+    };
 
   snix = import ../pkgs/userspace/snix.nix (
     standaloneCommon
@@ -771,6 +861,9 @@ in
 
     # Infrastructure (needed by module system)
     inherit (modularPkgs.infrastructure) initfsTools bootstrap;
+
+    # Per-crate kernel (unit2nix incremental build)
+    inherit kernelPerCrate;
 
     # Default package
     default = modularPkgs.host.fstools;
