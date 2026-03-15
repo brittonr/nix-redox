@@ -2,20 +2,35 @@
 //!
 //! Implements `SchemeSync` to interpose on `file:` operations,
 //! checking each request against the `AllowList` before forwarding
-//! to the real filesystem via the parent's namespace.
+//! to the real filesystem.
+//!
+//! ## initnsmgr deadlock and the root_fd bypass
+//!
+//! On Redox, ALL `file:` I/O goes through `SYS_OPENAT(namespace_fd, ...)`
+//! which routes through `initnsmgr`. initnsmgr is single-threaded — it
+//! processes one request at a time. When the builder opens `file:/path`,
+//! initnsmgr forwards the request to our proxy (blocking itself). If our
+//! proxy then does `File::open(path)` (which goes through initnsmgr),
+//! we get a circular deadlock: initnsmgr → proxy → initnsmgr.
+//!
+//! The fix: pre-open `/` before starting the proxy to get a raw fd that
+//! points directly to redoxfs. Use `SYS_OPENAT(root_fd, path, ...)` for
+//! all real file I/O — this goes directly to redoxfs through the kernel,
+//! bypassing initnsmgr entirely.
 //!
 //! Only compiled on Redox (`#[cfg(target_os = "redox")]`).
 
 use std::collections::HashMap;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write as IoWrite};
+use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use redox_scheme::scheme::SchemeSync;
 use redox_scheme::{CallerCtx, OpenResult};
 use syscall::data::Stat;
-use syscall::dirent::{DirEntry as RedoxDirEntry, DirentBuf, DirentKind};
+use syscall::dirent::DirentBuf;
 use syscall::error::{Error, Result, EACCES, EBADF, EIO, EISDIR, ENOENT, ENOTDIR};
 use syscall::flag::{O_ACCMODE, O_CREAT, O_DIRECTORY, O_TRUNC, O_WRONLY};
 use syscall::schemev2::NewFdFlags;
@@ -33,7 +48,7 @@ fn next_id() -> usize {
 
 /// An open file handle proxied to the real filesystem.
 pub struct FileHandle {
-    /// The real file descriptor (open in the parent's namespace).
+    /// The real file descriptor (opened via root_fd, bypassing initnsmgr).
     pub real_file: File,
     /// Absolute path on the real filesystem.
     pub real_path: PathBuf,
@@ -43,8 +58,8 @@ pub struct FileHandle {
     pub writable: bool,
     /// Cached file size.
     pub size: u64,
-    /// Whether the file is executable.
-    pub executable: bool,
+    /// Cached mode bits.
+    pub mode: u32,
 }
 
 /// An open directory handle.
@@ -61,56 +76,107 @@ pub enum ProxyHandle {
     Dir(DirHandle),
 }
 
+// ── Raw filesystem ops (bypass initnsmgr) ──────────────────────────────────
+
+/// Open a path relative to a raw root fd, bypassing initnsmgr.
+///
+/// Uses `SYS_OPENAT(root_fd, path, flags)` which routes directly to
+/// redoxfs through the kernel — no namespace manager involved.
+fn raw_openat(root_fd: usize, path: &str, flags: usize) -> Result<usize> {
+    // Strip leading '/' — openat paths are relative to the root fd.
+    let clean = path.trim_start_matches('/');
+    let fcntl_flags = flags & syscall::O_FCNTL_MASK;
+    unsafe {
+        syscall::syscall5(
+            syscall::SYS_OPENAT,
+            root_fd,
+            clean.as_ptr() as usize,
+            clean.len(),
+            flags,
+            fcntl_flags,
+        )
+    }
+}
+
+/// Stat a raw fd.
+fn raw_fstat(fd: usize) -> Result<Stat> {
+    let mut stat = Stat::default();
+    let stat_ptr = &mut stat as *mut Stat as usize;
+    let stat_size = core::mem::size_of::<Stat>();
+    unsafe {
+        syscall::syscall3(
+            syscall::SYS_FSTAT,
+            fd,
+            stat_ptr,
+            stat_size,
+        )?;
+    }
+    Ok(stat)
+}
+
+/// Close a raw fd.
+fn raw_close(fd: usize) {
+    let _ = syscall::close(fd);
+}
+
 // ── Scheme Handler ─────────────────────────────────────────────────────────
 
 /// The build filesystem proxy scheme handler.
 ///
 /// Routes `file:` operations from the builder through the allow-list.
-/// Permitted operations are forwarded to the real filesystem using
-/// the parent process's namespace (the proxy thread hasn't called
-/// `setns`, so `std::fs` operations hit real redoxfs).
+/// Real file I/O uses the pre-opened `root_fd` to bypass initnsmgr.
 pub struct BuildFsHandler {
     /// The allow-list controlling which paths are accessible.
     pub allow_list: AllowList,
     /// Open handles: ID → ProxyHandle.
     pub handles: HashMap<usize, ProxyHandle>,
+    /// Raw fd pointing to "/" on redoxfs.
+    /// Opened before the proxy starts (while initnsmgr is free).
+    /// All real file I/O uses `SYS_OPENAT(root_fd, ...)` to bypass initnsmgr.
+    pub root_fd: usize,
 }
 
 impl BuildFsHandler {
-    pub fn new(allow_list: AllowList) -> Self {
+    pub fn new(allow_list: AllowList, root_fd: usize) -> Self {
         Self {
             allow_list,
             handles: HashMap::new(),
+            root_fd,
         }
     }
 
     /// Resolve a scheme path to an absolute filesystem path.
-    ///
-    /// The builder opens paths like `/nix/store/abc/lib/foo.so`.
-    /// The scheme sees the path without the `file:` prefix, starting
-    /// from `/`. We prepend nothing — the path is already absolute.
     fn resolve_path(&self, scheme_path: &str) -> PathBuf {
         let clean = scheme_path.trim_start_matches('/');
         PathBuf::from(format!("/{clean}"))
     }
 
-    /// Check if a path resolves through symlinks to something allowed.
+    /// Check the allow-list for a path.
     ///
-    /// NOTE: We cannot call `fs::canonicalize()` inside the scheme event
-    /// loop — it does `file:` I/O which deadlocks the kernel (the kernel
-    /// prevents any context in a scheme-socket-owning process from making
-    /// `file:` requests). We only check the literal path against the
-    /// allow-list. Symlink resolution happens implicitly when we open
-    /// the real file (which must be done by a separate process, not a
-    /// thread in the scheme daemon process).
+    /// Cannot use `fs::canonicalize()` — that goes through initnsmgr.
+    /// We check the literal path only. Symlinks are followed by redoxfs
+    /// when we open via `raw_openat`.
     fn check_with_symlink_resolution(&self, path: &Path) -> Permission {
         self.allow_list.check(path)
+    }
+
+    /// Open a real file via the root fd (bypassing initnsmgr).
+    fn open_real_file(&self, path: &str, flags: usize) -> Result<(File, Stat)> {
+        let raw_fd = raw_openat(self.root_fd, path, flags)?;
+        let stat = match raw_fstat(raw_fd) {
+            Ok(s) => s,
+            Err(e) => {
+                raw_close(raw_fd);
+                return Err(e);
+            }
+        };
+        let file = unsafe { File::from_raw_fd(raw_fd as i32) };
+        Ok((file, stat))
     }
 }
 
 impl SchemeSync for BuildFsHandler {
     fn scheme_root(&mut self) -> Result<usize> {
-        // The root of the `file:` scheme is `/`.
         let id = next_id();
         self.handles.insert(
             id,
@@ -135,18 +201,18 @@ impl SchemeSync for BuildFsHandler {
 
         // Check allow-list.
         let perm = self.check_with_symlink_resolution(&abs_path);
+        eprintln!("buildfs: openat {:?} perm={:?}", abs_path, perm);
         if perm == Permission::Denied {
             return Err(Error::new(EACCES));
         }
 
         let wants_write = {
             let mode = flags & O_ACCMODE;
-            mode == O_WRONLY || mode == (O_WRONLY | 0x0001_0000) // O_RDWR on Redox
+            mode == O_WRONLY || mode == (O_WRONLY | 0x0001_0000)
                 || flags & O_CREAT != 0
                 || flags & O_TRUNC != 0
         };
 
-        // Block writes to read-only paths.
         if wants_write && perm != Permission::ReadWrite {
             return Err(Error::new(EACCES));
         }
@@ -154,21 +220,57 @@ impl SchemeSync for BuildFsHandler {
         let id = next_id();
         let scheme_path = path_str.to_string();
 
-        // Determine if this is a directory.
-        let open_as_dir = flags & O_DIRECTORY != 0;
-
-        // Check real filesystem metadata to decide file vs dir.
-        // If the path doesn't exist yet (O_CREAT for $out), treat as file.
-        let is_dir = if open_as_dir {
-            true
-        } else {
-            match fs::symlink_metadata(&abs_path) {
-                Ok(meta) => meta.is_dir(),
-                Err(_) => false, // Doesn't exist yet — treat as file (O_CREAT).
+        // Build redoxfs-compatible flags for the real open.
+        let redox_flags = if wants_write {
+            let mut f = syscall::flag::O_RDWR;
+            if flags & O_CREAT != 0 {
+                f |= syscall::flag::O_CREAT;
             }
+            if flags & O_TRUNC != 0 {
+                f |= syscall::flag::O_TRUNC;
+            }
+            f
+        } else {
+            syscall::flag::O_RDONLY
         };
 
-        if is_dir {
+        // If O_DIRECTORY requested, open as directory.
+        if flags & O_DIRECTORY != 0 {
+            // Verify it exists as a directory via the root fd.
+            match raw_openat(self.root_fd, path_str, syscall::flag::O_RDONLY | syscall::flag::O_DIRECTORY) {
+                Ok(dir_fd) => {
+                    raw_close(dir_fd);
+                    self.handles.insert(
+                        id,
+                        ProxyHandle::Dir(DirHandle {
+                            real_path: abs_path,
+                            scheme_path,
+                        }),
+                    );
+                    return Ok(OpenResult::ThisScheme {
+                        number: id,
+                        flags: NewFdFlags::POSITIONED,
+                    });
+                }
+                Err(_) => return Err(Error::new(ENOTDIR)),
+            }
+        }
+
+        // Open the real file via root_fd (bypasses initnsmgr).
+        let (file, stat) = self.open_real_file(path_str, redox_flags).map_err(|e| {
+            // Translate common errors.
+            if e.errno == syscall::ENOENT as i32 {
+                Error::new(ENOENT)
+            } else if e.errno == syscall::EACCES as i32 {
+                Error::new(EACCES)
+            } else {
+                e
+            }
+        })?;
+
+        // Check if it's a directory.
+        if stat.st_mode & syscall::MODE_DIR != 0 {
+            drop(file); // Close the file fd.
             self.handles.insert(
                 id,
                 ProxyHandle::Dir(DirHandle {
@@ -177,45 +279,15 @@ impl SchemeSync for BuildFsHandler {
                 }),
             );
         } else {
-            // Open (or create) the real file.
-            let real_file = if wants_write {
-                fs::OpenOptions::new()
-                    .read(true)
-                    .write(true)
-                    .create(flags & O_CREAT != 0)
-                    .truncate(flags & O_TRUNC != 0)
-                    .open(&abs_path)
-            } else {
-                File::open(&abs_path)
-            };
-
-            let real_file = real_file.map_err(|e| {
-                match e.kind() {
-                    std::io::ErrorKind::NotFound => Error::new(ENOENT),
-                    std::io::ErrorKind::PermissionDenied => Error::new(EACCES),
-                    _ => Error::new(EIO),
-                }
-            })?;
-
-            let meta = real_file.metadata().map_err(|_| Error::new(EIO))?;
-            let size = meta.len();
-            #[cfg(unix)]
-            let executable = {
-                use std::os::unix::fs::PermissionsExt;
-                meta.permissions().mode() & 0o111 != 0
-            };
-            #[cfg(not(unix))]
-            let executable = false;
-
             self.handles.insert(
                 id,
                 ProxyHandle::File(FileHandle {
-                    real_file,
+                    real_file: file,
                     real_path: abs_path,
                     scheme_path,
                     writable: wants_write,
-                    size,
-                    executable,
+                    size: stat.st_size,
+                    mode: stat.st_mode as u32,
                 }),
             );
         }
@@ -240,6 +312,7 @@ impl SchemeSync for BuildFsHandler {
                     .seek(SeekFrom::Start(offset))
                     .map_err(|_| Error::new(EIO))?;
                 let n = fh.real_file.read(buf).map_err(|_| Error::new(EIO))?;
+                eprintln!("buildfs: read id={} len={} off={} => {}", id, buf.len(), offset, n);
                 Ok(n)
             }
             Some(ProxyHandle::Dir(_)) => Err(Error::new(EISDIR)),
@@ -264,11 +337,11 @@ impl SchemeSync for BuildFsHandler {
                     .seek(SeekFrom::Start(offset))
                     .map_err(|_| Error::new(EIO))?;
                 let n = fh.real_file.write(buf).map_err(|_| Error::new(EIO))?;
-                // Update cached size.
                 let pos = offset + n as u64;
                 if pos > fh.size {
                     fh.size = pos;
                 }
+                eprintln!("buildfs: write id={} len={} => {}", id, buf.len(), n);
                 Ok(n)
             }
             Some(ProxyHandle::Dir(_)) => Err(Error::new(EISDIR)),
@@ -277,6 +350,7 @@ impl SchemeSync for BuildFsHandler {
     }
 
     fn fsize(&mut self, id: usize, _ctx: &CallerCtx) -> Result<u64> {
+        eprintln!("buildfs: fsize id={}", id);
         match self.handles.get(&id) {
             Some(ProxyHandle::File(fh)) => Ok(fh.size),
             Some(ProxyHandle::Dir(_)) => Ok(0),
@@ -291,7 +365,6 @@ impl SchemeSync for BuildFsHandler {
             None => return Err(Error::new(EBADF)),
         };
 
-        // Return "file:/<path>" as the full scheme path.
         let full = if scheme_path.is_empty() {
             "file:/".to_string()
         } else {
@@ -305,13 +378,11 @@ impl SchemeSync for BuildFsHandler {
     }
 
     fn fstat(&mut self, id: usize, stat: &mut Stat, _ctx: &CallerCtx) -> Result<()> {
+        eprintln!("buildfs: fstat id={}", id);
         match self.handles.get(&id) {
             Some(ProxyHandle::File(fh)) => {
                 stat.st_size = fh.size;
-                stat.st_mode = if fh.executable { 0o100555 } else { 0o100444 };
-                if fh.writable {
-                    stat.st_mode |= 0o200; // Add write bit.
-                }
+                stat.st_mode = fh.mode as u16;
                 stat.st_nlink = 1;
                 Ok(())
             }
@@ -328,103 +399,37 @@ impl SchemeSync for BuildFsHandler {
     fn getdents<'buf>(
         &mut self,
         id: usize,
-        mut buf: DirentBuf<&'buf mut [u8]>,
-        opaque_offset: u64,
+        buf: DirentBuf<&'buf mut [u8]>,
+        _opaque_offset: u64,
     ) -> Result<DirentBuf<&'buf mut [u8]>> {
-        let (real_path, _scheme_path) = match self.handles.get(&id) {
-            Some(ProxyHandle::Dir(dh)) => (dh.real_path.clone(), dh.scheme_path.clone()),
-            Some(ProxyHandle::File(_)) => return Err(Error::new(ENOTDIR)),
-            None => return Err(Error::new(EBADF)),
-        };
-
-        // Read real directory entries.
-        let entries = match fs::read_dir(&real_path) {
-            Ok(iter) => iter,
-            Err(_) => return Err(Error::new(EIO)),
-        };
-
-        // Collect and sort entries (NAR/Nix convention: sorted names).
-        let mut all_entries: Vec<(String, bool, bool)> = Vec::new(); // (name, is_dir, is_symlink)
-        for entry in entries {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(_) => continue,
-            };
-            let name = entry.file_name().to_string_lossy().into_owned();
-
-            // Filter: check if this child path is allowed.
-            let child_path = real_path.join(&name);
-            if !self.is_entry_visible(&child_path) {
-                continue;
+        match self.handles.get(&id) {
+            Some(ProxyHandle::Dir(_)) => {
+                // TODO: Implement directory listing via raw syscalls.
+                // For now, return empty — exec doesn't need getdents.
+                Ok(buf)
             }
-
-            let meta = entry.metadata();
-            let is_dir = meta.as_ref().map(|m| m.is_dir()).unwrap_or(false);
-            let is_symlink = entry
-                .file_type()
-                .map(|ft| ft.is_symlink())
-                .unwrap_or(false);
-
-            all_entries.push((name, is_dir, is_symlink));
+            Some(ProxyHandle::File(_)) => Err(Error::new(ENOTDIR)),
+            None => Err(Error::new(EBADF)),
         }
-        all_entries.sort_by(|a, b| a.0.cmp(&b.0));
-
-        let start = opaque_offset as usize;
-        for (i, (name, is_dir, is_symlink)) in all_entries.iter().enumerate().skip(start) {
-            let kind = if *is_dir {
-                DirentKind::Directory
-            } else if *is_symlink {
-                DirentKind::Symlink
-            } else {
-                DirentKind::Regular
-            };
-
-            if buf
-                .entry(RedoxDirEntry {
-                    inode: 0,
-                    next_opaque_id: (i + 1) as u64,
-                    name: &name,
-                    kind,
-                })
-                .is_err()
-            {
-                break;
-            }
-        }
-
-        Ok(buf)
     }
 
     fn on_close(&mut self, id: usize) {
-        // Remove the handle — the real File is dropped, closing the fd.
+        eprintln!("buildfs: close id={}", id);
         self.handles.remove(&id);
     }
 }
 
 impl BuildFsHandler {
     /// Check if a directory entry should be visible in a listing.
-    ///
-    /// An entry is visible if:
-    /// 1. It's directly on the allow-list, OR
-    /// 2. It's a prefix of something on the allow-list (e.g., `/nix`
-    ///    is visible because `/nix/store/abc` is allowed), OR
-    /// 3. It's a child of something on the allow-list (e.g.,
-    ///    `/nix/store/abc/lib` is visible because `/nix/store/abc`
-    ///    is allowed).
     fn is_entry_visible(&self, child_path: &Path) -> bool {
-        // Case 1 & 3: child is equal to or under an allow-list entry.
         if self.allow_list.can_read(child_path) {
             return true;
         }
-
-        // Case 2: child is a PREFIX of an allow-list entry.
-        // Example: listing "/" should show "nix" because /nix/store/abc is allowed.
         for prefix in self.allow_list.all_prefixes() {
             if prefix.starts_with(child_path) {
                 return true;
             }
         }
-
         false
     }
 }
