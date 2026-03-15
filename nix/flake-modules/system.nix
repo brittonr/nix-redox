@@ -42,13 +42,19 @@ let
   # Import the RedoxOS module system factory
   redoxSystemFactory = import ../redox-system { inherit lib; };
 
-  # Build a flat package set from modular packages
+  # Build a flat package set from modular packages.
+  # The per-crate kernel (kernelPerCrate) replaces the monolithic crane build —
+  # same output layout ($out/boot/{kernel,kernel.sym}), but each of the 43
+  # crates is a separate Nix derivation for incremental caching.
   mkFlatPkgs =
     {
       extraPkgs ? { },
     }:
     modularPkgs.host
     // modularPkgs.system
+    // {
+      kernel = self'.packages.kernelPerCrate;
+    }
     // modularPkgs.userspace
     // modularPkgs.infrastructure
     // extraPkgs;

@@ -132,6 +132,11 @@ pkgs.stdenv.mkDerivation {
     runHook postInstall
   '';
 
+  passthru = {
+    # Expose patched source for per-crate builds via unit2nix
+    src = patchedSrc;
+  };
+
   meta = with lib; {
     description = "Redox OS Kernel";
     homepage = "https://gitlab.redox-os.org/redox-os/kernel";
