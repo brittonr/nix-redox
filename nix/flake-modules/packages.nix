@@ -881,6 +881,122 @@ let
     inherit (redoxLib) stubLibs;
   };
 
+  # === Per-crate ion build (unit2nix) ===
+  ionPerCrate = mkCrossPackage {
+    pname = "ion-shell";
+    src = inputs.ion-src;
+    plan = ../pkgs/userspace/ion-build-plan.json;
+    member = "ion-shell";
+    extraCrateOverrides = {
+      ion-shell = _: {
+        # build.rs reads git_revision.txt; without it, tries `git rev-parse`
+        postPatch = ''
+          echo "nix-build" > git_revision.txt
+        '';
+      };
+      # decimal crate compiles C code (decQuad.c) via cc crate.
+      # Must cross-compile for Redox to avoid glibc FORTIFY refs.
+      decimal = _: {
+        CC_x86_64_unknown_redox = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
+        CFLAGS_x86_64_unknown_redox = builtins.concatStringsSep " " [
+          "--target=${redoxTarget}"
+          "-D__redox__"
+          "-U_FORTIFY_SOURCE"
+          "-D_FORTIFY_SOURCE=0"
+          "-I${modularPkgs.system.relibc}/${redoxTarget}/include"
+          "--sysroot=${modularPkgs.system.relibc}/${redoxTarget}"
+        ];
+      };
+    };
+  };
+
+  # === Per-crate extrautils build (unit2nix) ===
+  #
+  # 18 binaries from a single workspace member. buildRustCrate produces
+  # all binaries in $out/bin/ automatically from crateBin entries.
+  # extrautils source needs rust-lzma and tar removed (no liblzma for Redox).
+  extrautilsPatchedSrc = pkgs.runCommand "extrautils-patched" { } ''
+    cp -r ${inputs.extrautils-src} $out
+    chmod -R u+w $out
+    cd $out
+    sed -i '/^rust-lzma/d' Cargo.toml
+    sed -i '/^\[features\]/,/^\[/{ /^\[features\]/d; /^\[/!d; }' Cargo.toml
+    sed -i '/^\[\[bin\]\]$/,/^path = /{
+      /name = "tar"/,/^path = /{d}
+    }' Cargo.toml
+    sed -i '/^\[\[bin\]\]$/{N; /\n$/d}' Cargo.toml
+  '';
+
+  extrautilsPerCrate = mkCrossPackage {
+    pname = "extrautils";
+    src = extrautilsPatchedSrc;
+    plan = ../pkgs/userspace/extrautils-build-plan.json;
+    member = "extrautils";
+  };
+
+  # === Per-crate userutils build (unit2nix) ===
+  #
+  # 12 binaries (getty, login, passwd, sudo, etc.)
+  # userutils has generic-rt and redox-rt from relibc as git deps — they're
+  # prefetched by unit2nix so no source overrides needed.
+  userutilsPerCrate = mkCrossPackage {
+    pname = "userutils";
+    src = inputs.userutils-src;
+    plan = ../pkgs/userspace/userutils-build-plan.json;
+    member = "userutils";
+    extraCrateOverrides = {
+      # redox-rt uses #[path = "../../src/platform/auxv_defs.rs"] —
+      # needs full relibc source tree, not just the subDir.
+      redox-rt = _: {
+        src = inputs.relibc-src;
+        workspace_member = "redox-rt";
+      };
+      generic-rt = _: {
+        src = inputs.relibc-src;
+        workspace_member = "generic-rt";
+      };
+    };
+  };
+
+  # === Per-crate bootloader build (unit2nix) ===
+  #
+  # UEFI bootloader targeting x86_64-unknown-uefi with --build-std.
+  # Needs a dedicated buildRustCrate like the kernel (no_std, no CRT).
+  bootloaderPerCrate =
+    let
+      uefiBRC = import ../lib/kernel-buildRustCrate.nix {
+        inherit pkgs lib rustToolchain;
+        # x86_64-unknown-uefi is a built-in rustc target (no JSON spec)
+        kernelTargetSpec = "x86_64-unknown-uefi";
+      };
+      uefiBRCForPkgs = cratePkgs: if cratePkgs ? __isHostPkgs then hostBRC else uefiBRC;
+      uefiCrossPkgs = pkgs // {
+        buildPackages = hostPkgs;
+      };
+
+      ws = buildFromUnitGraph {
+        pkgs = uefiCrossPkgs;
+        src = inputs.bootloader-src;
+        resolvedJson = ../pkgs/system/bootloader-build-plan.json;
+        buildRustCrateForPkgs = uefiBRCForPkgs;
+        skipStalenessCheck = true;
+        rustSrcPath = "${rustToolchain}/lib/rustlib/src/rust";
+      };
+
+      bootBin = ws.workspaceMembers.redox_bootloader.build;
+    in
+    # Post-process: wrap as $out/boot/EFI/BOOT/BOOTX64.EFI to match existing layout
+    pkgs.runCommand "redox-bootloader-percrate-unstable" { } ''
+      mkdir -p $out/boot/EFI/BOOT
+      BIN=$(find ${bootBin} -name "bootloader" -type f | head -1)
+      if [ -z "$BIN" ]; then
+        echo "ERROR: bootloader binary not found in ${bootBin}" >&2
+        find ${bootBin} -type f | head -20 >&2
+        exit 1
+      fi
+      cp "$BIN" $out/boot/EFI/BOOT/BOOTX64.EFI
+    '';
+
   # pkgutils disabled: ring crate needs pregenerated assembly from git source
   # pkgutils = import ../pkgs/userspace/pkgutils.nix (
   #   standaloneCommon
@@ -915,8 +1031,9 @@ in
 
     # Userspace packages
     helix = helixPerCrate;
+    ion = ionPerCrate;
+    userutils = userutilsPerCrate;
     inherit (modularPkgs.userspace)
-      ion
       binutils
       netutils
       netcfg-setup
@@ -933,9 +1050,6 @@ in
       orbterm
       orbutils
       ;
-
-    # User management
-    inherit userutils;
 
     # CLI tools
     inherit

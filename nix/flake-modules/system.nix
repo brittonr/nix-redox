@@ -57,6 +57,10 @@ let
       base = self'.packages.basePerCrate;
     }
     // modularPkgs.userspace
+    // {
+      ion = self'.packages.ion;
+      userutils = self'.packages.userutils;
+    }
     // modularPkgs.infrastructure
     // extraPkgs;
 
