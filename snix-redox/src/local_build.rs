@@ -305,9 +305,24 @@ fn build_derivation_inner(
                 Ok((child_ns_fd, proxy)) => {
                     // Proxy is running. Child will use setns to switch
                     // to the namespace where file: = our proxy.
+                    //
+                    // We also need to close the scheme socket fd in the
+                    // child so it doesn't leak across exec. The child
+                    // inherits all parent fds after fork; if the socket
+                    // fd survives exec (missing CLOEXEC or CLOEXEC not
+                    // honored), closing it during the child's _exit can
+                    // disrupt the scheme registration and prevent pipe
+                    // EOF or waitpid from completing in the parent.
+                    let proxy_socket_fd = proxy.socket_fd();
                     _proxy_guard = Some(proxy);
                     unsafe {
                         cmd.pre_exec(move || {
+                            // Close inherited proxy fds in the CHILD
+                            // (does not affect the parent's fd table).
+                            if let Some(fd) = proxy_socket_fd {
+                                let _ = syscall::close(fd);
+                            }
+
                             libredox::call::setns(child_ns_fd).map_err(|e| {
                                 std::io::Error::new(
                                     std::io::ErrorKind::Other,
@@ -344,19 +359,66 @@ fn build_derivation_inner(
         }
     }
 
-    // With the LAPIC timer fix, the scheduler reliably wakes HLTing
-    // CPUs on KVM. cmd.output() pipe-based process wait should now work
-    // on Redox for deep process hierarchies (builder→cargo→rustc→cc→lld).
-    // Previously this crashed because the scheduler never ran to drain
-    // pipes — not a pipe bug per se, but a scheduling starvation issue.
+    // Avoid cmd.output() — its internal read2 may use poll() which is
+    // unreliable on Redox (AGENTS.md). Instead, spawn the child with
+    // piped stdout/stderr and use dedicated threads to drain each pipe.
+    // This also avoids a hang when the proxy sandbox is active: leaked
+    // fds from the proxy setup (cap_fd, scheme socket) could prevent
+    // pipe EOF from reaching the poll()-based read2 in std.
+    cmd.stdout(std::process::Stdio::piped());
+    cmd.stderr(std::process::Stdio::piped());
+
     let (status, captured_stderr) = {
-        let output = cmd.output().map_err(|e| {
+        let mut child = cmd.spawn().map_err(|e| {
             BuildError::Io(format!("executing builder '{}': {e}", drv.builder))
         })?;
-        (
-            output.status,
-            String::from_utf8_lossy(&output.stderr).into_owned(),
-        )
+
+        // Take ownership of the pipe read-ends. The child holds the
+        // write-ends (fd 1, fd 2). When the child exits, write-ends
+        // close and our reads get EOF.
+        let stdout_pipe = child.stdout.take();
+        let stderr_pipe = child.stderr.take();
+
+        // Thread-based read2: one thread per pipe, no poll() needed.
+        // Each thread blocks on read() until EOF — reliable on Redox.
+        let stderr_thread = stderr_pipe.map(|mut pipe| {
+            std::thread::Builder::new()
+                .name("build-stderr-reader".to_string())
+                .spawn(move || {
+                    let mut buf = Vec::new();
+                    let _ = std::io::Read::read_to_end(&mut pipe, &mut buf);
+                    buf
+                })
+        });
+
+        let stdout_thread = stdout_pipe.map(|mut pipe| {
+            std::thread::Builder::new()
+                .name("build-stdout-reader".to_string())
+                .spawn(move || {
+                    let mut buf = Vec::new();
+                    let _ = std::io::Read::read_to_end(&mut pipe, &mut buf);
+                    buf
+                })
+        });
+
+        // Wait for the child to exit. This blocks on waitpid (via
+        // proc: scheme on Redox). The child's exit closes pipe
+        // write-ends, which unblocks the reader threads above.
+        let status = child.wait().map_err(|e| {
+            BuildError::Io(format!("waiting for builder '{}': {e}", drv.builder))
+        })?;
+
+        // Join reader threads (they should have gotten EOF by now).
+        let _stdout_data = stdout_thread
+            .and_then(|r| r.ok())
+            .and_then(|h| h.join().ok())
+            .unwrap_or_default();
+        let stderr_data = stderr_thread
+            .and_then(|r| r.ok())
+            .and_then(|h| h.join().ok())
+            .unwrap_or_default();
+
+        (status, String::from_utf8_lossy(&stderr_data).into_owned())
     };
 
     // ── 5b. Shut down the filesystem proxy ───────────────────────────
