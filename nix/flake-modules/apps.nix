@@ -223,6 +223,12 @@ in
       meta.description = "Test snix system rebuild, generations, and rollback inside a running VM";
     };
 
+    boot-generation-select-test = {
+      type = "app";
+      program = "${self'.packages.boot-generation-select-test}/bin/functional-test";
+      meta.description = "Test boot-time generation activation: activate-boot, boot cmd, marker file";
+    };
+
     https-cache-test = {
       type = "app";
       program = "${self'.packages.httpsCacheTest}/bin/https-cache-test";
