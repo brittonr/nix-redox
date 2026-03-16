@@ -1,0 +1,52 @@
+Add IRQ wakeup to virtio-netd main event loop.
+
+Without this fix, virtio-netd's main event loop only wakes when smolnetd
+sends a scheme request. If smolnetd's timer goes idle (no active sockets),
+nobody polls the device for incoming packets. This patch subscribes the
+IRQ file descriptor to the main event queue so that hardware interrupts
+also trigger a tick() call.
+
+Three changes:
+  1. Add AsRawFd import
+  2. Clone IRQ handle before Device is shadowed by VirtioNet::new()
+  3. Subscribe IRQ handle to event queue
+
+--- a/drivers/net/virtio-netd/src/main.rs
++++ b/drivers/net/virtio-netd/src/main.rs
+@@ -3,6 +3,7 @@
+ use std::fs::File;
+ use std::io::{Read, Write};
+ use std::mem;
++use std::os::fd::AsRawFd;
+ 
+ use libredox::flag;
+ use syscall::error::Result;
+@@ -50,6 +51,11 @@
+     let rx_queue = device.queues.remove(0);
+     let tx_queue = device.queues.remove(0);
+ 
++    // Clone IRQ handle before the virtio-core Device is dropped (shadowed below).
++    // We need the fd alive in the main scope for event queue subscription.
++    let irq_file = device.irq_handle.try_clone()
++        .expect("virtio-netd: failed to clone IRQ handle");
++
+     let device = VirtioNet::new(mac_address, rx_queue, tx_queue);
+ 
+     let scheme_name = format!("network.{name}");
+@@ -66,6 +72,16 @@
+         data: 0,
+     })?;
+ 
++    // Also subscribe IRQ handle so hardware interrupts (packet received)
++    // wake the main loop and trigger tick() -> post_fevent to smolnetd.
++    // Without this, the main loop only wakes on scheme requests from smolnetd,
++    // creating a deadlock when smolnetd's timer goes idle.
++    event_queue.write(&syscall::Event {
++        id: irq_file.as_raw_fd() as usize,
++        flags: syscall::EVENT_READ,
++        data: 1,
++    })?;
++
+     libredox::call::setrens(0, 0).expect("virtio-netd: failed to enter null namespace");
+ 
+     scheme.tick()?;
