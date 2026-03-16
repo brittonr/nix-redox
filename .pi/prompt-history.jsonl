@@ -325,3 +325,14 @@
 {"text":"3","timestamp":1773625174354}
 {"text":"yes","timestamp":1773625754518}
 {"text":"- The 9 sandbox permission failures are the real issue now — the\n proxy's AllowList needs to include build script paths and tools in\n PATH. That's the bigger piece of work if you want to tackle it. - lets do it","timestamp":1773626654207}
+{"text":"what next?","timestamp":1773627375279}
+{"text":"1. Run the full test suite — quick sanity check after all the\n sandbox/scheduling work. nix run .#boot-test, nix run\n .#functional-test, nix run .#bridge-test to confirm nothing\n regressed.","timestamp":1773627469551}
+{"text":"run nix run .#run-redox","timestamp":1773627648555}
+{"text":"you get frozen running that","timestamp":1773627777491}
+{"text":"run nix run .#run-redox-qemu","timestamp":1773627867705}
+{"text":"yes","timestamp":1773627977228}
+{"text":"lets fix the scheme file issues too","timestamp":1773628080514}
+{"text":"fix the scheme file issues","timestamp":1773628111627}
+{"text":"what else needs fixing for the boot","timestamp":1773628451694}
+{"text":"are we sure  - Scheme \"file\" not found in namespace — per AGENTS.md, normal\n during early boot before redoxfs mounts rootfs is normal?","timestamp":1773628514200}
+{"text":"try to login","timestamp":1773628660274}
