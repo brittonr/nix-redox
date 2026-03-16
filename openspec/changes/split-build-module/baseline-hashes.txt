@@ -1,0 +1,13 @@
+# Baseline rootTree derivation paths (pre-split)
+# Recorded 2026-03-16
+#
+# NOTE: Replacing Python with Rust tools changes nativeBuildInputs,
+# which changes the drv hash even if outputs are identical.
+# Verification in task 14 must compare OUTPUT hashes (build both),
+# not drv paths.
+
+default:         /nix/store/hif9fgxqc2fll6yyaz2zxmac1y6l4swn-redox-root-tree.drv
+minimal:         /nix/store/b9ra6iv5y2ixlcqxr76v19sd8hnfdnkj-redox-root-tree.drv
+graphical:       /nix/store/wazgx3km5rqb1ip5l4bdzan7hfq42zsn-redox-root-tree.drv
+self-hosting:    /nix/store/n15h2014db24k5qz3h7wacrvqwdpg3ji-redox-root-tree.drv
+functional-test: (not in redoxConfigurations, accessed via .#redox-functional-test)
