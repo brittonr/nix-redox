@@ -1,0 +1,52 @@
+# ── Environment Variable Propagation ─────────────────────────
+# These verify env vars survive exec() into child processes.
+# Root cause of prior failures: Rust std's do_exec() wrote to the
+# global `environ` then called execvp(), but the pointer update
+# didn't reach relibc's reader. Fixed by execvpe() in relibc +
+# patched Rust std.
+#
+# Ion syntax: `let VAR = "val"` then `export VAR` to put it in env.
+# Child process reads it back via `ion -c 'echo $VAR'`.
+
+# Test: exported variable visible in a child ion process
+let REDOX_ENV_TEST = "propagation_works"
+export REDOX_ENV_TEST
+let child_val = $(ion -c 'echo $REDOX_ENV_TEST')
+if test $child_val = "propagation_works"
+    echo "FUNC_TEST:env-propagation-basic:PASS"
+else
+    echo "FUNC_TEST:env-propagation-basic:FAIL:got $child_val"
+end
+
+# Test: multiple exported vars all survive exec()
+let REDOX_A = "alpha"
+let REDOX_B = "bravo"
+let REDOX_C = "charlie"
+export REDOX_A
+export REDOX_B
+export REDOX_C
+let a_val = $(ion -c 'echo $REDOX_A')
+let b_val = $(ion -c 'echo $REDOX_B')
+let c_val = $(ion -c 'echo $REDOX_C')
+if test $a_val = "alpha"
+    if test $b_val = "bravo"
+        if test $c_val = "charlie"
+            echo "FUNC_TEST:env-propagation-multi:PASS"
+        else
+            echo "FUNC_TEST:env-propagation-multi:FAIL:C=$c_val"
+        end
+    else
+        echo "FUNC_TEST:env-propagation-multi:FAIL:B=$b_val"
+    end
+else
+    echo "FUNC_TEST:env-propagation-multi:FAIL:A=$a_val"
+end
+
+# Test: PATH env var survives into child (critical for cargo/rustc)
+let path_child = $(ion -c 'echo $PATH')
+if test -n $path_child
+    echo "FUNC_TEST:env-propagation-path:PASS"
+else
+    echo "FUNC_TEST:env-propagation-path:FAIL:PATH empty in child"
+end
+

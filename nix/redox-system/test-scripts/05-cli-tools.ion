@@ -1,0 +1,85 @@
+# ── CLI Tool Execution ─────────────────────────────────────
+# These verify cross-compiled binaries actually run on Redox.
+# Profile-managed tools live in /nix/system/profile/bin/ (not /bin/).
+# Boot-essential tools (ion, snix) live in /bin/.
+# We use PATH resolution via `which` for managed tools.
+
+# Profile-managed tools (generation-switchable)
+if exists -f /nix/system/profile/bin/rg
+    /nix/system/profile/bin/rg --version > /dev/null
+    if test $? = 0
+        echo "FUNC_TEST:run-rg:PASS"
+    else
+        echo "FUNC_TEST:run-rg:FAIL"
+    end
+else
+    echo "FUNC_TEST:run-rg:SKIP"
+end
+
+if exists -f /nix/system/profile/bin/fd
+    /nix/system/profile/bin/fd --version > /dev/null
+    if test $? = 0
+        echo "FUNC_TEST:run-fd:PASS"
+    else
+        echo "FUNC_TEST:run-fd:FAIL"
+    end
+else
+    echo "FUNC_TEST:run-fd:SKIP"
+end
+
+if exists -f /nix/system/profile/bin/bat
+    /nix/system/profile/bin/bat --version > /dev/null
+    if test $? = 0
+        echo "FUNC_TEST:run-bat:PASS"
+    else
+        echo "FUNC_TEST:run-bat:FAIL"
+    end
+else
+    echo "FUNC_TEST:run-bat:SKIP"
+end
+
+if exists -f /nix/system/profile/bin/hexyl
+    /nix/system/profile/bin/hexyl --version > /dev/null
+    if test $? = 0
+        echo "FUNC_TEST:run-hexyl:PASS"
+    else
+        echo "FUNC_TEST:run-hexyl:FAIL"
+    end
+else
+    echo "FUNC_TEST:run-hexyl:SKIP"
+end
+
+if exists -f /nix/system/profile/bin/zoxide
+    /nix/system/profile/bin/zoxide --version > /dev/null
+    if test $? = 0
+        echo "FUNC_TEST:run-zoxide:PASS"
+    else
+        echo "FUNC_TEST:run-zoxide:FAIL"
+    end
+else
+    echo "FUNC_TEST:run-zoxide:SKIP"
+end
+
+if exists -f /nix/system/profile/bin/dust
+    /nix/system/profile/bin/dust --version > /dev/null
+    if test $? = 0
+        echo "FUNC_TEST:run-dust:PASS"
+    else
+        echo "FUNC_TEST:run-dust:FAIL"
+    end
+else
+    echo "FUNC_TEST:run-dust:SKIP"
+end
+
+# Boot-essential tools (always in /bin/, survive generation switches)
+if exists -f /bin/snix
+    /bin/snix --version > /dev/null
+    if test $? = 0
+        echo "FUNC_TEST:run-snix:PASS"
+    else
+        echo "FUNC_TEST:run-snix:FAIL"
+    end
+else
+    echo "FUNC_TEST:run-snix:SKIP"
+end
+

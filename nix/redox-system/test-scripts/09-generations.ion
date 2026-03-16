@@ -1,0 +1,269 @@
+# ── Generation Switching (NixOS-style) ─────────────────────────
+# Tests that switching generations actually adds/removes binaries
+# from the system profile.  The profile at /nix/system/profile/bin/
+# contains symlinks to /nix/store/ paths.  When we switch to a
+# manifest with fewer packages, the symlinks are removed.
+
+# Test: system profile directory exists
+if exists -d /nix/system/profile/bin
+    echo "FUNC_TEST:gen-profile-exists:PASS"
+else
+    echo "FUNC_TEST:gen-profile-exists:FAIL"
+end
+
+# Test: rg is initially available via the system profile
+if exists -f /nix/system/profile/bin/rg
+    echo "FUNC_TEST:gen-rg-initial:PASS"
+else
+    echo "FUNC_TEST:gen-rg-initial:FAIL"
+end
+
+# Test: generation switching actually rebuilds the system profile.
+# We verify the full round-trip: remove a symlink → switch restores it,
+# proving snix system switch reads storePaths and rebuilds the profile.
+if exists -f /etc/redox-system/manifest.json
+
+    # Test: manually remove rg from the profile (simulates a generation
+    # without ripgrep — the symlink is gone but the store path remains)
+    if exists -f /nix/system/profile/bin/rg
+        rm /nix/system/profile/bin/rg
+        if not exists -f /nix/system/profile/bin/rg
+            echo "FUNC_TEST:gen-rg-removed:PASS"
+        else
+            echo "FUNC_TEST:gen-rg-removed:FAIL:still-exists"
+        end
+    else
+        echo "FUNC_TEST:gen-rg-removed:SKIP"
+    end
+
+    # Test: boot-essential binaries are NOT in the profile (they're in /bin/)
+    if exists -f /bin/ion
+        echo "FUNC_TEST:gen-boot-survives:PASS"
+    else
+        echo "FUNC_TEST:gen-boot-survives:FAIL"
+    end
+
+    # Test: other managed tools still in profile (fd unaffected by rg removal)
+    if exists -f /nix/system/profile/bin/fd
+        echo "FUNC_TEST:gen-fd-survives:PASS"
+    else
+        echo "FUNC_TEST:gen-fd-survives:FAIL"
+    end
+
+    # Test: rg binary is still in /nix/store/ (just unlinked from profile)
+    # Find it by scanning store directories
+    let rg_found = false
+    for dir in @(ls /nix/store/)
+        if exists -f /nix/store/$dir/bin/rg
+            let rg_found = true
+        end
+    end
+    if test $rg_found = true
+        echo "FUNC_TEST:gen-store-preserved:PASS"
+    else
+        echo "FUNC_TEST:gen-store-preserved:FAIL"
+    end
+
+    # Test: snix system switch rebuilds the profile from manifest storePaths.
+    # This is the core generation switch mechanism — it reads the manifest,
+    # finds all packages with storePaths, and recreates the profile symlinks.
+    /bin/snix system switch /etc/redox-system/manifest.json > /tmp/gen_sw_out ^> /tmp/gen_sw_err
+    if test $? = 0
+        echo "FUNC_TEST:gen-switch:PASS"
+    else
+        echo "FUNC_TEST:gen-switch:FAIL:exit-code"
+        cat /tmp/gen_sw_err
+    end
+    rm /tmp/gen_sw_out /tmp/gen_sw_err
+
+    # Test: rg should be RESTORED after switch (profile rebuilt from storePaths)
+    if exists -f /nix/system/profile/bin/rg
+        echo "FUNC_TEST:gen-switch-restores:PASS"
+    else
+        echo "FUNC_TEST:gen-switch-restores:FAIL:not-restored"
+    end
+
+    # Test: all profile entries are valid symlinks to store paths
+    let all_valid = true
+    for f in @(ls /nix/system/profile/bin/)
+        if not exists -f /nix/system/profile/bin/$f
+            let all_valid = false
+        end
+    end
+    if test $all_valid = true
+        echo "FUNC_TEST:gen-profile-symlinks-valid:PASS"
+    else
+        echo "FUNC_TEST:gen-profile-symlinks-valid:FAIL"
+    end
+
+    # Test: snix system switch is idempotent
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    let first_count = $(ls /nix/system/profile/bin/ | wc -l)
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    let second_count = $(ls /nix/system/profile/bin/ | wc -l)
+    if test $first_count = $second_count
+        echo "FUNC_TEST:gen-switch-idempotent:PASS"
+    else
+        echo "FUNC_TEST:gen-switch-idempotent:FAIL"
+    end
+
+    # Test: multiple switches increase generation count
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system generations > /tmp/gen_list ^> /dev/null
+    # Verify generations listing shows entries (header + data lines)
+    let line_count = $(wc -l < /tmp/gen_list)
+    # Header is 5 lines (title, =====, blank, column headers, -------)
+    # Plus 2 footer lines (blank, "Generations stored: N")
+    # So >7 lines means at least 1 generation entry
+    if test $line_count -gt 10
+        echo "FUNC_TEST:gen-multiple-switches:PASS"
+    else
+        echo "FUNC_TEST:gen-multiple-switches:FAIL:only-$line_count-lines"
+    end
+    rm /tmp/gen_list
+
+    # Test: /bin/ion still exists and runs after switch
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    if exists -f /bin/ion
+        /bin/ion -c 'echo ok' > /tmp/ion_test ^> /dev/null
+        if test $? = 0
+            echo "FUNC_TEST:gen-boot-ion-runs:PASS"
+        else
+            echo "FUNC_TEST:gen-boot-ion-runs:FAIL"
+        end
+        rm /tmp/ion_test
+    else
+        echo "FUNC_TEST:gen-boot-ion-runs:FAIL:missing"
+    end
+
+    # Test: /bin/snix still exists and runs after switch
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    if exists -f /bin/snix
+        /bin/snix --version > /dev/null ^> /dev/null
+        if test $? = 0
+            echo "FUNC_TEST:gen-boot-snix-runs:PASS"
+        else
+            echo "FUNC_TEST:gen-boot-snix-runs:FAIL"
+        end
+    else
+        echo "FUNC_TEST:gen-boot-snix-runs:FAIL:missing"
+    end
+
+    # Test: profile contains binaries from manifest packages
+    let profile_count = $(ls /nix/system/profile/bin/ | wc -l)
+    if test $profile_count -gt 0
+        echo "FUNC_TEST:gen-profile-has-binaries:PASS:$profile_count"
+    else
+        echo "FUNC_TEST:gen-profile-has-binaries:FAIL:empty"
+    end
+    # Test: rollback restores profile after modification
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    rm /nix/system/profile/bin/rg ^> /dev/null
+    /bin/snix system rollback > /dev/null ^> /dev/null
+    if exists -f /nix/system/profile/bin/rg
+        echo "FUNC_TEST:gen-rollback-works:PASS"
+    else
+        echo "FUNC_TEST:gen-rollback-works:FAIL:rg-missing"
+    end
+
+    # Test: snix system diff runs without error
+    cp /etc/redox-system/manifest.json /tmp/diff_manifest.json
+    /bin/snix system diff /tmp/diff_manifest.json > /tmp/diff_out ^> /dev/null
+    if test $? = 0
+        echo "FUNC_TEST:gen-diff-runs:PASS"
+    else
+        echo "FUNC_TEST:gen-diff-runs:FAIL"
+    end
+    rm /tmp/diff_manifest.json /tmp/diff_out ^> /dev/null
+
+    # Test: system packages are GC-protected after switch
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix store roots > /tmp/gc_roots ^> /dev/null
+    if test $? = 0
+        if grep -q 'system-' /tmp/gc_roots
+            echo "FUNC_TEST:gen-gc-safe:PASS"
+        else
+            echo "FUNC_TEST:gen-gc-safe:FAIL:no-system-roots"
+        end
+    else
+        echo "FUNC_TEST:gen-gc-safe:FAIL:roots-cmd-failed"
+    end
+    rm /tmp/gc_roots ^> /dev/null
+
+    # Test: GC dry-run doesn't crash
+    /bin/snix store gc --dry-run > /tmp/gc_out ^> /dev/null
+    if test $? = 0
+        echo "FUNC_TEST:gen-gc-dry-run:PASS"
+    else
+        echo "FUNC_TEST:gen-gc-dry-run:FAIL"
+    end
+    rm /tmp/gc_out ^> /dev/null
+
+    # ── Activation tests ──
+
+    # Test: `snix system activate --dry-run` shows plan without modifying
+    cp /etc/redox-system/manifest.json /tmp/activate-target.json
+    /bin/snix system activate /tmp/activate-target.json --dry-run > /tmp/activate_dry ^> /dev/null
+    if test $? = 0
+        echo "FUNC_TEST:activate-dry-run:PASS"
+    else
+        echo "FUNC_TEST:activate-dry-run:FAIL"
+    end
+    rm /tmp/activate_dry /tmp/activate-target.json ^> /dev/null
+
+    # Test: `snix system switch --dry-run` shows plan without creating generations
+    cp /etc/redox-system/manifest.json /tmp/switch-dry-target.json
+    let gen_count_before = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+    /bin/snix system switch /tmp/switch-dry-target.json --dry-run > /tmp/switch_dry ^> /dev/null
+    if test $? = 0
+        let gen_count_after = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+        if test $gen_count_before = $gen_count_after
+            echo "FUNC_TEST:switch-dry-run-no-modify:PASS"
+        else
+            echo "FUNC_TEST:switch-dry-run-no-modify:FAIL:generations-changed"
+        end
+    else
+        echo "FUNC_TEST:switch-dry-run-no-modify:FAIL:exit-code"
+    end
+    rm /tmp/switch_dry /tmp/switch-dry-target.json ^> /dev/null
+
+    # Test: activation with same manifest reports no changes
+    /bin/snix system activate /etc/redox-system/manifest.json --dry-run > /tmp/activate_same ^> /dev/null
+    if test $? = 0
+        grep -q 'No changes' /tmp/activate_same
+        if test $? = 0
+            echo "FUNC_TEST:activate-no-changes:PASS"
+        else
+            echo "FUNC_TEST:activate-no-changes:FAIL:no-message"
+        end
+    else
+        echo "FUNC_TEST:activate-no-changes:FAIL:exit-code"
+    end
+    rm /tmp/activate_same ^> /dev/null
+
+else
+    echo "FUNC_TEST:gen-profile-exists:SKIP"
+    echo "FUNC_TEST:gen-rg-initial:SKIP"
+    echo "FUNC_TEST:gen-rg-removed:SKIP"
+    echo "FUNC_TEST:gen-boot-survives:SKIP"
+    echo "FUNC_TEST:gen-fd-survives:SKIP"
+    echo "FUNC_TEST:gen-store-preserved:SKIP"
+    echo "FUNC_TEST:gen-switch:SKIP"
+    echo "FUNC_TEST:gen-switch-restores:SKIP"
+    echo "FUNC_TEST:gen-profile-symlinks-valid:SKIP"
+    echo "FUNC_TEST:gen-switch-idempotent:SKIP"
+    echo "FUNC_TEST:gen-multiple-switches:SKIP"
+    echo "FUNC_TEST:gen-boot-ion-runs:SKIP"
+    echo "FUNC_TEST:gen-boot-snix-runs:SKIP"
+    echo "FUNC_TEST:gen-profile-has-binaries:SKIP"
+    echo "FUNC_TEST:gen-rollback-works:SKIP"
+    echo "FUNC_TEST:gen-diff-runs:SKIP"
+    echo "FUNC_TEST:gen-gc-safe:SKIP"
+    echo "FUNC_TEST:gen-gc-dry-run:SKIP"
+    echo "FUNC_TEST:activate-dry-run:SKIP"
+    echo "FUNC_TEST:switch-dry-run-no-modify:SKIP"
+    echo "FUNC_TEST:activate-no-changes:SKIP"
+end
+

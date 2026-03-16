@@ -1,14 +1,25 @@
 # RedoxOS checks module (adios-flake)
 #
-# Provides build and quality checks:
-# - Module system tests (evaluation, types, artifacts, library functions)
-# - Build checks for key packages
-# - DevShell validation
-# - Boot test, functional test, bridge test
+# Provides build and quality checks organized in tiers:
 #
-# Usage:
-#   nix flake check
+#   Tier 1 — eval (seconds):   Module system tests with mock packages
+#   Tier 2 — host (minutes):   + snix host-side unit tests, devshells, host tools
+#   Tier 3 — cross (minutes):  + cross-compiled packages
+#   Tier 4 — vm (many minutes): + boot test, functional test, bridge test
+#
+# Quick iteration:
+#   nix build .#checks.x86_64-linux.tier-eval    # seconds
+#   nix build .#checks.x86_64-linux.tier-host    # minutes
+#   nix build .#checks.x86_64-linux.tier-cross   # many minutes
+#   nix build .#checks.x86_64-linux.tier-vm      # many minutes (needs KVM)
+#
+# Individual checks:
 #   nix build .#checks.x86_64-linux.eval-profile-default
+#   nix build .#checks.x86_64-linux.snix-test
+#   nix build .#checks.x86_64-linux.functional-test
+#
+# All checks:
+#   nix flake check
 
 {
   pkgs,
@@ -41,27 +52,37 @@ let
     in
     ws;
 
-in
-{
-  checks = {
-    # === Module System Tests ===
-  }
-  // moduleSystemTests.eval
-  // moduleSystemTests.types
-  // moduleSystemTests.artifacts
-  // moduleSystemTests.lib
-  // {
-    # === DevShell Validation ===
+  # ── Tier 1: eval (seconds) ──────────────────────────────────────
+  # Module system tests with mock packages. No builds, just Nix evaluation.
+  evalChecks =
+    moduleSystemTests.eval
+    // moduleSystemTests.types
+    // moduleSystemTests.artifacts
+    // moduleSystemTests.lib;
+
+  # ── Tier 2: host (minutes) ──────────────────────────────────────
+  # Native host-side builds and tests. No cross-compilation.
+  hostChecks = {
+    # DevShell validation
     devshell-default = self'.devShells.default;
     devshell-minimal = self'.devShells.minimal;
 
-    # === Build Checks ===
-    # Host tools (fast, native builds)
+    # Host tools (native builds)
     cookbook-build = packages.cookbook;
     redoxfs-build = packages.redoxfs;
     installer-build = packages.installer;
 
-    # Cross-compiled components (slower, but essential)
+    # snix host-side unit tests (502 tests, runs on linux, no VM needed)
+    snix-test = snixHostTests.test.check."snix-redox";
+
+    # snix clippy lint
+    snix-clippy = snixHostTests.clippy.allWorkspaceMembers;
+  };
+
+  # ── Tier 3: cross (many minutes) ───────────────────────────────
+  # Cross-compiled packages for x86_64-unknown-redox.
+  crossChecks = {
+    # Core system components
     relibc-build = packages.relibc;
     kernel-build = packages.kernel;
     bootloader-build = packages.bootloader;
@@ -76,14 +97,7 @@ in
     # snix (cross-compiled for Redox)
     snix-build = packages.snix;
 
-    # snix host-side unit tests (502 tests, runs on linux, no VM needed)
-    snix-test = snixHostTests.test.check."snix-redox";
-
-    # snix clippy lint
-    snix-clippy = snixHostTests.clippy.allWorkspaceMembers;
-
-    # Per-crate cross-compiled packages (same derivations as packages.*).
-    # Aliases kept for backward compatibility with `nix build .#checks...`.
+    # CLI tools
     ripgrep-cross = packages.ripgrep;
     dust-cross = packages.dust;
     hexyl-cross = packages.hexyl;
@@ -96,16 +110,70 @@ in
     bat-cross = packages.bat;
     fd-cross = packages.fd;
 
-    # Complete system images
+    # Complete system image
     redox-default-build = packages.redox-default;
+  };
 
-    # Boot test
+  # ── Tier 4: vm (many minutes, needs KVM) ───────────────────────
+  # Full VM boot + test execution.
+  vmChecks = {
     boot-test = packages.bootTest;
-
-    # Functional test
     functional-test = packages.functionalTest;
-
-    # Bridge test
     bridge-test = packages.bridgeTest;
   };
+
+  # ── Tier aggregation helpers ────────────────────────────────────
+  # Creates a derivation that depends on all checks in a tier.
+  # Building tier-X ensures all tier-X checks pass.
+  mkTierCheck =
+    name: description: checks:
+    pkgs.runCommand "tier-${name}"
+      {
+        preferLocalBuild = true;
+        passthru = { inherit checks; };
+      }
+      ''
+        echo "=== Tier: ${name} ==="
+        echo "${description}"
+        echo ""
+        echo "All ${toString (builtins.length (builtins.attrNames checks))} checks passed:"
+        ${lib.concatStringsSep "\n" (
+          lib.mapAttrsToList (n: drv: ''
+            echo "  ✓ ${n}"
+          '') checks
+        )}
+        ${lib.concatStringsSep "\n" (
+          lib.mapAttrsToList (n: drv: ''
+            # Reference the derivation to force it to build
+            test -e ${drv} || true
+          '') checks
+        )}
+        touch $out
+      '';
+
+in
+{
+  checks =
+    # All individual checks (flat namespace for nix flake check)
+    evalChecks
+    // hostChecks
+    // crossChecks
+    // vmChecks
+
+    # Tier aggregation targets
+    // {
+      tier-eval =
+        mkTierCheck "eval" "Module system tests (evaluation, types, artifacts, library functions)"
+          evalChecks;
+
+      tier-host =
+        mkTierCheck "host" "Host-side builds and tests (devshells, host tools, snix unit tests)"
+          (evalChecks // hostChecks);
+
+      tier-cross = mkTierCheck "cross" "Cross-compiled packages for Redox" (
+        evalChecks // hostChecks // crossChecks
+      );
+
+      tier-vm = mkTierCheck "vm" "Full VM boot and integration tests" vmChecks;
+    };
 }

@@ -1,0 +1,364 @@
+# ── Flake Installable Tests (snix build .#attr) ────────────────────
+# Tests prove the full flake pipeline works inside a running Redox VM:
+#   parse installable → parse flake.lock → resolve inputs →
+#   build eval expr → evaluate → build → output in /nix/store/
+#
+# All tests use local flakes (no network required).
+# bash -c blocks avoid Ion quoting issues with Nix expressions.
+
+echo ""
+echo "=== Flake Installable Tests ==="
+
+# ── Test: simple flake build ───────────────────────────────────────
+# Minimal flake with one package, no external inputs.
+echo "--- flake-build-simple ---"
+/nix/system/profile/bin/bash -c '
+  mkdir -p /nix/store /nix/var/snix/pathinfo
+  mkdir -p /tmp/testflake
+  cat > /tmp/testflake/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  outputs = { self }: {
+    packages."x86_64-unknown-redox".hello = derivation {
+      name = "flake-hello";
+      builder = "/nix/system/profile/bin/bash";
+      args = ["-c" "echo hello-from-flake > $out"];
+      system = "x86_64-unknown-redox";
+    };
+  };
+}
+  FLAKEEOF
+  cat > /tmp/testflake/flake.lock << '"'"'LOCKEOF'"'"'
+{
+  "version": 7,
+  "root": "root",
+  "nodes": {
+    "root": {}
+  }
+}
+  LOCKEOF
+  cd /tmp/testflake
+  OUTPUT=$(/bin/snix build ".#hello" 2>/tmp/flake-simple-err)
+  EXIT=$?
+  if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -f "$OUTPUT" ]; then
+    CONTENT=$(cat "$OUTPUT")
+    if [ "$CONTENT" = "hello-from-flake" ]; then
+      echo "FUNC_TEST:flake-build-simple:PASS"
+    else
+      echo "FUNC_TEST:flake-build-simple:FAIL:wrong content: $CONTENT"
+    fi
+  else
+    echo "FUNC_TEST:flake-build-simple:FAIL:exit=$EXIT output=$OUTPUT"
+    cat /tmp/flake-simple-err 2>/dev/null | head -5
+  fi
+'
+
+# ── Test: output is in /nix/store/ ─────────────────────────────────
+echo "--- flake-build-store-path ---"
+/nix/system/profile/bin/bash -c '
+  cd /tmp/testflake
+  OUTPUT=$(/bin/snix build ".#hello" 2>/dev/null)
+  case "$OUTPUT" in
+    /nix/store/*) echo "FUNC_TEST:flake-build-store-path:PASS" ;;
+    *) echo "FUNC_TEST:flake-build-store-path:FAIL:$OUTPUT" ;;
+  esac
+'
+
+# ── Test: qualified attribute path ─────────────────────────────────
+# Use full path: .#packages.x86_64-unknown-redox.hello
+echo "--- flake-build-qualified ---"
+/nix/system/profile/bin/bash -c '
+  cd /tmp/testflake
+  OUTPUT=$(/bin/snix build ".#packages.x86_64-unknown-redox.hello" 2>/tmp/flake-qual-err)
+  EXIT=$?
+  if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -f "$OUTPUT" ]; then
+    CONTENT=$(cat "$OUTPUT")
+    if [ "$CONTENT" = "hello-from-flake" ]; then
+      echo "FUNC_TEST:flake-build-qualified:PASS"
+    else
+      echo "FUNC_TEST:flake-build-qualified:FAIL:wrong content: $CONTENT"
+    fi
+  else
+    echo "FUNC_TEST:flake-build-qualified:FAIL:exit=$EXIT"
+    cat /tmp/flake-qual-err 2>/dev/null | head -5
+  fi
+'
+
+# ── Test: directory output from flake ──────────────────────────────
+echo "--- flake-build-dir ---"
+/nix/system/profile/bin/bash -c '
+  mkdir -p /tmp/testflake-dir
+  cat > /tmp/testflake-dir/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  outputs = { self }: {
+    packages."x86_64-unknown-redox".mypkg = derivation {
+      name = "flake-dir-pkg";
+      builder = "/nix/system/profile/bin/bash";
+      args = ["-c" "export PATH=/nix/system/profile/bin:/bin; mkdir -p $out/bin; echo flake-binary > $out/bin/run; echo 1.0.0 > $out/version"];
+      system = "x86_64-unknown-redox";
+    };
+  };
+}
+  FLAKEEOF
+  cat > /tmp/testflake-dir/flake.lock << '"'"'LOCKEOF'"'"'
+{
+  "version": 7,
+  "root": "root",
+  "nodes": {
+    "root": {}
+  }
+}
+  LOCKEOF
+  cd /tmp/testflake-dir
+  OUTPUT=$(/bin/snix build ".#mypkg" 2>/tmp/flake-dir-err)
+  EXIT=$?
+  if [ $EXIT -eq 0 ] && [ -d "$OUTPUT" ]; then
+    B=$(cat "$OUTPUT/bin/run" 2>/dev/null)
+    V=$(cat "$OUTPUT/version" 2>/dev/null)
+    if [ "$B" = "flake-binary" ] && [ "$V" = "1.0.0" ]; then
+      echo "FUNC_TEST:flake-build-dir:PASS"
+    else
+      echo "FUNC_TEST:flake-build-dir:FAIL:bin=$B ver=$V"
+    fi
+  else
+    echo "FUNC_TEST:flake-build-dir:FAIL:exit=$EXIT"
+    cat /tmp/flake-dir-err 2>/dev/null | head -5
+  fi
+'
+
+# ── Test: flake with multiple packages ─────────────────────────────
+echo "--- flake-build-multi ---"
+/nix/system/profile/bin/bash -c '
+  mkdir -p /tmp/testflake-multi
+  cat > /tmp/testflake-multi/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  outputs = { self }: {
+    packages."x86_64-unknown-redox" = {
+      alpha = derivation {
+        name = "flake-alpha";
+        builder = "/nix/system/profile/bin/bash";
+        args = ["-c" "echo pkg-alpha > $out"];
+        system = "x86_64-unknown-redox";
+      };
+      beta = derivation {
+        name = "flake-beta";
+        builder = "/nix/system/profile/bin/bash";
+        args = ["-c" "echo pkg-beta > $out"];
+        system = "x86_64-unknown-redox";
+      };
+    };
+  };
+}
+  FLAKEEOF
+  cat > /tmp/testflake-multi/flake.lock << '"'"'LOCKEOF'"'"'
+{
+  "version": 7,
+  "root": "root",
+  "nodes": {
+    "root": {}
+  }
+}
+  LOCKEOF
+  cd /tmp/testflake-multi
+  OUT_A=$(/bin/snix build ".#alpha" 2>/dev/null)
+  OUT_B=$(/bin/snix build ".#beta" 2>/dev/null)
+  if [ -f "$OUT_A" ] && [ -f "$OUT_B" ]; then
+    CA=$(cat "$OUT_A")
+    CB=$(cat "$OUT_B")
+    if [ "$CA" = "pkg-alpha" ] && [ "$CB" = "pkg-beta" ]; then
+      echo "FUNC_TEST:flake-build-multi:PASS"
+    else
+      echo "FUNC_TEST:flake-build-multi:FAIL:a=$CA b=$CB"
+    fi
+  else
+    echo "FUNC_TEST:flake-build-multi:FAIL:a=$OUT_A b=$OUT_B"
+  fi
+'
+
+# ── Test: flake with dependency chain ──────────────────────────────
+echo "--- flake-build-dep ---"
+/nix/system/profile/bin/bash -c '
+  mkdir -p /tmp/testflake-dep
+  cat > /tmp/testflake-dep/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  outputs = { self }:
+  let
+    dep = derivation {
+      name = "flake-dep";
+      builder = "/nix/system/profile/bin/bash";
+      args = ["-c" "echo dependency-data > $out"];
+      system = "x86_64-unknown-redox";
+    };
+  in {
+    packages."x86_64-unknown-redox".combined = derivation {
+      name = "flake-combined";
+      builder = "/nix/system/profile/bin/bash";
+      args = ["-c" "export PATH=/nix/system/profile/bin:/bin; cat ${dep} > $out; echo plus-main >> $out"];
+      system = "x86_64-unknown-redox";
+      inherit dep;
+    };
+  };
+}
+  FLAKEEOF
+  cat > /tmp/testflake-dep/flake.lock << '"'"'LOCKEOF'"'"'
+{
+  "version": 7,
+  "root": "root",
+  "nodes": {
+    "root": {}
+  }
+}
+  LOCKEOF
+  cd /tmp/testflake-dep
+  OUTPUT=$(/bin/snix build ".#combined" 2>/tmp/flake-dep-err)
+  EXIT=$?
+  if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ]; then
+    if grep -q "dependency-data" "$OUTPUT" && grep -q "plus-main" "$OUTPUT"; then
+      echo "FUNC_TEST:flake-build-dep:PASS"
+    else
+      echo "FUNC_TEST:flake-build-dep:FAIL:content=$(cat $OUTPUT)"
+    fi
+  else
+    echo "FUNC_TEST:flake-build-dep:FAIL:exit=$EXIT"
+    cat /tmp/flake-dep-err 2>/dev/null | head -5
+  fi
+'
+
+# ── Test: missing flake.lock error ─────────────────────────────────
+echo "--- flake-no-lock ---"
+/nix/system/profile/bin/bash -c '
+  mkdir -p /tmp/testflake-nolock
+  cat > /tmp/testflake-nolock/flake.nix << '"'"'FLAKEEOF'"'"'
+{ outputs = { self }: { packages."x86_64-unknown-redox".x = 1; }; }
+  FLAKEEOF
+  cd /tmp/testflake-nolock
+  /bin/snix build ".#x" >/dev/null 2>/tmp/flake-nolock-err
+  EXIT=$?
+  if [ $EXIT -ne 0 ]; then
+    if grep -qi "lock" /tmp/flake-nolock-err 2>/dev/null; then
+      echo "FUNC_TEST:flake-no-lock:PASS"
+    else
+      echo "FUNC_TEST:flake-no-lock:FAIL:no lock mention in error"
+      cat /tmp/flake-nolock-err 2>/dev/null | head -3
+    fi
+  else
+    echo "FUNC_TEST:flake-no-lock:FAIL:should have failed"
+  fi
+'
+
+# ── Test: missing flake.nix error ──────────────────────────────────
+echo "--- flake-no-flake-nix ---"
+/nix/system/profile/bin/bash -c '
+  mkdir -p /tmp/testflake-noflake
+  cd /tmp/testflake-noflake
+  /bin/snix build ".#x" >/dev/null 2>/tmp/flake-noflake-err
+  EXIT=$?
+  if [ $EXIT -ne 0 ]; then
+    if grep -qi "flake.nix" /tmp/flake-noflake-err 2>/dev/null; then
+      echo "FUNC_TEST:flake-no-flake-nix:PASS"
+    else
+      echo "FUNC_TEST:flake-no-flake-nix:FAIL:no flake.nix mention"
+      cat /tmp/flake-noflake-err 2>/dev/null | head -3
+    fi
+  else
+    echo "FUNC_TEST:flake-no-flake-nix:FAIL:should have failed"
+  fi
+'
+
+# ── Test: flake build is idempotent (cached) ───────────────────────
+echo "--- flake-build-cached ---"
+/nix/system/profile/bin/bash -c '
+  cd /tmp/testflake
+  OUT1=$(/bin/snix build ".#hello" 2>/dev/null)
+  OUT2=$(/bin/snix build ".#hello" 2>/dev/null)
+  if [ "$OUT1" = "$OUT2" ] && [ -n "$OUT1" ]; then
+    echo "FUNC_TEST:flake-build-cached:PASS"
+  else
+    echo "FUNC_TEST:flake-build-cached:FAIL:out1=$OUT1 out2=$OUT2"
+  fi
+'
+
+# ── Test: flake build registered in pathinfo db ────────────────────
+echo "--- flake-build-registered ---"
+/nix/system/profile/bin/bash -c '
+  cd /tmp/testflake
+  OUTPUT=$(/bin/snix build ".#hello" 2>/dev/null)
+  if [ -n "$OUTPUT" ]; then
+    INFO=$(/bin/snix store info "$OUTPUT" 2>&1)
+    if echo "$INFO" | grep -qi "sha256"; then
+      echo "FUNC_TEST:flake-build-registered:PASS"
+    else
+      echo "FUNC_TEST:flake-build-registered:FAIL:$INFO"
+    fi
+  else
+    echo "FUNC_TEST:flake-build-registered:FAIL:no output"
+  fi
+'
+
+# ── Test: flake with path input ────────────────────────────────────
+# Tests path-type flake inputs (local directory as source).
+echo "--- flake-build-path-input ---"
+/nix/system/profile/bin/bash -c '
+  mkdir -p /tmp/testflake-path/data
+  echo "data-from-path-input" > /tmp/testflake-path/data/message
+  cat > /tmp/testflake-path/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  inputs.data = {
+    url = "path:./data";
+    flake = false;
+  };
+
+  outputs = { self, data }: {
+    packages."x86_64-unknown-redox".greet = derivation {
+      name = "flake-path-input";
+      builder = "/nix/system/profile/bin/bash";
+      args = ["-c" "export PATH=/nix/system/profile/bin:/bin; cat ${data}/message > $out"];
+      system = "x86_64-unknown-redox";
+      inherit data;
+    };
+  };
+}
+  FLAKEEOF
+  cat > /tmp/testflake-path/flake.lock << '"'"'LOCKEOF'"'"'
+{
+  "version": 7,
+  "root": "root",
+  "nodes": {
+    "root": {
+      "inputs": {
+        "data": "data"
+      }
+    },
+    "data": {
+      "flake": false,
+      "locked": {
+        "type": "path",
+        "path": "./data"
+      }
+    }
+  }
+}
+  LOCKEOF
+  cd /tmp/testflake-path
+  OUTPUT=$(/bin/snix build ".#greet" 2>/tmp/flake-path-err)
+  EXIT=$?
+  if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ]; then
+    CONTENT=$(cat "$OUTPUT")
+    if [ "$CONTENT" = "data-from-path-input" ]; then
+      echo "FUNC_TEST:flake-build-path-input:PASS"
+    else
+      echo "FUNC_TEST:flake-build-path-input:FAIL:content=$CONTENT"
+    fi
+  else
+    echo "FUNC_TEST:flake-build-path-input:FAIL:exit=$EXIT"
+    cat /tmp/flake-path-err 2>/dev/null | head -5
+  fi
+'
+
+# Cleanup flake test dirs
+rm -r /tmp/testflake /tmp/testflake-dir /tmp/testflake-multi ^> /dev/null
+rm -r /tmp/testflake-dep /tmp/testflake-nolock /tmp/testflake-noflake ^> /dev/null
+rm -r /tmp/testflake-path ^> /dev/null
+rm /tmp/flake-simple-err /tmp/flake-qual-err /tmp/flake-dir-err ^> /dev/null
+rm /tmp/flake-dep-err /tmp/flake-nolock-err /tmp/flake-noflake-err ^> /dev/null
+rm /tmp/flake-path-err ^> /dev/null
+

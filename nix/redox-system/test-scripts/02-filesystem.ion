@@ -1,0 +1,86 @@
+# ── Filesystem I/O ─────────────────────────────────────────
+# These verify RedoxFS read/write works at runtime.
+
+# Test: write and read back a file
+echo "test_data_42" > /tmp/func_rw
+if exists -f /tmp/func_rw
+    let readback = $(cat /tmp/func_rw)
+    if test $readback = "test_data_42"
+        echo "FUNC_TEST:file-roundtrip:PASS"
+    else
+        echo "FUNC_TEST:file-roundtrip:FAIL:mismatch"
+    end
+    rm /tmp/func_rw
+else
+    echo "FUNC_TEST:file-roundtrip:FAIL:not-created"
+end
+
+# Test: mkdir + rmdir
+mkdir /tmp/func_dir
+if exists -d /tmp/func_dir
+    rm -rf /tmp/func_dir
+    echo "FUNC_TEST:mkdir:PASS"
+else
+    echo "FUNC_TEST:mkdir:FAIL"
+end
+
+# Test: touch creates file
+touch /tmp/func_touch
+if exists -f /tmp/func_touch
+    rm /tmp/func_touch
+    echo "FUNC_TEST:touch:PASS"
+else
+    echo "FUNC_TEST:touch:FAIL"
+end
+
+# Test: rm removes file
+touch /tmp/func_rm
+rm /tmp/func_rm
+if not exists -f /tmp/func_rm
+    echo "FUNC_TEST:rm:PASS"
+else
+    echo "FUNC_TEST:rm:FAIL"
+end
+
+# Test: cp copies file content
+echo "copy_me" > /tmp/func_cp_src
+cp /tmp/func_cp_src /tmp/func_cp_dst
+if exists -f /tmp/func_cp_dst
+    let content = $(cat /tmp/func_cp_dst)
+    rm /tmp/func_cp_src /tmp/func_cp_dst
+    if test $content = "copy_me"
+        echo "FUNC_TEST:cp:PASS"
+    else
+        echo "FUNC_TEST:cp:FAIL:content"
+    end
+else
+    rm /tmp/func_cp_src
+    echo "FUNC_TEST:cp:FAIL:missing"
+end
+
+# Test: mv moves file (src gone, dst exists)
+echo "move_me" > /tmp/func_mv_src
+mv /tmp/func_mv_src /tmp/func_mv_dst
+if exists -f /tmp/func_mv_dst
+    if not exists -f /tmp/func_mv_src
+        rm /tmp/func_mv_dst
+        echo "FUNC_TEST:mv:PASS"
+    else
+        rm /tmp/func_mv_src /tmp/func_mv_dst
+        echo "FUNC_TEST:mv:FAIL:src-exists"
+    end
+else
+    echo "FUNC_TEST:mv:FAIL:dst-missing"
+end
+
+# Test: file append
+echo "line1" > /tmp/func_append
+echo "line2" >> /tmp/func_append
+let lines = $(wc -l /tmp/func_append)
+rm /tmp/func_append
+if test -n $lines
+    echo "FUNC_TEST:append:PASS"
+else
+    echo "FUNC_TEST:append:FAIL"
+end
+

@@ -1,0 +1,400 @@
+# ── Per-Path Proxy Tests ───────────────────────────────────────────
+# Tests for the build filesystem proxy that interposes on file: in
+# the builder's namespace, filtering access to declared inputs only.
+#
+# Detection: snix emits "buildfs: entering event loop" to stderr when
+# the proxy starts. If "per-path proxy failed" appears, the fallback
+# scheme-level sandbox was used. Tests SKIP when proxy is not active.
+#
+# Covers: tasks 1.3, 1.4, 9.1–9.6 from per-path-sandbox change.
+
+echo ""
+echo "=== Per-Path Proxy Tests ==="
+
+# ── Helper: shared flake.lock ──────────────────────────────────────
+# All proxy test flakes are lockfile-trivial (no inputs).
+/nix/system/profile/bin/bash -c '
+  mkdir -p /tmp/proxy-test
+  cat > /tmp/proxy-test/flake.lock << '"'"'LOCKEOF'"'"'
+{
+  "version": 7,
+  "root": "root",
+  "nodes": {
+    "root": {
+      "inputs": {}
+    }
+  }
+}
+  LOCKEOF
+'
+
+# ── Test 1.3: exec() resolves through the proxy ───────────────────
+# If the proxy is active, the builder binary (/bin/sh) must be opened
+# via the proxy's file: scheme during exec(). A successful build with
+# an active proxy proves exec resolution works through the proxy.
+echo "--- proxy-exec-resolution ---"
+/nix/system/profile/bin/bash -c '
+  cat > /tmp/proxy-test/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  outputs = { self }: {
+    packages."x86_64-unknown-redox".probe = derivation {
+      name = "proxy-exec-probe";
+      system = "x86_64-unknown-redox";
+      builder = "/bin/sh";
+      args = [ "-c" "echo exec-ok > $out" ];
+    };
+  };
+}
+  FLAKEEOF
+  cd /tmp/proxy-test
+  OUTPUT=$(/bin/snix build ".#probe" 2>/tmp/proxy-test/exec-err)
+  EXIT=$?
+
+  # Detect proxy status from stderr
+  PROXY=0
+  if grep -q "buildfs: entering event loop" /tmp/proxy-test/exec-err 2>/dev/null; then
+    if ! grep -q "proxy failed" /tmp/proxy-test/exec-err 2>/dev/null; then
+      PROXY=1
+    fi
+  fi
+
+  if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ]; then
+    CONTENT=$(cat "$OUTPUT")
+    if [ "$CONTENT" = "exec-ok" ]; then
+      if [ $PROXY -eq 1 ]; then
+        echo "FUNC_TEST:proxy-exec-resolution:PASS"
+      else
+        echo "FUNC_TEST:proxy-exec-resolution:SKIP"
+      fi
+    else
+      echo "FUNC_TEST:proxy-exec-resolution:FAIL:unexpected-output=$CONTENT"
+    fi
+  else
+    echo "FUNC_TEST:proxy-exec-resolution:FAIL:build-failed-exit=$EXIT"
+  fi
+'
+
+# ── Test 1.4: proxy I/O latency ───────────────────────────────────
+# Builds a derivation that writes and reads $out 10 times to exercise
+# the proxy I/O path. If proxy is active, each operation is an IPC
+# round-trip through the scheme socket. We verify it completes (no
+# hang, no corruption). Actual timing requires a dedicated benchmark.
+echo "--- proxy-io-latency ---"
+/nix/system/profile/bin/bash -c '
+  cat > /tmp/proxy-test/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  outputs = { self }: {
+    packages."x86_64-unknown-redox".iobench = derivation {
+      name = "proxy-io-bench";
+      system = "x86_64-unknown-redox";
+      builder = "/bin/sh";
+      args = [ "-c" "echo round0 > $out; echo round1 >> $out; echo round2 >> $out; echo round3 >> $out; echo round4 >> $out; echo round5 >> $out; echo round6 >> $out; echo round7 >> $out; echo round8 >> $out; echo round9 >> $out; echo io-complete >> $out" ];
+    };
+  };
+}
+  FLAKEEOF
+  cd /tmp/proxy-test
+  OUTPUT=$(/bin/snix build ".#iobench" 2>/tmp/proxy-test/io-err)
+  EXIT=$?
+
+  PROXY=0
+  if grep -q "buildfs: entering event loop" /tmp/proxy-test/io-err 2>/dev/null; then
+    if ! grep -q "proxy failed" /tmp/proxy-test/io-err 2>/dev/null; then
+      PROXY=1
+    fi
+  fi
+
+  if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ]; then
+    if grep -q "io-complete" "$OUTPUT"; then
+      if [ $PROXY -eq 1 ]; then
+        echo "FUNC_TEST:proxy-io-latency:PASS"
+      else
+        echo "FUNC_TEST:proxy-io-latency:SKIP"
+      fi
+    else
+      echo "FUNC_TEST:proxy-io-latency:FAIL:incomplete-output"
+    fi
+  else
+    echo "FUNC_TEST:proxy-io-latency:FAIL:build-failed-exit=$EXIT"
+  fi
+'
+
+# ── Test 9.1: proxy blocks /etc/passwd ─────────────────────────────
+# A derivation whose builder attempts to read /etc/passwd via shell
+# redirect. With the proxy active, /etc/passwd is not in the allow-
+# list, so the open should fail (EACCES). The builder detects this
+# and writes "BLOCKED" to $out. Without the proxy, the real file:
+# scheme allows the read.
+echo "--- proxy-blocks-passwd ---"
+/nix/system/profile/bin/bash -c '
+  cat > /tmp/proxy-test/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  outputs = { self }: {
+    packages."x86_64-unknown-redox".passwdtest = derivation {
+      name = "proxy-passwd-test";
+      system = "x86_64-unknown-redox";
+      builder = "/bin/sh";
+      args = [ "-c" "echo READABLE > $out < /etc/passwd || echo BLOCKED > $out" ];
+    };
+  };
+}
+  FLAKEEOF
+  cd /tmp/proxy-test
+  OUTPUT=$(/bin/snix build ".#passwdtest" 2>/tmp/proxy-test/passwd-err)
+  EXIT=$?
+
+  PROXY=0
+  if grep -q "buildfs: entering event loop" /tmp/proxy-test/passwd-err 2>/dev/null; then
+    if ! grep -q "proxy failed" /tmp/proxy-test/passwd-err 2>/dev/null; then
+      PROXY=1
+    fi
+  fi
+
+  if [ $PROXY -eq 0 ]; then
+    echo "FUNC_TEST:proxy-blocks-passwd:SKIP"
+  elif [ $EXIT -ne 0 ]; then
+    # Build itself failed — proxy blocked access hard enough to kill builder
+    echo "FUNC_TEST:proxy-blocks-passwd:PASS"
+  elif [ -f "$OUTPUT" ]; then
+    CONTENT=$(cat "$OUTPUT")
+    if [ "$CONTENT" = "BLOCKED" ]; then
+      echo "FUNC_TEST:proxy-blocks-passwd:PASS"
+    else
+      echo "FUNC_TEST:proxy-blocks-passwd:FAIL:etc-passwd-was-readable"
+    fi
+  else
+    echo "FUNC_TEST:proxy-blocks-passwd:FAIL:no-output"
+  fi
+'
+
+# ── Test 9.2: proxy allows declared input store path ───────────────
+# Two derivations: dep writes content, reader declares dep as an
+# input and reads from it. With the proxy active, the dep output
+# path is in the allow-list (it is an inputDerivation of reader).
+echo "--- proxy-allows-declared-input ---"
+/nix/system/profile/bin/bash -c '
+  cat > /tmp/proxy-test/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  outputs = { self }:
+    let
+      dep = derivation {
+        name = "proxy-test-dep";
+        system = "x86_64-unknown-redox";
+        builder = "/bin/sh";
+        args = [ "-c" "echo dep-content-42 > $out" ];
+      };
+    in {
+      packages."x86_64-unknown-redox".reader = derivation {
+        name = "proxy-test-reader";
+        system = "x86_64-unknown-redox";
+        builder = "/bin/sh";
+        depPath = dep;
+        args = [ "-c" "echo read-ok > $out < $depPath || echo read-fail > $out" ];
+      };
+    };
+}
+  FLAKEEOF
+  cd /tmp/proxy-test
+  OUTPUT=$(/bin/snix build ".#reader" 2>/tmp/proxy-test/input-err)
+  EXIT=$?
+
+  PROXY=0
+  if grep -q "buildfs: entering event loop" /tmp/proxy-test/input-err 2>/dev/null; then
+    if ! grep -q "proxy failed" /tmp/proxy-test/input-err 2>/dev/null; then
+      PROXY=1
+    fi
+  fi
+
+  if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ]; then
+    CONTENT=$(cat "$OUTPUT")
+    if [ "$CONTENT" = "read-ok" ]; then
+      if [ $PROXY -eq 1 ]; then
+        echo "FUNC_TEST:proxy-allows-declared-input:PASS"
+      else
+        echo "FUNC_TEST:proxy-allows-declared-input:SKIP"
+      fi
+    else
+      echo "FUNC_TEST:proxy-allows-declared-input:FAIL:content=$CONTENT"
+    fi
+  else
+    echo "FUNC_TEST:proxy-allows-declared-input:FAIL:build-failed-exit=$EXIT"
+  fi
+'
+
+# ── Test 9.3: proxy blocks undeclared store path ───────────────────
+# The builder tries to read a store path that exists on disk but is
+# NOT declared as an input derivation or source. With the proxy, the
+# path is not in the allow-list, so the read should fail.
+# Strategy: the builder reads /nix/system/profile (exists on the live
+# system, never a declared build input).
+echo "--- proxy-blocks-undeclared-path ---"
+/nix/system/profile/bin/bash -c '
+  cat > /tmp/proxy-test/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  outputs = { self }: {
+    packages."x86_64-unknown-redox".undeclared = derivation {
+      name = "proxy-undeclared-test";
+      system = "x86_64-unknown-redox";
+      builder = "/bin/sh";
+      args = [ "-c" "echo READABLE > $out < /nix/system/profile/manifest.json || echo BLOCKED > $out" ];
+    };
+  };
+}
+  FLAKEEOF
+  cd /tmp/proxy-test
+  OUTPUT=$(/bin/snix build ".#undeclared" 2>/tmp/proxy-test/undecl-err)
+  EXIT=$?
+
+  PROXY=0
+  if grep -q "buildfs: entering event loop" /tmp/proxy-test/undecl-err 2>/dev/null; then
+    if ! grep -q "proxy failed" /tmp/proxy-test/undecl-err 2>/dev/null; then
+      PROXY=1
+    fi
+  fi
+
+  if [ $PROXY -eq 0 ]; then
+    echo "FUNC_TEST:proxy-blocks-undeclared-path:SKIP"
+  elif [ $EXIT -ne 0 ]; then
+    # Build failed — proxy blocked access
+    echo "FUNC_TEST:proxy-blocks-undeclared-path:PASS"
+  elif [ -f "$OUTPUT" ]; then
+    CONTENT=$(cat "$OUTPUT")
+    if [ "$CONTENT" = "BLOCKED" ]; then
+      echo "FUNC_TEST:proxy-blocks-undeclared-path:PASS"
+    else
+      echo "FUNC_TEST:proxy-blocks-undeclared-path:FAIL:undeclared-path-readable"
+    fi
+  else
+    echo "FUNC_TEST:proxy-blocks-undeclared-path:FAIL:no-output"
+  fi
+'
+
+# ── Test 9.4: write to $out and read back ──────────────────────────
+# The builder writes data to $out, then reads it back to verify both
+# write and read work on the output path. With the proxy active,
+# $out is in the read-write allow-list.
+echo "--- proxy-write-read-out ---"
+/nix/system/profile/bin/bash -c '
+  cat > /tmp/proxy-test/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  outputs = { self }: {
+    packages."x86_64-unknown-redox".writeread = derivation {
+      name = "proxy-write-read";
+      system = "x86_64-unknown-redox";
+      builder = "/bin/sh";
+      args = [ "-c" "echo write-test-42 > $out; echo verified > $out < $out || echo readback-failed > $out" ];
+    };
+  };
+}
+  FLAKEEOF
+  cd /tmp/proxy-test
+  OUTPUT=$(/bin/snix build ".#writeread" 2>/tmp/proxy-test/wr-err)
+  EXIT=$?
+
+  PROXY=0
+  if grep -q "buildfs: entering event loop" /tmp/proxy-test/wr-err 2>/dev/null; then
+    if ! grep -q "proxy failed" /tmp/proxy-test/wr-err 2>/dev/null; then
+      PROXY=1
+    fi
+  fi
+
+  if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ]; then
+    CONTENT=$(cat "$OUTPUT")
+    if [ "$CONTENT" = "verified" ]; then
+      if [ $PROXY -eq 1 ]; then
+        echo "FUNC_TEST:proxy-write-read-out:PASS"
+      else
+        echo "FUNC_TEST:proxy-write-read-out:SKIP"
+      fi
+    else
+      echo "FUNC_TEST:proxy-write-read-out:FAIL:content=$CONTENT"
+    fi
+  else
+    echo "FUNC_TEST:proxy-write-read-out:FAIL:build-failed-exit=$EXIT"
+  fi
+'
+
+# ── Test 9.5: existing builds still pass with proxy ────────────────
+# The sandbox-build-basic test (above) already verifies that a normal
+# derivation builds successfully under the sandbox. When the proxy is
+# active, that test exercises the proxy's full I/O path. This test
+# re-confirms by checking the earlier result is still valid.
+echo "--- proxy-existing-builds ---"
+/nix/system/profile/bin/bash -c '
+  cat > /tmp/proxy-test/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  outputs = { self }: {
+    packages."x86_64-unknown-redox".hello = derivation {
+      name = "proxy-compat-hello";
+      system = "x86_64-unknown-redox";
+      builder = "/bin/sh";
+      args = [ "-c" "echo proxy-compat-ok > $out" ];
+    };
+  };
+}
+  FLAKEEOF
+  cd /tmp/proxy-test
+  OUTPUT=$(/bin/snix build ".#hello" 2>/tmp/proxy-test/compat-err)
+  EXIT=$?
+
+  PROXY=0
+  if grep -q "buildfs: entering event loop" /tmp/proxy-test/compat-err 2>/dev/null; then
+    if ! grep -q "proxy failed" /tmp/proxy-test/compat-err 2>/dev/null; then
+      PROXY=1
+    fi
+  fi
+
+  if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ]; then
+    CONTENT=$(cat "$OUTPUT")
+    if [ "$CONTENT" = "proxy-compat-ok" ]; then
+      if [ $PROXY -eq 1 ]; then
+        echo "FUNC_TEST:proxy-existing-builds:PASS"
+      else
+        echo "FUNC_TEST:proxy-existing-builds:SKIP"
+      fi
+    else
+      echo "FUNC_TEST:proxy-existing-builds:FAIL:content=$CONTENT"
+    fi
+  else
+    echo "FUNC_TEST:proxy-existing-builds:FAIL:build-failed-exit=$EXIT"
+  fi
+'
+
+# ── Test 9.6: --no-sandbox fallback ────────────────────────────────
+# Verify builds still work with --no-sandbox (bypasses both the
+# proxy and the scheme-level namespace sandbox). Already exercised
+# by sandbox-build-nosandbox above; this re-confirms with a fresh
+# derivation to ensure the proxy teardown path is clean.
+echo "--- proxy-nosandbox-fallback ---"
+/nix/system/profile/bin/bash -c '
+  cat > /tmp/proxy-test/flake.nix << '"'"'FLAKEEOF'"'"'
+{
+  outputs = { self }: {
+    packages."x86_64-unknown-redox".nosb = derivation {
+      name = "proxy-nosandbox-test";
+      system = "x86_64-unknown-redox";
+      builder = "/bin/sh";
+      args = [ "-c" "echo nosandbox-ok > $out" ];
+    };
+  };
+}
+  FLAKEEOF
+  cd /tmp/proxy-test
+  OUTPUT=$(/bin/snix build --no-sandbox ".#nosb" 2>/tmp/proxy-test/nosb-err)
+  EXIT=$?
+  if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ]; then
+    CONTENT=$(cat "$OUTPUT")
+    if [ "$CONTENT" = "nosandbox-ok" ]; then
+      echo "FUNC_TEST:proxy-nosandbox-fallback:PASS"
+    else
+      echo "FUNC_TEST:proxy-nosandbox-fallback:FAIL:content=$CONTENT"
+    fi
+  else
+    echo "FUNC_TEST:proxy-nosandbox-fallback:FAIL:exit=$EXIT"
+    cat /tmp/proxy-test/nosb-err 2>/dev/null | head -3
+  fi
+'
+
+# Cleanup proxy test dirs
+rm -r /tmp/proxy-test ^> /dev/null
+

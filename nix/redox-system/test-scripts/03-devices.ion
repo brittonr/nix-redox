@@ -1,0 +1,19 @@
+# ── Device Files ───────────────────────────────────────────
+
+# Test: /dev/null accepts writes
+echo "discard" > /dev/null
+if test $? = 0
+    echo "FUNC_TEST:dev-null:PASS"
+else
+    echo "FUNC_TEST:dev-null:FAIL"
+end
+
+# Test: /tmp is writable (ramfs mounted)
+echo "writable" > /tmp/func_writable
+if exists -f /tmp/func_writable
+    rm /tmp/func_writable
+    echo "FUNC_TEST:tmp-writable:PASS"
+else
+    echo "FUNC_TEST:tmp-writable:FAIL"
+end
+

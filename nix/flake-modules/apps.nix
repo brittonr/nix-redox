@@ -220,5 +220,68 @@
       );
       meta.description = "Remove Nix result symlinks from the working directory";
     };
+
+    # ── Quick test runners ─────────────────────────────────────────
+    # These run subsets of checks for fast iteration.
+
+    test-quick = {
+      type = "app";
+      program = toString (
+        pkgs.writeShellScript "test-quick" ''
+          set -euo pipefail
+          echo "Running quick checks (module system eval + types + artifacts + lib)..."
+          echo ""
+          nix build .#checks.x86_64-linux.tier-eval "$@"
+          echo ""
+          echo "✓ All eval-tier checks passed"
+        ''
+      );
+      meta.description = "Run module system tests only (seconds)";
+    };
+
+    test-host = {
+      type = "app";
+      program = toString (
+        pkgs.writeShellScript "test-host" ''
+          set -euo pipefail
+          echo "Running host checks (eval + devshells + host tools + snix tests)..."
+          echo ""
+          nix build .#checks.x86_64-linux.tier-host "$@"
+          echo ""
+          echo "✓ All host-tier checks passed"
+        ''
+      );
+      meta.description = "Run eval + host-side tests (minutes)";
+    };
+
+    test-cross = {
+      type = "app";
+      program = toString (
+        pkgs.writeShellScript "test-cross" ''
+          set -euo pipefail
+          echo "Running cross checks (eval + host + all cross-compiled packages)..."
+          echo ""
+          nix build .#checks.x86_64-linux.tier-cross "$@"
+          echo ""
+          echo "✓ All cross-tier checks passed"
+        ''
+      );
+      meta.description = "Run eval + host + cross-compilation checks (many minutes)";
+    };
+
+    test-vm = {
+      type = "app";
+      program = toString (
+        pkgs.writeShellScript "test-vm" ''
+          set -euo pipefail
+          echo "Running VM checks (boot + functional + bridge tests)..."
+          echo ""
+          nix build .#checks.x86_64-linux.tier-vm "$@"
+          echo ""
+          echo "✓ All VM-tier checks passed"
+        ''
+      );
+      meta.description = "Run VM integration tests only (many minutes, needs KVM)";
+    };
   };
 }
