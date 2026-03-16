@@ -140,7 +140,6 @@ in
     echo "Starting Redox OS (headless with networking)..."
     echo ""
     echo "Controls:"
-    echo "  Auto-selecting resolution in 5 seconds..."
     echo "  Ctrl+A then X: Quit QEMU"
     echo ""
     echo "Network: e1000 with user-mode NAT"
@@ -151,10 +150,8 @@ in
     echo "Shell will be available after boot completes..."
     echo ""
 
-    # Automatically send Enter after delay using expect to bypass resolution selection
-    ${pkgs.expect}/bin/expect -c "
-      set timeout 120
-      spawn ${pkgs.qemu}/bin/qemu-system-x86_64 \
+    # -vga none skips the bootloader resolution picker entirely
+    exec ${pkgs.qemu}/bin/qemu-system-x86_64 \
       -M pc \
       -cpu host \
       -m ${defaultMemory} \
@@ -162,26 +159,13 @@ in
       -serial mon:stdio \
       -device isa-debug-exit \
       -enable-kvm \
-      -bios $OVMF \
+      -bios "$OVMF" \
       -kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI \
-      -drive file=$IMAGE,format=raw,if=none,id=disk0 \
+      -drive file="$IMAGE",format=raw,if=none,id=disk0 \
       -device virtio-blk-pci,drive=disk0 \
       -netdev user,id=net0,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$HTTP_PORT-:80 \
       -device e1000,netdev=net0 \
+      -vga none \
       -nographic
-
-      # Wait for the resolution selection screen and automatically select.
-      # After sending Enter, fall through immediately to interact (no exp_continue).
-      expect {
-        \"Arrow keys and enter select mode\" {
-          sleep 2
-          send \"\r\"
-        }
-        timeout {
-          # Boot bypassed resolution selection, continue
-        }
-      }
-      interact
-    "
   '';
 }

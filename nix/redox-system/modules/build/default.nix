@@ -328,19 +328,34 @@ adios:
 
       # Boot-essential packages: flat-copied to /bin/ for init scripts and early boot.
       # These survive generation switches — they're always available.
-      # NOTE: names must match pkg.pname (not the flake attribute name).
+      # Matching uses pkg.pname first, then falls back to parseDrvName. Since most
+      # packages set pname, we include BOTH the pname AND parseDrvName variants so
+      # packages match regardless of which attribute they expose. Verify with:
+      #   nix eval .#packages.x86_64-linux.<attr> --apply 'drv: { pname = drv.pname or null; parsed = (builtins.parseDrvName drv.name).name; }'
       bootEssentialNames = [
-        "redox-base" # init, drivers, core daemons
-        "ion-shell" # shell for init scripts
-        "redox-uutils" # basic unix tools (ls, cp, cat — used in scripts)
-        "redox-userutils" # getty, login for console
-        "netutils" # networking (if enabled)
-        "netcfg-setup" # network configuration
-        "snix-redox" # system management (must always be available)
-        "orbital" # window manager (if graphics)
-        "orbdata" # orbital data
-        "orbterm" # orbital terminal
-        "orbutils" # orbital utilities
+        # base: no pname, parseDrvName = "redox-base-percrate-unstable"
+        "redox-base-percrate-unstable"
+        # ion: pname = "ion-shell", parseDrvName = "rust_ion-shell"
+        "ion-shell"
+        "rust_ion-shell"
+        # uutils: pname = "redox-uutils"
+        "redox-uutils"
+        # userutils: pname = "userutils", parseDrvName = "rust_userutils"
+        "userutils"
+        "rust_userutils"
+        # netutils: pname = "netutils", parseDrvName = "netutils-unstable"
+        "netutils"
+        "netutils-unstable"
+        # netcfg-setup: pname = "netcfg-setup"
+        "netcfg-setup"
+        # snix: pname = "snix-redox", parseDrvName = "rust_snix-redox"
+        "snix-redox"
+        "rust_snix-redox"
+        # graphics (if enabled)
+        "orbital"
+        "orbdata"
+        "orbterm"
+        "orbutils"
       ];
 
       isBootEssential =
