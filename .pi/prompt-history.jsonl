@@ -309,3 +309,5 @@
 {"text":"openspec/changes/per-path-sandbox/waitpid-hang-prompt.md. run this","timestamp":1773609552505}
 {"text":"what next","timestamp":1773613977345}
 {"text":"lets do it","timestamp":1773614082975}
+{"text":"- 1.5 — Fix remaining test failures (stdout capture, dir output, dep\n chain, cargo)\n - 2.1–2.7 — Complex build handler fixes","timestamp":1773620487390}
+{"text":"continue","timestamp":1773621208102}

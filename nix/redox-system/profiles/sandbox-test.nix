@@ -363,6 +363,113 @@ let
                           fi
                         '
 
+                        # ── Test: cargo build with build.rs + dependency ───
+                        # A more complex Nix derivation that runs cargo build for a
+                        # workspace crate with a build.rs and a path dependency.
+                        # This exercises the sandbox proxy under deeper process trees.
+                        echo ""
+                        echo "--- snix-build-cargo-complex: cargo with build.rs + dep ---"
+                        /nix/system/profile/bin/bash -c '
+                          cat > /tmp/build-cargo-complex.sh << '"'"'BUILDEOF'"'"'
+        set -e
+        export PATH=/nix/system/profile/bin:/bin:/usr/bin
+        export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+        export HOME="$TMPDIR"
+        export CARGO_HOME="$TMPDIR/cargo-home"
+        SRCDIR="$TMPDIR/complex-src"
+        mkdir -p "$SRCDIR/src" "$SRCDIR/mylib/src" "$CARGO_HOME" "$out/bin"
+
+        # Path dependency: mylib
+        cat > "$SRCDIR/mylib/Cargo.toml" << TOML
+        [package]
+        name = "mylib"
+        version = "0.1.0"
+        edition = "2021"
+  TOML
+        cat > "$SRCDIR/mylib/src/lib.rs" << RUST
+        pub fn greeting() -> &'"'"'static str {
+            "Hello from complex sandbox build!"
+        }
+  RUST
+
+        # Main crate with build.rs + dependency on mylib
+        cat > "$SRCDIR/Cargo.toml" << TOML
+        [package]
+        name = "complex-hello"
+        version = "0.1.0"
+        edition = "2021"
+
+        [dependencies]
+        mylib = { path = "mylib" }
+  TOML
+        cat > "$SRCDIR/src/main.rs" << RUST
+        fn main() {
+            println!("{}", mylib::greeting());
+            println!("BUILD_TIME={}", env!("BUILD_TIMESTAMP"));
+        }
+  RUST
+        cat > "$SRCDIR/build.rs" << RUST
+        fn main() {
+            println!("cargo:rustc-env=BUILD_TIMESTAMP=sandbox-verified");
+        }
+  RUST
+
+        mkdir -p "$SRCDIR/.cargo"
+        cat > "$SRCDIR/.cargo/config.toml" << CFG
+        [build]
+        jobs = 2
+        target = "x86_64-unknown-redox"
+        [target.x86_64-unknown-redox]
+        linker = "/nix/system/profile/bin/cc"
+  CFG
+        cd "$SRCDIR"
+        MAX_TIME=180
+        cargo build --offline -j2 &
+        PID=$!
+        SECONDS=0
+        while kill -0 $PID 2>/dev/null; do
+          if [ $SECONDS -ge $MAX_TIME ]; then
+            echo "[builder] cargo timeout" >&2
+            kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
+            exit 1
+          fi
+          cat /scheme/sys/uname > /dev/null 2>/dev/null || true
+        done
+        cat /scheme/sys/uname > /dev/null 2>/dev/null || true
+        wait $PID
+        CARGO_EXIT=$?
+        if [ $CARGO_EXIT -ne 0 ]; then
+          exit $CARGO_EXIT
+        fi
+        cp target/x86_64-unknown-redox/debug/complex-hello "$out/bin/complex-hello"
+  BUILDEOF
+
+                          cat > /tmp/cargo-complex.nix << '"'"'COMPLEXNIX'"'"'
+        derivation {
+          name = "cargo-complex";
+          builder = "/nix/system/profile/bin/bash";
+          args = ["/tmp/build-cargo-complex.sh"];
+          system = "x86_64-unknown-redox";
+        }
+  COMPLEXNIX
+
+                          OUTPUT=$(/bin/snix build --file /tmp/cargo-complex.nix 2>/tmp/snix-build-cargo-complex-err)
+                          EXIT=$?
+                          if [ $EXIT -eq 0 ] && [ -x "$OUTPUT/bin/complex-hello" ]; then
+                            RUN=$("$OUTPUT/bin/complex-hello" 2>&1)
+                            if echo "$RUN" | grep -q "Hello from complex sandbox build" && echo "$RUN" | grep -q "BUILD_TIME=sandbox-verified"; then
+                              echo "FUNC_TEST:snix-build-cargo-complex:PASS"
+                            else
+                              echo "FUNC_TEST:snix-build-cargo-complex:FAIL:output=$RUN"
+                            fi
+                          else
+                            echo "FUNC_TEST:snix-build-cargo-complex:FAIL:exit=$EXIT"
+                            echo "=== stderr ==="
+                            head -c 2000 /tmp/snix-build-cargo-complex-err 2>/dev/null
+                            echo "=== end ==="
+                          fi
+                        '
+
                         echo ""
                         echo "FUNC_TESTS_COMPLETE"
   '';
