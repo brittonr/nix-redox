@@ -41,13 +41,6 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Active Workarounds (still needed)
 
-### Poll-wait pattern for sandbox builds — REMOVED
-- Was reintroduced during per-path-sandbox work out of caution.
-- Tested 2026-03-15: blocking wait() works. 53/62 tests pass, no hangs.
-- waitpid is a direct kernel syscall (SYS_WAITPID), doesn't route through initnsmgr.
-- LAPIC timer ensures scheduler delivers child-exit wake even with all CPUs in HLT.
-- Removed try_wait+sched_yield, unified on child.wait() for all platforms.
-
 ### Proxy scheme socket close doesn't unblock next_request() (kernel bug)
 - Closing scheme socket fd from another thread does NOT unblock blocked `next_request()`.
 - Workaround: event loop checks `handler.handles.is_empty()` and exits when builder exits.
@@ -59,17 +52,6 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - **child_ns_fd close after spawn**: mkns() fd shared by parent and child. Parent must close its copy after spawn. Do NOT close in child's pre_exec — setns() stores the raw fd. Code: `local_build.rs` ~line 401.
 - **stdout flush before exit**: Redox exit handlers may not flush stdout. Always `stdout().flush()` before process exit. Code: `local_build.rs` ~line 1143.
 - **sched_yield over thread::sleep**: thread::sleep uses nanosleep which routes through scheme I/O — deadlocks if initnsmgr is busy. Only matters in poll loops during sandbox builds.
-
-## Known Sandbox Issues (per-path proxy)
-
-### Build scripts denied by AllowList — FIXED (2026-03-15)
-- Root cause: AllowList missing `/bin`, `/usr/bin` (bash PATH lookup got EACCES
-  instead of ENOENT → "Permission denied" exit 126), `/usr/src` (source bundles),
-  and builder arg paths (scripts at `/tmp/build-*.sh`, `/usr/src/*/build-*.sh`)
-- Fix: added `/bin`, `/usr/bin`, `/usr/src` to SYSTEM_READ_ONLY_PATHS; scan
-  `drv.arguments` and `drv.environment` for absolute paths, add as read-only
-- Code: `snix-redox/src/build_proxy/allow_list.rs` — `build_allow_list()`
-- 38 unit tests pass (7 new tests covering args/env scanning)
 
 ## Standalone .ion File Gotchas (test script split)
 
