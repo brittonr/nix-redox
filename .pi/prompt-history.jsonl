@@ -324,3 +324,4 @@
 {"text":"what next?","timestamp":1773625057269}
 {"text":"3","timestamp":1773625174354}
 {"text":"yes","timestamp":1773625754518}
+{"text":"- The 9 sandbox permission failures are the real issue now — the\n proxy's AllowList needs to include build script paths and tools in\n PATH. That's the bigger piece of work if you want to tackle it. - lets do it","timestamp":1773626654207}

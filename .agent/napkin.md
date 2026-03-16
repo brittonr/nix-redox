@@ -54,11 +54,14 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Known Sandbox Issues (per-path proxy)
 
-### Build scripts denied by AllowList
-- snix-build-dir: `/bin/mkdir`, `/usr/bin/mkdir` not in AllowList → `command not found`
-- snix-build-cargo, snix-compile, rg-build: build script paths denied → exit 126
-- AllowList needs to include builder inputs (build scripts, tools in PATH)
-- 9/62 self-hosting test failures are all this issue (as of 2026-03-15)
+### Build scripts denied by AllowList — FIXED (2026-03-15)
+- Root cause: AllowList missing `/bin`, `/usr/bin` (bash PATH lookup got EACCES
+  instead of ENOENT → "Permission denied" exit 126), `/usr/src` (source bundles),
+  and builder arg paths (scripts at `/tmp/build-*.sh`, `/usr/src/*/build-*.sh`)
+- Fix: added `/bin`, `/usr/bin`, `/usr/src` to SYSTEM_READ_ONLY_PATHS; scan
+  `drv.arguments` and `drv.environment` for absolute paths, add as read-only
+- Code: `snix-redox/src/build_proxy/allow_list.rs` — `build_allow_list()`
+- 38 unit tests pass (7 new tests covering args/env scanning)
 
 ## Ion Shell Gotchas (keep forgetting)
 

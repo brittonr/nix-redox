@@ -162,10 +162,17 @@ use crate::known_paths::KnownPaths;
 ///
 /// On Redox, these provide:
 ///   - `/nix/system/profile` — system tools (bash, coreutils, cc, etc.)
+///   - `/nix/store` — entire store (read-only, matching Nix sandbox semantics)
 ///   - `/usr/lib` — dynamic linker (ld64.so.1) and runtime libraries
+///   - `/usr/src` — source bundles for self-hosting builds
 ///   - `/lib` — additional shared libraries
 ///   - `/etc` — system configuration (timezone, hostname, snix config)
-///   - `/nix/store` — entire store (read-only, matching Nix sandbox semantics)
+///   - `/bin`, `/usr/bin` — standard PATH directories; builders set
+///     `PATH=/nix/system/profile/bin:/bin:/usr/bin` and bash resolves
+///     commands by trying each PATH entry. Without these, the proxy
+///     returns EACCES (not ENOENT) when bash checks `/bin/cmd`, causing
+///     "Permission denied" (exit 126) instead of falling through to
+///     the next PATH entry.
 ///
 /// The full-store read-only access matches how Nix sandbox works on Linux:
 /// the entire /nix/store is bind-mounted read-only. Per-derivation filtering
@@ -176,8 +183,11 @@ const SYSTEM_READ_ONLY_PATHS: &[&str] = &[
     "/nix/system/profile",
     "/nix/store",
     "/usr/lib",
+    "/usr/src",
     "/lib",
     "/etc",
+    "/bin",
+    "/usr/bin",
 ];
 
 /// Build an `AllowList` from a derivation's declared inputs.
@@ -212,9 +222,40 @@ pub fn build_allow_list(
 
     // Read-only: the builder binary itself (may not be under /nix/).
     if !drv.builder.is_empty() {
-        // Add the builder path and its parent directory.
         let builder_path = normalize_path(&drv.builder);
         list.read_only.insert(builder_path);
+    }
+
+    // Read-only: builder arguments that are absolute file paths.
+    //
+    // Derivation args like ["/tmp/build-hello-cargo.sh"] or
+    // ["/usr/src/snix-redox/build-snix.sh"] reference files the
+    // builder must read. Non-path args ("-c", inline scripts) are
+    // harmlessly ignored — adding a non-existent path to the
+    // allow-list has no effect.
+    for arg in &drv.arguments {
+        if arg.starts_with('/') {
+            list.read_only.insert(normalize_path(arg));
+        }
+    }
+
+    // Read-only: environment values that are absolute paths.
+    //
+    // Derivation env vars may reference files outside the store
+    // (e.g., source bundles, config files). Store paths are already
+    // covered by input_sources/input_derivations and the blanket
+    // /nix/store entry, but non-store absolute paths need explicit
+    // inclusion. Skip "out" (read-write) and values that don't
+    // look like paths.
+    for (key, val) in &drv.environment {
+        if key == "out" {
+            continue;
+        }
+        if let Ok(s) = std::str::from_utf8(val.as_ref()) {
+            if s.starts_with('/') && !s.contains(' ') {
+                list.read_only.insert(normalize_path(s));
+            }
+        }
     }
 
     // Read-only: input sources.
@@ -437,11 +478,16 @@ mod tests {
         assert!(list.can_read(Path::new("/nix/system/profile/bin/bash")));
         assert!(list.can_read(Path::new("/nix/store/abc-any-store-path/lib/foo")));
         assert!(list.can_read(Path::new("/usr/lib/ld64.so.1")));
+        assert!(list.can_read(Path::new("/usr/src/snix-redox/build.nix")));
         assert!(list.can_read(Path::new("/etc/snix/config")));
+        assert!(list.can_read(Path::new("/bin/mkdir")));
+        assert!(list.can_read(Path::new("/usr/bin/env")));
 
         // System paths are NOT writable.
         assert!(!list.can_write(Path::new("/nix/system/profile/bin/bash")));
         assert!(!list.can_write(Path::new("/nix/store/abc-any-store-path/lib/foo")));
+        assert!(!list.can_write(Path::new("/bin/mkdir")));
+        assert!(!list.can_write(Path::new("/usr/src/anything")));
 
         // Home dirs are not allowed.
         assert!(!list.can_read(Path::new("/home/user/.ssh/id_rsa")));
@@ -466,6 +512,114 @@ mod tests {
         assert!(!list.can_write(Path::new(
             "/nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-src/default.nix"
         )));
+    }
+
+    // ── Builder args and environment scanning ────────────────────────
+
+    #[test]
+    fn build_allow_list_includes_builder_args() {
+        // Builder args that are absolute paths should be read-only.
+        let mut drv = Derivation::default();
+        drv.builder = "/nix/system/profile/bin/bash".to_string();
+        drv.arguments = vec![
+            "/tmp/build-hello-cargo.sh".to_string(),
+        ];
+
+        let kp = KnownPaths::default();
+        let list = build_allow_list(&drv, &kp, "/nix/store/out", "/tmp/build");
+
+        // The build script path is readable.
+        assert!(list.can_read(Path::new("/tmp/build-hello-cargo.sh")));
+        // But not writable.
+        assert!(!list.can_write(Path::new("/tmp/build-hello-cargo.sh")));
+    }
+
+    #[test]
+    fn build_allow_list_skips_non_path_args() {
+        // Args like "-c" or inline scripts should NOT be added.
+        let mut drv = Derivation::default();
+        drv.builder = "/nix/system/profile/bin/bash".to_string();
+        drv.arguments = vec![
+            "-c".to_string(),
+            "echo hello > $out".to_string(),
+        ];
+
+        let kp = KnownPaths::default();
+        let list = build_allow_list(&drv, &kp, "/nix/store/out", "/tmp/build");
+
+        // Non-path args don't pollute the allow-list.
+        // "-c" doesn't start with '/' so is not added.
+        // "echo hello > $out" doesn't start with '/' so is not added.
+        // Only system paths and the builder itself should be present.
+        assert!(!list.can_read(Path::new("/tmp/random-file")));
+    }
+
+    #[test]
+    fn build_allow_list_includes_env_paths() {
+        // Environment values that are absolute paths should be read-only.
+        use bstr::BString;
+        let mut drv = Derivation::default();
+        drv.environment.insert(
+            "src".to_string(),
+            BString::from("/usr/src/myproject"),
+        );
+        drv.environment.insert(
+            "CFLAGS".to_string(),
+            BString::from("-O2 -Wall"),
+        );
+
+        let kp = KnownPaths::default();
+        let list = build_allow_list(&drv, &kp, "/nix/store/out", "/tmp/build");
+
+        // Absolute path env value is readable.
+        assert!(list.can_read(Path::new("/usr/src/myproject/src/main.c")));
+        // Non-path env value doesn't add anything.
+        // (CFLAGS has spaces so is excluded by the heuristic.)
+    }
+
+    #[test]
+    fn build_allow_list_env_skips_out() {
+        // The "out" env var is already added as read-write — don't
+        // downgrade it to read-only.
+        use bstr::BString;
+        let mut drv = Derivation::default();
+        drv.environment.insert(
+            "out".to_string(),
+            BString::from("/nix/store/abc-output"),
+        );
+
+        let kp = KnownPaths::default();
+        let list = build_allow_list(&drv, &kp, "/nix/store/abc-output", "/tmp/build");
+
+        // "out" is read-write, not downgraded to read-only.
+        assert!(list.can_write(Path::new("/nix/store/abc-output/bin/foo")));
+    }
+
+    #[test]
+    fn build_allow_list_real_derivation_pattern() {
+        // Simulate the real snix-compile derivation pattern:
+        //   builder = "/nix/system/profile/bin/bash"
+        //   args = ["/usr/src/snix-redox/build-snix.sh"]
+        let mut drv = Derivation::default();
+        drv.builder = "/nix/system/profile/bin/bash".to_string();
+        drv.arguments = vec![
+            "/usr/src/snix-redox/build-snix.sh".to_string(),
+        ];
+
+        let kp = KnownPaths::default();
+        let list = build_allow_list(&drv, &kp, "/nix/store/out", "/tmp/build");
+
+        // Builder is accessible.
+        assert!(list.can_read(Path::new("/nix/system/profile/bin/bash")));
+        // Build script is accessible (from args).
+        assert!(list.can_read(Path::new("/usr/src/snix-redox/build-snix.sh")));
+        // Source directory is accessible (from /usr/src system path).
+        assert!(list.can_read(Path::new("/usr/src/snix-redox/src/main.rs")));
+        // PATH directories are accessible (bash needs for command lookup).
+        assert!(list.can_read(Path::new("/bin/mkdir")));
+        assert!(list.can_read(Path::new("/usr/bin/env")));
+        // Tools in system profile are accessible.
+        assert!(list.can_read(Path::new("/nix/system/profile/bin/cargo")));
     }
 
     // ── Symlink tests ───────────────────────────────────────────────
