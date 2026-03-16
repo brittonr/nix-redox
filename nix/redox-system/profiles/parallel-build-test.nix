@@ -244,10 +244,6 @@ selfHosting
     diskSizeMB = 4096;
   };
 
-  "/snix" = {
-    sandbox = false;
-  };
-
   "/services" = (selfHosting."/services" or { }) // {
     startupScriptText = testScript;
   };

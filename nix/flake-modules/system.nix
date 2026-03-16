@@ -292,19 +292,6 @@ let
     defaultTimeout = 1500; # snix self-compile (168 crates) + ripgrep build need ~900s
   };
 
-  # Sandbox test: validates per-path proxy for snix builds
-  sandboxTestSystem = mkSystem {
-    modules = [ ../redox-system/profiles/sandbox-test.nix ];
-    inherit extraPkgs;
-  };
-  sandboxTest = mkFunctionalTest {
-    diskImage = sandboxTestSystem.diskImage;
-    inherit bootloader;
-    memoryMB = 4096;
-    cpus = 4;
-    defaultTimeout = 600; # simple snix builds + one cargo hello-world
-  };
-
   # Parallel build test: JOBS=1 baseline + JOBS=2 validation
   parallelBuildTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/parallel-build-test.nix ];
@@ -468,9 +455,6 @@ in
 
     redox-self-hosting-test = selfHostingTestSystem.diskImage;
     self-hosting-test = selfHostingTest;
-
-    redox-sandbox-test = sandboxTestSystem.diskImage;
-    sandbox-test = sandboxTest;
 
     redox-parallel-build-test = parallelBuildTestSystem.diskImage;
     parallel-build-test = parallelBuildTest;
