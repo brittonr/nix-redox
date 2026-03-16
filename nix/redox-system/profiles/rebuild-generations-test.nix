@@ -436,6 +436,218 @@ let
         echo "FUNC_TEST:pkg-in-manifest:FAIL:ripgrep not in manifest"
     end
 
+    # ── Phase 9: switch to specific past generation (gen 3) ────
+    #
+    # Generation history at this point:
+    #   Gen 1: initial build (hostname=redox, all pkgs)
+    #   Gen 2: Phase 3b auto-rebuild unchanged config (hostname=redox)
+    #   Gen 3: Phase 4 rebuild (hostname=test-rebuild-host, all pkgs)
+    #   Gen 4: Phase 6 rollback to gen 2 (hostname=redox)
+    #   Gen 5: Phase 8 rebuild (hostname=test-rebuild-host, pkgs=ripgrep)
+    #
+    # State: Gen 5 active (packages=[ripgrep], hostname=test-rebuild-host)
+    # Goal:  Jump to Gen 3 (hostname=test-rebuild-host, ALL original packages)
+    #
+    # This proves:
+    #   - Targeted generation switching works (--generation 3)
+    #   - Profile binaries are rebuilt from gen-3's package list
+    #     (bash returns to profile — gen 3 had the full package set)
+    #   - A new generation (gen 6) is created for the switch
+    echo ""
+    echo "--- Phase 9: switch to specific generation ---"
+
+    /bin/snix system rollback --generation 3 > /tmp/switch_out ^> /tmp/switch_err
+    let switch_rc = $?
+
+    if test $switch_rc -eq 0
+        echo "FUNC_TEST:switch-to-gen3-succeeds:PASS"
+    else
+        echo "FUNC_TEST:switch-to-gen3-succeeds:FAIL:exit=$switch_rc"
+        cat /tmp/switch_out
+        cat /tmp/switch_err
+        echo "FUNC_TESTS_COMPLETE"
+        exit
+    end
+
+    # Verify hostname is now "test-rebuild-host" (gen 3's value).
+    # After switching to gen 3, bash should be back in the profile
+    # (gen 3 had the full package set). Use bash for assertions.
+    /nix/system/profile/bin/bash -c '
+        actual=$(cat /etc/hostname)
+        if [ "$actual" = "test-rebuild-host" ]; then
+            echo FUNC_TEST:switch-gen3-hostname-live:PASS
+        else
+            echo "FUNC_TEST:switch-gen3-hostname-live:FAIL:expected test-rebuild-host got $actual"
+        fi
+    '
+
+    # Verify the manifest agrees
+    /nix/system/profile/bin/bash -c '
+        if grep -q "test-rebuild-host" /etc/redox-system/manifest.json; then
+            echo FUNC_TEST:switch-gen3-hostname-manifest:PASS
+        else
+            echo "FUNC_TEST:switch-gen3-hostname-manifest:FAIL:manifest missing test-rebuild-host"
+        fi
+    '
+
+    # Verify profile was rebuilt with gen-3's packages (bash is accessible —
+    # gen 3 had the full package set from the original profile)
+    if exists -f /nix/system/profile/bin/bash
+        echo "FUNC_TEST:switch-gen3-bash-restored:PASS"
+    else
+        echo "FUNC_TEST:switch-gen3-bash-restored:FAIL:bash not in profile after switch"
+    end
+
+    # Verify generation 6 was created (switch creates a new generation)
+    /nix/system/profile/bin/bash -c '
+        gen_dir="/etc/redox-system/generations"
+        count=$(ls "$gen_dir" 2>/dev/null | wc -l)
+        if [ "$count" -ge 6 ]; then
+            echo FUNC_TEST:switch-gen6-created:PASS
+        else
+            echo "FUNC_TEST:switch-gen6-created:FAIL:expected >=6 generations, found $count"
+            ls "$gen_dir" 2>/dev/null
+        fi
+    '
+
+    # Verify the generation description mentions rollback to gen 3
+    /nix/system/profile/bin/bash -c '
+        if grep -q "rollback to generation 3" /etc/redox-system/manifest.json 2>/dev/null; then
+            echo FUNC_TEST:switch-gen3-description:PASS
+        else
+            echo "FUNC_TEST:switch-gen3-description:FAIL:description missing"
+        fi
+    '
+
+    # ── Phase 10: switch forward to gen 5 (ripgrep config) ─────
+    #
+    # State: Gen 6 active (content of gen 3: hostname=test-rebuild-host, all pkgs)
+    # Goal:  Jump to Gen 5 (packages=[ripgrep], hostname=test-rebuild-host)
+    #
+    # This proves:
+    #   - Forward switching works (jumping to a later generation)
+    #   - Package profile is correctly rebuilt (rg returns to profile)
+    #   - Different package sets are correctly swapped
+    echo ""
+    echo "--- Phase 10: switch forward to gen 5 ---"
+
+    /bin/snix system rollback --generation 5 > /tmp/fwd_out ^> /tmp/fwd_err
+    let fwd_rc = $?
+
+    if test $fwd_rc -eq 0
+        echo "FUNC_TEST:switch-to-gen5-succeeds:PASS"
+    else
+        echo "FUNC_TEST:switch-to-gen5-succeeds:FAIL:exit=$fwd_rc"
+        cat /tmp/fwd_out
+        cat /tmp/fwd_err
+        echo "FUNC_TESTS_COMPLETE"
+        exit
+    end
+
+    # Verify rg is in the profile (gen 5 had ripgrep)
+    if exists -f /nix/system/profile/bin/rg
+        echo "FUNC_TEST:switch-gen5-rg-restored:PASS"
+    else
+        echo "FUNC_TEST:switch-gen5-rg-restored:FAIL:rg not in profile"
+    end
+
+    # Verify ripgrep is in the manifest
+    /nix/system/profile/bin/rg -q ripgrep /etc/redox-system/manifest.json ^> /dev/null
+    if test $? -eq 0
+        echo "FUNC_TEST:switch-gen5-ripgrep-in-manifest:PASS"
+    else
+        echo "FUNC_TEST:switch-gen5-ripgrep-in-manifest:FAIL"
+    end
+
+    # ── Phase 10b: switch backward to gen 1 (original) ─────────
+    #
+    # State: Gen 7 active (content of gen 5: ripgrep, test-rebuild-host)
+    # Goal:  Jump all the way back to Gen 1 (original config, all pkgs)
+    #
+    # This proves:
+    #   - Can jump across many generations
+    #   - Original system state is fully recoverable
+    #   - Profile restored to initial package set (bash back, rg gone)
+    echo ""
+    echo "--- Phase 10b: switch back to original (gen 1) ---"
+
+    /bin/snix system rollback --generation 1 > /tmp/orig_out ^> /tmp/orig_err
+    let orig_rc = $?
+
+    if test $orig_rc -eq 0
+        echo "FUNC_TEST:switch-to-gen1-succeeds:PASS"
+    else
+        echo "FUNC_TEST:switch-to-gen1-succeeds:FAIL:exit=$orig_rc"
+        echo "FUNC_TESTS_COMPLETE"
+        exit
+    end
+
+    # Verify hostname reverted to original
+    /nix/system/profile/bin/bash -c '
+        actual=$(cat /etc/hostname)
+        original=$(cat /tmp/original_hostname)
+        if [ "$actual" = "$original" ]; then
+            echo FUNC_TEST:switch-gen1-hostname-original:PASS
+        else
+            echo "FUNC_TEST:switch-gen1-hostname-original:FAIL:expected $original got $actual"
+        fi
+    '
+
+    # Verify bash is back in the profile (gen 1 had full packages)
+    if exists -f /nix/system/profile/bin/bash
+        echo "FUNC_TEST:switch-gen1-bash-restored:PASS"
+    else
+        echo "FUNC_TEST:switch-gen1-bash-restored:FAIL:bash not in profile"
+    end
+
+    # Verify 8 generations exist now
+    /nix/system/profile/bin/bash -c '
+        gen_dir="/etc/redox-system/generations"
+        count=$(ls "$gen_dir" 2>/dev/null | wc -l)
+        if [ "$count" -ge 8 ]; then
+            echo "FUNC_TEST:eight-generations-exist:PASS"
+        else
+            echo "FUNC_TEST:eight-generations-exist:FAIL:found $count"
+        fi
+    '
+
+    # ── Phase 11: list all generations (final state) ───────────
+    echo ""
+    echo "--- Phase 11: generation history ---"
+
+    /bin/snix system generations > /tmp/final_gens ^> /dev/null
+
+    # Verify we can see all generations
+    if exists -f /tmp/final_gens
+        let gen_lines = $(wc -l < /tmp/final_gens)
+        if test $gen_lines -ge 6
+            echo "FUNC_TEST:final-generations-listed:PASS"
+        else
+            echo "FUNC_TEST:final-generations-listed:FAIL:only $gen_lines lines"
+        end
+    else
+        echo "FUNC_TEST:final-generations-listed:FAIL:no output"
+    end
+
+    # Verify generation descriptions tell the story of all switches
+    if exists -f /tmp/final_gens
+        if grep -q "rollback to generation 3" /tmp/final_gens
+            echo "FUNC_TEST:gen-history-has-switch-to-3:PASS"
+        else
+            echo "FUNC_TEST:gen-history-has-switch-to-3:FAIL"
+        end
+        if grep -q "rollback to generation 5" /tmp/final_gens
+            echo "FUNC_TEST:gen-history-has-switch-to-5:PASS"
+        else
+            echo "FUNC_TEST:gen-history-has-switch-to-5:FAIL"
+        end
+        if grep -q "rollback to generation 1" /tmp/final_gens
+            echo "FUNC_TEST:gen-history-has-switch-to-1:PASS"
+        else
+            echo "FUNC_TEST:gen-history-has-switch-to-1:FAIL"
+        end
+    end
+
     echo ""
     echo "FUNC_TESTS_COMPLETE"
     echo ""
