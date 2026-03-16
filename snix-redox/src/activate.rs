@@ -454,6 +454,13 @@ pub fn activate(
         &mut warnings,
     );
 
+    // ── Step 3b: Write manifest-derived config files ──
+    // These files have content derived directly from manifest fields,
+    // not tracked via rootTree hashes. During live rebuild (no rootTree
+    // redeploy), the activate must write them from manifest data.
+    let derived_updated = write_manifest_derived_files(old, new, &mut warnings);
+    let config_files_updated = config_files_updated + derived_updated;
+
     // ── Step 4: Update GC roots (always, for idempotency) ──
     if let Err(e) = crate::system::update_system_gc_roots_pub(new) {
         warnings.push(format!("GC root update failed: {e}"));
@@ -725,6 +732,63 @@ fn hash_file_if_exists(path: &Path) -> Option<String> {
         hasher.update(&buf[..n]);
     }
     Some(hasher.finalize().to_hex().to_string())
+}
+
+/// Write config files whose content is derived from manifest fields.
+///
+/// During a live `snix system rebuild`, no rootTree is deployed — the
+/// activate runs against the running filesystem. Config files like
+/// /etc/hostname have content that comes from manifest.system.hostname,
+/// not from hash-tracked rootTree entries. This function writes them.
+fn write_manifest_derived_files(
+    old: &Manifest,
+    new: &Manifest,
+    warnings: &mut Vec<String>,
+) -> u32 {
+    let mut count = 0u32;
+
+    // /etc/hostname
+    if old.system.hostname != new.system.hostname {
+        match std::fs::write("/etc/hostname", &new.system.hostname) {
+            Ok(()) => {
+                println!("  updated /etc/hostname -> {}", new.system.hostname);
+                count += 1;
+            }
+            Err(e) => warnings.push(format!("failed to write /etc/hostname: {e}")),
+        }
+    }
+
+    // /etc/timezone (if timezone changed)
+    if old.system.timezone != new.system.timezone {
+        match std::fs::write("/etc/timezone", &new.system.timezone) {
+            Ok(()) => {
+                println!("  updated /etc/timezone -> {}", new.system.timezone);
+                count += 1;
+            }
+            Err(e) => warnings.push(format!("failed to write /etc/timezone: {e}")),
+        }
+    }
+
+    // /etc/net/dns (if DNS servers changed)
+    if old.configuration.networking.dns != new.configuration.networking.dns {
+        let dns_content = new.configuration.networking.dns.join("\n");
+        if let Err(e) = std::fs::create_dir_all("/etc/net") {
+            warnings.push(format!("failed to create /etc/net: {e}"));
+        }
+        match std::fs::write("/etc/net/dns", &dns_content) {
+            Ok(()) => {
+                println!("  updated /etc/net/dns");
+                count += 1;
+            }
+            Err(e) => warnings.push(format!("failed to write /etc/net/dns: {e}")),
+        }
+    }
+
+    if count > 0 {
+        println!("Manifest-derived files: {count} updated");
+    }
+
+    count
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

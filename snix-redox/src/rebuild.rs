@@ -156,6 +156,25 @@ pub fn rebuild(
         return Ok(());
     }
 
+    // Step 5b: Extract newly-added packages from the binary cache.
+    // The resolve step gives us store paths, but they may not be extracted
+    // to /nix/store/ yet (only exist as NARs in /nix/cache/).
+    if !resolved_packages.is_empty() {
+        let cache_dir = Path::new(cache_path).parent().unwrap_or(Path::new("/nix/cache"));
+        let source = crate::cache_source::CacheSource::Local(cache_dir.to_path_buf());
+        for pkg in &resolved_packages {
+            if pkg.store_path.is_empty() {
+                continue;
+            }
+            if !Path::new(&pkg.store_path).exists() {
+                println!("Extracting {}...", pkg.name);
+                if let Err(e) = crate::install::fetch_and_extract(&pkg.store_path, &source) {
+                    eprintln!("warning: failed to extract {}: {e}", pkg.name);
+                }
+            }
+        }
+    }
+
     // Step 6: Write merged manifest and switch
     let tmp_path = format!("/tmp/snix-rebuild-{}.json", std::process::id());
     let json = serde_json::to_string_pretty(&merged)?;
@@ -377,8 +396,16 @@ pub(crate) fn resolve_packages_from_json(
     names: &[String],
     index_json: &str,
 ) -> Result<Vec<Package>, Box<dyn std::error::Error>> {
-    // packages.json format: { "name": { "storePath": "...", "version": "...", ... } }
-    let index: BTreeMap<String, serde_json::Value> = serde_json::from_str(index_json)?;
+    // packages.json format: { "version": 1, "packages": { "name": { "storePath": "...", ... } } }
+    // Also support flat format: { "name": { "storePath": "...", ... } } for backwards compat.
+    let raw: serde_json::Value = serde_json::from_str(index_json)?;
+    let index: BTreeMap<String, serde_json::Value> = if let Some(pkgs) = raw.get("packages") {
+        // Nested format: extract the "packages" sub-object
+        serde_json::from_value(pkgs.clone()).unwrap_or_default()
+    } else {
+        // Flat format: top-level keys are package names
+        serde_json::from_value(raw).unwrap_or_default()
+    };
 
     let mut packages = Vec::new();
 
