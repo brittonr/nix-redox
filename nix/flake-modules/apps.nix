@@ -221,6 +221,174 @@
       meta.description = "Remove Nix result symlinks from the working directory";
     };
 
+    # ── Binary cache management ────────────────────────────────────
+    push-cache = {
+      type = "app";
+      program = toString (
+        pkgs.writeShellScript "push-cache" ''
+          set -euo pipefail
+
+          CACHE_HOST="''${1:-aspen1}"
+          CACHE_URL="ssh://''${CACHE_HOST}"
+
+          echo "Pushing Redox packages to binary cache on $CACHE_HOST..."
+          echo ""
+
+          # Packages in dependency order: system → userspace → images
+          PKGS=(
+            # Host tools
+            cookbook redoxfs installer
+
+            # System
+            relibc kernel bootloader base sysroot
+
+            # Userspace - core
+            ion helix uutils binutils extrautils sodium netutils userutils
+
+            # CLI tools
+            ripgrep fd bat hexyl zoxide dust tokei lsd shellharden smith
+            exampled snix strace-redox findutils contain pkgar redox-games
+
+            # C libraries
+            redox-zlib redox-zstd redox-expat redox-openssl redox-curl
+            redox-ncurses redox-readline redox-libpng redox-pcre2
+            redox-freetype2 redox-sqlite3 redox-libiconv redox-bzip2
+            redox-lz4 redox-xz redox-libffi redox-libjpeg redox-libgif
+            redox-pixman redox-gettext redox-libtiff redox-libwebp
+            redox-harfbuzz redox-glib redox-fontconfig redox-fribidi
+
+            # Self-hosting
+            gnu-make redox-bash redox-git redox-diffutils redox-sed
+            redox-patch redox-cmake redox-libcxx redox-libstdcxx-shim
+            redox-llvm redox-rustc redox-sysroot lld-wrapper
+
+            # Data
+            ca-certificates terminfo netdb
+
+            # Graphics
+            orbdata orbital orbterm orbutils
+
+            # Disk images
+            redox-default redox-minimal redox-graphical redox-cloud
+          )
+
+          PUSHED=0
+          SKIPPED=0
+          FAILED=0
+
+          for pkg in "''${PKGS[@]}"; do
+            STORE_PATH=$(nix eval ".#packages.x86_64-linux.''${pkg}" --raw 2>/dev/null) || {
+              printf "  %-30s EVAL_SKIP\n" "$pkg"
+              SKIPPED=$((SKIPPED + 1))
+              continue
+            }
+
+            if [ ! -e "$STORE_PATH" ]; then
+              printf "  %-30s NOT_BUILT\n" "$pkg"
+              SKIPPED=$((SKIPPED + 1))
+              continue
+            fi
+
+            if nix copy --to "$CACHE_URL" "$STORE_PATH" 2>/dev/null; then
+              printf "  %-30s ✓\n" "$pkg"
+              PUSHED=$((PUSHED + 1))
+            else
+              printf "  %-30s FAIL\n" "$pkg"
+              FAILED=$((FAILED + 1))
+            fi
+          done
+
+          echo ""
+          echo "Pushed: $PUSHED  Skipped: $SKIPPED  Failed: $FAILED"
+        ''
+      );
+      meta.description = "Push built Redox packages to the binary cache on aspen1 (or specified host)";
+    };
+
+    cache-status = {
+      type = "app";
+      program = toString (
+        pkgs.writeShellScript "cache-status" ''
+          set -euo pipefail
+
+          CACHE_URL="''${1:-http://aspen1:5000}"
+
+          echo "Checking Redox package cache coverage at $CACHE_URL"
+          echo ""
+
+          PKGS=(
+            # Host tools
+            cookbook redoxfs installer
+
+            # System
+            relibc kernel bootloader base sysroot
+
+            # Userspace
+            ion helix uutils binutils extrautils sodium netutils userutils
+
+            # CLI tools
+            ripgrep fd bat hexyl zoxide dust tokei lsd shellharden smith
+            exampled snix strace-redox findutils contain pkgar redox-games
+
+            # C libraries
+            redox-zlib redox-zstd redox-expat redox-openssl redox-curl
+            redox-ncurses redox-readline redox-libpng redox-pcre2
+            redox-freetype2 redox-sqlite3
+
+            # Self-hosting
+            gnu-make redox-bash redox-git redox-diffutils redox-sed
+            redox-patch redox-cmake redox-libcxx redox-llvm redox-rustc
+            redox-sysroot lld-wrapper
+
+            # Data
+            ca-certificates terminfo netdb
+
+            # Graphics
+            orbdata orbital orbterm orbutils
+
+            # Disk images
+            redox-default redox-minimal redox-graphical redox-cloud
+          )
+
+          HIT=0
+          MISS=0
+          ERR=0
+          TOTAL=0
+
+          printf "  %-30s %-6s %s\n" "PACKAGE" "CACHE" "STORE PATH"
+          printf "  %-30s %-6s %s\n" "-------" "-----" "----------"
+
+          for pkg in "''${PKGS[@]}"; do
+            TOTAL=$((TOTAL + 1))
+            STORE_PATH=$(nix eval ".#packages.x86_64-linux.''${pkg}" --raw 2>/dev/null) || {
+              printf "  %-30s %-6s %s\n" "$pkg" "EVAL?" "-"
+              ERR=$((ERR + 1))
+              continue
+            }
+
+            HASH=$(echo "$STORE_PATH" | sed 's|/nix/store/||' | cut -d- -f1)
+            CODE=$(${pkgs.curl}/bin/curl -s -o /dev/null -w "%{http_code}" "''${CACHE_URL}/''${HASH}.narinfo" 2>/dev/null) || CODE="ERR"
+
+            if [ "$CODE" = "200" ]; then
+              printf "  %-30s %-6s %s\n" "$pkg" "HIT" "$(basename "$STORE_PATH")"
+              HIT=$((HIT + 1))
+            else
+              printf "  %-30s %-6s %s\n" "$pkg" "MISS" "$(basename "$STORE_PATH")"
+              MISS=$((MISS + 1))
+            fi
+          done
+
+          echo ""
+          echo "Total: $TOTAL  Cached: $HIT  Missing: $MISS  Errors: $ERR"
+          if [ "$TOTAL" -gt 0 ]; then
+            PCT=$((HIT * 100 / TOTAL))
+            echo "Coverage: ''${PCT}%"
+          fi
+        ''
+      );
+      meta.description = "Check which Redox packages are in the binary cache on aspen1";
+    };
+
     # ── Quick test runners ─────────────────────────────────────────
     # These run subsets of checks for fast iteration.
 
