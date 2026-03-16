@@ -1,0 +1,36 @@
+--- a/drivers/net/virtio-netd/src/scheme.rs	2026-03-15 23:14:50.969553784 -0400
++++ b/drivers/net/virtio-netd/src/scheme.rs	2026-03-15 23:14:50.970553779 -0400
+@@ -7,22 +7,26 @@
+             return 0;
+         }
+ 
+-        let idx = self.rx.used.head_index() as usize;
+-        let element = self.rx.used.get_element_at(idx - 1);
++        // Read one entry at recv_head (not the last entry)
++        let idx = self.recv_head as usize;
++        let queue_size = self.rx.descriptor_len();
++        let element = self.rx.used.get_element_at(idx % queue_size);
+ 
+         let descriptor_idx = element.table_index.get();
+         let payload_size = element.written.get() as usize - header_size;
+ 
+-        // XXX: The header and packet are added as one output descriptor to the transmit queue,
+-        //      and the device is notified of the new entry (see 5.1.5 Device Initialization).
+         let buffer = &self.rx_buffers[descriptor_idx as usize];
+-        // TODO: Check the header.
+         let _header = unsafe { &*(buffer.as_ptr() as *const VirtHeader) };
+         let packet = &buffer[header_size..(header_size + payload_size)];
+ 
+-        // Copy the packet into the buffer.
++        // Copy the packet into the caller's buffer.
+         target[..payload_size].copy_from_slice(&packet);
+ 
+-        self.recv_head = self.rx.used.head_index();
++        // Re-post this buffer to the available ring so the device can reuse it.
++        // The descriptor table entry still has the correct buffer address/flags from init.
++        self.rx.repost_buffer(descriptor_idx as u16);
++
++        // Advance recv_head by one (wrapping u16)
++        self.recv_head = self.recv_head.wrapping_add(1);
+         payload_size
+     }

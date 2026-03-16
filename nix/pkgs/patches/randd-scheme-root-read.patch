@@ -1,0 +1,14 @@
+--- a/randd/src/main.rs	2026-03-15 23:14:26.845074435 -0400
++++ b/randd/src/main.rs	2026-03-15 23:14:26.845575785 -0400
+@@ -6,5 +6,9 @@
+         _fcntl_flags: u32,
+         _ctx: &CallerCtx,
+     ) -> Result<usize> {
+-        // Check fd and permissions
+-        self.can_perform_op_on_fd(id, MODE_READ)?;
++        // Check fd and permissions -- allow reads from SchemeRoot
++        // (Rust std opens /scheme/rand directly and reads from it)
++        match self.handles.get(&id).ok_or(Error::new(EBADF))? {
++            Handle::SchemeRoot => { /* scheme root is always readable */ }
++            Handle::File(_) => { self.can_perform_op_on_fd(id, MODE_READ)?; }
++        }

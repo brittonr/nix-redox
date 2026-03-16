@@ -50,12 +50,11 @@ let
   graphicscreenPatchPy = ../patches/graphicscreen-mmap.py;
 
   # Patches for virtio-netd RX buffer recycling and IRQ wakeup
-  virtioNetPatch = ../patches/virtio-netd-rx-recycle.py;
-  virtioCorePatch = ../patches/virtio-core-repost-buffer.py;
-  virtioNetIrqPatch = ../patches/virtio-netd-irq-wakeup.py;
+  virtioNetRxPatch = ../patches/virtio-netd-rx-recycle.patch;
+  virtioNetIrqPatch = ../patches/virtio-netd-irq-wakeup.patch;
 
-  # Patch for randd to allow reads from scheme root handles
-  randdPatch = ../patches/randd-scheme-root-read.py;
+  # Patch for randd to allow reads from scheme root handles (unified diff)
+  randdPatch = ../patches/randd-scheme-root-read.patch;
 
   # virtio-fsd driver source (injected into base workspace)
   virtioFsdSrc = ./virtio-fsd;
@@ -159,34 +158,55 @@ let
         echo "Done patching xhcid"
       fi
 
-      # Add Queue::repost_buffer() to virtio-core for RX buffer recycling
-      if [ -f drivers/virtio-core/src/transport.rs ]; then
-        echo "Patching virtio-core: adding Queue::repost_buffer()..."
-        ${pkgs.python3}/bin/python3 ${virtioCorePatch} drivers/virtio-core/src/transport.rs
-        echo "Done patching virtio-core"
-      fi
+      # Add Queue::repost_buffer() to virtio-core for RX buffer recycling.
+      # Uses substituteInPlace (exact string match) rather than patch because
+      # both Queue and PendingRequest have descriptor_len() — unified diff
+      # context matching hits the wrong one.
+      echo "Patching virtio-core: adding Queue::repost_buffer()..."
+      substituteInPlace drivers/virtio-core/src/transport.rs \
+        --replace-quiet \
+          '    /// Returns the number of descriptors in the descriptor table of this queue.
+    pub fn descriptor_len(&self) -> usize {
+        self.descriptor.len()
+    }
+}' \
+          '    /// Returns the number of descriptors in the descriptor table of this queue.
+    pub fn descriptor_len(&self) -> usize {
+        self.descriptor.len()
+    }
+
+    /// Re-post a descriptor to the available ring without allocating a new one.
+    ///
+    /// The descriptor table entry must already be set up with the correct buffer
+    /// address, flags, and size (e.g. from initial queue population). This just
+    /// adds the descriptor index back to the available ring and notifies the device.
+    pub fn repost_buffer(&self, descriptor_idx: u16) {
+        use core::sync::atomic::Ordering;
+
+        let avail_idx = self.available.head_index() as usize;
+        self.available
+            .get_element_at(avail_idx)
+            .table_index
+            .store(descriptor_idx, Ordering::SeqCst);
+        self.available.set_head_idx(avail_idx as u16 + 1);
+        self.notification_bell.ring(self.queue_index);
+    }
+}'
 
       # Fix virtio-netd RX buffer recycling and used ring tracking
       # Bug 1: try_recv() never re-posts consumed buffers to the available ring.
       #   After ~256 packets, all RX buffers are exhausted and inbound packets are dropped.
       # Bug 2: try_recv() reads only the last used ring element (idx-1) and jumps recv_head
       #   to head_index(), skipping any intermediate packets.
-      # Fix: Process one entry at recv_head per call, re-post the buffer after reading.
-      if [ -f drivers/net/virtio-netd/src/scheme.rs ]; then
-        echo "Patching virtio-netd RX buffer recycling..."
-        ${pkgs.python3}/bin/python3 ${virtioNetPatch} drivers/net/virtio-netd/src/scheme.rs
-        echo "Done patching virtio-netd"
-      fi
+      echo "Patching virtio-netd RX buffer recycling..."
+      patch -p1 --fuzz=3 < ${virtioNetRxPatch}
 
       # Fix virtio-netd main loop to wake on IRQ events
       # Without this, the main loop only wakes on scheme requests from smolnetd.
       # When smolnetd's timer goes idle (no active sockets), nobody reads incoming
       # packets from the device, causing all inbound traffic to be ignored.
-      if [ -f drivers/net/virtio-netd/src/main.rs ]; then
-        echo "Patching virtio-netd IRQ wakeup..."
-        ${pkgs.python3}/bin/python3 ${virtioNetIrqPatch} drivers/net/virtio-netd/src/main.rs
-        echo "Done patching virtio-netd IRQ wakeup"
-      fi
+      echo "Patching virtio-netd IRQ wakeup..."
+      patch -p1 --fuzz=3 < ${virtioNetIrqPatch}
 
       # Fix ihdad: use Immediate Command Interface for all HDA controllers
       #
@@ -215,12 +235,8 @@ let
       # Rust's std::sys::random::redox opens /scheme/rand (the scheme root)
       # and reads random bytes from it. But randd's read() only accepts
       # Handle::File, not Handle::SchemeRoot, returning EBADF.
-      # Fix: allow reads from SchemeRoot handles (always permitted).
-      if [ -f randd/src/main.rs ]; then
-        echo "Patching randd: allow reads from scheme root..."
-        ${pkgs.python3}/bin/python3 ${randdPatch} randd/src/main.rs
-        echo "Done patching randd"
-      fi
+      echo "Patching randd: allow reads from scheme root..."
+      patch -p1 --fuzz=3 < ${randdPatch}
 
       # ─── virtio-fsd: inject driver source into workspace ───
       echo "Adding virtio-fsd driver to workspace..."
