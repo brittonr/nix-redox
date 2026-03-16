@@ -46,6 +46,6 @@
 ## 7. Verification
 
 - [x] 7.1 Build virtio-fsd cross-compiled for Redox (confirm it compiles with all changes)
-- [ ] 7.2 Run `bridge-test` to verify basic bridge flow still works (open, read, write, readdir, close)
-- [ ] 7.3 Test symlink handling: add a symlink to the shared directory on host, verify guest can read through it
-- [ ] 7.4 Test error propagation: create a read-only file on host, attempt write from guest, verify EACCES (not EIO)
+- [x] 7.2 Run `bridge-test` to verify basic bridge flow still works (open, read, write, readdir, close)
+- [x] 7.3 Test symlink handling: add a symlink to the shared directory on host, verify guest can read through it
+- [x] 7.4 Test error propagation: create a read-only file on host, attempt write from guest, verify EACCES (not EIO)
