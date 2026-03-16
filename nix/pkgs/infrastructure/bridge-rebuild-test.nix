@@ -246,9 +246,12 @@ pkgs.writeShellScriptBin "bridge-rebuild-test" ''
       echo "  ''${BLUE}→ Guest ready — starting REAL build-bridge daemon...''${RESET}"
 
       # Start the daemon in background
+      # Use the system nix (which has packages cached locally) rather than
+      # the pinned nix from the derivation (which may need remote builds)
       REDOX_SHARED_DIR="$SHARED_DIR" \
       REDOX_FLAKE_DIR="$FLAKE_DIR" \
       REDOX_PROFILE="default" \
+      REDOX_NIX="$(command -v nix)" \
       POLL_INTERVAL=1 \
       ${buildBridge}/bin/redox-build-bridge &>"$BRIDGE_LOG" &
       BRIDGE_PID=$!

@@ -380,3 +380,5 @@
 {"text":"are we doing the package management through nix? are we replicating how nixos handles this?","timestamp":1773695893611}
 {"text":"what do you suggest? the end goal is for it to not need a host sidecar for building, but i understand that may be a ways away","timestamp":1773696019140}
 {"text":"yes","timestamp":1773696054607}
+{"text":"what next","timestamp":1773696937174}
+{"text":"can we prove our recent change that allows rebuilding inside redox (albeit through the host) actually updates live? this would mean we dont have to keep building images right?","timestamp":1773697178528}
