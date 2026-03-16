@@ -2998,12 +2998,6 @@ selfHosting
     diskSizeMB = 8192;
   };
 
-  # Disable sandbox — per-path proxy is not yet validated for complex
-  # cargo builds with 100+ crates and deep process hierarchies.
-  "/snix" = {
-    sandbox = false;
-  };
-
   # Disable interactive login — just run the test script
   "/services" = (selfHosting."/services" or { }) // {
     startupScriptText = testScript;

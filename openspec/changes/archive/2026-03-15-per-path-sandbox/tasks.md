@@ -27,18 +27,18 @@
 
 ## 4. Validate with Full Self-Hosting Suite
 
-- [ ] 4.1 Add the 193-crate snix build and 33-crate ripgrep build to the `sandbox-test` profile. Run the full suite.
-- [ ] 4.2 Fix any remaining handler issues exposed by the full crate count (common issues: cargo's `target/.cargo-lock` file, rustc writing to `deps/` alongside the output, lld creating temporary files during linking).
-- [ ] 4.3 Verify proc-macro crates (serde_derive, thiserror, etc.) compile and load correctly under the proxy. The proc-macro DLL is written to `$TMPDIR/target/` and loaded by rustc from the same path — both write and read must work.
-- [ ] 4.4 Verify build scripts that read source files (cc-rs reading `.c` files from input sources) work. The `build_allow_list` must include `input_sources` as read-only — confirm this path is exercised.
-- [ ] 4.5 Run the full 62-test self-hosting suite with `sandbox = true`. All tests must pass.
+- [x] 4.1 Add the 193-crate snix build and 33-crate ripgrep build to the `sandbox-test` profile. Run the full suite.
+- [x] 4.2 Fix any remaining handler issues exposed by the full crate count (common issues: cargo's `target/.cargo-lock` file, rustc writing to `deps/` alongside the output, lld creating temporary files during linking).
+- [x] 4.3 Verify proc-macro crates (serde_derive, thiserror, etc.) compile and load correctly under the proxy. The proc-macro DLL is written to `$TMPDIR/target/` and loaded by rustc from the same path — both write and read must work.
+- [x] 4.4 Verify build scripts that read source files (cc-rs reading `.c` files from input sources) work. The `build_allow_list` must include `input_sources` as read-only — confirm this path is exercised.
+- [x] 4.5 Run the full 62-test self-hosting suite with `sandbox = true`. All tests must pass.
 
 ## 5. Enable by Default
 
-- [ ] 5.1 Remove `sandbox = false` from `nix/redox-system/profiles/self-hosting-test.nix` (delete the `/snix` block or set `sandbox = true`).
-- [ ] 5.2 Remove `sandbox = false` from `nix/redox-system/profiles/parallel-build-test.nix` if present.
-- [ ] 5.3 Run the full self-hosting test suite (`nix run .#self-hosting-test`) and verify all 62 tests pass.
-- [ ] 5.4 Run the functional test suite (`nix run .#functional-test`) and verify no regressions (the sandbox-related functional tests should still pass).
-- [ ] 5.5 Delete the separate `sandbox-test` profile (no longer needed — self-hosting-test covers it).
-- [ ] 5.6 Update `sandbox.rs` module doc comment to reflect that proxy is the default path, not experimental.
-- [ ] 5.7 Update `AGENTS.md` with any new build knowledge discovered during this change.
+- [x] 5.1 Remove `sandbox = false` from `nix/redox-system/profiles/self-hosting-test.nix` (delete the `/snix` block or set `sandbox = true`).
+- [x] 5.2 Remove `sandbox = false` from `nix/redox-system/profiles/parallel-build-test.nix` if present.
+- [x] 5.3 Run the full self-hosting test suite (`nix run .#self-hosting-test`) and verify all 62 tests pass.
+- [x] 5.4 Run the functional test suite (`nix run .#functional-test`) and verify no regressions (the sandbox-related functional tests should still pass).
+- [x] 5.5 Delete the separate `sandbox-test` profile (no longer needed — self-hosting-test covers it).
+- [x] 5.6 Update `sandbox.rs` module doc comment to reflect that proxy is the default path, not experimental.
+- [x] 5.7 Update `AGENTS.md` with any new build knowledge discovered during this change.

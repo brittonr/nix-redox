@@ -40,6 +40,20 @@ Hard-won lessons from building RedoxOS with Nix. Read before making changes.
 - `getty` works on `debug:` because it uses event-driven non-blocking I/O with event queues
 - "Scheme 'file' not found" warnings during early boot are normal (before redoxfs mounts rootfs)
 
+### Build Sandbox (Per-Path Proxy)
+- snix builds use a per-path filesystem proxy as the default sandbox mode
+- Proxy registers as `file:` in the builder's namespace via `register_scheme_to_ns`
+- Builder's namespace excludes real `file:` — all file I/O routes through the proxy
+- Proxy checks every open/read/write/getdents against an `AllowList` of declared inputs
+- `$out` and `$TMPDIR` are read-write; `/nix/store` is blanket read-only (matches Linux Nix sandbox)
+- Real file I/O uses pre-opened root fd (`SYS_OPENAT(root_fd, ...)`) to bypass initnsmgr deadlock
+- `mkdir_p_via_root_fd` handles recursive directory creation for `$out` subdirectories
+- Redox open flags translated explicitly: `O_RDONLY=0x10000`, `O_CREAT=0x02000000`, etc.
+- `O_APPEND` mode: handler seeks to end before each write (cargo log files use append)
+- `getdents` filters directory listings: ancestor dirs show only navigable children, allowed dirs show all real entries
+- Fallback chain: proxy → scheme-only sandbox (includes real `file:`) → unsandboxed
+- Validated against 193-crate snix build, 33-crate ripgrep build, proc-macros, JOBS=2 parallel builds
+
 ### relibc Limitations
 - `nanosleep()` works correctly (SYS_NANOSLEEP syscall 162, kernel context.wake + scheduler verified)
 - `Instant::now()` advances via clock_gettime(CLOCK_MONOTONIC) reading HPET/PIT hardware

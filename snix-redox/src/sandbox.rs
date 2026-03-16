@@ -17,11 +17,16 @@
 //!
 //! ## Sandbox modes
 //!
-//! | Mode | file: scheme | Filesystem access |
-//! |------|-------------|-------------------|
-//! | Full (proxy) | proxy daemon | allow-list only |
-//! | Fallback (scheme-only) | real redoxfs | everything |
-//! | Unsandboxed | real redoxfs | everything |
+//! | Mode | file: scheme | Filesystem access | Status |
+//! |------|-------------|-------------------|--------|
+//! | Full (proxy) | proxy daemon | allow-list only | **Default** |
+//! | Fallback (scheme-only) | real redoxfs | everything | Fallback on proxy failure |
+//! | Unsandboxed | real redoxfs | everything | `--no-sandbox` / config |
+//!
+//! The per-path proxy is the default sandbox mode. It has been validated
+//! against the full self-hosting suite: 193-crate snix build, 33-crate
+//! ripgrep build, proc-macro compilation, build scripts, and parallel
+//! builds with JOBS=2.
 //!
 //! `local_build.rs` tries the full proxy first. If that fails (kernel
 //! doesn't support `register_scheme_to_ns` for "file", or proxy thread
