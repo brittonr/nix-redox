@@ -4,6 +4,13 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Recurring Mistakes
 
+### bootEssentialNames MUST include both pname AND parseDrvName variants
+- `isBootEssential` checks `pkg.pname or parseDrvName` — only ONE value per package.
+- If bootEssentialNames has only the parseDrvName but the pkg has a pname, it won't match.
+- Real base package: pname = "redox-base", parseDrvName = "redox-base-unstable" — NOT "redox-base-percrate-unstable".
+- Always include both variants. Verify with: `nix eval .#packages.x86_64-linux.<attr> --apply 'drv: { pname = drv.pname or null; parsed = (builtins.parseDrvName drv.name).name; }'`
+- Three checks now catch this: build-time assertion, `boot-essential-names` check, `rootTree-boot-critical-binaries` artifact test.
+
 ### New files must be `git add`ed for flakes
 - Every session. New `.nix` or `.rs` files invisible to `nix build` until tracked.
 

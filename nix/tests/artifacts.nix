@@ -1547,6 +1547,31 @@ in
     ];
   };
 
+  # Test: ALL critical boot binaries present in /bin/
+  # This is the artifact-level safety net for the boot-essential name matching.
+  # Init scripts hardcode /bin/ paths — if any binary is missing here, boot fails.
+  rootTree-boot-critical-binaries = mkArtifactTest {
+    name = "rootTree-boot-critical-binaries";
+    description = "All binaries referenced by init scripts must be in /bin/ (not just profile)";
+    modules = [ ../redox-system/profiles/development.nix ];
+    checks = [
+      # From base package — init daemons
+      { file = "bin/init"; }
+      { file = "bin/logd"; }
+      { file = "bin/ipcd"; }
+      { file = "bin/ptyd"; }
+      # Ion shell — init scripts are Ion
+      { file = "bin/ion"; }
+      # Networking — init scripts reference /bin/smolnetd, /bin/dhcpd-quiet
+      { file = "bin/smolnetd"; }
+      # User management — getty/login for serial console
+      { file = "bin/getty"; }
+      { file = "bin/login"; }
+      # Package management — must survive generation switch
+      { file = "bin/snix"; }
+    ];
+  };
+
   # Test: Generations directory exists
   rootTree-generations-dir-exists = mkArtifactTest {
     name = "rootTree-generations-dir-exists";
