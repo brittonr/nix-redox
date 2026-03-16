@@ -217,6 +217,12 @@ in
       meta.description = "End-to-end test: guest sends config, host builds via nix, guest activates";
     };
 
+    rebuild-generations-test = {
+      type = "app";
+      program = "${self'.packages.rebuild-generations-test}/bin/functional-test";
+      meta.description = "Test snix system rebuild, generations, and rollback inside a running VM";
+    };
+
     https-cache-test = {
       type = "app";
       program = "${self'.packages.httpsCacheTest}/bin/https-cache-test";

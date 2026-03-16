@@ -325,6 +325,17 @@ let
     inherit bootloader;
   };
 
+  # Rebuild & generations test: snix system rebuild, generations, rollback
+  rebuildGenerationsTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/rebuild-generations-test.nix ];
+    inherit extraPkgs;
+  };
+  rebuildGenerationsTest = mkFunctionalTest {
+    diskImage = rebuildGenerationsTestSystem.diskImage;
+    inherit bootloader;
+    defaultTimeout = 300; # rebuild + rollback may take a while
+  };
+
   mkBridgeTest = modularPkgs.infrastructure.mkBridgeTest;
   bridgeTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/bridge-test.nix ];
@@ -464,6 +475,9 @@ in
 
     redox-scheme-native-test = schemeNativeTestSystem.diskImage;
     scheme-native-test = schemeNativeTest;
+
+    redox-rebuild-generations-test = rebuildGenerationsTestSystem.diskImage;
+    rebuild-generations-test = rebuildGenerationsTest;
 
     redox-https-cache-test = httpsCacheTestSystem.diskImage;
     inherit httpsCacheTest;

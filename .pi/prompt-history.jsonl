@@ -363,3 +363,16 @@
 {"text":"i dont want harmonia accesible by randos, its just on my tailnet","timestamp":1773687568621}
 {"text":"what next?","timestamp":1773688173925}
 {"text":"1, 2","timestamp":1773688237029}
+{"text":"lets do these.  Still pending (not blocked, just needs a build cycle):\n - 41 packages not yet built locally (graphics stack, some C libs)\n - LLVM trim hasn't been built yet — will verify on next nix build .#redox-llvm","timestamp":1773689588875}
+{"text":"skip the pkg builds for now, what else could we work on","timestamp":1773697580960}
+{"text":"5","timestamp":1773697760155}
+{"text":"write a openspec for this","timestamp":1773697904215}
+{"text":"openspec/changes/virtio-fsd-hardening/ lets start","timestamp":1773698210338}
+{"text":"what next","timestamp":1773689509487}
+{"text":"1","timestamp":1773689560232}
+{"text":"frozen","timestamp":1773690462001}
+{"text":"yes go ahead and do that","timestamp":1773690555880}
+{"text":"what next","timestamp":1773692002219}
+{"text":"Test results (bridge-test): 47 passed, 1 failed\n (pre-existing), 0 skipped","timestamp":1773692022615}
+{"text":"what should we tackle next?","timestamp":1773692470008}
+{"text":"lets do 1 and 2. make an openspec","timestamp":1773692632747}

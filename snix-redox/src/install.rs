@@ -571,7 +571,11 @@ fn register_without_extract(
 }
 
 /// Fetch a store path from any cache source, decompress, verify hash, extract, and register.
-fn fetch_and_extract(
+/// Extract a package from the binary cache to /nix/store/.
+///
+/// Fetches the narinfo, decompresses the NAR, extracts, verifies hash,
+/// and registers in PathInfoDb. Skips if the store path already exists.
+pub fn fetch_and_extract(
     store_path_str: &str,
     source: &CacheSource,
 ) -> Result<(), Box<dyn std::error::Error>> {

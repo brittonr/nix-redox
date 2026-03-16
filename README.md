@@ -315,6 +315,9 @@ nix run .#functional-test
 # Self-hosting test (boots VM, runs 66 compilation tests)
 nix run .#self-hosting-test
 
+# Rebuild & generations test (boots VM, tests snix system rebuild/rollback, 25 tests)
+nix run .#rebuild-generations-test
+
 # Scheme-native test (boots VM, tests stored + profiled daemons, 22 tests)
 nix run .#scheme-native-test
 
@@ -341,6 +344,7 @@ nix flake check
 | Nix eval checks | 163 | Module system: profiles, types, assertions, artifacts |
 | Functional VM | 152 | In-guest: shell, filesystem, config, CLI tools, env propagation, snix eval/build |
 | Self-hosting VM | 66 | Toolchain: rustc, cargo, proc-macros, build scripts, snix self-compile |
+| Rebuild VM | 25 | Declarative rebuild: configuration.nix eval, switch, generations, rollback |
 | Scheme-native VM | 22 | Daemon lifecycle: stored, profiled, live install, .control mutations |
 | Network VM | 9 | DHCP, connectivity, HTTP cache search/install/execute |
 | Bridge VM | 45 | virtio-fs: push, search, install, remove, live push, reinstall |
