@@ -25,6 +25,9 @@ const MANIFEST_PATH: &str = "/etc/redox-system/manifest.json";
 /// Directory holding generation snapshots
 const GENERATIONS_DIR: &str = "/etc/redox-system/generations";
 
+/// Marker file: which generation to activate at boot
+const BOOT_DEFAULT_PATH: &str = "/boot/default-generation";
+
 // ===== Manifest Schema =====
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -992,6 +995,11 @@ pub fn switch(
     // ── Activate: atomic profile swap + config file updates ──
     let activation = crate::activate::activate(&current, &new_manifest, false)?;
 
+    // Update boot default so this generation is activated on next reboot
+    if let Err(e) = write_boot_default(next_id, None) {
+        eprintln!("warning: could not update boot default: {e}");
+    }
+
     println!("Switched to generation {next_id}");
 
     // Show brief package diff
@@ -1121,6 +1129,11 @@ pub fn rollback(
     // ── Activate: atomic profile swap + config file updates ──
     let activation = crate::activate::activate(&current, &rolled_back, false)?;
 
+    // Update boot default so this generation is activated on next reboot
+    if let Err(e) = write_boot_default(next_id, None) {
+        eprintln!("warning: could not update boot default: {e}");
+    }
+
     println!();
     println!("Rolled back to generation {} (saved as generation {next_id})", target.id);
 
@@ -1145,6 +1158,147 @@ pub fn rollback(
     println!();
     println!("Note: Boot-essential binaries in /bin/ are unchanged.");
     println!("Profile binaries in /nix/system/profile/bin/ have been updated.");
+
+    Ok(())
+}
+
+// ===== Boot Generation Selection =====
+
+/// Activate a stored generation without creating a new generation entry.
+///
+/// Used by the `85_generation_select` init script at boot time.
+/// Loads the generation's manifest, runs activate() to rebuild the profile
+/// and write config files, then updates the current manifest on disk.
+/// Does NOT create a new generation (unlike rollback).
+pub fn activate_boot(
+    generation_id: u32,
+    gen_dir: Option<&str>,
+    manifest_path: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = gen_dir.unwrap_or(GENERATIONS_DIR);
+    let mpath = manifest_path.unwrap_or(MANIFEST_PATH);
+
+    let current = load_manifest_from(mpath)?;
+
+    // Skip if already at the requested generation
+    if current.generation.id == generation_id {
+        eprintln!("boot: already at generation {generation_id}, skipping activation");
+        return Ok(());
+    }
+
+    let gens = scan_generations(dir)?;
+    let target = gens
+        .iter()
+        .find(|g| g.id == generation_id)
+        .ok_or_else(|| {
+            format!(
+                "generation {generation_id} not found (available: {})",
+                gens.iter()
+                    .map(|g| g.id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })?;
+
+    eprintln!(
+        "boot: activating generation {} ({})",
+        target.id, target.manifest.generation.description
+    );
+
+    // Activate: rebuild profile + write config files
+    let activation = crate::activate::activate(&current, &target.manifest, false)?;
+
+    // Update the on-disk manifest to match the activated generation
+    let json = serde_json::to_string_pretty(&target.manifest)?;
+    fs::write(mpath, &json)?;
+
+    if activation.binaries_linked > 0 {
+        eprintln!(
+            "boot: profile rebuilt ({} binaries linked)",
+            activation.binaries_linked
+        );
+    }
+
+    if !activation.warnings.is_empty() {
+        for w in &activation.warnings {
+            eprintln!("boot: warning: {w}");
+        }
+    }
+
+    Ok(())
+}
+
+/// Read the boot default generation ID from the marker file.
+pub fn read_boot_default(
+    boot_default_path: Option<&str>,
+) -> Result<Option<u32>, Box<dyn std::error::Error>> {
+    let path = boot_default_path.unwrap_or(BOOT_DEFAULT_PATH);
+    if !Path::new(path).exists() {
+        return Ok(None);
+    }
+    let content = fs::read_to_string(path)?.trim().to_string();
+    if content.is_empty() {
+        return Ok(None);
+    }
+    let id: u32 = content
+        .parse()
+        .map_err(|e| format!("invalid generation ID in {path}: {e}"))?;
+    Ok(Some(id))
+}
+
+/// Write the boot default generation marker.
+pub fn write_boot_default(
+    generation_id: u32,
+    boot_default_path: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let path = boot_default_path.unwrap_or(BOOT_DEFAULT_PATH);
+    // Ensure /boot/ directory exists
+    if let Some(parent) = Path::new(path).parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(path, format!("{generation_id}\n"))?;
+    Ok(())
+}
+
+/// `snix system boot [N]` — show or set the next-boot generation.
+pub fn boot_cmd(
+    generation_id: Option<u32>,
+    gen_dir: Option<&str>,
+    boot_default_path: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = gen_dir.unwrap_or(GENERATIONS_DIR);
+
+    match generation_id {
+        Some(id) => {
+            // Verify the generation exists
+            let gens = scan_generations(dir)?;
+            if !gens.iter().any(|g| g.id == id) {
+                return Err(format!(
+                    "generation {id} not found (available: {})",
+                    gens.iter()
+                        .map(|g| g.id.to_string())
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+                .into());
+            }
+
+            write_boot_default(id, boot_default_path)?;
+            println!("Next boot will activate generation {id}");
+            println!("(Run `snix system rollback --generation {id}` to activate it now)");
+        }
+        None => {
+            // Show current boot default
+            match read_boot_default(boot_default_path)? {
+                Some(id) => {
+                    println!("Boot default: generation {id}");
+                }
+                None => {
+                    println!("No boot default set (system boots with current manifest)");
+                }
+            }
+        }
+    }
 
     Ok(())
 }
@@ -2513,6 +2667,191 @@ mod tests {
             Some(current_file.to_str().unwrap()),
         );
         assert!(result.is_ok());
+    }
+
+    // ===== Boot Generation Selection Tests =====
+
+    #[test]
+    fn activate_boot_valid_generation() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("manifest.json");
+
+        // Write current manifest (gen 1)
+        let mut manifest = sample_manifest();
+        manifest.generation.id = 1;
+        manifest.system.hostname = "original".to_string();
+        let json = serde_json::to_string_pretty(&manifest).unwrap();
+        fs::write(&manifest_file, &json).unwrap();
+
+        // Create generation 2 with a different hostname
+        let gen2_dir = gen_dir.join("2");
+        fs::create_dir_all(&gen2_dir).unwrap();
+        let mut gen2_manifest = sample_manifest();
+        gen2_manifest.generation.id = 2;
+        gen2_manifest.system.hostname = "gen2-host".to_string();
+        gen2_manifest.generation.description = "hostname change".to_string();
+        let gen2_json = serde_json::to_string_pretty(&gen2_manifest).unwrap();
+        fs::write(gen2_dir.join("manifest.json"), &gen2_json).unwrap();
+
+        // Activate generation 2
+        let result = activate_boot(
+            2,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        );
+        assert!(result.is_ok(), "activate_boot failed: {:?}", result.err());
+
+        // Verify manifest was updated
+        let updated = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
+        assert_eq!(updated.system.hostname, "gen2-host");
+        assert_eq!(updated.generation.id, 2);
+    }
+
+    #[test]
+    fn activate_boot_missing_generation() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        fs::create_dir_all(&gen_dir).unwrap();
+        let manifest_file = dir.path().join("manifest.json");
+
+        let manifest = sample_manifest();
+        let json = serde_json::to_string_pretty(&manifest).unwrap();
+        fs::write(&manifest_file, &json).unwrap();
+
+        let result = activate_boot(
+            99,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn activate_boot_skips_current_generation() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        fs::create_dir_all(&gen_dir).unwrap();
+        let manifest_file = dir.path().join("manifest.json");
+
+        let mut manifest = sample_manifest();
+        manifest.generation.id = 3;
+        let json = serde_json::to_string_pretty(&manifest).unwrap();
+        fs::write(&manifest_file, &json).unwrap();
+
+        // Activating the same generation we're already at should succeed (no-op)
+        let result = activate_boot(
+            3,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn activate_boot_corrupt_manifest() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("manifest.json");
+
+        let manifest = sample_manifest();
+        let json = serde_json::to_string_pretty(&manifest).unwrap();
+        fs::write(&manifest_file, &json).unwrap();
+
+        // Create generation 2 with invalid JSON
+        let gen2_dir = gen_dir.join("2");
+        fs::create_dir_all(&gen2_dir).unwrap();
+        fs::write(gen2_dir.join("manifest.json"), "not valid json {{{").unwrap();
+
+        // scan_generations skips corrupt manifests, so gen 2 won't be found
+        let result = activate_boot(
+            2,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[test]
+    fn read_write_boot_default() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join("default-generation");
+
+        // No file yet
+        assert_eq!(read_boot_default(Some(marker.to_str().unwrap())).unwrap(), None);
+
+        // Write
+        write_boot_default(5, Some(marker.to_str().unwrap())).unwrap();
+
+        // Read back
+        assert_eq!(read_boot_default(Some(marker.to_str().unwrap())).unwrap(), Some(5));
+    }
+
+    #[test]
+    fn read_boot_default_empty_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join("default-generation");
+        fs::write(&marker, "").unwrap();
+
+        assert_eq!(read_boot_default(Some(marker.to_str().unwrap())).unwrap(), None);
+    }
+
+    #[test]
+    fn read_boot_default_invalid_content() {
+        let dir = tempfile::tempdir().unwrap();
+        let marker = dir.path().join("default-generation");
+        fs::write(&marker, "not-a-number\n").unwrap();
+
+        let result = read_boot_default(Some(marker.to_str().unwrap()));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn boot_cmd_set_and_show() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let marker = dir.path().join("default-generation");
+
+        // Create generation 3
+        let gen3_dir = gen_dir.join("3");
+        fs::create_dir_all(&gen3_dir).unwrap();
+        let manifest = sample_manifest();
+        let json = serde_json::to_string_pretty(&manifest).unwrap();
+        fs::write(gen3_dir.join("manifest.json"), &json).unwrap();
+
+        // Set boot default
+        let result = boot_cmd(
+            Some(3),
+            Some(gen_dir.to_str().unwrap()),
+            Some(marker.to_str().unwrap()),
+        );
+        assert!(result.is_ok());
+        assert_eq!(read_boot_default(Some(marker.to_str().unwrap())).unwrap(), Some(3));
+
+        // Show boot default (no generation arg)
+        let result = boot_cmd(
+            None,
+            Some(gen_dir.to_str().unwrap()),
+            Some(marker.to_str().unwrap()),
+        );
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn boot_cmd_nonexistent_generation() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        fs::create_dir_all(&gen_dir).unwrap();
+        let marker = dir.path().join("default-generation");
+
+        let result = boot_cmd(
+            Some(99),
+            Some(gen_dir.to_str().unwrap()),
+            Some(marker.to_str().unwrap()),
+        );
+        assert!(result.is_err());
     }
 
 }
