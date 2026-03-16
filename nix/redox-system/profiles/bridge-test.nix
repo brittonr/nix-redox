@@ -93,16 +93,24 @@ let
 
     # Test: read a NAR file from the flat cache layout
     echo "DEBUG: testing NAR file read (flat layout)"
-    # Read the ripgrep NAR file (bbf32... = ripgrep)
-    cat /scheme/shared/cache/bbf32baf0f0664c625408b24dd3c12e54d392ad744b318af498773029bdc722d.nar.zst > /tmp/test.nar.zst ^> /tmp/cp_err
-    if test $? = 0
-        let sz = $(wc -c /tmp/test.nar.zst)
-        echo "FUNC_TEST:read-nar-file:PASS"
-        echo "DEBUG: NAR size: $sz"
+    # Find the first .nar.zst file dynamically (hash changes with rebuilds)
+    ls /scheme/shared/cache/*.nar.zst > /tmp/nar_list ^> /dev/null
+    let first_nar = $(head -1 /tmp/nar_list)
+    echo "DEBUG: first NAR file: $first_nar"
+    if test -n "$first_nar"
+        cat $first_nar > /tmp/test.nar.zst ^> /tmp/cp_err
+        if test $? = 0
+            let sz = $(wc -c /tmp/test.nar.zst)
+            echo "FUNC_TEST:read-nar-file:PASS"
+            echo "DEBUG: NAR size: $sz"
+        else
+            echo "FUNC_TEST:read-nar-file:FAIL:cat failed"
+            cat /tmp/cp_err
+        end
     else
-        echo "FUNC_TEST:read-nar-file:FAIL:cat failed"
-        cat /tmp/cp_err
+        echo "FUNC_TEST:read-nar-file:FAIL:no .nar.zst files found"
     end
+    rm /tmp/nar_list ^> /dev/null
 
     # ── Phase 2: snix search from shared cache ─────────────────
     echo ""
