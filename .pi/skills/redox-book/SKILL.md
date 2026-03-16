@@ -1,3 +1,7 @@
+---
+description: Look up Redox OS documentation from the official book. Use when you need reference material on Redox OS concepts, schemes, kernel internals, boot process, drivers, porting, or build system.
+---
+
 # Redox OS Book Reference
 
 Look up Redox OS documentation from the official book (https://doc.redox-os.org/book/).
