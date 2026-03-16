@@ -20,9 +20,9 @@ sed -i '/^test = false/d' Cargo.toml
 # Generate the plan targeting linux (not redox) with dev-dependencies
 CARGO_BUILD_TARGET=x86_64-unknown-linux-gnu \
   nix run github:brittonr/unit2nix -- \
-    --include-dev \
-    --force \
-    -o build-plan.json
+  --include-dev \
+  --force \
+  -o build-plan.json
 
 # Restore original
 mv Cargo.toml.bak Cargo.toml

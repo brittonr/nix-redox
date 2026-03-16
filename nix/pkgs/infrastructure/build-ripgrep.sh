@@ -46,14 +46,16 @@ cd "$SRCDIR"
 MAX_TIME=600
 for attempt in 1 2 3; do
   echo "[build-ripgrep] attempt $attempt/3 (JOBS=2)" >&2
-  cargo build --offline --bin rg -j2 >> "$TMPDIR/rg-build-log" 2>&1 &
+  cargo build --offline --bin rg -j2 >>"$TMPDIR/rg-build-log" 2>&1 &
   PID=$!
   SECONDS=0
   while kill -0 $PID 2>/dev/null; do
     if [ $SECONDS -ge $MAX_TIME ]; then
       echo "[build-ripgrep] TIMEOUT after ${MAX_TIME}s, attempt $attempt" >&2
-      kill $PID 2>/dev/null; wait $PID 2>/dev/null
-      kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
+      kill $PID 2>/dev/null
+      wait $PID 2>/dev/null
+      kill -9 $PID 2>/dev/null
+      wait $PID 2>/dev/null
       rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
       continue 2
     fi
@@ -69,7 +71,7 @@ for attempt in 1 2 3; do
     echo "[build-ripgrep] cargo failed (exit=$CARGO_EXIT) attempt $attempt" >&2
     if [ $attempt -eq 3 ]; then
       # Dump full build log — tail doesn't exist on Redox
-      echo "=== build log ($(wc -l < "$TMPDIR/rg-build-log") lines, $(wc -c < "$TMPDIR/rg-build-log") bytes) ===" >&2
+      echo "=== build log ($(wc -l <"$TMPDIR/rg-build-log") lines, $(wc -c <"$TMPDIR/rg-build-log") bytes) ===" >&2
       cat "$TMPDIR/rg-build-log" >&2
       echo "=== end build log ===" >&2
       exit $CARGO_EXIT
