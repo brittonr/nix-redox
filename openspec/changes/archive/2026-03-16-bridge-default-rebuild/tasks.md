@@ -28,4 +28,4 @@
 - [x] 5.2 Build the rebuild-generations-test disk image
 - [x] 5.3 Run rebuild-generations-test — all 26 tests pass (added auto-route test)
 - [x] 5.4 Run boot-test and functional-test — no regressions
-- [ ] 5.5 Commit
+- [x] 5.5 Commit
