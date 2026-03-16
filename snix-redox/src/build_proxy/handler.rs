@@ -23,7 +23,7 @@
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write as IoWrite};
-use std::os::unix::io::{AsRawFd, FromRawFd};
+use std::os::unix::io::FromRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -32,10 +32,91 @@ use redox_scheme::{CallerCtx, OpenResult};
 use syscall::data::Stat;
 use syscall::dirent::DirentBuf;
 use syscall::error::{Error, Result, EACCES, EBADF, EIO, EISDIR, ENOENT, ENOTDIR};
-use syscall::flag::{O_ACCMODE, O_CREAT, O_DIRECTORY, O_TRUNC, O_WRONLY};
+use syscall::flag::{O_ACCMODE, O_APPEND, O_CREAT, O_DIRECTORY, O_EXCL, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY};
 use syscall::schemev2::NewFdFlags;
 
 use super::allow_list::{AllowList, Permission};
+
+// ── Flag Translation ───────────────────────────────────────────────────────
+
+/// Translated open flags — the proxy's internal representation.
+///
+/// Maps every Redox open flag we care about into named booleans so the
+/// handler never does raw bit-masking inline.
+#[derive(Debug)]
+pub struct OpenFlags {
+    /// Builder wants to read the file (O_RDONLY or O_RDWR).
+    pub read: bool,
+    /// Builder wants to write the file (O_WRONLY or O_RDWR).
+    pub write: bool,
+    /// Create the file if it does not exist (O_CREAT).
+    pub create: bool,
+    /// Truncate the file to zero length on open (O_TRUNC).
+    pub truncate: bool,
+    /// Fail if the file already exists, used with O_CREAT (O_EXCL).
+    pub exclusive: bool,
+    /// Append mode — writes go to end of file (O_APPEND).
+    pub append: bool,
+    /// Open must be a directory (O_DIRECTORY).
+    pub directory: bool,
+}
+
+/// Translate raw Redox open flags into the proxy's internal representation.
+///
+/// Redox flag values (from redox_syscall 0.7):
+///   O_RDONLY    = 0x0001_0000
+///   O_WRONLY    = 0x0002_0000
+///   O_RDWR      = 0x0003_0000
+///   O_APPEND    = 0x0008_0000
+///   O_CREAT     = 0x0200_0000
+///   O_TRUNC     = 0x0400_0000
+///   O_EXCL      = 0x0800_0000
+///   O_DIRECTORY = 0x1000_0000
+///   O_ACCMODE   = O_RDONLY | O_WRONLY | O_RDWR
+pub fn translate_open_flags(raw: usize) -> OpenFlags {
+    let mode = raw & O_ACCMODE;
+    OpenFlags {
+        read: mode == O_RDONLY || mode == O_RDWR,
+        write: mode == O_WRONLY || mode == O_RDWR,
+        create: raw & O_CREAT != 0,
+        truncate: raw & O_TRUNC != 0,
+        exclusive: raw & O_EXCL != 0,
+        append: raw & O_APPEND != 0,
+        directory: raw & O_DIRECTORY != 0,
+    }
+}
+
+impl OpenFlags {
+    /// True if the operation needs write permission on the allow-list.
+    pub fn wants_write(&self) -> bool {
+        self.write || self.create || self.truncate
+    }
+
+    /// Build redoxfs-compatible flags for the real open via root_fd.
+    pub fn to_real_flags(&self) -> usize {
+        let mut f = if self.write {
+            O_RDWR
+        } else {
+            O_RDONLY
+        };
+        if self.create {
+            f |= O_CREAT;
+        }
+        if self.truncate {
+            f |= O_TRUNC;
+        }
+        if self.exclusive {
+            f |= O_EXCL;
+        }
+        if self.append {
+            f |= O_APPEND;
+        }
+        if self.directory {
+            f |= O_DIRECTORY;
+        }
+        f
+    }
+}
 
 /// Next handle ID. Global atomic counter — each open gets a unique ID.
 static NEXT_HANDLE_ID: AtomicUsize = AtomicUsize::new(1);
@@ -56,6 +137,8 @@ pub struct FileHandle {
     pub scheme_path: String,
     /// Whether writes are allowed.
     pub writable: bool,
+    /// Append mode — seek to end before each write.
+    pub append: bool,
     /// Cached file size.
     pub size: u64,
     /// Cached mode bits.
@@ -117,6 +200,40 @@ fn raw_fstat(fd: usize) -> Result<Stat> {
 /// Close a raw fd.
 fn raw_close(fd: usize) {
     let _ = syscall::close(fd);
+}
+
+/// Create a directory relative to root_fd, bypassing initnsmgr.
+///
+/// Uses `SYS_OPENAT` with `O_CREAT | O_DIRECTORY`. On redoxfs, opening
+/// with both flags creates the directory if it does not exist.
+fn raw_mkdir(root_fd: usize, path: &str) -> Result<()> {
+    let clean = path.trim_start_matches('/');
+    let flags = O_CREAT | O_DIRECTORY;
+    let fd = raw_openat(root_fd, clean, flags)?;
+    raw_close(fd);
+    Ok(())
+}
+
+/// Recursively create directories for `path` via root_fd.
+///
+/// Walks each component of `path` and calls `raw_mkdir` for each
+/// intermediate directory. Only called for paths under writable
+/// prefixes ($out, $TMPDIR) — never for read-only paths.
+fn mkdir_p_via_root_fd(root_fd: usize, path: &str) {
+    let clean = path.trim_start_matches('/');
+    let mut built = String::new();
+    for component in clean.split('/') {
+        if component.is_empty() {
+            continue;
+        }
+        if !built.is_empty() {
+            built.push('/');
+        }
+        built.push_str(component);
+        // Ignore errors — the dir may already exist, or we may lack
+        // permission (which will surface when the actual open happens).
+        let _ = raw_mkdir(root_fd, &built);
+    }
 }
 
 // ── Scheme Handler ─────────────────────────────────────────────────────────
@@ -198,46 +315,30 @@ impl SchemeSync for BuildFsHandler {
     ) -> Result<OpenResult> {
         let path_str = path.trim_matches('/');
         let abs_path = self.resolve_path(path_str);
+        let oflags = translate_open_flags(flags);
 
         // Check allow-list.
         let perm = self.check_with_symlink_resolution(&abs_path);
-        eprintln!("buildfs: openat {:?} perm={:?}", abs_path, perm);
+        eprintln!("buildfs: openat {:?} flags={:?} perm={:?}", abs_path, oflags, perm);
         if perm == Permission::Denied {
             return Err(Error::new(EACCES));
         }
 
-        let wants_write = {
-            let mode = flags & O_ACCMODE;
-            mode == O_WRONLY || mode == (O_WRONLY | 0x0001_0000)
-                || flags & O_CREAT != 0
-                || flags & O_TRUNC != 0
-        };
-
-        if wants_write && perm != Permission::ReadWrite {
+        if oflags.wants_write() && perm != Permission::ReadWrite {
             return Err(Error::new(EACCES));
         }
 
         let id = next_id();
         let scheme_path = path_str.to_string();
-
-        // Build redoxfs-compatible flags for the real open.
-        let redox_flags = if wants_write {
-            let mut f = syscall::flag::O_RDWR;
-            if flags & O_CREAT != 0 {
-                f |= syscall::flag::O_CREAT;
-            }
-            if flags & O_TRUNC != 0 {
-                f |= syscall::flag::O_TRUNC;
-            }
-            f
-        } else {
-            syscall::flag::O_RDONLY
-        };
+        let real_flags = oflags.to_real_flags();
 
         // If O_DIRECTORY requested, open as directory.
-        if flags & O_DIRECTORY != 0 {
-            // Verify it exists as a directory via the root fd.
-            match raw_openat(self.root_fd, path_str, syscall::flag::O_RDONLY | syscall::flag::O_DIRECTORY) {
+        if oflags.directory {
+            // For writable paths with O_CREAT, create the directory.
+            if oflags.create && perm == Permission::ReadWrite {
+                mkdir_p_via_root_fd(self.root_fd, path_str);
+            }
+            match raw_openat(self.root_fd, path_str, O_RDONLY | O_DIRECTORY) {
                 Ok(dir_fd) => {
                     raw_close(dir_fd);
                     self.handles.insert(
@@ -256,9 +357,19 @@ impl SchemeSync for BuildFsHandler {
             }
         }
 
+        // When O_CREAT is set on a writable path, ensure parent dirs exist.
+        // Cargo creates deep output structures like $out/lib/rustlib/.../lib/.
+        if oflags.create && perm == Permission::ReadWrite {
+            if let Some(parent) = Path::new(path_str).parent() {
+                let parent_str = parent.to_string_lossy();
+                if !parent_str.is_empty() {
+                    mkdir_p_via_root_fd(self.root_fd, &parent_str);
+                }
+            }
+        }
+
         // Open the real file via root_fd (bypasses initnsmgr).
-        let (file, stat) = self.open_real_file(path_str, redox_flags).map_err(|e| {
-            // Translate common errors.
+        let (file, stat) = self.open_real_file(path_str, real_flags).map_err(|e| {
             if e.errno == syscall::ENOENT as i32 {
                 Error::new(ENOENT)
             } else if e.errno == syscall::EACCES as i32 {
@@ -268,9 +379,9 @@ impl SchemeSync for BuildFsHandler {
             }
         })?;
 
-        // Check if it's a directory.
+        // Check if it's actually a directory (e.g., opened without O_DIRECTORY flag).
         if stat.st_mode & syscall::MODE_DIR != 0 {
-            drop(file); // Close the file fd.
+            drop(file);
             self.handles.insert(
                 id,
                 ProxyHandle::Dir(DirHandle {
@@ -285,7 +396,8 @@ impl SchemeSync for BuildFsHandler {
                     real_file: file,
                     real_path: abs_path,
                     scheme_path,
-                    writable: wants_write,
+                    writable: oflags.wants_write(),
+                    append: oflags.append,
                     size: stat.st_size,
                     mode: stat.st_mode as u32,
                 }),
@@ -333,11 +445,19 @@ impl SchemeSync for BuildFsHandler {
                 if !fh.writable {
                     return Err(Error::new(EACCES));
                 }
-                fh.real_file
-                    .seek(SeekFrom::Start(offset))
-                    .map_err(|_| Error::new(EIO))?;
+                // Append mode: ignore caller offset, seek to end.
+                let write_offset = if fh.append {
+                    fh.real_file
+                        .seek(SeekFrom::End(0))
+                        .map_err(|_| Error::new(EIO))?
+                } else {
+                    fh.real_file
+                        .seek(SeekFrom::Start(offset))
+                        .map_err(|_| Error::new(EIO))?;
+                    offset
+                };
                 let n = fh.real_file.write(buf).map_err(|_| Error::new(EIO))?;
-                let pos = offset + n as u64;
+                let pos = write_offset + n as u64;
                 if pos > fh.size {
                     fh.size = pos;
                 }
