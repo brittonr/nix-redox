@@ -15,7 +15,7 @@
 - **THEN** the command exits without error and reports no generations found
 
 ### Requirement: Rollback restores previous generation state
-`snix system rollback` SHALL revert the system to the previous generation's manifest and activate it. It SHALL also update the boot default marker.
+`snix system rollback` SHALL revert the system to the previous generation's manifest and activate it. It SHALL also update the boot default marker. It SHALL create per-generation GC roots for the rollback generation without removing other generations' roots.
 
 #### Scenario: Rollback after hostname change
 - **WHEN** the system was rebuilt with a hostname change (generation 2 is current)
@@ -24,6 +24,7 @@
 - **AND** the current manifest reflects the pre-rebuild state
 - **AND** a new generation (3) is created representing the rollback state
 - **AND** `/etc/redox-system/boot-default` is updated to the new generation's ID
+- **AND** GC roots `gen-3-{pkg}` are created for the rollback generation
 
 #### Scenario: Rollback to specific generation
 - **WHEN** multiple generations exist (1, 2, 3)
@@ -31,6 +32,7 @@
 - **THEN** the system reverts to generation 1's manifest
 - **AND** a new generation (4) is created with description indicating rollback to 1
 - **AND** `/etc/redox-system/boot-default` is updated to `4`
+- **AND** GC roots `gen-4-{pkg}` are created
 
 #### Scenario: Rollback with no previous generations
 - **WHEN** only one generation exists
@@ -40,13 +42,15 @@
 - **AND** `/etc/redox-system/boot-default` is not changed
 
 ### Requirement: Switch activates a specific manifest as a new generation
-`snix system switch` SHALL install a provided manifest as the current system, saving the previous state as a generation. It SHALL also update the boot default marker.
+`snix system switch` SHALL install a provided manifest as the current system, saving the previous state as a generation. It SHALL also update the boot default marker. It SHALL create per-generation GC roots for the new generation without removing old generations' roots.
 
 #### Scenario: Switch to a generation's manifest
 - **WHEN** generation 1's manifest is passed to `snix system switch`
 - **THEN** the system activates that manifest
 - **AND** a new generation is created
 - **AND** `/etc/redox-system/boot-default` is updated to the new generation's ID
+- **AND** GC roots `gen-{N}-{pkg}` are created for the new generation's packages
+- **AND** previous generations' GC roots are preserved
 
 #### Scenario: Dry-run switch shows changes without applying
 - **WHEN** `snix system switch --dry-run` is run with a different manifest
