@@ -432,50 +432,18 @@ fn build_derivation_inner(
 
         // Wait for the child to exit.
         //
-        // On Redox, blocking waitpid hangs when all threads are idle
-        // (AGENTS.md: "waitpid via proc: scheme hangs when parent is
-        // idle"). The fix: poll try_wait() + sleep to keep the process
-        // active so the scheduler delivers the child-exit wake.
+        // Blocking wait() works on Redox with the LAPIC timer fix:
+        // - waitpid opens proc: via initnsmgr (quick, returns fd),
+        //   then blocks on reading the proc: fd — initnsmgr is free
+        // - LAPIC timer ensures scheduler delivers child-exit wake
+        //   even when all CPUs are in HLT
+        // - child_ns_fd is already closed (above), so namespace
+        //   cleanup on child exit doesn't need the parent
+        // - pipe reader threads provide additional process activity
         //
-        // We avoid scheme I/O in the poll loop — it goes through
-        // initnsmgr (single-threaded) which may deadlock during the
-        // builder's exit cleanup. Instead, close the child namespace fd
-        // (above) so the namespace is destroyed when the builder exits,
-        // which invalidates the proxy scheme socket and unblocks the
-        // proxy event loop. With the event loop exiting, the process
-        // has active thread joins happening, which keeps the scheduler
-        // servicing waitpid wakes.
-        //
-        // On non-Redox, just use blocking wait().
-        #[cfg(target_os = "redox")]
-        let status = {
-            let child_id = child.id();
-            let mut poll_count = 0u64;
-            loop {
-                match child.try_wait() {
-                    Ok(Some(status)) => {
-                        eprintln!("buildfs: child exited after {} polls", poll_count);
-                        break Ok(status);
-                    }
-                    Ok(None) => {
-                        poll_count += 1;
-                        // Use sched_yield — thread::sleep uses nanosleep
-                        // which may deadlock when other threads are
-                        // blocking on scheme I/O.
-                        let _ = syscall::sched_yield();
-                    }
-                    Err(e) => {
-                        eprintln!("buildfs: try_wait error: {e}");
-                        break Err(e);
-                    }
-                }
-            }
-            .map_err(|e| {
-                BuildError::Io(format!("waiting for builder '{}': {e}", drv.builder))
-            })?
-        };
-
-        #[cfg(not(target_os = "redox"))]
+        // Previously used try_wait()+sched_yield() poll loop, but
+        // that was a workaround for pre-LAPIC scheduler starvation
+        // and burns CPU spinning. Blocking wait is correct now.
         let status = child.wait().map_err(|e| {
             BuildError::Io(format!("waiting for builder '{}': {e}", drv.builder))
         })?;
