@@ -476,8 +476,12 @@ enum SystemCommand {
         cache_index: Option<String>,
 
         /// Rebuild via bridge: send config to host, host builds, guest activates
-        #[arg(long)]
+        #[arg(long, conflicts_with = "local")]
         bridge: bool,
+
+        /// Force local rebuild path (even for package changes)
+        #[arg(long, conflicts_with = "bridge")]
+        local: bool,
 
         /// Shared directory for bridge communication (default: /scheme/shared)
         #[arg(long)]
@@ -734,12 +738,14 @@ fn main() {
                 gen_dir,
                 cache_index,
                 bridge,
+                local,
                 shared_dir,
                 timeout,
             } => {
                 if init {
                     rebuild::init_config(config.as_deref())
                 } else if bridge {
+                    // Explicit --bridge: always use bridge path
                     bridge::rebuild_via_bridge(
                         config.as_deref(),
                         dry_run,
@@ -748,13 +754,25 @@ fn main() {
                         manifest.as_deref(),
                         gen_dir.as_deref(),
                     )
-                } else {
+                } else if local {
+                    // Explicit --local: always use local path
                     rebuild::rebuild(
                         config.as_deref(),
                         dry_run,
                         manifest.as_deref(),
                         gen_dir.as_deref(),
                         cache_index.as_deref(),
+                    )
+                } else {
+                    // Auto-route: bridge for package changes, local for config-only
+                    rebuild::auto_rebuild(
+                        config.as_deref(),
+                        dry_run,
+                        manifest.as_deref(),
+                        gen_dir.as_deref(),
+                        cache_index.as_deref(),
+                        shared_dir.as_deref(),
+                        timeout,
                     )
                 }
             }

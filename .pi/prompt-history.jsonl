@@ -376,3 +376,7 @@
 {"text":"Test results (bridge-test): 47 passed, 1 failed\n (pre-existing), 0 skipped","timestamp":1773692022615}
 {"text":"what should we tackle next?","timestamp":1773692470008}
 {"text":"lets do 1 and 2. make an openspec","timestamp":1773692632747}
+{"text":"what next","timestamp":1773695833128}
+{"text":"are we doing the package management through nix? are we replicating how nixos handles this?","timestamp":1773695893611}
+{"text":"what do you suggest? the end goal is for it to not need a host sidecar for building, but i understand that may be a ways away","timestamp":1773696019140}
+{"text":"yes","timestamp":1773696054607}

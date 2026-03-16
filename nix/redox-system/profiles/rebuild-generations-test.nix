@@ -130,6 +130,21 @@ let
         fi
     '
 
+    # ── Phase 3b: auto-routing with no changes, no bridge ──────
+    echo ""
+    echo "--- Phase 3b: auto-routing unchanged config ---"
+
+    # snix system rebuild (no flags) with unchanged config should auto-route
+    # to local path and succeed, even without bridge available
+    /bin/snix system rebuild > /tmp/auto_out ^> /tmp/auto_err
+    if test $? -eq 0
+        echo "FUNC_TEST:auto-route-config-only:PASS"
+    else
+        echo "FUNC_TEST:auto-route-config-only:FAIL:auto-rebuild failed without bridge"
+        echo "DEBUG auto stderr:"
+        cat /tmp/auto_err
+    end
+
     # ── Phase 4: rebuild with hostname change ──────────────────
     echo ""
     echo "--- Phase 4: rebuild with hostname change ---"
@@ -380,8 +395,8 @@ let
         fi
     '
 
-    # Rebuild with package change
-    /bin/snix system rebuild > /tmp/pkg_rebuild_out ^> /tmp/pkg_rebuild_err
+    # Rebuild with package change (--local: no bridge in test VM)
+    /bin/snix system rebuild --local > /tmp/pkg_rebuild_out ^> /tmp/pkg_rebuild_err
 
     # Post-rebuild: bash/grep/sed may be gone from profile (only boot-essential
     # + ripgrep remain). Use rg (ripgrep, just installed) for assertions.

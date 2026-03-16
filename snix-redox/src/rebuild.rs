@@ -122,6 +122,82 @@ pub struct ProgramsConfig {
 ///
 /// Evaluates the Nix config, merges with the current manifest, resolves
 /// packages, and switches to the new configuration.
+/// Check if the parsed config contains package changes.
+///
+/// Returns true if `packages` is `Some` with a non-empty list.
+/// An empty list (`packages = []`) is treated as "no change".
+pub fn has_package_changes(config: &RebuildConfig) -> bool {
+    matches!(&config.packages, Some(pkgs) if !pkgs.is_empty())
+}
+
+/// Check if the build bridge is available.
+///
+/// The bridge requires virtio-fs with the shared directory mounted
+/// and the host-side build-bridge daemon running. We detect this by
+/// checking for the requests directory that the daemon creates.
+pub fn bridge_available(shared_dir: Option<&str>) -> bool {
+    let dir = shared_dir.unwrap_or("/scheme/shared");
+    Path::new(dir).join("requests").is_dir()
+}
+
+/// Auto-routing rebuild entry point.
+///
+/// Parses configuration.nix, then decides which path to use:
+///   - Config-only changes (no packages) → local rebuild
+///   - Package changes + bridge available → bridge rebuild
+///   - Package changes + no bridge → error with instructions
+pub fn auto_rebuild(
+    config_path: Option<&str>,
+    dry_run: bool,
+    manifest_path: Option<&str>,
+    gen_dir: Option<&str>,
+    cache_index_path: Option<&str>,
+    shared_dir: Option<&str>,
+    timeout: Option<u64>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let cfg_path = config_path.unwrap_or(DEFAULT_CONFIG_PATH);
+
+    // Parse config to determine what changed
+    println!("Evaluating {cfg_path}...");
+    let config = evaluate_config(cfg_path)?;
+
+    if has_package_changes(&config) {
+        // Package changes — need the bridge
+        if bridge_available(shared_dir) {
+            println!("Package changes detected, using bridge...");
+            crate::bridge::rebuild_via_bridge(
+                config_path,
+                dry_run,
+                shared_dir,
+                timeout,
+                manifest_path,
+                gen_dir,
+            )
+        } else {
+            Err(format!(
+                "package changes require the build bridge\n\
+                 \n\
+                 Your configuration.nix modifies `packages`, which requires the host\n\
+                 to build the new package set. Start the VM with shared filesystem:\n\
+                 \n\
+                   nix run .#run-redox-shared     (in one terminal)\n\
+                   nix run .#build-bridge         (in another terminal)\n\
+                 \n\
+                 Then re-run: snix system rebuild\n\
+                 \n\
+                 To apply config-only changes without the bridge: remove the\n\
+                 `packages` line from configuration.nix and re-run.\n\
+                 \n\
+                 To force local resolution (may produce incomplete results):\n\
+                   snix system rebuild --local"
+            ).into())
+        }
+    } else {
+        // Config-only — use local path (fast, no bridge needed)
+        rebuild(config_path, dry_run, manifest_path, gen_dir, cache_index_path)
+    }
+}
+
 pub fn rebuild(
     config_path: Option<&str>,
     dry_run: bool,
@@ -136,6 +212,12 @@ pub fn rebuild(
     // Step 1: Evaluate configuration.nix
     println!("Evaluating {cfg_path}...");
     let config = evaluate_config(cfg_path)?;
+
+    // Warn if using local path with package changes (--local or legacy behavior)
+    if has_package_changes(&config) {
+        eprintln!("warning: resolving packages locally from binary cache index");
+        eprintln!("         results may be incomplete — use bridge for full builds");
+    }
 
     // Step 2: Load current manifest
     let current = system::load_manifest_from(mpath)?;
