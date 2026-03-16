@@ -12,6 +12,14 @@
       nix run .#run-redox-qemu  - Run in QEMU headless (legacy)
       nix develop               - Enter development shell
 
+    Binary cache (tailnet only):
+      harmonia on aspen1:5000 serves cross-compiled packages.
+      Add to /etc/nix/nix.conf or use nixosModules.default:
+        extra-substituters = http://aspen1:5000
+        extra-trusted-public-keys = aspen1-1:hdbOqMbh1N/...
+      Run `nix run .#push-cache` after building to populate the cache.
+      Run `nix run .#cache-status` to check cache coverage.
+
     Cloud Hypervisor is the default VMM for its lower overhead and Rust-based
     security. QEMU is used for graphical mode due to better input handling.
 

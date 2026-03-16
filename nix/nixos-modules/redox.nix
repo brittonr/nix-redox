@@ -105,6 +105,14 @@ in
         redoxPkgs.redox-rebuild
       ];
       programs.fuse.userAllowOther = true;
+
+      # Binary cache for cross-compiled Redox packages (tailnet only).
+      # harmonia on aspen1 serves pre-built relibc, kernel, base, userspace, etc.
+      # Only reachable from machines on the tailnet.
+      nix.settings = {
+        extra-substituters = [ "http://aspen1:5000" ];
+        extra-trusted-public-keys = [ "aspen1-1:hdbOqMbh1N/jLuqHVErDlrI7Wh9Cd/htzF7HUWYjQRc=" ];
+      };
     })
 
     # VM service
