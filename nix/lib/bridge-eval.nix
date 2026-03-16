@@ -65,17 +65,12 @@ let
   ) { } baseSys._module.modules;
 
   # Resolve a package name to a derivation.
-  # Tries direct name first, then common aliases.
+  # Direct attribute lookup — no aliases needed because the pkgs attrset
+  # already uses the canonical short names (ion, base, snix, etc.).
   resolvePackage =
     name:
     if systemPkgs ? ${name} then
       systemPkgs.${name}
-    else if name == "ion" && systemPkgs ? ion-shell then
-      systemPkgs.ion-shell
-    else if name == "base" && systemPkgs ? redox-base then
-      systemPkgs.redox-base
-    else if name == "snix" && systemPkgs ? snix-redox then
-      systemPkgs.snix-redox
     else
       builtins.throw "unknown package: ${name} (available: ${builtins.concatStringsSep ", " (builtins.attrNames systemPkgs)})";
 

@@ -250,13 +250,9 @@ selfHosting
 
   "/environment" = selfHosting."/environment" // {
     systemPackages =
-      builtins.filter (
-        p:
-        let
-          name = p.pname or (builtins.parseDrvName p.name).name;
-        in
-        name != "userutils" && name != "redox-userutils"
-      ) (selfHosting."/environment".systemPackages or [ ])
+      builtins.filter (p: !(pkgs ? userutils && toString p == toString pkgs.userutils)) (
+        selfHosting."/environment".systemPackages or [ ]
+      )
       ++ opt "proc-dump"
       ++ opt "waitpid-stress";
   };

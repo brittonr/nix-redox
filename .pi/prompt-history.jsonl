@@ -339,3 +339,4 @@
 {"text":"how can we add in checks or tests to prevent the last issue we had","timestamp":1773628941078}
 {"text":"is there any way we can solve this permanmently in how we build with nix ?","timestamp":1773629359122}
 {"text":"do it","timestamp":1773629453557}
+{"text":"is there anywhere else we are using simliliar pattersn and not doing it the \"nix\" way?","timestamp":1773629803573}
