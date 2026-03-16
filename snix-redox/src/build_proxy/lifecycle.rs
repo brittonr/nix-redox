@@ -153,14 +153,21 @@ impl BuildFsProxy {
 
     fn close_and_join(&mut self) {
         // Close the socket fd to signal the event loop to stop.
+        // This should cause next_request() to return with EBADF.
         if let Some(fd) = self.socket_fd.take() {
+            eprintln!("buildfs: closing socket fd={}", fd);
             let _ = syscall::close(fd);
+            eprintln!("buildfs: socket closed");
         }
 
-        // Join the thread.
+        // Join the proxy thread. On Redox, closing a scheme socket fd
+        // from another thread may not reliably unblock next_request().
+        // However, the event loop now exits proactively when all handles
+        // are closed (builder exited), so join should return quickly.
         if let Some(thread) = self.thread.take() {
+            eprintln!("buildfs: joining proxy thread...");
             match thread.join() {
-                Ok(()) => {}
+                Ok(()) => eprintln!("buildfs: proxy thread joined"),
                 Err(e) => eprintln!("buildfs: proxy thread join error: {e:?}"),
             }
         }
@@ -211,6 +218,16 @@ fn run_event_loop(
                 handler.on_close(id);
             }
             _ => continue,
+        }
+
+        // When all handles are closed (builder exited), exit the loop
+        // immediately. This prevents blocking on next_request() after
+        // the last client disconnects — on Redox, closing a scheme
+        // socket fd from another thread does not reliably unblock a
+        // blocked next_request() read.
+        if handler.handles.is_empty() {
+            eprintln!("buildfs: all handles closed, exiting event loop");
+            break;
         }
     }
     eprintln!("buildfs: event loop exited");

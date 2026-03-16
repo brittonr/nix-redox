@@ -75,9 +75,13 @@ let
                               wait $SNIX_PID 2>/dev/null
                               break
                             fi
-                            read -t 1 < /dev/null || true
+                            # Scheme I/O keeps bash active so the scheduler
+                            # delivers waitpid wakes (AGENTS.md poll-wait pattern).
+                            cat /scheme/sys/uname > /dev/null 2>/dev/null || true
                             WAITED=$((WAITED + 1))
                           done
+                          # Scheme I/O before wait to keep process active.
+                          cat /scheme/sys/uname > /dev/null 2>/dev/null || true
                           wait $SNIX_PID 2>/dev/null
                           EXIT=$?
                           echo "[snix-test] exit=$EXIT"
@@ -312,8 +316,9 @@ let
               rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
               continue 2
             fi
-            read -t 1 < /dev/null 2>/dev/null || true
+            cat /scheme/sys/uname > /dev/null 2>/dev/null || true
           done
+          cat /scheme/sys/uname > /dev/null 2>/dev/null || true
           wait $PID
           CARGO_EXIT=$?
           if [ $CARGO_EXIT -eq 0 ]; then

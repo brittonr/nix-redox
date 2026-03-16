@@ -251,6 +251,20 @@ fn build_derivation_inner(
     // with the old scheme-level-only sandbox (file: included in mkns).
     #[cfg(target_os = "redox")]
     let mut _proxy_guard: Option<crate::build_proxy::BuildFsProxy> = None;
+    #[cfg(target_os = "redox")]
+    let mut _child_ns_fd: Option<usize> = None;
+    // Pre-open "/" for direct redoxfs access. This fd bypasses initnsmgr
+    // and is used for post-build output verification when the proxy
+    // thread may still be alive (its detached thread can deadlock
+    // initnsmgr if we use normal file: I/O).
+    #[cfg(target_os = "redox")]
+    let verify_root_fd: Option<usize> = {
+        use std::os::unix::io::{AsRawFd, IntoRawFd};
+        match std::fs::File::open("/") {
+            Ok(f) => Some(f.into_raw_fd() as usize),
+            Err(_) => None,
+        }
+    };
 
     if !no_sandbox && !sandbox_disabled_by_config() {
         let primary_out_path = drv
@@ -315,6 +329,7 @@ fn build_derivation_inner(
                     // EOF or waitpid from completing in the parent.
                     let proxy_socket_fd = proxy.socket_fd();
                     _proxy_guard = Some(proxy);
+                    _child_ns_fd = Some(child_ns_fd);
                     unsafe {
                         cmd.pre_exec(move || {
                             // Close inherited proxy fds in the CHILD
@@ -329,6 +344,9 @@ fn build_derivation_inner(
                                     format!("setns: {e}"),
                                 )
                             })?;
+                            // Do NOT close child_ns_fd here — setns stores
+                            // the raw fd as the current namespace. Closing
+                            // it invalidates the namespace for this process.
                             Ok(())
                         });
                     }
@@ -373,6 +391,17 @@ fn build_derivation_inner(
             BuildError::Io(format!("executing builder '{}': {e}", drv.builder))
         })?;
 
+        // Close the child namespace fd in the parent. The child already
+        // called setns() in pre_exec and no longer needs it. Keeping
+        // this fd open prevents the namespace from being destroyed when
+        // the child exits — which keeps the proxy scheme registered,
+        // blocking the proxy event loop's next_request() indefinitely,
+        // and preventing initnsmgr from servicing other requests.
+        #[cfg(target_os = "redox")]
+        if let Some(ns_fd) = _child_ns_fd.take() {
+            let _ = syscall::close(ns_fd);
+        }
+
         // Take ownership of the pipe read-ends. The child holds the
         // write-ends (fd 1, fd 2). When the child exits, write-ends
         // close and our reads get EOF.
@@ -401,9 +430,52 @@ fn build_derivation_inner(
                 })
         });
 
-        // Wait for the child to exit. This blocks on waitpid (via
-        // proc: scheme on Redox). The child's exit closes pipe
-        // write-ends, which unblocks the reader threads above.
+        // Wait for the child to exit.
+        //
+        // On Redox, blocking waitpid hangs when all threads are idle
+        // (AGENTS.md: "waitpid via proc: scheme hangs when parent is
+        // idle"). The fix: poll try_wait() + sleep to keep the process
+        // active so the scheduler delivers the child-exit wake.
+        //
+        // We avoid scheme I/O in the poll loop — it goes through
+        // initnsmgr (single-threaded) which may deadlock during the
+        // builder's exit cleanup. Instead, close the child namespace fd
+        // (above) so the namespace is destroyed when the builder exits,
+        // which invalidates the proxy scheme socket and unblocks the
+        // proxy event loop. With the event loop exiting, the process
+        // has active thread joins happening, which keeps the scheduler
+        // servicing waitpid wakes.
+        //
+        // On non-Redox, just use blocking wait().
+        #[cfg(target_os = "redox")]
+        let status = {
+            let child_id = child.id();
+            let mut poll_count = 0u64;
+            loop {
+                match child.try_wait() {
+                    Ok(Some(status)) => {
+                        eprintln!("buildfs: child exited after {} polls", poll_count);
+                        break Ok(status);
+                    }
+                    Ok(None) => {
+                        poll_count += 1;
+                        // Use sched_yield — thread::sleep uses nanosleep
+                        // which may deadlock when other threads are
+                        // blocking on scheme I/O.
+                        let _ = syscall::sched_yield();
+                    }
+                    Err(e) => {
+                        eprintln!("buildfs: try_wait error: {e}");
+                        break Err(e);
+                    }
+                }
+            }
+            .map_err(|e| {
+                BuildError::Io(format!("waiting for builder '{}': {e}", drv.builder))
+            })?
+        };
+
+        #[cfg(not(target_os = "redox"))]
         let status = child.wait().map_err(|e| {
             BuildError::Io(format!("waiting for builder '{}': {e}", drv.builder))
         })?;
@@ -439,11 +511,44 @@ fn build_derivation_inner(
     }
 
     // ── 6. Verify outputs exist ────────────────────────────────────────
+    //
+    // On Redox with sandbox, use raw SYS_OPENAT via the pre-opened root
+    // fd to bypass initnsmgr. The detached proxy thread may still be
+    // blocking on a scheme socket read, which can deadlock initnsmgr if
+    // we use normal file: I/O (Path::exists() → stat → initnsmgr).
     let mut output_paths: BTreeMap<String, String> = BTreeMap::new();
     for (name, out) in &drv.outputs {
         if let Some(ref sp) = out.path {
             let abs = sp.to_absolute_path();
-            if !Path::new(&abs).exists() {
+            #[cfg(target_os = "redox")]
+            let output_exists = if let Some(rfd) = verify_root_fd {
+                let clean = abs.trim_start_matches('/');
+                let fcntl_flags = (syscall::flag::O_RDONLY | syscall::flag::O_STAT)
+                    & syscall::O_FCNTL_MASK;
+                match unsafe {
+                    syscall::syscall5(
+                        syscall::SYS_OPENAT,
+                        rfd,
+                        clean.as_ptr() as usize,
+                        clean.len(),
+                        syscall::flag::O_RDONLY | syscall::flag::O_STAT,
+                        fcntl_flags,
+                    )
+                } {
+                    Ok(fd) => {
+                        let _ = syscall::close(fd);
+                        true
+                    }
+                    Err(e) => {
+                        false
+                    }
+                }
+            } else {
+                Path::new(&abs).exists()
+            };
+            #[cfg(not(target_os = "redox"))]
+            let output_exists = Path::new(&abs).exists();
+            if !output_exists {
                 return Err(BuildError::MissingOutput {
                     output: name.clone(),
                     path: abs,
@@ -489,6 +594,12 @@ fn build_derivation_inner(
         };
         db.register(&info)
             .map_err(|e| BuildError::Io(format!("registering {path}: {e}")))?;
+    }
+
+    // Close verify_root_fd (raw fd from into_raw_fd, not auto-closed).
+    #[cfg(target_os = "redox")]
+    if let Some(rfd) = verify_root_fd {
+        let _ = syscall::close(rfd);
     }
 
     Ok(BuildResult {
@@ -1016,13 +1127,20 @@ pub fn run_with_options(
 
     let result = build_needed_with_options(&drv_path, &known_paths, &db, no_sandbox)?;
 
-    // Print output paths
-    for (name, path) in &result.outputs {
-        if result.outputs.len() == 1 {
-            println!("{path}");
-        } else {
-            println!("{name}: {path}");
+    // Print output paths. Explicit flush required — stdout is fully
+    // buffered when redirected to a file, and Redox's exit handlers
+    // may not flush the buffer reliably.
+    {
+        use std::io::Write;
+        let mut out = std::io::stdout().lock();
+        for (name, path) in &result.outputs {
+            if result.outputs.len() == 1 {
+                let _ = writeln!(out, "{path}");
+            } else {
+                let _ = writeln!(out, "{name}: {path}");
+            }
         }
+        let _ = out.flush();
     }
 
     Ok(())
