@@ -30,7 +30,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use redox_scheme::scheme::SchemeSync;
 use redox_scheme::{CallerCtx, OpenResult};
 use syscall::data::Stat;
-use syscall::dirent::DirentBuf;
+use syscall::dirent::{DirEntry as RedoxDirEntry, DirentBuf, DirentKind};
 use syscall::error::{Error, Result, EACCES, EBADF, EIO, EISDIR, ENOENT, ENOTDIR};
 use syscall::flag::{O_ACCMODE, O_APPEND, O_CREAT, O_DIRECTORY, O_EXCL, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY};
 use syscall::schemev2::NewFdFlags;
@@ -117,6 +117,12 @@ impl OpenFlags {
         f
     }
 }
+
+/// I/O timeout threshold in seconds. Operations exceeding this
+/// are logged as warnings. On Redox, reads from redoxfs should be
+/// sub-millisecond; hitting this threshold indicates a deadlock or
+/// hung filesystem daemon.
+const IO_TIMEOUT_SECS: u64 = 30;
 
 /// Next handle ID. Global atomic counter — each open gets a unique ID.
 static NEXT_HANDLE_ID: AtomicUsize = AtomicUsize::new(1);
@@ -420,11 +426,18 @@ impl SchemeSync for BuildFsHandler {
     ) -> Result<usize> {
         match self.handles.get_mut(&id) {
             Some(ProxyHandle::File(fh)) => {
+                let start = std::time::Instant::now();
                 fh.real_file
                     .seek(SeekFrom::Start(offset))
                     .map_err(|_| Error::new(EIO))?;
                 let n = fh.real_file.read(buf).map_err(|_| Error::new(EIO))?;
-                eprintln!("buildfs: read id={} len={} off={} => {}", id, buf.len(), offset, n);
+                let elapsed = start.elapsed();
+                if elapsed.as_secs() >= IO_TIMEOUT_SECS {
+                    eprintln!(
+                        "buildfs: WARNING: read took {:.1}s on {:?} (id={} len={})",
+                        elapsed.as_secs_f64(), fh.real_path, id, buf.len()
+                    );
+                }
                 Ok(n)
             }
             Some(ProxyHandle::Dir(_)) => Err(Error::new(EISDIR)),
@@ -445,6 +458,7 @@ impl SchemeSync for BuildFsHandler {
                 if !fh.writable {
                     return Err(Error::new(EACCES));
                 }
+                let start = std::time::Instant::now();
                 // Append mode: ignore caller offset, seek to end.
                 let write_offset = if fh.append {
                     fh.real_file
@@ -461,7 +475,13 @@ impl SchemeSync for BuildFsHandler {
                 if pos > fh.size {
                     fh.size = pos;
                 }
-                eprintln!("buildfs: write id={} len={} => {}", id, buf.len(), n);
+                let elapsed = start.elapsed();
+                if elapsed.as_secs() >= IO_TIMEOUT_SECS {
+                    eprintln!(
+                        "buildfs: WARNING: write took {:.1}s on {:?} (id={} len={})",
+                        elapsed.as_secs_f64(), fh.real_path, id, buf.len()
+                    );
+                }
                 Ok(n)
             }
             Some(ProxyHandle::Dir(_)) => Err(Error::new(EISDIR)),
@@ -499,17 +519,65 @@ impl SchemeSync for BuildFsHandler {
 
     fn fstat(&mut self, id: usize, stat: &mut Stat, _ctx: &CallerCtx) -> Result<()> {
         eprintln!("buildfs: fstat id={}", id);
-        match self.handles.get(&id) {
+        match self.handles.get_mut(&id) {
             Some(ProxyHandle::File(fh)) => {
-                stat.st_size = fh.size;
-                stat.st_mode = fh.mode as u16;
-                stat.st_nlink = 1;
+                // Re-stat the real file for the most accurate metadata.
+                // The cached fh.size tracks writes from this handle, but
+                // re-statting catches any metadata changes the kernel
+                // applies (e.g., atime updates, mode changes).
+                use std::os::unix::io::AsRawFd;
+                let raw_fd = fh.real_file.as_raw_fd() as usize;
+                if let Ok(real_stat) = raw_fstat(raw_fd) {
+                    // Use the larger of cached size and real stat size.
+                    // Cached size may be ahead if we wrote past the
+                    // previously-statted size and the FS hasn't flushed.
+                    if real_stat.st_size > fh.size {
+                        fh.size = real_stat.st_size;
+                    }
+                    fh.mode = real_stat.st_mode as u32;
+                    stat.st_size = fh.size;
+                    stat.st_mode = real_stat.st_mode;
+                    stat.st_nlink = real_stat.st_nlink;
+                    stat.st_uid = real_stat.st_uid;
+                    stat.st_gid = real_stat.st_gid;
+                    stat.st_atime = real_stat.st_atime;
+                    stat.st_mtime = real_stat.st_mtime;
+                    stat.st_ctime = real_stat.st_ctime;
+                    stat.st_blksize = real_stat.st_blksize;
+                    stat.st_blocks = real_stat.st_blocks;
+                    stat.st_dev = real_stat.st_dev;
+                    stat.st_ino = real_stat.st_ino;
+                } else {
+                    // Fallback to cached values if re-stat fails.
+                    stat.st_size = fh.size;
+                    stat.st_mode = fh.mode as u16;
+                    stat.st_nlink = 1;
+                }
                 Ok(())
             }
-            Some(ProxyHandle::Dir(_)) => {
-                stat.st_mode = 0o040555;
-                stat.st_size = 0;
-                stat.st_nlink = 2;
+            Some(ProxyHandle::Dir(dh)) => {
+                // Re-stat the real directory for accurate metadata.
+                let path_str = dh.real_path.to_string_lossy();
+                let clean = path_str.trim_start_matches('/');
+                let open_path = if clean.is_empty() { "." } else { &*clean };
+                if let Ok(dir_fd) = raw_openat(self.root_fd, open_path, O_RDONLY | O_DIRECTORY) {
+                    if let Ok(real_stat) = raw_fstat(dir_fd) {
+                        stat.st_mode = real_stat.st_mode;
+                        stat.st_size = real_stat.st_size;
+                        stat.st_nlink = real_stat.st_nlink;
+                        stat.st_dev = real_stat.st_dev;
+                        stat.st_ino = real_stat.st_ino;
+                    } else {
+                        stat.st_mode = 0o040555;
+                        stat.st_size = 0;
+                        stat.st_nlink = 2;
+                    }
+                    raw_close(dir_fd);
+                } else {
+                    stat.st_mode = 0o040555;
+                    stat.st_size = 0;
+                    stat.st_nlink = 2;
+                }
                 Ok(())
             }
             None => Err(Error::new(EBADF)),
@@ -519,18 +587,46 @@ impl SchemeSync for BuildFsHandler {
     fn getdents<'buf>(
         &mut self,
         id: usize,
-        buf: DirentBuf<&'buf mut [u8]>,
-        _opaque_offset: u64,
+        mut buf: DirentBuf<&'buf mut [u8]>,
+        opaque_offset: u64,
     ) -> Result<DirentBuf<&'buf mut [u8]>> {
-        match self.handles.get(&id) {
-            Some(ProxyHandle::Dir(_)) => {
-                // TODO: Implement directory listing via raw syscalls.
-                // For now, return empty — exec doesn't need getdents.
-                Ok(buf)
+        let (dir_path, is_under_allowed) = match self.handles.get(&id) {
+            Some(ProxyHandle::Dir(dh)) => {
+                let under = self.allow_list.can_read(&dh.real_path);
+                (dh.real_path.clone(), under)
             }
-            Some(ProxyHandle::File(_)) => Err(Error::new(ENOTDIR)),
-            None => Err(Error::new(EBADF)),
+            Some(ProxyHandle::File(_)) => return Err(Error::new(ENOTDIR)),
+            None => return Err(Error::new(EBADF)),
+        };
+
+        eprintln!("buildfs: getdents {:?} offset={} under_allowed={}", dir_path, opaque_offset, is_under_allowed);
+
+        // Collect visible entries.
+        // For directories under an allowed prefix: read real entries unfiltered.
+        // For ancestor directories (/, /nix, /tmp): filter or synthesize.
+        let entries = if is_under_allowed {
+            read_real_dir_entries(self.root_fd, &dir_path)
+        } else {
+            self.list_visible_children(&dir_path)
+        };
+
+        // Paginate: skip entries before opaque_offset.
+        let start = opaque_offset as usize;
+        for (i, (name, kind)) in entries.iter().enumerate().skip(start) {
+            if buf
+                .entry(RedoxDirEntry {
+                    inode: 0,
+                    next_opaque_id: (i + 1) as u64,
+                    name,
+                    kind: *kind,
+                })
+                .is_err()
+            {
+                break; // buffer full
+            }
         }
+
+        Ok(buf)
     }
 
     fn on_close(&mut self, id: usize) {
@@ -541,6 +637,10 @@ impl SchemeSync for BuildFsHandler {
 
 impl BuildFsHandler {
     /// Check if a directory entry should be visible in a listing.
+    ///
+    /// An entry is visible if:
+    /// 1. It is directly readable (on the allow-list), OR
+    /// 2. It is an ancestor of an allowed path (navigable).
     fn is_entry_visible(&self, child_path: &Path) -> bool {
         if self.allow_list.can_read(child_path) {
             return true;
@@ -551,5 +651,153 @@ impl BuildFsHandler {
             }
         }
         false
+    }
+
+    /// List visible children of an ancestor directory.
+    ///
+    /// For directories that are NOT directly under an allowed prefix
+    /// (e.g., `/`, `/nix`, `/tmp`), we read the real directory and
+    /// filter to only entries that are visible per `is_entry_visible`.
+    ///
+    /// Also synthesizes entries for allowed paths whose parents may
+    /// not exist on disk yet (e.g., `$out` before the builder creates it).
+    fn list_visible_children(&self, dir_path: &Path) -> Vec<(String, DirentKind)> {
+        // Read real entries once, build a kind map for later.
+        let real = read_real_dir_entries(self.root_fd, dir_path);
+        let real_map: HashMap<&str, DirentKind> = real
+            .iter()
+            .map(|(n, k)| (n.as_str(), *k))
+            .collect();
+
+        // Collect visible names. Start with allow-list children
+        // (handles paths that don't exist on disk yet, like $out).
+        let mut names = std::collections::BTreeSet::new();
+        for prefix in self.allow_list.all_prefixes() {
+            if let Ok(rest) = prefix.strip_prefix(dir_path) {
+                if let Some(first) = rest.components().next() {
+                    let name = first.as_os_str().to_string_lossy().into_owned();
+                    names.insert(name);
+                }
+            }
+        }
+
+        // Add real entries that pass visibility filtering.
+        for (name, _kind) in &real {
+            let child = dir_path.join(name);
+            if self.is_entry_visible(&child) {
+                names.insert(name.clone());
+            }
+        }
+
+        // Build result with real kinds where available.
+        names
+            .into_iter()
+            .map(|n| {
+                let kind = real_map
+                    .get(n.as_str())
+                    .copied()
+                    .unwrap_or(DirentKind::Directory);
+                (n, kind)
+            })
+            .collect()
+    }
+}
+
+/// Read directory entries from a real directory via raw syscalls.
+///
+/// Opens the directory via `root_fd` (bypassing initnsmgr), reads
+/// entries with `SYS_GETDENTS`, and returns `(name, kind)` pairs.
+/// Filters out `.` and `..` entries.
+fn read_real_dir_entries(root_fd: usize, path: &Path) -> Vec<(String, DirentKind)> {
+    let path_str = path.to_string_lossy();
+    let clean = path_str.trim_start_matches('/');
+    // For root "/", open "." relative to root_fd.
+    let open_path = if clean.is_empty() { "." } else { clean };
+
+    let dir_fd = match raw_openat(root_fd, open_path, O_RDONLY | O_DIRECTORY) {
+        Ok(fd) => fd,
+        Err(e) => {
+            eprintln!("buildfs: read_real_dir open {:?}: {}", path, e);
+            return Vec::new();
+        }
+    };
+
+    let mut entries = Vec::new();
+    let mut raw_buf = [0u8; 8192];
+
+    loop {
+        let n = match unsafe {
+            syscall::syscall3(
+                syscall::SYS_GETDENTS,
+                dir_fd,
+                raw_buf.as_mut_ptr() as usize,
+                raw_buf.len(),
+            )
+        } {
+            Ok(0) => break,
+            Ok(n) => n,
+            Err(_) => break,
+        };
+
+        parse_raw_dirents(&raw_buf[..n], &mut entries);
+    }
+
+    raw_close(dir_fd);
+    entries
+}
+
+/// Parse raw getdents buffer into `(name, kind)` pairs.
+///
+/// Each entry is a `DirentHeader` (packed, 19 bytes) followed by the
+/// filename and a NUL terminator. `record_len` covers the full entry.
+///
+/// DirentHeader layout (redox_syscall 0.7, packed):
+///   inode:           u64  (8 bytes)
+///   next_opaque_id:  u64  (8 bytes)
+///   record_len:      u16  (2 bytes)
+///   kind:            u8   (1 byte)
+/// Total header: 19 bytes. Name follows, NUL-terminated.
+fn parse_raw_dirents(buf: &[u8], entries: &mut Vec<(String, DirentKind)>) {
+    const HEADER_SIZE: usize = 8 + 8 + 2 + 1; // 19 bytes
+
+    let mut pos = 0;
+    while pos + HEADER_SIZE <= buf.len() {
+        // Read fields manually to avoid alignment issues with packed structs.
+        let _inode = u64::from_ne_bytes(
+            buf[pos..pos + 8].try_into().unwrap_or([0; 8]),
+        );
+        let _next_opaque_id = u64::from_ne_bytes(
+            buf[pos + 8..pos + 16].try_into().unwrap_or([0; 8]),
+        );
+        let record_len = u16::from_ne_bytes(
+            buf[pos + 16..pos + 18].try_into().unwrap_or([0; 2]),
+        );
+        let kind_byte = buf[pos + 18];
+
+        if record_len == 0 || pos + record_len as usize > buf.len() {
+            break;
+        }
+
+        // Name starts after the header, extends to record_len.
+        // Trim trailing NUL bytes that the kernel appends.
+        let name_start = pos + HEADER_SIZE;
+        let name_end = pos + record_len as usize;
+        if name_start < name_end {
+            let name_bytes = &buf[name_start..name_end];
+            // Strip trailing NUL.
+            let name_trimmed = match name_bytes.iter().position(|&b| b == 0) {
+                Some(nul_pos) => &name_bytes[..nul_pos],
+                None => name_bytes,
+            };
+            if let Ok(name) = core::str::from_utf8(name_trimmed) {
+                if !name.is_empty() && name != "." && name != ".." {
+                    let kind = DirentKind::try_from_raw(kind_byte)
+                        .unwrap_or(DirentKind::Regular);
+                    entries.push((name.to_string(), kind));
+                }
+            }
+        }
+
+        pos += record_len as usize;
     }
 }
