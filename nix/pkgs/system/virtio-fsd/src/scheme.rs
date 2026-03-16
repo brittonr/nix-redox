@@ -21,14 +21,18 @@ use redox_scheme::scheme::SchemeSync;
 use redox_scheme::{CallerCtx, OpenResult};
 use syscall::data::{Stat, StatVfs};
 use syscall::dirent::{DirEntry as RedoxDirEntry, DirentBuf, DirentKind};
-use syscall::error::{Error, Result, EBADF, EEXIST, EIO, EISDIR, ENOENT, ENOTDIR};
+use syscall::error::{
+    Error, Result, EACCES, EBADF, EBUSY, EEXIST, EINVAL, EIO, EISDIR, ELOOP, ENAMETOOLONG,
+    ENOENT, ENOMEM, ENOSPC, ENOSYS, ENOTDIR, ENOTEMPTY, EPERM, ERANGE,
+};
 use syscall::flag::{
     EventFlags, O_ACCMODE, O_CREAT, O_DIRECTORY, O_EXCL, O_RDONLY, O_STAT, O_TRUNC, O_WRONLY,
 };
 use syscall::schemev2::NewFdFlags;
 
-use crate::fuse::{S_IFDIR, S_IFMT};
+use crate::fuse::{S_IFDIR, S_IFLNK, S_IFMT};
 use crate::session::{DirEntry, FuseSession};
+use crate::transport::FuseTransportError;
 
 // Linux open flag values (for FUSE translation)
 const LINUX_O_WRONLY: u32 = 1;
@@ -76,6 +80,45 @@ fn redox_to_fuse_flags(redox_flags: usize) -> u32 {
     fuse
 }
 
+/// Map a FUSE/Linux errno value (positive) to the corresponding Redox error.
+///
+/// FUSE error codes in the protocol are negative Linux errno values. The caller
+/// should pass the absolute value. Unrecognized codes fall back to EIO.
+fn fuse_error_to_redox(fuse_errno: i32) -> Error {
+    match fuse_errno {
+        1 => Error::new(EPERM),
+        2 => Error::new(ENOENT),
+        12 => Error::new(ENOMEM),
+        13 => Error::new(EACCES),
+        16 => Error::new(EBUSY),
+        17 => Error::new(EEXIST),
+        20 => Error::new(ENOTDIR),
+        21 => Error::new(EISDIR),
+        22 => Error::new(EINVAL),
+        28 => Error::new(ENOSPC),
+        34 => Error::new(ERANGE),
+        36 => Error::new(ENAMETOOLONG),
+        38 => Error::new(ENOSYS),
+        39 => Error::new(ENOTEMPTY),
+        40 => Error::new(ELOOP),
+        _ => Error::new(EIO),
+    }
+}
+
+/// Convert a `FuseTransportError` to a Redox `Error`, logging a warning.
+///
+/// For FUSE protocol errors, extracts the negative errno and maps it via
+/// `fuse_error_to_redox`. All other transport errors (DMA, short response,
+/// unexpected size) become EIO. Every conversion is logged at warn level.
+fn fuse_err(e: FuseTransportError) -> Error {
+    let err = match &e {
+        FuseTransportError::FuseError(neg_errno) => fuse_error_to_redox(-neg_errno),
+        _ => Error::new(EIO),
+    };
+    log::warn!("FUSE transport error: {} -> {:?}", e, err);
+    err
+}
+
 /// An open file or directory handle.
 struct Handle {
     /// FUSE node ID.
@@ -114,7 +157,19 @@ impl<'a> VirtioFsScheme<'a> {
     }
 
     /// Resolve a path relative to the FUSE root by walking LOOKUP.
+    ///
+    /// Follows symlinks transparently: after each LOOKUP, if the returned
+    /// node has `S_IFLNK` mode, calls FUSE_READLINK and continues resolution
+    /// from the symlink target. A hop counter prevents infinite loops.
     fn resolve_path(&mut self, path: &str) -> Result<(u64, crate::fuse::FuseAttr)> {
+        self.resolve_path_hops(path, 40)
+    }
+
+    fn resolve_path_hops(
+        &mut self,
+        path: &str,
+        max_hops: u32,
+    ) -> Result<(u64, crate::fuse::FuseAttr)> {
         let path = path.trim_matches('/');
 
         if path.is_empty() {
@@ -122,30 +177,73 @@ impl<'a> VirtioFsScheme<'a> {
             let attr_out = self
                 .session
                 .getattr(1) // FUSE root nodeid is always 1
-                .map_err(|_| Error::new(ENOENT))?;
+                .map_err(fuse_err)?;
             return Ok((1, attr_out.attr));
         }
 
         let mut current_nodeid: u64 = 1; // FUSE root
+        let mut hops_remaining = max_hops;
 
-        for component in path.split('/') {
+        // Collect components so we can splice in symlink target components
+        let mut components: Vec<String> = path.split('/').map(|s| s.to_string()).collect();
+        let mut i = 0;
+
+        while i < components.len() {
+            let component = &components[i];
             if component.is_empty() {
+                i += 1;
                 continue;
             }
 
             let entry = self
                 .session
                 .lookup(current_nodeid, component)
-                .map_err(|_| Error::new(ENOENT))?;
+                .map_err(fuse_err)?;
+
+            // Check if this node is a symlink
+            if (entry.attr.mode & S_IFMT) == S_IFLNK {
+                if hops_remaining == 0 {
+                    return Err(Error::new(ELOOP));
+                }
+                hops_remaining -= 1;
+
+                let target = self
+                    .session
+                    .readlink(entry.nodeid)
+                    .map_err(fuse_err)?;
+
+                // Remove the current component and splice in the target's components
+                components.remove(i);
+
+                let target_components: Vec<String> =
+                    target.split('/').map(|s| s.to_string()).collect();
+
+                if target.starts_with('/') {
+                    // Absolute symlink: restart from FUSE root
+                    current_nodeid = 1;
+                    // Replace everything up to this point with the target
+                    components.splice(0..i, target_components);
+                    i = 0;
+                } else {
+                    // Relative symlink: continue from current parent
+                    for (j, tc) in target_components.into_iter().enumerate() {
+                        components.insert(i + j, tc);
+                    }
+                    // Don't advance i — re-resolve from the first target component
+                }
+
+                continue;
+            }
 
             current_nodeid = entry.nodeid;
+            i += 1;
         }
 
         // Get attributes of the final node
         let attr_out = self
             .session
             .getattr(current_nodeid)
-            .map_err(|_| Error::new(ENOENT))?;
+            .map_err(fuse_err)?;
 
         Ok((current_nodeid, attr_out.attr))
     }
@@ -157,12 +255,12 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         let attr_out = self
             .session
             .getattr(1)
-            .map_err(|_| Error::new(ENOENT))?;
+            .map_err(fuse_err)?;
 
         let dir_handle = self
             .session
             .opendir(1)
-            .map_err(|_| Error::new(ENOENT))?;
+            .map_err(fuse_err)?;
 
         let id = self.next_id.fetch_add(1, Ordering::Relaxed);
         self.handles.insert(
@@ -190,6 +288,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         _fcntl_flags: u32,
         _ctx: &CallerCtx,
     ) -> Result<OpenResult> {
+        log::debug!("openat: dirfd={}, path={:?}, flags={:#x}", dirfd, path, flags);
         let path = path.trim_matches('/');
 
         // Resolve the starting directory
@@ -226,7 +325,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                 let attr_out = self
                     .session
                     .getattr(1)
-                    .map_err(|_| Error::new(ENOENT))?;
+                    .map_err(fuse_err)?;
                 (1u64, attr_out.attr)
             } else {
                 self.resolve_path(parent_path)?
@@ -246,7 +345,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                     let dir_handle = self
                         .session
                         .opendir(nodeid)
-                        .map_err(|_| Error::new(EIO))?;
+                        .map_err(fuse_err)?;
 
                     let id = self.next_id.fetch_add(1, Ordering::Relaxed);
                     self.handles.insert(
@@ -272,7 +371,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                 let file_handle = self
                     .session
                     .open(nodeid, fuse_flags)
-                    .map_err(|_| Error::new(EIO))?;
+                    .map_err(fuse_err)?;
 
                 let id = self.next_id.fetch_add(1, Ordering::Relaxed);
                 self.handles.insert(
@@ -300,12 +399,12 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                 let entry = self
                     .session
                     .mkdir(parent_nodeid, filename, 0o755)
-                    .map_err(|_| Error::new(EIO))?;
+                    .map_err(fuse_err)?;
 
                 let dir_handle = self
                     .session
                     .opendir(entry.nodeid)
-                    .map_err(|_| Error::new(EIO))?;
+                    .map_err(fuse_err)?;
 
                 let id = self.next_id.fetch_add(1, Ordering::Relaxed);
                 self.handles.insert(
@@ -333,7 +432,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
             let (entry, open) = self
                 .session
                 .create(parent_nodeid, filename, fuse_flags, 0o644)
-                .map_err(|_| Error::new(EIO))?;
+                .map_err(fuse_err)?;
 
             let id = self.next_id.fetch_add(1, Ordering::Relaxed);
             self.handles.insert(
@@ -391,7 +490,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
             let dir_handle = self
                 .session
                 .opendir(nodeid)
-                .map_err(|_| Error::new(ENOENT))?;
+                .map_err(fuse_err)?;
 
             let id = self.next_id.fetch_add(1, Ordering::Relaxed);
             self.handles.insert(
@@ -421,7 +520,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
             let file_handle = self
                 .session
                 .open(nodeid, fuse_flags)
-                .map_err(|_| Error::new(ENOENT))?;
+                .map_err(fuse_err)?;
 
             let id = self.next_id.fetch_add(1, Ordering::Relaxed);
             self.handles.insert(
@@ -453,6 +552,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         _fcntl_flags: u32,
         _ctx: &CallerCtx,
     ) -> Result<usize> {
+        log::debug!("read: handle={}, offset={}, size={}", id, offset, buf.len());
         let handle = self.handles.get(&id).ok_or(Error::new(EBADF))?;
 
         if handle.is_dir {
@@ -465,7 +565,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         let data = self
             .session
             .read(nodeid, fh, offset, buf.len() as u32)
-            .map_err(|_| Error::new(EIO))?;
+            .map_err(fuse_err)?;
 
         let copy_len = data.len().min(buf.len());
         buf[..copy_len].copy_from_slice(&data[..copy_len]);
@@ -480,6 +580,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         _fcntl_flags: u32,
         _ctx: &CallerCtx,
     ) -> Result<usize> {
+        log::debug!("write: handle={}, offset={}, size={}", id, offset, buf.len());
         let handle = self.handles.get(&id).ok_or(Error::new(EBADF))?;
 
         if handle.is_dir {
@@ -495,7 +596,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         let written = self
             .session
             .write(nodeid, fh, offset, buf)
-            .map_err(|_| Error::new(EIO))?;
+            .map_err(fuse_err)?;
 
         // Update cached size if write extends beyond current end
         if let Some(h) = self.handles.get_mut(&id) {
@@ -509,6 +610,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
     }
 
     fn ftruncate(&mut self, id: usize, len: u64, _ctx: &CallerCtx) -> Result<()> {
+        log::debug!("ftruncate: handle={}, len={}", id, len);
         let handle = self.handles.get(&id).ok_or(Error::new(EBADF))?;
 
         if !handle.writable {
@@ -521,7 +623,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         let attr_out = self
             .session
             .truncate(nodeid, fh, len)
-            .map_err(|_| Error::new(EIO))?;
+            .map_err(fuse_err)?;
 
         // Update cached size
         if let Some(h) = self.handles.get_mut(&id) {
@@ -532,6 +634,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
     }
 
     fn fsize(&mut self, id: usize, _ctx: &CallerCtx) -> Result<u64> {
+        log::debug!("fsize: handle={}", id);
         let handle = self.handles.get(&id).ok_or(Error::new(EBADF))?;
         let nodeid = handle.nodeid;
 
@@ -539,7 +642,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         let attr_out = self
             .session
             .getattr(nodeid)
-            .map_err(|_| Error::new(EBADF))?;
+            .map_err(fuse_err)?;
 
         // Update cached size
         if let Some(h) = self.handles.get_mut(&id) {
@@ -550,6 +653,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
     }
 
     fn fpath(&mut self, id: usize, buf: &mut [u8], _ctx: &CallerCtx) -> Result<usize> {
+        log::debug!("fpath: handle={}", id);
         let handle = self.handles.get(&id).ok_or(Error::new(EBADF))?;
 
         let scheme_path = format!("/scheme/{}", self.scheme_name);
@@ -566,13 +670,14 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
     }
 
     fn fstat(&mut self, id: usize, stat: &mut Stat, _ctx: &CallerCtx) -> Result<()> {
+        log::debug!("fstat: handle={}", id);
         let handle = self.handles.get(&id).ok_or(Error::new(EBADF))?;
         let nodeid = handle.nodeid;
 
         let attr_out = self
             .session
             .getattr(nodeid)
-            .map_err(|_| Error::new(EBADF))?;
+            .map_err(fuse_err)?;
 
         let attr = &attr_out.attr;
 
@@ -596,12 +701,13 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
     }
 
     fn fstatvfs(&mut self, id: usize, stat: &mut StatVfs, _ctx: &CallerCtx) -> Result<()> {
+        log::debug!("fstatvfs: handle={}", id);
         let _handle = self.handles.get(&id).ok_or(Error::new(EBADF))?;
 
         let fsstat = self
             .session
             .statfs()
-            .map_err(|_| Error::new(EBADF))?;
+            .map_err(fuse_err)?;
 
         stat.f_bsize = fsstat.st.bsize;
         stat.f_blocks = fsstat.st.blocks;
@@ -617,6 +723,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         mut buf: DirentBuf<&'buf mut [u8]>,
         opaque_offset: u64,
     ) -> Result<DirentBuf<&'buf mut [u8]>> {
+        log::debug!("getdents: handle={}, opaque_offset={}", id, opaque_offset);
         let handle = self.handles.get_mut(&id).ok_or(Error::new(EBADF))?;
 
         if !handle.is_dir {
@@ -631,7 +738,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
             let entries = self
                 .session
                 .readdir(nodeid, fh, 0, 32768)
-                .map_err(|_| Error::new(EBADF))?;
+                .map_err(fuse_err)?;
             handle.dir_entries = Some(entries);
         }
 
@@ -671,6 +778,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         _flags: usize,
         _ctx: &CallerCtx,
     ) -> Result<()> {
+        log::debug!("unlinkat: fd={}, path={:?}", fd, path);
         let path = path.trim_matches('/');
 
         // Resolve base directory from fd handle
@@ -698,7 +806,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
             let attr_out = self
                 .session
                 .getattr(1)
-                .map_err(|_| Error::new(ENOENT))?;
+                .map_err(fuse_err)?;
             (1u64, attr_out.attr)
         } else {
             self.resolve_path(parent_path)?
@@ -711,11 +819,11 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         if is_dir {
             self.session
                 .rmdir(parent_nodeid, filename)
-                .map_err(|_| Error::new(EIO))?;
+                .map_err(fuse_err)?;
         } else {
             self.session
                 .unlink(parent_nodeid, filename)
-                .map_err(|_| Error::new(EIO))?;
+                .map_err(fuse_err)?;
         }
 
         Ok(())
@@ -734,8 +842,24 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
     }
 
     fn on_close(&mut self, id: usize) {
+        log::debug!("on_close: handle={}", id);
         if let Some(handle) = self.handles.remove(&id) {
+            log::debug!(
+                "on_close: handle={}, nodeid={}, is_dir={}, writable={}",
+                id, handle.nodeid, handle.is_dir, handle.writable
+            );
             if handle.fh != 0 {
+                // Flush writable file handles before release to ensure
+                // the host pushes dirty pages to stable storage.
+                if handle.writable && !handle.is_dir {
+                    if let Err(e) = self.session.flush(handle.nodeid, handle.fh) {
+                        log::warn!(
+                            "on_close: flush failed for handle={}, nodeid={}: {}",
+                            id, handle.nodeid, e
+                        );
+                    }
+                }
+
                 if handle.is_dir {
                     let _ = self.session.releasedir(handle.nodeid, handle.fh);
                 } else {
