@@ -38,15 +38,17 @@ echo "[build-snix] Vendor crates: $(ls vendor/ | wc -l)" >&2
 # Uses file redirection, NOT pipes. Pipes on Redox break with deep
 # process hierarchies (cargo->rustc->cc->lld).
 MAX_TIME=1800
-cargo build --offline >> "$TMPDIR/snix-build-log" 2>&1 &
+cargo build --offline >>"$TMPDIR/snix-build-log" 2>&1 &
 PID=$!
 SECONDS=0
 LAST_REPORT=0
 while kill -0 $PID 2>/dev/null; do
   if [ $SECONDS -ge $MAX_TIME ]; then
     echo "[build-snix] TIMEOUT after ${MAX_TIME}s" >&2
-    kill $PID 2>/dev/null; wait $PID 2>/dev/null
-    kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
+    kill $PID 2>/dev/null
+    wait $PID 2>/dev/null
+    kill -9 $PID 2>/dev/null
+    wait $PID 2>/dev/null
     exit 1
   fi
   # Progress indicator every 60s
@@ -63,7 +65,7 @@ CARGO_EXIT=$?
 
 if [ $CARGO_EXIT -ne 0 ]; then
   echo "[build-snix] cargo build failed (exit=$CARGO_EXIT)" >&2
-  echo "=== build log ($(wc -l < "$TMPDIR/snix-build-log") lines, $(wc -c < "$TMPDIR/snix-build-log") bytes) ===" >&2
+  echo "=== build log ($(wc -l <"$TMPDIR/snix-build-log") lines, $(wc -c <"$TMPDIR/snix-build-log") bytes) ===" >&2
   cat "$TMPDIR/snix-build-log" >&2
   echo "=== end build log ===" >&2
   exit $CARGO_EXIT

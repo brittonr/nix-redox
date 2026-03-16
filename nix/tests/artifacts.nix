@@ -24,6 +24,7 @@ let
       name,
       description,
       modules,
+      targetPkgs ? mockPkgs.all, # Override to test with different package sets
       artifact ? "rootTree", # "rootTree", "toplevel", "initfs", or "diskImage"
       checks, # List of { file, contains ? null, mode ? null }
     }:
@@ -33,7 +34,7 @@ let
 
       system = redoxSystemFactory.redoxSystem {
         inherit modules;
-        pkgs = mockPkgs.all;
+        pkgs = targetPkgs;
         hostPkgs = pkgs;
       };
 
@@ -412,31 +413,39 @@ in
 
   # Test 9: rootTree has startup.sh
   # Note: Nix store strips write bits, so chmod 755 becomes 555
-  rootTree-has-startup = mkArtifactTest {
-    name = "rootTree-has-startup";
-    description = "Verifies rootTree contains startup.sh script";
-    modules = [
-      {
-        "/services" = {
-          startupScriptText = ''
-            echo "Custom startup"
-            /bin/ion
-          '';
-        };
-      }
-    ];
-    checks = [
-      {
-        file = "startup.sh";
-        contains = "Custom startup";
-        mode = "555";
-      }
-      {
-        file = "etc/init.toml";
-        contains = "/startup.sh";
-      }
-    ];
-  };
+  rootTree-has-startup =
+    let
+      # Use packages without userutils so init.toml gets the shell service
+      # entry pointing to /startup.sh. With userutils present, getty handles
+      # the console and init.toml is empty.
+      noUserutilsPkgs = builtins.removeAttrs mockPkgs.all [ "userutils" ];
+    in
+    mkArtifactTest {
+      name = "rootTree-has-startup";
+      description = "Verifies rootTree contains startup.sh script (no-userutils path)";
+      targetPkgs = noUserutilsPkgs;
+      modules = [
+        {
+          "/services" = {
+            startupScriptText = ''
+              echo "Custom startup"
+              /bin/ion
+            '';
+          };
+        }
+      ];
+      checks = [
+        {
+          file = "startup.sh";
+          contains = "Custom startup";
+          mode = "555";
+        }
+        {
+          file = "etc/init.toml";
+          contains = "/startup.sh";
+        }
+      ];
+    };
 
   # Test 10: rootTree has graphical profile elements
   # Note: Nix store strips write bits, so chmod 755 becomes 555
