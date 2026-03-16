@@ -383,6 +383,12 @@ let
         #   snix system rebuild --dry-run   # Preview changes
         #   snix system rebuild             # Apply changes
         #
+        # Config-only changes (hostname, timezone, etc.) are applied locally.
+        # Package changes require the build bridge (host builds packages):
+        #   nix run .#run-redox-shared   (start VM with shared filesystem)
+        #   nix run .#build-bridge       (start host-side build daemon)
+        #   snix system rebuild          (auto-detects bridge)
+        #
         # Available options:
         #   hostname, timezone, packages,
         #   networking.{enable, mode, dns},

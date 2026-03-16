@@ -215,8 +215,19 @@ snix eval --expr 'builtins.map (x: x * 2) [1 2 3]'
 snix store list
 snix store gc --dry-run
 snix system generations
-snix system rebuild
+
+# Declarative system rebuild
+snix system rebuild               # Auto-routes: local for config, bridge for packages
+snix system rebuild --dry-run     # Preview changes
+snix system rebuild --bridge      # Force bridge path
+snix system rebuild --local       # Force local path (config + cached packages only)
+snix system rollback              # Revert to previous generation
 ```
+
+**Rebuild routing:** `snix system rebuild` auto-detects what changed. Config-only
+changes (hostname, timezone, DNS) apply locally. Package changes require the
+build bridge — start the VM with `nix run .#run-redox-shared` and the host
+daemon with `nix run .#build-bridge`, then rebuild from the guest.
 
 ### Scheme Daemons
 
