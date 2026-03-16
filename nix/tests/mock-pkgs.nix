@@ -239,7 +239,7 @@ rec {
 
   userutils = mkMockPackageWithBins {
     name = "userutils";
-    pname = "redox-userutils";
+    pname = "userutils";
     binaries = [
       "login"
       "getty"

@@ -333,7 +333,9 @@ adios:
       # packages match regardless of which attribute they expose. Verify with:
       #   nix eval .#packages.x86_64-linux.<attr> --apply 'drv: { pname = drv.pname or null; parsed = (builtins.parseDrvName drv.name).name; }'
       bootEssentialNames = [
-        # base: no pname, parseDrvName = "redox-base-percrate-unstable"
+        # base: pname = "redox-base", parseDrvName = "redox-base-unstable"
+        "redox-base"
+        "redox-base-unstable"
         "redox-base-percrate-unstable"
         # ion: pname = "ion-shell", parseDrvName = "rust_ion-shell"
         "ion-shell"
@@ -353,9 +355,13 @@ adios:
         "rust_snix-redox"
         # graphics (if enabled)
         "orbital"
+        "orbital-unstable"
         "orbdata"
+        "orbdata-unstable"
         "orbterm"
+        "orbterm-unstable"
         "orbutils"
+        "orbutils-unstable"
       ];
 
       isBootEssential =
@@ -366,6 +372,16 @@ adios:
         builtins.elem name bootEssentialNames;
 
       bootPackages = builtins.filter isBootEssential allPackages;
+
+      # Names from bootEssentialNames that did NOT match any package.
+      # Used for assertion: catches stale or mistyped names.
+      matchedBootNames = builtins.filter (
+        bname: builtins.any (pkg: (pkg.pname or (builtins.parseDrvName pkg.name).name) == bname) allPackages
+      ) bootEssentialNames;
+
+      unmatchedBootNames = builtins.filter (
+        bname: !builtins.elem bname matchedBootNames
+      ) bootEssentialNames;
 
       # Managed packages: everything NOT boot-essential goes in the system profile.
       # These appear/disappear when switching generations.
@@ -475,6 +491,26 @@ adios:
           assertion = (inputs.power.idleTimeoutMinutes or 30) > 0;
           message = "power.idleTimeoutMinutes must be positive.";
         }
+        # Boot-essential package assertions — prevent silent exclusion from /bin/.
+        # If bootEssentialNames has a typo or package metadata changes, the name
+        # won't match any package and binaries silently go to /nix/system/profile
+        # instead of /bin/. That breaks init scripts that hardcode /bin/ paths.
+        {
+          assertion = bootPackages != [ ];
+          message = "No packages matched bootEssentialNames. Critical binaries (init, ion, snix) would be missing from /bin/. Check that bootEssentialNames entries match pkg.pname or parseDrvName output.";
+        }
+        {
+          assertion =
+            let getName = pkg: pkg.pname or (builtins.parseDrvName pkg.name).name;
+                baseNames = [ "redox-base" "redox-base-unstable" "redox-base-percrate-unstable" ];
+            in builtins.any (pkg: builtins.elem (getName pkg) baseNames) allPackages;
+          message = "Base package not found in allPackages. Init daemons (init, logd, ipcd, ptyd) would be missing from /bin/.";
+        }
+        {
+          assertion = unmatchedBootNames == [ ]
+                      || builtins.length unmatchedBootNames < builtins.length bootEssentialNames;
+          message = "All bootEssentialNames are unmatched — no boot packages would end up in /bin/. Unmatched: ${lib.concatStringsSep ", " unmatchedBootNames}";
+        }
       ];
 
       # Warnings: non-fatal notices traced during evaluation
@@ -492,6 +528,9 @@ adios:
         (lib.optionalString (
           allowRemoteRoot && networkingEnabled
         ) "Remote root login is allowed with networking enabled. Consider disabling for production.")
+        (lib.optionalString (unmatchedBootNames != [ ])
+          "bootEssentialNames has entries that don't match any package: ${lib.concatStringsSep ", " unmatchedBootNames}. These may be stale after a package rename. Verify with: nix eval .#packages.x86_64-linux.<attr> --apply 'drv: { pname = drv.pname or null; parsed = (builtins.parseDrvName drv.name).name; }'"
+        )
       ];
 
       # Process assertions — throw at eval time if any fail
