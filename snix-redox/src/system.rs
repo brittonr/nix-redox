@@ -1367,35 +1367,406 @@ fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error:
     Ok(())
 }
 
-/// Update GC roots to protect the current generation's store paths from garbage collection.
-/// Called after switch/rollback to ensure `snix store gc` won't delete active packages.
-fn update_system_gc_roots(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+/// Update GC roots to protect a generation's store paths from garbage collection.
+///
+/// Creates `gen-{N}-{pkg}` roots for the given manifest's generation. Does NOT
+/// remove other generations' roots — each generation stays rooted until explicitly
+/// deleted via `delete_generations()`. This matches the NixOS model where every
+/// profile generation is a GC root until the user removes it.
+///
+/// On first call after upgrade from the old `system-*` naming, migrates all
+/// existing generations to the new naming scheme.
+fn update_system_gc_roots(manifest: &Manifest, gen_dir: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
     let gc_roots = crate::store::GcRoots::open()?;
+    update_system_gc_roots_with(&gc_roots, manifest, gen_dir)
+}
 
-    // Remove old system-* roots (from previous generation)
-    if let Ok(roots) = gc_roots.list_roots() {
-        for root in roots {
-            if root.name.starts_with("system-") {
-                let _ = gc_roots.remove_root(&root.name);
-            }
-        }
+/// Inner implementation that accepts a GcRoots instance (testable).
+fn update_system_gc_roots_with(
+    gc_roots: &crate::store::GcRoots,
+    manifest: &Manifest,
+    gen_dir: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = gen_dir.unwrap_or(GENERATIONS_DIR);
+
+    // Migration: if old system-* roots exist, re-root all existing generations
+    migrate_gc_roots_if_needed(gc_roots, dir)?;
+
+    // Add roots for this generation's packages
+    let gen_id = manifest.generation.id;
+    let added = add_generation_gc_roots(gc_roots, gen_id, &manifest.packages)?;
+
+    if added > 0 {
+        println!("GC roots updated: {added} packages protected for generation {gen_id}");
     }
 
-    // Add roots for current generation's packages
+    Ok(())
+}
+
+/// Add GC roots for a single generation's packages.
+/// Returns the number of roots successfully added.
+fn add_generation_gc_roots(
+    gc_roots: &crate::store::GcRoots,
+    gen_id: u32,
+    packages: &[Package],
+) -> Result<u32, Box<dyn std::error::Error>> {
     let mut added = 0u32;
-    for pkg in &manifest.packages {
+    for pkg in packages {
         if !pkg.store_path.is_empty() {
-            let root_name = format!("system-{}", pkg.name);
+            let root_name = format!("gen-{}-{}", gen_id, pkg.name);
             if let Err(e) = gc_roots.add_root(&root_name, &pkg.store_path) {
-                eprintln!("warning: could not add GC root for {}: {e}", pkg.name);
+                eprintln!("warning: could not add GC root for gen-{}-{}: {e}", gen_id, pkg.name);
             } else {
                 added += 1;
             }
         }
     }
+    Ok(added)
+}
 
-    if added > 0 {
-        println!("GC roots updated: {added} system packages protected");
+/// Remove all GC roots for a specific generation.
+fn remove_generation_gc_roots(
+    gc_roots: &crate::store::GcRoots,
+    gen_id: u32,
+) -> Result<u32, Box<dyn std::error::Error>> {
+    let prefix = format!("gen-{}-", gen_id);
+    let mut removed = 0u32;
+    if let Ok(roots) = gc_roots.list_roots() {
+        for root in roots {
+            if root.name.starts_with(&prefix) {
+                let _ = gc_roots.remove_root(&root.name);
+                removed += 1;
+            }
+        }
+    }
+    Ok(removed)
+}
+
+/// Migrate from old `system-*` GC root naming to per-generation `gen-{N}-*` naming.
+/// Scans all existing generations and creates roots for each. Then removes old roots.
+/// No-op if no `system-*` roots exist.
+fn migrate_gc_roots_if_needed(
+    gc_roots: &crate::store::GcRoots,
+    gen_dir: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let roots = gc_roots.list_roots()?;
+    let old_roots: Vec<_> = roots.iter()
+        .filter(|r| r.name.starts_with("system-"))
+        .collect();
+
+    if old_roots.is_empty() {
+        return Ok(());
+    }
+
+    eprintln!("Migrating {} old system-* GC roots to per-generation naming...", old_roots.len());
+
+    // Root all existing generations
+    let gens = scan_generations(gen_dir)?;
+    let mut total_added = 0u32;
+    for gen in &gens {
+        let added = add_generation_gc_roots(gc_roots, gen.id, &gen.manifest.packages)?;
+        total_added += added;
+    }
+
+    // Remove old system-* roots
+    for root in &old_roots {
+        let _ = gc_roots.remove_root(&root.name);
+    }
+
+    eprintln!("Migration complete: {total_added} roots created for {} generations, {} old roots removed",
+        gens.len(), old_roots.len());
+
+    Ok(())
+}
+
+// ===== Generation Deletion =====
+
+/// Selector for which generations to delete.
+#[derive(Debug, PartialEq)]
+enum GenerationSelector {
+    /// Delete specific generation IDs: `1 3 5`
+    Ids(Vec<u32>),
+    /// Keep the last N generations: `+N`
+    KeepLast(u32),
+    /// Delete generations older than N days: `Nd`
+    OlderThanDays(u32),
+    /// Delete all except current (and boot-default): `old`
+    Old,
+}
+
+/// Parse a generation selector string.
+///
+/// Formats:
+/// - `old` — all except current
+/// - `+N` — keep last N
+/// - `Nd` — older than N days
+/// - `1 3 5` — specific IDs
+fn parse_generation_selector(input: &str) -> Result<GenerationSelector, Box<dyn std::error::Error>> {
+    let trimmed = input.trim();
+
+    if trimmed == "old" {
+        return Ok(GenerationSelector::Old);
+    }
+
+    if let Some(n) = trimmed.strip_prefix('+') {
+        let count: u32 = n.parse()
+            .map_err(|_| format!("invalid keep count: +{n}"))?;
+        if count == 0 {
+            return Err("keep count must be at least 1".into());
+        }
+        return Ok(GenerationSelector::KeepLast(count));
+    }
+
+    if let Some(n) = trimmed.strip_suffix('d') {
+        let days: u32 = n.parse()
+            .map_err(|_| format!("invalid day count: {n}d"))?;
+        return Ok(GenerationSelector::OlderThanDays(days));
+    }
+
+    // Try parsing as space-separated IDs
+    let ids: Result<Vec<u32>, _> = trimmed.split_whitespace()
+        .map(|s| s.parse::<u32>())
+        .collect();
+    match ids {
+        Ok(ids) if !ids.is_empty() => Ok(GenerationSelector::Ids(ids)),
+        _ => Err(format!("invalid selector: {trimmed}. Use 'old', '+N', 'Nd', or space-separated IDs.").into()),
+    }
+}
+
+/// Statistics from a generation deletion.
+#[derive(Debug, Default)]
+pub struct DeleteGenerationsStats {
+    /// Number of generations deleted.
+    pub generations_deleted: u32,
+    /// Number of GC roots removed.
+    pub roots_removed: u32,
+    /// IDs of generations that were deleted.
+    pub deleted_ids: Vec<u32>,
+    /// IDs of generations that were protected (current/boot-default).
+    pub protected_ids: Vec<u32>,
+}
+
+/// Delete generations matching the selector.
+///
+/// Protected generations (current + boot-default) are never deleted.
+/// Removes generation directories and their `gen-{N}-*` GC roots.
+/// Does NOT run store GC — call `store::run_gc()` separately.
+pub fn delete_generations(
+    selector: &str,
+    dry_run: bool,
+    gen_dir: Option<&str>,
+    manifest_path: Option<&str>,
+    boot_default_path: Option<&str>,
+) -> Result<DeleteGenerationsStats, Box<dyn std::error::Error>> {
+    let gc_roots = crate::store::GcRoots::open()?;
+    delete_generations_with(
+        &gc_roots, selector, dry_run, gen_dir, manifest_path, boot_default_path,
+    )
+}
+
+/// Inner implementation that accepts a GcRoots instance (testable).
+fn delete_generations_with(
+    gc_roots: &crate::store::GcRoots,
+    selector: &str,
+    dry_run: bool,
+    gen_dir: Option<&str>,
+    manifest_path: Option<&str>,
+    boot_default_path: Option<&str>,
+) -> Result<DeleteGenerationsStats, Box<dyn std::error::Error>> {
+    let dir = gen_dir.unwrap_or(GENERATIONS_DIR);
+    let mpath = manifest_path.unwrap_or(MANIFEST_PATH);
+
+    let current = load_manifest_from(mpath)?;
+    let current_id = current.generation.id;
+
+    let boot_default_id = read_boot_default(boot_default_path)?;
+
+    let gens = scan_generations(dir)?;
+    let parsed = parse_generation_selector(selector)?;
+
+    // Build protected set
+    let mut protected = std::collections::BTreeSet::new();
+    protected.insert(current_id);
+    if let Some(bd) = boot_default_id {
+        protected.insert(bd);
+    }
+
+    // Determine which generations to delete
+    let to_delete: Vec<u32> = match parsed {
+        GenerationSelector::Ids(ref ids) => {
+            ids.iter().filter(|id| !protected.contains(id)).copied().collect()
+        }
+        GenerationSelector::KeepLast(n) => {
+            // Keep the N most recent (by ID), delete the rest
+            let mut sorted_ids: Vec<u32> = gens.iter().map(|g| g.id).collect();
+            sorted_ids.sort();
+            let keep_count = n as usize;
+            if sorted_ids.len() > keep_count {
+                let delete_count = sorted_ids.len() - keep_count;
+                sorted_ids[..delete_count].iter()
+                    .filter(|id| !protected.contains(id))
+                    .copied()
+                    .collect()
+            } else {
+                Vec::new()
+            }
+        }
+        GenerationSelector::OlderThanDays(days) => {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let cutoff = now.saturating_sub(days as u64 * 86400);
+
+            gens.iter()
+                .filter(|g| {
+                    if protected.contains(&g.id) {
+                        return false;
+                    }
+                    // Parse timestamp to epoch seconds
+                    let gen_epoch = parse_timestamp_to_epoch(&g.manifest.generation.timestamp);
+                    gen_epoch < cutoff
+                })
+                .map(|g| g.id)
+                .collect()
+        }
+        GenerationSelector::Old => {
+            gens.iter()
+                .map(|g| g.id)
+                .filter(|id| !protected.contains(id))
+                .collect()
+        }
+    };
+
+    // Check if user tried to delete a protected generation
+    let mut stats = DeleteGenerationsStats::default();
+    if let GenerationSelector::Ids(ref ids) = parsed {
+        for id in ids {
+            if protected.contains(id) {
+                stats.protected_ids.push(*id);
+                if *id == current_id {
+                    eprintln!("Skipping generation {id}: current generation (cannot delete)");
+                } else {
+                    eprintln!("Skipping generation {id}: boot-default generation (cannot delete)");
+                }
+            }
+        }
+    }
+
+    if to_delete.is_empty() {
+        println!("Nothing to delete.");
+        return Ok(stats);
+    }
+
+    for id in &to_delete {
+        let gen_path = Path::new(dir).join(id.to_string());
+
+        if dry_run {
+            println!("would delete: generation {id} ({})", gen_path.display());
+        } else {
+            // Remove GC roots first
+            let roots_removed = remove_generation_gc_roots(gc_roots, *id)?;
+            stats.roots_removed += roots_removed;
+
+            // Remove generation directory
+            if gen_path.exists() {
+                fs::remove_dir_all(&gen_path)?;
+            }
+        }
+
+        stats.generations_deleted += 1;
+        stats.deleted_ids.push(*id);
+    }
+
+    if dry_run {
+        println!();
+        println!("Would delete {} generations.", stats.generations_deleted);
+    } else {
+        println!("Deleted {} generations ({} GC roots removed).",
+            stats.generations_deleted, stats.roots_removed);
+    }
+
+    Ok(stats)
+}
+
+/// Parse an ISO 8601 timestamp to epoch seconds. Returns 0 on parse failure.
+fn parse_timestamp_to_epoch(ts: &str) -> u64 {
+    // Format: "2026-02-19T10:00:00Z"
+    if ts.len() < 19 {
+        return 0;
+    }
+    let parts: Vec<&str> = ts.split('T').collect();
+    if parts.len() != 2 {
+        return 0;
+    }
+    let date_parts: Vec<&str> = parts[0].split('-').collect();
+    let time_str = parts[1].trim_end_matches('Z');
+    let time_parts: Vec<&str> = time_str.split(':').collect();
+
+    if date_parts.len() != 3 || time_parts.len() != 3 {
+        return 0;
+    }
+
+    let year: u64 = date_parts[0].parse().unwrap_or(0);
+    let month: u64 = date_parts[1].parse().unwrap_or(0);
+    let day: u64 = date_parts[2].parse().unwrap_or(0);
+    let hour: u64 = time_parts[0].parse().unwrap_or(0);
+    let minute: u64 = time_parts[1].parse().unwrap_or(0);
+    let second: u64 = time_parts[2].parse().unwrap_or(0);
+
+    // Approximate: days since epoch
+    // Good enough for "older than N days" comparisons
+    let mut total_days: u64 = 0;
+    for y in 1970..year {
+        total_days += if is_leap_year(y) { 366 } else { 365 };
+    }
+    let days_in_month = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    for m in 1..month {
+        total_days += days_in_month[m as usize] as u64;
+        if m == 2 && is_leap_year(year) {
+            total_days += 1;
+        }
+    }
+    total_days += day - 1;
+
+    total_days * 86400 + hour * 3600 + minute * 60 + second
+}
+
+fn is_leap_year(y: u64) -> bool {
+    (y % 4 == 0 && y % 100 != 0) || y % 400 == 0
+}
+
+// ===== System GC (convenience wrapper) =====
+
+/// Combined generation pruning and store GC.
+///
+/// 1. Prune generations (delete-generations with `+N` or `old`)
+/// 2. Run store GC to sweep unreferenced paths
+pub fn system_gc(
+    keep: Option<u32>,
+    dry_run: bool,
+    gen_dir: Option<&str>,
+    manifest_path: Option<&str>,
+    boot_default_path: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Step 1: Prune generations
+    let selector = match keep {
+        Some(n) => format!("+{n}"),
+        None => "old".to_string(),
+    };
+
+    println!("── Pruning generations ──");
+    let stats = delete_generations(&selector, dry_run, gen_dir, manifest_path, boot_default_path)?;
+
+    // Step 2: Store GC
+    println!();
+    println!("── Store garbage collection ──");
+    crate::store::run_gc(dry_run)?;
+
+    if !dry_run && stats.generations_deleted > 0 {
+        println!();
+        println!("Summary: {} generations pruned, store swept.",
+            stats.generations_deleted);
     }
 
     Ok(())
@@ -1407,8 +1778,8 @@ pub fn current_timestamp_pub() -> String {
 }
 
 /// Public accessor for update_system_gc_roots (used by activate module).
-pub fn update_system_gc_roots_pub(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
-    update_system_gc_roots(manifest)
+pub fn update_system_gc_roots_pub(manifest: &Manifest, gen_dir: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+    update_system_gc_roots(manifest, gen_dir)
 }
 
 /// Get current timestamp as ISO 8601 string
@@ -2597,7 +2968,7 @@ mod tests {
         new_m.generation.build_hash = "bbbbbb".to_string();
 
         // Even if packages are identical, different build hash means a rebuild happened
-        let plan = crate::activate::plan(&current, &new_m);
+        let _plan = crate::activate::plan(&current, &new_m);
         // Plan itself may be empty (same packages), but build hash differs
         assert_ne!(current.generation.build_hash, new_m.generation.build_hash);
     }
@@ -2854,6 +3225,514 @@ mod tests {
             Some(marker.to_str().unwrap()),
         );
         assert!(result.is_err());
+    }
+
+    // ===== Per-Generation GC Root Tests =====
+
+    fn make_gc_roots(tmp: &tempfile::TempDir) -> crate::store::GcRoots {
+        crate::store::GcRoots::open_at(tmp.path().join("gcroots")).unwrap()
+    }
+
+    fn root_names(gc_roots: &crate::store::GcRoots) -> Vec<String> {
+        gc_roots.list_roots().unwrap().into_iter().map(|r| r.name).collect()
+    }
+
+    // Valid nixbase32 store paths for GC root tests
+    const SP_ION_V1: &str = "/nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-ion-1.0";
+    const SP_ION_V2: &str = "/nix/store/2c8kzfrjzhi7jkmz3fxcsyj7c5n2sp5s-ion-2.0";
+    const SP_UUTILS: &str = "/nix/store/3d7lxgskakh8klnz4gydrzk8d6p3rq6r-uutils-1.0";
+    const SP_RIPGREP: &str = "/nix/store/4f6mybrlblj9lmpz5hzfs0l9f7q4sp7s-ripgrep-14.0";
+
+    #[test]
+    fn add_generation_gc_roots_creates_named_roots() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gc_roots = make_gc_roots(&tmp);
+
+        let pkgs = vec![
+            Package { name: "ion".into(), version: "1.0".into(), store_path: SP_ION_V1.into() },
+            Package { name: "uutils".into(), version: "1.0".into(), store_path: SP_UUTILS.into() },
+        ];
+
+        let added = add_generation_gc_roots(&gc_roots, 3, &pkgs).unwrap();
+        assert_eq!(added, 2);
+
+        let names = root_names(&gc_roots);
+        assert!(names.contains(&"gen-3-ion".to_string()));
+        assert!(names.contains(&"gen-3-uutils".to_string()));
+    }
+
+    #[test]
+    fn add_generation_gc_roots_skips_empty_store_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gc_roots = make_gc_roots(&tmp);
+
+        let pkgs = vec![
+            Package { name: "ion".into(), version: "1.0".into(), store_path: SP_ION_V1.into() },
+            Package { name: "empty".into(), version: "1.0".into(), store_path: String::new() },
+        ];
+
+        let added = add_generation_gc_roots(&gc_roots, 1, &pkgs).unwrap();
+        assert_eq!(added, 1);
+
+        let names = root_names(&gc_roots);
+        assert_eq!(names.len(), 1);
+        assert!(names.contains(&"gen-1-ion".to_string()));
+    }
+
+    #[test]
+    fn remove_generation_gc_roots_removes_only_target() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gc_roots = make_gc_roots(&tmp);
+
+        // Add roots for gen 1 and gen 2
+        gc_roots.add_root("gen-1-ion", SP_ION_V1).unwrap();
+        gc_roots.add_root("gen-1-uutils", SP_UUTILS).unwrap();
+        gc_roots.add_root("gen-2-ion", SP_ION_V2).unwrap();
+        gc_roots.add_root("gen-2-ripgrep", SP_RIPGREP).unwrap();
+
+        // Remove gen 1 roots only
+        let removed = remove_generation_gc_roots(&gc_roots, 1).unwrap();
+        assert_eq!(removed, 2);
+
+        let names = root_names(&gc_roots);
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"gen-2-ion".to_string()));
+        assert!(names.contains(&"gen-2-ripgrep".to_string()));
+    }
+
+    #[test]
+    fn remove_generation_gc_roots_nonexistent_is_noop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gc_roots = make_gc_roots(&tmp);
+
+        gc_roots.add_root("gen-1-ion", SP_ION_V1).unwrap();
+
+        let removed = remove_generation_gc_roots(&gc_roots, 99).unwrap();
+        assert_eq!(removed, 0);
+        assert_eq!(root_names(&gc_roots).len(), 1);
+    }
+
+    #[test]
+    fn old_gen_roots_survive_new_gen_rooting() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gc_roots = make_gc_roots(&tmp);
+        let gen_dir = tmp.path().join("generations");
+        fs::create_dir_all(&gen_dir).unwrap();
+
+        // Simulate gen 1 already rooted
+        gc_roots.add_root("gen-1-ion", SP_ION_V1).unwrap();
+        gc_roots.add_root("gen-1-uutils", SP_UUTILS).unwrap();
+
+        // Root gen 2 (as update_system_gc_roots would)
+        let mut m2 = sample_manifest();
+        m2.generation.id = 2;
+        m2.packages[0].store_path = SP_ION_V2.into();
+        m2.packages[1].store_path = SP_UUTILS.into();
+        m2.packages.push(Package { name: "ripgrep".into(), version: "14.0".into(), store_path: SP_RIPGREP.into() });
+
+        // update_system_gc_roots should NOT remove gen-1 roots
+        update_system_gc_roots_with(&gc_roots, &m2, Some(gen_dir.to_str().unwrap())).unwrap();
+
+        let names = root_names(&gc_roots);
+        // gen-1 roots preserved
+        assert!(names.contains(&"gen-1-ion".to_string()));
+        assert!(names.contains(&"gen-1-uutils".to_string()));
+        // gen-2 roots added
+        assert!(names.contains(&"gen-2-ion".to_string()));
+        assert!(names.contains(&"gen-2-uutils".to_string()));
+        assert!(names.contains(&"gen-2-ripgrep".to_string()));
+        assert_eq!(names.len(), 5);
+    }
+
+    #[test]
+    fn migration_converts_system_roots_to_gen_roots() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gc_roots = make_gc_roots(&tmp);
+        let gen_dir = tmp.path().join("generations");
+
+        // Create 2 existing generations
+        for id in 1..=2 {
+            let gd = gen_dir.join(id.to_string());
+            fs::create_dir_all(&gd).unwrap();
+            let mut m = sample_manifest();
+            m.generation.id = id;
+            m.packages[0].store_path = if id == 1 { SP_ION_V1.into() } else { SP_ION_V2.into() };
+            m.packages[1].store_path = SP_UUTILS.into();
+            fs::write(gd.join("manifest.json"), serde_json::to_string(&m).unwrap()).unwrap();
+        }
+
+        // Old-style system-* roots
+        gc_roots.add_root("system-ion", SP_ION_V2).unwrap();
+        gc_roots.add_root("system-uutils", SP_UUTILS).unwrap();
+
+        // Trigger migration via update_system_gc_roots for gen 3
+        let mut m3 = sample_manifest();
+        m3.generation.id = 3;
+        m3.packages[0].store_path = SP_ION_V2.into();
+        m3.packages[1].store_path = SP_UUTILS.into();
+        m3.packages.push(Package { name: "ripgrep".into(), version: "14.0".into(), store_path: SP_RIPGREP.into() });
+
+        update_system_gc_roots_with(&gc_roots, &m3, Some(gen_dir.to_str().unwrap())).unwrap();
+
+        let names = root_names(&gc_roots);
+        // Old system-* roots gone
+        assert!(!names.iter().any(|n| n.starts_with("system-")));
+        // Gen 1, 2, 3 roots all exist
+        assert!(names.contains(&"gen-1-ion".to_string()));
+        assert!(names.contains(&"gen-1-uutils".to_string()));
+        assert!(names.contains(&"gen-2-ion".to_string()));
+        assert!(names.contains(&"gen-2-uutils".to_string()));
+        assert!(names.contains(&"gen-3-ion".to_string()));
+        assert!(names.contains(&"gen-3-uutils".to_string()));
+        assert!(names.contains(&"gen-3-ripgrep".to_string()));
+    }
+
+    #[test]
+    fn migration_noop_when_no_system_roots() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gc_roots = make_gc_roots(&tmp);
+        let gen_dir = tmp.path().join("generations");
+        fs::create_dir_all(&gen_dir).unwrap();
+
+        // Already have gen-style roots (no system-* roots)
+        gc_roots.add_root("gen-1-ion", SP_ION_V1).unwrap();
+
+        // update_system_gc_roots should skip migration
+        let mut m2 = sample_manifest();
+        m2.generation.id = 2;
+        m2.packages[0].store_path = SP_ION_V2.into();
+        m2.packages[1].store_path = SP_UUTILS.into();
+
+        update_system_gc_roots_with(&gc_roots, &m2, Some(gen_dir.to_str().unwrap())).unwrap();
+
+        let names = root_names(&gc_roots);
+        // gen-1 root still there
+        assert!(names.contains(&"gen-1-ion".to_string()));
+        // gen-2 roots added
+        assert!(names.contains(&"gen-2-ion".to_string()));
+        assert!(names.contains(&"gen-2-uutils".to_string()));
+    }
+
+    // ===== Delete Generations Tests =====
+
+    /// Set up N generations in a tempdir with GC roots. Returns (gen_dir, manifest_file, gc_roots, boot_default_path).
+    fn setup_generations(
+        tmp: &tempfile::TempDir,
+        count: u32,
+        current_id: u32,
+    ) -> (std::path::PathBuf, std::path::PathBuf, crate::store::GcRoots, std::path::PathBuf) {
+        let gen_dir = tmp.path().join("generations");
+        let manifest_file = tmp.path().join("manifest.json");
+        let boot_default_path = tmp.path().join("boot-default");
+        let gc_roots = make_gc_roots(tmp);
+
+        for id in 1..=count {
+            let gd = gen_dir.join(id.to_string());
+            fs::create_dir_all(&gd).unwrap();
+            let mut m = sample_manifest();
+            m.generation.id = id;
+            m.generation.timestamp = format!("2026-03-{:02}T10:00:00Z", id.min(28));
+            m.packages[0].store_path = format!(
+                "/nix/store/{}b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-ion-{}.0",
+                id, id
+            );
+            m.packages[1].store_path = SP_UUTILS.into();
+            fs::write(gd.join("manifest.json"), serde_json::to_string(&m).unwrap()).unwrap();
+
+            // Create GC roots
+            let _ = add_generation_gc_roots(&gc_roots, id, &m.packages);
+        }
+
+        // Write current manifest
+        let mut current = sample_manifest();
+        current.generation.id = current_id;
+        fs::write(&manifest_file, serde_json::to_string(&current).unwrap()).unwrap();
+
+        (gen_dir, manifest_file, gc_roots, boot_default_path)
+    }
+
+    #[test]
+    fn parse_selector_old() {
+        assert_eq!(parse_generation_selector("old").unwrap(), GenerationSelector::Old);
+    }
+
+    #[test]
+    fn parse_selector_keep_last() {
+        assert_eq!(parse_generation_selector("+3").unwrap(), GenerationSelector::KeepLast(3));
+    }
+
+    #[test]
+    fn parse_selector_older_than_days() {
+        assert_eq!(parse_generation_selector("14d").unwrap(), GenerationSelector::OlderThanDays(14));
+    }
+
+    #[test]
+    fn parse_selector_ids() {
+        assert_eq!(parse_generation_selector("1 3 5").unwrap(), GenerationSelector::Ids(vec![1, 3, 5]));
+    }
+
+    #[test]
+    fn parse_selector_invalid() {
+        assert!(parse_generation_selector("").is_err());
+        assert!(parse_generation_selector("+0").is_err());
+        assert!(parse_generation_selector("abc").is_err());
+    }
+
+    #[test]
+    fn delete_generations_by_id() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 5, 5);
+
+        let stats = delete_generations_with(
+            &gc_roots, "1 3", false,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+            Some(boot_default.to_str().unwrap()),
+        ).unwrap();
+
+        assert_eq!(stats.generations_deleted, 2);
+        assert!(stats.deleted_ids.contains(&1));
+        assert!(stats.deleted_ids.contains(&3));
+        assert!(!gen_dir.join("1").exists());
+        assert!(!gen_dir.join("3").exists());
+        assert!(gen_dir.join("2").exists());
+        assert!(gen_dir.join("4").exists());
+        assert!(gen_dir.join("5").exists());
+
+        // GC roots for 1 and 3 removed
+        let names = root_names(&gc_roots);
+        assert!(!names.iter().any(|n| n.starts_with("gen-1-")));
+        assert!(!names.iter().any(|n| n.starts_with("gen-3-")));
+        // 2, 4, 5 roots intact
+        assert!(names.iter().any(|n| n.starts_with("gen-2-")));
+        assert!(names.iter().any(|n| n.starts_with("gen-4-")));
+        assert!(names.iter().any(|n| n.starts_with("gen-5-")));
+    }
+
+    #[test]
+    fn delete_generations_keep_last_n() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 8, 8);
+
+        let stats = delete_generations_with(
+            &gc_roots, "+3", false,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+            Some(boot_default.to_str().unwrap()),
+        ).unwrap();
+
+        assert_eq!(stats.generations_deleted, 5); // 1-5 deleted, 6-8 kept
+        for id in 1..=5 {
+            assert!(!gen_dir.join(id.to_string()).exists(), "gen {id} should be deleted");
+        }
+        for id in 6..=8 {
+            assert!(gen_dir.join(id.to_string()).exists(), "gen {id} should be kept");
+        }
+    }
+
+    #[test]
+    fn delete_generations_old() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 4, 4);
+
+        let stats = delete_generations_with(
+            &gc_roots, "old", false,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+            Some(boot_default.to_str().unwrap()),
+        ).unwrap();
+
+        assert_eq!(stats.generations_deleted, 3); // 1, 2, 3 deleted
+        assert!(!gen_dir.join("1").exists());
+        assert!(!gen_dir.join("2").exists());
+        assert!(!gen_dir.join("3").exists());
+        assert!(gen_dir.join("4").exists()); // current protected
+    }
+
+    #[test]
+    fn delete_generations_protects_current() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 3, 3);
+
+        let stats = delete_generations_with(
+            &gc_roots, "3", false,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+            Some(boot_default.to_str().unwrap()),
+        ).unwrap();
+
+        // Current generation protected
+        assert_eq!(stats.generations_deleted, 0);
+        assert!(stats.protected_ids.contains(&3));
+        assert!(gen_dir.join("3").exists());
+    }
+
+    #[test]
+    fn delete_generations_protects_boot_default() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 5, 5);
+
+        // Set boot-default to generation 3
+        fs::write(&boot_default, "3\n").unwrap();
+
+        let stats = delete_generations_with(
+            &gc_roots, "old", false,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+            Some(boot_default.to_str().unwrap()),
+        ).unwrap();
+
+        // Gen 3 (boot-default) and 5 (current) protected
+        assert_eq!(stats.generations_deleted, 3); // 1, 2, 4 deleted
+        assert!(gen_dir.join("3").exists());
+        assert!(gen_dir.join("5").exists());
+        assert!(!gen_dir.join("1").exists());
+        assert!(!gen_dir.join("2").exists());
+        assert!(!gen_dir.join("4").exists());
+    }
+
+    #[test]
+    fn delete_generations_dry_run() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 3, 3);
+
+        let stats = delete_generations_with(
+            &gc_roots, "old", true, // dry_run
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+            Some(boot_default.to_str().unwrap()),
+        ).unwrap();
+
+        assert_eq!(stats.generations_deleted, 2); // would delete 1, 2
+        // But nothing actually deleted
+        assert!(gen_dir.join("1").exists());
+        assert!(gen_dir.join("2").exists());
+        // GC roots still intact
+        let names = root_names(&gc_roots);
+        assert!(names.iter().any(|n| n.starts_with("gen-1-")));
+        assert!(names.iter().any(|n| n.starts_with("gen-2-")));
+    }
+
+    #[test]
+    fn delete_generations_nothing_to_delete() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 1, 1);
+
+        let stats = delete_generations_with(
+            &gc_roots, "old", false,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+            Some(boot_default.to_str().unwrap()),
+        ).unwrap();
+
+        assert_eq!(stats.generations_deleted, 0);
+        assert!(gen_dir.join("1").exists());
+    }
+
+    #[test]
+    fn parse_timestamp_known_date() {
+        let epoch = parse_timestamp_to_epoch("2026-03-16T10:00:00Z");
+        // 2026-03-16 should be well after epoch
+        assert!(epoch > 1_700_000_000);
+    }
+
+    #[test]
+    fn parse_timestamp_invalid() {
+        assert_eq!(parse_timestamp_to_epoch(""), 0);
+        assert_eq!(parse_timestamp_to_epoch("not-a-date"), 0);
+    }
+
+    // ===== System GC Integration Tests =====
+
+    #[test]
+    fn system_gc_prune_then_sweep_simulation() {
+        // Simulate the system_gc flow: prune generations, verify store paths
+        // become unreferenced, then a store GC would collect them.
+        let tmp = tempfile::tempdir().unwrap();
+        let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 4, 4);
+
+        // Set up a PathInfoDb in the same tmpdir
+        let pathinfo_dir = tmp.path().join("pathinfo");
+        let db = crate::pathinfo::PathInfoDb::open_at(pathinfo_dir).unwrap();
+
+        // Register store paths from all generations
+        for id in 1..=4u32 {
+            let store_path = format!(
+                "/nix/store/{}b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-ion-{}.0",
+                id, id
+            );
+            crate::store::register_path(&db, &store_path, "deadbeef", 1000, vec![], vec![]).unwrap();
+        }
+        crate::store::register_path(&db, SP_UUTILS, "deadbeef", 500, vec![], vec![]).unwrap();
+
+        // Step 1: Prune (keep last 1 = only gen 4)
+        let stats = delete_generations_with(
+            &gc_roots, "+1", false,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+            Some(boot_default.to_str().unwrap()),
+        ).unwrap();
+
+        assert_eq!(stats.generations_deleted, 3);
+
+        // Step 2: Verify GC root state
+        let live = gc_roots.compute_live_set(&db).unwrap();
+        // Only gen 4's ion path and shared uutils should be live
+        let gen4_ion = "/nix/store/4b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-ion-4.0";
+        assert!(live.contains(gen4_ion));
+        assert!(live.contains(SP_UUTILS));
+        // Gen 1-3 ion paths are dead (their roots were removed)
+        for id in 1..=3u32 {
+            let dead_path = format!(
+                "/nix/store/{}b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-ion-{}.0",
+                id, id
+            );
+            assert!(!live.contains(&dead_path), "gen {id} ion should be dead");
+        }
+    }
+
+    #[test]
+    fn system_gc_dry_run_preserves_everything() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 3, 3);
+
+        let stats = delete_generations_with(
+            &gc_roots, "old", true,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+            Some(boot_default.to_str().unwrap()),
+        ).unwrap();
+
+        // Reports what would happen
+        assert_eq!(stats.generations_deleted, 2);
+        // But everything is still intact
+        assert!(gen_dir.join("1").exists());
+        assert!(gen_dir.join("2").exists());
+        assert!(gen_dir.join("3").exists());
+        let names = root_names(&gc_roots);
+        assert!(names.iter().any(|n| n.starts_with("gen-1-")));
+        assert!(names.iter().any(|n| n.starts_with("gen-2-")));
+        assert!(names.iter().any(|n| n.starts_with("gen-3-")));
+    }
+
+    #[test]
+    fn system_gc_default_deletes_all_old() {
+        // When no --keep is specified, system_gc uses "old" selector
+        let tmp = tempfile::tempdir().unwrap();
+        let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 5, 5);
+
+        let stats = delete_generations_with(
+            &gc_roots, "old", false,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+            Some(boot_default.to_str().unwrap()),
+        ).unwrap();
+
+        assert_eq!(stats.generations_deleted, 4);
+        for id in 1..=4 {
+            assert!(!gen_dir.join(id.to_string()).exists());
+        }
+        assert!(gen_dir.join("5").exists());
     }
 
 }

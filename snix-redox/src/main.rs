@@ -531,6 +531,51 @@ enum SystemCommand {
         #[arg(short, long)]
         config: Option<String>,
     },
+
+    /// Delete old generations (frees them for garbage collection)
+    DeleteGenerations {
+        /// Selector: "old" (all but current), "+N" (keep last N), "Nd" (older than N days), or space-separated IDs
+        selector: Vec<String>,
+
+        /// Show what would be deleted without actually deleting
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Path to generations directory
+        #[arg(short, long)]
+        dir: Option<String>,
+
+        /// Path to current manifest file
+        #[arg(short, long)]
+        manifest: Option<String>,
+
+        /// Path to boot default marker file
+        #[arg(short, long)]
+        boot_default: Option<String>,
+    },
+
+    /// Garbage collect: prune old generations then sweep unreferenced store paths
+    Gc {
+        /// Keep the last N generations (default: keep only current)
+        #[arg(long)]
+        keep: Option<u32>,
+
+        /// Show what would be deleted without actually deleting
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Path to generations directory
+        #[arg(short, long)]
+        dir: Option<String>,
+
+        /// Path to current manifest file
+        #[arg(short, long)]
+        manifest: Option<String>,
+
+        /// Path to boot default marker file
+        #[arg(short, long)]
+        boot_default: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -844,6 +889,41 @@ fn main() {
             }
             SystemCommand::ShowConfig { config } => {
                 rebuild::show_config(config.as_deref())
+            }
+            SystemCommand::DeleteGenerations {
+                selector,
+                dry_run,
+                dir,
+                manifest,
+                boot_default,
+            } => {
+                let selector_str = selector.join(" ");
+                if selector_str.is_empty() {
+                    return Err("selector required: 'old', '+N', 'Nd', or generation IDs".into());
+                }
+                system::delete_generations(
+                    &selector_str,
+                    dry_run,
+                    dir.as_deref(),
+                    manifest.as_deref(),
+                    boot_default.as_deref(),
+                )?;
+                Ok(())
+            }
+            SystemCommand::Gc {
+                keep,
+                dry_run,
+                dir,
+                manifest,
+                boot_default,
+            } => {
+                system::system_gc(
+                    keep,
+                    dry_run,
+                    dir.as_deref(),
+                    manifest.as_deref(),
+                    boot_default.as_deref(),
+                )
             }
         },
         Command::Stored {

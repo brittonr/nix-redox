@@ -648,6 +648,98 @@ let
         end
     end
 
+    # ── Phase 12: GC root verification ───────────────────────────
+    echo ""
+    echo "--- Phase 12: GC root verification ---"
+
+    # Verify per-generation GC roots exist (gen-{N}-{pkg} naming)
+    /nix/system/profile/bin/bash -c '
+        gcroot_dir="/nix/var/snix/gcroots"
+        if [ ! -d "$gcroot_dir" ]; then
+            echo "FUNC_TEST:gcroots-dir-exists:FAIL:no gcroots directory"
+            exit 0
+        fi
+        echo FUNC_TEST:gcroots-dir-exists:PASS
+
+        # Count gen-* roots
+        gen_root_count=$(ls "$gcroot_dir" 2>/dev/null | grep "^gen-" | wc -l)
+        if [ "$gen_root_count" -gt 0 ]; then
+            echo "FUNC_TEST:gc-gen-roots-exist:PASS"
+        else
+            echo "FUNC_TEST:gc-gen-roots-exist:FAIL:no gen-* roots found"
+            ls "$gcroot_dir" 2>/dev/null
+        fi
+
+        # No old system-* roots should remain
+        old_roots=$(ls "$gcroot_dir" 2>/dev/null | grep "^system-" | wc -l)
+        if [ "$old_roots" -eq 0 ]; then
+            echo "FUNC_TEST:gc-no-system-roots:PASS"
+        else
+            echo "FUNC_TEST:gc-no-system-roots:FAIL:$old_roots old system-* roots remain"
+        fi
+
+        # Current generation (gen 8) should have roots
+        current_roots=$(ls "$gcroot_dir" 2>/dev/null | grep "^gen-8-" | wc -l)
+        if [ "$current_roots" -gt 0 ]; then
+            echo "FUNC_TEST:gc-current-gen-rooted:PASS"
+        else
+            echo "FUNC_TEST:gc-current-gen-rooted:FAIL:no gen-8-* roots"
+            ls "$gcroot_dir" 2>/dev/null | head -20
+        fi
+
+        # Earlier generations should also have roots (not deleted)
+        gen1_roots=$(ls "$gcroot_dir" 2>/dev/null | grep "^gen-1-" | wc -l)
+        if [ "$gen1_roots" -gt 0 ]; then
+            echo "FUNC_TEST:gc-old-gen-preserved:PASS"
+        else
+            echo "FUNC_TEST:gc-old-gen-preserved:FAIL:gen-1 roots missing (would break rollback)"
+        fi
+    '
+
+    # ── Phase 13: GC dry-run verification ─────────────────────────
+    echo ""
+    echo "--- Phase 13: snix system gc dry-run ---"
+
+    # Run system gc in dry-run mode, keeping only 1 generation
+    /bin/snix system gc --keep 1 --dry-run > /tmp/gc_dryrun_out ^> /tmp/gc_dryrun_err
+
+    /nix/system/profile/bin/bash -c '
+        if [ -f /tmp/gc_dryrun_out ]; then
+            # Should mention pruning generations
+            if grep -q "Pruning\|would delete\|generation" /tmp/gc_dryrun_out 2>/dev/null; then
+                echo FUNC_TEST:gc-dryrun-output:PASS
+            else
+                echo "FUNC_TEST:gc-dryrun-output:FAIL:no pruning info in output"
+                cat /tmp/gc_dryrun_out
+                cat /tmp/gc_dryrun_err 2>/dev/null
+            fi
+        else
+            echo "FUNC_TEST:gc-dryrun-output:FAIL:no output file"
+        fi
+    '
+
+    # Verify dry-run did NOT actually delete anything
+    /nix/system/profile/bin/bash -c '
+        gen_dir="/etc/redox-system/generations"
+        count=$(ls "$gen_dir" 2>/dev/null | wc -l)
+        if [ "$count" -ge 8 ]; then
+            echo "FUNC_TEST:gc-dryrun-preserves-gens:PASS"
+        else
+            echo "FUNC_TEST:gc-dryrun-preserves-gens:FAIL:expected >=8, found $count (dry-run deleted!)"
+        fi
+    '
+
+    # Verify GC roots still intact after dry-run
+    /nix/system/profile/bin/bash -c '
+        gcroot_dir="/nix/var/snix/gcroots"
+        gen_root_count=$(ls "$gcroot_dir" 2>/dev/null | grep "^gen-" | wc -l)
+        if [ "$gen_root_count" -gt 0 ]; then
+            echo "FUNC_TEST:gc-dryrun-preserves-roots:PASS"
+        else
+            echo "FUNC_TEST:gc-dryrun-preserves-roots:FAIL:roots gone after dry-run"
+        fi
+    '
+
     echo ""
     echo "FUNC_TESTS_COMPLETE"
     echo ""

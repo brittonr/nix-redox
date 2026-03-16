@@ -462,7 +462,7 @@ pub fn activate(
     let config_files_updated = config_files_updated + derived_updated;
 
     // ── Step 4: Update GC roots (always, for idempotency) ──
-    if let Err(e) = crate::system::update_system_gc_roots_pub(new) {
+    if let Err(e) = crate::system::update_system_gc_roots_pub(new, None) {
         warnings.push(format!("GC root update failed: {e}"));
     }
 
