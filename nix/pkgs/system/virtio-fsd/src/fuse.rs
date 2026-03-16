@@ -20,8 +20,8 @@ pub enum FuseOpcode {
     Forget = 2,
     Getattr = 3,
     Setattr = 4,
-    // Readlink = 5,
-    // Symlink = 6,
+    Readlink = 5,
+    Symlink = 6,
     // Mknod = 8,
     Mkdir = 9,
     Unlink = 10,
@@ -311,6 +311,24 @@ pub struct FuseSetattrIn {
     pub gid: u32,
     pub unused5: u32,
 }
+
+/// FUSE_FLUSH request body.
+///
+/// Sent before FUSE_RELEASE to flush dirty pages for a file handle.
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct FuseFlushIn {
+    pub fh: u64,
+    pub unused: u32,
+    pub padding: u32,
+    pub lock_owner: u64,
+}
+
+// FUSE_SYMLINK has no fixed input struct. The request body is two
+// null-terminated strings packed sequentially: `name\0target\0`.
+// The name is the new symlink entry and target is what it points to.
+// (Note: Linux FUSE kernel docs specify the body as `name\0` followed
+// by `linkname\0`, but virtiofsd expects `linkname\0name\0`.)
 
 /// FUSE_SETATTR valid bits.
 pub const FATTR_SIZE: u32 = 1 << 3;

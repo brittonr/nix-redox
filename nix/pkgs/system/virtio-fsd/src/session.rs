@@ -38,6 +38,9 @@ pub struct FuseSession<'a> {
     unique_counter: AtomicU64,
     max_readahead: u32,
     max_write: u32,
+    /// Effective maximum I/O size per FUSE request, respecting both the
+    /// host-negotiated max_write and the pre-allocated DMA buffer limit.
+    effective_max_io: usize,
 
     /// Pre-allocated request DMA buffer. Sized for the largest possible
     /// request (FUSE_WRITE: header + FuseWriteIn + MAX_IO_SIZE), rounded
@@ -115,19 +118,28 @@ impl<'a> FuseSession<'a> {
             init_out.max_write
         );
 
+        let effective_max_io = (init_out.max_write as usize).min(MAX_IO_SIZE);
+
         if init_out.max_write as usize > MAX_IO_SIZE {
             log::warn!(
-                "virtio-fsd: negotiated max_write ({}) exceeds buffer size ({}), large writes will fail",
+                "virtio-fsd: negotiated max_write ({}) exceeds buffer size ({}), capping at {}",
                 init_out.max_write,
-                MAX_IO_SIZE
+                MAX_IO_SIZE,
+                effective_max_io
             );
         }
+
+        log::info!(
+            "virtio-fsd: effective_max_io={} bytes",
+            effective_max_io
+        );
 
         Ok(Self {
             queue,
             unique_counter,
             max_readahead: init_out.max_readahead,
             max_write: init_out.max_write,
+            effective_max_io,
             req_buf,
             resp_buf,
         })
@@ -296,9 +308,47 @@ impl<'a> FuseSession<'a> {
 
     /// FUSE_READ: read data from an open file.
     ///
-    /// The response descriptor is sized to exactly `header + size` bytes so
-    /// virtiofsd reads exactly the requested amount from the host file.
+    /// If the requested size exceeds `effective_max_io`, the read is split
+    /// into multiple FUSE_READ operations. Results are concatenated. A short
+    /// read (fewer bytes than requested) terminates chunking early.
     pub fn read(
+        &mut self,
+        nodeid: u64,
+        fh: u64,
+        offset: u64,
+        size: u32,
+    ) -> Result<Vec<u8>, FuseTransportError> {
+        let total = size as usize;
+
+        // Fast path: single request fits in one chunk
+        if total <= self.effective_max_io {
+            return self.read_single(nodeid, fh, offset, size);
+        }
+
+        // Chunked read
+        let mut result = Vec::with_capacity(total);
+        let mut current_offset = offset;
+        let mut remaining = total;
+
+        while remaining > 0 {
+            let chunk_size = remaining.min(self.effective_max_io) as u32;
+            let chunk = self.read_single(nodeid, fh, current_offset, chunk_size)?;
+            let got = chunk.len();
+            result.extend_from_slice(&chunk);
+            current_offset += got as u64;
+            remaining -= got;
+
+            // Short read means EOF or end of data
+            if got < chunk_size as usize {
+                break;
+            }
+        }
+
+        Ok(result)
+    }
+
+    /// Issue a single FUSE_READ (no chunking). Size must fit in effective_max_io.
+    fn read_single(
         &mut self,
         nodeid: u64,
         fh: u64,
@@ -405,9 +455,46 @@ impl<'a> FuseSession<'a> {
 
     /// FUSE_WRITE: write data to an open file.
     ///
-    /// Data is packed into the request descriptor (header + FuseWriteIn + data).
-    /// Returns the number of bytes actually written by the host.
+    /// If the data exceeds `effective_max_io`, the write is split into
+    /// multiple FUSE_WRITE operations, advancing the offset after each chunk.
+    /// A short write (fewer bytes than the chunk) terminates chunking early.
+    /// Returns the total number of bytes written.
     pub fn write(
+        &mut self,
+        nodeid: u64,
+        fh: u64,
+        offset: u64,
+        data: &[u8],
+    ) -> Result<u32, FuseTransportError> {
+        // Fast path: single request fits in one chunk
+        if data.len() <= self.effective_max_io {
+            return self.write_single(nodeid, fh, offset, data);
+        }
+
+        // Chunked write
+        let mut total_written: u32 = 0;
+        let mut current_offset = offset;
+        let mut remaining = data;
+
+        while !remaining.is_empty() {
+            let chunk_size = remaining.len().min(self.effective_max_io);
+            let chunk = &remaining[..chunk_size];
+            let written = self.write_single(nodeid, fh, current_offset, chunk)?;
+            total_written += written;
+            current_offset += written as u64;
+            remaining = &remaining[chunk_size..];
+
+            // Short write means host couldn't accept the full chunk
+            if (written as usize) < chunk_size {
+                break;
+            }
+        }
+
+        Ok(total_written)
+    }
+
+    /// Issue a single FUSE_WRITE (no chunking). Data must fit in effective_max_io.
+    fn write_single(
         &mut self,
         nodeid: u64,
         fh: u64,
@@ -591,6 +678,91 @@ impl<'a> FuseSession<'a> {
         }
 
         Ok(unsafe { *(body.as_ptr() as *const FuseAttrOut) })
+    }
+
+    /// FUSE_READLINK: read the target of a symbolic link.
+    ///
+    /// The response body is the raw symlink target path (no null terminator,
+    /// no structured header — just the path bytes).
+    pub fn readlink(&mut self, nodeid: u64) -> Result<String, FuseTransportError> {
+        let req = build_request(
+            FuseOpcode::Readlink as u32,
+            nodeid,
+            self.next_unique(),
+            &[],
+            None,
+        );
+
+        // Symlink targets can be up to PATH_MAX (4096) bytes
+        let resp = self.data_exchange(&req, 4096)?;
+        let _hdr = parse_response_header(&resp)?;
+        let body = response_body(&resp);
+
+        String::from_utf8(body.to_vec())
+            .map_err(|_| FuseTransportError::UnexpectedSize)
+    }
+
+    /// FUSE_SYMLINK: create a symbolic link.
+    ///
+    /// Creates a symlink named `name` in directory `parent` pointing to `target`.
+    /// The FUSE protocol packs the body as `name\0target\0` (name first, then
+    /// linkname/target).
+    pub fn symlink(
+        &mut self,
+        parent: u64,
+        name: &str,
+        target: &str,
+    ) -> Result<FuseEntryOut, FuseTransportError> {
+        // FUSE_SYMLINK body: name\0target\0
+        // The header nodeid is the parent directory.
+        let mut body = Vec::with_capacity(name.len() + 1 + target.len() + 1);
+        body.extend_from_slice(name.as_bytes());
+        body.push(0);
+        body.extend_from_slice(target.as_bytes());
+        body.push(0);
+
+        let req = build_request(
+            FuseOpcode::Symlink as u32,
+            parent,
+            self.next_unique(),
+            &body,
+            None,
+        );
+
+        let resp = self.meta_exchange(&req)?;
+        let _hdr = parse_response_header(&resp)?;
+        let body = response_body(&resp);
+
+        if body.len() < core::mem::size_of::<FuseEntryOut>() {
+            return Err(FuseTransportError::UnexpectedSize);
+        }
+
+        Ok(unsafe { *(body.as_ptr() as *const FuseEntryOut) })
+    }
+
+    /// FUSE_FLUSH: flush pending writes for a file handle.
+    ///
+    /// Sent before FUSE_RELEASE to ensure the host flushes dirty pages
+    /// to stable storage. Only meaningful for writable file handles.
+    pub fn flush(&mut self, nodeid: u64, fh: u64) -> Result<(), FuseTransportError> {
+        let args = FuseFlushIn {
+            fh,
+            unused: 0,
+            padding: 0,
+            lock_owner: 0,
+        };
+
+        let req = build_request_with_args(
+            FuseOpcode::Flush as u32,
+            nodeid,
+            self.next_unique(),
+            &args,
+            None,
+        );
+
+        let resp = self.meta_exchange(&req)?;
+        let _hdr = parse_response_header(&resp)?;
+        Ok(())
     }
 
     /// FUSE_STATFS: get filesystem statistics.
