@@ -127,6 +127,27 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - `cmd.output()` creates pipes that crash deep process hierarchies (snix→bash→cargo→rustc→cc→lld).
 - `#[cfg(target_os = "redox")]` uses `Stdio::inherit()` + `.status()` instead.
 
+### Proxy scheme socket close doesn't unblock next_request()
+- On Redox, closing a scheme socket fd from another thread does NOT unblock a blocked `next_request()` read
+- Fix: event loop checks `handler.handles.is_empty()` after each request and exits proactively when the builder exits
+- Without this fix, `proxy.shutdown().join()` hangs forever — the thread never returns from the blocked read
+
+### child_ns_fd must be closed in parent after spawn
+- mkns() creates namespace fd, shared by parent and child (fork inheritance)
+- Parent closing its copy is required — otherwise the namespace stays alive after child exits
+- This prevents the scheme registration from being invalidated, keeping initnsmgr busy
+- But do NOT close in child's pre_exec — setns() stores the raw fd as current namespace
+- setns on Redox is userspace-only (swaps DynamicProcInfo.ns_fd) — closing the fd invalidates the namespace for the process
+
+### thread::sleep() deadlocks when other threads hold scheme I/O
+- nanosleep works at the syscall level, but in a multi-threaded process with scheme socket blocking, sleep() can cause the scheduler to never wake the process
+- Use sched_yield() instead of thread::sleep() in poll-wait loops on Redox
+
+### Rust stdout not flushed on Redox process exit
+- println! to a file-redirected stdout stays in the buffer (fully buffered, not line-buffered)
+- Redox exit handlers may not flush stdio reliably
+- Explicit `stdout().flush()` required before process exit
+
 ## Active Bugs (not yet fixed)
 
 ### Kernel DMA page allocator bug (FIXED — see Stale Claims)
