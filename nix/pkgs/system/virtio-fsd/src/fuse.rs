@@ -325,10 +325,10 @@ pub struct FuseFlushIn {
 }
 
 // FUSE_SYMLINK has no fixed input struct. The request body is two
-// null-terminated strings packed sequentially: `name\0target\0`.
-// The name is the new symlink entry and target is what it points to.
-// (Note: Linux FUSE kernel docs specify the body as `name\0` followed
-// by `linkname\0`, but virtiofsd expects `linkname\0name\0`.)
+// null-terminated strings packed sequentially: `name\0linkname\0`.
+// `name` is the new symlink entry to create, `linkname` is the target
+// path it points to. This matches the Linux kernel FUSE protocol
+// (fs/fuse/dir.c fuse_symlink: args[0]=name, args[1]=link).
 
 /// FUSE_SETATTR valid bits.
 pub const FATTR_SIZE: u32 = 1 << 3;

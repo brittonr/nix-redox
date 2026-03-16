@@ -495,6 +495,107 @@ let
     # Cleanup test files
     rm /scheme/shared/large-test.txt ^> /dev/null
 
+    # ── Phase 8b: Symlink handling ─────────────────────────────
+    # The host created symlinks in the shared directory before boot.
+    # Test that the guest can read through them transparently.
+    echo ""
+    echo "--- Phase 8b: Symlink handling ---"
+    echo ""
+
+    # Test: read through a file symlink (host created symlink-link.txt → symlink-target.txt)
+    cat /scheme/shared/symlink-link.txt > /tmp/symlink_read ^> /tmp/symlink_err
+    if test $? = 0
+        if grep -q "symlink target content" /tmp/symlink_read
+            echo "FUNC_TEST:symlink-read-through:PASS"
+        else
+            echo "FUNC_TEST:symlink-read-through:FAIL:content mismatch"
+            echo "DEBUG: got:"
+            cat /tmp/symlink_read
+        end
+    else
+        echo "FUNC_TEST:symlink-read-through:FAIL:read failed"
+        echo "DEBUG: error:"
+        cat /tmp/symlink_err
+    end
+
+    # Test: read through a directory symlink (symlink-dir-link → symlink-subdir)
+    cat /scheme/shared/symlink-dir-link/real.txt > /tmp/symdir_read ^> /tmp/symdir_err
+    if test $? = 0
+        if grep -q "nested via symlink" /tmp/symdir_read
+            echo "FUNC_TEST:symlink-dir-read-through:PASS"
+        else
+            echo "FUNC_TEST:symlink-dir-read-through:FAIL:content mismatch"
+            echo "DEBUG: got:"
+            cat /tmp/symdir_read
+        end
+    else
+        echo "FUNC_TEST:symlink-dir-read-through:FAIL:read failed"
+        echo "DEBUG: error:"
+        cat /tmp/symdir_err
+    end
+
+    # Test: list directory through symlink
+    ls /scheme/shared/symlink-dir-link/ > /tmp/symdir_ls ^> /tmp/symdir_ls_err
+    if test $? = 0
+        if grep -q "real.txt" /tmp/symdir_ls
+            echo "FUNC_TEST:symlink-dir-listing:PASS"
+        else
+            echo "FUNC_TEST:symlink-dir-listing:FAIL:real.txt not in listing"
+            echo "DEBUG: listing:"
+            cat /tmp/symdir_ls
+        end
+    else
+        echo "FUNC_TEST:symlink-dir-listing:FAIL:ls failed"
+        echo "DEBUG: error:"
+        cat /tmp/symdir_ls_err
+    end
+
+    rm /tmp/symlink_read /tmp/symlink_err /tmp/symdir_read /tmp/symdir_err ^> /dev/null
+    rm /tmp/symdir_ls /tmp/symdir_ls_err ^> /dev/null
+
+    # ── Phase 8c: Error propagation ────────────────────────────
+    # The host created a read-only file (chmod 444). Writing to it
+    # should fail — and with errno translation, the error should be
+    # EACCES (permission denied) not a generic EIO.
+    echo ""
+    echo "--- Phase 8c: Error propagation ---"
+    echo ""
+
+    # Test: writing to a read-only file fails with EACCES (not generic EIO).
+    # Ion aborts on redirect failure (it opens the file itself), so use cp
+    # which handles file opens internally and exits non-zero on failure.
+    echo "should fail" > /tmp/write_attempt
+    cp /tmp/write_attempt /scheme/shared/readonly-file.txt ^> /tmp/readonly_err
+    if test $? != 0
+        echo "FUNC_TEST:error-readonly-write-fails:PASS"
+        # Check that the error message says "Permission denied" (EACCES), not "I/O error" (EIO)
+        if grep -q "ermission" /tmp/readonly_err
+            echo "FUNC_TEST:error-eacces-not-eio:PASS"
+        else
+            echo "FUNC_TEST:error-eacces-not-eio:FAIL:expected Permission denied"
+            echo "DEBUG: error was:"
+            cat /tmp/readonly_err
+        end
+    else
+        echo "FUNC_TEST:error-readonly-write-fails:FAIL:write succeeded on readonly file"
+        echo "FUNC_TEST:error-eacces-not-eio:SKIP"
+    end
+    rm /tmp/write_attempt ^> /dev/null
+
+    # Test: reading the read-only file still works
+    cat /scheme/shared/readonly-file.txt > /tmp/readonly_read ^> /tmp/readonly_read_err
+    if test $? = 0
+        if grep -q "read only content" /tmp/readonly_read
+            echo "FUNC_TEST:error-readonly-read-ok:PASS"
+        else
+            echo "FUNC_TEST:error-readonly-read-ok:FAIL:content mismatch"
+        end
+    else
+        echo "FUNC_TEST:error-readonly-read-ok:FAIL:read failed"
+    end
+
+    rm /tmp/readonly_err /tmp/readonly_rc /tmp/readonly_read /tmp/readonly_read_err ^> /dev/null
+
     # ── Phase 9: Bridge rebuild protocol ───────────────────────
     # Tests the guest-initiated rebuild flow:
     #   1. Write a configuration.json (not .nix — avoids snix-eval)

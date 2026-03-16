@@ -87,6 +87,17 @@ pkgs.writeShellScriptBin "bridge-test" ''
     mkdir -p "$SHARED_DIR/cache"
     touch "$SERIAL_LOG"
 
+    # Setup for symlink test (task 7.3): guest reads through a host-created symlink
+    echo "symlink target content" > "$SHARED_DIR/symlink-target.txt"
+    ln -s "symlink-target.txt" "$SHARED_DIR/symlink-link.txt"
+    mkdir -p "$SHARED_DIR/symlink-subdir"
+    echo "nested via symlink" > "$SHARED_DIR/symlink-subdir/real.txt"
+    ln -s "symlink-subdir" "$SHARED_DIR/symlink-dir-link"
+
+    # Setup for error propagation test (task 7.4): guest write to read-only file
+    echo "read only content" > "$SHARED_DIR/readonly-file.txt"
+    chmod 444 "$SHARED_DIR/readonly-file.txt"
+
     echo ""
     echo "  ''${BOLD}Redox OS Build Bridge Test''${RESET}"
     echo "  =========================="
