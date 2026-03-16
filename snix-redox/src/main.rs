@@ -449,6 +449,39 @@ enum SystemCommand {
         manifest: Option<String>,
     },
 
+    /// Activate a generation at boot time (no new generation created)
+    ActivateBoot {
+        /// Generation number to activate (reads /boot/default-generation if omitted)
+        #[arg(short, long)]
+        generation: Option<u32>,
+
+        /// Path to generations directory
+        #[arg(short, long)]
+        dir: Option<String>,
+
+        /// Path to current manifest file
+        #[arg(short, long)]
+        manifest: Option<String>,
+
+        /// Path to boot default marker file
+        #[arg(short, long)]
+        boot_default: Option<String>,
+    },
+
+    /// Show or set which generation to boot next
+    Boot {
+        /// Generation number to boot next (omit to show current)
+        generation: Option<u32>,
+
+        /// Path to generations directory
+        #[arg(short, long)]
+        dir: Option<String>,
+
+        /// Path to boot default marker file
+        #[arg(short, long)]
+        boot_default: Option<String>,
+    },
+
     /// Rebuild system from configuration.nix (like nixos-rebuild switch)
     Rebuild {
         /// Path to configuration.nix (default: /etc/redox-system/configuration.nix)
@@ -730,6 +763,41 @@ fn main() {
                 dir,
                 manifest,
             } => system::rollback(generation, dir.as_deref(), manifest.as_deref()),
+            SystemCommand::ActivateBoot {
+                generation,
+                dir,
+                manifest,
+                boot_default,
+            } => {
+                // If no --generation given, read from boot default marker
+                let gen_id = match generation {
+                    Some(id) => id,
+                    None => match system::read_boot_default(boot_default.as_deref()) {
+                        Ok(Some(id)) => id,
+                        Ok(None) => {
+                            // No marker file — nothing to activate, exit cleanly
+                            return Ok(());
+                        }
+                        Err(e) => {
+                            eprintln!("boot: warning: could not read boot default: {e}");
+                            return Ok(());
+                        }
+                    },
+                };
+                match system::activate_boot(gen_id, dir.as_deref(), manifest.as_deref()) {
+                    Ok(()) => Ok(()),
+                    Err(e) => {
+                        // At boot time, log warning and continue rather than halting
+                        eprintln!("boot: warning: generation activation failed: {e}");
+                        Ok(())
+                    }
+                }
+            }
+            SystemCommand::Boot {
+                generation,
+                dir,
+                boot_default,
+            } => system::boot_cmd(generation, dir.as_deref(), boot_default.as_deref()),
             SystemCommand::Rebuild {
                 config,
                 dry_run,

@@ -181,6 +181,15 @@ let
       unset REDOXFS_UUID REDOXFS_BLOCK REDOXFS_PASSWORD_ADDR REDOXFS_PASSWORD_SIZE
     '';
 
+    "85_generation_select" = ''
+      # Boot-time generation activation
+      # Reads /boot/default-generation marker and activates that generation's
+      # manifest (rebuild profile, write config files) before userspace entry.
+      # Skips silently if no marker exists. Falls back to current manifest on error.
+      cd /
+      /bin/snix system activate-boot
+    '';
+
     "90_exit_initfs" = ''
       # Exit initfs and enter userspace
       cd /
