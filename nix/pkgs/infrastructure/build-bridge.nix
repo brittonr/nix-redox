@@ -39,6 +39,8 @@ pkgs.writeShellScriptBin "redox-build-bridge" ''
     FLAKE_DIR="''${REDOX_FLAKE_DIR:-$(pwd)}"
     PROFILE="''${REDOX_PROFILE:-default}"
     POLL_INTERVAL="''${POLL_INTERVAL:-1}"
+    # Allow overriding nix binary (the pinned version may not have local cache)
+    NIX_CMD="''${REDOX_NIX:-${nix}/bin/nix}"
 
     # Colors
     if [ -t 2 ]; then
@@ -83,7 +85,7 @@ pkgs.writeShellScriptBin "redox-build-bridge" ''
       # Build using bridge-eval.nix
       echo -e "  ''${BLUE}Building with nix...''${RESET}"
       local build_output root_tree
-      if build_output=$(${nix}/bin/nix build \
+      if build_output=$($NIX_CMD build \
         --file "${bridgeEvalNix}" \
         --arg flakeDir "\"$FLAKE_DIR\"" \
         --arg configPath "\"$config_file\"" \
@@ -289,7 +291,7 @@ pkgs.writeShellScriptBin "redox-build-bridge" ''
           echo -e "''${BLUE}[$(date +%H:%M:%S)] Build-attr: $attr (req: $req_id)''${RESET}"
 
           local out_path
-          if out_path=$(${nix}/bin/nix build "$FLAKE_DIR#$attr" --no-link --print-out-paths 2>&1); then
+          if out_path=$($NIX_CMD build "$FLAKE_DIR#$attr" --no-link --print-out-paths 2>&1); then
             out_path=$(echo "$out_path" | tail -1)
             echo -e "  ''${GREEN}Built: $out_path''${RESET}"
 
@@ -357,11 +359,11 @@ pkgs.writeShellScriptBin "redox-build-bridge" ''
 
           # Import .drv into Nix store and build
           local store_drv
-          if store_drv=$(${nix}/bin/nix-store --add "$drv_file" 2>&1); then
+          if store_drv=$($NIX_CMD-store --add "$drv_file" 2>&1); then
             echo -e "  Imported: $store_drv"
 
             local out_path
-            if out_path=$(${nix}/bin/nix-store --realise "$store_drv" 2>&1); then
+            if out_path=$($NIX_CMD-store --realise "$store_drv" 2>&1); then
               echo -e "  ''${GREEN}Built: $out_path''${RESET}"
 
               # Export output to shared cache
@@ -503,7 +505,6 @@ pkgs.writeShellScriptBin "redox-build-bridge" ''
         touch "$req_file.lock"
 
         # Route to appropriate handler based on filename prefix
-        local basename
         basename=$(basename "$req_file" .json)
         case "$basename" in
           build-*)

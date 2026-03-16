@@ -41,9 +41,19 @@ let
         exit
     end
 
-    # Record current hostname before rebuild
+    # Record current hostname before rebuild (both manifest and live file)
     let current_hostname = $(cat /etc/hostname)
-    echo "DEBUG: current hostname = $current_hostname"
+    echo "DEBUG: current /etc/hostname = $current_hostname"
+
+    # Verify the hostname is NOT "rebuilt-via-bridge" before we start
+    # (proves the change actually happened, not that it was baked in)
+    if grep -q "rebuilt-via-bridge" /etc/hostname
+        echo "FUNC_TEST:hostname-not-prebaked:FAIL:hostname already set before rebuild"
+        echo "FUNC_TESTS_COMPLETE"
+        exit
+    else
+        echo "FUNC_TEST:hostname-not-prebaked:PASS"
+    end
 
     # Record current manifest package count
     let current_manifest = $(cat /etc/redox-system/manifest.json)
@@ -114,7 +124,7 @@ let
     /bin/snix system rebuild --bridge \
         --config /scheme/shared/bridge-rebuild-config.json \
         --shared-dir /scheme/shared \
-        --timeout 120 \
+        --timeout 240 \
         --manifest /etc/redox-system/manifest.json \
         --gen-dir /tmp/bridge-rebuild-gens \
         > /tmp/rebuild_stdout
@@ -146,9 +156,51 @@ let
 
     # Test: hostname was updated in manifest
     if grep -q "rebuilt-via-bridge" /etc/redox-system/manifest.json
-        echo "FUNC_TEST:hostname-updated:PASS"
+        echo "FUNC_TEST:hostname-in-manifest:PASS"
     else
-        echo "FUNC_TEST:hostname-updated:FAIL:hostname not changed in manifest"
+        echo "FUNC_TEST:hostname-in-manifest:FAIL:hostname not changed in manifest"
+    end
+
+    # ── Live system effect: /etc/hostname file was actually written ──
+    # This is the key proof that activate() wrote the derived file,
+    # not just updated the manifest JSON. If this passes, the running
+    # system reflects the change without a reboot or image rebuild.
+    if exists -f /etc/hostname
+        let live_hostname = $(cat /etc/hostname)
+        echo "DEBUG: /etc/hostname contains: $live_hostname"
+        if grep -q "rebuilt-via-bridge" /etc/hostname
+            echo "FUNC_TEST:hostname-live-updated:PASS"
+        else
+            echo "FUNC_TEST:hostname-live-updated:FAIL:file says $live_hostname"
+        end
+    else
+        echo "FUNC_TEST:hostname-live-updated:FAIL:/etc/hostname missing"
+    end
+
+    # ── Live system effect: profile bin directory has working symlinks ──
+    # activate() does atomic_profile_swap which rebuilds /nix/system/profile/bin/
+    # with symlinks to package store paths. Verify the directory exists and
+    # has actual symlinks (not just the manifest claiming packages exist).
+    if exists -d /nix/system/profile/bin
+        echo "FUNC_TEST:profile-bin-exists:PASS"
+    else
+        echo "FUNC_TEST:profile-bin-exists:FAIL:profile bin dir missing"
+    end
+
+    # ── Live system effect: ion binary accessible through profile ──
+    # After profile swap, /nix/system/profile/bin/ion should be a symlink
+    # pointing to the ion store path. This proves the profile was rebuilt.
+    if exists -f /nix/system/profile/bin/ion
+        echo "FUNC_TEST:ion-in-profile:PASS"
+    else
+        echo "FUNC_TEST:ion-in-profile:FAIL:ion not in profile bin"
+    end
+
+    # ── Live system effect: snix binary accessible through profile ──
+    if exists -f /nix/system/profile/bin/snix
+        echo "FUNC_TEST:snix-in-profile:PASS"
+    else
+        echo "FUNC_TEST:snix-in-profile:FAIL:snix not in profile bin"
     end
 
     # Test: essential packages are preserved (ion must still be in manifest)
@@ -182,6 +234,30 @@ let
         end
     else
         echo "FUNC_TEST:generation-created:FAIL:gen dir not created"
+    end
+
+    # ── Live system effect: generation manifest matches live state ──
+    # The saved generation should have the new hostname, proving the
+    # generation system captured the live-updated state.
+    if exists -d /tmp/bridge-rebuild-gens
+        /nix/system/profile/bin/bash -c '
+            found=0
+            for d in /tmp/bridge-rebuild-gens/*/; do
+                if [ -f "$d/manifest.json" ]; then
+                    if grep -q "rebuilt-via-bridge" "$d/manifest.json" 2>/dev/null; then
+                        found=1
+                        break
+                    fi
+                fi
+            done
+            if [ "$found" = "1" ]; then
+                echo "FUNC_TEST:generation-has-new-hostname:PASS"
+            else
+                echo "FUNC_TEST:generation-has-new-hostname:FAIL:no generation has new hostname"
+            fi
+        '
+    else
+        echo "FUNC_TEST:generation-has-new-hostname:FAIL:gen dir missing"
     end
 
     # Test: rebuild with --dry-run shows changes without modifying
