@@ -127,15 +127,25 @@ let
   # Boot-essential packages: flat-copied to /bin/ for init scripts and early boot.
   # These survive generation switches — they're always available.
   #
+  # Packages the profile actually requested via systemPackages.
+  profileSystemPackages = inputs.environment.systemPackages or [ ];
+
+  # Check if a package is referenced in the profile's systemPackages list.
+  inSystemPackages = pkg: builtins.any (p: toString p == toString pkg) profileSystemPackages;
+
   # Listed by DERIVATION REFERENCE (pkgs.foo), not by name string.
   # This makes the partition immune to pname/parseDrvName changes —
   # if pkgs.base changes metadata, it still goes to /bin/ because we
   # reference the derivation itself, not its name.
+  #
+  # userutils is only boot-essential when the profile includes it in
+  # systemPackages. Test profiles exclude userutils so that startup.sh
+  # runs the test runner directly instead of getty.
   bootPackages = lib.unique (
     (lib.optional (pkgs ? base) pkgs.base)
     ++ (lib.optional (pkgs ? ion) pkgs.ion)
     ++ (lib.optional (pkgs ? uutils) pkgs.uutils)
-    ++ (lib.optional (pkgs ? userutils) pkgs.userutils)
+    ++ (lib.optional (pkgs ? userutils && inSystemPackages pkgs.userutils) pkgs.userutils)
     ++ (lib.optional (networkingEnabled && pkgs ? netutils) pkgs.netutils)
     ++ (lib.optional (networkingEnabled && pkgs ? netcfg-setup) pkgs.netcfg-setup)
     ++ (lib.optional (pkgs ? snix) pkgs.snix)

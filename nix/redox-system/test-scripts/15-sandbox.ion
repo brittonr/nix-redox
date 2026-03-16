@@ -23,7 +23,7 @@ echo "--- sandbox-build-basic ---"
     };
   };
 }
-  FLAKEEOF
+FLAKEEOF
   cat > /tmp/sandbox-test/flake.lock << '"'"'LOCKEOF'"'"'
 {
   "version": 7,
@@ -34,7 +34,7 @@ echo "--- sandbox-build-basic ---"
     }
   }
 }
-  LOCKEOF
+LOCKEOF
   cd /tmp/sandbox-test
   OUTPUT=$(/bin/snix build ".#hello" 2>/tmp/sandbox-basic-err)
   EXIT=$?
@@ -88,7 +88,7 @@ echo "--- sandbox-restricts-schemes ---"
     };
   };
 }
-  FLAKEEOF
+FLAKEEOF
   cat > /tmp/sandbox-restrict/flake.lock << '"'"'LOCKEOF'"'"'
 {
   "version": 7,
@@ -99,7 +99,7 @@ echo "--- sandbox-restricts-schemes ---"
     }
   }
 }
-  LOCKEOF
+LOCKEOF
   cd /tmp/sandbox-restrict
 
   # Sandboxed: debug: should be blocked

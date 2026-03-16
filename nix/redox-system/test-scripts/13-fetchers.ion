@@ -81,7 +81,7 @@ in (derivation {
   system = "x86_64-linux";
   inherit src;
 }).outPath
-  NIXEOF
+NIXEOF
 '
 /bin/snix eval --file /tmp/fetch_input.nix > /tmp/fetch_input_out ^> /tmp/fetch_input_err
 if test $? = 0

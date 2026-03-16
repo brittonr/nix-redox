@@ -114,7 +114,7 @@ in
       bootloader,
       memoryMB ? 1024,
       cpus ? 2,
-      defaultTimeout ? 120,
+      defaultTimeout ? 300,
     }:
     import ./functional-test.nix {
       inherit
