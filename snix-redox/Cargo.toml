@@ -12,6 +12,11 @@ path = "src/main.rs"
 # Run tests with: cargo test --target x86_64-unknown-linux-gnu
 test = false
 
+[[bin]]
+name = "proxy_namespace_test"
+path = "tests/redox/proxy_namespace_test.rs"
+test = false
+
 [lib]
 name = "snix_redox"
 path = "src/lib.rs"

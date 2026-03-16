@@ -48,6 +48,17 @@ mkUserspace.mkBinary {
   version = "0.4.0";
   src = snix-redox-src;
   binaryName = "snix";
+  cargoBuildFlags = "--bin snix --bin proxy_namespace_test";
+
+  installPhase = ''
+    runHook preInstall
+    mkdir -p $out/bin
+    cp target/${redoxTarget}/release/snix $out/bin/
+    if [ -f target/${redoxTarget}/release/proxy_namespace_test ]; then
+      cp target/${redoxTarget}/release/proxy_namespace_test $out/bin/
+    fi
+    runHook postInstall
+  '';
 
   # Vendor hash — all dependencies are from crates.io (no git sources)
   # No vendorHash — auto-vendored from Cargo.lock via unit2nix

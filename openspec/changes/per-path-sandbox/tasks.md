@@ -18,12 +18,12 @@
 
 ## 3. Extend proxy_namespace_test.rs
 
-- [ ] 3.1 Add test 3: fork a child, have the child call `setns(child_ns_fd)`, then open+write+close a file in a writable directory through the proxy. Parent verifies the file exists on the real filesystem.
-- [ ] 3.2 Add test 4: from the child (in proxy namespace), attempt to open `/etc/passwd`. Verify `EACCES` is returned.
-- [ ] 3.3 Add test 5: from the child, create a directory, write 3 files, then call `getdents` and verify all 3 files appear.
-- [ ] 3.4 Add test 6: from the child, write 1KB to a file, read it back, verify byte-for-byte equality.
-- [ ] 3.5 Add test 7: measure round-trip latency for 1000 sequential open+read+close operations. Print the mean and p99 latency.
-- [ ] 3.6 Wire the extended `proxy_namespace_test` into the functional-test profile so it runs as part of `nix run .#functional-test`. Emit `FUNC_TEST:proxy-roundtrip:PASS/FAIL` etc.
+- [x] 3.1 Add test 3: fork a child, have the child call `setns(child_ns_fd)`, then open+write+close a file in a writable directory through the proxy. Parent verifies the file exists on the real filesystem.
+- [x] 3.2 Add test 4: from the child (in proxy namespace), attempt to open `/etc/passwd`. Verify `EACCES` is returned.
+- [x] 3.3 Add test 5: from the child, create a directory, write 3 files, then call `getdents` and verify all 3 files appear.
+- [x] 3.4 Add test 6: from the child, write 1KB to a file, read it back, verify byte-for-byte equality.
+- [x] 3.5 Add test 7: measure round-trip latency for 1000 sequential open+read+close operations. Print the mean and p99 latency.
+- [x] 3.6 Wire the extended `proxy_namespace_test` into the functional-test profile so it runs as part of `nix run .#functional-test`. Emit `FUNC_TEST:proxy-roundtrip:PASS/FAIL` etc.
 
 ## 4. Validate with Full Self-Hosting Suite
 
