@@ -71,6 +71,25 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Code: `snix-redox/src/build_proxy/allow_list.rs` — `build_allow_list()`
 - 38 unit tests pass (7 new tests covering args/env scanning)
 
+## Standalone .ion File Gotchas (test script split)
+
+### Heredoc terminators must be at column 0 in standalone files
+- In the monolithic Nix `''` string, indentation stripping moved `  FLAKEEOF` → `FLAKEEOF`
+- Standalone files via `builtins.readFile` + `${content}` interpolation preserve original indentation
+- Lines from `${content}` paste at column 0 — no re-indentation applied by Nix
+- All heredoc terminators (FLAKEEOF, LOCKEOF, NIXEOF) need column 0 in .ion files
+
+### Ion parses ${...} inside single quotes — syntax error on / and :
+- `bash -c '... ${line//$old/$new} ...'` — Ion sees `${line//` and errors on `/`
+- `bash -c '... ${HASH:0:16} ...'` — same issue with `:` inside `${}`
+- Fix: write bash content to a .sh file and execute it, so Ion never parses it
+- `echo 'line' >> /tmp/script.sh` then `/nix/system/profile/bin/bash /tmp/script.sh`
+
+### bootPackages must not unconditionally include userutils
+- `pkgs ? userutils` is always true (mkFlatPkgs puts it in the set)
+- Must also check `inSystemPackages pkgs.userutils` (profile actually uses it)
+- Without this gate, `userutilsInstalled=true` everywhere → getty runs → test scripts never execute
+
 ## Ion Shell Gotchas (keep forgetting)
 
 ### `$()` crashes on empty output

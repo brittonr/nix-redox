@@ -26,7 +26,7 @@ echo "--- flake-build-simple ---"
     };
   };
 }
-  FLAKEEOF
+FLAKEEOF
   cat > /tmp/testflake/flake.lock << '"'"'LOCKEOF'"'"'
 {
   "version": 7,
@@ -35,7 +35,7 @@ echo "--- flake-build-simple ---"
     "root": {}
   }
 }
-  LOCKEOF
+LOCKEOF
   cd /tmp/testflake
   OUTPUT=$(/bin/snix build ".#hello" 2>/tmp/flake-simple-err)
   EXIT=$?
@@ -98,7 +98,7 @@ echo "--- flake-build-dir ---"
     };
   };
 }
-  FLAKEEOF
+FLAKEEOF
   cat > /tmp/testflake-dir/flake.lock << '"'"'LOCKEOF'"'"'
 {
   "version": 7,
@@ -107,7 +107,7 @@ echo "--- flake-build-dir ---"
     "root": {}
   }
 }
-  LOCKEOF
+LOCKEOF
   cd /tmp/testflake-dir
   OUTPUT=$(/bin/snix build ".#mypkg" 2>/tmp/flake-dir-err)
   EXIT=$?
@@ -148,7 +148,7 @@ echo "--- flake-build-multi ---"
     };
   };
 }
-  FLAKEEOF
+FLAKEEOF
   cat > /tmp/testflake-multi/flake.lock << '"'"'LOCKEOF'"'"'
 {
   "version": 7,
@@ -157,7 +157,7 @@ echo "--- flake-build-multi ---"
     "root": {}
   }
 }
-  LOCKEOF
+LOCKEOF
   cd /tmp/testflake-multi
   OUT_A=$(/bin/snix build ".#alpha" 2>/dev/null)
   OUT_B=$(/bin/snix build ".#beta" 2>/dev/null)
@@ -198,7 +198,7 @@ echo "--- flake-build-dep ---"
     };
   };
 }
-  FLAKEEOF
+FLAKEEOF
   cat > /tmp/testflake-dep/flake.lock << '"'"'LOCKEOF'"'"'
 {
   "version": 7,
@@ -207,7 +207,7 @@ echo "--- flake-build-dep ---"
     "root": {}
   }
 }
-  LOCKEOF
+LOCKEOF
   cd /tmp/testflake-dep
   OUTPUT=$(/bin/snix build ".#combined" 2>/tmp/flake-dep-err)
   EXIT=$?
@@ -229,7 +229,7 @@ echo "--- flake-no-lock ---"
   mkdir -p /tmp/testflake-nolock
   cat > /tmp/testflake-nolock/flake.nix << '"'"'FLAKEEOF'"'"'
 { outputs = { self }: { packages."x86_64-unknown-redox".x = 1; }; }
-  FLAKEEOF
+FLAKEEOF
   cd /tmp/testflake-nolock
   /bin/snix build ".#x" >/dev/null 2>/tmp/flake-nolock-err
   EXIT=$?
@@ -317,7 +317,7 @@ echo "--- flake-build-path-input ---"
     };
   };
 }
-  FLAKEEOF
+FLAKEEOF
   cat > /tmp/testflake-path/flake.lock << '"'"'LOCKEOF'"'"'
 {
   "version": 7,
@@ -337,7 +337,7 @@ echo "--- flake-build-path-input ---"
     }
   }
 }
-  LOCKEOF
+LOCKEOF
   cd /tmp/testflake-path
   OUTPUT=$(/bin/snix build ".#greet" 2>/tmp/flake-path-err)
   EXIT=$?
