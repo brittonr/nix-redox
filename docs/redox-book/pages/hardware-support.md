@@ -1,0 +1,44 @@
+# Hardware Support
+
+
+There are billions of devices with hundreds of models and architectures in the world. We try to write drivers for the most used devices to support more people. Support depends on the specific hardware, since some drivers are device-specific and others are architecture-specific.
+
+Have a look at the [HARDWARE.md document to see all tested computers.
+## CPU Requirements
+
+
+The following requirements are mandatory to make Redox work, non-x86 CPUs have equivalents for them.
+
+- [MMU : Introduced by the Intel 8086 CPU line in 1978 and present in all CPUs since then
+- [FPU : Introduced by the Intel 8087 coprocessor in 1980 for the Intel 8086 CPU line and present in almost all CPUs since then
+- FXSAVE extension or non-x86 CPU equivalent
+- [Page Size Extension or non-x86 CPU equivalent
+- Paging global extension or non-x86 CPU equivalent
+## I have a low-end computer, would Redox work on it?
+
+
+A CPU is the most complex machine of the world: even the oldest processors are powerful for some tasks but not for others.
+
+The main problem with old computers is the amount of DRAM memory available (they were sold in a era where RAM chips were expensive) and the lack of SSE/AVX extensions (programs use them to speed up the algorithms). Because of this some modern programs may not work or require a lot of RAM to perform complex tasks.
+
+Redox itself will work normally if the CPU architecture is supported by the system, but the performance and stability may vary per program.
+## Why choosing i586 as the minimal supported x86 CPU?
+
+
+- i686 ([Pentium Pro) introduced MMX, SSE, and SSE2 [extensions. Fortunately the kernel and other critical system components don't use them.
+- i586 ([Original Pentium) introduced a more efficient FPU and MMX extension which are critical for programs, also the most minimal CPU architecture supported by [Rust and perhaps most Rust packages.
+- [i486 introduced FPU and atomic operations, which are used by the kernel and other critical system components. It would be possible to go all the way back to i486, but Redox will run with much less programs.
+- [i386 has no atomics and floating instructions (at all), which makes it not a target for both the kernel and other critical system components.
+## Compatibility Table
+ ********
+
+
+| Category            | Items                                   |                                                                  |                 |                                         |                                              |
+| ------------------- | --------------------------------------- | ---------------------------------------------------------------- | --------------- | --------------------------------------- | -------------------------------------------- |
+| CPU                 | - Intel 64-bit (x86_64)                 | - Intel 32-bit (i586) from Pentium II and after with limitations | - AMD 32/64-bit | - ARM 64-bit (aarch64) with limitations | - RISC-V 64-bit (riscv64gc) with limitations |
+| Hardware Interfaces | - ACPI, PCI, USB                        |                                                                  |                 |                                         |                                              |
+| Storage             | - IDE (PATA), SATA (AHCI), NVMe         |                                                                  |                 |                                         |                                              |
+| Video               | - BIOS VESA, UEFI GOP, Intel GPU        |                                                                  |                 |                                         |                                              |
+| Sound               | - Intel, Realtek chipsets               |                                                                  |                 |                                         |                                              |
+| Input               | - PS/2 keyboards, mouse, and touchpad   | - USB keyboards, mouse and touchpad                              |                 |                                         |                                              |
+| Ethernet            | - Intel Gigabit and 10 Gigabit ethernet | - Realtek ethernet                                               |                 |                                         |                                              |

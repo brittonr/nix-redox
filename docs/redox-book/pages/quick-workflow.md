@@ -1,0 +1,315 @@
+# Quick Workflow
+
+
+This page contains the most quick testing/development workflow for people that want an direct list to do things.
+
+**You need to fully understand the build system to use this workflow, as it don't give a detailed explanation of each command to save time and space**
+
+- Install Rust Nightly
+- Update Rust
+- Download a new build system copy without the bootstrap script
+- Install the required dependencies for the build system
+- Download and run the "podman_bootstrap.sh" script
+- Build the system
+- Update the build system
+- Update the toolchain and relibc
+- Update recipes and Redox image
+- Update everything
+- Wipe the toolchain and download again
+- Wipe the toolchain/recipe binaries and download/build them again
+- Wipe toolchain/recipe binaries and Podman container, update build system source and rebuild the system
+- Wipe all recipe sources/binaries and download/build them again
+- Use the "myfiles" recipe to insert your files on Redox image
+- Disable a recipe on the filesystem configuration
+- Create logs
+- Temporarily build the toolchain from source
+- Build some filesystem configuration for some CPU architecture
+- Build some filesystem configuration for some CPU architecture (using pre-built packages from the build server)
+- Boot Redox on QEMU from a NVMe device
+- Boot Redox on QEMU from a NVMe device with a custom number of CPU threads
+- Boot Redox on QEMU from a NVMe device, a custom number of CPU threads and memory
+#### Install Rust Nightly
+
+```
+curl https://sh.rustup.rs -sSf | sh -s -- --default-toolchain nightly
+
+```
+
+
+Use Case: Configure the host system without the build system bootstrap scripts.
+#### Update Rust
+
+```
+rustup update
+
+```
+
+
+Use Case: Try to fix Rust problems.
+#### Download a new build system copy without the bootstrap script
+
+```
+git clone https://gitlab.redox-os.org/redox-os/redox.git --origin upstream
+
+```
+
+
+Use Case: Commonly used when a big build system breakage was not prevented before an update or wipe leftovers.
+### Install the required dependencies for the build system
+
+```
+curl -sf https://gitlab.redox-os.org/redox-os/redox/raw/master/podman_bootstrap.sh -o podman_bootstrap.sh
+
+```
+
+```
+bash -e podman_bootstrap.sh -d
+
+```
+
+
+Use Case: Install new build tools or update the existing ones.
+#### Download and run the "podman_bootstrap.sh" script
+
+```
+curl -sf https://gitlab.redox-os.org/redox-os/redox/raw/master/podman_bootstrap.sh -o podman_bootstrap.sh
+
+```
+
+```
+bash -e podman_bootstrap.sh
+
+```
+
+
+Use Case: Commonly used when a big build system breakage was not prevented before an update and install new build tools or update the existing ones.
+#### Build the system
+
+```
+cd redox
+
+```
+
+```
+make all
+
+```
+
+
+Use Case: Build the system from a clean build system copy.
+#### Update the build system
+
+```
+make pull
+
+```
+
+
+Use Case: Keep the build system up-to-date.
+#### Update the toolchain and relibc
+
+```
+make prefix r.relibc
+
+```
+
+
+Use Case: Keep the toolchain up-to-date.
+#### Update recipes and Redox image
+
+```
+make rebuild
+
+```
+
+
+Use Case: Keep the Redox image up-to-date.
+#### Only update system recipes and install in Redox image
+
+```
+make rp.sys,sys-gui,--with-package-deps
+
+```
+
+
+Or if incremental compilation can't be used:
+```
+make crp.sys,sys-gui,--with-package-deps
+
+```
+
+#### Update everything
+
+
+Install the `topgrade` tool to update your system packages (you can install it with `cargo install topgrade`)
+```
+topgrade
+
+```
+
+```
+make pull rebuild
+
+```
+
+
+Use Case: Try to fix most problems caused by outdated recipes, toolchain and build system configuration.
+#### Wipe statically linked recipe binaries
+
+```
+make static_clean rebuild
+
+```
+
+#### Wipe and build all recipe binaries
+
+```
+make repo_clean repo
+
+```
+
+#### Wipe the toolchain and download again
+
+```
+rm -rf prefix
+
+```
+
+```
+make prefix
+
+```
+
+
+Use Case: Commonly used to fix problems.
+#### Wipe the toolchain/recipe binaries and download/build them again
+
+```
+make clean all
+
+```
+
+
+Use Case: Commonly used to fix breaking changes on recipes.
+#### Wipe toolchain/recipe binaries and Podman container, update build system source and rebuild the system
+
+```
+make clean container_clean pull all
+
+```
+
+
+Use Case: Full build system binary cleanup and update to avoid most configuration breaking changes
+#### Wipe all recipe sources/binaries and download/build them again
+
+```
+make distclean all
+
+```
+
+
+Use Case: Fix source/binary breaking changes on recipes or save space.
+#### Use the "myfiles" recipe to insert your files on Redox image
+
+```
+mkdir recipes/other/myfiles/source
+
+```
+
+```
+nano config/$ARCH/your-config.toml
+
+```
+
+```
+[packages]
+myfiles = {}
+
+```
+
+```
+make rp.myfiles
+
+```
+
+
+Use Case: Quickly insert files on the Redox image or keep files between rebuilds.
+#### Disable a recipe on the filesystem configuration
+
+```
+nano config/$ARCH/your-config.toml
+
+```
+
+```
+#recipe-name = {}
+
+```
+
+
+Use Case: Mostly used if some default recipe is broken.
+#### Create logs
+
+```
+make some-command 2>&1 | tee file-name.log
+
+```
+
+
+Use Case: Report errors.
+#### Temporarily build the toolchain from source
+
+```
+make prefix PREFIX_BINARY=0
+
+```
+
+
+Use Case: Test toolchain fixes.
+#### Build and install a meta-package
+
+```
+make rp.meta-package,--with-package-deps
+
+```
+
+#### Build some filesystem configuration for some CPU architecture
+
+```
+make all CONFIG_NAME=your-config ARCH=$ARCH
+
+```
+
+
+Use Case: Quickly build Redox variants without manual intervention on configuration files.
+#### Build some filesystem configuration for some CPU architecture (using pre-built packages from the build server)
+
+
+(Much faster than the option above)
+```
+make all REPO_BINARY=1 CONFIG_NAME=your-config ARCH=$ARCH
+
+```
+
+
+Use Case: Quickly build Redox variants without system compilation and manual intervention on configuration files.
+#### Boot Redox on QEMU from a NVMe device
+
+```
+make qemu disk=nvme
+
+```
+
+#### Boot Redox on QEMU from a NVMe device with a custom number of CPU threads
+
+```
+make qemu disk=nvme QEMU_SMP=number
+
+```
+
+#### Boot Redox on QEMU from a NVMe device, a custom number of CPU threads and memory
+
+```
+make qemu disk=nvme QEMU_SMP=number QEMU_MEM=number-in-mb
+
+```

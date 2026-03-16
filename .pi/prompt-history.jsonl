@@ -350,3 +350,7 @@
 {"text":"let sdo as much in rust and nix as we can. no python","timestamp":1773674977496}
 {"text":"lets test our last update","timestamp":1773679341786}
 {"text":"what next?","timestamp":1773680000707}
+{"text":"what next?","timestamp":1773681598890}
+{"text":"1. Run the tiered checks — you just created test-quick/test-host/test-cross/test-vm.\n Run them to make sure everything passes after the split.\n 2. VM functional test — the 20 split test scripts haven't been validated in a real\n VM yet. A functional-test run would confirm nothing broke.","timestamp":1773681885789}
+{"text":"are we pulling in the redoxos book for reference? https://doc.redox-os.org/book/","timestamp":1773682971346}
+{"text":"2, 3","timestamp":1773683140388}
