@@ -4,7 +4,7 @@
 The init system SHALL activate the default generation's manifest after root mount and before userspace entry, restoring the generation's package profile and config files.
 
 #### Scenario: Boot with default-generation marker set
-- **WHEN** `/boot/default-generation` contains `3`
+- **WHEN** `/etc/redox-system/boot-default` contains `3`
 - **AND** generation 3 exists in `/etc/redox-system/generations/3/manifest.json`
 - **AND** the system boots
 - **THEN** `/nix/system/profile/bin/` reflects generation 3's package set
@@ -12,13 +12,13 @@ The init system SHALL activate the default generation's manifest after root moun
 - **AND** the system reaches userspace with generation 3 active
 
 #### Scenario: Boot without default-generation marker
-- **WHEN** `/boot/default-generation` does not exist
+- **WHEN** `/etc/redox-system/boot-default` does not exist
 - **AND** the system boots
 - **THEN** the system boots with the current on-disk manifest unchanged
 - **AND** no generation activation occurs during init
 
 #### Scenario: Boot with invalid generation reference
-- **WHEN** `/boot/default-generation` contains `99`
+- **WHEN** `/etc/redox-system/boot-default` contains `99`
 - **AND** generation 99 does not exist
 - **AND** the system boots
 - **THEN** a warning is logged to serial output
@@ -26,7 +26,7 @@ The init system SHALL activate the default generation's manifest after root moun
 - **AND** userspace entry proceeds normally
 
 #### Scenario: Boot with corrupt generation manifest
-- **WHEN** `/boot/default-generation` references a generation with invalid JSON in its manifest
+- **WHEN** `/etc/redox-system/boot-default` references a generation with invalid JSON in its manifest
 - **AND** the system boots
 - **THEN** a warning is logged to serial output
 - **AND** the system boots with the current on-disk manifest
@@ -66,15 +66,15 @@ The generation activation init script SHALL run after root mount (`50_rootfs`) a
 
 #### Scenario: Set next-boot generation
 - **WHEN** `snix system boot 3` is run
-- **THEN** `/boot/default-generation` contains `3`
+- **THEN** `/etc/redox-system/boot-default` contains `3`
 - **AND** the current running system is unchanged (manifest, profile, hostname all unchanged)
 
 #### Scenario: Show current boot default
 - **WHEN** `snix system boot` is run without arguments
-- **AND** `/boot/default-generation` contains `5`
+- **AND** `/etc/redox-system/boot-default` contains `5`
 - **THEN** the output shows that generation 5 is the boot default
 
 #### Scenario: Show no boot default
 - **WHEN** `snix system boot` is run without arguments
-- **AND** `/boot/default-generation` does not exist
+- **AND** `/etc/redox-system/boot-default` does not exist
 - **THEN** the output shows that no boot default is set (system boots with current manifest)

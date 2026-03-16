@@ -31,7 +31,7 @@ The init script runs `/bin/snix system activate-boot` which reads the default ge
 
 *Alternative: Activate in `90_exit_initfs` itself.* Rejected — `90_exit_initfs` sets PATH to include `/nix/system/profile/bin` and starts services. The profile must already reflect the correct generation before that happens.
 
-### 2. `/boot/default-generation` marker file
+### 2. `/etc/redox-system/boot-default` marker file
 
 A plain text file containing a generation ID (e.g., `5`). Written by `switch()`, `rollback()`, and the new `boot` subcommand. Read by the `85_generation_select` init script.
 
@@ -53,7 +53,7 @@ If `activate-boot` fails (corrupt manifest, missing store paths, permission erro
 
 ### 5. `snix system boot N` sets next-boot without live activation
 
-Writes `/boot/default-generation` to N but does NOT call `activate()`. The current running system is unchanged. On next reboot, `85_generation_select` activates generation N. This mirrors NixOS's `nixos-rebuild boot` (vs `nixos-rebuild switch`).
+Writes `/etc/redox-system/boot-default` to N but does NOT call `activate()`. The current running system is unchanged. On next reboot, `85_generation_select` activates generation N. This mirrors NixOS's `nixos-rebuild boot` (vs `nixos-rebuild switch`).
 
 Running `snix system boot` without an argument shows the current default.
 
@@ -65,4 +65,4 @@ Running `snix system boot` without an argument shows the current default.
 
 - **[Corrupt generation manifest]** If `/etc/redox-system/generations/N/manifest.json` is corrupt or has dangling store path references, `activate-boot` will fail. → Falls back to current manifest. Could add a `--verify` flag that checks store path existence before activating.
 
-- **[Default marker out of sync]** If generations are garbage collected but `/boot/default-generation` still references a deleted generation, boot activation fails. → Fallback handles this. GC should update the marker.
+- **[Default marker out of sync]** If generations are garbage collected but `/etc/redox-system/boot-default` still references a deleted generation, boot activation fails. → Fallback handles this. GC should update the marker.

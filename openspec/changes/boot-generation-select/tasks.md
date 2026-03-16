@@ -18,6 +18,6 @@
 
 ## 4. Integration test
 
-- [ ] 4.1 Create `boot-generation-select-test` profile: boots, rebuilds with hostname change, writes a different generation as boot default, then verifies `activate-boot` produces correct live state
-- [ ] 4.2 Create test runner (Cloud Hypervisor, serial log parsing, FUNC_TEST protocol)
-- [ ] 4.3 Wire test into flake apps and run to green
+- [x] 4.1 Create `boot-generation-select-test` profile: boots, rebuilds with hostname change, writes a different generation as boot default, then verifies `activate-boot` produces correct live state
+- [x] 4.2 Create test runner (Cloud Hypervisor, serial log parsing, FUNC_TEST protocol)
+- [x] 4.3 Wire test into flake apps and run to green

@@ -336,6 +336,16 @@ let
     defaultTimeout = 300; # rebuild + rollback may take a while
   };
 
+  bootGenerationSelectTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/boot-generation-select-test.nix ];
+    inherit extraPkgs;
+  };
+  bootGenerationSelectTest = mkFunctionalTest {
+    diskImage = bootGenerationSelectTestSystem.diskImage;
+    inherit bootloader;
+    defaultTimeout = 120;
+  };
+
   mkBridgeTest = modularPkgs.infrastructure.mkBridgeTest;
   bridgeTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/bridge-test.nix ];
@@ -478,6 +488,9 @@ in
 
     redox-rebuild-generations-test = rebuildGenerationsTestSystem.diskImage;
     rebuild-generations-test = rebuildGenerationsTest;
+
+    redox-boot-generation-select-test = bootGenerationSelectTestSystem.diskImage;
+    boot-generation-select-test = bootGenerationSelectTest;
 
     redox-https-cache-test = httpsCacheTestSystem.diskImage;
     inherit httpsCacheTest;

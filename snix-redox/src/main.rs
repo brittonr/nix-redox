@@ -771,26 +771,24 @@ fn main() {
             } => {
                 // If no --generation given, read from boot default marker
                 let gen_id = match generation {
-                    Some(id) => id,
+                    Some(id) => Some(id),
                     None => match system::read_boot_default(boot_default.as_deref()) {
-                        Ok(Some(id)) => id,
-                        Ok(None) => {
-                            // No marker file — nothing to activate, exit cleanly
-                            return Ok(());
-                        }
+                        Ok(id) => id,
                         Err(e) => {
                             eprintln!("boot: warning: could not read boot default: {e}");
-                            return Ok(());
+                            None
                         }
                     },
                 };
-                match system::activate_boot(gen_id, dir.as_deref(), manifest.as_deref()) {
-                    Ok(()) => Ok(()),
-                    Err(e) => {
-                        // At boot time, log warning and continue rather than halting
-                        eprintln!("boot: warning: generation activation failed: {e}");
+                match gen_id {
+                    Some(id) => {
+                        // At boot time, log warning on failure but don't halt
+                        if let Err(e) = system::activate_boot(id, dir.as_deref(), manifest.as_deref()) {
+                            eprintln!("boot: warning: generation activation failed: {e}");
+                        }
                         Ok(())
                     }
+                    None => Ok(()), // No marker — nothing to do
                 }
             }
             SystemCommand::Boot {

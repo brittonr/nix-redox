@@ -25,8 +25,10 @@ const MANIFEST_PATH: &str = "/etc/redox-system/manifest.json";
 /// Directory holding generation snapshots
 const GENERATIONS_DIR: &str = "/etc/redox-system/generations";
 
-/// Marker file: which generation to activate at boot
-const BOOT_DEFAULT_PATH: &str = "/boot/default-generation";
+/// Marker file: which generation to activate at boot.
+/// Stored alongside the generations directory on the rootfs (not in /boot/
+/// which may be read-only on initfs-based systems).
+const BOOT_DEFAULT_PATH: &str = "/etc/redox-system/boot-default";
 
 // ===== Manifest Schema =====
 

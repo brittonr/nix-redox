@@ -5,7 +5,7 @@ System generation switching currently only works at runtime via `snix system rol
 ## What Changes
 
 - Add an `85_generation_select` init script that activates a selected generation between root mount and userspace entry
-- `snix system switch` and `snix system rollback` write a `/boot/default-generation` marker so the chosen generation persists across reboots
+- `snix system switch` and `snix system rollback` write a `/etc/redox-system/boot-default` marker so the chosen generation persists across reboots
 - New `snix system boot` subcommand: set which generation to boot next without activating it live
 - Generation activation at boot time: read the marker, load the stored manifest, rebuild the profile, write config files — all before getty/shell starts
 - Fallback behavior: if the selected generation's activation fails, boot with the current on-disk manifest and log a warning
@@ -20,7 +20,7 @@ System generation switching currently only works at runtime via `snix system rol
 
 ## Impact
 
-- `snix-redox/src/system.rs`: switch() and rollback() write `/boot/default-generation`
+- `snix-redox/src/system.rs`: switch() and rollback() write `/etc/redox-system/boot-default`
 - `snix-redox/src/activate.rs`: extract activation into a standalone entry point callable from init
 - `nix/redox-system/modules/build/init-scripts.nix`: new `85_generation_select` init script
 - `nix/redox-system/profiles/`: new test profile for boot generation selection
