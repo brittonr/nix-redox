@@ -4,12 +4,13 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Recurring Mistakes
 
-### bootEssentialNames MUST include both pname AND parseDrvName variants
-- `isBootEssential` checks `pkg.pname or parseDrvName` — only ONE value per package.
-- If bootEssentialNames has only the parseDrvName but the pkg has a pname, it won't match.
-- Real base package: pname = "redox-base", parseDrvName = "redox-base-unstable" — NOT "redox-base-percrate-unstable".
-- Always include both variants. Verify with: `nix eval .#packages.x86_64-linux.<attr> --apply 'drv: { pname = drv.pname or null; parsed = (builtins.parseDrvName drv.name).name; }'`
-- Three checks now catch this: build-time assertion, `boot-essential-names` check, `rootTree-boot-critical-binaries` artifact test.
+### Package partitioning uses derivation references, not name strings
+- Boot vs managed partition uses `samePackage` (outPath equality), never pname/parseDrvName.
+- `bootPackages` is built from `pkgs.*` references directly (pkgs.base, pkgs.ion, etc.).
+- `selfHostingPackages` same pattern — pkgs.redox-rustc, pkgs.redox-llvm, etc.
+- `managedPackages` = systemPackages filtered by `!isBootPkg` (derivation identity).
+- If a package changes pname/name metadata, nothing breaks — we reference the derivation, not its name.
+- Old `bootEssentialNames` string list eliminated entirely.
 
 ### New files must be `git add`ed for flakes
 - Every session. New `.nix` or `.rs` files invisible to `nix build` until tracked.
