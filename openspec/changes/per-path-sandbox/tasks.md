@@ -2,8 +2,8 @@
 
 - [x] 1.1 Create a `sandbox-test` profile variant in `nix/redox-system/profiles/` that clones self-hosting-test but with `sandbox = true` and runs only the simplest builds first (hello world, single-crate with no deps, single-crate with 1 dep). Wire it as `nix run .#sandbox-test`.
 - [x] 1.2 Run `sandbox-test` and collect the first round of failures. Document each failure mode: which syscall, which flags, which path triggered the error.
-- [ ] 1.3 Add `translate_open_flags()` function to `handler.rs` that explicitly maps each Redox open flag (`O_RDONLY=0x10000`, `O_CREAT=0x02000000`, `O_RDWR`, `O_TRUNC`, `O_DIRECTORY`, `O_APPEND`) to the handler's write-intent determination. Replace the current inline `wants_write` logic in `openat`.
-- [ ] 1.4 Add recursive `mkdir_p` to `handler.rs` `openat`: when `O_CREAT` is set and the path is under a read-write prefix, create missing parent directories before opening the file. Only create dirs under `$out` and `$TMPDIR` — never under read-only prefixes.
+- [x] 1.3 Add `translate_open_flags()` function to `handler.rs` that explicitly maps each Redox open flag (`O_RDONLY=0x10000`, `O_CREAT=0x02000000`, `O_RDWR`, `O_TRUNC`, `O_DIRECTORY`, `O_APPEND`) to the handler's write-intent determination. Replace the current inline `wants_write` logic in `openat`.
+- [x] 1.4 Add recursive `mkdir_p` to `handler.rs` `openat`: when `O_CREAT` is set and the path is under a read-write prefix, create missing parent directories before opening the file. Only create dirs under `$out` and `$TMPDIR` — never under read-only prefixes.
 - [ ] 1.5 Re-run `sandbox-test` after flag translation and mkdir fixes. All simple builds should pass.
 
 ## 2. Fix Handler Issues for Complex Builds
@@ -11,7 +11,7 @@
 - [ ] 2.1 Add the full cargo build (single workspace crate with build.rs + proc-macro dep) to the `sandbox-test` profile. Run and collect failures.
 - [ ] 2.2 Fix `getdents` filtering for overlapping prefixes: when `$TMPDIR` and `$out` share a common ancestor (both under `/tmp/` or `/nix/store/`), directory listings must include entries from both. Verify with a test that has `$out=/nix/store/abc` and `$TMPDIR=/tmp/snix-build-1` and lists `/`.
 - [ ] 2.3 Fix `fpath` to return the correct scheme-prefixed path. Verify cargo's `--print=file-names` and rustc's `--emit=dep-info` produce correct paths through the proxy.
-- [ ] 2.4 Handle `O_APPEND` flag in `write`: when the builder opens with `O_APPEND`, seek to end before each write. Cargo log files and build script output use append mode.
+- [x] 2.4 Handle `O_APPEND` flag in `write`: when the builder opens with `O_APPEND`, seek to end before each write. Cargo log files and build script output use append mode.
 - [ ] 2.5 Add read timeout on real filesystem operations in the handler: if `real_file.read()` or `real_file.write()` takes more than 30 seconds, return `EIO` instead of blocking the event loop indefinitely. Use `File::set_read_timeout` where available, or wrap in a thread with a timeout.
 - [ ] 2.6 Handle `fstat` for files opened with `O_CREAT` where metadata changes after initial open (size grows as builder writes). The cached `size` field must update on every write, not just at open time. Verify the current implementation handles this (it does update `fh.size` in `write` — confirm this is sufficient for cargo's file-size checks).
 - [ ] 2.7 Add allow-list entries for proc-macro output directories. When a derivation's inputs include proc-macro crates, the proc-macro's output dir (under `/nix/store/`) must be on the read-only list. Verify `build_allow_list` already resolves these via `input_derivations` output paths.
