@@ -2868,6 +2868,26 @@ let
     rm /tmp/channel-list-out /tmp/upgrade-dry-out /tmp/upgrade-dry-err ^> /dev/null
     rm /tmp/upgrade-apply-err /tmp/gen-out ^> /dev/null
 
+    # ── Proxy Namespace Round-Trip Tests ──────────────────────────────
+    # Run the compiled proxy_namespace_test binary which exercises
+    # the full proxy I/O stack: mkns, register_scheme_to_ns, fork+setns,
+    # write through proxy, EACCES denial, getdents, read-back, latency.
+    # The binary emits FUNC_TEST: lines directly.
+
+    echo ""
+    echo "=== Proxy Namespace Round-Trip Tests ==="
+
+    if exists -f /nix/system/profile/bin/proxy_namespace_test
+        /nix/system/profile/bin/proxy_namespace_test
+    else
+        echo "FUNC_TEST:proxy-write-roundtrip:SKIP"
+        echo "FUNC_TEST:proxy-denies-passwd:SKIP"
+        echo "FUNC_TEST:proxy-getdents:SKIP"
+        echo "FUNC_TEST:proxy-readback:SKIP"
+        echo "FUNC_TEST:proxy-roundtrip:SKIP"
+        echo "  proxy_namespace_test binary not found"
+    end
+
     echo ""
     echo "FUNC_TESTS_COMPLETE"
     echo ""

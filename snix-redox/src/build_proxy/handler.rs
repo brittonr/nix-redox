@@ -257,6 +257,12 @@ pub struct BuildFsHandler {
     /// Opened before the proxy starts (while initnsmgr is free).
     /// All real file I/O uses `SYS_OPENAT(root_fd, ...)` to bypass initnsmgr.
     pub root_fd: usize,
+    /// True after at least one openat request from a client.
+    /// Guards the "all handles closed → exit" optimization so the
+    /// proxy doesn't exit if the scheme_root handle is closed before
+    /// any real client connects (race between cap_fd close and the
+    /// first builder file operation).
+    pub had_client_opens: bool,
 }
 
 impl BuildFsHandler {
@@ -265,6 +271,7 @@ impl BuildFsHandler {
             allow_list,
             handles: HashMap::new(),
             root_fd,
+            had_client_opens: false,
         }
     }
 
@@ -322,6 +329,9 @@ impl SchemeSync for BuildFsHandler {
         let path_str = path.trim_matches('/');
         let abs_path = self.resolve_path(path_str);
         let oflags = translate_open_flags(flags);
+
+        // A real client connected (not the scheme_root setup).
+        self.had_client_opens = true;
 
         // Check allow-list.
         let perm = self.check_with_symlink_resolution(&abs_path);

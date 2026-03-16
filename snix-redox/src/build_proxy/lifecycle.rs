@@ -225,7 +225,12 @@ fn run_event_loop(
         // the last client disconnects — on Redox, closing a scheme
         // socket fd from another thread does not reliably unblock a
         // blocked next_request() read.
-        if handler.handles.is_empty() {
+        //
+        // Guard: only exit after a real client has connected (at least
+        // one openat processed). Without this guard, the proxy can exit
+        // if the scheme_root handle's cap_fd close event arrives before
+        // the builder opens its first file.
+        if handler.had_client_opens && handler.handles.is_empty() {
             eprintln!("buildfs: all handles closed, exiting event loop");
             break;
         }
