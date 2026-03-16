@@ -303,20 +303,6 @@ adios:
 
       allDaemons = lib.unique (coreDaemons ++ initfsDaemons ++ (inputs.boot.initfsExtraBinaries or [ ]));
 
-      # Collect all system packages
-      allPackages = lib.unique (
-        (inputs.environment.systemPackages or [ ])
-        ++ (lib.optional (pkgs ? base) pkgs.base)
-        ++ (lib.optional (networkingEnabled && pkgs ? netutils) pkgs.netutils)
-        ++ (lib.optional (networkingEnabled && pkgs ? netcfg-setup) pkgs.netcfg-setup)
-        ++ (lib.optionals graphicsEnabled (
-          lib.optional (pkgs ? orbital) pkgs.orbital
-          ++ lib.optional (pkgs ? orbdata) pkgs.orbdata
-          ++ lib.optional (pkgs ? orbterm) pkgs.orbterm
-          ++ lib.optional (pkgs ? orbutils) pkgs.orbutils
-        ))
-      );
-
       # ===== STORE-BASED PACKAGE MANAGEMENT =====
       # Inspired by NixOS's /run/current-system/sw model.
       # Packages live in /nix/store/<hash>-<name>/ and are symlinked into
@@ -326,66 +312,54 @@ adios:
       # Get Nix store path basename for a package (e.g. "abc123-ripgrep-unstable")
       pkgStoreName = pkg: builtins.baseNameOf (toString pkg);
 
+      # Compare two derivations by output path (store identity).
+      # Two derivations with the same outPath are the same build artifact,
+      # regardless of pname, name, or any other metadata.
+      samePackage = a: b: toString a == toString b;
+
       # Boot-essential packages: flat-copied to /bin/ for init scripts and early boot.
       # These survive generation switches — they're always available.
-      # Matching uses pkg.pname first, then falls back to parseDrvName. Since most
-      # packages set pname, we include BOTH the pname AND parseDrvName variants so
-      # packages match regardless of which attribute they expose. Verify with:
-      #   nix eval .#packages.x86_64-linux.<attr> --apply 'drv: { pname = drv.pname or null; parsed = (builtins.parseDrvName drv.name).name; }'
-      bootEssentialNames = [
-        # base: pname = "redox-base", parseDrvName = "redox-base-unstable"
-        "redox-base"
-        "redox-base-unstable"
-        "redox-base-percrate-unstable"
-        # ion: pname = "ion-shell", parseDrvName = "rust_ion-shell"
-        "ion-shell"
-        "rust_ion-shell"
-        # uutils: pname = "redox-uutils"
-        "redox-uutils"
-        # userutils: pname = "userutils", parseDrvName = "rust_userutils"
-        "userutils"
-        "rust_userutils"
-        # netutils: pname = "netutils", parseDrvName = "netutils-unstable"
-        "netutils"
-        "netutils-unstable"
-        # netcfg-setup: pname = "netcfg-setup"
-        "netcfg-setup"
-        # snix: pname = "snix-redox", parseDrvName = "rust_snix-redox"
-        "snix-redox"
-        "rust_snix-redox"
-        # graphics (if enabled)
-        "orbital"
-        "orbital-unstable"
-        "orbdata"
-        "orbdata-unstable"
-        "orbterm"
-        "orbterm-unstable"
-        "orbutils"
-        "orbutils-unstable"
-      ];
+      #
+      # Listed by DERIVATION REFERENCE (pkgs.foo), not by name string.
+      # This makes the partition immune to pname/parseDrvName changes —
+      # if pkgs.base changes metadata, it still goes to /bin/ because we
+      # reference the derivation itself, not its name.
+      bootPackages = lib.unique (
+        (lib.optional (pkgs ? base) pkgs.base)
+        ++ (lib.optional (pkgs ? ion) pkgs.ion)
+        ++ (lib.optional (pkgs ? uutils) pkgs.uutils)
+        ++ (lib.optional (pkgs ? userutils) pkgs.userutils)
+        ++ (lib.optional (networkingEnabled && pkgs ? netutils) pkgs.netutils)
+        ++ (lib.optional (networkingEnabled && pkgs ? netcfg-setup) pkgs.netcfg-setup)
+        ++ (lib.optional (pkgs ? snix) pkgs.snix)
+        ++ (lib.optionals graphicsEnabled (
+          lib.optional (pkgs ? orbital) pkgs.orbital
+          ++ lib.optional (pkgs ? orbdata) pkgs.orbdata
+          ++ lib.optional (pkgs ? orbterm) pkgs.orbterm
+          ++ lib.optional (pkgs ? orbutils) pkgs.orbutils
+        ))
+      );
 
-      isBootEssential =
-        pkg:
-        let
-          name = pkg.pname or (builtins.parseDrvName pkg.name).name;
-        in
-        builtins.elem name bootEssentialNames;
+      # Self-hosting packages: need full store copy (lib/, sysroot/, include/).
+      # Same pattern — derivation references, not name strings.
+      selfHostingPackages = lib.unique (
+        lib.optional (pkgs ? redox-rustc) pkgs.redox-rustc
+        ++ lib.optional (pkgs ? redox-llvm) pkgs.redox-llvm
+        ++ lib.optional (pkgs ? redox-sysroot) pkgs.redox-sysroot
+        ++ lib.optional (pkgs ? redox-cmake) pkgs.redox-cmake
+        ++ lib.optional (pkgs ? redox-libcxx) pkgs.redox-libcxx
+        ++ lib.optional (pkgs ? redox-libstdcxx-shim) pkgs.redox-libstdcxx-shim
+      );
 
-      bootPackages = builtins.filter isBootEssential allPackages;
+      isSelfHostingPkg = pkg: builtins.any (sh: samePackage sh pkg) selfHostingPackages;
 
-      # Names from bootEssentialNames that did NOT match any package.
-      # Used for assertion: catches stale or mistyped names.
-      matchedBootNames = builtins.filter (
-        bname: builtins.any (pkg: (pkg.pname or (builtins.parseDrvName pkg.name).name) == bname) allPackages
-      ) bootEssentialNames;
-
-      unmatchedBootNames = builtins.filter (
-        bname: !builtins.elem bname matchedBootNames
-      ) bootEssentialNames;
-
-      # Managed packages: everything NOT boot-essential goes in the system profile.
+      # Managed packages: everything in systemPackages that isn't boot-essential.
       # These appear/disappear when switching generations.
-      managedPackages = builtins.filter (pkg: !isBootEssential pkg) allPackages;
+      isBootPkg = pkg: builtins.any (b: samePackage b pkg) bootPackages;
+      managedPackages = builtins.filter (pkg: !isBootPkg pkg) (inputs.environment.systemPackages or [ ]);
+
+      # All packages: union of boot + managed (used for store population and manifest).
+      allPackages = lib.unique (bootPackages ++ managedPackages);
 
       # Check if userutils (getty, login) is installed on rootFS
       # When present, startup.sh runs a login loop for serial console
@@ -491,25 +465,10 @@ adios:
           assertion = (inputs.power.idleTimeoutMinutes or 30) > 0;
           message = "power.idleTimeoutMinutes must be positive.";
         }
-        # Boot-essential package assertions — prevent silent exclusion from /bin/.
-        # If bootEssentialNames has a typo or package metadata changes, the name
-        # won't match any package and binaries silently go to /nix/system/profile
-        # instead of /bin/. That breaks init scripts that hardcode /bin/ paths.
+        # Boot-essential packages must include base (init, logd, ipcd, ptyd).
         {
-          assertion = bootPackages != [ ];
-          message = "No packages matched bootEssentialNames. Critical binaries (init, ion, snix) would be missing from /bin/. Check that bootEssentialNames entries match pkg.pname or parseDrvName output.";
-        }
-        {
-          assertion =
-            let getName = pkg: pkg.pname or (builtins.parseDrvName pkg.name).name;
-                baseNames = [ "redox-base" "redox-base-unstable" "redox-base-percrate-unstable" ];
-            in builtins.any (pkg: builtins.elem (getName pkg) baseNames) allPackages;
-          message = "Base package not found in allPackages. Init daemons (init, logd, ipcd, ptyd) would be missing from /bin/.";
-        }
-        {
-          assertion = unmatchedBootNames == [ ]
-                      || builtins.length unmatchedBootNames < builtins.length bootEssentialNames;
-          message = "All bootEssentialNames are unmatched — no boot packages would end up in /bin/. Unmatched: ${lib.concatStringsSep ", " unmatchedBootNames}";
+          assertion = pkgs ? base;
+          message = "pkgs.base is missing. Init daemons (init, logd, ipcd, ptyd) would be absent from /bin/.";
         }
       ];
 
@@ -528,9 +487,6 @@ adios:
         (lib.optionalString (
           allowRemoteRoot && networkingEnabled
         ) "Remote root login is allowed with networking enabled. Consider disabling for production.")
-        (lib.optionalString (unmatchedBootNames != [ ])
-          "bootEssentialNames has entries that don't match any package: ${lib.concatStringsSep ", " unmatchedBootNames}. These may be stale after a package rename. Verify with: nix eval .#packages.x86_64-linux.<attr> --apply 'drv: { pname = drv.pname or null; parsed = (builtins.parseDrvName drv.name).name; }'"
-        )
       ];
 
       # Process assertions — throw at eval time if any fail
@@ -1200,23 +1156,8 @@ adios:
       # All packages: stored in /nix/store/<hash>-<name>/ with content-addressed paths
       # Copies bin/, lib/, sysroot/, include/, share/, and etc/ directories.
       # Most packages only have bin/; toolchain packages (rustc, LLVM) need lib/.
-      # Packages whose full contents (lib/, include/, sysroot/, share/, etc/) should be
-      # copied into the store, not just bin/. These are self-hosting toolchain packages.
-      selfHostingPackageNames = [
-        "rustc-redox"
-        "llvm-redox"
-        "redox-sysroot"
-        "cmake-redox"
-        "libcxx-redox"
-        "libstdcxx-redox-shim"
-      ];
-      isSelfHostingPkg =
-        pkg:
-        let
-          name = pkg.pname or (builtins.parseDrvName pkg.name).name;
-        in
-        builtins.elem name selfHostingPackageNames;
-
+      # selfHostingPackages and isSelfHostingPkg are defined above alongside
+      # bootPackages — both use derivation references, not name strings.
       mkStorePackages = lib.concatStringsSep "\n" (
         builtins.map (pkg: ''
           pkg_store="$out/nix/store/${pkgStoreName pkg}"
@@ -1448,28 +1389,11 @@ adios:
       # ===== SELF-HOSTING TOOLCHAIN =====
       # Detect whether the Rust toolchain and sysroot are present.
       # When present, create well-known paths and cargo configuration.
-      hasSelfHosting =
-        let
-          hasRustc = builtins.any (
-            p: (p.pname or (builtins.parseDrvName p.name).name) == "rustc-redox"
-          ) allPackages;
-          hasSysroot = builtins.any (
-            p: (p.pname or (builtins.parseDrvName p.name).name) == "redox-sysroot"
-          ) allPackages;
-        in
-        hasRustc && hasSysroot;
-
-      sysrootPkg = lib.findFirst (
-        p: (p.pname or (builtins.parseDrvName p.name).name) == "redox-sysroot"
-      ) null allPackages;
-
-      rustcPkg = lib.findFirst (
-        p: (p.pname or (builtins.parseDrvName p.name).name) == "rustc-redox"
-      ) null allPackages;
-
-      libstdcxxShimPkg = lib.findFirst (
-        p: (p.pname or (builtins.parseDrvName p.name).name) == "libstdcxx-redox-shim"
-      ) null allPackages;
+      # Uses pkgs.* references directly — no name string matching.
+      sysrootPkg = pkgs.redox-sysroot or null;
+      rustcPkg = pkgs.redox-rustc or null;
+      libstdcxxShimPkg = pkgs.redox-libstdcxx-shim or null;
+      hasSelfHosting = rustcPkg != null && sysrootPkg != null;
 
       # ===== BINARY CACHE =====
       # Generate a local Nix binary cache from binaryCachePackages.

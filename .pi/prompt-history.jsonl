@@ -337,3 +337,5 @@
 {"text":"are we sure  - Scheme \"file\" not found in namespace — per AGENTS.md, normal\n during early boot before redoxfs mounts rootfs is normal?","timestamp":1773628514200}
 {"text":"try to login","timestamp":1773628660274}
 {"text":"how can we add in checks or tests to prevent the last issue we had","timestamp":1773628941078}
+{"text":"is there any way we can solve this permanmently in how we build with nix ?","timestamp":1773629359122}
+{"text":"do it","timestamp":1773629453557}
