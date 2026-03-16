@@ -77,6 +77,9 @@ let
       }
     );
 
+    fix-elf-palign = import ./host/fix-elf-palign.nix { inherit pkgs; };
+    hash-manifest = import ./host/hash-manifest.nix { inherit pkgs; };
+
     # Combined host tools
     fstools = pkgs.symlinkJoin {
       name = "redox-fstools";

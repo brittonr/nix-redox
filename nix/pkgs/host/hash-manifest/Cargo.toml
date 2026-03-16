@@ -1,0 +1,13 @@
+[package]
+name = "hash-manifest"
+version = "0.1.0"
+edition = "2021"
+description = "BLAKE3 manifest hasher for RedoxOS rootTree"
+
+[dependencies]
+blake3 = "1"
+serde_json = "1"
+walkdir = "2"
+
+[dev-dependencies]
+tempfile = "3"

@@ -1,0 +1,11 @@
+[package]
+name = "fix-elf-palign"
+version = "0.1.0"
+edition = "2021"
+description = "Patch ELF program headers with p_align=0 to p_align=1"
+
+# No external dependencies — std only
+[dependencies]
+
+[dev-dependencies]
+tempfile = "3"
