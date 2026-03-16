@@ -329,15 +329,42 @@ pkgs.stdenv.mkDerivation {
   installPhase = ''
     ninja -C build install
 
-    # Create convenience symlinks
+    # Strip to only the binaries needed for self-hosting on Redox.
+    # The full install has 103 binaries (1.3 GB); we only need ~8 (200 MB).
     cd $out/bin
-    ln -sf clang clang++
-    ln -sf lld ld.lld 2>/dev/null || true
+    keepBins=(
+      clang-21    # C/C++ compiler (real binary)
+      lld         # linker (real binary)
+      llvm-ar     # archive tool
+      llvm-nm     # symbol lister
+      llvm-objcopy  # binary manipulation
+      llvm-objdump  # disassembler
+      llvm-readobj  # ELF reader
+    )
+    for f in *; do
+      keep=0
+      for k in "''${keepBins[@]}"; do
+        [ "$f" = "$k" ] && keep=1 && break
+      done
+      # Also keep symlinks that point to kept binaries
+      if [ -L "$f" ]; then
+        target=$(readlink "$f")
+        for k in "''${keepBins[@]}"; do
+          [ "$target" = "$k" ] && keep=1 && break
+        done
+      fi
+      [ "$keep" = "0" ] && rm -f "$f"
+    done
+
+    # Recreate essential symlinks
+    ln -sf clang-21 clang
+    ln -sf clang-21 clang++
+    ln -sf lld ld.lld
+    ln -sf llvm-objcopy llvm-strip
+    ln -sf llvm-readobj llvm-readelf
 
     echo "=== Installed binaries ==="
-    ls -la $out/bin/ | head -20 || true
-    echo "=== Binary sizes ==="
-    du -sh $out/bin/clang $out/bin/lld $out/bin/llvm-ar 2>/dev/null || true
+    ls -la $out/bin/
     echo "=== Total size ==="
     du -sh $out/
   '';
