@@ -383,3 +383,7 @@
 {"text":"what next","timestamp":1773696937174}
 {"text":"can we prove our recent change that allows rebuilding inside redox (albeit through the host) actually updates live? this would mean we dont have to keep building images right?","timestamp":1773697178528}
 {"text":"prove rollbacks and switching to previous generations","timestamp":1773698884610}
+{"text":"can we do this on boot like nixos?","timestamp":1773699381244}
+{"text":"what is the most \"correct\" way to do this?","timestamp":1773699858365}
+{"text":"continue","timestamp":1773699977404}
+{"text":"yes","timestamp":1773700549956}
