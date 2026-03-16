@@ -110,25 +110,26 @@ Disk images are built through a declarative module system powered by
 Unlike NixOS's `lib.evalModules`, adios modules declare **explicit inputs** by
 path — no global `config` namespace, no `lib.mkOption`/`lib.mkIf` machinery.
 
-### Module Tree (16 modules)
+### Module Tree (17 modules)
 
 ```
-/pkgs          Package injection (pkgs, hostPkgs, nixpkgsLib)
-/boot          Kernel, bootloader, initfs config
-/hardware      Driver selection (enum-typed)
-/networking    Network mode, DNS, interfaces
-/environment   Packages, shell aliases, variables
-/filesystem    Directory layout, symlinks
-/graphics      Orbital desktop config
-/services      Init scripts, startup
-/users         User accounts (struct-typed), groups
-/security      Namespace access, setuid, policies
-/time          Hostname, timezone, NTP
-/programs      Ion, helix, editor, httpd config
-/logging       Log levels, destinations, retention
-/power         ACPI, power/idle actions, panic behavior
-/snix          stored/profiled daemons, build sandboxing
-/build         Produces rootTree, initfs, diskImage (inputs: all above)
+/pkgs              Package injection (pkgs, hostPkgs, nixpkgsLib)
+/boot              Kernel, bootloader, initfs config
+/hardware          Driver selection (enum-typed)
+/networking        Network mode, DNS, interfaces
+/environment       Packages, shell aliases, variables
+/filesystem        Directory layout, symlinks
+/graphics          Orbital desktop config
+/services          Init scripts, startup
+/users             User accounts (struct-typed), groups
+/security          Namespace access, setuid, policies
+/time              Hostname, timezone, NTP
+/programs          Ion, helix, editor, httpd config
+/logging           Log levels, destinations, retention
+/power             ACPI, power/idle actions, panic behavior
+/snix              stored/profiled daemons, build sandboxing
+/virtualisation    VM-specific config (virtio, shared fs)
+/build             Produces rootTree, initfs, diskImage (inputs: all above)
 ```
 
 ### Type System
@@ -176,15 +177,15 @@ redoxSystem {
 
 **snix** is a Nix evaluator and package builder that runs natively on Redox OS.
 It uses snix-eval (a bytecode VM) for Nix expression evaluation and implements
-store path computation, NAR serialization, and unsandboxed local builds.
+store path computation, NAR serialization, and sandboxed local builds.
 
 ### What works
 
 - **Eval**: Full Nix language including `derivationStrict`, `builtins.fetchurl`,
   `builtins.fetchTarball`, `import`, `builtins.toJSON`, string interpolation
-- **Build**: Local unsandboxed builds — evaluate a derivation, compute store paths,
-  run the builder, register outputs in PathInfoDb
-- **Install**: From local binary cache or remote HTTP cache
+- **Build**: Local builds with per-path filesystem proxy sandbox — evaluate a
+  derivation, compute store paths, run the builder, register outputs in PathInfoDb
+- **Install**: From local binary cache or remote HTTP/HTTPS cache
 - **Flake installables**: `snix build .#ripgrep` — resolve flake.lock, fetch inputs,
   evaluate, build
 - **Store management**: list, info, closure, GC, roots, verify
@@ -242,18 +243,10 @@ Redox: `rustc` (with `librustc_driver.so`), `cargo`, `lld`, `llvm-ar`, and
 - `rustc` compiles Rust source to ELF binaries
 - `cargo build` with dependencies, workspaces, proc-macros, build scripts
 - Proc-macro `.so` files load correctly through `ld_so`
-- `snix build .#ripgrep` — 33 crates compiled in ~100 seconds
-- snix compiles itself (168 crates, ~7 minutes with JOBS=1)
-
-### Known limits
-
-- **JOBS=1 required**: Parallel compilation (JOBS>1) hangs after ~136 crates.
-  Root cause is in Redox's pipe/scheduling, not the jobserver.
-- **Intermittent cargo startup hangs**: `cargo-build-safe` wrapper with 90s
-  timeout + retry handles this.
-- **`--env-set` workaround**: `env!("CARGO_PKG_*")` macros in proc-macro crates
-  need `--env-set` flags because DSO-linked processes don't reliably propagate
-  env vars through `exec()`.
+- Parallel compilation at JOBS=2 (fork-lock + lld-wrapper fixes)
+- `snix build .#ripgrep` — 33 crates compiled at JOBS=2
+- snix compiles itself (168 crates at JOBS=2)
+- Per-path filesystem proxy sandbox enforces declared build inputs
 
 ### Test suite
 
@@ -316,19 +309,19 @@ automatically with the development profile.
 # Automated boot test (verifies boot milestones on serial)
 nix run .#boot-test
 
-# Functional test (boots VM, runs 133 in-guest tests)
+# Functional test (boots VM, runs 152 in-guest tests)
 nix run .#functional-test
 
 # Self-hosting test (boots VM, runs 66 compilation tests)
 nix run .#self-hosting-test
 
-# Scheme-native test (boots VM, tests stored + profiled daemons, 23 tests)
+# Scheme-native test (boots VM, tests stored + profiled daemons, 22 tests)
 nix run .#scheme-native-test
 
-# Network test (boots VM with QEMU SLiRP, tests HTTP install, 8 tests)
+# Network test (boots VM with QEMU SLiRP, tests HTTP install, 9 tests)
 nix run .#network-test
 
-# Bridge test (pushes packages via virtio-fs, tests snix install, 30 tests)
+# Bridge test (pushes packages via virtio-fs, tests snix install, 45 tests)
 nix run .#bridge-test
 
 # Module system checks (fast, no cross-compilation)
@@ -344,13 +337,13 @@ nix flake check
 
 | Suite | Tests | What it covers |
 |---|---|---|
-| Host unit tests | 464 | snix internals: eval, store, pathinfo, install, build, activate, cache, flake |
+| Host unit tests | 504 | snix internals: eval, store, pathinfo, install, build, activate, cache, flake |
 | Nix eval checks | 163 | Module system: profiles, types, assertions, artifacts |
-| Functional VM | 133 | In-guest: shell, filesystem, config, CLI tools, env propagation, snix eval/build |
+| Functional VM | 152 | In-guest: shell, filesystem, config, CLI tools, env propagation, snix eval/build |
 | Self-hosting VM | 66 | Toolchain: rustc, cargo, proc-macros, build scripts, snix self-compile |
-| Scheme-native VM | 23 | Daemon lifecycle: stored, profiled, live install, .control mutations |
-| Network VM | 8 | DHCP, connectivity, HTTP cache search/install/execute |
-| Bridge VM | 30 | virtio-fs: push, search, install, remove, live push, reinstall |
+| Scheme-native VM | 22 | Daemon lifecycle: stored, profiled, live install, .control mutations |
+| Network VM | 9 | DHCP, connectivity, HTTP cache search/install/execute |
+| Bridge VM | 45 | virtio-fs: push, search, install, remove, live push, reinstall |
 
 ## Architecture
 
@@ -388,7 +381,7 @@ nix/
 ├── redox-system/          Adios module system
 │   ├── default.nix        redoxSystem entry point with .extend chaining
 │   ├── lib.nix            Redox helpers (passwd/group format, Argon2 hashing)
-│   ├── modules/           16 adios modules (auto-imported)
+│   ├── modules/           17 adios modules (auto-imported)
 │   ├── profiles/          Option presets + test profiles
 │   └── examples/          Example configurations
 ├── vendor/
