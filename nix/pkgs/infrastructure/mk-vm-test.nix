@@ -93,6 +93,10 @@ let
         echo "$log" | tr -d '\r' | ${grep} "^$prefix:" 2>/dev/null \
           | tail -n +"$((LAST_PARSED_LINE + 1))" \
           | while IFS=: read -r _marker name result reason; do
+              # If filter is set, skip tests that don't match
+              if [ -n "$TEST_FILTER" ] && ! echo "$name" | ${grep} -q "$TEST_FILTER"; then
+                continue
+              fi
               case "$result" in
                 PASS) echo "    ''${GREEN}✓''${RESET} $name" ;;
                 FAIL) echo "    ''${RED}✗''${RESET} $name: $reason" ;;
@@ -106,9 +110,23 @@ let
     # === Count test results from serial log ===
     count_results() {
       local prefix="$1"
-      PASS_COUNT=$(${grep} -c "^$prefix:.*:PASS" "$SERIAL_LOG" 2>/dev/null) || PASS_COUNT=0
-      FAIL_COUNT=$(${grep} -c "^$prefix:.*:FAIL" "$SERIAL_LOG" 2>/dev/null) || FAIL_COUNT=0
-      SKIP_COUNT=$(${grep} -c "^$prefix:.*:SKIP" "$SERIAL_LOG" 2>/dev/null) || SKIP_COUNT=0
+      if [ -n "$TEST_FILTER" ]; then
+        # Filter and count matching tests
+        PASS_COUNT=$(${grep} "^$prefix:.*:PASS" "$SERIAL_LOG" 2>/dev/null | while IFS=: read -r _marker name _result; do
+          if echo "$name" | ${grep} -q "$TEST_FILTER"; then echo "$name"; fi
+        done | wc -l) || PASS_COUNT=0
+        FAIL_COUNT=$(${grep} "^$prefix:.*:FAIL" "$SERIAL_LOG" 2>/dev/null | while IFS=: read -r _marker name _result; do
+          if echo "$name" | ${grep} -q "$TEST_FILTER"; then echo "$name"; fi
+        done | wc -l) || FAIL_COUNT=0
+        SKIP_COUNT=$(${grep} "^$prefix:.*:SKIP" "$SERIAL_LOG" 2>/dev/null | while IFS=: read -r _marker name _result; do
+          if echo "$name" | ${grep} -q "$TEST_FILTER"; then echo "$name"; fi
+        done | wc -l) || SKIP_COUNT=0
+      else
+        # Count all tests
+        PASS_COUNT=$(${grep} -c "^$prefix:.*:PASS" "$SERIAL_LOG" 2>/dev/null) || PASS_COUNT=0
+        FAIL_COUNT=$(${grep} -c "^$prefix:.*:FAIL" "$SERIAL_LOG" 2>/dev/null) || FAIL_COUNT=0
+        SKIP_COUNT=$(${grep} -c "^$prefix:.*:SKIP" "$SERIAL_LOG" 2>/dev/null) || SKIP_COUNT=0
+      fi
       TOTAL_COUNT=$((PASS_COUNT + FAIL_COUNT + SKIP_COUNT))
     }
 
@@ -132,6 +150,10 @@ let
         echo "  ''${RED}Failed tests:''${RESET}"
         ${grep} "^$TEST_PREFIX:.*:FAIL" "$SERIAL_LOG" 2>/dev/null | tr -d '\r' \
           | while IFS=: read -r _marker name _fail reason; do
+              # If filter is set, skip tests that don't match
+              if [ -n "$TEST_FILTER" ] && ! echo "$name" | ${grep} -q "$TEST_FILTER"; then
+                continue
+              fi
               echo "    ✗ $name: $reason"
             done
         echo ""
@@ -282,6 +304,7 @@ in
       TIMEOUT="''${${timeoutEnvVar}:-${toString defaultTimeout}}"
       MODE="${defaultMode}"
       VERBOSE=0
+      TEST_FILTER=""
 
       usage() {
         echo "Usage: ${name} [OPTIONS]"
@@ -292,6 +315,7 @@ in
         echo "  --qemu         Force QEMU TCG mode (no KVM required)"
         echo "  --ch           Force Cloud Hypervisor mode (KVM required)"
         echo "  --timeout SEC  Set timeout (default: ${toString defaultTimeout}, env: ${timeoutEnvVar})"
+        echo "  --filter PAT   Only run tests matching pattern (substring match)"
         echo "  --verbose      Show serial output in real time"
         echo "  --help         Show this help"
         exit 0
@@ -302,6 +326,7 @@ in
           --qemu)    MODE="qemu"; shift ;;
           --ch)      MODE="ch"; shift ;;
           --timeout) TIMEOUT="$2"; shift 2 ;;
+          --filter)  TEST_FILTER="$2"; shift 2 ;;
           --verbose) VERBOSE=1; shift ;;
           --help)    usage ;;
           *)         echo "Unknown option: $1"; usage ;;

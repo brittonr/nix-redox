@@ -1,0 +1,57 @@
+# ── Shell Execution ────────────────────────────────────────
+# These verify Ion shell actually works on the running kernel.
+
+# Test: echo produces correct output
+let result = $(echo "test123")
+if test $result = "test123"
+    echo "FUNC_TEST:echo:PASS"
+else
+    echo "FUNC_TEST:echo:FAIL:got $result"
+end
+
+# Test: variable assignment and expansion
+let myvar = "hello"
+if test $myvar = "hello"
+    echo "FUNC_TEST:variables:PASS"
+else
+    echo "FUNC_TEST:variables:FAIL:got $myvar"
+end
+
+# Test: command substitution captures output
+let pwd_out = $(pwd)
+if test -n $pwd_out
+    echo "FUNC_TEST:substitution:PASS"
+else
+    echo "FUNC_TEST:substitution:FAIL:empty"
+end
+
+# Test: pipeline between processes
+let result = $(echo "foo" | cat)
+if test $result = "foo"
+    echo "FUNC_TEST:pipeline:PASS"
+else
+    echo "FUNC_TEST:pipeline:FAIL:got $result"
+end
+
+# Test: exit status captured
+true
+if test $? = 0
+    echo "FUNC_TEST:exit-status:PASS"
+else
+    echo "FUNC_TEST:exit-status:FAIL"
+end
+
+# Test: if/else control flow
+let val = "expected"
+let passed = "no"
+if test $val = "expected"
+    let passed = "yes"
+else
+    let passed = "no"
+end
+if test $passed = "yes"
+    echo "FUNC_TEST:if-else:PASS"
+else
+    echo "FUNC_TEST:if-else:FAIL"
+end
+

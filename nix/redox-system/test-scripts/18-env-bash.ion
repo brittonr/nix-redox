@@ -1,0 +1,31 @@
+# ── Environment Variable Propagation Test ────────────────────────
+# Verifies that env vars set via Command::env() propagate to child
+# processes. This tests the __relibc_init_environ injection path.
+
+echo "--- env-propagation ---"
+/nix/system/profile/bin/bash -c '
+  # Set a custom env var and verify the child sees it
+  TEST_ENVPROP_VALUE="redox_env_test_42"
+  export TEST_ENVPROP_VALUE
+  # Run bash as a child and check the variable
+  CHILD_RESULT=$(/nix/system/profile/bin/bash -c "echo \$TEST_ENVPROP_VALUE")
+  if [ "$CHILD_RESULT" = "redox_env_test_42" ]; then
+    echo "FUNC_TEST:env-propagation:PASS"
+  else
+    echo "FUNC_TEST:env-propagation:FAIL:expected=redox_env_test_42 got=$CHILD_RESULT"
+  fi
+'
+
+echo "--- env-new-var-propagation ---"
+/nix/system/profile/bin/bash -c '
+  # Test that a NEW env var (not inherited) propagates to child
+  # This is the pattern Command::env("KEY", "value") uses
+  export NEW_REDOX_TEST_VAR="propagation_check_ok"
+  GOT=$(/nix/system/profile/bin/bash -c "echo \$NEW_REDOX_TEST_VAR")
+  if [ "$GOT" = "propagation_check_ok" ]; then
+    echo "FUNC_TEST:env-new-var-propagation:PASS"
+  else
+    echo "FUNC_TEST:env-new-var-propagation:FAIL:expected=propagation_check_ok got=$GOT"
+  fi
+'
+

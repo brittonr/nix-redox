@@ -1,0 +1,113 @@
+# ── Fetcher Builtins (builtins.fetchurl / builtins.fetchTarball) ────
+echo ""
+echo "=== Fetcher Builtins ==="
+
+# Test: builtins.fetchurl returns a store path
+echo "--- fetchurl-store-path ---"
+/bin/snix eval --expr 'builtins.fetchurl { url = "https://example.com/hello.txt"; sha256 = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }' > /tmp/fetch_out ^> /tmp/fetch_err
+if test $? = 0
+    let fetch_result = $(cat /tmp/fetch_out)
+    if test -n "$fetch_result"
+        echo "FUNC_TEST:fetchurl-store-path:PASS"
+    else
+        echo "FUNC_TEST:fetchurl-store-path:FAIL:empty result"
+    end
+else
+    echo "FUNC_TEST:fetchurl-store-path:FAIL"
+    cat /tmp/fetch_err
+end
+
+# Test: fetchurl path starts with /nix/store/
+echo "--- fetchurl-is-nix-store ---"
+let fetch_raw = $(/bin/snix eval --raw --expr 'builtins.fetchurl { url = "https://example.com/test.txt"; sha256 = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }')
+if test -n "$fetch_raw"
+    /nix/system/profile/bin/bash -c 'case "$1" in /nix/store/*) echo "FUNC_TEST:fetchurl-is-nix-store:PASS" ;; *) echo "FUNC_TEST:fetchurl-is-nix-store:FAIL:$1" ;; esac' _ "$fetch_raw"
+else
+    echo "FUNC_TEST:fetchurl-is-nix-store:FAIL:empty"
+end
+
+# Test: same hash + same name = same path (FOD determinism)
+echo "--- fetchurl-fod-deterministic ---"
+let fod1 = $(/bin/snix eval --raw --expr 'builtins.fetchurl { url = "https://mirror1.example.com/f"; sha256 = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; name = "f"; }')
+let fod2 = $(/bin/snix eval --raw --expr 'builtins.fetchurl { url = "https://mirror2.example.com/f"; sha256 = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; name = "f"; }')
+if test "$fod1" = "$fod2"
+    echo "FUNC_TEST:fetchurl-fod-deterministic:PASS"
+else
+    echo "FUNC_TEST:fetchurl-fod-deterministic:FAIL:$fod1 != $fod2"
+end
+
+# Test: different hash = different path
+echo "--- fetchurl-different-hash ---"
+let diff1 = $(/bin/snix eval --raw --expr 'builtins.fetchurl { url = "https://a.com/f"; sha256 = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; name = "f"; }')
+let diff2 = $(/bin/snix eval --raw --expr 'builtins.fetchurl { url = "https://a.com/f"; sha256 = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="; name = "f"; }')
+if not test "$diff1" = "$diff2"
+    echo "FUNC_TEST:fetchurl-different-hash:PASS"
+else
+    echo "FUNC_TEST:fetchurl-different-hash:FAIL:same path"
+end
+
+# Test: builtins.fetchTarball returns a store path
+echo "--- fetchtarball-store-path ---"
+/bin/snix eval --expr 'builtins.fetchTarball { url = "https://example.com/src.tar.gz"; sha256 = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }' > /tmp/tarball_out ^> /tmp/tarball_err
+if test $? = 0
+    echo "FUNC_TEST:fetchtarball-store-path:PASS"
+else
+    echo "FUNC_TEST:fetchtarball-store-path:FAIL"
+    cat /tmp/tarball_err
+end
+
+# Test: fetchurl vs fetchTarball with same hash = different paths (different hash mode)
+echo "--- fetch-flat-vs-recursive ---"
+let flat = $(/bin/snix eval --raw --expr 'builtins.fetchurl { url = "https://a.com/f"; sha256 = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; name = "f"; }')
+let recursive = $(/bin/snix eval --raw --expr 'builtins.fetchTarball { url = "https://a.com/f"; sha256 = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; name = "f"; }')
+if not test "$flat" = "$recursive"
+    echo "FUNC_TEST:fetch-flat-vs-recursive:PASS"
+else
+    echo "FUNC_TEST:fetch-flat-vs-recursive:FAIL:same path"
+end
+
+# Test: fetchurl as derivation input (context propagation)
+echo "--- fetchurl-as-input ---"
+/nix/system/profile/bin/bash -c '
+cat > /tmp/fetch_input.nix << NIXEOF
+let
+  src = builtins.fetchurl {
+    url = "https://example.com/src.c";
+    sha256 = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=";
+  };
+in (derivation {
+  name = "uses-fetch";
+  builder = "/bin/sh";
+  system = "x86_64-linux";
+  inherit src;
+}).outPath
+  NIXEOF
+'
+/bin/snix eval --file /tmp/fetch_input.nix > /tmp/fetch_input_out ^> /tmp/fetch_input_err
+if test $? = 0
+    let input_result = $(cat /tmp/fetch_input_out)
+    if test -n "$input_result"
+        echo "FUNC_TEST:fetchurl-as-input:PASS"
+    else
+        echo "FUNC_TEST:fetchurl-as-input:FAIL:empty"
+    end
+else
+    echo "FUNC_TEST:fetchurl-as-input:FAIL"
+    cat /tmp/fetch_input_err
+end
+
+# Test: fetchurl without hash is rejected
+echo "--- fetchurl-requires-hash ---"
+/bin/snix eval --expr 'builtins.fetchurl "https://example.com/f"' > /tmp/fetch_nohash_out ^> /tmp/fetch_nohash_err
+if test $? = 0
+    echo "FUNC_TEST:fetchurl-requires-hash:FAIL:should have failed"
+else
+    echo "FUNC_TEST:fetchurl-requires-hash:PASS"
+end
+
+# Cleanup
+rm /tmp/fetch_out /tmp/fetch_err ^> /dev/null
+rm /tmp/tarball_out /tmp/tarball_err ^> /dev/null
+rm /tmp/fetch_input.nix /tmp/fetch_input_out /tmp/fetch_input_err ^> /dev/null
+rm /tmp/fetch_nohash_out /tmp/fetch_nohash_err ^> /dev/null
+
