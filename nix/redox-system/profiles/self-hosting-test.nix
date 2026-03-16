@@ -3006,11 +3006,7 @@ selfHosting
   # No userutils — run the test script directly (not via login loop)
   "/environment" = selfHosting."/environment" // {
     systemPackages = builtins.filter (
-      p:
-      let
-        name = p.pname or (builtins.parseDrvName p.name).name;
-      in
-      name != "userutils" && name != "redox-userutils"
+      p: !(pkgs ? userutils && toString p == toString pkgs.userutils)
     ) (selfHosting."/environment".systemPackages or [ ]);
   };
 
