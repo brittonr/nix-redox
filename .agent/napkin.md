@@ -33,27 +33,32 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Active Workarounds (still needed)
 
-### Poll-wait pattern for cargo builds
-- Redox waitpid via proc: scheme hangs when parent is idle on KVM.
-- Background cargo + `kill -0` poll loop with scheme I/O + `wait $PID`.
+### Poll-wait pattern for sandbox builds — REMOVED
+- Was reintroduced during per-path-sandbox work out of caution.
+- Tested 2026-03-15: blocking wait() works. 53/62 tests pass, no hangs.
+- waitpid is a direct kernel syscall (SYS_WAITPID), doesn't route through initnsmgr.
+- LAPIC timer ensures scheduler delivers child-exit wake even with all CPUs in HLT.
+- Removed try_wait+sched_yield, unified on child.wait() for all platforms.
 
-### Stdio::inherit() for build_derivation on Redox
-- `cmd.output()` creates pipes that crash deep process hierarchies.
-- `#[cfg(target_os = "redox")]` uses `Stdio::inherit()` + `.status()`.
-
-### Proxy scheme socket close doesn't unblock next_request()
+### Proxy scheme socket close doesn't unblock next_request() (kernel bug)
 - Closing scheme socket fd from another thread does NOT unblock blocked `next_request()`.
-- Event loop checks `handler.handles.is_empty()` and exits when builder exits.
+- Workaround: event loop checks `handler.handles.is_empty()` and exits when builder exits.
+- Code: `snix-redox/src/build_proxy/lifecycle.rs` ~line 206.
+- Upstream fix would be in kernel/redox-scheme — not actionable from here.
 
-### child_ns_fd must be closed in parent after spawn
-- mkns() fd shared by parent and child. Parent must close its copy after spawn.
-- Do NOT close in child's pre_exec — setns() stores the raw fd as current namespace.
+### Code patterns to maintain (not bugs, just Redox differences)
 
-### thread::sleep() deadlocks with scheme I/O
-- Use sched_yield() instead of thread::sleep() in poll-wait loops on Redox.
+- **child_ns_fd close after spawn**: mkns() fd shared by parent and child. Parent must close its copy after spawn. Do NOT close in child's pre_exec — setns() stores the raw fd. Code: `local_build.rs` ~line 401.
+- **stdout flush before exit**: Redox exit handlers may not flush stdout. Always `stdout().flush()` before process exit. Code: `local_build.rs` ~line 1143.
+- **sched_yield over thread::sleep**: thread::sleep uses nanosleep which routes through scheme I/O — deadlocks if initnsmgr is busy. Only matters in poll loops during sandbox builds.
 
-### Rust stdout not flushed on Redox process exit
-- Explicit `stdout().flush()` required before process exit.
+## Known Sandbox Issues (per-path proxy)
+
+### Build scripts denied by AllowList
+- snix-build-dir: `/bin/mkdir`, `/usr/bin/mkdir` not in AllowList → `command not found`
+- snix-build-cargo, snix-compile, rg-build: build script paths denied → exit 126
+- AllowList needs to include builder inputs (build scripts, tools in PATH)
+- 9/62 self-hosting test failures are all this issue (as of 2026-03-15)
 
 ## Ion Shell Gotchas (keep forgetting)
 
