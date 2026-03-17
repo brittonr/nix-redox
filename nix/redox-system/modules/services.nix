@@ -48,6 +48,17 @@ let
     ];
     # Whether the service is enabled
     enable = t.bool;
+    # Service names that must start before this one (dependency ordering).
+    # The build system topologically sorts services and assigns numeric
+    # prefixes to init scripts based on the dependency graph.
+    after = t.listOf t.string;
+    # Per-service environment variables, rendered as `export KEY VALUE`
+    # lines before the service command in the generated init script.
+    environment = t.attrsOf t.string;
+    # Explicit numeric priority (10-79). When set to a non-default value,
+    # overrides auto-numbering from the dependency graph.
+    # Default 50 means auto-number from topo sort position.
+    priority = t.int;
   };
 in
 

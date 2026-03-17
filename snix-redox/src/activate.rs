@@ -133,10 +133,12 @@ pub struct ActivationPlan {
     pub config_files_removed: Vec<String>,
     /// Config files whose content changed (path → old hash, new hash).
     pub config_files_changed: Vec<ConfigChange>,
-    /// Services added.
-    pub services_added: Vec<String>,
-    /// Services removed.
-    pub services_removed: Vec<String>,
+    /// Services added (name, type).
+    pub services_added: Vec<ServiceChange>,
+    /// Services removed (name, type).
+    pub services_removed: Vec<ServiceChange>,
+    /// Services whose definition changed (command, type, environment).
+    pub services_changed: Vec<ServiceChange>,
     /// Whether the system profile needs rebuilding.
     pub profile_needs_rebuild: bool,
     /// Number of binaries that will be linked in the new profile.
@@ -167,6 +169,14 @@ pub struct ConfigChange {
     pub path: String,
     pub old_hash: String,
     pub new_hash: String,
+}
+
+/// A service that was added, removed, or changed.
+#[derive(Debug, PartialEq)]
+pub struct ServiceChange {
+    pub name: String,
+    pub svc_type: String,
+    pub description: String,
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -213,11 +223,10 @@ pub fn plan(old: &Manifest, new: &Manifest) -> ActivationPlan {
     let (config_files_added, config_files_removed, config_files_changed) =
         diff_config_files(&old.files, &new.files);
 
-    // Service diff
-    let old_svcs: BTreeSet<&str> = old.services.init_scripts.iter().map(|s| s.as_str()).collect();
-    let new_svcs: BTreeSet<&str> = new.services.init_scripts.iter().map(|s| s.as_str()).collect();
-    let services_added: Vec<String> = new_svcs.difference(&old_svcs).map(|s| s.to_string()).collect();
-    let services_removed: Vec<String> = old_svcs.difference(&new_svcs).map(|s| s.to_string()).collect();
+    // Service diff — compare declared service maps (semantic) when available,
+    // fall back to init_scripts list comparison for v2 manifests.
+    let (services_added, services_removed, services_changed) =
+        diff_declared_services(&old.services.declared, &new.services.declared);
 
     // User diff
     let (users_added, users_removed, users_changed) = diff_users(&old.users, &new.users);
@@ -241,6 +250,7 @@ pub fn plan(old: &Manifest, new: &Manifest) -> ActivationPlan {
         config_files_changed,
         services_added,
         services_removed,
+        services_changed,
         profile_needs_rebuild,
         profile_binary_count,
         users_added,
@@ -277,6 +287,48 @@ fn diff_config_files(
     for path in old.keys() {
         if !new.contains_key(path) {
             removed.push(path.clone());
+        }
+    }
+
+    (added, removed, changed)
+}
+
+/// Diff declared services between two manifests.
+/// Returns (added, removed, changed) service change lists.
+fn diff_declared_services(
+    old: &BTreeMap<String, crate::system::ServiceInfo>,
+    new: &BTreeMap<String, crate::system::ServiceInfo>,
+) -> (Vec<ServiceChange>, Vec<ServiceChange>, Vec<ServiceChange>) {
+    let mut added = Vec::new();
+    let mut removed = Vec::new();
+    let mut changed = Vec::new();
+
+    for (name, new_svc) in new {
+        match old.get(name) {
+            None => added.push(ServiceChange {
+                name: name.clone(),
+                svc_type: new_svc.svc_type.clone(),
+                description: new_svc.description.clone(),
+            }),
+            Some(old_svc) => {
+                if old_svc != new_svc {
+                    changed.push(ServiceChange {
+                        name: name.clone(),
+                        svc_type: new_svc.svc_type.clone(),
+                        description: new_svc.description.clone(),
+                    });
+                }
+            }
+        }
+    }
+
+    for (name, old_svc) in old {
+        if !new.contains_key(name) {
+            removed.push(ServiceChange {
+                name: name.clone(),
+                svc_type: old_svc.svc_type.clone(),
+                description: old_svc.description.clone(),
+            });
         }
     }
 
@@ -351,6 +403,7 @@ impl ActivationPlan {
             && self.config_files_changed.is_empty()
             && self.services_added.is_empty()
             && self.services_removed.is_empty()
+            && self.services_changed.is_empty()
             && self.users_added.is_empty()
             && self.users_removed.is_empty()
             && self.users_changed.is_empty()
@@ -416,18 +469,22 @@ impl ActivationPlan {
         }
 
         // Services
-        if !self.services_added.is_empty() || !self.services_removed.is_empty() {
+        if !self.services_added.is_empty()
+            || !self.services_removed.is_empty()
+            || !self.services_changed.is_empty()
+        {
             println!();
             println!("Services:");
             for svc in &self.services_added {
-                println!("  + {svc}");
+                println!("  + {} ({})", svc.name, svc.svc_type);
             }
             for svc in &self.services_removed {
-                println!("  - {svc}");
+                println!("  - {} ({})", svc.name, svc.svc_type);
             }
-            if !self.services_added.is_empty() || !self.services_removed.is_empty() {
-                println!("  note: service changes require reboot to take effect");
+            for svc in &self.services_changed {
+                println!("  ~ {} ({})", svc.name, svc.svc_type);
             }
+            println!("  note: service changes require reboot to take effect");
         }
 
         // Users
@@ -1219,6 +1276,7 @@ mod tests {
                 },
             )]),
             services: Services {
+                declared: BTreeMap::new(),
                 init_scripts: vec!["10_net".to_string(), "15_dhcp".to_string()],
                 startup_script: "/startup.sh".to_string(),
             },
@@ -1367,22 +1425,146 @@ mod tests {
     fn plan_service_added() {
         let old = sample_manifest();
         let mut new = sample_manifest();
-        new.services.init_scripts.push("20_orbital".to_string());
+        new.services.declared.insert(
+            "orbital".to_string(),
+            ServiceInfo {
+                description: "Desktop environment".to_string(),
+                command: "orbital".to_string(),
+                svc_type: "nowait".to_string(),
+                args: "orblogin orbterm".to_string(),
+                wanted_by: "rootfs".to_string(),
+                environment: BTreeMap::from([("VT".to_string(), "3".to_string())]),
+                after: vec!["ptyd".to_string()],
+            },
+        );
 
         let p = plan(&old, &new);
-        assert_eq!(p.services_added, vec!["20_orbital"]);
+        assert_eq!(p.services_added.len(), 1);
+        assert_eq!(p.services_added[0].name, "orbital");
+        assert_eq!(p.services_added[0].svc_type, "nowait");
         assert!(p.services_removed.is_empty());
+        assert!(p.services_changed.is_empty());
     }
 
     #[test]
     fn plan_service_removed() {
-        let old = sample_manifest();
-        let mut new = sample_manifest();
-        new.services.init_scripts.retain(|s| s != "15_dhcp");
+        let mut old = sample_manifest();
+        old.services.declared.insert(
+            "smolnetd".to_string(),
+            ServiceInfo {
+                description: "Network stack".to_string(),
+                command: "/bin/smolnetd".to_string(),
+                svc_type: "daemon".to_string(),
+                args: String::new(),
+                wanted_by: "rootfs".to_string(),
+                environment: BTreeMap::new(),
+                after: vec![],
+            },
+        );
+        let new = sample_manifest();
 
         let p = plan(&old, &new);
         assert!(p.services_added.is_empty());
-        assert_eq!(p.services_removed, vec!["15_dhcp"]);
+        assert_eq!(p.services_removed.len(), 1);
+        assert_eq!(p.services_removed[0].name, "smolnetd");
+        assert_eq!(p.services_removed[0].svc_type, "daemon");
+        assert!(p.services_changed.is_empty());
+    }
+
+    #[test]
+    fn plan_service_type_changed() {
+        let svc = ServiceInfo {
+            description: "Network stack".to_string(),
+            command: "/bin/smolnetd".to_string(),
+            svc_type: "daemon".to_string(),
+            args: String::new(),
+            wanted_by: "rootfs".to_string(),
+            environment: BTreeMap::new(),
+            after: vec![],
+        };
+        let mut old = sample_manifest();
+        old.services.declared.insert("smolnetd".to_string(), svc.clone());
+        let mut new = sample_manifest();
+        let mut new_svc = svc;
+        new_svc.svc_type = "nowait".to_string();
+        new.services.declared.insert("smolnetd".to_string(), new_svc);
+
+        let p = plan(&old, &new);
+        assert!(p.services_added.is_empty());
+        assert!(p.services_removed.is_empty());
+        assert_eq!(p.services_changed.len(), 1);
+        assert_eq!(p.services_changed[0].name, "smolnetd");
+        assert_eq!(p.services_changed[0].svc_type, "nowait");
+    }
+
+    #[test]
+    fn plan_service_env_changed() {
+        let svc = ServiceInfo {
+            description: "Desktop".to_string(),
+            command: "orbital".to_string(),
+            svc_type: "nowait".to_string(),
+            args: "orblogin orbterm".to_string(),
+            wanted_by: "rootfs".to_string(),
+            environment: BTreeMap::from([("VT".to_string(), "3".to_string())]),
+            after: vec![],
+        };
+        let mut old = sample_manifest();
+        old.services.declared.insert("orbital".to_string(), svc.clone());
+        let mut new = sample_manifest();
+        let mut new_svc = svc;
+        new_svc.environment = BTreeMap::from([("VT".to_string(), "4".to_string())]);
+        new.services.declared.insert("orbital".to_string(), new_svc);
+
+        let p = plan(&old, &new);
+        assert!(p.services_added.is_empty());
+        assert!(p.services_removed.is_empty());
+        assert_eq!(p.services_changed.len(), 1);
+        assert_eq!(p.services_changed[0].name, "orbital");
+    }
+
+    #[test]
+    fn plan_service_command_changed() {
+        let svc = ServiceInfo {
+            description: "Network stack".to_string(),
+            command: "/bin/smolnetd".to_string(),
+            svc_type: "daemon".to_string(),
+            args: String::new(),
+            wanted_by: "rootfs".to_string(),
+            environment: BTreeMap::new(),
+            after: vec![],
+        };
+        let mut old = sample_manifest();
+        old.services.declared.insert("smolnetd".to_string(), svc.clone());
+        let mut new = sample_manifest();
+        let mut new_svc = svc;
+        new_svc.command = "/bin/smolnetd2".to_string();
+        new.services.declared.insert("smolnetd".to_string(), new_svc);
+
+        let p = plan(&old, &new);
+        assert_eq!(p.services_changed.len(), 1);
+        assert_eq!(p.services_changed[0].name, "smolnetd");
+    }
+
+    #[test]
+    fn plan_service_unchanged() {
+        let svc = ServiceInfo {
+            description: "Network stack".to_string(),
+            command: "/bin/smolnetd".to_string(),
+            svc_type: "daemon".to_string(),
+            args: String::new(),
+            wanted_by: "rootfs".to_string(),
+            environment: BTreeMap::new(),
+            after: vec![],
+        };
+        let mut old = sample_manifest();
+        old.services.declared.insert("smolnetd".to_string(), svc.clone());
+        let mut new = sample_manifest();
+        new.services.declared.insert("smolnetd".to_string(), svc);
+
+        let p = plan(&old, &new);
+        assert!(p.services_added.is_empty());
+        assert!(p.services_removed.is_empty());
+        assert!(p.services_changed.is_empty());
     }
 
     #[test]
@@ -1465,7 +1647,18 @@ mod tests {
                 mode: "644".to_string(),
             },
         );
-        new.services.init_scripts.push("20_new".to_string());
+        new.services.declared.insert(
+            "newservice".to_string(),
+            ServiceInfo {
+                description: "A new service".to_string(),
+                command: "/bin/new".to_string(),
+                svc_type: "nowait".to_string(),
+                args: String::new(),
+                wanted_by: "rootfs".to_string(),
+                environment: BTreeMap::new(),
+                after: vec![],
+            },
+        );
         new.users.insert(
             "admin".to_string(),
             User {
@@ -1485,10 +1678,20 @@ mod tests {
     fn plan_reboot_recommended_on_service_change() {
         let old = sample_manifest();
         let mut new = sample_manifest();
-        new.services.init_scripts.push("20_new".to_string());
+        new.services.declared.insert(
+            "newservice".to_string(),
+            ServiceInfo {
+                description: "New service".to_string(),
+                command: "/bin/new".to_string(),
+                svc_type: "daemon".to_string(),
+                args: String::new(),
+                wanted_by: "rootfs".to_string(),
+                environment: BTreeMap::new(),
+                after: vec![],
+            },
+        );
 
         let p = plan(&old, &new);
-        // We test the logic directly since activate() needs real filesystem
         assert!(!p.services_added.is_empty());
     }
 
