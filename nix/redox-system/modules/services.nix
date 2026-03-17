@@ -2,12 +2,14 @@
 #
 # Init scripts, structured services, and startup configuration.
 #
-# Two service definition styles:
-#   1. initScripts — raw text init scripts (legacy, full control)
-#   2. services — typed structs rendered to init.d scripts automatically
+# Three service definition styles:
+#   1. Typed service modules — `services.ssh.enable = true` with per-service
+#      options that auto-generate init scripts and config files.
+#   2. services — generic typed structs rendered to init.d scripts
+#   3. initScripts — raw text init scripts (legacy, full control)
 #
-# Both are merged at build time. Structured services are rendered by the
-# build module and combined with raw initScripts.
+# All three are merged at build time. Typed modules produce structured
+# service entries that go through topo sort alongside everything else.
 
 adios:
 
@@ -60,6 +62,62 @@ let
     # Default 50 means auto-number from topo sort position.
     priority = t.int;
   };
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Typed service module options
+  # ═══════════════════════════════════════════════════════════════════
+  # Each service gets a typed struct with service-specific settings.
+  # The build module reads these and generates:
+  #   - A structured service entry (init script)
+  #   - Configuration files under /etc/
+  #   - Package dependencies (via systemPackages assertion)
+
+  sshServiceType = t.struct "SshService" {
+    # Master switch — when false, no sshd service or config is generated.
+    enable = t.bool;
+    # TCP port for sshd to listen on.
+    port = t.int;
+    # Allow root login over SSH.
+    permitRootLogin = t.bool;
+    # Listen address (0.0.0.0 = all interfaces).
+    listenAddress = t.string;
+    # Path to host key file. Generated on first boot if missing.
+    hostKeyPath = t.string;
+    # Path to authorized_keys file.
+    authorizedKeysPath = t.string;
+  };
+
+  httpdServiceType = t.struct "HttpdService" {
+    # Master switch — when false, no httpd service or config is generated.
+    enable = t.bool;
+    # TCP port for the HTTP server.
+    port = t.int;
+    # Document root directory.
+    rootDir = t.string;
+  };
+
+  gettyServiceType = t.struct "GettyService" {
+    # Master switch — when false, no getty service is generated.
+    # NOTE: getty requires the userutils package. The build module
+    # auto-enables this when userutils is in systemPackages, but
+    # this option lets profiles override that behavior.
+    enable = t.enum "GettyEnable" [
+      "auto"
+      "true"
+      "false"
+    ];
+    # Device to attach getty to.
+    device = t.string;
+    # Extra flags passed to getty.
+    extraArgs = t.string;
+  };
+
+  exampledServiceType = t.struct "ExampledService" {
+    # Master switch — example scheme daemon (for testing).
+    enable = t.bool;
+    # Scheme name to register.
+    schemeName = t.string;
+  };
 in
 
 {
@@ -105,6 +163,52 @@ in
         end
       '';
       description = "Content of the startup script";
+    };
+
+    # ═══════════════════════════════════════════════════════════════
+    # Typed service modules
+    # ═══════════════════════════════════════════════════════════════
+
+    ssh = {
+      type = sshServiceType;
+      default = {
+        enable = false;
+        port = 22;
+        permitRootLogin = false;
+        listenAddress = "0.0.0.0";
+        hostKeyPath = "/etc/ssh/host_key";
+        authorizedKeysPath = "/etc/ssh/authorized_keys";
+      };
+      description = "SSH server (sshd) — requires redox-ssh package";
+    };
+
+    httpd = {
+      type = httpdServiceType;
+      default = {
+        enable = false;
+        port = 8080;
+        rootDir = "/var/www";
+      };
+      description = "HTTP file server — requires httpd binary (from base)";
+    };
+
+    getty = {
+      type = gettyServiceType;
+      default = {
+        enable = "auto";
+        device = "/scheme/debug/no-preserve";
+        extraArgs = "-J";
+      };
+      description = "Serial console login via getty — requires userutils package";
+    };
+
+    exampled = {
+      type = exampledServiceType;
+      default = {
+        enable = false;
+        schemeName = "example";
+      };
+      description = "Example scheme daemon (for testing)";
     };
   };
 

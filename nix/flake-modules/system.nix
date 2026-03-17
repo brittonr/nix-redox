@@ -346,6 +346,17 @@ let
     defaultTimeout = 120;
   };
 
+  # E2E rebuild test: full activate pipeline (etc files, activation scripts, no-op, rollback)
+  e2eRebuildTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/e2e-rebuild-test.nix ];
+    inherit extraPkgs;
+  };
+  e2eRebuildTest = mkFunctionalTest {
+    diskImage = e2eRebuildTestSystem.diskImage;
+    inherit bootloader;
+    defaultTimeout = 300;
+  };
+
   mkBridgeTest = modularPkgs.infrastructure.mkBridgeTest;
   bridgeTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/bridge-test.nix ];
@@ -491,6 +502,9 @@ in
 
     redox-boot-generation-select-test = bootGenerationSelectTestSystem.diskImage;
     boot-generation-select-test = bootGenerationSelectTest;
+
+    redox-e2e-rebuild-test = e2eRebuildTestSystem.diskImage;
+    e2e-rebuild-test = e2eRebuildTest;
 
     redox-https-cache-test = httpsCacheTestSystem.diskImage;
     inherit httpsCacheTest;

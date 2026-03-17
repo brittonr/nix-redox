@@ -326,12 +326,19 @@ pub fn rebuild(
     let merged = merge_config(&current, &config, &resolved_packages)?;
 
     // Step 5: Show what would change
+    let has_changes = has_manifest_changes(&current, &merged);
     print_changes(&current, &merged, &config);
 
     if dry_run {
         println!();
         println!("Dry run complete. No changes applied.");
         println!("Edit {cfg_path} and run `snix system rebuild` to apply.");
+        return Ok(());
+    }
+
+    if !has_changes {
+        println!();
+        println!("No changes detected. System is already up to date.");
         return Ok(());
     }
 
@@ -766,6 +773,48 @@ pub(crate) fn merge_config(
 /// Check if a package name is boot-essential (always preserved in /bin/).
 fn is_boot_essential(name: &str) -> bool {
     BOOT_ESSENTIAL.iter().any(|&b| b == name)
+}
+
+/// Check if the merged manifest differs from the current one in any
+/// meaningful way (hostname, timezone, networking, packages, users,
+/// services, files, boot components, drivers, security, logging, power).
+fn has_manifest_changes(current: &Manifest, merged: &Manifest) -> bool {
+    // System-level fields
+    if current.system.hostname != merged.system.hostname { return true; }
+    if current.system.timezone != merged.system.timezone { return true; }
+
+    // Networking
+    if current.configuration.networking != merged.configuration.networking { return true; }
+
+    // Security, logging, power
+    if current.configuration.security != merged.configuration.security { return true; }
+    if current.configuration.logging != merged.configuration.logging { return true; }
+    if current.configuration.power != merged.configuration.power { return true; }
+    if current.configuration.hardware != merged.configuration.hardware { return true; }
+
+    // Packages (compare by name + store_path)
+    let cur_pkgs: Vec<(&str, &str)> = current.packages.iter()
+        .map(|p| (p.name.as_str(), p.store_path.as_str())).collect();
+    let new_pkgs: Vec<(&str, &str)> = merged.packages.iter()
+        .map(|p| (p.name.as_str(), p.store_path.as_str())).collect();
+    if cur_pkgs != new_pkgs { return true; }
+
+    // Users
+    if current.users != merged.users { return true; }
+
+    // Services
+    if current.services != merged.services { return true; }
+
+    // Files (environment.etc)
+    if current.files != merged.files { return true; }
+
+    // Boot components
+    if current.boot != merged.boot { return true; }
+
+    // Drivers
+    if current.drivers != merged.drivers { return true; }
+
+    false
 }
 
 /// Print a summary of what changed between current and merged manifests.

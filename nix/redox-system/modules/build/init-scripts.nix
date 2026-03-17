@@ -133,19 +133,68 @@ let
     })
   );
 
-  # --- Console (getty) ---
-  consoleServices = lib.optionalAttrs cfg.userutilsInstalled {
+  # --- Console (getty) — typed service module ---
+  # cfg.gettyEnabled resolves the "auto"/"true"/"false" enum against userutilsInstalled.
+  consoleServices = lib.optionalAttrs cfg.gettyEnabled {
     getty = {
       description = "Serial console via getty + PTY bridge";
       command = "getty";
       type = "nowait";
-      args = "/scheme/debug/no-preserve -J";
+      args = "${cfg.gettyOpts.device} ${cfg.gettyOpts.extraArgs}";
       wantedBy = "rootfs";
       enable = true;
       after = [ "ptyd" ];
       environment = {
         XDG_CONFIG_HOME = "/etc";
       };
+      priority = 50;
+    };
+  };
+
+  # --- SSH server (sshd) — typed service module ---
+  sshServices = lib.optionalAttrs cfg.sshEnabled {
+    sshd = {
+      description = "SSH server daemon";
+      command = "/bin/sshd";
+      type = "nowait";
+      args = lib.concatStringsSep " " [
+        "-p" (toString cfg.sshOpts.port)
+        "-k" cfg.sshOpts.hostKeyPath
+      ];
+      wantedBy = "rootfs";
+      enable = true;
+      after = [ "ptyd" "smolnetd" ];
+      environment = { };
+      priority = 50;
+    };
+  };
+
+  # --- HTTP server (httpd) — typed service module ---
+  httpdServices = lib.optionalAttrs cfg.svcHttpdEnabled {
+    httpd = {
+      description = "HTTP file server";
+      command = "/bin/httpd";
+      type = "nowait";
+      args = "-p ${toString cfg.svcHttpdOpts.port} -r ${cfg.svcHttpdOpts.rootDir}";
+      wantedBy = "rootfs";
+      enable = true;
+      after = [ "smolnetd" ];
+      environment = { };
+      priority = 50;
+    };
+  };
+
+  # --- Example scheme daemon — typed service module ---
+  exampledServices = lib.optionalAttrs cfg.exampledEnabled {
+    exampled = {
+      description = "Example scheme daemon (${cfg.exampledOpts.schemeName})";
+      command = "/bin/exampled";
+      type = "scheme";
+      args = cfg.exampledOpts.schemeName;
+      wantedBy = "rootfs";
+      enable = true;
+      after = [ ];
+      environment = { };
       priority = 50;
     };
   };
@@ -232,6 +281,9 @@ let
     coreServices
     // networkingServices
     // consoleServices
+    // sshServices
+    // httpdServices
+    // exampledServices
     // graphicsServices
     // snixServices;
 

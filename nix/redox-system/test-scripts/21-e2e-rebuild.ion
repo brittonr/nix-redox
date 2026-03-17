@@ -1,0 +1,330 @@
+# ── End-to-End Rebuild Integration Test ────────────────────
+# Tests the full activate pipeline: config files, activation scripts,
+# hostname changes, no-op detection, and rollback.
+
+echo ""
+echo "========================================"
+echo "  RedoxOS E2E Rebuild Test"
+echo "========================================"
+echo ""
+echo "FUNC_TESTS_START"
+echo ""
+
+# ── Phase 1: Verify initial state ─────────────────────────
+echo "--- Phase 1: initial state ---"
+
+# Pre-flight: snix must exist
+if exists -f /bin/snix
+    echo "FUNC_TEST:snix-exists:PASS"
+else
+    echo "FUNC_TEST:snix-exists:FAIL:snix not in /bin"
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+
+# Pre-flight: manifest must exist
+if exists -f /etc/redox-system/manifest.json
+    echo "FUNC_TEST:manifest-exists:PASS"
+else
+    echo "FUNC_TEST:manifest-exists:FAIL"
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+
+# Verify environment.etc files via bash (Ion $? unreliable between externals)
+/nix/system/profile/bin/bash -c '
+    # Check motd.txt
+    if [ -f /etc/e2e-test/motd.txt ]; then
+        if grep -q "E2E rebuild test" /etc/e2e-test/motd.txt; then
+            echo FUNC_TEST:etc-motd-exists:PASS
+        else
+            echo "FUNC_TEST:etc-motd-exists:FAIL:wrong-content"
+            cat /etc/e2e-test/motd.txt
+        fi
+    else
+        echo "FUNC_TEST:etc-motd-exists:FAIL:file-missing"
+    fi
+
+    # Check app-config.toml
+    if [ -f /etc/e2e-test/app-config.toml ]; then
+        content=$(cat /etc/e2e-test/app-config.toml)
+        if echo "$content" | grep -q "enabled"; then
+            echo FUNC_TEST:etc-appconfig-exists:PASS
+        else
+            echo "FUNC_TEST:etc-appconfig-exists:FAIL:wrong-content"
+            echo "DEBUG file contents:"
+            cat /etc/e2e-test/app-config.toml
+            echo "DEBUG hex:"
+            head -c 100 /etc/e2e-test/app-config.toml | od -A x -t x1z 2>/dev/null || true
+        fi
+    else
+        echo "FUNC_TEST:etc-appconfig-exists:FAIL:file-missing"
+    fi
+'
+
+# Verify activation script files exist in activation.d
+# (Scripts are baked into rootTree but only EXECUTED during snix system switch,
+#  not during initial boot. Check the files exist, not the marker output.)
+/nix/system/profile/bin/bash -c '
+    dir="/etc/redox-system/activation.d"
+    if [ -d "$dir" ]; then
+        if [ -f "$dir/createE2eDirs" ] && [ -f "$dir/writeE2eMarker" ]; then
+            echo FUNC_TEST:activation-scripts-present:PASS
+        else
+            echo "FUNC_TEST:activation-scripts-present:FAIL:missing-scripts"
+            ls -la "$dir" 2>/dev/null || true
+        fi
+    else
+        echo "FUNC_TEST:activation-scripts-present:FAIL:no-activation.d"
+    fi
+'
+
+# Save original hostname for rollback verification
+if exists -f /etc/hostname
+    cat /etc/hostname > /tmp/original_hostname
+    echo "FUNC_TEST:original-hostname-saved:PASS"
+else
+    echo "FUNC_TEST:original-hostname-saved:FAIL:no /etc/hostname"
+end
+
+# Record generation count before rebuild
+/bin/snix system generations > /tmp/pre_rebuild_gens ^> /dev/null
+/nix/system/profile/bin/bash -c '
+    if [ -f /tmp/pre_rebuild_gens ]; then
+        count=$(wc -l < /tmp/pre_rebuild_gens)
+        echo "$count" > /tmp/pre_gen_count
+        echo "FUNC_TEST:pre-gen-count:PASS"
+    else
+        echo "1" > /tmp/pre_gen_count
+        echo "FUNC_TEST:pre-gen-count:PASS"
+    fi
+'
+
+# ── Phase 2: Rebuild with changes ─────────────────────────
+echo ""
+echo "--- Phase 2: rebuild with changes ---"
+
+# Modify configuration.nix to change hostname
+/nix/system/profile/bin/bash -c '
+    cfg="/etc/redox-system/configuration.nix"
+    if [ -f "$cfg" ] && grep -q "hostname" "$cfg"; then
+        sed -i "s/hostname = \"[^\"]*\"/hostname = \"e2e-rebuilt\"/" "$cfg"
+        if grep -q "e2e-rebuilt" "$cfg"; then
+            echo FUNC_TEST:config-modified:PASS
+        else
+            echo "FUNC_TEST:config-modified:FAIL:sed-failed"
+        fi
+    else
+        echo "FUNC_TEST:config-modified:FAIL:no-config-or-hostname"
+    fi
+'
+
+# Run rebuild
+echo "DEBUG: starting snix system rebuild"
+/bin/snix system rebuild > /tmp/rebuild_out ^> /tmp/rebuild_err
+
+# Check rebuild succeeded
+/nix/system/profile/bin/bash -c '
+    if [ -f /tmp/rebuild_out ]; then
+        if grep -q "rebuilt from" /tmp/rebuild_out 2>/dev/null || \
+           grep -q "Switched to generation" /tmp/rebuild_out 2>/dev/null || \
+           grep -q "activated" /tmp/rebuild_out 2>/dev/null; then
+            echo FUNC_TEST:rebuild-succeeds:PASS
+        else
+            echo "FUNC_TEST:rebuild-succeeds:FAIL:no-success-message"
+            echo "DEBUG rebuild stdout:"
+            cat /tmp/rebuild_out
+            echo "DEBUG rebuild stderr:"
+            cat /tmp/rebuild_err 2>/dev/null || true
+        fi
+    else
+        echo "FUNC_TEST:rebuild-succeeds:FAIL:no-output"
+    fi
+'
+
+# Verify hostname changed
+/nix/system/profile/bin/bash -c '
+    if [ -f /etc/hostname ]; then
+        actual=$(cat /etc/hostname)
+        if [ "$actual" = "e2e-rebuilt" ]; then
+            echo FUNC_TEST:rebuild-hostname:PASS
+        else
+            echo "FUNC_TEST:rebuild-hostname:FAIL:expected e2e-rebuilt got $actual"
+        fi
+    else
+        echo "FUNC_TEST:rebuild-hostname:FAIL:no-hostname-file"
+    fi
+'
+
+# Verify hostname in manifest
+/bin/snix system info > /tmp/rebuild_info ^> /dev/null
+grep -q "e2e-rebuilt" /tmp/rebuild_info
+if test $? -eq 0
+    echo "FUNC_TEST:rebuild-manifest-hostname:PASS"
+else
+    echo "FUNC_TEST:rebuild-manifest-hostname:FAIL:not-in-info"
+end
+
+# Verify new generation created
+/bin/snix system generations > /tmp/post_rebuild_gens ^> /dev/null
+/nix/system/profile/bin/bash -c '
+    pre=$(cat /tmp/pre_gen_count 2>/dev/null || echo 0)
+    if [ -f /tmp/post_rebuild_gens ]; then
+        post=$(wc -l < /tmp/post_rebuild_gens)
+        if [ "$post" -gt "$pre" ]; then
+            echo FUNC_TEST:rebuild-new-generation:PASS
+        else
+            echo "FUNC_TEST:rebuild-new-generation:FAIL:pre=$pre post=$post"
+        fi
+    else
+        echo "FUNC_TEST:rebuild-new-generation:FAIL:no-gen-list"
+    fi
+'
+
+# ── Phase 3: No-op rebuild ────────────────────────────────
+echo ""
+echo "--- Phase 3: no-op rebuild ---"
+
+# Record current generation count
+/bin/snix system generations > /tmp/pre_noop_gens ^> /dev/null
+/nix/system/profile/bin/bash -c '
+    if [ -f /tmp/pre_noop_gens ]; then
+        count=$(wc -l < /tmp/pre_noop_gens)
+        echo "$count" > /tmp/pre_noop_count
+    else
+        echo "0" > /tmp/pre_noop_count
+    fi
+'
+
+# Run rebuild again (same config, should be no-op)
+/bin/snix system rebuild > /tmp/noop_out ^> /tmp/noop_err
+
+# Verify no new generation
+/bin/snix system generations > /tmp/post_noop_gens ^> /dev/null
+/nix/system/profile/bin/bash -c '
+    pre=$(cat /tmp/pre_noop_count 2>/dev/null || echo 0)
+    if [ -f /tmp/post_noop_gens ]; then
+        post=$(wc -l < /tmp/post_noop_gens)
+        if [ "$post" -eq "$pre" ]; then
+            echo FUNC_TEST:noop-no-new-gen:PASS
+        else
+            echo "FUNC_TEST:noop-no-new-gen:FAIL:pre=$pre post=$post"
+        fi
+    else
+        echo "FUNC_TEST:noop-no-new-gen:FAIL:no-gen-list"
+    fi
+'
+
+# Verify no-op: either stdout mentions no changes or no new generation created
+/nix/system/profile/bin/bash -c '
+    found=0
+    if [ -f /tmp/noop_out ]; then
+        if grep -qi "no changes\|up to date\|nothing to do\|already active" /tmp/noop_out 2>/dev/null; then
+            found=1
+        fi
+    fi
+    if [ -f /tmp/noop_err ]; then
+        if grep -qi "no changes\|up to date\|nothing to do\|already active" /tmp/noop_err 2>/dev/null; then
+            found=1
+        fi
+    fi
+    # Also accept: gen count unchanged = no-op worked
+    pre=$(cat /tmp/pre_noop_count 2>/dev/null || echo 0)
+    post=0
+    if [ -f /tmp/post_noop_gens ]; then
+        post=$(wc -l < /tmp/post_noop_gens)
+    fi
+    if [ "$post" -eq "$pre" ]; then
+        found=1
+    fi
+    if [ "$found" -eq 1 ]; then
+        echo FUNC_TEST:noop-detected:PASS
+    else
+        echo "FUNC_TEST:noop-detected:FAIL:unexpected-output"
+        echo "DEBUG noop stdout:"
+        cat /tmp/noop_out 2>/dev/null || echo "(empty)"
+        echo "DEBUG noop stderr:"
+        cat /tmp/noop_err 2>/dev/null || echo "(empty)"
+    fi
+'
+
+# ── Phase 4: Rollback ─────────────────────────────────────
+echo ""
+echo "--- Phase 4: rollback ---"
+
+# Record generation count before rollback
+/bin/snix system generations > /tmp/pre_rollback_gens ^> /dev/null
+/nix/system/profile/bin/bash -c '
+    if [ -f /tmp/pre_rollback_gens ]; then
+        count=$(wc -l < /tmp/pre_rollback_gens)
+        echo "$count" > /tmp/pre_rollback_count
+    else
+        echo "0" > /tmp/pre_rollback_count
+    fi
+'
+
+# Run rollback
+/bin/snix system rollback > /tmp/rollback_out ^> /tmp/rollback_err
+
+# Check rollback succeeded
+/nix/system/profile/bin/bash -c '
+    if [ -f /tmp/rollback_out ]; then
+        if grep -q "Rolling back" /tmp/rollback_out 2>/dev/null || \
+           grep -q "Switched to generation" /tmp/rollback_out 2>/dev/null || \
+           grep -q "rollback" /tmp/rollback_out 2>/dev/null; then
+            echo FUNC_TEST:rollback-succeeds:PASS
+        else
+            echo "FUNC_TEST:rollback-succeeds:FAIL:no-rollback-message"
+            echo "DEBUG rollback stdout:"
+            cat /tmp/rollback_out
+            echo "DEBUG rollback stderr:"
+            cat /tmp/rollback_err 2>/dev/null || true
+        fi
+    else
+        echo "FUNC_TEST:rollback-succeeds:FAIL:no-output"
+    fi
+'
+
+# Verify hostname reverted to original
+/nix/system/profile/bin/bash -c '
+    if [ -f /etc/hostname ] && [ -f /tmp/original_hostname ]; then
+        actual=$(cat /etc/hostname)
+        original=$(cat /tmp/original_hostname)
+        if [ "$actual" = "$original" ]; then
+            echo FUNC_TEST:rollback-hostname-restored:PASS
+        else
+            echo "FUNC_TEST:rollback-hostname-restored:FAIL:expected=$original got=$actual"
+        fi
+    else
+        echo "FUNC_TEST:rollback-hostname-restored:FAIL:missing-files"
+    fi
+'
+
+# Verify rollback created a new generation
+/bin/snix system generations > /tmp/post_rollback_gens ^> /dev/null
+/nix/system/profile/bin/bash -c '
+    pre=$(cat /tmp/pre_rollback_count 2>/dev/null || echo 0)
+    if [ -f /tmp/post_rollback_gens ]; then
+        post=$(wc -l < /tmp/post_rollback_gens)
+        if [ "$post" -gt "$pre" ]; then
+            echo FUNC_TEST:rollback-new-generation:PASS
+        else
+            echo "FUNC_TEST:rollback-new-generation:FAIL:pre=$pre post=$post"
+        fi
+    else
+        echo "FUNC_TEST:rollback-new-generation:FAIL:no-gen-list"
+    fi
+'
+
+# ── Cleanup ───────────────────────────────────────────────
+rm /tmp/original_hostname ^> /dev/null
+rm /tmp/pre_gen_count /tmp/pre_rebuild_gens /tmp/post_rebuild_gens ^> /dev/null
+rm /tmp/rebuild_out /tmp/rebuild_err /tmp/rebuild_info ^> /dev/null
+rm /tmp/pre_noop_count /tmp/pre_noop_gens /tmp/post_noop_gens ^> /dev/null
+rm /tmp/noop_out /tmp/noop_err ^> /dev/null
+rm /tmp/pre_rollback_count /tmp/pre_rollback_gens /tmp/post_rollback_gens ^> /dev/null
+rm /tmp/rollback_out /tmp/rollback_err ^> /dev/null
+
+echo ""
+echo "FUNC_TESTS_COMPLETE"
+echo ""

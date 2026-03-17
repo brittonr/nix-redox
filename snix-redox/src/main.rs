@@ -908,8 +908,8 @@ fn main() {
                     dir.as_deref(),
                     manifest.as_deref(),
                     boot_default.as_deref(),
-                )?;
-                Ok(())
+                )
+                .map(|_| ())
             }
             SystemCommand::Gc {
                 keep,

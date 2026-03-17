@@ -395,6 +395,26 @@ rec {
     ];
   };
 
+  # === SSH ===
+
+  redox-ssh = mkMockPackageWithBins {
+    name = "redox-ssh";
+    pname = "redox-ssh";
+    binaries = [
+      "ssh"
+      "sshd"
+      "ssh-keygen"
+    ];
+  };
+
+  # === Scheme Daemons ===
+
+  exampled = mkMockPackageWithBins {
+    name = "exampled";
+    pname = "exampled";
+    binaries = [ "exampled" ];
+  };
+
   # === Network Configuration ===
 
   netcfg-setup = mkMockPackageWithBins {
@@ -443,6 +463,8 @@ rec {
       orbterm
       orbutils
       relibc
+      redox-ssh
+      exampled
       ;
   };
 }
