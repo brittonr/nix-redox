@@ -24,16 +24,16 @@
     in
     {
       apps.${system} = {
-        # `nix run` — headless serial console (Cloud Hypervisor)
+        # `nix run` — headless with serial console (QEMU)
         default = {
           type = "app";
-          program = "${chRunners.headless}/bin/run-redox-cloud-hypervisor";
+          program = "${qemuRunners.headless}/bin/run-redox";
         };
 
-        # `nix run .#qemu` — headless serial console (QEMU)
-        qemu = {
+        # `nix run .#cloud-hypervisor` — fast headless (no interactive serial)
+        cloud-hypervisor = {
           type = "app";
-          program = "${qemuRunners.headless}/bin/run-redox";
+          program = "${chRunners.headless}/bin/run-redox-cloud-hypervisor";
         };
       };
 
