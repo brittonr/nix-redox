@@ -286,6 +286,7 @@ let
   rustcPkg = pkgs.redox-rustc or null;
   libstdcxxShimPkg = pkgs.redox-libstdcxx-shim or null;
   hasSelfHosting = rustcPkg != null && sysrootPkg != null;
+  hasBash = (pkgs.redox-bash or null) != null && builtins.any (p: p == pkgs.redox-bash) allPackages;
 
   # ===== BINARY CACHE =====
   # Generate a local Nix binary cache from binaryCachePackages.
@@ -361,6 +362,7 @@ in
     rustcPkg
     libstdcxxShimPkg
     hasSelfHosting
+    hasBash
     binaryCachePackages
     hasBinaryCache
     diskSizeMB

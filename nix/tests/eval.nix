@@ -1008,6 +1008,100 @@ in
         touch $out
       '';
 
+  # Test: system with all hardware driver enums evaluates without error
+  all-drivers-evaluate = mkEvalTest {
+    name = "all-drivers-evaluate";
+    description = "Verifies a system with every declared driver enum value evaluates correctly";
+    modules = [
+      {
+        "/hardware" = {
+          storageDrivers = [
+            "ahcid"
+            "nvmed"
+            "ided"
+            "virtio-blkd"
+            "virtio-fsd"
+          ];
+          networkDrivers = [
+            "e1000d"
+            "virtio-netd"
+            "rtl8168d"
+          ];
+          graphicsEnable = true;
+          graphicsDrivers = [
+            "virtio-gpud"
+            "bgad"
+          ];
+          audioEnable = true;
+          audioDrivers = [
+            "ihdad"
+            "ac97d"
+            "sb16d"
+          ];
+          usbEnable = true;
+        };
+        "/networking" = {
+          enable = true;
+          mode = "dhcp";
+        };
+        "/graphics".enable = true;
+      }
+    ];
+  };
+
+  # Test: pcid registry has RTL8168 entries
+  pcid-rtl8168d-entry =
+    let
+      pcid = import ../redox-system/modules/build/pcid.nix {
+        inherit lib;
+        allDrivers = [
+          "rtl8168d"
+          "e1000d"
+        ];
+      };
+    in
+    pkgs.runCommand "test-eval-pcid-rtl8168d-entry"
+      {
+        preferLocalBuild = true;
+        pcidToml = pcid.pcidToml;
+      }
+      ''
+        set -euo pipefail
+        echo "$pcidToml" | grep -qF '0x10EC' || { echo "FAIL: missing vendor 0x10EC"; exit 1; }
+        echo "$pcidToml" | grep -qF '0x8168' || { echo "FAIL: missing device 0x8168"; exit 1; }
+        echo "$pcidToml" | grep -qF '0x8136' || { echo "FAIL: missing device 0x8136"; exit 1; }
+        echo "$pcidToml" | grep -qF 'rtl8168d' || { echo "FAIL: missing rtl8168d command"; exit 1; }
+        echo "✓ pcid TOML contains RTL8168 entries"
+        touch $out
+      '';
+
+  # Test: pcid registry has no sb16d (ISA only, no PCI entry)
+  pcid-no-sb16d-entry =
+    let
+      pcid = import ../redox-system/modules/build/pcid.nix {
+        inherit lib;
+        allDrivers = [
+          "sb16d"
+          "ihdad"
+        ];
+      };
+    in
+    pkgs.runCommand "test-eval-pcid-no-sb16d-entry"
+      {
+        preferLocalBuild = true;
+        pcidToml = pcid.pcidToml;
+      }
+      ''
+        set -euo pipefail
+        if echo "$pcidToml" | grep -qF 'sb16d'; then
+          echo "FAIL: sb16d should not be in pcid TOML (ISA device, not PCI)"
+          exit 1
+        fi
+        echo "$pcidToml" | grep -qF 'ihdad' || { echo "FAIL: missing ihdad"; exit 1; }
+        echo "✓ pcid TOML correctly excludes ISA-only sb16d"
+        touch $out
+      '';
+
   # Test: sudod service starts when userutils is installed
   service-sudod-with-userutils = mkEvalTest {
     name = "service-sudod-with-userutils";
