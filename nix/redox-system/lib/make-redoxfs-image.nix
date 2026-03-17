@@ -25,8 +25,16 @@
   initfs, # Initfs package with boot/initfs
   bootloader ? null, # Bootloader package with boot/EFI/BOOT/BOOTX64.EFI
   sizeMB ? 308, # Size in MB (default: 512 - 200 ESP - 4 GPT overhead)
+  # Per-path ownership overrides for redoxfs-ar.
+  # List of { path, uid, gid } where path is relative to root (e.g. "home/user").
+  ownershipMap ? [ ],
 }:
 
+let
+  chownArgs = lib.concatMapStringsSep " " (
+    entry: "--chown ${entry.path}:${toString entry.uid}:${toString entry.gid}"
+  ) ownershipMap;
+in
 hostPkgs.runCommand "redox-redoxfs"
   {
     nativeBuildInputs = [ redoxfs ];
@@ -35,6 +43,9 @@ hostPkgs.runCommand "redox-redoxfs"
     mkdir -p root
     cp -r ${rootTree}/* root/
     chmod -R u+w root/
+
+    # /tmp must be world-writable with sticky bit (like any Unix system)
+    chmod 1777 root/tmp
 
     # Install boot components as store paths (for generation tracking)
     # These are the authoritative copies — /boot/ files are for bootloader compat.
@@ -61,6 +72,8 @@ hostPkgs.runCommand "redox-redoxfs"
     dd if=/dev/zero of=redoxfs.img bs=1M count=${toString sizeMB} 2>/dev/null
 
     # Populate with RedoxFS (formats and archives in one step)
-    redoxfs-ar --uid 0 --gid 0 redoxfs.img root
+    # --uid 0 --gid 0: default everything to root ownership
+    # --chown path:uid:gid: per-path overrides for user home directories
+    redoxfs-ar --uid 0 --gid 0 ${chownArgs} redoxfs.img root
     cp redoxfs.img $out
   ''

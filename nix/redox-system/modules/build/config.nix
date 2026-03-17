@@ -213,6 +213,23 @@ let
     )
   );
 
+  # Per-path ownership overrides for redoxfs-ar.
+  # Each user's home directory should be owned by that user.
+  # Paths are relative to the root tree (no leading slash).
+  ownershipMap = lib.filter (e: e != null) (
+    lib.mapAttrsToList (
+      name: user:
+      if user.createHome or false then
+        {
+          path = lib.removePrefix "/" user.home;
+          uid = user.uid;
+          gid = user.gid;
+        }
+      else
+        null
+    ) (inputs.users.users or { })
+  );
+
   allDirectories =
     (inputs.filesystem.extraDirectories or [ ])
     ++ homeDirectories
@@ -338,6 +355,7 @@ in
     allPackages
     userutilsInstalled
     allDirectories
+    ownershipMap
     defaultUser
     sysrootPkg
     rustcPkg
