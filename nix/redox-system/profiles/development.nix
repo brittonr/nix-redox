@@ -43,7 +43,9 @@ in
       ++ opt "redox-diffutils"
       ++ opt "redox-sed"
       ++ opt "redox-patch"
-      ++ opt "strace-redox";
+      ++ opt "strace-redox"
+      ++ opt "contain"
+      ++ opt "pkgutils";
 
     shellAliases = {
       ls = "ls --color=auto";

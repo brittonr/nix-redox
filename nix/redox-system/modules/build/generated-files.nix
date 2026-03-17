@@ -545,6 +545,21 @@ let
     }
   ) (inputs.activation.scripts or { }))
 
+  # Standard /etc files expected by upstream Redox programs
+  // {
+    "etc/motd" = {
+      text = "Welcome to Redox OS!\n";
+      mode = "0644";
+    };
+    "etc/shells" = {
+      text = lib.concatStringsSep "\n" (
+        [ "/bin/ion" "/bin/sh" ]
+        ++ lib.optional (cfg.hasBash or false) "/bin/bash"
+      ) + "\n";
+      mode = "0644";
+    };
+  }
+
   # User-declared etc files (environment.etc) — applied LAST so they override built-ins.
   # Like NixOS environment.etc: keys are paths relative to / (e.g. "etc/motd").
   # Each entry has text or source content and optional mode (default: 0644).

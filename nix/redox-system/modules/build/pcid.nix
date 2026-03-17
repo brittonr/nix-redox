@@ -109,6 +109,20 @@ let
         device = "0x2415";
       }
     ];
+    rtl8168d = [
+      {
+        name = "Realtek RTL8168/8111";
+        class = "0x02";
+        vendor = "0x10EC";
+        device = "0x8168";
+      }
+      {
+        name = "Realtek RTL8101/8102";
+        class = "0x02";
+        vendor = "0x10EC";
+        device = "0x8136";
+      }
+    ];
     xhcid = [
       {
         name = "USB xHCI";
@@ -116,6 +130,9 @@ let
         subclass = "0x03";
       }
     ];
+    # sb16d: SoundBlaster16 uses ISA port I/O (0x220), not PCI.
+    # pcid-spawner only handles PCI devices, so sb16d cannot be
+    # auto-spawned here. It needs a manual init script when selected.
   };
 
   pcidDrivers = builtins.concatLists (

@@ -1936,6 +1936,63 @@ in
     ];
   };
 
+  # ── pcid driver registry ──
+
+  # pcid rtl8168d test is in eval.nix (pcidToml is embedded in initfs binary,
+  # not inspectable as a file in the artifact)
+
+  # ── default /etc files ──
+
+  rootTree-has-motd = mkArtifactTest {
+    name = "rootTree-has-motd";
+    description = "Verifies default rootTree contains /etc/motd with welcome message";
+    modules = [ ];
+    checks = [
+      {
+        file = "etc/motd";
+        contains = "Welcome to Redox OS!";
+      }
+    ];
+  };
+
+  rootTree-has-shells = mkArtifactTest {
+    name = "rootTree-has-shells";
+    description = "Verifies default rootTree contains /etc/shells with /bin/ion";
+    modules = [ ];
+    checks = [
+      {
+        file = "etc/shells";
+        contains = "/bin/ion";
+      }
+      {
+        file = "etc/shells";
+        contains = "/bin/sh";
+      }
+    ];
+  };
+
+  rootTree-motd-user-override = mkArtifactTest {
+    name = "rootTree-motd-user-override";
+    description = "Verifies user-provided etc/motd overrides the default";
+    modules = [
+      {
+        "/environment" = {
+          etc = {
+            "etc/motd" = {
+              text = "Custom MOTD here";
+            };
+          };
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/motd";
+        contains = "Custom MOTD here";
+      }
+    ];
+  };
+
   # ── sudo daemon init script ──
 
   # Test: sudod init script present when userutils installed
