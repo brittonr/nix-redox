@@ -375,7 +375,44 @@ fn install_bridge_packages(
         }
     }
 
+    // Install boot component store paths (v2 manifests)
+    if let Some(ref boot) = manifest.boot {
+        for (name, path_opt) in [
+            ("kernel", &boot.kernel),
+            ("initfs", &boot.initfs),
+            ("bootloader", &boot.bootloader),
+        ] {
+            if let Some(ref file_path) = path_opt {
+                // Extract store dir: /nix/store/abc-kernel/boot/kernel -> /nix/store/abc-kernel
+                let store_dir = extract_store_dir(file_path);
+                if Path::new(&store_dir).exists() {
+                    continue;
+                }
+                eprintln!("  Installing boot component {name}...");
+                match crate::local_cache::fetch_local(&store_dir, cache_path) {
+                    Ok(()) => {
+                        installed += 1;
+                    }
+                    Err(e) => {
+                        eprintln!("  warning: could not install boot {name}: {e}");
+                    }
+                }
+            }
+        }
+    }
+
     Ok(installed)
+}
+
+/// Extract the store directory from a full file path within a store derivation.
+/// e.g. "/nix/store/abc-kernel/boot/kernel" → "/nix/store/abc-kernel"
+fn extract_store_dir(path: &str) -> String {
+    if let Some(rest) = path.strip_prefix("/nix/store/") {
+        if let Some(idx) = rest.find('/') {
+            return format!("/nix/store/{}", &rest[..idx]);
+        }
+    }
+    path.to_string()
 }
 
 #[cfg(test)]

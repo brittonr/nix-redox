@@ -2,7 +2,7 @@
 # Inspired by nix-darwin's system.checks module.
 # Validates that built artifacts contain everything needed for boot.
 
-{ hostPkgs, lib, rootTree, cfg }:
+{ hostPkgs, lib, rootTree, cfg, kernel ? null, initfs ? null, bootloader ? null }:
 
 hostPkgs.runCommand "redox-system-checks" { } ''
   set -euo pipefail
@@ -81,6 +81,37 @@ hostPkgs.runCommand "redox-system-checks" { } ''
     fi
     echo "  ✓ startup.sh executable"
   fi
+
+  # Check 11: Manifest has boot component store paths (v2)
+  if [ -e "${rootTree}/etc/redox-system/manifest.json" ]; then
+    version=$(${hostPkgs.jq}/bin/jq -r '.manifestVersion' "${rootTree}/etc/redox-system/manifest.json")
+    if [ "$version" = "2" ]; then
+      for field in kernel initfs bootloader; do
+        path=$(${hostPkgs.jq}/bin/jq -r ".boot.$field // empty" "${rootTree}/etc/redox-system/manifest.json")
+        if [ -z "$path" ]; then
+          echo "FAIL: v2 manifest missing boot.$field store path"
+          exit 1
+        fi
+      done
+      echo "  ✓ Manifest v2 boot component paths present"
+    fi
+  fi
+
+  # Check 12: Boot component derivations exist (when provided)
+  ${lib.optionalString (kernel != null) ''
+    if [ ! -f "${kernel}/boot/kernel" ]; then
+      echo "FAIL: kernel derivation missing boot/kernel"
+      exit 1
+    fi
+    echo "  ✓ kernel derivation valid"
+  ''}
+  ${lib.optionalString (initfs != null) ''
+    if [ ! -f "${initfs}/boot/initfs" ]; then
+      echo "FAIL: initfs derivation missing boot/initfs"
+      exit 1
+    fi
+    echo "  ✓ initfs derivation valid"
+  ''}
 
   echo ""
   echo "All system checks passed."

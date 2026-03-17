@@ -176,26 +176,45 @@ pkgs.writeShellScriptBin "redox-build-bridge" ''
       local cache_tmp
       cache_tmp=$(mktemp -d /tmp/bridge-cache-XXXXXX)
 
-      # Generate package-info.json from the manifest's package list
+      # Generate package-info.json from the manifest's package list + boot components
       ${python}/bin/python3 -c "
   import json, os
   with open('$manifest_path') as f:
       manifest = json.load(f)
   entries = []
   for pkg in manifest.get('packages', []):
-      sp = pkg.get('storePath', ''')
+      sp = pkg.get('storePath', str())
       if sp and os.path.exists(sp):
           entries.append({
-              'name': pkg.get('name', '''),
+              'name': pkg.get('name', str()),
               'storePath': sp,
-              'pname': pkg.get('name', '''),
-              'version': pkg.get('version', '''),
+              'pname': pkg.get('name', str()),
+              'version': pkg.get('version', str()),
           })
       else:
           print(f'  Skipping {pkg.get(\"name\",\"?\")} (store path missing: {sp})')
+  # Export boot component store paths (v2 manifests)
+  boot = manifest.get('boot', {})
+  for comp_name, file_path in [('kernel', boot.get('kernel')), ('initfs', boot.get('initfs')), ('bootloader', boot.get('bootloader'))]:
+      if not file_path:
+          continue
+      # Extract store dir from file path: /nix/store/abc-kernel/boot/kernel -> /nix/store/abc-kernel
+      parts = file_path.split('/')
+      if len(parts) >= 4 and parts[1] == 'nix' and parts[2] == 'store':
+          store_dir = '/'.join(parts[:4])
+          if os.path.exists(store_dir):
+              entries.append({
+                  'name': comp_name,
+                  'storePath': store_dir,
+                  'pname': comp_name,
+                  'version': 'boot',
+              })
+              print(f'  Boot component: {comp_name} -> {store_dir}')
+          else:
+              print(f'  Skipping boot {comp_name} (store path missing: {store_dir})')
   with open('$pkg_info', 'w') as f:
       json.dump(entries, f, indent=2)
-  print(f'  {len(entries)} packages to export')
+  print(f'  {len(entries)} entries to export (packages + boot)')
   "
 
       # Run the binary cache builder

@@ -461,6 +461,9 @@ pub fn activate(
     let derived_updated = write_manifest_derived_files(old, new, &mut warnings);
     let config_files_updated = config_files_updated + derived_updated;
 
+    // ── Step 3c: Update boot components ──
+    let boot_updated = update_boot_components(old, new, &mut warnings);
+
     // ── Step 4: Update GC roots (always, for idempotency) ──
     if let Err(e) = crate::system::update_system_gc_roots_pub(new, None) {
         warnings.push(format!("GC root update failed: {e}"));
@@ -470,7 +473,8 @@ pub fn activate(
     // (Reserved for future use)
 
     // ── Determine if reboot is recommended ──
-    let reboot_recommended = !activation_plan.services_added.is_empty()
+    let reboot_recommended = boot_updated
+        || !activation_plan.services_added.is_empty()
         || !activation_plan.services_removed.is_empty()
         || has_boot_config_changed(old, new);
 
@@ -483,10 +487,128 @@ pub fn activate(
 }
 
 /// Check if boot-critical configuration changed (kernel, bootloader, drivers).
+/// Covers all fields that affect initfs content or boot behavior.
 fn has_boot_config_changed(old: &Manifest, new: &Manifest) -> bool {
+    // Driver lists → initfs content
     old.drivers.initfs != new.drivers.initfs
-        || old.configuration.boot.disk_size_mb != new.configuration.boot.disk_size_mb
         || old.configuration.hardware.storage_drivers != new.configuration.hardware.storage_drivers
+        || old.configuration.hardware.network_drivers != new.configuration.hardware.network_drivers
+        || old.configuration.hardware.graphics_drivers != new.configuration.hardware.graphics_drivers
+        || old.configuration.hardware.audio_drivers != new.configuration.hardware.audio_drivers
+        || old.configuration.hardware.usb_enabled != new.configuration.hardware.usb_enabled
+    // Boot partition layout
+        || old.configuration.boot.disk_size_mb != new.configuration.boot.disk_size_mb
+    // Init script changes → initfs content
+        || old.services.init_scripts != new.services.init_scripts
+    // Boot component store paths
+        || boot_components_changed(old, new)
+}
+
+/// Check if boot component store paths differ between manifests.
+fn boot_components_changed(old: &Manifest, new: &Manifest) -> bool {
+    match (&old.boot, &new.boot) {
+        (Some(old_boot), Some(new_boot)) => old_boot != new_boot,
+        (None, Some(_)) | (Some(_), None) => true,
+        (None, None) => false,
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Boot Component Updates
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Default boot directory on the running Redox system.
+const BOOT_DIR: &str = "/boot";
+
+/// Update boot component files on disk when the generation's boot paths differ.
+///
+/// Copies kernel/initfs from their store paths to /boot/ on the rootfs.
+/// Skips if:
+///   - Both manifests have no boot section (v1 compat)
+///   - Boot paths are identical (no-op)
+///   - Store path file is missing (warns, continues)
+///
+/// Returns true if any boot files were updated (reboot recommended).
+fn update_boot_components(
+    old: &Manifest,
+    new: &Manifest,
+    warnings: &mut Vec<String>,
+) -> bool {
+    update_boot_components_at(old, new, BOOT_DIR, warnings)
+}
+
+/// Inner implementation with configurable boot directory (for testing).
+fn update_boot_components_at(
+    old: &Manifest,
+    new: &Manifest,
+    boot_dir: &str,
+    warnings: &mut Vec<String>,
+) -> bool {
+    let new_boot = match &new.boot {
+        Some(b) => b,
+        None => return false, // v1 manifest — don't touch boot
+    };
+
+    let old_boot = old.boot.as_ref();
+
+    let mut updated = false;
+
+    // Update kernel if path changed
+    if let Some(ref kernel_path) = new_boot.kernel {
+        let changed = old_boot.map_or(true, |ob| ob.kernel.as_ref() != Some(kernel_path));
+        if changed {
+            let dst = format!("{boot_dir}/kernel");
+            match copy_boot_file(kernel_path, &dst) {
+                Ok(()) => {
+                    println!("Boot: kernel updated from {kernel_path}");
+                    updated = true;
+                }
+                Err(e) => {
+                    warnings.push(format!(
+                        "boot: kernel store path missing or unreadable: {kernel_path}: {e}"
+                    ));
+                }
+            }
+        }
+    }
+
+    // Update initfs if path changed
+    if let Some(ref initfs_path) = new_boot.initfs {
+        let changed = old_boot.map_or(true, |ob| ob.initfs.as_ref() != Some(initfs_path));
+        if changed {
+            let dst = format!("{boot_dir}/initfs");
+            match copy_boot_file(initfs_path, &dst) {
+                Ok(()) => {
+                    println!("Boot: initfs updated from {initfs_path}");
+                    updated = true;
+                }
+                Err(e) => {
+                    warnings.push(format!(
+                        "boot: initfs store path missing or unreadable: {initfs_path}: {e}"
+                    ));
+                }
+            }
+        }
+    }
+
+    updated
+}
+
+/// Copy a boot component file from its store path to the target location.
+fn copy_boot_file(src: &str, dst: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let src_path = Path::new(src);
+    if !src_path.exists() {
+        return Err(format!("file not found: {src}").into());
+    }
+    // Write to temp file first, then rename (closer to atomic on most filesystems)
+    let dst_path = Path::new(dst);
+    let tmp_path = dst_path.with_extension("tmp");
+    if let Some(parent) = dst_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::copy(src_path, &tmp_path)?;
+    std::fs::rename(&tmp_path, dst_path)?;
+    Ok(())
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -830,6 +952,7 @@ mod tests {
                 description: "initial build".to_string(),
                 timestamp: "2026-02-20T10:00:00Z".to_string(),
             },
+            boot: None,
             configuration: Configuration {
                 boot: BootConfig {
                     disk_size_mb: 512,
@@ -1191,6 +1314,33 @@ mod tests {
         assert!(!has_boot_config_changed(&old, &new));
     }
 
+    #[test]
+    fn plan_boot_config_network_driver_change() {
+        let old = sample_manifest();
+        let mut new = sample_manifest();
+        new.configuration.hardware.network_drivers.push("e1000d".to_string());
+
+        assert!(has_boot_config_changed(&old, &new));
+    }
+
+    #[test]
+    fn plan_boot_config_usb_toggle() {
+        let old = sample_manifest();
+        let mut new = sample_manifest();
+        new.configuration.hardware.usb_enabled = !old.configuration.hardware.usb_enabled;
+
+        assert!(has_boot_config_changed(&old, &new));
+    }
+
+    #[test]
+    fn plan_boot_config_init_script_change() {
+        let old = sample_manifest();
+        let mut new = sample_manifest();
+        new.services.init_scripts.push("20_custom".to_string());
+
+        assert!(has_boot_config_changed(&old, &new));
+    }
+
     // ── Atomic profile swap tests (use tempdir) ──
 
     #[test]
@@ -1469,5 +1619,147 @@ mod tests {
         };
         assert!(!result.reboot_recommended);
         assert!(result.warnings.is_empty());
+    }
+
+    // ── Boot component update tests ──
+
+    use crate::system::BootComponents;
+
+    #[test]
+    fn boot_update_with_changed_paths_copies_files() {
+        let dir = tempfile::tempdir().unwrap();
+        let kernel_src = dir.path().join("store-kernel");
+        let initfs_src = dir.path().join("store-initfs");
+        let boot_dir = dir.path().join("boot");
+        std::fs::create_dir_all(&boot_dir).unwrap();
+        std::fs::write(&kernel_src, b"KERNEL_V2").unwrap();
+        std::fs::write(&initfs_src, b"INITFS_V2").unwrap();
+        // Write old boot files
+        std::fs::write(boot_dir.join("kernel"), b"KERNEL_V1").unwrap();
+        std::fs::write(boot_dir.join("initfs"), b"INITFS_V1").unwrap();
+
+        let old = sample_manifest(); // boot: None (v1)
+        let mut new = sample_manifest();
+        new.boot = Some(BootComponents {
+            kernel: Some(kernel_src.to_string_lossy().to_string()),
+            initfs: Some(initfs_src.to_string_lossy().to_string()),
+            bootloader: None,
+        });
+
+        let mut warnings = Vec::new();
+        let updated = update_boot_components_at(
+            &old, &new, &boot_dir.to_string_lossy(), &mut warnings,
+        );
+        assert!(updated);
+        assert!(warnings.is_empty());
+
+        // Verify files were actually copied
+        assert_eq!(std::fs::read(boot_dir.join("kernel")).unwrap(), b"KERNEL_V2");
+        assert_eq!(std::fs::read(boot_dir.join("initfs")).unwrap(), b"INITFS_V2");
+    }
+
+    #[test]
+    fn boot_update_same_paths_skips() {
+        let dir = tempfile::tempdir().unwrap();
+        let boot_dir = dir.path().join("boot");
+        std::fs::create_dir_all(&boot_dir).unwrap();
+        let kernel_src = dir.path().join("kernel");
+        std::fs::write(&kernel_src, b"KERNEL").unwrap();
+
+        let boot = Some(BootComponents {
+            kernel: Some(kernel_src.to_string_lossy().to_string()),
+            initfs: None,
+            bootloader: None,
+        });
+
+        let mut old = sample_manifest();
+        old.boot = boot.clone();
+        let mut new = sample_manifest();
+        new.boot = boot;
+
+        let mut warnings = Vec::new();
+        let updated = update_boot_components_at(
+            &old, &new, &boot_dir.to_string_lossy(), &mut warnings,
+        );
+        assert!(!updated);
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn boot_update_none_boot_section_skips() {
+        let old = sample_manifest(); // boot: None
+        let new = sample_manifest(); // boot: None
+
+        let mut warnings = Vec::new();
+        let updated = update_boot_components_at(
+            &old, &new, "/tmp/nonexistent-boot", &mut warnings,
+        );
+        assert!(!updated);
+        assert!(warnings.is_empty());
+    }
+
+    #[test]
+    fn boot_update_missing_store_path_warns() {
+        let dir = tempfile::tempdir().unwrap();
+        let boot_dir = dir.path().join("boot");
+        std::fs::create_dir_all(&boot_dir).unwrap();
+
+        let old = sample_manifest();
+        let mut new = sample_manifest();
+        new.boot = Some(BootComponents {
+            kernel: Some("/nonexistent/store/kernel".to_string()),
+            initfs: None,
+            bootloader: None,
+        });
+
+        let mut warnings = Vec::new();
+        let updated = update_boot_components_at(
+            &old, &new, &boot_dir.to_string_lossy(), &mut warnings,
+        );
+        assert!(!updated); // couldn't copy, so not "updated"
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("missing or unreadable"));
+    }
+
+    #[test]
+    fn boot_components_changed_detection() {
+        let mut old = sample_manifest();
+        let mut new = sample_manifest();
+
+        // None vs None → no change
+        assert!(!boot_components_changed(&old, &new));
+
+        // None vs Some → changed
+        new.boot = Some(BootComponents {
+            kernel: Some("/nix/store/k1".to_string()),
+            initfs: None,
+            bootloader: None,
+        });
+        assert!(boot_components_changed(&old, &new));
+
+        // Same values → no change
+        old.boot = new.boot.clone();
+        assert!(!boot_components_changed(&old, &new));
+
+        // Different kernel → changed
+        old.boot.as_mut().unwrap().kernel = Some("/nix/store/k2".to_string());
+        assert!(boot_components_changed(&old, &new));
+    }
+
+    #[test]
+    fn has_boot_config_changed_includes_boot_components() {
+        let mut old = sample_manifest();
+        let mut new = sample_manifest();
+
+        // Same config, no boot section → no change
+        assert!(!has_boot_config_changed(&old, &new));
+
+        // Add boot components to new → detected as change
+        new.boot = Some(BootComponents {
+            kernel: Some("/nix/store/new-kernel".to_string()),
+            initfs: None,
+            bootloader: None,
+        });
+        assert!(has_boot_config_changed(&old, &new));
     }
 }

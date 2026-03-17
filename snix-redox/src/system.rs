@@ -39,6 +39,9 @@ pub struct Manifest {
     pub system: SystemInfo,
     #[serde(default)]
     pub generation: GenerationInfo,
+    /// Boot component store paths (v2+). Missing/default for v1 manifests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub boot: Option<BootComponents>,
     pub configuration: Configuration,
     pub packages: Vec<Package>,
     pub drivers: Drivers,
@@ -108,6 +111,22 @@ pub struct BootConfig {
     pub disk_size_mb: u32,
     #[serde(rename = "espSizeMB")]
     pub esp_size_mb: u32,
+}
+
+/// Boot component store paths tracked per generation.
+/// When present, generation rollback restores these files to /boot/.
+/// Missing (None) for v1 manifests — activation skips boot component updates.
+#[derive(Deserialize, Serialize, Debug, Clone, Default, PartialEq)]
+pub struct BootComponents {
+    /// Nix store path to the kernel binary (e.g. "/nix/store/abc-kernel/boot/kernel")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kernel: Option<String>,
+    /// Nix store path to the initfs image (e.g. "/nix/store/def-initfs/boot/initfs")
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub initfs: Option<String>,
+    /// Nix store path to the bootloader EFI binary
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bootloader: Option<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -1396,8 +1415,12 @@ fn update_system_gc_roots_with(
     let gen_id = manifest.generation.id;
     let added = add_generation_gc_roots(gc_roots, gen_id, &manifest.packages)?;
 
-    if added > 0 {
-        println!("GC roots updated: {added} packages protected for generation {gen_id}");
+    // Add roots for boot component store paths
+    let boot_added = add_boot_gc_roots(gc_roots, gen_id, &manifest.boot)?;
+
+    let total = added + boot_added;
+    if total > 0 {
+        println!("GC roots updated: {added} packages + {boot_added} boot components protected for generation {gen_id}");
     }
 
     Ok(())
@@ -1418,6 +1441,49 @@ fn add_generation_gc_roots(
                 eprintln!("warning: could not add GC root for gen-{}-{}: {e}", gen_id, pkg.name);
             } else {
                 added += 1;
+            }
+        }
+    }
+    Ok(added)
+}
+
+/// Add GC roots for a generation's boot component store paths.
+/// Boot paths use the `gen-{N}-boot-{component}` naming convention.
+fn add_boot_gc_roots(
+    gc_roots: &crate::store::GcRoots,
+    gen_id: u32,
+    boot: &Option<BootComponents>,
+) -> Result<u32, Box<dyn std::error::Error>> {
+    let boot = match boot {
+        Some(b) => b,
+        None => return Ok(0),
+    };
+    let mut added = 0u32;
+    // Extract the store path directory from the full file path.
+    // e.g. "/nix/store/abc-kernel/boot/kernel" → "/nix/store/abc-kernel"
+    let extract_store_dir = |path: &str| -> Option<String> {
+        if let Some(rest) = path.strip_prefix("/nix/store/") {
+            // Find the first '/' after the hash-name
+            if let Some(idx) = rest.find('/') {
+                return Some(format!("/nix/store/{}", &rest[..idx]));
+            }
+        }
+        // Fallback: use the path as-is (may be a direct store path)
+        Some(path.to_string())
+    };
+    for (name, path_opt) in [
+        ("boot-kernel", &boot.kernel),
+        ("boot-initfs", &boot.initfs),
+        ("boot-bootloader", &boot.bootloader),
+    ] {
+        if let Some(ref path) = path_opt {
+            if let Some(store_dir) = extract_store_dir(path) {
+                let root_name = format!("gen-{}-{}", gen_id, name);
+                if let Err(e) = gc_roots.add_root(&root_name, &store_dir) {
+                    eprintln!("warning: could not add GC root for {root_name}: {e}");
+                } else {
+                    added += 1;
+                }
             }
         }
     }
@@ -1858,6 +1924,7 @@ mod tests {
                 description: "initial build".to_string(),
                 timestamp: "2026-02-19T10:00:00Z".to_string(),
             },
+            boot: None,
             configuration: Configuration {
                 boot: BootConfig {
                     disk_size_mb: 512,
@@ -3413,6 +3480,119 @@ mod tests {
         assert!(names.contains(&"gen-2-uutils".to_string()));
     }
 
+    // ===== Boot Component GC Root Tests =====
+
+    const SP_KERNEL: &str = "/nix/store/5g8nzclclk9lnqz6izgsml0a8r5aq8ss-kernel";
+    const SP_INITFS: &str = "/nix/store/6h9padmfmla0prz7jzharn1f9s6ar9ss-initfs";
+    const SP_KERNEL2: &str = "/nix/store/7j0qbfvngn0g1qsz8kaiasq2g0a7vs0v-kernel2";
+
+    #[test]
+    fn boot_gc_roots_added_for_generation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gc_roots = make_gc_roots(&tmp);
+
+        let boot = Some(BootComponents {
+            kernel: Some(format!("{SP_KERNEL}/boot/kernel")),
+            initfs: Some(format!("{SP_INITFS}/boot/initfs")),
+            bootloader: None,
+        });
+
+        let added = add_boot_gc_roots(&gc_roots, 1, &boot).unwrap();
+        assert_eq!(added, 2);
+
+        let names = root_names(&gc_roots);
+        assert!(names.contains(&"gen-1-boot-kernel".to_string()));
+        assert!(names.contains(&"gen-1-boot-initfs".to_string()));
+    }
+
+    #[test]
+    fn boot_gc_roots_none_is_noop() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gc_roots = make_gc_roots(&tmp);
+
+        let added = add_boot_gc_roots(&gc_roots, 1, &None).unwrap();
+        assert_eq!(added, 0);
+        assert!(root_names(&gc_roots).is_empty());
+    }
+
+    #[test]
+    fn boot_gc_roots_removed_with_generation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gc_roots = make_gc_roots(&tmp);
+
+        // Add package + boot roots for gen 1
+        gc_roots.add_root("gen-1-ion", SP_ION_V1).unwrap();
+        gc_roots.add_root("gen-1-boot-kernel", SP_KERNEL).unwrap();
+        gc_roots.add_root("gen-1-boot-initfs", SP_INITFS).unwrap();
+        // And gen 2
+        gc_roots.add_root("gen-2-ion", SP_ION_V2).unwrap();
+        gc_roots.add_root("gen-2-boot-kernel", SP_KERNEL).unwrap();
+
+        // Remove gen 1 — both package and boot roots go
+        let removed = remove_generation_gc_roots(&gc_roots, 1).unwrap();
+        assert_eq!(removed, 3); // ion + boot-kernel + boot-initfs
+
+        let names = root_names(&gc_roots);
+        assert_eq!(names.len(), 2);
+        assert!(names.contains(&"gen-2-ion".to_string()));
+        assert!(names.contains(&"gen-2-boot-kernel".to_string()));
+    }
+
+    #[test]
+    fn shared_boot_paths_kept_until_last_generation() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gc_roots = make_gc_roots(&tmp);
+
+        // Gen 1 and gen 2 share the same kernel store path
+        gc_roots.add_root("gen-1-boot-kernel", SP_KERNEL).unwrap();
+        gc_roots.add_root("gen-2-boot-kernel", SP_KERNEL).unwrap();
+        // Gen 3 has a different kernel
+        gc_roots.add_root("gen-3-boot-kernel", SP_KERNEL2).unwrap();
+
+        // Delete gen 1 — shared kernel still rooted by gen 2
+        remove_generation_gc_roots(&gc_roots, 1).unwrap();
+        let names = root_names(&gc_roots);
+        assert!(names.contains(&"gen-2-boot-kernel".to_string()));
+
+        // Delete gen 2 — now the old kernel has no roots
+        remove_generation_gc_roots(&gc_roots, 2).unwrap();
+        let names = root_names(&gc_roots);
+        assert_eq!(names.len(), 1);
+        assert!(names.contains(&"gen-3-boot-kernel".to_string()));
+    }
+
+    #[test]
+    fn update_gc_roots_includes_boot_components() {
+        let tmp = tempfile::tempdir().unwrap();
+        let gc_roots = make_gc_roots(&tmp);
+        let gen_dir = tmp.path().join("generations");
+        fs::create_dir_all(&gen_dir).unwrap();
+
+        let mut m = sample_manifest();
+        m.generation.id = 1;
+        // Use valid nixbase32 store paths for packages
+        m.packages = vec![
+            Package { name: "ion".into(), version: "1.0".into(), store_path: SP_ION_V1.into() },
+            Package { name: "uutils".into(), version: "1.0".into(), store_path: SP_UUTILS.into() },
+        ];
+        m.boot = Some(BootComponents {
+            kernel: Some(format!("{SP_KERNEL}/boot/kernel")),
+            initfs: Some(format!("{SP_INITFS}/boot/initfs")),
+            bootloader: None,
+        });
+
+        update_system_gc_roots_with(&gc_roots, &m, Some(gen_dir.to_str().unwrap())).unwrap();
+
+        let names = root_names(&gc_roots);
+        // Package roots
+        assert!(names.contains(&"gen-1-ion".to_string()));
+        assert!(names.contains(&"gen-1-uutils".to_string()));
+        // Boot roots
+        assert!(names.contains(&"gen-1-boot-kernel".to_string()));
+        assert!(names.contains(&"gen-1-boot-initfs".to_string()));
+        assert_eq!(names.len(), 4);
+    }
+
     // ===== Delete Generations Tests =====
 
     /// Set up N generations in a tempdir with GC roots. Returns (gen_dir, manifest_file, gc_roots, boot_default_path).
@@ -3733,6 +3913,82 @@ mod tests {
             assert!(!gen_dir.join(id.to_string()).exists());
         }
         assert!(gen_dir.join("5").exists());
+    }
+
+    // ── Boot component manifest tests ──
+
+    #[test]
+    fn parse_v1_manifest_no_boot_section() {
+        let m = sample_manifest();
+        assert_eq!(m.manifest_version, 1);
+        assert!(m.boot.is_none());
+    }
+
+    #[test]
+    fn parse_v1_json_without_boot_field() {
+        let json = serde_json::to_string(&sample_manifest()).unwrap();
+        // v1 manifest serialized without boot field (skip_serializing_if = None)
+        assert!(!json.contains("\"boot\":{\"kernel\""));
+        let parsed: Manifest = serde_json::from_str(&json).unwrap();
+        assert!(parsed.boot.is_none());
+    }
+
+    #[test]
+    fn parse_v2_manifest_with_boot_paths() {
+        let mut m = sample_manifest();
+        m.manifest_version = 2;
+        m.boot = Some(BootComponents {
+            kernel: Some("/nix/store/abc-kernel/boot/kernel".to_string()),
+            initfs: Some("/nix/store/def-initfs/boot/initfs".to_string()),
+            bootloader: Some("/nix/store/ghi-bootloader/boot/EFI/BOOT/BOOTX64.EFI".to_string()),
+        });
+
+        let json = serde_json::to_string(&m).unwrap();
+        assert!(json.contains("abc-kernel"));
+        assert!(json.contains("def-initfs"));
+        assert!(json.contains("ghi-bootloader"));
+
+        let parsed: Manifest = serde_json::from_str(&json).unwrap();
+        let boot = parsed.boot.unwrap();
+        assert_eq!(boot.kernel.unwrap(), "/nix/store/abc-kernel/boot/kernel");
+        assert_eq!(boot.initfs.unwrap(), "/nix/store/def-initfs/boot/initfs");
+        assert_eq!(boot.bootloader.unwrap(), "/nix/store/ghi-bootloader/boot/EFI/BOOT/BOOTX64.EFI");
+    }
+
+    #[test]
+    fn roundtrip_v2_manifest_preserves_boot() {
+        let mut m = sample_manifest();
+        m.manifest_version = 2;
+        m.boot = Some(BootComponents {
+            kernel: Some("/nix/store/k1/boot/kernel".to_string()),
+            initfs: Some("/nix/store/i1/boot/initfs".to_string()),
+            bootloader: None, // partial — bootloader omitted
+        });
+
+        let json = serde_json::to_string_pretty(&m).unwrap();
+        let parsed: Manifest = serde_json::from_str(&json).unwrap();
+        let boot = parsed.boot.unwrap();
+        assert_eq!(boot.kernel.unwrap(), "/nix/store/k1/boot/kernel");
+        assert_eq!(boot.initfs.unwrap(), "/nix/store/i1/boot/initfs");
+        assert!(boot.bootloader.is_none());
+    }
+
+    #[test]
+    fn v1_json_with_extra_fields_parses() {
+        // Simulate a v2 manifest read by v1-era code: extra fields ignored
+        let mut m = sample_manifest();
+        m.manifest_version = 2;
+        m.boot = Some(BootComponents {
+            kernel: Some("/nix/store/k/boot/kernel".to_string()),
+            initfs: None,
+            bootloader: None,
+        });
+        let json = serde_json::to_string(&m).unwrap();
+
+        // Parse succeeds (serde default handles missing/extra gracefully)
+        let parsed: Manifest = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.manifest_version, 2);
+        assert!(parsed.boot.is_some());
     }
 
 }
