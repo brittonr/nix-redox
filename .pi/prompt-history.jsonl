@@ -439,3 +439,4 @@
 {"text":"so do we need to add redox rx","timestamp":1773788915047}
 {"text":"add it. sudo needs to be included as default, and we need to be able to escalte when needed","timestamp":1773788958847}
 {"text":"add tests for this.","timestamp":1773789024763}
+{"text":"go through the redoxos docs and see what else we are missing. write an openspec to resolve these. ensure we write tests for them. do a through research","timestamp":1773789545058}
