@@ -477,7 +477,34 @@ let
         };
       }
     ) initScripts.allInitScriptsWithServices
-  ));
+  ))
+
+  # Activation scripts — stored as executable files in /etc/redox-system/activation.d/
+  # Executed by activate.rs during `snix system switch` in dependency order.
+  // (lib.mapAttrs' (
+    name: script:
+    {
+      name = "etc/redox-system/activation.d/${name}";
+      value = {
+        text = "#!/bin/sh\n${script.text}";
+        mode = "0755";
+      };
+    }
+  ) (inputs.activation.scripts or { }))
+
+  # User-declared etc files (environment.etc) — applied LAST so they override built-ins.
+  # Like NixOS environment.etc: keys are paths relative to / (e.g. "etc/motd").
+  # Each entry has text or source content and optional mode (default: 0644).
+  // (lib.mapAttrs (
+    name: entry:
+    let
+      hasSource = (entry ? source) && entry.source != null;
+      hasText = (entry ? text) && entry.text != null;
+    in
+    (lib.optionalAttrs hasText { text = entry.text; })
+    // (lib.optionalAttrs hasSource { source = entry.source; })
+    // { mode = entry.mode or "0644"; }
+  ) (inputs.environment.etc or { }));
 
 in
 

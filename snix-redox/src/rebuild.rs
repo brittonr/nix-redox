@@ -1014,6 +1014,7 @@ mod tests {
                 init_scripts: vec!["10_net".to_string()],
                 startup_script: "/startup.sh".to_string(),
             },
+            activation_scripts: Vec::new(),
             files: BTreeMap::new(),
             system_profile: String::new(),
         }

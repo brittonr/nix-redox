@@ -899,7 +899,8 @@ fn main() {
             } => {
                 let selector_str = selector.join(" ");
                 if selector_str.is_empty() {
-                    return Err("selector required: 'old', '+N', 'Nd', or generation IDs".into());
+                    eprintln!("Error: selector required: 'old', '+N', 'Nd', or generation IDs");
+                    std::process::exit(1);
                 }
                 system::delete_generations(
                     &selector_str,

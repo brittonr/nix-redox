@@ -122,6 +122,12 @@ let
       startupScript = "/startup.sh";
     };
 
+    # Activation scripts — executed by activate.rs during `snix system switch`
+    activationScripts = lib.mapAttrsToList (name: script: {
+      inherit name;
+      deps = script.deps or [ ];
+    }) (inputs.activation.scripts or { });
+
     # File hashes are computed at build time and merged into this manifest.
     # The key "files" is populated by the rootTree derivation (see below).
     # This avoids a circular dependency: manifest.json is written first,

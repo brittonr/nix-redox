@@ -116,6 +116,17 @@ in
     binaryCachePackages =
       lib.optionalAttrs (pkgs ? ripgrep) { ripgrep = pkgs.ripgrep; }
       // lib.optionalAttrs (pkgs ? fd) { fd = pkgs.fd; };
+
+    # Test environment.etc: arbitrary file injection
+    etc = {
+      "etc/motd" = {
+        text = "Welcome to Redox OS functional test environment!";
+        mode = "0644";
+      };
+      "etc/myapp/config.toml" = {
+        text = "[test]\nenabled = true\n";
+      };
+    };
   };
 
   "/networking" = {
@@ -133,6 +144,20 @@ in
 
   "/services" = {
     startupScriptText = testRunner;
+  };
+
+  # Test activation scripts: dependency ordering and execution
+  "/activation" = {
+    scripts = {
+      createTestDirs = {
+        text = "mkdir -p /var/test-data";
+        deps = [];
+      };
+      writeTestMarker = {
+        text = "echo activation-test-ok > /var/test-data/marker";
+        deps = [ "createTestDirs" ];
+      };
+    };
   };
 
   "/virtualisation" = {
