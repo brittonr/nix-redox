@@ -1854,4 +1854,61 @@ mod tests {
         let config = parse_config_json(json).unwrap();
         assert!(config.services.is_none());
     }
+
+    // ===== Nonexistent Package Handling =====
+
+    #[test]
+    fn test_merge_unresolved_package_included_in_manifest() {
+        let current = sample_manifest();
+        let config = RebuildConfig {
+            packages: Some(vec!["nonexistent".to_string()]),
+            ..Default::default()
+        };
+
+        // Package not in cache → empty store_path
+        let resolved = vec![Package {
+            name: "nonexistent".to_string(),
+            version: String::new(),
+            store_path: String::new(),
+        }];
+
+        let merged = merge_config(&current, &config, &resolved).unwrap();
+
+        // Boot-essential packages preserved
+        let names: Vec<_> = merged.packages.iter().map(|p| p.name.as_str()).collect();
+        assert!(names.contains(&"ion"), "boot-essential ion preserved");
+        assert!(names.contains(&"base"), "boot-essential base preserved");
+        // Unresolved package is still in the list (with empty store_path)
+        assert!(names.contains(&"nonexistent"), "unresolved package included");
+        let unresolved = merged.packages.iter().find(|p| p.name == "nonexistent").unwrap();
+        assert!(unresolved.store_path.is_empty(), "store_path stays empty");
+    }
+
+    #[test]
+    fn test_merge_all_unresolved_preserves_boot_essential() {
+        let current = sample_manifest();
+        let config = RebuildConfig {
+            packages: Some(vec!["pkg1".to_string(), "pkg2".to_string()]),
+            ..Default::default()
+        };
+
+        // All packages unresolved
+        let resolved = vec![
+            Package { name: "pkg1".to_string(), version: String::new(), store_path: String::new() },
+            Package { name: "pkg2".to_string(), version: String::new(), store_path: String::new() },
+        ];
+
+        let merged = merge_config(&current, &config, &resolved).unwrap();
+
+        let names: Vec<_> = merged.packages.iter().map(|p| p.name.as_str()).collect();
+        // Boot-essential from current manifest always preserved
+        assert!(names.contains(&"ion"));
+        assert!(names.contains(&"base"));
+        assert!(names.contains(&"uutils"));
+        // Old managed packages (ripgrep) replaced by the new set
+        assert!(!names.contains(&"ripgrep"));
+        // New unresolved packages present
+        assert!(names.contains(&"pkg1"));
+        assert!(names.contains(&"pkg2"));
+    }
 }

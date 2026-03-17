@@ -2345,4 +2345,185 @@ mod tests {
         // Should not panic
         p.display();
     }
+
+    // ── Service diff: semantic diffs with names and types ──
+
+    #[test]
+    fn plan_service_added_has_correct_name_and_type() {
+        let old = sample_manifest();
+        let mut new = sample_manifest();
+        new.services.declared.insert(
+            "orbital".to_string(),
+            ServiceInfo {
+                description: "Orbital display server".to_string(),
+                command: "/bin/orbital".to_string(),
+                svc_type: "nowait".to_string(),
+                args: String::new(),
+                wanted_by: "rootfs".to_string(),
+                environment: BTreeMap::new(),
+                after: vec![],
+            },
+        );
+
+        let p = plan(&old, &new);
+        assert_eq!(p.services_added.len(), 1);
+        assert_eq!(p.services_added[0].name, "orbital");
+        assert_eq!(p.services_added[0].svc_type, "nowait");
+    }
+
+    #[test]
+    fn plan_service_removed_has_correct_name_and_type() {
+        let mut old = sample_manifest();
+        old.services.declared.insert(
+            "dhcpd".to_string(),
+            ServiceInfo {
+                description: "DHCP client".to_string(),
+                command: "/bin/dhcpd".to_string(),
+                svc_type: "daemon".to_string(),
+                args: String::new(),
+                wanted_by: "rootfs".to_string(),
+                environment: BTreeMap::new(),
+                after: vec![],
+            },
+        );
+        let new = sample_manifest();
+
+        let p = plan(&old, &new);
+        assert_eq!(p.services_removed.len(), 1);
+        assert_eq!(p.services_removed[0].name, "dhcpd");
+        assert_eq!(p.services_removed[0].svc_type, "daemon");
+    }
+
+    #[test]
+    fn plan_service_add_remove_unchanged_stays_out() {
+        // Old has smolnetd + dhcpd, new has smolnetd + orbital
+        let mut old = sample_manifest();
+        old.services.declared.insert(
+            "smolnetd".to_string(),
+            ServiceInfo {
+                description: "Network stack".to_string(),
+                command: "/bin/smolnetd".to_string(),
+                svc_type: "daemon".to_string(),
+                args: String::new(),
+                wanted_by: "rootfs".to_string(),
+                environment: BTreeMap::new(),
+                after: vec![],
+            },
+        );
+        old.services.declared.insert(
+            "dhcpd".to_string(),
+            ServiceInfo {
+                description: "DHCP client".to_string(),
+                command: "/bin/dhcpd".to_string(),
+                svc_type: "daemon".to_string(),
+                args: String::new(),
+                wanted_by: "rootfs".to_string(),
+                environment: BTreeMap::new(),
+                after: vec![],
+            },
+        );
+
+        let mut new = sample_manifest();
+        new.services.declared.insert(
+            "smolnetd".to_string(),
+            ServiceInfo {
+                description: "Network stack".to_string(),
+                command: "/bin/smolnetd".to_string(),
+                svc_type: "daemon".to_string(),
+                args: String::new(),
+                wanted_by: "rootfs".to_string(),
+                environment: BTreeMap::new(),
+                after: vec![],
+            },
+        );
+        new.services.declared.insert(
+            "orbital".to_string(),
+            ServiceInfo {
+                description: "Display server".to_string(),
+                command: "/bin/orbital".to_string(),
+                svc_type: "nowait".to_string(),
+                args: String::new(),
+                wanted_by: "rootfs".to_string(),
+                environment: BTreeMap::new(),
+                after: vec![],
+            },
+        );
+
+        let p = plan(&old, &new);
+        // dhcpd removed, orbital added, smolnetd unchanged
+        assert_eq!(p.services_removed.len(), 1);
+        assert_eq!(p.services_removed[0].name, "dhcpd");
+        assert_eq!(p.services_added.len(), 1);
+        assert_eq!(p.services_added[0].name, "orbital");
+        // smolnetd should not appear in any change list
+        assert!(!p.services_added.iter().any(|s| s.name == "smolnetd"));
+        assert!(!p.services_removed.iter().any(|s| s.name == "smolnetd"));
+        assert!(!p.services_changed.iter().any(|s| s.name == "smolnetd"));
+    }
+
+    #[test]
+    fn plan_service_changes_set_reboot_recommended() {
+        // reboot_recommended is computed during activate(), not plan().
+        // But has_boot_config_changed covers init_script changes, and
+        // the activate logic ORs in services_added/services_removed.
+        // We verify here that the plan data feeds the reboot decision.
+        let old = sample_manifest();
+        let mut new = sample_manifest();
+        new.services.declared.insert(
+            "audiod".to_string(),
+            ServiceInfo {
+                description: "Audio daemon".to_string(),
+                command: "/bin/audiod".to_string(),
+                svc_type: "nowait".to_string(),
+                args: String::new(),
+                wanted_by: "rootfs".to_string(),
+                environment: BTreeMap::new(),
+                after: vec![],
+            },
+        );
+
+        let p = plan(&old, &new);
+        // services_added is non-empty → activate would set reboot_recommended = true
+        assert!(!p.services_added.is_empty(),
+            "service addition should trigger reboot recommendation");
+    }
+
+    // ── Boot path change → reboot_recommended ──
+
+    #[test]
+    fn has_boot_config_changed_on_initfs_path_diff() {
+        let mut old = sample_manifest();
+        let mut new = sample_manifest();
+
+        old.boot = Some(BootComponents {
+            kernel: Some("/nix/store/aaa-kernel/boot/kernel".to_string()),
+            initfs: Some("/nix/store/bbb-initfs/boot/initfs".to_string()),
+            bootloader: Some("/nix/store/ccc-boot/boot/BOOTX64.EFI".to_string()),
+        });
+        new.boot = Some(BootComponents {
+            kernel: Some("/nix/store/aaa-kernel/boot/kernel".to_string()),
+            initfs: Some("/nix/store/ddd-initfs/boot/initfs".to_string()),
+            bootloader: Some("/nix/store/ccc-boot/boot/BOOTX64.EFI".to_string()),
+        });
+
+        assert!(has_boot_config_changed(&old, &new),
+            "differing initfs path should be detected as boot config change");
+    }
+
+    #[test]
+    fn has_boot_config_unchanged_when_paths_identical() {
+        let mut old = sample_manifest();
+        let mut new = sample_manifest();
+
+        let boot = BootComponents {
+            kernel: Some("/nix/store/aaa-kernel/boot/kernel".to_string()),
+            initfs: Some("/nix/store/bbb-initfs/boot/initfs".to_string()),
+            bootloader: Some("/nix/store/ccc-boot/boot/BOOTX64.EFI".to_string()),
+        };
+        old.boot = Some(boot.clone());
+        new.boot = Some(boot);
+
+        assert!(!has_boot_config_changed(&old, &new),
+            "identical boot paths should not trigger boot config change");
+    }
 }

@@ -405,3 +405,5 @@
 {"text":"- boot-component-rebuild — Detect boot-affecting config changes that need kernel/bootloader rebuild.","timestamp":1773770186658}
 {"text":"yes","timestamp":1773770449723}
 {"text":"archive and commit","timestamp":1773770958397}
+{"text":"what next","timestamp":1773771067369}
+{"text":"guest-rebuild               │ snix system rebuild end-to-end       │ The capstone — ties all the pieces together into the      │\n │","timestamp":1773771158454}
