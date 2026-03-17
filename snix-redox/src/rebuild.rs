@@ -1011,6 +1011,7 @@ mod tests {
                 },
             )]),
             services: Services {
+                declared: BTreeMap::new(),
                 init_scripts: vec!["10_net".to_string()],
                 startup_script: "/startup.sh".to_string(),
             },

@@ -212,8 +212,37 @@ pub struct Group {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Services {
+    /// Full service declarations (for semantic diffing during activation).
+    /// Added in manifest v3. Falls back to empty map for v2 manifests.
+    #[serde(default)]
+    pub declared: BTreeMap<String, ServiceInfo>,
     pub init_scripts: Vec<String>,
     pub startup_script: String,
+}
+
+/// Metadata for a declared service (stored in manifest for activation diffs).
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ServiceInfo {
+    /// Human-readable description
+    pub description: String,
+    /// Binary or script to execute
+    pub command: String,
+    /// Service type: oneshot, daemon, nowait, scheme
+    #[serde(rename = "type")]
+    pub svc_type: String,
+    /// Extra arguments
+    #[serde(default)]
+    pub args: String,
+    /// Target phase: initfs or rootfs
+    #[serde(rename = "wantedBy")]
+    pub wanted_by: String,
+    /// Per-service environment variables
+    #[serde(default)]
+    pub environment: BTreeMap<String, String>,
+    /// Service names that must start before this one
+    #[serde(default)]
+    pub after: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -2008,6 +2037,7 @@ mod tests {
                 },
             )]),
             services: Services {
+                declared: BTreeMap::new(),
                 init_scripts: vec!["10_net".to_string(), "15_dhcp".to_string()],
                 startup_script: "/startup.sh".to_string(),
             },
@@ -3077,8 +3107,19 @@ mod tests {
             blake3: "aaa111".to_string(), size: 42, mode: "644".to_string(),
         });
         let mut new_m = current.clone();
-        // Add a new service
-        new_m.services.init_scripts.push("20_httpd".to_string());
+        // Add a declared service
+        new_m.services.declared.insert(
+            "httpd".to_string(),
+            ServiceInfo {
+                description: "HTTP server".to_string(),
+                command: "/bin/httpd".to_string(),
+                svc_type: "daemon".to_string(),
+                args: String::new(),
+                wanted_by: "rootfs".to_string(),
+                environment: BTreeMap::new(),
+                after: vec![],
+            },
+        );
         // Change a config file hash
         new_m.files.get_mut("etc/passwd").unwrap().blake3 = "changed123".to_string();
         // Add a new config file
@@ -3089,7 +3130,8 @@ mod tests {
         });
 
         let plan = crate::activate::plan(&current, &new_m);
-        assert_eq!(plan.services_added, vec!["20_httpd"]);
+        assert_eq!(plan.services_added.len(), 1);
+        assert_eq!(plan.services_added[0].name, "httpd");
         assert_eq!(plan.config_files_added, vec!["etc/httpd.conf"]);
         assert_eq!(plan.config_files_changed.len(), 1);
         assert_eq!(plan.config_files_changed[0].path, "etc/passwd");

@@ -1,22 +1,24 @@
 # Init scripts and service configuration
 # Generates init.toml, startup.sh, and all numbered init.d scripts.
-# Handles both raw initScripts and structured service rendering.
+#
+# Service declarations come from three sources:
+#   1. Module-derived services — generated here from module inputs
+#      (networking, graphics, snix, etc.)
+#   2. Profile-declared services — set via /services.services in profiles
+#   3. Raw initScripts — legacy numbered scripts with full control
+#
+# Services are topologically sorted by `after` dependencies and assigned
+# numeric prefixes (10-79). Raw initScripts keep their explicit names.
 
 { lib, cfg, inputs, pkgs }:
 
 let
-  # Services: init.toml, startup.sh
-  #
-  # When userutils (getty/login) is installed, the serial console is handled
-  # by getty using event-driven non-blocking I/O on the debug: scheme.
-  # getty bridges debug: to a PTY, and login/shell run on the PTY which
-  # supports full terminal operations (tcsetattr, liner, etc.).
-  #
-  # When userutils is NOT installed (e.g., functional-test profile),
-  # startup.sh provides a basic read loop or test runner on debug: directly.
+  # ═══════════════════════════════════════════════════════════════════
+  # init.toml and startup.sh
+  # ═══════════════════════════════════════════════════════════════════
+
   initToml =
     if cfg.userutilsInstalled then
-      # getty handles the console — no shell service needed in init.toml
       ""
     else
       ''
@@ -29,106 +31,399 @@ let
 
   startupContent = "#!/bin/sh\n" + (inputs.services.startupScriptText or "/bin/ion\n");
 
-  # Collect all init scripts
-  allInitScripts =
-    (inputs.services.initScripts or { })
-    // (lib.optionalAttrs cfg.networkingEnabled (
-      {
-        "10_net" = {
-          text = "notify /bin/smolnetd";
-          directory = "init.d";
-        };
-      }
-      // (lib.optionalAttrs (inputs.networking.mode == "dhcp" || inputs.networking.mode == "auto") {
-        "15_dhcp" = {
-          text = "echo \"Starting DHCP client...\"\nnowait /bin/dhcpd-quiet";
-          directory = "init.d";
-        };
-      })
-      // (lib.optionalAttrs (inputs.networking.mode == "auto") {
-        "16_netcfg" = {
-          text = "nowait /bin/netcfg-setup auto";
-          directory = "init.d";
-        };
-      })
-      // (lib.optionalAttrs (inputs.networking.mode == "static" && cfg.firstIface != null) {
-        "15_netcfg" = {
-          # Interface config names (e.g. "cloud-hypervisor") are labels —
-          # the actual Redox device is always eth0.
-          text = "/bin/netcfg-setup static --interface eth0 --address ${cfg.firstIface.address} --gateway ${cfg.firstIface.gateway}";
-          directory = "init.d";
-        };
-      })
-      // (lib.optionalAttrs (inputs.networking.remoteShellEnable or false) {
-        "17_remote_shell" = {
-          text = "echo \"Starting remote shell on port ${
-            toString (inputs.networking.remoteShellPort or 8023)
-          }...\"\nnowait /bin/nc -l -e /bin/sh 0.0.0.0:${
-            toString (inputs.networking.remoteShellPort or 8023)
-          }";
-          directory = "init.d";
-        };
-      })
-    ))
-    // (lib.optionalAttrs cfg.userutilsInstalled {
-      # Serial console via getty + PTY bridge.
-      # getty opens /scheme/debug/no-preserve with non-blocking I/O, creates a
-      # PTY pair, and bridges them using event-driven I/O. login/shell run on the
-      # PTY slave which supports full terminal operations (tcsetattr, liner, etc.)
-      # -J = don't clear screen. Matches upstream Redox minimal.toml.
-      # XDG_CONFIG_HOME=/etc ensures Ion finds system initrc at /etc/ion/initrc.
-      "30_console" = {
-        text = "export XDG_CONFIG_HOME /etc\nnowait getty /scheme/debug/no-preserve -J";
-        directory = "usr/lib/init.d";
-      };
-    })
-    // (lib.optionalAttrs cfg.graphicsEnabled {
-      "20_orbital" = {
-        text =
-          # VT=3 avoids conflict with inputd VT 1 and fbcond VT 2.
-          # Use 'export' + separate 'nowait' because our init daemon (base fc162ac)
-          # does NOT support inline KEY=VALUE syntax — it treats VT=3 as the executable.
-          # audiod uses 'nowait' (not 'notify') so it doesn't block init when no audio HW.
-          let
-            audioLine = lib.optionalString (inputs.hardware.audioEnable or false) "nowait audiod\n";
-            loginCmd = if pkgs ? orbutils then "orblogin orbterm" else "login";
-          in
-          "${audioLine}export VT 3\nnowait orbital ${loginCmd}";
-        directory = "usr/lib/init.d";
-      };
-    })
-    // (
-      let
-        storedEnabled = (inputs.snix.stored.enable or false);
-        profiledEnabled = (inputs.snix.profiled.enable or false);
-      in
-      lib.optionalAttrs storedEnabled {
-        "12_stored" = {
-          text =
-            let
-              cachePath = inputs.snix.stored.cachePath or "/nix/cache";
-              storeDir = inputs.snix.stored.storeDir or "/nix/store";
-            in
-            "# snix store scheme daemon (lazy NAR extraction)\nnowait /bin/snix stored --cache-path ${cachePath} --store-dir ${storeDir}";
-          directory = "init.d";
-        };
-      }
-      // lib.optionalAttrs profiledEnabled {
-        "13_profiled" = {
-          text =
-            let
-              profilesDir = inputs.snix.profiled.profilesDir or "/nix/var/snix/profiles";
-              storeDir = inputs.snix.profiled.storeDir or "/nix/store";
-            in
-            "# snix profile scheme daemon (union package views)\nnowait /bin/snix profiled --profiles-dir ${profilesDir} --store-dir ${storeDir}";
-          directory = "init.d";
-        };
-      }
-    );
+  # ═══════════════════════════════════════════════════════════════════
+  # Module-derived service declarations
+  # ═══════════════════════════════════════════════════════════════════
+  # Each block mirrors what was previously hardcoded as raw initScript
+  # conditionals. Now they produce structured service entries that go
+  # through topo sort + rendering like any other service.
 
-  # ===== INIT.D SCRIPTS (numbered, new init system) =====
-  # The new init daemon reads numbered scripts from /scheme/initfs/etc/init.d/
-  # instead of a single init.rc file
+  # --- Core daemons (from 00_base) ---
+  coreServices = {
+    ipcd = {
+      description = "Inter-process communication daemon";
+      command = "/bin/ipcd";
+      type = "daemon";
+      args = "";
+      wantedBy = "rootfs";
+      enable = true;
+      after = [ ];
+      environment = { };
+      priority = 50;
+    };
+    ptyd = {
+      description = "Pseudo-terminal daemon";
+      command = "/bin/ptyd";
+      type = "daemon";
+      args = "";
+      wantedBy = "rootfs";
+      enable = true;
+      after = [ ];
+      environment = { };
+      priority = 50;
+    };
+  };
+
+  # --- Networking services ---
+  networkingServices = lib.optionalAttrs cfg.networkingEnabled (
+    {
+      smolnetd = {
+        description = "Network stack daemon";
+        command = "/bin/smolnetd";
+        type = "daemon";
+        args = "";
+        wantedBy = "rootfs";
+        enable = true;
+        after = [ "ptyd" ];
+        environment = { };
+        priority = 50;
+      };
+    }
+    // (lib.optionalAttrs (inputs.networking.mode == "dhcp" || inputs.networking.mode == "auto") {
+      dhcpd = {
+        description = "DHCP client";
+        command = "/bin/dhcpd-quiet";
+        type = "nowait";
+        args = "";
+        wantedBy = "rootfs";
+        enable = true;
+        after = [ "smolnetd" ];
+        environment = { };
+        priority = 50;
+      };
+    })
+    // (lib.optionalAttrs (inputs.networking.mode == "auto") {
+      netcfg-auto = {
+        description = "Network auto-configuration";
+        command = "/bin/netcfg-setup";
+        type = "nowait";
+        args = "auto";
+        wantedBy = "rootfs";
+        enable = true;
+        after = [ "smolnetd" ];
+        environment = { };
+        priority = 50;
+      };
+    })
+    // (lib.optionalAttrs (inputs.networking.mode == "static" && cfg.firstIface != null) {
+      netcfg-static = {
+        description = "Static network configuration";
+        command = "/bin/netcfg-setup";
+        type = "oneshot";
+        args = "static --interface eth0 --address ${cfg.firstIface.address} --gateway ${cfg.firstIface.gateway}";
+        wantedBy = "rootfs";
+        enable = true;
+        after = [ "smolnetd" ];
+        environment = { };
+        priority = 50;
+      };
+    })
+    // (lib.optionalAttrs (inputs.networking.remoteShellEnable or false) {
+      remote-shell = {
+        description = "Remote shell listener";
+        command = "/bin/nc";
+        type = "nowait";
+        args = "-l -e /bin/sh 0.0.0.0:${toString (inputs.networking.remoteShellPort or 8023)}";
+        wantedBy = "rootfs";
+        enable = true;
+        after = [ "smolnetd" ];
+        environment = { };
+        priority = 50;
+      };
+    })
+  );
+
+  # --- Console (getty) ---
+  consoleServices = lib.optionalAttrs cfg.userutilsInstalled {
+    getty = {
+      description = "Serial console via getty + PTY bridge";
+      command = "getty";
+      type = "nowait";
+      args = "/scheme/debug/no-preserve -J";
+      wantedBy = "rootfs";
+      enable = true;
+      after = [ "ptyd" ];
+      environment = {
+        XDG_CONFIG_HOME = "/etc";
+      };
+      priority = 50;
+    };
+  };
+
+  # --- Graphics (orbital, audiod) ---
+  graphicsServices = lib.optionalAttrs cfg.graphicsEnabled (
+    let
+      loginCmd = if pkgs ? orbutils then "orblogin orbterm" else "login";
+    in
+    {
+      orbital = {
+        description = "Orbital desktop environment";
+        command = "orbital";
+        type = "nowait";
+        args = loginCmd;
+        wantedBy = "rootfs";
+        enable = true;
+        after = [ "ptyd" "ipcd" ];
+        environment = {
+          VT = "3";
+        };
+        priority = 50;
+      };
+    }
+    // lib.optionalAttrs (inputs.hardware.audioEnable or false) {
+      audiod = {
+        description = "Audio daemon";
+        command = "audiod";
+        type = "nowait";
+        args = "";
+        wantedBy = "rootfs";
+        enable = true;
+        after = [ ];
+        environment = { };
+        priority = 50;
+      };
+    }
+  );
+
+  # --- snix scheme daemons ---
+  snixServices =
+    let
+      storedEnabled = inputs.snix.stored.enable or false;
+      profiledEnabled = inputs.snix.profiled.enable or false;
+      cachePath = inputs.snix.stored.cachePath or "/nix/cache";
+      storeDir = inputs.snix.stored.storeDir or "/nix/store";
+      profilesDir = inputs.snix.profiled.profilesDir or "/nix/var/snix/profiles";
+      profiledStoreDir = inputs.snix.profiled.storeDir or "/nix/store";
+    in
+    lib.optionalAttrs storedEnabled {
+      stored = {
+        description = "snix store scheme daemon (lazy NAR extraction)";
+        command = "/bin/snix";
+        type = "nowait";
+        args = "stored --cache-path ${cachePath} --store-dir ${storeDir}";
+        wantedBy = "rootfs";
+        enable = true;
+        after = [ ];
+        environment = { };
+        priority = 50;
+      };
+    }
+    // lib.optionalAttrs profiledEnabled {
+      profiled = {
+        description = "snix profile scheme daemon (union package views)";
+        command = "/bin/snix";
+        type = "nowait";
+        args = "profiled --profiles-dir ${profilesDir} --store-dir ${profiledStoreDir}";
+        wantedBy = "rootfs";
+        enable = true;
+        after = [ ];
+        environment = { };
+        priority = 50;
+      };
+    };
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Merge all service sources
+  # ═══════════════════════════════════════════════════════════════════
+  # Module-derived services are overridden by profile-declared services
+  # (// merge: right side wins on key collision).
+
+  moduleServices =
+    coreServices
+    // networkingServices
+    // consoleServices
+    // graphicsServices
+    // snixServices;
+
+  profileServices = inputs.services.services or { };
+
+  # Filter out disabled services
+  allDeclaredServices =
+    lib.filterAttrs (_: svc: svc.enable or true) (moduleServices // profileServices);
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Topological sort with auto-numbering
+  # ═══════════════════════════════════════════════════════════════════
+
+  # Validate: all `after` references exist in the service set
+  serviceNames = builtins.attrNames allDeclaredServices;
+  serviceNameSet = builtins.listToAttrs (map (n: { name = n; value = true; }) serviceNames);
+
+  validateAfterRefs =
+    let
+      errors = lib.concatLists (
+        lib.mapAttrsToList (
+          name: svc:
+          let
+            badRefs = builtins.filter (dep: !(serviceNameSet ? ${dep})) (svc.after or [ ]);
+          in
+          map (bad: "service '${name}' depends on unknown service '${bad}'") badRefs
+        ) allDeclaredServices
+      );
+    in
+    if errors == [ ] then
+      true
+    else
+      throw ("Service dependency errors:\n  " + lib.concatStringsSep "\n  " errors);
+
+  # Topological sort using Kahn's algorithm.
+  # Returns a list of service names in dependency order.
+  # Throws on cycles.
+  topoSortServices =
+    let
+      names = builtins.attrNames allDeclaredServices;
+
+      # Build in-degree map: how many deps does each service have?
+      inDegree = builtins.listToAttrs (
+        map (name: {
+          inherit name;
+          value = builtins.length (allDeclaredServices.${name}.after or [ ]);
+        }) names
+      );
+
+      # Iterative Kahn's: pick zero-in-degree nodes, remove their edges, repeat.
+      # Nix is pure functional — simulate with recursive function.
+      kahnStep =
+        {
+          remaining,
+          degrees,
+          result,
+        }:
+        let
+          # Find nodes with zero in-degree (sorted for determinism)
+          ready = builtins.sort builtins.lessThan (
+            builtins.filter (n: degrees.${n} == 0) remaining
+          );
+        in
+        if remaining == [ ] then
+          result
+        else if ready == [ ] then
+          throw (
+            "Service dependency cycle detected among: "
+            + lib.concatStringsSep ", " remaining
+          )
+        else
+          let
+            # Remove ready nodes from remaining
+            newRemaining = builtins.filter (n: !(builtins.elem n ready)) remaining;
+
+            # Decrement in-degree for dependents of ready nodes
+            newDegrees = builtins.listToAttrs (
+              map (n: {
+                name = n;
+                value =
+                  let
+                    deps = allDeclaredServices.${n}.after or [ ];
+                    decrements = builtins.length (builtins.filter (d: builtins.elem d ready) deps);
+                  in
+                  degrees.${n} - decrements;
+              }) newRemaining
+            );
+          in
+          kahnStep {
+            remaining = newRemaining;
+            degrees = newDegrees;
+            result = result ++ ready;
+          };
+
+      sorted = kahnStep {
+        remaining = names;
+        degrees = inDegree;
+        result = [ ];
+      };
+    in
+    sorted;
+
+  # Assign numbers 10-79 based on topo sort position.
+  # Services with explicit priority (!= 50) use their priority directly.
+  autoNumbered =
+    let
+      sorted = topoSortServices;
+      count = builtins.length sorted;
+      # Spread numbers across 10-79 range
+      step = if count <= 1 then 1 else 69.0 / (count - 1);
+    in
+    lib.imap0 (
+      idx: name:
+      let
+        svc = allDeclaredServices.${name};
+        autoNum = 10 + builtins.floor (idx * step);
+        num = if (svc.priority or 50) != 50 then svc.priority else autoNum;
+        numStr = if num < 10 then "0${toString num}" else toString num;
+      in
+      {
+        inherit name num numStr;
+        service = svc;
+      }
+    ) sorted;
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Service rendering
+  # ═══════════════════════════════════════════════════════════════════
+
+  # Render a single service to init script text
+  renderServiceText = svc:
+    let
+      envLines = lib.concatStringsSep "\n" (
+        lib.mapAttrsToList (k: v: "export ${k} ${v}") (svc.environment or { })
+      );
+      cmdLine =
+        if svc.type == "scheme" then
+          "scheme ${svc.args} ${svc.command}"
+        else if svc.type == "daemon" then
+          "notify ${svc.command}${lib.optionalString (svc.args != "") " ${svc.args}"}"
+        else if svc.type == "nowait" then
+          "nowait ${svc.command}${lib.optionalString (svc.args != "") " ${svc.args}"}"
+        else
+          "${svc.command}${lib.optionalString (svc.args != "") " ${svc.args}"}";
+    in
+    "# ${svc.description}"
+    + lib.optionalString (envLines != "") "\n${envLines}"
+    + "\n${cmdLine}";
+
+  # Convert auto-numbered services to the allInitScripts format
+  renderedServices = builtins.listToAttrs (
+    map (entry: {
+      name = "${entry.numStr}_${entry.name}";
+      value = {
+        text = renderServiceText entry.service;
+        directory =
+          if (entry.service.wantedBy or "rootfs") == "initfs" then
+            "etc/init.d"
+          else
+            "usr/lib/init.d";
+      };
+    }) autoNumbered
+  );
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Raw initScripts (legacy, from profiles)
+  # ═══════════════════════════════════════════════════════════════════
+  # These keep their explicit numbered names and are not auto-numbered.
+  # The 00_base default is removed — ptyd/ipcd are now structured services.
+
+  rawInitScripts =
+    let
+      profileScripts = inputs.services.initScripts or { };
+      # Remove the default 00_base that contained ptyd/ipcd — those are
+      # now declared as structured services above.
+      cleaned = builtins.removeAttrs profileScripts [ "00_base" ];
+    in
+    cleaned;
+
+  # Merge: raw scripts + rendered services. Raw scripts take precedence
+  # on name collision (profile can override an auto-numbered service).
+  allInitScripts = renderedServices // rawInitScripts;
+
+  # For backwards compat: allInitScriptsWithServices is the same as allInitScripts
+  allInitScriptsWithServices = allInitScripts;
+
+  # ═══════════════════════════════════════════════════════════════════
+  # Initfs init.d scripts (early boot, before rootfs)
+  # ═══════════════════════════════════════════════════════════════════
+  # These are separate from rootfs services — they run in the initfs
+  # environment with different PATH/LD_LIBRARY_PATH.
+
   initScriptFiles = {
     "00_runtime" = ''
       # Core runtime daemons (SchemeDaemon binaries use 'scheme <name> <cmd>')
@@ -147,10 +442,6 @@ let
       stdio /scheme/log
       scheme logging ramfs logging
     '';
-
-    # ptyd, ipcd, USB daemons are rootfs services started by
-    # run.d /usr/lib/init.d /etc/init.d in 90_exit_initfs.
-    # They are NOT part of the initfs boot sequence.
 
     "20_graphics" = lib.optionalString cfg.initfsEnableGraphics ''
       # Graphics and input (SchemeDaemons: inputd, fbbootlogd, fbcond)
@@ -183,9 +474,6 @@ let
 
     "85_generation_select" = ''
       # Boot-time generation activation
-      # Reads /etc/redox-system/boot-default marker and activates that
-      # generation's manifest (rebuild profile, write config files) before
-      # userspace entry. Skips silently if no marker exists.
       cd /
       /bin/snix system activate-boot
     '';
@@ -214,49 +502,29 @@ let
       ''}
       ${
         if cfg.userutilsInstalled then
-          # getty handles the serial console via 30_console init script.
-          # Just redirect init's own stdio to debug for log output.
           "stdio debug:"
         else
-          # No getty available — run startup.sh directly on debug: scheme.
-          # Used by functional-test and minimal profiles.
           "stdio debug:\n/startup.sh"
       }
     '';
   };
 
-  # ===== STRUCTURED SERVICE RENDERING =====
-  # Render typed Service structs (from /services.services) into init script entries
-  # These get merged with raw initScripts from /services.initScripts
-  renderService =
-    name: svc:
-    if !(svc.enable or true) then
-      null
-    else
-      {
-        inherit name;
-        value = {
-          text =
-            if svc.type == "scheme" then
-              "# ${svc.description}\nscheme ${svc.args} ${svc.command}"
-            else if svc.type == "daemon" then
-              "# ${svc.description}\nnotify ${svc.command}${lib.optionalString (svc.args != "") " ${svc.args}"}"
-            else if svc.type == "nowait" then
-              "# ${svc.description}\nnowait ${svc.command}${lib.optionalString (svc.args != "") " ${svc.args}"}"
-            else
-              "# ${svc.description}\n${svc.command}${lib.optionalString (svc.args != "") " ${svc.args}"}";
-          directory = if (svc.wantedBy or "rootfs") == "initfs" then "etc/init.d" else "usr/lib/init.d";
-        };
-      };
-
-  renderedServices = builtins.listToAttrs (
-    builtins.filter (x: x != null) (lib.mapAttrsToList renderService (inputs.services.services or { }))
-  );
-
-  # Merge raw initScripts with rendered structured services
-  allInitScriptsWithServices = allInitScripts // renderedServices;
+  # ═══════════════════════════════════════════════════════════════════
+  # Exported: service metadata for manifest
+  # ═══════════════════════════════════════════════════════════════════
+  # Full service declarations (for manifest.nix to embed in manifest JSON)
+  declaredServicesForManifest = lib.mapAttrs (
+    name: svc: {
+      inherit (svc) description command type args wantedBy;
+      environment = svc.environment or { };
+      after = svc.after or [ ];
+    }
+  ) allDeclaredServices;
 
 in
+
+# Force evaluation of dependency validation
+assert validateAfterRefs;
 
 {
   inherit
@@ -266,5 +534,7 @@ in
     initScriptFiles
     renderedServices
     allInitScriptsWithServices
+    declaredServicesForManifest
+    autoNumbered
     ;
 }

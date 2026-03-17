@@ -35,7 +35,7 @@ let
   # Provides live system introspection via `snix system info/verify/diff`.
   # File hashes are computed post-build (see rootTree derivation).
   manifestData = {
-    manifestVersion = 2; # v2: adds boot component store paths
+    manifestVersion = 3; # v3: adds services.declared for semantic service diffs
 
     system = {
       inherit (versionInfo) redoxSystemVersion target;
@@ -118,6 +118,8 @@ let
     }) (inputs.users.groups or { });
 
     services = {
+      # Full service declarations for semantic diffing during activation
+      declared = initScripts.declaredServicesForManifest;
       initScripts = builtins.attrNames initScripts.allInitScriptsWithServices;
       startupScript = "/startup.sh";
     };

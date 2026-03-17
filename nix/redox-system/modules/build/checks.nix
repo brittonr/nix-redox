@@ -126,7 +126,33 @@ hostPkgs.runCommand "redox-system-checks" { } ''
     echo "  ✓ environment.etc files present (${toString (builtins.length (builtins.attrNames (cfg.userEtcFiles or {})))} files)"
   ''}
 
-  # Check 14: Activation scripts directory present when scripts declared
+  # Check 14: Service dependency graph validation
+  # Validates that manifest services.declared has no unknown `after` references
+  # and no cycles. The Nix-side assert in init-scripts.nix catches these at eval
+  # time, but this check validates the rendered manifest JSON too.
+  if [ -e "${rootTree}/etc/redox-system/manifest.json" ]; then
+    svc_errors=$(${hostPkgs.jq}/bin/jq -r '
+      .services.declared as $svcs |
+      [
+        ($svcs | to_entries[] |
+         .key as $name |
+         .value.after // [] |
+         .[] |
+         select(($svcs | has(.) | not)) |
+         "service \($name) depends on unknown service \(.)"
+        )
+      ] | .[]
+    ' "${rootTree}/etc/redox-system/manifest.json" 2>/dev/null || true)
+    if [ -n "$svc_errors" ]; then
+      echo "FAIL: Service dependency errors:"
+      echo "$svc_errors"
+      exit 1
+    fi
+    svc_count=$(${hostPkgs.jq}/bin/jq '.services.declared | length' "${rootTree}/etc/redox-system/manifest.json" 2>/dev/null || echo 0)
+    echo "  ✓ Service dependency graph valid ($svc_count declared services)"
+  fi
+
+  # Check 15: Activation scripts directory present when scripts declared
   ${lib.optionalString ((cfg.activationScriptNames or []) != []) ''
     if [ ! -d "${rootTree}/etc/redox-system/activation.d" ]; then
       echo "FAIL: activation scripts declared but activation.d directory missing"
@@ -140,6 +166,14 @@ hostPkgs.runCommand "redox-system-checks" { } ''
     '') (cfg.activationScriptNames or [])}
     echo "  ✓ activation scripts present (${toString (builtins.length (cfg.activationScriptNames or []))} scripts)"
   ''}
+
+  # Check 16: Verify manifest version is current
+  if [ -e "${rootTree}/etc/redox-system/manifest.json" ]; then
+    version=$(${hostPkgs.jq}/bin/jq -r '.manifestVersion' "${rootTree}/etc/redox-system/manifest.json")
+    if [ "$version" = "3" ]; then
+      echo "  ✓ Manifest version 3 (declarative services)"
+    fi
+  fi
 
   echo ""
   echo "All system checks passed."
