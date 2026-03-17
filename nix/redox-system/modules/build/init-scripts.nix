@@ -133,6 +133,24 @@ let
     })
   );
 
+  # --- Privilege escalation (sudo scheme daemon) ---
+  # The sudo binary doubles as the scheme daemon when run with --daemon.
+  # It registers the "sudo:" scheme, handles password verification, and
+  # calls SetResugid on behalf of su/sudo clients.
+  sudoServices = lib.optionalAttrs cfg.userutilsInstalled {
+    sudod = {
+      description = "Privilege escalation daemon (sudo scheme)";
+      command = "/bin/sudo";
+      type = "daemon";
+      args = "--daemon";
+      wantedBy = "rootfs";
+      enable = true;
+      after = [ "ptyd" ];
+      environment = { };
+      priority = 50;
+    };
+  };
+
   # --- Console (getty) — typed service module ---
   # cfg.gettyEnabled resolves the "auto"/"true"/"false" enum against userutilsInstalled.
   consoleServices = lib.optionalAttrs cfg.gettyEnabled {
@@ -280,6 +298,7 @@ let
   moduleServices =
     coreServices
     // networkingServices
+    // sudoServices
     // consoleServices
     // sshServices
     // httpdServices

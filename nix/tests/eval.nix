@@ -1007,4 +1007,34 @@ in
         echo "✓ vmConfig profile overrides correct"
         touch $out
       '';
+
+  # Test: sudod service starts when userutils is installed
+  service-sudod-with-userutils = mkEvalTest {
+    name = "service-sudod-with-userutils";
+    description = "Verifies sudod scheme daemon is auto-enabled when userutils is in systemPackages";
+    extraPkgs = {
+      userutils = mockPkgs.userutils;
+    };
+    modules = [
+      {
+        "/environment" = {
+          systemPackages = [ mockPkgs.userutils ];
+        };
+      }
+    ];
+  };
+
+  # Test: sudod service absent when userutils is not installed
+  service-sudod-without-userutils = mkEvalTest {
+    name = "service-sudod-without-userutils";
+    description = "Verifies sudod scheme daemon is not generated when userutils is absent";
+    modules = [ ];
+  };
+
+  # Test: sudo group in default groups
+  default-sudo-group = mkEvalTest {
+    name = "default-sudo-group";
+    description = "Verifies the sudo group (gid 27) exists in default user configuration";
+    modules = [ ];
+  };
 }

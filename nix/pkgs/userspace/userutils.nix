@@ -175,10 +175,10 @@ pkgs.stdenv.mkDerivation {
 
     export ${rustFlags.cargoEnvVar}="${rustFlags.userRustFlags} -L ${stubLibs}/lib"
 
-    # Build userutils binaries (excluding sudo which needs redox-rt)
-    # The key binaries we need: getty (terminal login), login, passwd, id
-    # su and sudo require redox-rt for privilege escalation protocol
-    for bin in getty login passwd id useradd userdel usermod groupadd groupdel groupmod; do
+    # Build userutils binaries individually (cargo build --bin).
+    # su and sudo get redox-rt symbols through relibc static linkage,
+    # not as a Cargo dependency (which is stripped for vendoring).
+    for bin in getty login passwd id su sudo useradd userdel usermod groupadd groupdel groupmod; do
       echo "Building $bin..."
       cargo build \
         --target ${redoxTarget} \
