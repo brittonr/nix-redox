@@ -16,21 +16,38 @@
         modules = [ ./configuration.nix ];
       };
 
-      # Create VM runners
-      runners = redoxLib.mkQemuRunners {
+      # Create runners for both VMM backends
+      chRunners = redoxLib.mkCloudHypervisorRunners {
+        inherit (mySystem) diskImage vmConfig;
+      };
+      qemuRunners = redoxLib.mkQemuRunners {
         inherit (mySystem) diskImage vmConfig;
       };
     in
     {
-      # `nix run` boots the graphical desktop, `nix run .#headless` for serial console
       apps.${system} = {
+        # `nix run` — headless serial console (Cloud Hypervisor)
         default = {
           type = "app";
-          program = "${runners.graphical}/bin/run-redox-graphical";
+          program = "${chRunners.headless}/bin/run-redox-cloud-hypervisor";
         };
-        headless = {
+
+        # `nix run .#qemu` — headless serial console (QEMU)
+        qemu = {
           type = "app";
-          program = "${runners.headless}/bin/run-redox";
+          program = "${qemuRunners.headless}/bin/run-redox";
+        };
+
+        # `nix run .#graphical` — explicit alias for default
+        graphical = {
+          type = "app";
+          program = "${qemuRunners.graphical}/bin/run-redox-graphical";
+        };
+
+        # `nix run .#cloud-hypervisor` — headless Cloud Hypervisor
+        cloud-hypervisor = {
+          type = "app";
+          program = "${chRunners.headless}/bin/run-redox-cloud-hypervisor";
         };
       };
 

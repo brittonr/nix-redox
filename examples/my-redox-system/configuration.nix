@@ -61,7 +61,8 @@ in
   };
 
   # ── Graphics ──
-  "/graphics".enable = true;
+  # Enable for Orbital desktop (requires `nix run .#graphical`)
+  "/graphics".enable = false;
 
   # ── Networking ──
   "/networking" = {
