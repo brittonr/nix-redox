@@ -424,3 +424,4 @@
 {"text":"what does a redoxos config look like in nix?","timestamp":1773780898521}
 {"text":"lets clean up our repo so that we can let others just do \"nix run\" from our github and get a redox vm","timestamp":1773781031432}
 {"text":"how can we create a example repo for a redoxos config?","timestamp":1773781575719}
+{"text":"can we make this in an example dir","timestamp":1773782156098}
