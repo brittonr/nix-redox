@@ -1,34 +1,63 @@
-diff -ruN a/src/archive.rs b/src/archive.rs
---- a/src/archive.rs	2026-01-04 22:00:24.284867691 -0500
-+++ b/src/archive.rs	2026-01-04 22:01:56.900034609 -0500
-@@ -10,10 +10,16 @@
+diff -ruN orig/src/archive.rs modified/src/archive.rs
+--- orig/src/archive.rs	2026-03-17 18:52:03.584817784 -0400
++++ modified/src/archive.rs	2026-03-17 18:52:48.606731810 -0400
+@@ -1,3 +1,4 @@
++use std::collections::HashMap;
+ use std::fs;
+ use std::io;
+ use std::os::unix::ffi::OsStrExt;
+@@ -10,10 +11,26 @@
      io::Error::from_raw_os_error(err.errno)
  }
 
 -pub fn archive_at<D: Disk, P: AsRef<Path>>(
++/// Per-path ownership override entry.
++#[derive(Clone, Debug)]
++pub struct ChownEntry {
++    pub uid: u32,
++    pub gid: u32,
++}
++
 +/// Archive a directory into a RedoxFS transaction.
 +///
-+/// If `uid_override` or `gid_override` are provided, all files will be
-+/// archived with those ownership values instead of the source file's metadata.
++/// `uid_override`/`gid_override` set default ownership for all files.
++/// `chown_map` overrides ownership for specific paths (and their contents).
++/// `base_path` is the folder prefix stripped when looking up chown_map keys.
 +pub fn archive_at_with_owner<D: Disk, P: AsRef<Path>>(
      tx: &mut Transaction<D>,
      parent_path: P,
      parent_ptr: TreePtr<Node>,
 +    uid_override: Option<u32>,
 +    gid_override: Option<u32>,
++    chown_map: &HashMap<String, ChownEntry>,
++    base_path: &str,
  ) -> io::Result<()> {
      for entry_res in fs::read_dir(parent_path)? {
          let entry = entry_res?;
-@@ -53,16 +59,20 @@
+@@ -53,16 +70,34 @@
 
              node_ptr = node.ptr();
 
 -            if node.data().uid() != metadata.uid() || node.data().gid() != metadata.gid() {
 -                node.data_mut().set_uid(metadata.uid());
 -                node.data_mut().set_gid(metadata.gid());
-+            // Use override values if provided, otherwise use source file metadata
-+            let target_uid = uid_override.unwrap_or(metadata.uid());
-+            let target_gid = gid_override.unwrap_or(metadata.gid());
++            // Determine ownership: per-path chown > global override > source metadata.
++            // Strip base_path prefix so "root/home/user" matches key "home/user".
++            let full_path = entry.path();
++            let full_str = full_path.to_string_lossy();
++            let lookup_key = full_str
++                .strip_prefix(base_path)
++                .unwrap_or(&full_str)
++                .trim_start_matches('/');
++
++            let (target_uid, target_gid) = if let Some(chown) = chown_map.get(lookup_key) {
++                (chown.uid, chown.gid)
++            } else {
++                (
++                    uid_override.unwrap_or(metadata.uid()),
++                    gid_override.unwrap_or(metadata.gid()),
++                )
++            };
 +
 +            if node.data().uid() != target_uid || node.data().gid() != target_gid {
 +                node.data_mut().set_uid(target_uid);
@@ -40,11 +69,11 @@ diff -ruN a/src/archive.rs b/src/archive.rs
          let path = entry.path();
          if file_type.is_dir() {
 -            archive_at(tx, path, node_ptr)?;
-+            archive_at_with_owner(tx, path, node_ptr, uid_override, gid_override)?;
++            archive_at_with_owner(tx, path, node_ptr, uid_override, gid_override, chown_map, base_path)?;
          } else if file_type.is_file() {
              let data = fs::read(path)?;
              let count = tx
-@@ -103,11 +113,25 @@
+@@ -103,35 +138,41 @@
      Ok(())
  }
 
@@ -55,7 +84,7 @@ diff -ruN a/src/archive.rs b/src/archive.rs
 +    parent_path: P,
 +    parent_ptr: TreePtr<Node>,
 +) -> io::Result<()> {
-+    archive_at_with_owner(tx, parent_path, parent_ptr, None, None)
++    archive_at_with_owner(tx, parent_path, parent_ptr, None, None, &HashMap::new(), "")
 +}
 +
 +/// Archive a directory into a RedoxFS filesystem with optional ownership overrides.
@@ -64,33 +93,72 @@ diff -ruN a/src/archive.rs b/src/archive.rs
 +    parent_path: P,
 +    uid_override: Option<u32>,
 +    gid_override: Option<u32>,
++    chown_map: &HashMap<String, ChownEntry>,
 +) -> io::Result<u64> {
++    let base = parent_path.as_ref().to_string_lossy().to_string();
      let end_block = fs
          .tx(|tx| {
 -            // Archive_at root node
 -            archive_at(tx, parent_path, TreePtr::root())
-+            archive_at_with_owner(tx, parent_path, TreePtr::root(), uid_override, gid_override)
++            archive_at_with_owner(
++                tx,
++                parent_path,
++                TreePtr::root(),
++                uid_override,
++                gid_override,
++                chown_map,
++                &base,
++            )
                  .map_err(|err| syscall::Error::new(err.raw_os_error().unwrap()))?;
 
              // Squash alloc log
-@@ -144,3 +168,8 @@
+             tx.sync(true)?;
+
+             let end_block = tx.header.size() / BLOCK_SIZE;
+-            /* TODO: Cut off any free blocks at the end of the filesystem
+-            let mut end_changed = true;
+-            while end_changed {
+-                end_changed = false;
+-
+-                let allocator = fs.allocator();
+-                let levels = allocator.levels();
+-                for level in 0..levels.len() {
+-                    let level_size = 1 << level;
+-                    for &block in levels[level].iter() {
+-                        if block < end_block && block + level_size >= end_block {
+-                            end_block = block;
+-                            end_changed = true;
+-                        }
+-                    }
+-                }
+-            }
+-            */
+
+             // Update header
+             tx.header.size = (end_block * BLOCK_SIZE).into();
+@@ -144,3 +185,8 @@
 
      Ok((fs.block + end_block) * BLOCK_SIZE)
  }
 +
 +/// Archive a directory into a RedoxFS filesystem (backwards compatible).
 +pub fn archive<D: Disk, P: AsRef<Path>>(fs: &mut FileSystem<D>, parent_path: P) -> io::Result<u64> {
-+    archive_with_owner(fs, parent_path, None, None)
++    archive_with_owner(fs, parent_path, None, None, &HashMap::new())
 +}
-diff -ruN a/src/bin/ar.rs b/src/bin/ar.rs
---- a/src/bin/ar.rs	2026-01-04 22:00:24.284880716 -0500
-+++ b/src/bin/ar.rs	2026-01-04 22:02:27.047409282 -0500
-@@ -6,47 +6,110 @@
+diff -ruN orig/src/bin/ar.rs modified/src/bin/ar.rs
+--- orig/src/bin/ar.rs	2026-03-17 18:52:03.584627627 -0400
++++ modified/src/bin/ar.rs	2026-03-17 18:53:12.438734400 -0400
+@@ -2,51 +2,136 @@
+ extern crate syscall;
+ extern crate uuid;
+
++use std::collections::HashMap;
+ use std::io::Read;
  use std::time::{SystemTime, UNIX_EPOCH};
  use std::{env, fs, process};
 
 -use redoxfs::{archive, DiskFile, FileSystem};
-+use redoxfs::{archive_with_owner, DiskFile, FileSystem};
++use redoxfs::{archive_with_owner, ChownEntry, DiskFile, FileSystem};
  use uuid::Uuid;
 
 +fn print_usage() {
@@ -104,9 +172,10 @@ diff -ruN a/src/bin/ar.rs b/src/bin/ar.rs
 +    eprintln!("  BOOTLOADER  Optional path to bootloader binary");
 +    eprintln!();
 +    eprintln!("Options:");
-+    eprintln!("  --uid <N>   Override file owner UID for all files");
-+    eprintln!("  --gid <N>   Override file group GID for all files");
-+    eprintln!("  --help      Show this help message");
++    eprintln!("  --uid <N>              Override file owner UID for all files");
++    eprintln!("  --gid <N>              Override file group GID for all files");
++    eprintln!("  --chown <path:uid:gid> Per-path ownership (repeatable, recursive)");
++    eprintln!("  --help                 Show this help message");
 +}
 +
  fn main() {
@@ -116,6 +185,7 @@ diff -ruN a/src/bin/ar.rs b/src/bin/ar.rs
 +    let args: Vec<String> = env::args().skip(1).collect();
 +    let mut uid_override: Option<u32> = None;
 +    let mut gid_override: Option<u32> = None;
++    let mut chown_map: HashMap<String, ChownEntry> = HashMap::new();
 +    let mut positional_args: Vec<String> = Vec::new();
 +
 +    let mut i = 0;
@@ -138,6 +208,25 @@ diff -ruN a/src/bin/ar.rs b/src/bin/ar.rs
 +                        .parse()
 +                        .expect("--gid must be a number"),
 +                );
++            }
++            "--chown" => {
++                i += 1;
++                let spec = args.get(i).expect("--chown requires path:uid:gid");
++                let parts: Vec<&str> = spec.splitn(3, ':').collect();
++                if parts.len() != 3 {
++                    eprintln!("redoxfs-ar: --chown must be path:uid:gid, got: {}", spec);
++                    process::exit(1);
++                }
++                let path = parts[0].to_string();
++                let uid: u32 = parts[1].parse().unwrap_or_else(|_| {
++                    eprintln!("redoxfs-ar: invalid uid in --chown: {}", parts[1]);
++                    process::exit(1);
++                });
++                let gid: u32 = parts[2].parse().unwrap_or_else(|_| {
++                    eprintln!("redoxfs-ar: invalid gid in --chown: {}", parts[2]);
++                    process::exit(1);
++                });
++                chown_map.insert(path, ChownEntry { uid, gid });
 +            }
 +            "--help" | "-h" => {
 +                print_usage();
@@ -186,10 +275,10 @@ diff -ruN a/src/bin/ar.rs b/src/bin/ar.rs
 -    let bootloader_path_opt = args.next();
 +    let bootloader_path_opt = positional_args.get(2);
 +
-+    if uid_override.is_some() || gid_override.is_some() {
++    if uid_override.is_some() || gid_override.is_some() || !chown_map.is_empty() {
 +        eprintln!(
-+            "redoxfs-ar: using ownership override uid={:?} gid={:?}",
-+            uid_override, gid_override
++            "redoxfs-ar: ownership: uid={:?} gid={:?} chown_entries={}",
++            uid_override, gid_override, chown_map.len()
 +        );
 +    }
 
@@ -214,7 +303,7 @@ diff -ruN a/src/bin/ar.rs b/src/bin/ar.rs
                          "redoxfs-ar: failed to read bootloader {}: {}",
                          bootloader_path, err
                      );
-@@ -54,14 +117,14 @@
+@@ -54,14 +139,14 @@
                  }
              },
              Err(err) => {
@@ -231,12 +320,12 @@ diff -ruN a/src/bin/ar.rs b/src/bin/ar.rs
 
      let ctime = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
      match FileSystem::create_reserved(
-@@ -72,16 +135,16 @@
+@@ -72,16 +157,16 @@
          ctime.subsec_nanos(),
      ) {
          Ok(mut fs) => {
 -            let size = match archive(&mut fs, &folder_path) {
-+            let size = match archive_with_owner(&mut fs, &folder_path, uid_override, gid_override) {
++            let size = match archive_with_owner(&mut fs, &folder_path, uid_override, gid_override, &chown_map) {
                  Ok(ok) => ok,
                  Err(err) => {
 -                    println!("redoxfs-ar: failed to archive {}: {}", folder_path, err);
@@ -251,7 +340,7 @@ diff -ruN a/src/bin/ar.rs b/src/bin/ar.rs
                      "redoxfs-ar: failed to truncate {} to {}: {}",
                      disk_path, size, err
                  );
-@@ -98,7 +161,7 @@
+@@ -98,11 +183,11 @@
              );
          }
          Err(err) => {
@@ -260,15 +349,20 @@ diff -ruN a/src/bin/ar.rs b/src/bin/ar.rs
                  "redoxfs-ar: failed to create filesystem on {}: {}",
                  disk_path, err
              );
-diff -ruN a/src/lib.rs b/src/lib.rs
---- a/src/lib.rs	2026-01-04 22:00:24.284992758 -0500
-+++ b/src/lib.rs	2026-01-04 22:02:43.455605510 -0500
+             process::exit(1);
+         }
+-    };
++    }
+ }
+diff -ruN orig/src/lib.rs modified/src/lib.rs
+--- orig/src/lib.rs	2026-03-17 18:52:03.584896222 -0400
++++ modified/src/lib.rs	2026-03-17 18:53:27.901736080 -0400
 @@ -23,7 +23,7 @@
 
  pub use self::allocator::{AllocEntry, AllocList, Allocator, ReleaseList, ALLOC_LIST_ENTRIES};
  #[cfg(feature = "std")]
 -pub use self::archive::{archive, archive_at};
-+pub use self::archive::{archive, archive_at, archive_at_with_owner, archive_with_owner};
++pub use self::archive::{archive, archive_at, archive_at_with_owner, archive_with_owner, ChownEntry};
  pub use self::block::{
      BlockAddr, BlockData, BlockLevel, BlockList, BlockMeta, BlockPtr, BlockRaw, BlockTrait,
  };

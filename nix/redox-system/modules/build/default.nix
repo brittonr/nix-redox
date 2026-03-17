@@ -178,6 +178,7 @@ adios:
         redoxfs = pkgs.redoxfs;
         inherit rootTree kernel initfs bootloader;
         sizeMB = cfg.diskSizeMB - cfg.espSizeMB - 4;
+        inherit (cfg) ownershipMap;
       };
 
       diskImage = mkDiskImage {
