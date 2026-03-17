@@ -15,14 +15,14 @@
         modules = [ ./configuration.nix ];
       };
 
-      chRunners = redoxLib.mkCloudHypervisorRunners {
+      qemuRunners = redoxLib.mkQemuRunners {
         inherit (mySystem) diskImage vmConfig;
       };
     in
     {
       apps.${system}.default = {
         type = "app";
-        program = "${chRunners.headless}/bin/run-redox-cloud-hypervisor";
+        program = "${qemuRunners.headless}/bin/run-redox";
       };
 
       packages.${system}.default = mySystem.diskImage;

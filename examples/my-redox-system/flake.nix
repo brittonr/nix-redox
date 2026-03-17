@@ -26,25 +26,21 @@
     in
     {
       apps.${system} = {
-        # `nix run` — headless serial console (Cloud Hypervisor)
+        # `nix run` — headless with serial console (QEMU)
+        # QEMU's -serial mon:stdio gives reliable interactive I/O.
+        # Cloud Hypervisor's --serial tty drops keystrokes.
         default = {
-          type = "app";
-          program = "${chRunners.headless}/bin/run-redox-cloud-hypervisor";
-        };
-
-        # `nix run .#qemu` — headless serial console (QEMU)
-        qemu = {
           type = "app";
           program = "${qemuRunners.headless}/bin/run-redox";
         };
 
-        # `nix run .#graphical` — explicit alias for default
+        # `nix run .#graphical` — Orbital desktop (QEMU + GTK)
         graphical = {
           type = "app";
           program = "${qemuRunners.graphical}/bin/run-redox-graphical";
         };
 
-        # `nix run .#cloud-hypervisor` — headless Cloud Hypervisor
+        # `nix run .#cloud-hypervisor` — fast headless (no interactive serial)
         cloud-hypervisor = {
           type = "app";
           program = "${chRunners.headless}/bin/run-redox-cloud-hypervisor";

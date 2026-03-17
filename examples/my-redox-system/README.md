@@ -5,22 +5,22 @@ A custom Redox OS configuration built with Nix.
 ## Usage
 
 ```bash
-# Boot headless with serial console (Cloud Hypervisor — default)
+# Boot headless with interactive serial console (QEMU — default)
 nix run
 
-# Boot headless with QEMU
-nix run .#qemu
-
-# Boot graphical desktop with Orbital (QEMU only)
+# Boot graphical desktop with Orbital (QEMU + GTK)
 nix run .#graphical
+
+# Fast headless boot (Cloud Hypervisor, no interactive serial)
+nix run .#cloud-hypervisor
 
 # Build just the disk image
 nix build
 ```
 
-Cloud Hypervisor is the default because it boots faster and uses less host
-resources. For graphical mode, set `/graphics.enable = true` in
-`configuration.nix` and use `nix run .#graphical`.
+QEMU is the default because its serial console supports interactive I/O.
+For graphical mode, set `/graphics.enable = true` in `configuration.nix`
+and use `nix run .#graphical`.
 
 ## Configuration
 
