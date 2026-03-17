@@ -11,16 +11,107 @@
 //! rotation. The manifest tells us what the system *should* look like;
 //! activate makes it so.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 
-use crate::system::{FileInfo, Manifest, Package};
+use crate::system::{ActivationScript, FileInfo, Manifest, Package};
 
 /// System profile bin directory (where managed package binaries live).
 const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
 
 /// Staging directory for building the new profile atomically.
 const STAGING_DIR: &str = "/nix/system/.profile-staging";
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Topological Sort for Activation Scripts
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Topologically sort activation scripts by their dependencies.
+/// Returns ordered script names on success, or a cycle description on failure.
+///
+/// Uses Kahn's algorithm: repeatedly pick nodes with zero in-degree.
+/// If the queue empties before all nodes are processed, there's a cycle.
+pub fn topo_sort(scripts: &[ActivationScript]) -> Result<Vec<String>, String> {
+    if scripts.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let names: HashSet<&str> = scripts.iter().map(|s| s.name.as_str()).collect();
+
+    // Validate all deps reference known scripts
+    for s in scripts {
+        for dep in &s.deps {
+            if !names.contains(dep.as_str()) {
+                return Err(format!(
+                    "script '{}' depends on unknown script '{}'",
+                    s.name, dep
+                ));
+            }
+        }
+    }
+
+    // Build adjacency list and in-degree map
+    let mut in_degree: HashMap<&str, usize> = HashMap::new();
+    let mut dependents: HashMap<&str, Vec<&str>> = HashMap::new();
+
+    for s in scripts {
+        in_degree.entry(s.name.as_str()).or_insert(0);
+        for dep in &s.deps {
+            *in_degree.entry(s.name.as_str()).or_insert(0) += 1;
+            dependents
+                .entry(dep.as_str())
+                .or_default()
+                .push(s.name.as_str());
+        }
+    }
+
+    // Seed queue with zero-in-degree nodes (sorted for determinism)
+    let mut queue: VecDeque<&str> = VecDeque::new();
+    let mut zero_deg: Vec<&str> = in_degree
+        .iter()
+        .filter(|(_, &deg)| deg == 0)
+        .map(|(&name, _)| name)
+        .collect();
+    zero_deg.sort();
+    for name in zero_deg {
+        queue.push_back(name);
+    }
+
+    let mut result = Vec::with_capacity(scripts.len());
+
+    while let Some(name) = queue.pop_front() {
+        result.push(name.to_string());
+        if let Some(deps) = dependents.get(name) {
+            let mut next: Vec<&str> = Vec::new();
+            for &dep in deps {
+                let deg = in_degree.get_mut(dep).unwrap();
+                *deg -= 1;
+                if *deg == 0 {
+                    next.push(dep);
+                }
+            }
+            next.sort();
+            for n in next {
+                queue.push_back(n);
+            }
+        }
+    }
+
+    if result.len() != scripts.len() {
+        // Find the cycle: nodes still with in-degree > 0
+        let in_cycle: Vec<&str> = in_degree
+            .iter()
+            .filter(|(_, &deg)| deg > 0)
+            .map(|(&name, _)| name)
+            .collect();
+        Err(format!(
+            "dependency cycle among activation scripts: {}",
+            in_cycle.join(", ")
+        ))
+    } else {
+        Ok(result)
+    }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Activation Plan — computed diff between current and target manifests
@@ -56,6 +147,8 @@ pub struct ActivationPlan {
     pub users_removed: Vec<String>,
     /// User accounts with changed properties.
     pub users_changed: Vec<String>,
+    /// Activation scripts to execute (in dependency order).
+    pub activation_scripts: Vec<String>,
 }
 
 /// A package that changed between generations.
@@ -136,6 +229,9 @@ pub fn plan(old: &Manifest, new: &Manifest) -> ActivationPlan {
     // Count binaries for the new profile
     let profile_binary_count = count_profile_binaries(&new.packages);
 
+    // Activation scripts (in dependency order, or empty on cycle)
+    let activation_scripts = topo_sort(&new.activation_scripts).unwrap_or_default();
+
     ActivationPlan {
         packages_added,
         packages_removed,
@@ -150,6 +246,7 @@ pub fn plan(old: &Manifest, new: &Manifest) -> ActivationPlan {
         users_added,
         users_removed,
         users_changed,
+        activation_scripts,
     }
 }
 
@@ -257,6 +354,7 @@ impl ActivationPlan {
             && self.users_added.is_empty()
             && self.users_removed.is_empty()
             && self.users_changed.is_empty()
+            && self.activation_scripts.is_empty()
     }
 
     /// Display the plan in a human-readable format.
@@ -357,6 +455,18 @@ impl ActivationPlan {
                 "Profile: will rebuild ({} binaries)",
                 self.profile_binary_count
             );
+        }
+
+        // Activation scripts
+        if !self.activation_scripts.is_empty() {
+            println!();
+            println!(
+                "Activation scripts ({} to run):",
+                self.activation_scripts.len()
+            );
+            for (i, name) in self.activation_scripts.iter().enumerate() {
+                println!("  {}. {name}", i + 1);
+            }
         }
     }
 }
@@ -469,8 +579,11 @@ pub fn activate(
         warnings.push(format!("GC root update failed: {e}"));
     }
 
-    // ── Step 5: Post-activation hooks ──
-    // (Reserved for future use)
+    // ── Step 5: Run activation scripts ──
+    let scripts_run = run_activation_scripts(&new.activation_scripts, &mut warnings);
+    if scripts_run > 0 {
+        println!("Activation scripts: {scripts_run} executed");
+    }
 
     // ── Determine if reboot is recommended ──
     let reboot_recommended = boot_updated
@@ -914,6 +1027,87 @@ fn write_manifest_derived_files(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Activation Script Execution
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Directory where activation scripts are stored on the rootfs.
+const ACTIVATION_SCRIPTS_DIR: &str = "/etc/redox-system/activation.d";
+
+/// Execute activation scripts in dependency order.
+/// Returns the number of scripts successfully executed.
+/// Failures are logged as warnings but do not abort activation.
+fn run_activation_scripts(
+    scripts: &[ActivationScript],
+    warnings: &mut Vec<String>,
+) -> u32 {
+    run_activation_scripts_at(scripts, ACTIVATION_SCRIPTS_DIR, warnings)
+}
+
+/// Inner implementation with configurable script directory (for testing).
+fn run_activation_scripts_at(
+    scripts: &[ActivationScript],
+    scripts_dir: &str,
+    warnings: &mut Vec<String>,
+) -> u32 {
+    if scripts.is_empty() {
+        return 0;
+    }
+
+    // Topologically sort scripts
+    let ordered = match topo_sort(scripts) {
+        Ok(order) => order,
+        Err(e) => {
+            warnings.push(format!("activation scripts skipped: {e}"));
+            return 0;
+        }
+    };
+
+    let mut count = 0u32;
+    for name in &ordered {
+        let script_path = PathBuf::from(scripts_dir).join(name);
+        if !script_path.exists() {
+            warnings.push(format!(
+                "activation script '{name}' not found at {}",
+                script_path.display()
+            ));
+            continue;
+        }
+
+        println!("  running activation script: {name}");
+
+        match std::process::Command::new("/bin/sh")
+            .arg(script_path.as_os_str())
+            .stdin(std::process::Stdio::null())
+            .output()
+        {
+            Ok(output) => {
+                if !output.stdout.is_empty() {
+                    let stdout = String::from_utf8_lossy(&output.stdout);
+                    for line in stdout.lines() {
+                        println!("    {line}");
+                    }
+                }
+                if output.status.success() {
+                    count += 1;
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    warnings.push(format!(
+                        "activation script '{name}' failed (exit {}): {}",
+                        output.status.code().unwrap_or(-1),
+                        stderr.trim()
+                    ));
+                }
+            }
+            Err(e) => {
+                warnings.push(format!("activation script '{name}' failed to execute: {e}"));
+            }
+        }
+    }
+
+    count
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1028,6 +1222,7 @@ mod tests {
                 init_scripts: vec!["10_net".to_string(), "15_dhcp".to_string()],
                 startup_script: "/startup.sh".to_string(),
             },
+            activation_scripts: Vec::new(),
             files: BTreeMap::from([
                 (
                     "etc/passwd".to_string(),
@@ -1761,5 +1956,190 @@ mod tests {
             bootloader: None,
         });
         assert!(has_boot_config_changed(&old, &new));
+    }
+
+    // ── Topological sort tests ──
+
+    #[test]
+    fn topo_sort_empty() {
+        let result = topo_sort(&[]);
+        assert_eq!(result.unwrap(), Vec::<String>::new());
+    }
+
+    #[test]
+    fn topo_sort_single() {
+        let scripts = vec![ActivationScript {
+            name: "setup".to_string(),
+            deps: vec![],
+        }];
+        assert_eq!(topo_sort(&scripts).unwrap(), vec!["setup"]);
+    }
+
+    #[test]
+    fn topo_sort_linear_chain() {
+        let scripts = vec![
+            ActivationScript {
+                name: "c".to_string(),
+                deps: vec!["b".to_string()],
+            },
+            ActivationScript {
+                name: "b".to_string(),
+                deps: vec!["a".to_string()],
+            },
+            ActivationScript {
+                name: "a".to_string(),
+                deps: vec![],
+            },
+        ];
+        assert_eq!(topo_sort(&scripts).unwrap(), vec!["a", "b", "c"]);
+    }
+
+    #[test]
+    fn topo_sort_diamond() {
+        // a → b, a → c, b → d, c → d
+        let scripts = vec![
+            ActivationScript {
+                name: "a".to_string(),
+                deps: vec![],
+            },
+            ActivationScript {
+                name: "b".to_string(),
+                deps: vec!["a".to_string()],
+            },
+            ActivationScript {
+                name: "c".to_string(),
+                deps: vec!["a".to_string()],
+            },
+            ActivationScript {
+                name: "d".to_string(),
+                deps: vec!["b".to_string(), "c".to_string()],
+            },
+        ];
+        let order = topo_sort(&scripts).unwrap();
+        assert_eq!(order[0], "a"); // a first (no deps)
+        // b and c next (both depend on a), deterministic sorted order
+        assert_eq!(order[1], "b");
+        assert_eq!(order[2], "c");
+        assert_eq!(order[3], "d"); // d last (depends on b and c)
+    }
+
+    #[test]
+    fn topo_sort_cycle_detected() {
+        let scripts = vec![
+            ActivationScript {
+                name: "a".to_string(),
+                deps: vec!["b".to_string()],
+            },
+            ActivationScript {
+                name: "b".to_string(),
+                deps: vec!["a".to_string()],
+            },
+        ];
+        let err = topo_sort(&scripts).unwrap_err();
+        assert!(err.contains("cycle"), "expected cycle error, got: {err}");
+    }
+
+    #[test]
+    fn topo_sort_unknown_dep() {
+        let scripts = vec![ActivationScript {
+            name: "a".to_string(),
+            deps: vec!["nonexistent".to_string()],
+        }];
+        let err = topo_sort(&scripts).unwrap_err();
+        assert!(
+            err.contains("unknown"),
+            "expected unknown dep error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn topo_sort_self_cycle() {
+        let scripts = vec![ActivationScript {
+            name: "a".to_string(),
+            deps: vec!["a".to_string()],
+        }];
+        let err = topo_sort(&scripts).unwrap_err();
+        assert!(err.contains("cycle"), "expected cycle error, got: {err}");
+    }
+
+    #[test]
+    fn topo_sort_independent_scripts_sorted_alphabetically() {
+        let scripts = vec![
+            ActivationScript {
+                name: "z_last".to_string(),
+                deps: vec![],
+            },
+            ActivationScript {
+                name: "a_first".to_string(),
+                deps: vec![],
+            },
+            ActivationScript {
+                name: "m_middle".to_string(),
+                deps: vec![],
+            },
+        ];
+        assert_eq!(
+            topo_sort(&scripts).unwrap(),
+            vec!["a_first", "m_middle", "z_last"]
+        );
+    }
+
+    // ── Activation plan with scripts ──
+
+    #[test]
+    fn plan_shows_activation_scripts() {
+        let old = sample_manifest();
+        let mut new = sample_manifest();
+        new.activation_scripts = vec![
+            ActivationScript {
+                name: "createDirs".to_string(),
+                deps: vec![],
+            },
+            ActivationScript {
+                name: "writeConfig".to_string(),
+                deps: vec!["createDirs".to_string()],
+            },
+        ];
+        let p = plan(&old, &new);
+        assert_eq!(p.activation_scripts, vec!["createDirs", "writeConfig"]);
+    }
+
+    #[test]
+    fn plan_empty_without_activation_scripts() {
+        let m = sample_manifest();
+        let p = plan(&m, &m);
+        assert!(p.activation_scripts.is_empty());
+        assert!(p.is_empty());
+    }
+
+    #[test]
+    fn plan_not_empty_with_activation_scripts() {
+        let old = sample_manifest();
+        let mut new = sample_manifest();
+        new.activation_scripts = vec![ActivationScript {
+            name: "test".to_string(),
+            deps: vec![],
+        }];
+        let p = plan(&old, &new);
+        assert!(!p.is_empty());
+    }
+
+    #[test]
+    fn plan_display_with_activation_scripts() {
+        let old = sample_manifest();
+        let mut new = sample_manifest();
+        new.activation_scripts = vec![
+            ActivationScript {
+                name: "setup".to_string(),
+                deps: vec![],
+            },
+            ActivationScript {
+                name: "finalize".to_string(),
+                deps: vec!["setup".to_string()],
+            },
+        ];
+        let p = plan(&old, &new);
+        // Should not panic
+        p.display();
     }
 }

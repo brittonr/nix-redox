@@ -49,6 +49,8 @@ pub struct Manifest {
     pub groups: BTreeMap<String, Group>,
     pub services: Services,
     #[serde(default)]
+    pub activation_scripts: Vec<ActivationScript>,
+    #[serde(default)]
     pub files: BTreeMap<String, FileInfo>,
     #[serde(default, rename = "systemProfile")]
     pub system_profile: String,
@@ -212,6 +214,15 @@ pub struct Group {
 pub struct Services {
     pub init_scripts: Vec<String>,
     pub startup_script: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct ActivationScript {
+    /// Script name (matches filename in /etc/redox-system/activation.d/)
+    pub name: String,
+    /// Names of scripts that must run before this one
+    #[serde(default)]
+    pub deps: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
@@ -2000,6 +2011,7 @@ mod tests {
                 init_scripts: vec!["10_net".to_string(), "15_dhcp".to_string()],
                 startup_script: "/startup.sh".to_string(),
             },
+            activation_scripts: Vec::new(),
             files: BTreeMap::new(),
             system_profile: String::new(),
         }

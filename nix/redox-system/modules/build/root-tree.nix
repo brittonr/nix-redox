@@ -117,8 +117,8 @@ let
       let
         dir = builtins.dirOf path;
         storeFile =
-          if file ? source then
-            file.source # Pre-built store file (e.g., manifest.json)
+          if (file ? source) && file.source != null then
+            file.source # Pre-built store file (e.g., manifest.json, shadow)
           else
             hostPkgs.writeText (builtins.replaceStrings [ "/" ] [ "-" ] path) file.text;
       in

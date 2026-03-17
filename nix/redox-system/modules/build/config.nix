@@ -210,7 +210,16 @@ let
     ]
     ++ (lib.optional acpiEnabled "/etc/acpi")
     ++ (lib.optional (helixConfig.enable or false) "/etc/helix")
-    ++ (lib.optional (httpdConfig.enable or false) (httpdConfig.rootDir or "/var/www"));
+    ++ (lib.optional (httpdConfig.enable or false) (httpdConfig.rootDir or "/var/www"))
+    # Activation scripts directory
+    ++ (lib.optional ((inputs.activation.scripts or { }) != { }) "/etc/redox-system/activation.d")
+    # Parent directories for user-declared etc files (environment.etc)
+    ++ (lib.unique (
+      lib.filter (d: d != "" && d != "." && d != "/") (
+        builtins.map (key: "/" + builtins.dirOf key)
+          (builtins.attrNames (inputs.environment.etc or { }))
+      )
+    ));
 
   # User for serial console
   nonRootUsers = lib.filterAttrs (name: user: (user.uid or 0) > 0) (inputs.users.users or { });
@@ -256,6 +265,12 @@ let
     if names != [ ] then builtins.head names else null;
   firstIface =
     if firstIfaceName != null then inputs.networking.interfaces.${firstIfaceName} else null;
+
+  # User-declared etc files (for checks validation)
+  userEtcFiles = inputs.environment.etc or { };
+
+  # Activation script names (for checks validation)
+  activationScriptNames = builtins.attrNames (inputs.activation.scripts or { });
 
 in
 {
@@ -311,5 +326,7 @@ in
     espSizeMB
     firstIfaceName
     firstIface
+    userEtcFiles
+    activationScriptNames
     ;
 }

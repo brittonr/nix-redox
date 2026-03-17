@@ -1,11 +1,21 @@
 # Environment Configuration (/environment)
 #
-# System packages, shell aliases, environment variables.
+# System packages, shell aliases, environment variables, arbitrary etc files.
 
 adios:
 
 let
   t = adios.types;
+
+  # Declarative /etc file entry — like NixOS environment.etc
+  etcFileType = t.struct "EtcFile" {
+    # Inline text content (mutually exclusive with source)
+    text = t.optionalAttr t.string;
+    # Derivation or path to copy from (mutually exclusive with text)
+    source = t.optionalAttr t.derivation;
+    # File permissions (default: "0644")
+    mode = t.optionalAttr t.string;
+  };
 in
 
 {
@@ -45,6 +55,11 @@ in
       type = t.attrsOf t.derivation;
       default = { };
       description = "Packages to include in the local binary cache for `snix install`";
+    };
+    etc = {
+      type = t.attrsOf etcFileType;
+      default = { };
+      description = "Arbitrary files to place in the root tree. Keys are paths relative to / (e.g. \"etc/motd\"). Each entry provides text or source content and optional mode (default: 0644).";
     };
   };
 

@@ -71,6 +71,9 @@ adios:
     snix = {
       path = "/snix";
     };
+    activation = {
+      path = "/activation";
+    };
   };
 
   impl =

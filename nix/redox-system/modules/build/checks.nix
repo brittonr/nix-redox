@@ -113,6 +113,34 @@ hostPkgs.runCommand "redox-system-checks" { } ''
     echo "  ✓ initfs derivation valid"
   ''}
 
+  # Check 13: User-declared etc files (environment.etc) present in rootTree
+  ${lib.concatStringsSep "\n" (
+    lib.mapAttrsToList (path: entry: ''
+      if [ ! -e "${rootTree}/${path}" ]; then
+        echo "FAIL: environment.etc file missing: ${path}"
+        exit 1
+      fi
+    '') (cfg.userEtcFiles or {})
+  )}
+  ${lib.optionalString ((cfg.userEtcFiles or {}) != {}) ''
+    echo "  ✓ environment.etc files present (${toString (builtins.length (builtins.attrNames (cfg.userEtcFiles or {})))} files)"
+  ''}
+
+  # Check 14: Activation scripts directory present when scripts declared
+  ${lib.optionalString ((cfg.activationScriptNames or []) != []) ''
+    if [ ! -d "${rootTree}/etc/redox-system/activation.d" ]; then
+      echo "FAIL: activation scripts declared but activation.d directory missing"
+      exit 1
+    fi
+    ${lib.concatMapStringsSep "\n" (name: ''
+      if [ ! -e "${rootTree}/etc/redox-system/activation.d/${name}" ]; then
+        echo "FAIL: activation script missing: ${name}"
+        exit 1
+      fi
+    '') (cfg.activationScriptNames or [])}
+    echo "  ✓ activation scripts present (${toString (builtins.length (cfg.activationScriptNames or []))} scripts)"
+  ''}
+
   echo ""
   echo "All system checks passed."
   touch $out
