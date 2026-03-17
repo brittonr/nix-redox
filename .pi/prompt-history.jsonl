@@ -417,3 +417,9 @@
 {"text":"what next","timestamp":1773777142155}
 {"text":"1","timestamp":1773777273450}
 {"text":"lets begin","timestamp":1773777527159}
+{"text":"is our redox COMPLETELY build with nix?","timestamp":1773778508110}
+{"text":"how does it manage to do that","timestamp":1773778763282}
+{"text":"whats still missing from ours","timestamp":1773779351553}
+{"text":"lets switch to smolnetd","timestamp":1773779884661}
+{"text":"what does a redoxos config look like in nix?","timestamp":1773780898521}
+{"text":"lets clean up our repo so that we can let others just do \"nix run\" from our github and get a redox vm","timestamp":1773781031432}

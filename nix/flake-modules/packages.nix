@@ -1146,8 +1146,7 @@ in
     # Per-crate builds (unit2nix incremental)
     inherit kernelPerCrate basePerCrate;
 
-    # Default package
-    default = modularPkgs.host.fstools;
+    # Default package is set in system.nix (diskImageGraphical)
   };
 
   # Expose build environment for other modules via legacyPackages

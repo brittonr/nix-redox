@@ -59,11 +59,31 @@ let
 in
 {
   apps = {
-    # Default runner: Cloud Hypervisor (headless with serial console)
+    # ── Default: `nix run` boots a graphical Redox desktop ──
+    default = {
+      type = "app";
+      program = "${self'.packages.run-redox-graphical-desktop}/bin/run-redox-graphical";
+      meta.description = "Run Redox OS with graphical desktop (QEMU + GTK)";
+    };
+
+    # ── Short aliases for common tasks ──
+    graphical = {
+      type = "app";
+      program = "${self'.packages.run-redox-graphical-desktop}/bin/run-redox-graphical";
+      meta.description = "Run Redox OS with graphical desktop (QEMU + GTK)";
+    };
+
+    headless = {
+      type = "app";
+      program = "${self'.packages.run-redox-default}/bin/run-redox-cloud-hypervisor";
+      meta.description = "Run Redox OS headless with serial console (Cloud Hypervisor)";
+    };
+
+    # ── Legacy names (kept for backward compat) ──
     run-redox = {
       type = "app";
       program = "${self'.packages.run-redox-default}/bin/run-redox-cloud-hypervisor";
-      meta.description = "Run Redox OS in Cloud Hypervisor (default, headless with serial console)";
+      meta.description = "Run Redox OS in Cloud Hypervisor (headless with serial console)";
     };
 
     run-redox-graphical = {
