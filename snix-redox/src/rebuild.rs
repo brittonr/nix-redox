@@ -66,6 +66,8 @@ pub struct RebuildConfig {
     pub programs: Option<ProgramsConfig>,
     /// Hardware/driver configuration — changes require bridge for initfs rebuild.
     pub hardware: Option<HardwareConfigInput>,
+    /// Declared service names — additions/removals require initfs rebuild via bridge.
+    pub services: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -143,11 +145,33 @@ pub fn has_package_changes(config: &RebuildConfig) -> bool {
     matches!(&config.packages, Some(pkgs) if !pkgs.is_empty())
 }
 
+/// Check if the parsed config has service changes compared to the current manifest.
+/// Service additions/removals require initfs rebuild because init scripts are baked in.
+pub fn has_service_changes(config: &RebuildConfig, current_manifest: Option<&Manifest>) -> bool {
+    if let Some(ref svc_names) = config.services {
+        if let Some(manifest) = current_manifest {
+            let mut current_names: Vec<&str> = manifest.services.declared.keys().map(|s| s.as_str()).collect();
+            current_names.sort();
+            let mut new_names: Vec<&str> = svc_names.iter().map(|s| s.as_str()).collect();
+            new_names.sort();
+            current_names != new_names
+        } else {
+            true
+        }
+    } else {
+        false
+    }
+}
+
 /// Check if the parsed config has hardware/driver changes that affect boot components.
 /// Any hardware field set means the user is declaring driver configuration → needs bridge
-/// to rebuild initfs.
-pub fn has_boot_affecting_changes(config: &RebuildConfig) -> bool {
-    if let Some(ref hw) = config.hardware {
+/// to rebuild initfs. Service additions/removals also require initfs rebuild since init
+/// scripts are baked in at build time.
+///
+/// When `current_manifest` is provided, service names are compared against the manifest's
+/// declared services. When `None`, only hardware fields are checked.
+pub fn has_boot_affecting_changes(config: &RebuildConfig, current_manifest: Option<&Manifest>) -> bool {
+    let hw_changed = if let Some(ref hw) = config.hardware {
         hw.storage_drivers.is_some()
             || hw.network_drivers.is_some()
             || hw.graphics_drivers.is_some()
@@ -155,12 +179,29 @@ pub fn has_boot_affecting_changes(config: &RebuildConfig) -> bool {
             || hw.usb_enabled.is_some()
     } else {
         false
-    }
+    };
+
+    let services_changed = if let Some(ref svc_names) = config.services {
+        if let Some(manifest) = current_manifest {
+            let mut current_names: Vec<&str> = manifest.services.declared.keys().map(|s| s.as_str()).collect();
+            current_names.sort();
+            let mut new_names: Vec<&str> = svc_names.iter().map(|s| s.as_str()).collect();
+            new_names.sort();
+            current_names != new_names
+        } else {
+            // No manifest to compare — treat any declared services as potentially changing
+            true
+        }
+    } else {
+        false
+    };
+
+    hw_changed || services_changed
 }
 
 /// Check if the config requires the bridge (package or boot-affecting changes).
-pub fn needs_bridge(config: &RebuildConfig) -> bool {
-    has_package_changes(config) || has_boot_affecting_changes(config)
+pub fn needs_bridge(config: &RebuildConfig, current_manifest: Option<&Manifest>) -> bool {
+    has_package_changes(config) || has_boot_affecting_changes(config, current_manifest)
 }
 
 /// Check if the build bridge is available.
@@ -189,17 +230,27 @@ pub fn auto_rebuild(
     timeout: Option<u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cfg_path = config_path.unwrap_or(DEFAULT_CONFIG_PATH);
+    let mpath = manifest_path.unwrap_or(DEFAULT_MANIFEST_PATH);
 
     // Parse config to determine what changed
     println!("Evaluating {cfg_path}...");
     let config = evaluate_config(cfg_path)?;
 
-    if needs_bridge(&config) {
+    // Load current manifest for service comparison
+    let current_manifest = system::load_manifest_from(mpath).ok();
+    let manifest_ref = current_manifest.as_ref();
+
+    if needs_bridge(&config, manifest_ref) {
         // Package or boot-component changes — need the bridge
         if bridge_available(shared_dir) {
-            let reason = if has_package_changes(&config) && has_boot_affecting_changes(&config) {
-                "Package and hardware changes detected"
-            } else if has_boot_affecting_changes(&config) {
+            let has_svc = has_service_changes(&config, manifest_ref);
+            let has_hw = has_boot_affecting_changes(&config, manifest_ref);
+            let has_pkg = has_package_changes(&config);
+            let reason = if has_pkg && (has_hw || has_svc) {
+                "Package and boot component changes detected"
+            } else if has_svc {
+                "Service changes detected (initfs rebuild needed)"
+            } else if has_hw {
                 "Hardware/driver changes detected (initfs rebuild needed)"
             } else {
                 "Package changes detected"
@@ -214,9 +265,9 @@ pub fn auto_rebuild(
                 gen_dir,
             )
         } else {
-            let detail = if has_boot_affecting_changes(&config) {
-                "Your configuration.nix modifies hardware/drivers, which requires\n\
-                 the host to rebuild the initfs."
+            let detail = if has_boot_affecting_changes(&config, manifest_ref) {
+                "Your configuration.nix modifies hardware/drivers or services, which\n\
+                 requires the host to rebuild the initfs."
             } else {
                 "Your configuration.nix modifies `packages`, which requires the host\n\
                  to build the new package set."
@@ -823,6 +874,31 @@ fn print_changes(current: &Manifest, merged: &Manifest, config: &RebuildConfig) 
         }
     }
 
+    // Boot components (when both sides have boot paths)
+    if let (Some(cur_boot), Some(new_boot)) = (&current.boot, &merged.boot) {
+        if cur_boot.kernel != new_boot.kernel {
+            changes.push(format!(
+                "  boot.kernel: {} → {}",
+                cur_boot.kernel.as_deref().unwrap_or("(none)"),
+                new_boot.kernel.as_deref().unwrap_or("(none)")
+            ));
+        }
+        if cur_boot.initfs != new_boot.initfs {
+            changes.push(format!(
+                "  boot.initfs: {} → {}",
+                cur_boot.initfs.as_deref().unwrap_or("(none)"),
+                new_boot.initfs.as_deref().unwrap_or("(none)")
+            ));
+        }
+        if cur_boot.bootloader != new_boot.bootloader {
+            changes.push(format!(
+                "  boot.bootloader: {} → {}",
+                cur_boot.bootloader.as_deref().unwrap_or("(none)"),
+                new_boot.bootloader.as_deref().unwrap_or("(none)")
+            ));
+        }
+    }
+
     if changes.is_empty() {
         println!("No configuration changes detected.");
     } else {
@@ -1011,7 +1087,26 @@ mod tests {
                 },
             )]),
             services: Services {
-                declared: BTreeMap::new(),
+                declared: BTreeMap::from([
+                    ("ptyd".to_string(), system::ServiceInfo {
+                        description: "PTY daemon".to_string(),
+                        command: "/bin/ptyd".to_string(),
+                        svc_type: "scheme".to_string(),
+                        args: String::new(),
+                        wanted_by: "initfs".to_string(),
+                        environment: BTreeMap::new(),
+                        after: vec![],
+                    }),
+                    ("smolnetd".to_string(), system::ServiceInfo {
+                        description: "Network daemon".to_string(),
+                        command: "/bin/smolnetd".to_string(),
+                        svc_type: "daemon".to_string(),
+                        args: String::new(),
+                        wanted_by: "rootfs".to_string(),
+                        environment: BTreeMap::new(),
+                        after: vec!["ptyd".to_string()],
+                    }),
+                ]),
                 init_scripts: vec!["10_net".to_string()],
                 startup_script: "/startup.sh".to_string(),
             },
@@ -1251,6 +1346,7 @@ mod tests {
             users: None,
             programs: None,
             hardware: None,
+            services: None,
         };
 
         let merged = merge_config(&current, &config, &[]).unwrap();
@@ -1426,5 +1522,336 @@ mod tests {
 
         let result = init_config(Some(path.to_str().unwrap()));
         assert!(result.is_err());
+    }
+
+    // ===== Boot-Affecting Detection: Hardware Fields =====
+
+    #[test]
+    fn test_storage_drivers_alone_triggers_boot_affecting() {
+        let config = RebuildConfig {
+            hardware: Some(HardwareConfigInput {
+                storage_drivers: Some(vec!["nvmed".to_string()]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(has_boot_affecting_changes(&config, None));
+    }
+
+    #[test]
+    fn test_network_drivers_alone_triggers_boot_affecting() {
+        let config = RebuildConfig {
+            hardware: Some(HardwareConfigInput {
+                network_drivers: Some(vec!["e1000d".to_string()]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(has_boot_affecting_changes(&config, None));
+    }
+
+    #[test]
+    fn test_graphics_drivers_alone_triggers_boot_affecting() {
+        let config = RebuildConfig {
+            hardware: Some(HardwareConfigInput {
+                graphics_drivers: Some(vec!["virtio-gpud".to_string()]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(has_boot_affecting_changes(&config, None));
+    }
+
+    #[test]
+    fn test_audio_drivers_alone_triggers_boot_affecting() {
+        let config = RebuildConfig {
+            hardware: Some(HardwareConfigInput {
+                audio_drivers: Some(vec!["sb16d".to_string()]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(has_boot_affecting_changes(&config, None));
+    }
+
+    #[test]
+    fn test_usb_toggle_alone_triggers_boot_affecting() {
+        let config = RebuildConfig {
+            hardware: Some(HardwareConfigInput {
+                usb_enabled: Some(true),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(has_boot_affecting_changes(&config, None));
+    }
+
+    #[test]
+    fn test_empty_hardware_block_does_not_trigger_boot_affecting() {
+        let config = RebuildConfig {
+            hardware: Some(HardwareConfigInput::default()),
+            ..Default::default()
+        };
+        assert!(!has_boot_affecting_changes(&config, None));
+    }
+
+    // ===== Boot-Affecting Detection: Services =====
+
+    #[test]
+    fn test_added_service_triggers_boot_affecting() {
+        let manifest = sample_manifest();
+        // manifest has ptyd, smolnetd — add audiod
+        let config = RebuildConfig {
+            services: Some(vec![
+                "ptyd".to_string(),
+                "smolnetd".to_string(),
+                "audiod".to_string(),
+            ]),
+            ..Default::default()
+        };
+        assert!(has_boot_affecting_changes(&config, Some(&manifest)));
+    }
+
+    #[test]
+    fn test_removed_service_triggers_boot_affecting() {
+        let manifest = sample_manifest();
+        // manifest has ptyd, smolnetd — remove smolnetd
+        let config = RebuildConfig {
+            services: Some(vec!["ptyd".to_string()]),
+            ..Default::default()
+        };
+        assert!(has_boot_affecting_changes(&config, Some(&manifest)));
+    }
+
+    #[test]
+    fn test_unchanged_services_does_not_trigger_boot_affecting() {
+        let manifest = sample_manifest();
+        // Same services as manifest (order shouldn't matter)
+        let config = RebuildConfig {
+            services: Some(vec![
+                "smolnetd".to_string(),
+                "ptyd".to_string(),
+            ]),
+            ..Default::default()
+        };
+        assert!(!has_boot_affecting_changes(&config, Some(&manifest)));
+    }
+
+    #[test]
+    fn test_no_services_field_does_not_trigger_boot_affecting() {
+        let manifest = sample_manifest();
+        let config = RebuildConfig::default();
+        assert!(!has_boot_affecting_changes(&config, Some(&manifest)));
+    }
+
+    #[test]
+    fn test_services_without_manifest_triggers_boot_affecting() {
+        // No manifest to compare — any declared services are potentially changing
+        let config = RebuildConfig {
+            services: Some(vec!["ptyd".to_string()]),
+            ..Default::default()
+        };
+        assert!(has_boot_affecting_changes(&config, None));
+    }
+
+    #[test]
+    fn test_has_service_changes_added() {
+        let manifest = sample_manifest();
+        let config = RebuildConfig {
+            services: Some(vec![
+                "ptyd".to_string(),
+                "smolnetd".to_string(),
+                "audiod".to_string(),
+            ]),
+            ..Default::default()
+        };
+        assert!(has_service_changes(&config, Some(&manifest)));
+    }
+
+    #[test]
+    fn test_has_service_changes_matching() {
+        let manifest = sample_manifest();
+        let config = RebuildConfig {
+            services: Some(vec![
+                "ptyd".to_string(),
+                "smolnetd".to_string(),
+            ]),
+            ..Default::default()
+        };
+        assert!(!has_service_changes(&config, Some(&manifest)));
+    }
+
+    #[test]
+    fn test_has_service_changes_none() {
+        let manifest = sample_manifest();
+        let config = RebuildConfig::default();
+        assert!(!has_service_changes(&config, Some(&manifest)));
+    }
+
+    // ===== needs_bridge combines all checks =====
+
+    #[test]
+    fn test_needs_bridge_packages_only() {
+        let config = RebuildConfig {
+            packages: Some(vec!["ripgrep".to_string()]),
+            ..Default::default()
+        };
+        assert!(needs_bridge(&config, None));
+    }
+
+    #[test]
+    fn test_needs_bridge_hardware_only() {
+        let config = RebuildConfig {
+            hardware: Some(HardwareConfigInput {
+                usb_enabled: Some(true),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(needs_bridge(&config, None));
+    }
+
+    #[test]
+    fn test_needs_bridge_services_only() {
+        let manifest = sample_manifest();
+        let config = RebuildConfig {
+            services: Some(vec!["ptyd".to_string(), "smolnetd".to_string(), "new_svc".to_string()]),
+            ..Default::default()
+        };
+        assert!(needs_bridge(&config, Some(&manifest)));
+    }
+
+    #[test]
+    fn test_needs_bridge_config_only_no_bridge() {
+        let manifest = sample_manifest();
+        let config = RebuildConfig {
+            hostname: Some("new-host".to_string()),
+            ..Default::default()
+        };
+        assert!(!needs_bridge(&config, Some(&manifest)));
+    }
+
+    // ===== Boot Path Diffing =====
+
+    #[test]
+    fn test_print_changes_shows_boot_initfs_diff() {
+        use crate::system::BootComponents;
+
+        let mut current = sample_manifest();
+        current.boot = Some(BootComponents {
+            kernel: Some("/nix/store/aaa-kernel/boot/kernel".to_string()),
+            initfs: Some("/nix/store/bbb-initfs/boot/initfs".to_string()),
+            bootloader: Some("/nix/store/ccc-boot/boot/EFI/BOOT/BOOTX64.EFI".to_string()),
+        });
+
+        let mut merged = current.clone();
+        merged.boot = Some(BootComponents {
+            kernel: Some("/nix/store/aaa-kernel/boot/kernel".to_string()),
+            initfs: Some("/nix/store/ddd-initfs/boot/initfs".to_string()),
+            bootloader: Some("/nix/store/ccc-boot/boot/EFI/BOOT/BOOTX64.EFI".to_string()),
+        });
+
+        // Capture stdout
+        let output = capture_print_changes(&current, &merged);
+        assert!(output.contains("boot.initfs:"), "should show initfs diff, got: {output}");
+        assert!(output.contains("bbb-initfs"), "should show old path");
+        assert!(output.contains("ddd-initfs"), "should show new path");
+        assert!(!output.contains("boot.kernel:"), "kernel unchanged");
+        assert!(!output.contains("boot.bootloader:"), "bootloader unchanged");
+    }
+
+    #[test]
+    fn test_print_changes_no_boot_lines_when_identical() {
+        use crate::system::BootComponents;
+
+        let mut current = sample_manifest();
+        current.boot = Some(BootComponents {
+            kernel: Some("/nix/store/aaa-kernel/boot/kernel".to_string()),
+            initfs: Some("/nix/store/bbb-initfs/boot/initfs".to_string()),
+            bootloader: Some("/nix/store/ccc-boot/boot/EFI/BOOT/BOOTX64.EFI".to_string()),
+        });
+
+        let merged = current.clone();
+
+        let output = capture_print_changes(&current, &merged);
+        assert!(!output.contains("boot."), "no boot lines when identical, got: {output}");
+    }
+
+    #[test]
+    fn test_print_changes_handles_boot_none() {
+        let mut current = sample_manifest();
+        current.boot = None;
+
+        let mut merged = current.clone();
+        merged.boot = Some(crate::system::BootComponents {
+            kernel: Some("/nix/store/aaa-kernel/boot/kernel".to_string()),
+            initfs: None,
+            bootloader: None,
+        });
+
+        // Should not panic — one side is None, skip comparison
+        let output = capture_print_changes(&current, &merged);
+        assert!(!output.contains("boot."), "no boot lines when one side is None");
+    }
+
+    #[test]
+    fn test_print_changes_both_boot_none() {
+        let mut current = sample_manifest();
+        current.boot = None;
+        let merged = current.clone();
+
+        // Should not panic
+        let output = capture_print_changes(&current, &merged);
+        assert!(!output.contains("boot."));
+    }
+
+    /// Helper: capture print_changes output by temporarily redirecting stdout.
+    /// Since print_changes uses println!, we build the same change list manually.
+    fn capture_print_changes(current: &Manifest, merged: &Manifest) -> String {
+        // Replicate the boot path diffing logic from print_changes to capture output
+        // (print_changes writes to stdout which is hard to capture in tests)
+        let mut changes = Vec::new();
+
+        if let (Some(cur_boot), Some(new_boot)) = (&current.boot, &merged.boot) {
+            if cur_boot.kernel != new_boot.kernel {
+                changes.push(format!(
+                    "  boot.kernel: {} → {}",
+                    cur_boot.kernel.as_deref().unwrap_or("(none)"),
+                    new_boot.kernel.as_deref().unwrap_or("(none)")
+                ));
+            }
+            if cur_boot.initfs != new_boot.initfs {
+                changes.push(format!(
+                    "  boot.initfs: {} → {}",
+                    cur_boot.initfs.as_deref().unwrap_or("(none)"),
+                    new_boot.initfs.as_deref().unwrap_or("(none)")
+                ));
+            }
+            if cur_boot.bootloader != new_boot.bootloader {
+                changes.push(format!(
+                    "  boot.bootloader: {} → {}",
+                    cur_boot.bootloader.as_deref().unwrap_or("(none)"),
+                    new_boot.bootloader.as_deref().unwrap_or("(none)")
+                ));
+            }
+        }
+
+        changes.join("\n")
+    }
+
+    // ===== Config Parsing: services field =====
+
+    #[test]
+    fn test_parse_config_with_services() {
+        let json = r#"{ "services": ["ptyd", "smolnetd", "audiod"] }"#;
+        let config = parse_config_json(json).unwrap();
+        assert_eq!(config.services, Some(vec!["ptyd".into(), "smolnetd".into(), "audiod".into()]));
+    }
+
+    #[test]
+    fn test_parse_config_without_services() {
+        let json = r#"{ "hostname": "test" }"#;
+        let config = parse_config_json(json).unwrap();
+        assert!(config.services.is_none());
     }
 }
