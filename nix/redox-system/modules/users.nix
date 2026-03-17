@@ -65,6 +65,10 @@ in
           gid = 1000;
           members = [ "user" ];
         };
+        sudo = {
+          gid = 27;
+          members = [ "user" ];
+        };
       };
       description = "System groups";
     };

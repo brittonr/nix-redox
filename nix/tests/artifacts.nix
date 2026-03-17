@@ -114,9 +114,43 @@ let
                 ''
               else
                 "";
+            # Search all files in a directory for a string
+            dirContainsCheck =
+              if check ? dirContains && check.dirContains != null then
+                ''
+                  echo "Checking: ${check.file}/* for '${check.dirContains}'"
+                  if grep -rqF '${check.dirContains}' "$systemDerivation/${check.file}/" 2>/dev/null; then
+                    echo "  ✓ Directory contains: ${check.dirContains}"
+                  else
+                    echo "  ✗ No file in ${check.file}/ contains: ${check.dirContains}"
+                    echo "  Directory contents:"
+                    ls "$systemDerivation/${check.file}/" 2>/dev/null || echo "    (directory missing)"
+                    exit 1
+                  fi
+                ''
+              else
+                "";
+            dirNotContainsCheck =
+              if check ? dirNotContains && check.dirNotContains != null then
+                ''
+                  echo "Checking: ${check.file}/* should NOT contain '${check.dirNotContains}'"
+                  if [ -d "$systemDerivation/${check.file}" ] && grep -rqF '${check.dirNotContains}' "$systemDerivation/${check.file}/" 2>/dev/null; then
+                    echo "  ✗ Directory unexpectedly contains: ${check.dirNotContains}"
+                    grep -rlF '${check.dirNotContains}' "$systemDerivation/${check.file}/"
+                    exit 1
+                  else
+                    echo "  ✓ Directory correctly does not contain: ${check.dirNotContains}"
+                  fi
+                ''
+              else
+                "";
           in
           if check ? notExists && check.notExists then
             notExistsCheck
+          else if check ? dirContains then
+            dirContainsCheck
+          else if check ? dirNotContains then
+            dirNotContainsCheck
           else
             fileCheck
             + containsCheck
@@ -1898,6 +1932,59 @@ in
       {
         file = "etc/httpd/config";
         contains = "root_dir=/srv/www";
+      }
+    ];
+  };
+
+  # ── sudo daemon init script ──
+
+  # Test: sudod init script present when userutils installed
+  rootTree-sudod-init-script = mkArtifactTest {
+    name = "rootTree-sudod-init-script";
+    description = "Verifies sudod init script exists and starts sudo --daemon when userutils present";
+    targetPkgs = mockPkgs.all // {
+      userutils = mockPkgs.userutils;
+    };
+    modules = [
+      {
+        "/environment" = {
+          systemPackages = [ mockPkgs.userutils ];
+        };
+      }
+    ];
+    checks = [
+      {
+        # The service name "sudod" gets a numeric prefix from topo sort.
+        # Use a glob-style check: find any init.d script containing the command.
+        file = "usr/lib/init.d";
+        dirContains = "sudo --daemon";
+      }
+    ];
+  };
+
+  # Test: sudod init script absent when no userutils
+  rootTree-no-sudod-without-userutils = mkArtifactTest {
+    name = "rootTree-no-sudod-without-userutils";
+    description = "Verifies no sudod init script when userutils is not installed";
+    modules = [ ];
+    checks = [
+      {
+        file = "usr/lib/init.d";
+        dirNotContains = "sudo --daemon";
+      }
+    ];
+  };
+
+  # ── sudo group in /etc/group ──
+
+  rootTree-has-sudo-group = mkArtifactTest {
+    name = "rootTree-has-sudo-group";
+    description = "Verifies /etc/group contains the sudo group with default user as member";
+    modules = [ ];
+    checks = [
+      {
+        file = "etc/group";
+        contains = "sudo;x;27;user";
       }
     ];
   };
