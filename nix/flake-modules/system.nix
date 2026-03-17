@@ -445,6 +445,9 @@ in
     run-redox-graphical-desktop = graphicalQemuRunners.graphical;
     run-redox-graphical-headless = graphicalCHRunners.headless;
 
+    # Default: graphical disk image (what `nix build` produces)
+    default = systems.graphical.diskImage;
+
     # === Backward-compatible aliases ===
     diskImage = systems.default.diskImage;
     diskImageCloudHypervisor = systems.cloud-hypervisor.diskImage;
