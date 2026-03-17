@@ -1056,11 +1056,11 @@
         "zoxide-src": "zoxide-src"
       },
       "locked": {
-        "lastModified": 1773781926,
-        "narHash": "sha256-VEBLpGeHcBk4vbeUZsUdHAjc3vo8Fwv9SBU9CG7Xz+c=",
+        "lastModified": 1773784528,
+        "narHash": "sha256-LPc7g00LSb1RA9BlmiZMGVD2ly6YEC5EP36Kz7MYTTg=",
         "owner": "brittonr",
         "repo": "nix-redox",
-        "rev": "9ba2ace517efd479b9f0fd97c9bc587a869548c0",
+        "rev": "a34ccce4657313a38347cd85ee4f40b3f2caa0e0",
         "type": "github"
       },
       "original": {
