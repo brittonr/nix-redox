@@ -2,7 +2,7 @@
   description = "My custom Redox OS configuration";
 
   inputs = {
-    redox.url = "github:brittonr/redox";
+    redox.url = "github:brittonr/nix-redox";
   };
 
   outputs =
@@ -22,16 +22,16 @@
       };
     in
     {
-      # `nix run` boots the graphical desktop
-      apps.${system}.default = {
-        type = "app";
-        program = "${runners.graphical}/bin/run-redox-graphical";
-      };
-
-      # `nix run .#headless` for serial console
-      apps.${system}.headless = {
-        type = "app";
-        program = "${runners.headless}/bin/run-redox";
+      # `nix run` boots the graphical desktop, `nix run .#headless` for serial console
+      apps.${system} = {
+        default = {
+          type = "app";
+          program = "${runners.graphical}/bin/run-redox-graphical";
+        };
+        headless = {
+          type = "app";
+          program = "${runners.headless}/bin/run-redox";
+        };
       };
 
       # `nix build` produces the disk image

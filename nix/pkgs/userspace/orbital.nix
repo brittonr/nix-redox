@@ -140,127 +140,127 @@ let
             if [ -f src/core/image.rs ]; then
               echo "Patching ImageAligned for page-aligned allocation..."
               python3 - src/core/image.rs << 'PATCH_EOF'
-      import sys
+    import sys
 
-      file_path = sys.argv[1]
-      with open(file_path, 'r') as f:
-          content = f.read()
+    file_path = sys.argv[1]
+    with open(file_path, 'r') as f:
+        content = f.read()
 
-      # Find and replace the ImageAligned struct and its impl
-      old_struct = """pub struct ImageAligned {
-          w: i32,
-          h: i32,
-          data: &'static mut [Color],
-      }"""
+    # Find and replace the ImageAligned struct and its impl
+    old_struct = """pub struct ImageAligned {
+        w: i32,
+        h: i32,
+        data: &'static mut [Color],
+    }"""
 
-      new_struct = """pub struct ImageAligned {
-          w: i32,
-          h: i32,
-          data: &'static mut [Color],
-          // Original allocation pointer for proper deallocation
-          alloc_ptr: *mut u8,
-          alloc_size: usize,
-      }"""
+    new_struct = """pub struct ImageAligned {
+        w: i32,
+        h: i32,
+        data: &'static mut [Color],
+        // Original allocation pointer for proper deallocation
+        alloc_ptr: *mut u8,
+        alloc_size: usize,
+    }"""
 
-      if old_struct in content:
-          content = content.replace(old_struct, new_struct)
-          print("Replaced ImageAligned struct")
-      else:
-          print("WARNING: Could not find ImageAligned struct")
+    if old_struct in content:
+        content = content.replace(old_struct, new_struct)
+        print("Replaced ImageAligned struct")
+    else:
+        print("WARNING: Could not find ImageAligned struct")
 
-      # Replace Drop impl
-      old_drop = """impl Drop for ImageAligned {
-          fn drop(&mut self) {
-              unsafe {
-                  libc::free(self.data.as_mut_ptr() as *mut libc::c_void);
-              }
-          }
-      }"""
+    # Replace Drop impl
+    old_drop = """impl Drop for ImageAligned {
+        fn drop(&mut self) {
+            unsafe {
+                libc::free(self.data.as_mut_ptr() as *mut libc::c_void);
+            }
+        }
+    }"""
 
-      new_drop = """impl Drop for ImageAligned {
-          fn drop(&mut self) {
-              unsafe {
-                  // Use the original allocation pointer for deallocation
-                  libc::free(self.alloc_ptr as *mut libc::c_void);
-              }
-          }
-      }"""
+    new_drop = """impl Drop for ImageAligned {
+        fn drop(&mut self) {
+            unsafe {
+                // Use the original allocation pointer for deallocation
+                libc::free(self.alloc_ptr as *mut libc::c_void);
+            }
+        }
+    }"""
 
-      if old_drop in content:
-          content = content.replace(old_drop, new_drop)
-          print("Replaced Drop impl")
-      else:
-          print("WARNING: Could not find Drop impl")
+    if old_drop in content:
+        content = content.replace(old_drop, new_drop)
+        print("Replaced Drop impl")
+    else:
+        print("WARNING: Could not find Drop impl")
 
-      # Replace ImageAligned::new implementation
-      old_new = """impl ImageAligned {
-          pub fn new(w: i32, h: i32, align: usize) -> ImageAligned {
-              let size = (w * h) as usize;
-              let size_bytes = size * mem::size_of::<Color>();
-              let size_alignments = (size_bytes + align - 1) / align;
-              let size_aligned = size_alignments * align;
-              let data;
-              unsafe {
-                  let ptr = libc::memalign(align, size_aligned);
-                  libc::memset(ptr, 0, size_aligned);
-                  data = slice::from_raw_parts_mut(
-                      ptr as *mut Color,
-                      size_aligned / mem::size_of::<Color>(),
-                  );
-              }
-              ImageAligned { w, h, data }
-          }"""
+    # Replace ImageAligned::new implementation
+    old_new = """impl ImageAligned {
+        pub fn new(w: i32, h: i32, align: usize) -> ImageAligned {
+            let size = (w * h) as usize;
+            let size_bytes = size * mem::size_of::<Color>();
+            let size_alignments = (size_bytes + align - 1) / align;
+            let size_aligned = size_alignments * align;
+            let data;
+            unsafe {
+                let ptr = libc::memalign(align, size_aligned);
+                libc::memset(ptr, 0, size_aligned);
+                data = slice::from_raw_parts_mut(
+                    ptr as *mut Color,
+                    size_aligned / mem::size_of::<Color>(),
+                );
+            }
+            ImageAligned { w, h, data }
+        }"""
 
-      new_new = """impl ImageAligned {
-          pub fn new(w: i32, h: i32, align: usize) -> ImageAligned {
-              let size = (w * h) as usize;
-              let size_bytes = size * mem::size_of::<Color>();
-              let size_alignments = (size_bytes + align - 1) / align;
-              let size_aligned = size_alignments * align;
+    new_new = """impl ImageAligned {
+        pub fn new(w: i32, h: i32, align: usize) -> ImageAligned {
+            let size = (w * h) as usize;
+            let size_bytes = size * mem::size_of::<Color>();
+            let size_alignments = (size_bytes + align - 1) / align;
+            let size_aligned = size_alignments * align;
 
-              // Over-allocate by align to guarantee we can find an aligned address
-              // This is necessary because libc::memalign in relibc may not work correctly
-              let alloc_size = size_aligned + align;
-              let data;
-              let alloc_ptr;
-              unsafe {
-                  // Use malloc instead of memalign, then manually align
-                  alloc_ptr = libc::malloc(alloc_size) as *mut u8;
-                  if alloc_ptr.is_null() {
-                      panic!("ImageAligned: allocation failed");
-                  }
+            // Over-allocate by align to guarantee we can find an aligned address
+            // This is necessary because libc::memalign in relibc may not work correctly
+            let alloc_size = size_aligned + align;
+            let data;
+            let alloc_ptr;
+            unsafe {
+                // Use malloc instead of memalign, then manually align
+                alloc_ptr = libc::malloc(alloc_size) as *mut u8;
+                if alloc_ptr.is_null() {
+                    panic!("ImageAligned: allocation failed");
+                }
 
-                  // Align the pointer up to the next boundary
-                  let alloc_addr = alloc_ptr as usize;
-                  let aligned_addr = (alloc_addr + align - 1) & !(align - 1);
-                  let aligned_ptr = aligned_addr as *mut u8;
+                // Align the pointer up to the next boundary
+                let alloc_addr = alloc_ptr as usize;
+                let aligned_addr = (alloc_addr + align - 1) & !(align - 1);
+                let aligned_ptr = aligned_addr as *mut u8;
 
-                  // Zero the aligned region
-                  libc::memset(aligned_ptr as *mut libc::c_void, 0, size_aligned);
+                // Zero the aligned region
+                libc::memset(aligned_ptr as *mut libc::c_void, 0, size_aligned);
 
-                  data = slice::from_raw_parts_mut(
-                      aligned_ptr as *mut Color,
-                      size_aligned / mem::size_of::<Color>(),
-                  );
+                data = slice::from_raw_parts_mut(
+                    aligned_ptr as *mut Color,
+                    size_aligned / mem::size_of::<Color>(),
+                );
 
-                  eprintln!(
-                      "ImageAligned: alloc_addr={:#x}, aligned_addr={:#x}, page_aligned={}",
-                      alloc_addr, aligned_addr, aligned_addr % align == 0
-                  );
-              }
-              ImageAligned { w, h, data, alloc_ptr, alloc_size }
-          }"""
+                eprintln!(
+                    "ImageAligned: alloc_addr={:#x}, aligned_addr={:#x}, page_aligned={}",
+                    alloc_addr, aligned_addr, aligned_addr % align == 0
+                );
+            }
+            ImageAligned { w, h, data, alloc_ptr, alloc_size }
+        }"""
 
-      if old_new in content:
-          content = content.replace(old_new, new_new)
-          print("Replaced ImageAligned::new impl")
-      else:
-          print("WARNING: Could not find ImageAligned::new impl")
+    if old_new in content:
+        content = content.replace(old_new, new_new)
+        print("Replaced ImageAligned::new impl")
+    else:
+        print("WARNING: Could not find ImageAligned::new impl")
 
-      with open(file_path, 'w') as f:
-          f.write(content)
+    with open(file_path, 'w') as f:
+        f.write(content)
 
-      print("ImageAligned patching complete")
+    print("ImageAligned patching complete")
     PATCH_EOF
               echo "ImageAligned patch applied"
             fi
