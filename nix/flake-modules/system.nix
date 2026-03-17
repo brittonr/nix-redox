@@ -523,10 +523,39 @@ in
   legacyPackages = {
     inherit (redoxSystemFactory) redoxSystem;
     redoxConfigurations = systems;
+
+    # Build a Redox system from a list of profile modules.
+    # Returns { diskImage, initfs, rootTree, vmConfig, ... }
     mkRedoxSystem =
       { modules }:
       mkSystem {
         inherit modules extraPkgs;
       };
+
+    # Create QEMU runner scripts from a system's disk image.
+    # Returns { graphical, headless }
+    mkQemuRunners =
+      {
+        diskImage,
+        vmConfig ? { },
+      }:
+      mkQemuRunners {
+        inherit diskImage vmConfig;
+        inherit bootloader;
+      };
+
+    # Create Cloud Hypervisor runner scripts from a system's disk image.
+    # Returns { headless, withNetwork, withDev }
+    mkCloudHypervisorRunners =
+      {
+        diskImage,
+        vmConfig ? { },
+      }:
+      mkCHRunners {
+        inherit diskImage vmConfig;
+      };
+
+    # The bootloader derivation (needed for custom QEMU setups)
+    inherit bootloader;
   };
 }
