@@ -740,6 +740,76 @@ let
         fi
     '
 
+    # ── Phase 14: Boot component manifest verification ──────────
+    echo ""
+    echo "--- Phase 14: v2 manifest boot component tracking ---"
+
+    /nix/system/profile/bin/bash -c '
+        manifest="/etc/redox-system/manifest.json"
+        version=$(grep -o "\"manifestVersion\":[0-9]*" "$manifest" | grep -o "[0-9]*")
+        if [ "$version" = "2" ]; then
+            echo FUNC_TEST:manifest-v2:PASS
+        else
+            echo "FUNC_TEST:manifest-v2:FAIL:version=$version"
+        fi
+    '
+
+    # Check boot.kernel path exists in manifest
+    /nix/system/profile/bin/bash -c '
+        manifest="/etc/redox-system/manifest.json"
+        if grep -q "\"kernel\":\"/nix/store/" "$manifest"; then
+            echo FUNC_TEST:boot-kernel-path:PASS
+        else
+            echo FUNC_TEST:boot-kernel-path:FAIL:no kernel path in manifest
+        fi
+    '
+
+    # Check boot.initfs path exists in manifest
+    /nix/system/profile/bin/bash -c '
+        manifest="/etc/redox-system/manifest.json"
+        if grep -q "\"initfs\":\"/nix/store/" "$manifest"; then
+            echo FUNC_TEST:boot-initfs-path:PASS
+        else
+            echo FUNC_TEST:boot-initfs-path:FAIL:no initfs path in manifest
+        fi
+    '
+
+    # Check boot component store paths exist on rootfs
+    /nix/system/profile/bin/bash -c '
+        manifest="/etc/redox-system/manifest.json"
+        # Extract kernel store path (simple grep — no jq on Redox)
+        kpath=$(grep -o "\"kernel\":\"[^\"]*\"" "$manifest" | head -1 | grep -o "/nix/store/[^\"]*")
+        if [ -n "$kpath" ] && [ -f "$kpath" ]; then
+            echo FUNC_TEST:boot-kernel-store-exists:PASS
+        else
+            echo "FUNC_TEST:boot-kernel-store-exists:FAIL:kpath=$kpath"
+        fi
+    '
+
+    # Verify generations preserve boot paths through rollback
+    /nix/system/profile/bin/bash -c '
+        gen1="/etc/redox-system/generations/1/manifest.json"
+        if [ -f "$gen1" ]; then
+            if grep -q "\"kernel\":\"/nix/store/" "$gen1"; then
+                echo FUNC_TEST:gen1-boot-path-preserved:PASS
+            else
+                echo FUNC_TEST:gen1-boot-path-preserved:FAIL:no kernel in gen1
+            fi
+        else
+            echo FUNC_TEST:gen1-boot-path-preserved:FAIL:gen1 manifest missing
+        fi
+    '
+
+    # Verify GC roots include boot components
+    /nix/system/profile/bin/bash -c '
+        gcroots="/nix/var/snix/gcroots"
+        if ls "$gcroots"/gen-*-boot-kernel* >/dev/null 2>&1; then
+            echo FUNC_TEST:boot-gc-roots:PASS
+        else
+            echo FUNC_TEST:boot-gc-roots:FAIL:no boot-kernel GC roots
+        fi
+    '
+
     echo ""
     echo "FUNC_TESTS_COMPLETE"
     echo ""

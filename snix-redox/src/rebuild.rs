@@ -64,6 +64,8 @@ pub struct RebuildConfig {
     pub power: Option<PowerConfig>,
     pub users: Option<BTreeMap<String, UserConfig>>,
     pub programs: Option<ProgramsConfig>,
+    /// Hardware/driver configuration — changes require bridge for initfs rebuild.
+    pub hardware: Option<HardwareConfigInput>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -116,6 +118,17 @@ pub struct ProgramsConfig {
     pub editor: Option<String>,
 }
 
+/// Hardware configuration that affects boot components (drivers → initfs).
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HardwareConfigInput {
+    pub storage_drivers: Option<Vec<String>>,
+    pub network_drivers: Option<Vec<String>>,
+    pub graphics_drivers: Option<Vec<String>>,
+    pub audio_drivers: Option<Vec<String>>,
+    pub usb_enabled: Option<bool>,
+}
+
 // ===== Public API =====
 
 /// Rebuild the system from configuration.nix.
@@ -128,6 +141,26 @@ pub struct ProgramsConfig {
 /// An empty list (`packages = []`) is treated as "no change".
 pub fn has_package_changes(config: &RebuildConfig) -> bool {
     matches!(&config.packages, Some(pkgs) if !pkgs.is_empty())
+}
+
+/// Check if the parsed config has hardware/driver changes that affect boot components.
+/// Any hardware field set means the user is declaring driver configuration → needs bridge
+/// to rebuild initfs.
+pub fn has_boot_affecting_changes(config: &RebuildConfig) -> bool {
+    if let Some(ref hw) = config.hardware {
+        hw.storage_drivers.is_some()
+            || hw.network_drivers.is_some()
+            || hw.graphics_drivers.is_some()
+            || hw.audio_drivers.is_some()
+            || hw.usb_enabled.is_some()
+    } else {
+        false
+    }
+}
+
+/// Check if the config requires the bridge (package or boot-affecting changes).
+pub fn needs_bridge(config: &RebuildConfig) -> bool {
+    has_package_changes(config) || has_boot_affecting_changes(config)
 }
 
 /// Check if the build bridge is available.
@@ -161,10 +194,17 @@ pub fn auto_rebuild(
     println!("Evaluating {cfg_path}...");
     let config = evaluate_config(cfg_path)?;
 
-    if has_package_changes(&config) {
-        // Package changes — need the bridge
+    if needs_bridge(&config) {
+        // Package or boot-component changes — need the bridge
         if bridge_available(shared_dir) {
-            println!("Package changes detected, using bridge...");
+            let reason = if has_package_changes(&config) && has_boot_affecting_changes(&config) {
+                "Package and hardware changes detected"
+            } else if has_boot_affecting_changes(&config) {
+                "Hardware/driver changes detected (initfs rebuild needed)"
+            } else {
+                "Package changes detected"
+            };
+            println!("{reason}, using bridge...");
             crate::bridge::rebuild_via_bridge(
                 config_path,
                 dry_run,
@@ -174,11 +214,17 @@ pub fn auto_rebuild(
                 gen_dir,
             )
         } else {
+            let detail = if has_boot_affecting_changes(&config) {
+                "Your configuration.nix modifies hardware/drivers, which requires\n\
+                 the host to rebuild the initfs."
+            } else {
+                "Your configuration.nix modifies `packages`, which requires the host\n\
+                 to build the new package set."
+            };
             Err(format!(
-                "package changes require the build bridge\n\
+                "changes require the build bridge\n\
                  \n\
-                 Your configuration.nix modifies `packages`, which requires the host\n\
-                 to build the new package set. Start the VM with shared filesystem:\n\
+                 {detail} Start the VM with shared filesystem:\n\
                  \n\
                    nix run .#run-redox-shared     (in one terminal)\n\
                    nix run .#build-bridge         (in another terminal)\n\
@@ -186,7 +232,7 @@ pub fn auto_rebuild(
                  Then re-run: snix system rebuild\n\
                  \n\
                  To apply config-only changes without the bridge: remove the\n\
-                 `packages` line from configuration.nix and re-run.\n\
+                 `packages` / `hardware` section from configuration.nix and re-run.\n\
                  \n\
                  To force local resolution (may produce incomplete results):\n\
                    snix system rebuild --local"
@@ -882,6 +928,7 @@ mod tests {
                 description: "initial build".to_string(),
                 timestamp: "2026-02-20T10:00:00Z".to_string(),
             },
+            boot: None,
             configuration: Configuration {
                 boot: BootConfig {
                     disk_size_mb: 768,
@@ -1201,6 +1248,7 @@ mod tests {
             packages: None,
             users: None,
             programs: None,
+            hardware: None,
         };
 
         let merged = merge_config(&current, &config, &[]).unwrap();

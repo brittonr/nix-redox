@@ -146,6 +146,9 @@ adios:
       # ===== 9. Build-time validation =====
       systemChecks = import ./checks.nix {
         inherit hostPkgs lib rootTree cfg;
+        kernel = inputs.boot.kernel;
+        inherit initfs;
+        bootloader = inputs.boot.bootloader;
       };
 
       # ===== 10. Initfs =====
@@ -170,7 +173,7 @@ adios:
 
       redoxfsImage = mkRedoxfsImage {
         redoxfs = pkgs.redoxfs;
-        inherit rootTree kernel initfs;
+        inherit rootTree kernel initfs bootloader;
         sizeMB = cfg.diskSizeMB - cfg.espSizeMB - 4;
       };
 

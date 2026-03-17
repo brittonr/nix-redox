@@ -35,7 +35,7 @@ let
   # Provides live system introspection via `snix system info/verify/diff`.
   # File hashes are computed post-build (see rootTree derivation).
   manifestData = {
-    manifestVersion = 1; # Schema version for forward compatibility
+    manifestVersion = 2; # v2: adds boot component store paths
 
     system = {
       inherit (versionInfo) redoxSystemVersion target;
@@ -49,6 +49,13 @@ let
       buildHash = ""; # Populated at rootTree build time (content hash)
       description = "initial build";
       timestamp = ""; # Set at switch/activation time (not build, for reproducibility)
+    };
+
+    # Boot component store paths — tracked per generation for rollback
+    boot = {
+      kernel = "${inputs.boot.kernel}/boot/kernel";
+      initfs = "${initfs}/boot/initfs";
+      bootloader = "${inputs.boot.bootloader}/boot/EFI/BOOT/BOOTX64.EFI";
     };
 
     configuration = {
