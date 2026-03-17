@@ -1817,4 +1817,88 @@ in
         echo "Test PASSED: rootTree-boot-vs-profile-separation"
         touch $out
       '';
+
+  # === Typed Service Module Artifact Tests ===
+
+  # Test: services.ssh.enable produces sshd_config in rootTree
+  rootTree-ssh-config = mkArtifactTest {
+    name = "rootTree-ssh-config";
+    description = "Verifies services.ssh.enable produces /etc/ssh/sshd_config with correct settings";
+    modules = [
+      {
+        "/networking" = {
+          enable = true;
+          mode = "dhcp";
+        };
+        "/services" = {
+          ssh = {
+            enable = true;
+            port = 2222;
+            permitRootLogin = true;
+            listenAddress = "0.0.0.0";
+            hostKeyPath = "/etc/ssh/host_key";
+            authorizedKeysPath = "/etc/ssh/authorized_keys";
+          };
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/ssh/sshd_config";
+        contains = "Port 2222";
+      }
+      {
+        file = "etc/ssh/sshd_config";
+        contains = "PermitRootLogin yes";
+      }
+      {
+        file = "etc/ssh/authorized_keys";
+        contains = "Authorized SSH public keys";
+      }
+    ];
+  };
+
+  # Test: services.ssh disabled means no sshd_config
+  rootTree-ssh-disabled = mkArtifactTest {
+    name = "rootTree-ssh-disabled";
+    description = "Verifies disabled SSH does not produce /etc/ssh/sshd_config";
+    modules = [ ];
+    checks = [
+      {
+        file = "etc/ssh/sshd_config";
+        notExists = true;
+      }
+    ];
+  };
+
+  # Test: services.httpd.enable produces config and init script
+  rootTree-httpd-service = mkArtifactTest {
+    name = "rootTree-httpd-service";
+    description = "Verifies services.httpd.enable produces /etc/httpd/config with correct port";
+    modules = [
+      {
+        "/networking" = {
+          enable = true;
+          mode = "dhcp";
+        };
+        "/services" = {
+          httpd = {
+            enable = true;
+            port = 9090;
+            rootDir = "/srv/www";
+          };
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/httpd/config";
+        contains = "port=9090";
+      }
+      {
+        file = "etc/httpd/config";
+        contains = "root_dir=/srv/www";
+      }
+    ];
+  };
 }

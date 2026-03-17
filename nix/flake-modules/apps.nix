@@ -229,6 +229,12 @@ in
       meta.description = "Test boot-time generation activation: activate-boot, boot cmd, marker file";
     };
 
+    e2e-rebuild-test = {
+      type = "app";
+      program = "${self'.packages.e2e-rebuild-test}/bin/functional-test";
+      meta.description = "E2E test: environment.etc, activation scripts, rebuild, no-op, rollback";
+    };
+
     https-cache-test = {
       type = "app";
       program = "${self'.packages.httpsCacheTest}/bin/https-cache-test";

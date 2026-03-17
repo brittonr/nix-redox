@@ -63,6 +63,28 @@ let
       assertion = pkgs ? base;
       message = "pkgs.base is missing. Init daemons (init, logd, ipcd, ptyd) would be absent from /bin/.";
     }
+    # Typed service module assertions
+    {
+      assertion = !cfg.sshEnabled || (pkgs ? redox-ssh);
+      message = "services.ssh.enable requires the 'redox-ssh' package in pkgs.";
+    }
+    {
+      assertion = !cfg.sshEnabled || cfg.networkingEnabled;
+      message = "services.ssh.enable requires networking.enable = true.";
+    }
+    {
+      assertion = !cfg.svcHttpdEnabled || cfg.networkingEnabled;
+      message = "services.httpd.enable requires networking.enable = true.";
+    }
+    {
+      assertion =
+        cfg.gettyOpts.enable == "auto" || cfg.gettyOpts.enable == "false" || (pkgs ? userutils);
+      message = "services.getty.enable = 'true' requires the 'userutils' package in pkgs.";
+    }
+    {
+      assertion = !cfg.exampledEnabled || (pkgs ? exampled);
+      message = "services.exampled.enable requires the 'exampled' package in pkgs.";
+    }
   ];
 
   # Warnings: non-fatal notices traced during evaluation
@@ -80,6 +102,9 @@ let
     (lib.optionalString (
       cfg.allowRemoteRoot && cfg.networkingEnabled
     ) "Remote root login is allowed with networking enabled. Consider disabling for production.")
+    (lib.optionalString (
+      cfg.sshEnabled && cfg.sshOpts.permitRootLogin
+    ) "SSH root login is permitted. Consider services.ssh.permitRootLogin = false for production.")
   ];
 
   # Process assertions — throw at eval time if any fail

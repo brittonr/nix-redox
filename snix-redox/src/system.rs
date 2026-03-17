@@ -32,7 +32,7 @@ const BOOT_DEFAULT_PATH: &str = "/etc/redox-system/boot-default";
 
 // ===== Manifest Schema =====
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Manifest {
     pub manifest_version: u32,
@@ -59,7 +59,7 @@ pub struct Manifest {
 /// System profile directory (managed by generation switching)
 const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct GenerationInfo {
     /// Monotonically increasing generation number
@@ -86,7 +86,7 @@ impl Default for GenerationInfo {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemInfo {
     pub redox_system_version: String,
@@ -96,7 +96,7 @@ pub struct SystemInfo {
     pub timezone: String,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct Configuration {
     pub boot: BootConfig,
     pub hardware: HardwareConfig,
@@ -107,7 +107,7 @@ pub struct Configuration {
     pub power: PowerConfig,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct BootConfig {
     #[serde(rename = "diskSizeMB")]
     pub disk_size_mb: u32,
@@ -131,7 +131,7 @@ pub struct BootComponents {
     pub bootloader: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct HardwareConfig {
     pub storage_drivers: Vec<String>,
@@ -141,20 +141,20 @@ pub struct HardwareConfig {
     pub usb_enabled: bool,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct NetworkingConfig {
     pub enabled: bool,
     pub mode: String,
     pub dns: Vec<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct GraphicsConfig {
     pub enabled: bool,
     pub resolution: String,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct SecurityConfig {
     pub protect_kernel_schemes: bool,
@@ -162,7 +162,7 @@ pub struct SecurityConfig {
     pub allow_remote_root: bool,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LoggingConfig {
     pub log_level: String,
@@ -172,7 +172,7 @@ pub struct LoggingConfig {
     pub max_log_size_mb: u32,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PowerConfig {
     pub acpi_enabled: bool,
@@ -180,7 +180,7 @@ pub struct PowerConfig {
     pub reboot_on_panic: bool,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct Package {
     pub name: String,
     pub version: String,
@@ -188,7 +188,7 @@ pub struct Package {
     pub store_path: String,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct Drivers {
     pub all: Vec<String>,
     pub initfs: Vec<String>,
@@ -203,13 +203,13 @@ pub struct User {
     pub shell: String,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct Group {
     pub gid: u32,
     pub members: Vec<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Services {
     /// Full service declarations (for semantic diffing during activation).
@@ -245,7 +245,7 @@ pub struct ServiceInfo {
     pub after: Vec<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct ActivationScript {
     /// Script name (matches filename in /etc/redox-system/activation.d/)
     pub name: String,
@@ -254,7 +254,7 @@ pub struct ActivationScript {
     pub deps: Vec<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 pub struct FileInfo {
     /// BLAKE3 hash of file contents (hex-encoded, 64 chars)
     pub blake3: String,

@@ -743,6 +743,230 @@ in
         touch $out
       '';
 
+  # === Typed Service Module Tests ===
+
+  # Test: services.ssh.enable generates sshd service and config
+  service-ssh-enable = mkEvalTest {
+    name = "service-ssh-enable";
+    description = "Verifies services.ssh.enable generates sshd init script and /etc/ssh/ config";
+    modules = [
+      {
+        "/networking" = {
+          enable = true;
+          mode = "dhcp";
+        };
+        "/services" = {
+          ssh = {
+            enable = true;
+            port = 2222;
+            permitRootLogin = true;
+            listenAddress = "0.0.0.0";
+            hostKeyPath = "/etc/ssh/host_key";
+            authorizedKeysPath = "/etc/ssh/authorized_keys";
+          };
+        };
+      }
+    ];
+  };
+
+  # Test: services.httpd.enable generates httpd service and config
+  service-httpd-enable = mkEvalTest {
+    name = "service-httpd-enable";
+    description = "Verifies services.httpd.enable generates httpd init script and /etc/httpd/config";
+    modules = [
+      {
+        "/networking" = {
+          enable = true;
+          mode = "dhcp";
+        };
+        "/services" = {
+          httpd = {
+            enable = true;
+            port = 9090;
+            rootDir = "/srv/www";
+          };
+        };
+      }
+    ];
+  };
+
+  # Test: services.getty.enable = "true" forces getty on
+  service-getty-force = mkEvalTest {
+    name = "service-getty-force";
+    description = "Verifies services.getty.enable = 'true' forces getty even without default userutils";
+    extraPkgs = {
+      userutils = mockPkgs.userutils;
+    };
+    modules = [
+      {
+        "/environment" = {
+          systemPackages = [ mockPkgs.userutils ];
+        };
+        "/services" = {
+          getty = {
+            enable = "true";
+            device = "/scheme/debug/no-preserve";
+            extraArgs = "-J";
+          };
+        };
+      }
+    ];
+  };
+
+  # Test: services.exampled.enable generates scheme daemon service
+  service-exampled-enable = mkEvalTest {
+    name = "service-exampled-enable";
+    description = "Verifies services.exampled.enable generates scheme daemon init script";
+    modules = [
+      {
+        "/environment" = {
+          systemPackages = [ mockPkgs.exampled ];
+        };
+        "/services" = {
+          exampled = {
+            enable = true;
+            schemeName = "test-scheme";
+          };
+        };
+      }
+    ];
+  };
+
+  # Test: services.ssh without networking triggers assertion
+  assertion-ssh-without-networking =
+    let
+      redoxSystemFactory = import ../redox-system { inherit lib; };
+      result = builtins.tryEval (
+        let
+          system = redoxSystemFactory.redoxSystem {
+            modules = [
+              {
+                "/networking" = {
+                  enable = false;
+                };
+                "/services" = {
+                  ssh = {
+                    enable = true;
+                    port = 22;
+                    permitRootLogin = false;
+                    listenAddress = "0.0.0.0";
+                    hostKeyPath = "/etc/ssh/host_key";
+                    authorizedKeysPath = "/etc/ssh/authorized_keys";
+                  };
+                };
+              }
+            ];
+            pkgs = mockPkgs.all;
+            hostPkgs = pkgs;
+          };
+        in
+        builtins.deepSeq system.rootTree.outPath "ok"
+      );
+    in
+    pkgs.runCommand "test-eval-assertion-ssh-without-networking"
+      {
+        preferLocalBuild = true;
+        succeeded = if result.success or false then "true" else "false";
+      }
+      ''
+        if [ "$succeeded" = "true" ]; then
+          echo "FAIL: Should have rejected SSH without networking"
+          exit 1
+        fi
+        echo "✓ Assertion correctly rejects SSH without networking"
+        touch $out
+      '';
+
+  # Test: services.ssh without redox-ssh package triggers assertion
+  assertion-ssh-without-package =
+    let
+      redoxSystemFactory = import ../redox-system { inherit lib; };
+      pkgsNoSsh = builtins.removeAttrs mockPkgs.all [ "redox-ssh" ];
+      result = builtins.tryEval (
+        let
+          system = redoxSystemFactory.redoxSystem {
+            modules = [
+              {
+                "/networking" = {
+                  enable = true;
+                };
+                "/services" = {
+                  ssh = {
+                    enable = true;
+                    port = 22;
+                    permitRootLogin = false;
+                    listenAddress = "0.0.0.0";
+                    hostKeyPath = "/etc/ssh/host_key";
+                    authorizedKeysPath = "/etc/ssh/authorized_keys";
+                  };
+                };
+              }
+            ];
+            pkgs = pkgsNoSsh;
+            hostPkgs = pkgs;
+          };
+        in
+        builtins.deepSeq system.rootTree.outPath "ok"
+      );
+    in
+    pkgs.runCommand "test-eval-assertion-ssh-without-package"
+      {
+        preferLocalBuild = true;
+        succeeded = if result.success or false then "true" else "false";
+      }
+      ''
+        if [ "$succeeded" = "true" ]; then
+          echo "FAIL: Should have rejected SSH without redox-ssh package"
+          exit 1
+        fi
+        echo "✓ Assertion correctly rejects SSH without package"
+        touch $out
+      '';
+
+  # Test: All typed services together
+  service-all-together = mkEvalTest {
+    name = "service-all-together";
+    description = "Verifies all typed service modules work together";
+    modules = [
+      {
+        "/networking" = {
+          enable = true;
+          mode = "dhcp";
+        };
+        "/environment" = {
+          systemPackages = [
+            mockPkgs.userutils
+            mockPkgs.exampled
+          ];
+        };
+        "/services" = {
+          ssh = {
+            enable = true;
+            port = 22;
+            permitRootLogin = false;
+            listenAddress = "0.0.0.0";
+            hostKeyPath = "/etc/ssh/host_key";
+            authorizedKeysPath = "/etc/ssh/authorized_keys";
+          };
+          httpd = {
+            enable = true;
+            port = 8080;
+            rootDir = "/var/www";
+          };
+          getty = {
+            enable = "true";
+            device = "/scheme/debug/no-preserve";
+            extraArgs = "-J";
+          };
+          exampled = {
+            enable = true;
+            schemeName = "demo";
+          };
+        };
+      }
+    ];
+  };
+
   # Test: vmConfig reflects profile overrides
   vmconfig-profile-override =
     let

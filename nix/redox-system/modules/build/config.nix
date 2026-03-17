@@ -187,6 +187,25 @@ let
     in
     uu != null && builtins.any (p: p == uu) allPackages;
 
+  # ===== TYPED SERVICE MODULES =====
+  # Single source of truth for typed service options.
+  # adios validates types and applies defaults from /services module —
+  # no `or` fallbacks needed here.
+  sshOpts = inputs.services.ssh;
+  sshEnabled = sshOpts.enable;
+
+  svcHttpdOpts = inputs.services.httpd;
+  svcHttpdEnabled = svcHttpdOpts.enable;
+
+  gettyOpts = inputs.services.getty;
+  gettyEnabled =
+    if gettyOpts.enable == "true" then true
+    else if gettyOpts.enable == "false" then false
+    else userutilsInstalled;  # "auto"
+
+  exampledOpts = inputs.services.exampled;
+  exampledEnabled = exampledOpts.enable;
+
   # Collect all directories
   homeDirectories = lib.filter (d: d != null) (
     lib.mapAttrsToList (name: user: if user.createHome or false then user.home else null) (
@@ -211,6 +230,10 @@ let
     ++ (lib.optional acpiEnabled "/etc/acpi")
     ++ (lib.optional (helixConfig.enable or false) "/etc/helix")
     ++ (lib.optional (httpdConfig.enable or false) (httpdConfig.rootDir or "/var/www"))
+    # Typed service module directories
+    ++ (lib.optional sshEnabled "/etc/ssh")
+    ++ (lib.optional svcHttpdEnabled "/etc/httpd")
+    ++ (lib.optional svcHttpdEnabled svcHttpdOpts.rootDir)
     # Activation scripts directory
     ++ (lib.optional ((inputs.activation.scripts or { }) != { }) "/etc/redox-system/activation.d")
     # Parent directories for user-declared etc files (environment.etc)
@@ -328,5 +351,13 @@ in
     firstIface
     userEtcFiles
     activationScriptNames
+    sshOpts
+    sshEnabled
+    svcHttpdOpts
+    svcHttpdEnabled
+    gettyOpts
+    gettyEnabled
+    exampledOpts
+    exampledEnabled
     ;
 }
