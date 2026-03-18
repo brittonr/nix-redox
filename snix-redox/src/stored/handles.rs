@@ -14,9 +14,13 @@
 use std::collections::BTreeMap;
 use std::io::{self};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::file_io_worker::FileIoWorker;
+
+/// Upper bound for handle IDs. The kernel reserves the top 4096
+/// values of usize as error codes, so valid descriptors are in
+/// the range `1..=MAX_HANDLE_ID`.
+const MAX_HANDLE_ID: usize = usize::MAX - 4096;
 
 /// An open file handle.
 ///
@@ -84,7 +88,7 @@ pub enum Handle {
 /// without blocking the scheme event loop. On Redox, the worker is
 /// required; on other platforms (tests), reads fall back to direct I/O.
 pub struct HandleTable {
-    next_id: AtomicUsize,
+    next_id: usize,
     pub handles: BTreeMap<usize, Handle>,
     /// Background I/O worker for file reads. On Redox, this MUST be set
     /// before any `read()` calls on lazy file handles.
@@ -95,7 +99,7 @@ pub struct HandleTable {
 impl HandleTable {
     pub fn new() -> Self {
         Self {
-            next_id: AtomicUsize::new(1),
+            next_id: 1,
             handles: BTreeMap::new(),
             io_worker: None,
         }
@@ -105,11 +109,33 @@ impl HandleTable {
     ///
     /// The worker thread handles all file reads, keeping filesystem
     /// I/O off the scheme event loop thread.
-    pub fn with_io_worker() -> Self {
+    pub fn with_io_worker(root_fd: Option<usize>) -> Self {
         Self {
-            next_id: AtomicUsize::new(1),
+            next_id: 1,
             handles: BTreeMap::new(),
-            io_worker: Some(FileIoWorker::spawn()),
+            io_worker: Some(FileIoWorker::spawn(root_fd)),
+        }
+    }
+
+    /// Allocate the next handle ID, wrapping within the valid range
+    /// and skipping IDs that collide with open handles.
+    ///
+    /// Matches the upstream randd pattern: `Wrapping` counter with
+    /// collision loop. Valid range is `1..=MAX_HANDLE_ID` (kernel
+    /// reserves the top 4096 values as error codes).
+    fn alloc_id(&mut self) -> usize {
+        loop {
+            let id = self.next_id;
+            // Advance counter, wrapping back to 1 if past the valid range.
+            if self.next_id >= MAX_HANDLE_ID {
+                self.next_id = 1;
+            } else {
+                self.next_id += 1;
+            }
+            // Skip IDs already in use (collision after wrap).
+            if id >= 1 && id <= MAX_HANDLE_ID && !self.handles.contains_key(&id) {
+                return id;
+            }
         }
     }
 
@@ -124,7 +150,7 @@ impl HandleTable {
         size: u64,
         executable: bool,
     ) -> usize {
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let id = self.alloc_id();
         self.handles.insert(
             id,
             Handle::File(FileHandle {
@@ -159,7 +185,7 @@ impl HandleTable {
         let executable = false;
 
         let size = meta.len();
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let id = self.alloc_id();
         self.handles.insert(
             id,
             Handle::File(FileHandle {
@@ -200,7 +226,7 @@ impl HandleTable {
         real_path: PathBuf,
         scheme_path: String,
     ) -> io::Result<usize> {
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let id = self.alloc_id();
         self.handles.insert(
             id,
             Handle::Dir(DirHandle {
@@ -371,7 +397,7 @@ impl HandleTable {
 
     /// Open a control handle for receiving manifest notifications.
     pub fn open_control(&mut self, scheme_path: String) -> usize {
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let id = self.alloc_id();
         self.handles.insert(
             id,
             Handle::Control(ControlHandle {
@@ -648,5 +674,29 @@ mod tests {
 
         assert_eq!(table.real_path(id), Some(&f));
         assert_eq!(table.real_path(999), None);
+    }
+
+    #[test]
+    fn handle_id_wraps_at_limit() {
+        let mut table = HandleTable::new();
+        // Force the counter near the limit.
+        table.next_id = MAX_HANDLE_ID;
+        let id1 = table.open_control("test1".to_string());
+        assert_eq!(id1, MAX_HANDLE_ID);
+        // Next allocation wraps to 1.
+        let id2 = table.open_control("test2".to_string());
+        assert_eq!(id2, 1);
+    }
+
+    #[test]
+    fn handle_id_skips_collision() {
+        let mut table = HandleTable::new();
+        // Allocate ID 1.
+        let id1 = table.open_control("a".to_string());
+        assert_eq!(id1, 1);
+        // Force counter back to 1 — should skip to 2.
+        table.next_id = 1;
+        let id2 = table.open_control("b".to_string());
+        assert_eq!(id2, 2);
     }
 }

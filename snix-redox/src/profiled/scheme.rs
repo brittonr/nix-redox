@@ -32,7 +32,8 @@ impl ProfileSchemeHandler {
     fn new(daemon: ProfileDaemon) -> Self {
         Self {
             daemon,
-            handles: HandleTable::with_io_worker(),
+            // root_fd set later by run_daemon() before setrens.
+            handles: HandleTable::with_io_worker(None),
         }
     }
 
@@ -223,6 +224,18 @@ impl SchemeSync for ProfileSchemeHandler {
         let len = bytes.len().min(buf.len());
         buf[..len].copy_from_slice(&bytes[..len]);
         Ok(len)
+    }
+
+    fn fevent(&mut self, id: usize, _flags: syscall::flag::EventFlags, _ctx: &CallerCtx) -> Result<syscall::flag::EventFlags> {
+        match self.handles.get(id) {
+            Some(Handle::File(_)) | Some(Handle::Dir(_)) => {
+                Ok(syscall::flag::EventFlags::EVENT_READ)
+            }
+            Some(Handle::Control(_)) => {
+                Ok(syscall::flag::EventFlags::EVENT_WRITE)
+            }
+            None => Err(Error::new(EBADF)),
+        }
     }
 
     fn fstat(&mut self, id: usize, stat: &mut Stat, _ctx: &CallerCtx) -> Result<()> {
@@ -428,6 +441,32 @@ pub fn run_daemon(config: ProfiledConfig) -> Result<(), Box<dyn std::error::Erro
             return Err(format!("profiled: registration failed: {e}").into());
         }
     }
+
+    // Pre-open "/" to get a direct fd to redoxfs. Must be done BEFORE
+    // setrens(0, 0). The root_fd allows the FileIoWorker to continue
+    // reading files via SYS_OPENAT after the namespace is null.
+    eprintln!("profiled: pre-opening /");
+    let root_file = std::fs::File::open("/").map_err(|e| {
+        format!("profiled: failed to open /: {e}")
+    })?;
+    let root_fd = {
+        use std::os::unix::io::AsRawFd;
+        root_file.as_raw_fd() as usize
+    };
+    eprintln!("profiled: root_fd={root_fd}");
+
+    // Restart the FileIoWorker with the root_fd.
+    handler.handles.io_worker = Some(
+        crate::file_io_worker::FileIoWorker::spawn(Some(root_fd))
+    );
+
+    // Drop into null namespace.
+    eprintln!("profiled: entering null namespace");
+    libredox::call::setrens(0, 0).map_err(|e| {
+        format!("profiled: setrens(0, 0) failed: {e}")
+    })?;
+
+    let _root_file = root_file;
 
     // Main event loop.
     eprintln!("profiled: entering event loop");
