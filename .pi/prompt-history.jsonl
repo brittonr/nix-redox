@@ -458,3 +458,5 @@
 {"text":"this is going to cause a process that never finishes for you","timestamp":1773837682760}
 {"text":"dig into kernel issue","timestamp":1773838001294}
 {"text":"yes propse as separate openspec","timestamp":1773838391957}
+{"text":"what next?","timestamp":1773838661810}
+{"text":"kernel-ptrace-proc-handles","timestamp":1773838734411}
