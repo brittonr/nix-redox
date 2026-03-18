@@ -39,6 +39,8 @@ let
       ./patches/kernel/patch-kernel-p2frame-init.patch
     ];
 
+    nativeBuildInputs = [ pkgs.python3 ];
+
     postUnpack = ''
       rm -rf $sourceRoot/rmm
       cp -r ${rmm-src} $sourceRoot/rmm
@@ -56,6 +58,9 @@ let
           --replace-fail 'fdt = { git = "https://github.com/repnop/fdt.git", rev = "2fb1409edd1877c714a0aa36b6a7c5351004be54" }' \
                          'fdt = { path = "${fdt-src}" }'
       fi
+
+      # Restore ptrace proc: scheme handles (trace + mem)
+      python3 ${./patches/kernel/patch-kernel-ptrace-proc-handles.py} .
     '';
 
     installPhase = ''
