@@ -1,0 +1,11 @@
+[package]
+name = "gdbstub"
+version = "0.1.0"
+edition = "2021"
+description = "GDB remote debugging stub for Redox OS"
+license = "MIT"
+
+[dependencies]
+gdb-protocol = "0.1.0"
+redox_syscall = "0.5"
+libc = "0.2"

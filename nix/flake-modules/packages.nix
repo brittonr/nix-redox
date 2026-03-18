@@ -1124,6 +1124,8 @@ let
     }
   );
 
+  gdbstub = import ../pkgs/userspace/gdbstub.nix standaloneCommon;
+
   # === Host tools (run on Linux, not on Redox) ===
 
   pkgar-repo = import ../pkgs/host/pkgar-repo.nix {
@@ -1214,6 +1216,7 @@ in
       gdb-protocol
       redox-intelflash
       redox-buffer-pool
+      gdbstub
       ;
 
     # Host tools (run on Linux)
