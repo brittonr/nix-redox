@@ -258,7 +258,7 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 - Our init (base fc162ac) does NOT support inline `KEY=VALUE cmd` syntax — use `export` on separate line
 - `ptyd` must be started (notify) in 00_base — getty needs pty: scheme
 - `acpid` is spawned by pcid-spawner — do NOT notify directly
-- `audiod` uses `nowait` (no HW in headless = no readiness signal)
+- `audiod` uses `daemon` type (notify); if no audio HW, it exits and parent gets EOF → continues
 - VT=3 for Orbital (VT=1 conflicts with inputd, VT=2 with fbcond)
 
 ### Clang on Redox

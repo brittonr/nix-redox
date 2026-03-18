@@ -241,7 +241,7 @@ let
       audiod = {
         description = "Audio daemon";
         command = "audiod";
-        type = "nowait";
+        type = "daemon";
         args = "";
         wantedBy = "rootfs";
         enable = true;
