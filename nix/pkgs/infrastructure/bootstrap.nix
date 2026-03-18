@@ -98,8 +98,13 @@ let
       }
     LINKERSCRIPT
 
+      # Forward ptrace handle opens (trace, mem) from procmgr to kernel
+      ${pkgs.python3}/bin/python3 ${../system/patches/bootstrap/patch-procmgr-ptrace-forward.py} .
+
       runHook postPatch
     '';
+
+    nativeBuildInputs = [ pkgs.python3 ];
 
     installPhase = ''
       mkdir -p $out

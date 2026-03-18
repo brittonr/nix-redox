@@ -87,7 +87,7 @@ let
 
   # Prepare source with patched dependencies
   patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "base-src-patched-v12"; # v12: Extract graphicscreen patch to .py file
+    name = "base-src-patched-v13"; # v13: Forward ptrace handle opens in procmgr
     src = base-src;
 
     nativeBuildInputs = [ pkgs.gnupatch ];
@@ -251,6 +251,10 @@ let
       # Add to workspace members
       sed -i 's|"drivers/storage/virtio-blkd",|"drivers/storage/virtio-blkd",\n    "drivers/storage/virtio-fsd",|' Cargo.toml
       echo "Done adding virtio-fsd"
+
+      # Forward ptrace handle opens (trace, mem) from procmgr to kernel
+      ${pkgs.python3}/bin/python3 ${./patches/bootstrap/patch-procmgr-ptrace-forward.py} .
+      echo "procmgr ptrace forwarding patch applied"
 
       runHook postPatch
     '';
