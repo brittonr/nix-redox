@@ -40,10 +40,23 @@
 
 - [x] 6.1 Boot VM with patched kernel
 - [ ] 6.2 Run `strace echo test` — verify ptrace events are received (pre/post syscall stops)
-  - BLOCKED: `proc:` scheme is managed by procmgr (userspace), not directly accessible to user processes.
-    Opening `proc:<pid>/trace` goes through procmgr's scheme handler which doesn't forward trace/mem.
-    The kernel ProcScheme kopenat + kdup + trace/mem handles compile and are correct, but procmgr
-    needs to be patched to forward "trace" and "mem" operations to the kernel's proc scheme.
-    This is tracked as a follow-up change.
 - [ ] 6.3 Run `gdbstub --exec /bin/ls --port 1234` — verify attach succeeds (no ENODEV)
 - [ ] 6.4 Connect GDB from host, verify register read (`info registers`), memory read (`x/10i $rip`), single step (`si`), continue (`c`)
+
+### Blocked: userspace routing through procmgr scheme socket
+
+The kernel changes compile and boot. End-to-end validation is blocked by
+how Redox routes `proc:` scheme requests through userspace:
+
+1. `open("proc:PID/trace")` → initnsmgr → `openat(proc_fd, "PID/trace")` → kernel sends `Opcode::OpenAt` to procmgr's scheme socket
+2. procmgr reads the request, `req.op()` returns `Err` → ENOSYS
+3. The `Op::OpenAt` match arm in procmgr exists but is unreachable — the scheme socket protocol parser doesn't decode the request
+
+The procmgr forwarding patch (patch-procmgr-ptrace-forward.py) adds the
+right logic to `on_openat`, but `on_openat` is never called because the
+request never parses as `Op::OpenAt`. The issue is in the `redox-scheme`
+crate's request deserialization, not in our kernel or procmgr code.
+
+Unblocking requires understanding the scheme request wire protocol — how
+`Opcode::OpenAt` is serialized by the kernel vs how procmgr's `req.op()`
+parses it. This may be a version mismatch or a missing protocol feature.
