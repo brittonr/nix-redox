@@ -166,7 +166,15 @@ adios:
       mkRedoxfsImage = import ../../lib/make-redoxfs-image.nix { inherit hostPkgs lib; };
       mkDiskImage = import ../../lib/make-disk-image.nix { inherit hostPkgs lib; };
 
-      kernel = inputs.boot.kernel;
+      # Swap in debug kernel when kernelSyscallDebug is enabled.
+      # Uses the pre-built trace-all variant from pkgs. Process filtering
+      # requires a custom kernel build via mkKernelSyscallDebug (see docs).
+      syscallDebugEnabled = inputs.boot.kernelSyscallDebug or false;
+      kernel =
+        if syscallDebugEnabled then
+          pkgs.kernelSyscallDebug or inputs.boot.kernel
+        else
+          inputs.boot.kernel;
       bootloader = inputs.boot.bootloader;
 
       espImage = mkEspImage {

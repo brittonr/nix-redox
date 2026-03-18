@@ -283,10 +283,20 @@ let
   # Builds the Redox kernel with per-crate Nix caching. When only kernel
   # source changes, the 38 registry deps + 3 stdlib crates are cached,
   # rebuilding only kernel + rmm (~10-15s instead of ~74s).
-  kernelPerCrate =
+  #
+  # mkKernelPerCrate: parameterized builder for kernel variants.
+  #   extraFeatures: additional Cargo features (e.g. ["syscall_debug"])
+  #   srcPatch: optional source patching function (src -> patched src derivation)
+  mkKernelPerCrate =
+    {
+      extraFeatures ? [ ],
+      srcPatch ? null,
+      pnameSuffix ? "",
+    }:
     let
       # The kernel source with patches applied (same as kernel.nix's patchedSrc)
-      patchedKernelSrc = modularPkgs.system.kernel.src;
+      baseSrc = modularPkgs.system.kernel.src;
+      patchedKernelSrc = if srcPatch != null then srcPatch baseSrc else baseSrc;
       rustSrcPath = "${rustToolchain}/lib/rustlib/src/rust";
 
       ws = buildFromUnitGraph {
@@ -303,6 +313,8 @@ let
             nativeBuildInputs = (attrs.nativeBuildInputs or [ ]) ++ [
               pkgs.nasm
             ];
+            # Append extra features (e.g. syscall_debug) to the resolved set.
+            features = (attrs.features or [ ]) ++ extraFeatures;
             # Linker script and page size args passed to rustc for the final link.
             extraRustcOpts = (attrs.extraRustcOpts or [ ]) ++ [
               "-C"
@@ -332,7 +344,7 @@ let
     in
     # Post-process: strip debug info into separate .sym file
     pkgs.stdenv.mkDerivation {
-      pname = "redox-kernel-percrate";
+      pname = "redox-kernel-percrate${pnameSuffix}";
       version = "unstable";
       dontUnpack = true;
       nativeBuildInputs = [ pkgs.llvmPackages.llvm ];
@@ -351,6 +363,86 @@ let
         llvm-objcopy --strip-debug "$KBIN" $out/boot/kernel
       '';
     };
+
+  # Standard kernel (no extra features)
+  kernelPerCrate = mkKernelPerCrate { };
+
+  # Kernel with syscall_debug: traces syscalls to serial console.
+  # The debug.rs patch removes the `false &&` guard. By default traces
+  # all processes; pass debugProcesses to filter.
+  mkKernelSyscallDebug =
+    {
+      debugProcesses ? [ ],
+    }:
+    let
+      # Build the process filter expression for debug.rs.
+      # Empty list = match everything (.contains("") is always true).
+      # Single process = .contains("name")
+      # Multiple = .contains("a") || .contains("b") || ...
+      filterNames = if debugProcesses == [ ] then [ "" ] else debugProcesses;
+      filterExpr = builtins.concatStringsSep " || " (map (name: ''.contains("${name}")'') filterNames);
+    in
+    mkKernelPerCrate {
+      extraFeatures = [ "syscall_debug" ];
+      pnameSuffix = "-syscall-debug";
+      srcPatch =
+        src:
+        pkgs.stdenv.mkDerivation {
+          name = "kernel-src-syscall-debug";
+          inherit src;
+          phases = [
+            "unpackPhase"
+            "patchPhase"
+            "installPhase"
+          ];
+          postPatch = ''
+                      # Rewrite the do_debug expression in debug_start().
+                      # Replace the entire `if false && ...contains("init")` block
+                      # with our filter expression.
+                      ${pkgs.python3}/bin/python3 -c "
+            import re, sys
+
+            path = 'src/syscall/debug.rs'
+            with open(path) as f:
+                src = f.read()
+
+            # Match the do_debug assignment block:
+            #   let do_debug = if false
+            #       && crate::context::current()
+            #           .read(token.token())
+            #           .name
+            #           .contains(\"init\")
+            old_pattern = (
+                r'let do_debug = if false\n'
+                r'\s+&& crate::context::current\(\)\n'
+                r'\s+\.read\(token\.token\(\)\)\n'
+                r'\s+\.name\n'
+                r'\s+\.contains\([^)]+\)'
+            )
+
+            new_code = (
+                'let do_debug = if crate::context::current()\n'
+                '            .read(token.token())\n'
+                '            .name\n'
+                '            ${filterExpr}'
+            )
+
+            result = re.sub(old_pattern, new_code, src)
+            if result == src:
+                print('WARNING: pattern not found in debug.rs, trying fallback', file=sys.stderr)
+                result = src.replace('let do_debug = if false', 'let do_debug = if true')
+
+            with open(path, 'w') as f:
+                f.write(result)
+            print('Patched debug.rs for syscall tracing')
+            "
+          '';
+          installPhase = "cp -r . $out";
+        };
+    };
+
+  # Default syscall debug kernel: traces all processes.
+  kernelSyscallDebug = mkKernelSyscallDebug { };
 
   # === Per-crate base build (unit2nix) ===
   #
@@ -1149,7 +1241,7 @@ in
     inherit (modularPkgs.infrastructure) initfsTools bootstrap;
 
     # Per-crate builds (unit2nix incremental)
-    inherit kernelPerCrate basePerCrate;
+    inherit kernelPerCrate basePerCrate kernelSyscallDebug;
 
     # Default package is set in system.nix (diskImageGraphical)
   };
@@ -1157,5 +1249,8 @@ in
   # Expose build environment for other modules via legacyPackages
   legacyPackages = {
     inherit rustToolchain craneLib;
+    # Parameterized kernel builder for custom syscall debug variants.
+    # Usage: mkKernelSyscallDebug { debugProcesses = ["cargo" "rustc"]; }
+    inherit mkKernelSyscallDebug;
   };
 }
