@@ -119,6 +119,7 @@ let
         resolvedJson = plan;
         buildRustCrateForPkgs = buildRustCrateForPkgs;
         skipStalenessCheck = true;
+        skipTargetCheck = true;
       };
     in
     ws.workspaceMembers.${member}.build // { inherit pname; };
@@ -294,6 +295,7 @@ let
         resolvedJson = ../pkgs/system/kernel-build-plan.json;
         buildRustCrateForPkgs = kernelBRCForPkgs;
         skipStalenessCheck = true;
+        skipTargetCheck = true;
         inherit rustSrcPath;
         extraCrateOverrides = {
           # The kernel crate needs nasm for build.rs and linker script args.
@@ -398,6 +400,7 @@ let
         resolvedJson = ../pkgs/system/base-build-plan.json;
         buildRustCrateForPkgs = buildRustCrateForPkgs;
         skipStalenessCheck = true;
+        skipTargetCheck = true;
         extraCrateOverrides = externalSrcOverrides;
       };
 
@@ -484,6 +487,7 @@ let
         resolvedJson = ../pkgs/userspace/helix-build-plan.json;
         buildRustCrateForPkgs = buildRustCrateForPkgs;
         skipStalenessCheck = true;
+        skipTargetCheck = true;
         extraCrateOverrides = {
           helix-term = _: {
             # Prevent build.rs from trying to fetch+compile tree-sitter grammars
@@ -980,6 +984,7 @@ let
         resolvedJson = ../pkgs/system/bootloader-build-plan.json;
         buildRustCrateForPkgs = uefiBRCForPkgs;
         skipStalenessCheck = true;
+        skipTargetCheck = true;
         rustSrcPath = "${rustToolchain}/lib/rustlib/src/rust";
       };
 

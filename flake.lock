@@ -1469,11 +1469,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1773585677,
-        "narHash": "sha256-QgREQIfPDeQX4+IG4dHUSNusQ06QUNFAdcszSK1e+ig=",
+        "lastModified": 1773792671,
+        "narHash": "sha256-faeuOzA4SUe8RxRrvDqwmhpU6FixDceplj2RTtJcUng=",
         "owner": "brittonr",
         "repo": "unit2nix",
-        "rev": "abba2b704211a455061ff3aaf1edf91c10b30eaf",
+        "rev": "16148065bb23ba697103dbc04e69113bd8f0aa3d",
         "type": "github"
       },
       "original": {
