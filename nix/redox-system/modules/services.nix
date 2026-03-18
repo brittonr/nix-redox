@@ -126,13 +126,8 @@ in
   options = {
     initScripts = {
       type = t.attrsOf initScriptType;
-      default = {
-        "00_base" = {
-          text = "notify /bin/ipcd\nnotify /bin/ptyd";
-          directory = "usr/lib/init.d";
-        };
-      };
-      description = "Raw init scripts to run during boot (legacy format)";
+      default = { };
+      description = "Raw init scripts to run during boot (legacy format). Core daemons (ipcd, ptyd) are managed as structured services — no raw 00_base needed.";
     };
     services = {
       type = t.attrsOf serviceType;

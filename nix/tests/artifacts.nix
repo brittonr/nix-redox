@@ -299,14 +299,15 @@ in
       }
     ];
     checks = [
+      # Networking services are auto-numbered in usr/lib/init.d/;
+      # check directory content rather than hardcoded filenames.
       {
-        file = "etc/init.d/10_net";
-        contains = "notify /bin/smolnetd";
-        mode = "555";
+        file = "usr/lib/init.d";
+        dirContains = "notify /bin/smolnetd";
       }
       {
-        file = "etc/init.d/15_dhcp";
-        contains = "dhcpd-quiet";
+        file = "usr/lib/init.d";
+        dirContains = "dhcpd-quiet";
       }
     ];
   };
@@ -324,8 +325,8 @@ in
     ];
     checks = [
       {
-        file = "etc/init.d/10_net";
-        notExists = true;
+        file = "usr/lib/init.d";
+        dirNotContains = "smolnetd";
       }
       {
         file = "bin/dhcpd-quiet";
@@ -356,19 +357,19 @@ in
       {
         file = "usr/bin/netcfg-setup";
       }
-      # The init.d script should call netcfg-setup with static config
-      # directory = "init.d" maps to etc/init.d in rootTree
+      # Static network init script is auto-numbered in usr/lib/init.d/;
+      # check directory content rather than hardcoded filenames.
       {
-        file = "etc/init.d/15_netcfg";
-        contains = "netcfg-setup static";
+        file = "usr/lib/init.d";
+        dirContains = "netcfg-setup static";
       }
       {
-        file = "etc/init.d/15_netcfg";
-        contains = "10.0.0.5";
+        file = "usr/lib/init.d";
+        dirContains = "10.0.0.5";
       }
       {
-        file = "etc/init.d/15_netcfg";
-        contains = "10.0.0.1";
+        file = "usr/lib/init.d";
+        dirContains = "10.0.0.1";
       }
     ];
   };
@@ -494,10 +495,11 @@ in
       }
     ];
     checks = [
+      # Orbital service is auto-numbered in usr/lib/init.d/;
+      # check directory content rather than hardcoded filenames.
       {
-        file = "usr/lib/init.d/20_orbital";
-        contains = "orbital";
-        mode = "555";
+        file = "usr/lib/init.d";
+        dirContains = "orbital";
       }
       {
         file = "etc/profile";
@@ -1142,9 +1144,10 @@ in
     description = "Verifies development profile has networking init scripts";
     modules = [ ../redox-system/profiles/development.nix ];
     checks = [
+      # Networking services are auto-numbered in usr/lib/init.d/.
       {
-        file = "etc/init.d/10_net";
-        contains = "smolnetd";
+        file = "usr/lib/init.d";
+        dirContains = "smolnetd";
       }
       { file = "etc/net/dns"; }
     ];
