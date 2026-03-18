@@ -83,12 +83,10 @@ dev
   };
 
   # Custom init script
+  # Note: ipcd and ptyd are started automatically as structured services
+  # with guaranteed early priority (10/11). No need for a raw 00_base script.
   "/services" = {
     initScripts = {
-      "00_base" = {
-        text = "notify /bin/ipcd\nnotify /bin/ptyd";
-        directory = "usr/lib/init.d";
-      };
       "30_custom" = {
         text = ''echo "Custom initialization complete"'';
         directory = "init.d";

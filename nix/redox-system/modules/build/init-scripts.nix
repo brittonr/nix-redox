@@ -39,6 +39,9 @@ let
   # through topo sort + rendering like any other service.
 
   # --- Core daemons (from 00_base) ---
+  # Explicit priorities guarantee these start before all other rootfs
+  # services. Without them, alphabetical topo-sort of zero-dependency
+  # services would place audiod (10) before ipcd (16) and ptyd (30).
   coreServices = {
     ipcd = {
       description = "Inter-process communication daemon";
@@ -49,7 +52,7 @@ let
       enable = true;
       after = [ ];
       environment = { };
-      priority = 50;
+      priority = 10;
     };
     ptyd = {
       description = "Pseudo-terminal daemon";
@@ -58,9 +61,9 @@ let
       args = "";
       wantedBy = "rootfs";
       enable = true;
-      after = [ ];
+      after = [ "ipcd" ];
       environment = { };
-      priority = 50;
+      priority = 11;
     };
   };
 
@@ -405,20 +408,22 @@ let
     in
     sorted;
 
-  # Assign numbers 10-79 based on topo sort position.
+  # Assign numbers 15-79 based on topo sort position.
+  # Range 10-14 is reserved for core daemons with explicit priorities
+  # (ipcd=10, ptyd=11) so they always start before auto-numbered services.
   # Services with explicit priority (!= 50) use their priority directly.
   autoNumbered =
     let
       sorted = topoSortServices;
       count = builtins.length sorted;
-      # Spread numbers across 10-79 range
-      step = if count <= 1 then 1 else 69.0 / (count - 1);
+      # Spread auto numbers across 15-79 range
+      step = if count <= 1 then 1 else 64.0 / (count - 1);
     in
     lib.imap0 (
       idx: name:
       let
         svc = allDeclaredServices.${name};
-        autoNum = 10 + builtins.floor (idx * step);
+        autoNum = 15 + builtins.floor (idx * step);
         num = if (svc.priority or 50) != 50 then svc.priority else autoNum;
         numStr = if num < 10 then "0${toString num}" else toString num;
       in
@@ -476,8 +481,8 @@ let
   rawInitScripts =
     let
       profileScripts = inputs.services.initScripts or { };
-      # Remove the default 00_base that contained ptyd/ipcd — those are
-      # now declared as structured services above.
+      # Strip 00_base if any old profile still declares it — ipcd/ptyd
+      # are structured services with explicit priority 10/11.
       cleaned = builtins.removeAttrs profileScripts [ "00_base" ];
     in
     cleaned;
