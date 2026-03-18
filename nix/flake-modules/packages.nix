@@ -1094,13 +1094,52 @@ let
       cp "$BIN" $out/boot/EFI/BOOT/BOOTX64.EFI
     '';
 
-  # pkgutils disabled: ring crate needs pregenerated assembly from git source
-  # pkgutils = import ../pkgs/userspace/pkgutils.nix (
-  #   standaloneCommon
-  #   // {
-  #     inherit (inputs) pkgutils-src;
-  #   }
-  # );
+  pkgutils = import ../pkgs/userspace/pkgutils.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) pkgutils-src ring-redox-src;
+    }
+  );
+
+  # === Bare metal / ecosystem library crates ===
+
+  gdb-protocol = import ../pkgs/userspace/gdb-protocol.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) gdb-protocol-src;
+    }
+  );
+
+  redox-intelflash = import ../pkgs/userspace/intelflash.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) intelflash-src;
+    }
+  );
+
+  redox-buffer-pool = import ../pkgs/userspace/buffer-pool.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) buffer-pool-src;
+    }
+  );
+
+  # === Host tools (run on Linux, not on Redox) ===
+
+  pkgar-repo = import ../pkgs/host/pkgar-repo.nix {
+    inherit pkgs lib;
+    inherit (inputs) pkgar-src;
+  };
+
+  redox-kprofiling = import ../pkgs/host/kprofiling.nix {
+    inherit pkgs lib rustToolchain;
+    inherit (inputs) kprofiling-src;
+  };
+
+  redoxer = import ../pkgs/host/redoxer.nix {
+    inherit pkgs lib;
+    inherit (inputs) redoxer-src;
+  };
 
   sysroot = pkgs.symlinkJoin {
     name = "redox-sysroot";
@@ -1165,8 +1204,23 @@ in
       findutils
       contain
       pkgar
+      pkgutils
       exampled
       redox-games
+      ;
+
+    # Bare metal / ecosystem libraries
+    inherit
+      gdb-protocol
+      redox-intelflash
+      redox-buffer-pool
+      ;
+
+    # Host tools (run on Linux)
+    inherit
+      pkgar-repo
+      redox-kprofiling
+      redoxer
       ;
 
     # Data packages

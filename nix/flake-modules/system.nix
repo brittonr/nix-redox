@@ -101,6 +101,12 @@ let
     exampled = self'.packages.exampled or null;
     snix = self'.packages.snix or null;
     redox-curl = self'.packages.redox-curl or null;
+    pkgutils = self'.packages.pkgutils or null;
+
+    # Bare metal / ecosystem libraries
+    gdb-protocol = self'.packages.gdb-protocol or null;
+    redox-intelflash = self'.packages.redox-intelflash or null;
+    redox-buffer-pool = self'.packages.redox-buffer-pool or null;
 
     # Self-hosting: build tools
     redox-bash = self'.packages.redox-bash or null;

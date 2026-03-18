@@ -56,7 +56,14 @@ in
     # Include extra CLI tools in the local binary cache.
     # These are packages NOT in systemPackages that users can install
     # at runtime via `snix install <name>`.
-    binaryCachePackages = { };
+    binaryCachePackages = { }
+
+    # Bare metal / ecosystem libraries available via opt for custom profiles.
+    # Not in systemPackages by default — add to profiles that need them:
+    #   ++ opt "gdb-protocol"
+    #   ++ opt "redox-intelflash"
+    #   ++ opt "redox-buffer-pool"
+    ;
   };
 
   "/networking" = {

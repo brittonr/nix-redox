@@ -384,6 +384,12 @@
       flake = false;
     };
 
+    # ring - Redox fork with pregenerated assembly (needed by pkgutils, pkgar-repo)
+    ring-redox-src = {
+      url = "gitlab:redox-os/ring/redox-0.17.8?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
     # redox-ssh - SSH client/server (Redox-native)
     redox-ssh-src = {
       url = "gitlab:redox-os/redox-ssh/master?host=gitlab.redox-os.org";
@@ -435,6 +441,36 @@
     # onefetch - git repository summary (upstream, cargo template)
     onefetch-src = {
       url = "github:o2sh/onefetch/v2.13.2";
+      flake = false;
+    };
+
+    # gdb-protocol - GDB Remote Serial Protocol implementation
+    gdb-protocol-src = {
+      url = "gitlab:redox-os/gdb-protocol/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # intelflash - Intel SPI flash read/write library
+    intelflash-src = {
+      url = "gitlab:redox-os/intelflash/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # redox-buffer-pool - zero-copy shared buffer management for drivers
+    buffer-pool-src = {
+      url = "gitlab:redox-os/redox-buffer-pool/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # kprofiling - kernel profiling data converter
+    kprofiling-src = {
+      url = "gitlab:redox-os/kprofiling/master?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # redoxer - run Redox programs from Linux via KVM
+    redoxer-src = {
+      url = "gitlab:redox-os/redoxer/master?host=gitlab.redox-os.org";
       flake = false;
     };
   };
