@@ -171,6 +171,22 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - Duplicate attrset keys: later one silently wins
 - Korora types: `t.int` (not `t.integer`), `t.bool`, `t.string`
 
+## Syscall Debugging
+
+### strace-redox (Userspace)
+- Included in `development.nix` profile — `strace /bin/ls` or `strace -p PID`
+- Output goes to stderr; no kernel rebuild needed
+- Can't trace scheme daemons or early boot
+
+### Kernel syscall_debug
+- Module option: `"/boot".kernelSyscallDebug = true;` swaps in debug kernel
+- Standalone build: `nix build .#kernelSyscallDebug`
+- Per-process filtering: `mkKernelSyscallDebug { debugProcesses = ["cargo"]; }`
+- Output goes to serial console — capture with `2>&1 | tee trace.log`
+- Filters out `clock_gettime`, `yield`, `futex`, stdout/stderr writes by default
+- Heavy performance impact — traces ALL syscalls from matching processes
+- Full docs: `docs/syscall-debugging.md`
+
 ## VM Testing
 
 ### Boot Milestones for `vm_serial expect:`

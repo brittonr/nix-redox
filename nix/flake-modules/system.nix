@@ -54,6 +54,7 @@ let
     // modularPkgs.system
     // {
       kernel = self'.packages.kernelPerCrate;
+      kernelSyscallDebug = self'.packages.kernelSyscallDebug;
       base = self'.packages.basePerCrate;
     }
     // modularPkgs.userspace

@@ -60,6 +60,26 @@ in
       default = 64;
       description = "Maximum initfs image size in megabytes (default 64 MiB)";
     };
+    kernelSyscallDebug = {
+      type = t.bool;
+      default = false;
+      description = ''
+        Build the kernel with syscall_debug feature enabled and the
+        default process filter removed. When true, ALL syscalls from
+        ALL processes are traced to the serial console. Use
+        kernelSyscallDebugProcesses to limit tracing to specific
+        programs. See also strace-redox for userspace tracing.
+      '';
+    };
+    kernelSyscallDebugProcesses = {
+      type = t.listOf t.string;
+      default = [ ];
+      description = ''
+        Process names to trace (matched with contains()). Empty list
+        means trace everything. Examples: ["cargo"] ["snix" "rustc"].
+        Only effective when kernelSyscallDebug is true.
+      '';
+    };
   };
 
   impl = { options }: options;

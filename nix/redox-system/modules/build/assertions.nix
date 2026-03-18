@@ -85,6 +85,12 @@ let
       assertion = !cfg.exampledEnabled || (pkgs ? exampled);
       message = "services.exampled.enable requires the 'exampled' package in pkgs.";
     }
+    {
+      assertion =
+        !(inputs.boot.kernelSyscallDebugProcesses or [ ] != [ ])
+        || (inputs.boot.kernelSyscallDebug or false);
+      message = "boot.kernelSyscallDebugProcesses is set but boot.kernelSyscallDebug is not enabled.";
+    }
   ];
 
   # Warnings: non-fatal notices traced during evaluation
@@ -105,6 +111,9 @@ let
     (lib.optionalString (
       cfg.sshEnabled && cfg.sshOpts.permitRootLogin
     ) "SSH root login is permitted. Consider services.ssh.permitRootLogin = false for production.")
+    (lib.optionalString (
+      inputs.boot.kernelSyscallDebug or false
+    ) "Kernel syscall tracing is enabled. All syscalls are printed to serial — expect heavy output and slower performance.")
   ];
 
   # Process assertions — throw at eval time if any fail
