@@ -142,6 +142,25 @@
         "type": "github"
       }
     },
+    "buffer-pool-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1624347049,
+        "narHash": "sha256-VzvNEwLd9dgEVtd3l8ibLRyRuU1Cq2ysJJY42yBk+Uo=",
+        "owner": "redox-os",
+        "repo": "redox-buffer-pool",
+        "rev": "60a2d03c68b723a4a7034054efe682e01831c362",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "redox-buffer-pool",
+        "type": "gitlab"
+      }
+    },
     "ca-certificates-src": {
       "flake": false,
       "locked": {
@@ -466,6 +485,25 @@
         "type": "gitlab"
       }
     },
+    "gdb-protocol-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1565896055,
+        "narHash": "sha256-Ol5lweA5L0vOn+gxw6dLfsmLkX/Zv6K/msFAfKhdq/A=",
+        "owner": "redox-os",
+        "repo": "gdb-protocol",
+        "rev": "457129fe30df52cb2b0c8540f971cdce91bf0aad",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "gdb-protocol",
+        "type": "gitlab"
+      }
+    },
     "git-hooks": {
       "inputs": {
         "flake-compat": "flake-compat",
@@ -564,6 +602,25 @@
         "type": "gitlab"
       }
     },
+    "intelflash-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1720222027,
+        "narHash": "sha256-yGmZzaCce9/OfQHo0ahYEEhPGT9Ypd6PC/INnuRuG4A=",
+        "owner": "redox-os",
+        "repo": "intelflash",
+        "rev": "457f92eafae87680b6350beb38f19d0ec22ba5f6",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "intelflash",
+        "type": "gitlab"
+      }
+    },
     "ion-src": {
       "flake": false,
       "locked": {
@@ -599,6 +656,25 @@
         "owner": "redox-os",
         "ref": "master",
         "repo": "kernel",
+        "type": "gitlab"
+      }
+    },
+    "kprofiling-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1712348952,
+        "narHash": "sha256-BmmIQ+S5hJlNSKsxylE9oc6bXMwCKyhT7jVVATBAyyU=",
+        "owner": "redox-os",
+        "repo": "kprofiling",
+        "rev": "d389397aba5b237113d0978cf767b85ea784676a",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "kprofiling",
         "type": "gitlab"
       }
     },
@@ -1106,6 +1182,25 @@
         "type": "gitlab"
       }
     },
+    "redoxer-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1773841068,
+        "narHash": "sha256-MMqyyt2cJmPE3FsiyTIzXEquDztFwe0pIEfNQCrKH4k=",
+        "owner": "redox-os",
+        "repo": "redoxer",
+        "rev": "67af2b7543ff8fb2eaba6699ac9d331dfe2d0f8c",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "master",
+        "repo": "redoxer",
+        "type": "gitlab"
+      }
+    },
     "redoxfs-src": {
       "flake": false,
       "locked": {
@@ -1141,6 +1236,25 @@
         "owner": "redox-os",
         "ref": "master",
         "repo": "relibc",
+        "type": "gitlab"
+      }
+    },
+    "ring-redox-src": {
+      "flake": false,
+      "locked": {
+        "host": "gitlab.redox-os.org",
+        "lastModified": 1729282070,
+        "narHash": "sha256-V3sV4m69eFsOF26OfhjnEKoTiEyS1kHxEuECALwgcgQ=",
+        "owner": "redox-os",
+        "repo": "ring",
+        "rev": "fce20f12b6aad164a1a7e13ae1dcb46422b171c0",
+        "type": "gitlab"
+      },
+      "original": {
+        "host": "gitlab.redox-os.org",
+        "owner": "redox-os",
+        "ref": "redox-0.17.8",
+        "repo": "ring",
         "type": "gitlab"
       }
     },
@@ -1189,6 +1303,7 @@
         "binutils-src": "binutils-src",
         "bootloader-src": "bootloader-src",
         "bottom-src": "bottom-src",
+        "buffer-pool-src": "buffer-pool-src",
         "ca-certificates-src": "ca-certificates-src",
         "cc-rs-src": "cc-rs-src",
         "compiler-builtins-src": "compiler-builtins-src",
@@ -1205,12 +1320,15 @@
         "findutils-src": "findutils-src",
         "flake-parts": "flake-parts",
         "games-src": "games-src",
+        "gdb-protocol-src": "gdb-protocol-src",
         "git-hooks": "git-hooks",
         "helix-src": "helix-src",
         "hexyl-src": "hexyl-src",
         "installer-src": "installer-src",
+        "intelflash-src": "intelflash-src",
         "ion-src": "ion-src",
         "kernel-src": "kernel-src",
+        "kprofiling-src": "kprofiling-src",
         "liblibc-src": "liblibc-src",
         "libredox-src": "libredox-src",
         "lsd-src": "lsd-src",
@@ -1238,8 +1356,10 @@
         "redox-src": "redox-src",
         "redox-ssh-src": "redox-ssh-src",
         "redox-syscall-src": "redox-syscall-src",
+        "redoxer-src": "redoxer-src",
         "redoxfs-src": "redoxfs-src",
         "relibc-src": "relibc-src",
+        "ring-redox-src": "ring-redox-src",
         "ripgrep-src": "ripgrep-src",
         "rmm-src": "rmm-src",
         "rust-overlay": "rust-overlay",
