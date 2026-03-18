@@ -208,7 +208,18 @@ enum Command {
         command: vendor::VendorCommand,
     },
 
-    /// System introspection (info, verify, diff)
+    /// Manage the declarative system (rebuild, generations, rollback, gc)
+    ///
+    /// Edit configuration.nix, rebuild to create a new generation,
+    /// rollback to revert, gc to clean up.
+    ///
+    /// Quick start:
+    ///   snix system rebuild              Build from configuration.nix
+    ///   snix system generations          List all generations
+    ///   snix system rollback             Revert to previous generation
+    ///   snix system rollback -g 3        Jump to a specific generation
+    ///   snix system gc --keep 3          Prune old generations + sweep store
+    ///   snix system boot 2               Set generation to activate on next boot
     System {
         #[command(subcommand)]
         command: SystemCommand,
