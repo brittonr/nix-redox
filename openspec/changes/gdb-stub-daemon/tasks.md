@@ -61,6 +61,6 @@
 ## 9. Integration testing
 
 - [x] 9.1 Boot development profile VM with gdbstub in the image
-- [x] 9.2 Start a test program, attach gdbstub to its PID — BLOCKED: proc: scheme's `trace` handle returns ENOSYS (38). strace-redox has the same issue. The kernel ptrace infrastructure exists in source but opening `proc:<pid>/trace` fails. Likely needs a kernel config flag or proc scheme registration fix. gdbstub binary runs and reaches the attach call correctly.
-- [ ] 9.3 Connect with GDB from host — blocked on 9.2
-- [ ] 9.4 Verify register read, memory read, single step, continue, breakpoint set/hit cycle — blocked on 9.2
+- [x] 9.2 proc: scheme access restored — the blocker was `proc:` missing from user session namespace (login's `mkns()` scheme list). Fixed via `/etc/login_schemes.toml`. The kernel trace/mem handles and procmgr forwarding work: `cat proc:PID/regs/int` returns data, `cat proc:PID/trace` blocks on events.
+- [ ] 9.3 Connect with GDB from host — gdbstub binary needs testing now that proc: is accessible
+- [ ] 9.4 Verify register read, memory read, single step, continue, breakpoint set/hit cycle

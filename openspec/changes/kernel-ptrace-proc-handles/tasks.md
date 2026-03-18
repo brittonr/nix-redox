@@ -43,20 +43,24 @@
 - [ ] 6.3 Run `gdbstub --exec /bin/ls --port 1234` — verify attach succeeds (no ENODEV)
 - [ ] 6.4 Connect GDB from host, verify register read (`info registers`), memory read (`x/10i $rip`), single step (`si`), continue (`c`)
 
-### Blocked: userspace routing through procmgr scheme socket
+### Root cause analysis (resolved)
 
-The kernel changes compile and boot. End-to-end validation is blocked by
-how Redox routes `proc:` scheme requests through userspace:
+The "scheme socket protocol" hypothesis was wrong. Two separate issues:
 
-1. `open("proc:PID/trace")` → initnsmgr → `openat(proc_fd, "PID/trace")` → kernel sends `Opcode::OpenAt` to procmgr's scheme socket
-2. procmgr reads the request, `req.op()` returns `Err` → ENOSYS
-3. The `Op::OpenAt` match arm in procmgr exists but is unreachable — the scheme socket protocol parser doesn't decode the request
+**Issue 1: `proc:` missing from user namespace (FIXED)**
+The `login` binary from userutils calls `mkns()` with a hardcoded
+`DEFAULT_SCHEMES` list that doesn't include `proc`. User sessions got
+a restricted namespace without proc: access. Fix: generate
+`/etc/login_schemes.toml` with `proc` in the scheme list.
 
-The procmgr forwarding patch (patch-procmgr-ptrace-forward.py) adds the
-right logic to `on_openat`, but `on_openat` is never called because the
-request never parses as `Op::OpenAt`. The issue is in the `redox-scheme`
-crate's request deserialization, not in our kernel or procmgr code.
+**Issue 2: strace-redox uses obsolete syscall API (UNFIXED)**
+strace-redox depends on `redox_syscall 0.3.4` which uses legacy syscall
+numbers `SYS_KILL=37`, `SYS_WAITPID=7`, `SYS_GETPID=20`. The current
+kernel has NO handler for these — they fall through to the default
+ENOSYS path. Modern Redox routes kill/waitpid/getpid through the proc:
+scheme's `SYS_CALL` interface instead. strace-redox needs to be updated
+to use the current proc: scheme call API or a newer redox_syscall crate.
 
-Unblocking requires understanding the scheme request wire protocol — how
-`Opcode::OpenAt` is serialized by the kernel vs how procmgr's `req.op()`
-parses it. This may be a version mismatch or a missing protocol feature.
+The kernel ptrace handles (trace, mem) and procmgr forwarding both work
+correctly: `cat proc:PID/regs/int` returns register data, and
+`cat proc:PID/trace` opens the trace handle and blocks waiting for events.

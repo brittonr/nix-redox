@@ -72,6 +72,21 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Must also check `inSystemPackages pkgs.userutils` (profile actually uses it)
 - Without this gate, `userutilsInstalled=true` everywhere → getty runs → test scripts never execute
 
+## Namespace Gotchas
+
+### User sessions get restricted namespaces from login's `mkns()`
+- `userutils/login` calls `mkns()` with a hardcoded `DEFAULT_SCHEMES` list (26 schemes)
+- New schemes (like `proc`) must be added to `/etc/login_schemes.toml` per-user override
+- The config format: `[user_schemes.root]` with `schemes = ["debug", "event", ..., "proc"]`
+- Debugging symptoms: `Scheme "X" not found in namespace` in initnsmgr logs, ENODEV from opens
+- init process has full namespace; children inherit it; login creates RESTRICTED child namespace
+
+### strace-redox uses obsolete syscall ABI
+- Depends on `redox_syscall 0.3.4` which has `SYS_KILL=37`, `SYS_WAITPID=7`, `SYS_GETPID=20`
+- Current kernel has NO handlers for these — all return ENOSYS
+- Modern Redox routes kill/waitpid/getpid through proc: scheme `SYS_CALL` interface
+- strace binary needs full rewrite or redox_syscall upgrade to work
+
 ## Ion Shell Gotchas (keep forgetting)
 
 ### `$()` crashes on empty output

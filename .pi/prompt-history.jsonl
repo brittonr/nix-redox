@@ -462,3 +462,5 @@
 {"text":"kernel-ptrace-proc-handles","timestamp":1773838734411}
 {"text":"are we sure that's the correct way to do this in redox","timestamp":1773840826060}
 {"text":"i think we're in over our skis","timestamp":1773841669248}
+{"text":"what next","timestamp":1773845294467}
+{"text":"yes, we should see if this is caused by one of our patches","timestamp":1773845428707}
