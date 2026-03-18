@@ -230,6 +230,18 @@ impl SchemeSync for StoreSchemeHandler {
         Ok(len)
     }
 
+    fn fevent(&mut self, id: usize, _flags: syscall::flag::EventFlags, _ctx: &CallerCtx) -> Result<syscall::flag::EventFlags> {
+        match self.daemon.handles.handles.get(&id) {
+            Some(Handle::File(_)) | Some(Handle::Dir(_)) => {
+                Ok(syscall::flag::EventFlags::EVENT_READ)
+            }
+            Some(Handle::Control(_)) => {
+                Ok(syscall::flag::EventFlags::EVENT_WRITE)
+            }
+            None => Err(Error::new(EBADF)),
+        }
+    }
+
     fn fstat(&mut self, id: usize, stat: &mut Stat, _ctx: &CallerCtx) -> Result<()> {
         match self.daemon.handles.handles.get(&id) {
             Some(Handle::Dir(_)) => {
@@ -444,6 +456,39 @@ pub fn run_daemon(config: StoredConfig) -> Result<(), Box<dyn std::error::Error>
             return Err(format!("stored: registration failed: {e}").into());
         }
     }
+
+    // Pre-open "/" to get a direct fd to redoxfs. Must be done BEFORE
+    // setrens(0, 0) — after that, std::fs operations fail. The root_fd
+    // allows the FileIoWorker to continue reading files via SYS_OPENAT.
+    eprintln!("stored: pre-opening /");
+    let root_file = std::fs::File::open("/").map_err(|e| {
+        format!("stored: failed to open /: {e}")
+    })?;
+    let root_fd = {
+        use std::os::unix::io::AsRawFd;
+        root_file.as_raw_fd() as usize
+    };
+    eprintln!("stored: root_fd={root_fd}");
+
+    // Update the FileIoWorker with the root_fd so it can bypass
+    // the namespace after setrens. The worker was spawned with
+    // root_fd=None during daemon construction — now that we have
+    // the fd, restart the worker with it.
+    handler.daemon.handles.io_worker = Some(
+        crate::file_io_worker::FileIoWorker::spawn(Some(root_fd))
+    );
+
+    // Drop into null namespace. After this, no new scheme connections
+    // can be opened. The already-open scheme socket and root_fd still
+    // work (open fds survive setrens).
+    eprintln!("stored: entering null namespace");
+    libredox::call::setrens(0, 0).map_err(|e| {
+        format!("stored: setrens(0, 0) failed: {e}")
+    })?;
+
+    // Keep root_file alive for the lifetime of the event loop — it
+    // owns the fd that the FileIoWorker uses.
+    let _root_file = root_file;
 
     // Main event loop.
     eprintln!("stored: entering event loop");

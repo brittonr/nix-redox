@@ -25,7 +25,6 @@ use std::fs::File;
 use std::io::{Read, Seek, SeekFrom, Write as IoWrite};
 use std::os::unix::io::FromRawFd;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use redox_scheme::scheme::SchemeSync;
 use redox_scheme::{CallerCtx, OpenResult};
@@ -124,12 +123,9 @@ impl OpenFlags {
 /// hung filesystem daemon.
 const IO_TIMEOUT_SECS: u64 = 30;
 
-/// Next handle ID. Global atomic counter — each open gets a unique ID.
-static NEXT_HANDLE_ID: AtomicUsize = AtomicUsize::new(1);
-
-fn next_id() -> usize {
-    NEXT_HANDLE_ID.fetch_add(1, Ordering::Relaxed)
-}
+/// Upper bound for handle IDs. The kernel reserves the top 4096
+/// values of usize as error codes.
+const MAX_HANDLE_ID: usize = usize::MAX - 4096;
 
 // ── Handle Types ───────────────────────────────────────────────────────────
 
@@ -263,6 +259,8 @@ pub struct BuildFsHandler {
     /// any real client connects (race between cap_fd close and the
     /// first builder file operation).
     pub had_client_opens: bool,
+    /// Per-instance handle ID counter (not global static).
+    next_id: usize,
 }
 
 impl BuildFsHandler {
@@ -272,6 +270,23 @@ impl BuildFsHandler {
             handles: HashMap::new(),
             root_fd,
             had_client_opens: false,
+            next_id: 1,
+        }
+    }
+
+    /// Allocate the next handle ID, wrapping within the valid range
+    /// and skipping IDs that collide with open handles.
+    fn alloc_id(&mut self) -> usize {
+        loop {
+            let id = self.next_id;
+            if self.next_id >= MAX_HANDLE_ID {
+                self.next_id = 1;
+            } else {
+                self.next_id += 1;
+            }
+            if id >= 1 && id <= MAX_HANDLE_ID && !self.handles.contains_key(&id) {
+                return id;
+            }
         }
     }
 
@@ -307,7 +322,7 @@ impl BuildFsHandler {
 
 impl SchemeSync for BuildFsHandler {
     fn scheme_root(&mut self) -> Result<usize> {
-        let id = next_id();
+        let id = self.alloc_id();
         self.handles.insert(
             id,
             ProxyHandle::Dir(DirHandle {
@@ -344,7 +359,7 @@ impl SchemeSync for BuildFsHandler {
             return Err(Error::new(EACCES));
         }
 
-        let id = next_id();
+        let id = self.alloc_id();
         let scheme_path = path_str.to_string();
         let real_flags = oflags.to_real_flags();
 
@@ -637,6 +652,22 @@ impl SchemeSync for BuildFsHandler {
         }
 
         Ok(buf)
+    }
+
+    fn fevent(&mut self, id: usize, _flags: syscall::flag::EventFlags, _ctx: &CallerCtx) -> Result<syscall::flag::EventFlags> {
+        match self.handles.get(&id) {
+            Some(ProxyHandle::File(fh)) => {
+                let mut events = syscall::flag::EventFlags::EVENT_READ;
+                if fh.writable {
+                    events |= syscall::flag::EventFlags::EVENT_WRITE;
+                }
+                Ok(events)
+            }
+            Some(ProxyHandle::Dir(_)) => {
+                Ok(syscall::flag::EventFlags::EVENT_READ)
+            }
+            None => Err(Error::new(EBADF)),
+        }
     }
 
     fn on_close(&mut self, id: usize) {

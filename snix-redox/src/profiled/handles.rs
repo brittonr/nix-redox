@@ -8,9 +8,12 @@
 use std::collections::BTreeMap;
 use std::io::{self};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use crate::file_io_worker::FileIoWorker;
+
+/// Upper bound for handle IDs. The kernel reserves the top 4096
+/// values of usize as error codes.
+const MAX_HANDLE_ID: usize = usize::MAX - 4096;
 
 /// An open file resolved through the profile.
 ///
@@ -60,26 +63,42 @@ pub enum Handle {
 
 /// Table of open handles.
 pub struct HandleTable {
-    next_id: AtomicUsize,
+    next_id: usize,
     handles: BTreeMap<usize, Handle>,
-    io_worker: Option<FileIoWorker>,
+    pub io_worker: Option<FileIoWorker>,
 }
 
 impl HandleTable {
     pub fn new() -> Self {
         Self {
-            next_id: AtomicUsize::new(1),
+            next_id: 1,
             handles: BTreeMap::new(),
             io_worker: None,
         }
     }
 
     /// Create a handle table with a background I/O worker.
-    pub fn with_io_worker() -> Self {
+    pub fn with_io_worker(root_fd: Option<usize>) -> Self {
         Self {
-            next_id: AtomicUsize::new(1),
+            next_id: 1,
             handles: BTreeMap::new(),
-            io_worker: Some(FileIoWorker::spawn()),
+            io_worker: Some(FileIoWorker::spawn(root_fd)),
+        }
+    }
+
+    /// Allocate the next handle ID, wrapping within the valid range
+    /// and skipping IDs that collide with open handles.
+    fn alloc_id(&mut self) -> usize {
+        loop {
+            let id = self.next_id;
+            if self.next_id >= MAX_HANDLE_ID {
+                self.next_id = 1;
+            } else {
+                self.next_id += 1;
+            }
+            if id >= 1 && id <= MAX_HANDLE_ID && !self.handles.contains_key(&id) {
+                return id;
+            }
         }
     }
 
@@ -93,7 +112,7 @@ impl HandleTable {
         size: u64,
         executable: bool,
     ) -> usize {
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let id = self.alloc_id();
         self.handles.insert(
             id,
             Handle::File(FileHandle {
@@ -118,7 +137,7 @@ impl HandleTable {
         let data = std::fs::read(&real_path)?;
         let size = data.len() as u64;
 
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let id = self.alloc_id();
         self.handles.insert(
             id,
             Handle::File(FileHandle {
@@ -139,7 +158,7 @@ impl HandleTable {
         profile_name: String,
         subpath: String,
     ) -> usize {
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let id = self.alloc_id();
         self.handles.insert(
             id,
             Handle::Dir(DirHandle {
@@ -153,7 +172,7 @@ impl HandleTable {
 
     /// Open a control handle for a profile.
     pub fn open_control(&mut self, profile_name: String, scheme_path: String) -> usize {
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let id = self.alloc_id();
         self.handles.insert(
             id,
             Handle::Control(ControlHandle {

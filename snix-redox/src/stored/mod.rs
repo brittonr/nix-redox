@@ -112,9 +112,12 @@ impl StoreDaemon {
         // reads on a separate thread, avoiding the scheme event loop
         // hang that occurs when doing file: I/O from within a scheme
         // handler on Redox.
+        //
+        // root_fd is set later by scheme::run_daemon() before setrens.
+        // Pass None here — the daemon will update it before the event loop.
         Ok(Self {
             db,
-            handles: handles::HandleTable::with_io_worker(),
+            handles: handles::HandleTable::with_io_worker(None),
             extracting: Mutex::new(std::collections::HashSet::new()),
             config,
             manifests,

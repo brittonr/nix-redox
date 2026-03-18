@@ -17,7 +17,7 @@
 //! ```no_run
 //! use snix_redox::file_io_worker::FileIoWorker;
 //! use std::path::PathBuf;
-//! let worker = FileIoWorker::spawn();
+//! let worker = FileIoWorker::spawn(None);
 //!
 //! // From within the scheme handler's read():
 //! let path = PathBuf::from("/nix/store/abc/bin/rg");
@@ -34,6 +34,11 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::thread;
 use std::collections::BTreeMap;
+
+/// Maximum number of cached open file descriptors. When exceeded,
+/// the lexicographically first entry is evicted. Keeps the worker's
+/// fd usage bounded for long-running daemons.
+const MAX_FILE_CACHE: usize = 64;
 
 /// Request sent from the scheme handler to the I/O worker.
 enum IoRequest {
@@ -65,7 +70,11 @@ pub struct FileIoWorker {
 
 impl FileIoWorker {
     /// Spawn the worker thread.
-    pub fn spawn() -> Self {
+    ///
+    /// `root_fd`: On Redox, a pre-opened fd to `/` for bypassing
+    /// initnsmgr after `setrens(0, 0)`. Pass `None` on Linux/tests
+    /// to use `std::fs` (the default).
+    pub fn spawn(root_fd: Option<usize>) -> Self {
         let (tx, rx) = mpsc::channel::<IoRequest>();
 
         let handle = thread::spawn(move || {
@@ -80,13 +89,13 @@ impl FileIoWorker {
                         len,
                         response,
                     } => {
-                        let result = worker_read(&mut file_cache, &path, offset, len);
+                        let result = worker_read(&mut file_cache, &path, offset, len, root_fd);
                         // Ignore send errors — the receiver may have been dropped
                         // if the scheme handler timed out or the handle was closed.
                         let _ = response.send(result);
                     }
                     IoRequest::Preload { path, response } => {
-                        let result = worker_preload(&path);
+                        let result = worker_preload(&path, root_fd);
                         let _ = response.send(result);
                     }
                     IoRequest::Shutdown => {
@@ -160,10 +169,17 @@ fn worker_read(
     path: &PathBuf,
     offset: u64,
     len: usize,
+    root_fd: Option<usize>,
 ) -> io::Result<Vec<u8>> {
     // Open file if not cached.
     if !cache.contains_key(path) {
-        let file = fs::File::open(path)?;
+        let file = open_file(path, root_fd)?;
+        // Evict oldest entry if cache is full.
+        if cache.len() >= MAX_FILE_CACHE {
+            if let Some(oldest) = cache.keys().next().cloned() {
+                cache.remove(&oldest);
+            }
+        }
         cache.insert(path.clone(), file);
     }
 
@@ -177,8 +193,52 @@ fn worker_read(
 }
 
 /// Worker thread: read entire file content.
-fn worker_preload(path: &PathBuf) -> io::Result<Vec<u8>> {
-    fs::read(path)
+fn worker_preload(path: &PathBuf, root_fd: Option<usize>) -> io::Result<Vec<u8>> {
+    let mut file = open_file(path, root_fd)?;
+    let mut data = Vec::new();
+    file.read_to_end(&mut data)?;
+    Ok(data)
+}
+
+/// Open a file, using raw `SYS_OPENAT(root_fd, ...)` on Redox when
+/// a root_fd is available (bypasses initnsmgr after setrens), or
+/// falling back to `std::fs::File::open()` on Linux/tests.
+fn open_file(path: &PathBuf, root_fd: Option<usize>) -> io::Result<fs::File> {
+    #[cfg(target_os = "redox")]
+    if let Some(rfd) = root_fd {
+        return open_via_root_fd(rfd, path);
+    }
+
+    #[cfg(not(target_os = "redox"))]
+    let _ = root_fd;
+
+    fs::File::open(path)
+}
+
+/// Redox-only: open a file via `SYS_OPENAT(root_fd, path, O_RDONLY)`.
+/// The root_fd points directly to redoxfs, bypassing initnsmgr.
+#[cfg(target_os = "redox")]
+fn open_via_root_fd(root_fd: usize, path: &PathBuf) -> io::Result<fs::File> {
+    use std::os::unix::io::FromRawFd;
+
+    let path_str = path.to_string_lossy();
+    let clean = path_str.trim_start_matches('/');
+    // SYS_OPENAT: (fd, ptr, len, flags, fcntl_flags)
+    let flags = syscall::O_RDONLY;
+    let fcntl_flags = flags & syscall::O_FCNTL_MASK;
+    let raw_fd = unsafe {
+        syscall::syscall5(
+            syscall::SYS_OPENAT,
+            root_fd,
+            clean.as_ptr() as usize,
+            clean.len(),
+            flags,
+            fcntl_flags,
+        )
+    }
+    .map_err(|e| io::Error::new(io::ErrorKind::NotFound, format!("SYS_OPENAT: {e}")))?;
+
+    Ok(unsafe { fs::File::from_raw_fd(raw_fd as i32) })
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -193,7 +253,7 @@ mod tests {
         let path = tmp.path().join("test.txt");
         fs::write(&path, "Hello World!").unwrap();
 
-        let worker = FileIoWorker::spawn();
+        let worker = FileIoWorker::spawn(None);
         let data = worker.read_file(&path, 0, 1024).unwrap();
         assert_eq!(&data, b"Hello World!");
     }
@@ -204,7 +264,7 @@ mod tests {
         let path = tmp.path().join("offset.txt");
         fs::write(&path, "Hello World!").unwrap();
 
-        let worker = FileIoWorker::spawn();
+        let worker = FileIoWorker::spawn(None);
         let data = worker.read_file(&path, 6, 1024).unwrap();
         assert_eq!(&data, b"World!");
     }
@@ -215,7 +275,7 @@ mod tests {
         let path = tmp.path().join("small.txt");
         fs::write(&path, "Hello World!").unwrap();
 
-        let worker = FileIoWorker::spawn();
+        let worker = FileIoWorker::spawn(None);
         let data = worker.read_file(&path, 0, 5).unwrap();
         assert_eq!(&data, b"Hello");
     }
@@ -226,7 +286,7 @@ mod tests {
         let path = tmp.path().join("cached.txt");
         fs::write(&path, "First read").unwrap();
 
-        let worker = FileIoWorker::spawn();
+        let worker = FileIoWorker::spawn(None);
 
         // First read opens the file.
         let data1 = worker.read_file(&path, 0, 1024).unwrap();
@@ -239,7 +299,7 @@ mod tests {
 
     #[test]
     fn read_nonexistent_file() {
-        let worker = FileIoWorker::spawn();
+        let worker = FileIoWorker::spawn(None);
         let result = worker.read_file(&PathBuf::from("/nonexistent"), 0, 64);
         assert!(result.is_err());
     }
@@ -250,7 +310,7 @@ mod tests {
         let path = tmp.path().join("preload.txt");
         fs::write(&path, "Preloaded content").unwrap();
 
-        let worker = FileIoWorker::spawn();
+        let worker = FileIoWorker::spawn(None);
         let data = worker.preload_file(&path).unwrap();
         assert_eq!(&data, b"Preloaded content");
     }
@@ -263,7 +323,7 @@ mod tests {
         fs::write(&p1, "alpha").unwrap();
         fs::write(&p2, "bravo").unwrap();
 
-        let worker = FileIoWorker::spawn();
+        let worker = FileIoWorker::spawn(None);
         assert_eq!(worker.read_file(&p1, 0, 64).unwrap(), b"alpha");
         assert_eq!(worker.read_file(&p2, 0, 64).unwrap(), b"bravo");
     }
@@ -274,9 +334,35 @@ mod tests {
         let path = tmp.path().join("drop.txt");
         fs::write(&path, "data").unwrap();
 
-        let worker = FileIoWorker::spawn();
+        let worker = FileIoWorker::spawn(None);
         let data = worker.read_file(&path, 0, 64).unwrap();
         assert_eq!(&data, b"data");
         drop(worker); // Should not panic or hang.
+    }
+
+    #[test]
+    fn cache_eviction_at_limit() {
+        let tmp = tempfile::tempdir().unwrap();
+
+        // Create MAX_FILE_CACHE + 5 files.
+        for i in 0..MAX_FILE_CACHE + 5 {
+            let path = tmp.path().join(format!("file_{:04}.txt", i));
+            fs::write(&path, format!("content {i}")).unwrap();
+        }
+
+        let worker = FileIoWorker::spawn(None);
+
+        // Read all files — the cache should evict oldest entries
+        // once it exceeds MAX_FILE_CACHE. All reads should succeed.
+        for i in 0..MAX_FILE_CACHE + 5 {
+            let path = tmp.path().join(format!("file_{:04}.txt", i));
+            let data = worker.read_file(&path, 0, 1024).unwrap();
+            assert_eq!(data, format!("content {i}").as_bytes());
+        }
+
+        // Re-read an early file that was likely evicted — should re-open.
+        let path = tmp.path().join("file_0000.txt");
+        let data = worker.read_file(&path, 0, 1024).unwrap();
+        assert_eq!(&data, b"content 0");
     }
 }

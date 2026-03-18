@@ -15,7 +15,10 @@
 //!   - Whether it's a directory
 
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
+
+/// Upper bound for handle IDs. The kernel reserves the top 4096
+/// values of usize as error codes.
+const MAX_HANDLE_ID: usize = usize::MAX - 4096;
 
 use redox_scheme::scheme::SchemeSync;
 use redox_scheme::{CallerCtx, OpenResult};
@@ -142,7 +145,7 @@ struct Handle {
 pub struct VirtioFsScheme<'a> {
     session: FuseSession<'a>,
     scheme_name: String,
-    next_id: AtomicUsize,
+    next_id: usize,
     handles: BTreeMap<usize, Handle>,
 }
 
@@ -151,8 +154,24 @@ impl<'a> VirtioFsScheme<'a> {
         Self {
             session,
             scheme_name,
-            next_id: AtomicUsize::new(1),
+            next_id: 1,
             handles: BTreeMap::new(),
+        }
+    }
+
+    /// Allocate the next handle ID, wrapping within the valid range
+    /// and skipping IDs that collide with open handles.
+    fn alloc_id(&mut self) -> usize {
+        loop {
+            let id = self.next_id;
+            if self.next_id >= MAX_HANDLE_ID {
+                self.next_id = 1;
+            } else {
+                self.next_id += 1;
+            }
+            if id >= 1 && id <= MAX_HANDLE_ID && !self.handles.contains_key(&id) {
+                return id;
+            }
         }
     }
 
@@ -262,7 +281,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
             .opendir(1)
             .map_err(fuse_err)?;
 
-        let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+        let id = self.alloc_id();
         self.handles.insert(
             id,
             Handle {
@@ -347,7 +366,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                         .opendir(nodeid)
                         .map_err(fuse_err)?;
 
-                    let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+                    let id = self.alloc_id();
                     self.handles.insert(
                         id,
                         Handle {
@@ -373,7 +392,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                     .open(nodeid, fuse_flags)
                     .map_err(fuse_err)?;
 
-                let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+                let id = self.alloc_id();
                 self.handles.insert(
                     id,
                     Handle {
@@ -406,7 +425,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                     .opendir(entry.nodeid)
                     .map_err(fuse_err)?;
 
-                let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+                let id = self.alloc_id();
                 self.handles.insert(
                     id,
                     Handle {
@@ -434,7 +453,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                 .create(parent_nodeid, filename, fuse_flags, 0o644)
                 .map_err(fuse_err)?;
 
-            let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+            let id = self.alloc_id();
             self.handles.insert(
                 id,
                 Handle {
@@ -461,7 +480,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
 
         // Stat-only open doesn't need a FUSE file handle
         if flags & O_STAT == O_STAT {
-            let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+            let id = self.alloc_id();
             self.handles.insert(
                 id,
                 Handle {
@@ -492,7 +511,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                 .opendir(nodeid)
                 .map_err(fuse_err)?;
 
-            let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+            let id = self.alloc_id();
             self.handles.insert(
                 id,
                 Handle {
@@ -522,7 +541,7 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
                 .open(nodeid, fuse_flags)
                 .map_err(fuse_err)?;
 
-            let id = self.next_id.fetch_add(1, Ordering::Relaxed);
+            let id = self.alloc_id();
             self.handles.insert(
                 id,
                 Handle {
