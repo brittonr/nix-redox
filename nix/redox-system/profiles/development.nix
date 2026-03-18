@@ -44,6 +44,7 @@ in
       ++ opt "redox-sed"
       ++ opt "redox-patch"
       ++ opt "strace-redox"
+      ++ opt "gdbstub"
       ++ opt "contain"
       ++ opt "pkgutils";
 

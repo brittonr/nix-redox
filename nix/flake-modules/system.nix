@@ -107,6 +107,7 @@ let
     gdb-protocol = self'.packages.gdb-protocol or null;
     redox-intelflash = self'.packages.redox-intelflash or null;
     redox-buffer-pool = self'.packages.redox-buffer-pool or null;
+    gdbstub = self'.packages.gdbstub or null;
 
     # Self-hosting: build tools
     redox-bash = self'.packages.redox-bash or null;
