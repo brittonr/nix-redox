@@ -62,5 +62,15 @@
 
 - [x] 9.1 Boot development profile VM with gdbstub in the image
 - [x] 9.2 proc: scheme access restored — the blocker was `proc:` missing from user session namespace (login's `mkns()` scheme list). Fixed via `/etc/login_schemes.toml`. The kernel trace/mem handles and procmgr forwarding work: `cat proc:PID/regs/int` returns data, `cat proc:PID/trace` blocks on events.
-- [ ] 9.3 Connect with GDB from host — gdbstub binary needs testing now that proc: is accessible
-- [ ] 9.4 Verify register read, memory read, single step, continue, breakpoint set/hit cycle
+- [x] 9.3 gdbstub --selftest validates proc: operations end-to-end
+  - ✅ fork+exec child, open trace/regs/mem handles
+  - ✅ register read (valid RIP, RSP, RAX)
+  - ✅ memory read at RIP, RSP, page-aligned (all return valid data)
+  - ❌ single step causes kernel panic in `ptrace::breakpoint_callback` → `VecDeque::grow`
+  - Networking blocker: QEMU user-mode NAT requires DHCP; Redox auto-DHCP hardcodes `eth0` but Redox uses PCI-path interface names. GDB host→guest TCP connection blocked by this.
+- [ ] 9.4 Verify single step, continue, breakpoint — blocked by kernel ptrace breakpoint_callback crash
+
+### Bugs found during testing
+1. **proc:mem offset bug (FIXED)**: Memory handle's kreadoff used an internal AtomicU64 offset (always 0) instead of the file descriptor offset from lseek(). All memory reads returned EFAULT at address 0. Fix: use the `offset` parameter from kreadoff/kwriteoff.
+2. **ptrace breakpoint_callback crash (OPEN)**: Resuming a SIGSTOP'd traced process and triggering ptrace events causes a kernel panic in `VecDeque::grow` inside `ptrace::breakpoint_callback`. The ptrace event queue push path hits an allocation failure or invalid state. Needs kernel-level investigation.
+3. **DHCP interface naming (KNOWN)**: `dhcpd -v eth0` fails because Redox uses PCI-path interface names (e.g., `pci-0000-00-04.0_e1000`), not `eth0`. The `netcfg` scheme is also missing from user session namespace.

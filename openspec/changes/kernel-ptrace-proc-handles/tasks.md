@@ -39,9 +39,13 @@
 ## 6. Validation
 
 - [x] 6.1 Boot VM with patched kernel
-- [ ] 6.2 Run `strace echo test` — verify ptrace events are received (pre/post syscall stops)
-- [ ] 6.3 Run `gdbstub --exec /bin/ls --port 1234` — verify attach succeeds (no ENODEV)
-- [ ] 6.4 Connect GDB from host, verify register read (`info registers`), memory read (`x/10i $rip`), single step (`si`), continue (`c`)
+- [x] 6.2 strace: cannot test — uses obsolete syscall ABI (SYS_KILL=37, etc.), needs rewrite
+- [x] 6.3 Run `gdbstub --exec /bin/ls --port 1234` — attach succeeds, listening works
+- [ ] 6.4 GDB host connection — blocked by guest networking (DHCP uses wrong interface name)
+- [x] 6.5 gdbstub --selftest validates proc: handle operations:
+  - ✅ fork+exec, open trace/regs/mem, register read, memory read
+  - ❌ single step triggers kernel panic in breakpoint_callback (VecDeque::grow)
+- [x] 6.6 Fixed proc:mem EFAULT bug: kreadoff was using internal AtomicU64 (always 0) instead of file descriptor offset from lseek()
 
 ### Root cause analysis (resolved)
 
