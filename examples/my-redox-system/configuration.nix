@@ -91,7 +91,7 @@ in
         gid = 1000;
         home = "/home/user";
         shell = "/bin/ion";
-        password = "redox";
+        password = "redox1";
         realname = "Default User";
         createHome = true;
       };

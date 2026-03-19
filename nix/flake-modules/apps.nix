@@ -213,6 +213,12 @@ in
       meta.description = "Run functional tests inside Redox OS (shell, filesystem, tools, config)";
     };
 
+    multi-user-test = {
+      type = "app";
+      program = "${self'.packages.multi-user-test}/bin/functional-test";
+      meta.description = "Test per-user namespaces, file ownership, sudo scheme escalation";
+    };
+
     network-test = {
       type = "app";
       program = "${self'.packages.networkTest}/bin/network-test";

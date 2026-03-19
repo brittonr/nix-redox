@@ -30,6 +30,40 @@ let
   logPath = inputs.logging.logPath or "/var/log";
 
   # /security
+  # Scheme lists for per-user login namespaces.
+  # Matches upstream userutils DEFAULT_SCHEMES (login.rs) plus proc for root.
+  # Used by generated-files.nix to produce /etc/login_schemes.toml.
+  fullSchemes = [
+    # Kernel schemes
+    "debug" "event" "memory" "pipe" "serio" "irq" "time" "sys"
+    # Base schemes
+    "rand" "null" "zero" "log"
+    # Network schemes
+    "ip" "icmp" "tcp" "udp"
+    # IPC schemes
+    "shm" "chan" "uds_stream" "uds_dgram"
+    # File schemes
+    "file"
+    # Display schemes
+    "display.vesa" "display*"
+    # Other schemes
+    "pty" "sudo" "audio"
+    # Debugging (root only)
+    "proc"
+  ];
+
+  # Restricted set for non-root users: no kernel-internal schemes.
+  # Excludes irq, sys, memory, serio — leaves 22 schemes.
+  restrictedSchemes = [
+    "debug" "event" "pipe" "time"
+    "rand" "null" "zero" "log"
+    "ip" "icmp" "tcp" "udp"
+    "shm" "chan" "uds_stream" "uds_dgram"
+    "file"
+    "display.vesa" "display*"
+    "pty" "sudo" "audio"
+  ];
+
   protectKernelSchemes = inputs.security.protectKernelSchemes or true;
   requirePasswords = inputs.security.requirePasswords or false;
   allowRemoteRoot = inputs.security.allowRemoteRoot or false;
@@ -316,6 +350,8 @@ let
 in
 {
   inherit
+    fullSchemes
+    restrictedSchemes
     graphicsEnabled
     networkingEnabled
     usbEnabled

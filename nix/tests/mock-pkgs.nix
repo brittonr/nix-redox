@@ -246,6 +246,8 @@ rec {
       "passwd"
       "su"
       "sudo"
+      "id"
+      "whoami"
     ];
   };
 
