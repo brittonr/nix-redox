@@ -216,16 +216,21 @@ adios:
       version = manifest.versionInfo;
 
       vmConfig = {
-        vmm = inputs.virtualisation.vmm or "cloud-hypervisor";
-        memorySize = inputs.virtualisation.memorySize or 2048;
-        cpus = inputs.virtualisation.cpus or 4;
-        graphics = inputs.virtualisation.graphics or false;
-        serialConsole = inputs.virtualisation.serialConsole or true;
-        hugepages = inputs.virtualisation.hugepages or false;
-        directIO = inputs.virtualisation.directIO or true;
-        apiSocket = inputs.virtualisation.apiSocket or false;
-        tapNetworking = inputs.virtualisation.tapNetworking or false;
-        qemuExtraArgs = inputs.virtualisation.qemuExtraArgs or [ ];
+        vmm = inputs.virtualisation.vmm;
+        memorySize = inputs.virtualisation.memorySize;
+        cpus = inputs.virtualisation.cpus;
+        graphics = inputs.virtualisation.graphics;
+        serialConsole = inputs.virtualisation.serialConsole;
+        hugepages = inputs.virtualisation.hugepages;
+        directIO = inputs.virtualisation.directIO;
+        apiSocket = inputs.virtualisation.apiSocket;
+        tapNetworking = inputs.virtualisation.tapNetworking;
+        qemuNicModel = inputs.virtualisation.qemuNicModel;
+        qemuHostSshPort = inputs.virtualisation.qemuHostSshPort;
+        qemuHostHttpPort = inputs.virtualisation.qemuHostHttpPort;
+        qemuExtraArgs = inputs.virtualisation.qemuExtraArgs;
+        cpuTopology = inputs.virtualisation.cpuTopology;
+        chMinTimeout = inputs.virtualisation.chMinTimeout;
       };
     };
 }

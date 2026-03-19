@@ -16,14 +16,14 @@ let
     inherit (cfg) hostname timezone;
     graphicsEnabled = cfg.graphicsEnabled;
     networkingEnabled = cfg.networkingEnabled;
-    networkMode = inputs.networking.mode or "auto";
+    networkMode = inputs.networking.mode;
     ntpEnabled = cfg.ntpEnabled;
     inherit (cfg) logLevel;
     acpiEnabled = cfg.acpiEnabled;
     inherit (cfg) protectKernelSchemes;
     diskSizeMB = cfg.diskSizeMB;
     espSizeMB = cfg.espSizeMB;
-    userCount = builtins.length (builtins.attrNames (inputs.users.users or { }));
+    userCount = builtins.length (builtins.attrNames inputs.users.users);
     packageCount = builtins.length cfg.allPackages;
     driverCount = builtins.length cfg.allDrivers;
   };
@@ -63,27 +63,27 @@ let
         inherit (cfg) diskSizeMB espSizeMB;
       };
       hardware = {
-        storageDrivers = inputs.hardware.storageDrivers or [ ];
-        networkDrivers = inputs.hardware.networkDrivers or [ ];
-        graphicsDrivers = lib.optionals cfg.graphicsEnabled (inputs.hardware.graphicsDrivers or [ ]);
-        audioDrivers = lib.optionals cfg.audioEnabled (inputs.hardware.audioDrivers or [ ]);
+        storageDrivers = inputs.hardware.storageDrivers;
+        networkDrivers = inputs.hardware.networkDrivers;
+        graphicsDrivers = lib.optionals cfg.graphicsEnabled inputs.hardware.graphicsDrivers;
+        audioDrivers = lib.optionals cfg.audioEnabled inputs.hardware.audioDrivers;
         inherit (cfg) usbEnabled;
       };
       networking = {
         enabled = cfg.networkingEnabled;
-        mode = inputs.networking.mode or "auto";
-        dns = inputs.networking.dns or [ ];
+        mode = inputs.networking.mode;
+        dns = inputs.networking.dns;
       };
       graphics = {
         enabled = cfg.graphicsEnabled;
-        resolution = inputs.graphics.resolution or "1024x768";
+        resolution = inputs.graphics.resolution;
       };
       security = {
         inherit (cfg) protectKernelSchemes requirePasswords allowRemoteRoot;
       };
       logging = {
         inherit (cfg) logLevel kernelLogLevel logToFile;
-        maxLogSizeMB = inputs.logging.maxLogSizeMB or 10;
+        maxLogSizeMB = inputs.logging.maxLogSizeMB;
       };
       power = {
         inherit (cfg) acpiEnabled powerAction rebootOnPanic;
@@ -110,12 +110,12 @@ let
       gid = user.gid;
       home = user.home;
       shell = user.shell;
-    }) (inputs.users.users or { });
+    }) inputs.users.users;
 
     groups = builtins.mapAttrs (name: group: {
       gid = group.gid;
       members = group.members or [ ];
-    }) (inputs.users.groups or { });
+    }) inputs.users.groups;
 
     services = {
       # Full service declarations for semantic diffing during activation
@@ -128,7 +128,7 @@ let
     activationScripts = lib.mapAttrsToList (name: script: {
       inherit name;
       deps = script.deps or [ ];
-    }) (inputs.activation.scripts or { });
+    }) inputs.activation.scripts;
 
     # File hashes are computed at build time and merged into this manifest.
     # The key "files" is populated by the rootTree derivation (see below).

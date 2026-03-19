@@ -7,32 +7,32 @@
 let
   # ===== SHARED COMPUTATIONS =====
 
-  graphicsEnabled = inputs.graphics.enable or false;
-  networkingEnabled = inputs.networking.enable or false;
-  usbEnabled = (inputs.hardware.usbEnable or false) || graphicsEnabled;
-  audioEnabled = inputs.hardware.audioEnable or false;
-  initfsEnableGraphics = (inputs.boot.initfsEnableGraphics or false) || graphicsEnabled;
-  initfsSizeMB = inputs.boot.initfsSizeMB or 64;
+  graphicsEnabled = inputs.graphics.enable;
+  networkingEnabled = inputs.networking.enable;
+  usbEnabled = inputs.hardware.usbEnable || graphicsEnabled;
+  audioEnabled = inputs.hardware.audioEnable;
+  initfsEnableGraphics = inputs.boot.initfsEnableGraphics || graphicsEnabled;
+  initfsSizeMB = inputs.boot.initfsSizeMB;
 
   # ===== NEW MODULE OPTIONS =====
 
-  # /time
-  hostname = inputs.time.hostname or "redox";
-  timezone = inputs.time.timezone or "UTC";
-  ntpEnabled = inputs.time.ntpEnable or false;
-  ntpServers = inputs.time.ntpServers or [ "pool.ntp.org" ];
-  hwclock = inputs.time.hwclock or "utc";
+  # /time — adios validates types and applies defaults from the module
+  hostname = inputs.time.hostname;
+  timezone = inputs.time.timezone;
+  ntpEnabled = inputs.time.ntpEnable;
+  ntpServers = inputs.time.ntpServers;
+  hwclock = inputs.time.hwclock;
 
   # /logging
-  logLevel = inputs.logging.level or "info";
-  kernelLogLevel = inputs.logging.kernelLogLevel or "warn";
-  logToFile = inputs.logging.logToFile or true;
-  logPath = inputs.logging.logPath or "/var/log";
+  logLevel = inputs.logging.level;
+  kernelLogLevel = inputs.logging.kernelLogLevel;
+  logToFile = inputs.logging.logToFile;
+  logPath = inputs.logging.logPath;
 
   # /boot
-  initfsPrompt = inputs.boot.initfsPrompt or "ion> ";
-  rustBacktrace = inputs.boot.rustBacktrace or "1";
-  bootExtraEssentialPackages = inputs.boot.essentialPackages or [ ];
+  initfsPrompt = inputs.boot.initfsPrompt;
+  rustBacktrace = inputs.boot.rustBacktrace;
+  bootExtraEssentialPackages = inputs.boot.essentialPackages;
 
   # /security
   # Scheme lists for per-user login namespaces.
@@ -41,68 +41,44 @@ let
   fullSchemes = inputs.security.defaultRootSchemes;
   restrictedSchemes = inputs.security.defaultUserSchemes;
 
-  protectKernelSchemes = inputs.security.protectKernelSchemes or true;
-  requirePasswords = inputs.security.requirePasswords or false;
-  allowRemoteRoot = inputs.security.allowRemoteRoot or false;
-  setuidPrograms =
-    inputs.security.setuidPrograms or [
-      "su"
-      "sudo"
-      "login"
-      "passwd"
-    ];
+  protectKernelSchemes = inputs.security.protectKernelSchemes;
+  requirePasswords = inputs.security.requirePasswords;
+  allowRemoteRoot = inputs.security.allowRemoteRoot;
+  setuidPrograms = inputs.security.setuidPrograms;
 
-  # /programs
-  ionConfig =
-    inputs.programs.ion or {
-      enable = true;
-      prompt = "\\$USER@\\$HOSTNAME \\$PWD# ";
-      initExtra = "";
-    };
-  helixConfig =
-    inputs.programs.helix or {
-      enable = false;
-      theme = "default";
-    };
-  defaultEditor = inputs.programs.editor or "/bin/sodium";
-  httpdConfig =
-    inputs.programs.httpd or {
-      enable = false;
-      port = 8080;
-      rootDir = "/var/www";
-    };
-  cargoConfig =
-    inputs.programs.cargo or {
-      buildJobs = 4;
-      home = "/root/.cargo";
-    };
+  # /programs — adios validates types and applies defaults from the module
+  ionConfig = inputs.programs.ion;
+  helixConfig = inputs.programs.helix;
+  defaultEditor = inputs.programs.editor;
+  httpdConfig = inputs.programs.httpd;
+  cargoConfig = inputs.programs.cargo;
 
   # /graphics (forwarded for init-scripts / generated-files)
-  virtualTerminal = inputs.graphics.virtualTerminal or 3;
-  graphicsDisplay = inputs.graphics.display or ":0";
+  virtualTerminal = inputs.graphics.virtualTerminal;
+  graphicsDisplay = inputs.graphics.display;
 
   # /networking
-  defaultNetmask = inputs.networking.defaultNetmask or "255.255.255.0";
-  extraHosts = inputs.networking.extraHosts or "";
+  defaultNetmask = inputs.networking.defaultNetmask;
+  extraHosts = inputs.networking.extraHosts;
 
   # /environment
-  motd = inputs.environment.motd or "Welcome to Redox OS!\n";
-  extraShells = inputs.environment.shells or [ ];
-  extraSelfHostingPackages = inputs.environment.selfHostingPackages or [ ];
+  motd = inputs.environment.motd;
+  extraShells = inputs.environment.shells;
+  extraSelfHostingPackages = inputs.environment.selfHostingPackages;
 
   # /power
-  acpiEnabled = inputs.power.acpiEnable or true;
-  powerAction = inputs.power.powerAction or "shutdown";
-  rebootOnPanic = inputs.power.rebootOnPanic or false;
+  acpiEnabled = inputs.power.acpiEnable;
+  powerAction = inputs.power.powerAction;
+  rebootOnPanic = inputs.power.rebootOnPanic;
 
   # Compute all drivers
   allDrivers = lib.unique (
-    (inputs.hardware.storageDrivers or [ ])
-    ++ (inputs.hardware.networkDrivers or [ ])
-    ++ (lib.optionals graphicsEnabled (inputs.hardware.graphicsDrivers or [ ]))
-    ++ (lib.optionals audioEnabled (inputs.hardware.audioDrivers or [ ]))
+    inputs.hardware.storageDrivers
+    ++ inputs.hardware.networkDrivers
+    ++ (lib.optionals graphicsEnabled inputs.hardware.graphicsDrivers)
+    ++ (lib.optionals audioEnabled inputs.hardware.audioDrivers)
     ++ (lib.optional usbEnabled "xhcid")
-    ++ (inputs.boot.initfsExtraDrivers or [ ])
+    ++ inputs.boot.initfsExtraDrivers
   );
 
   # Core daemons for initfs
@@ -137,7 +113,7 @@ let
       "usbhidd"
     ]);
 
-  allDaemons = lib.unique (coreDaemons ++ initfsDaemons ++ (inputs.boot.initfsExtraBinaries or [ ]));
+  allDaemons = lib.unique (coreDaemons ++ initfsDaemons ++ inputs.boot.initfsExtraBinaries);
 
   # ===== STORE-BASED PACKAGE MANAGEMENT =====
   # Inspired by NixOS's /run/current-system/sw model.
@@ -157,7 +133,7 @@ let
   # These survive generation switches — they're always available.
   #
   # Packages the profile actually requested via systemPackages.
-  profileSystemPackages = inputs.environment.systemPackages or [ ];
+  profileSystemPackages = inputs.environment.systemPackages;
 
   # Check if a package is referenced in the profile's systemPackages list.
   inSystemPackages = pkg: builtins.any (p: toString p == toString pkg) profileSystemPackages;
@@ -207,7 +183,7 @@ let
   # Managed packages: everything in systemPackages that isn't boot-essential.
   # These appear/disappear when switching generations.
   isBootPkg = pkg: builtins.any (b: samePackage b pkg) bootPackages;
-  managedPackages = builtins.filter (pkg: !isBootPkg pkg) (inputs.environment.systemPackages or [ ]);
+  managedPackages = builtins.filter (pkg: !isBootPkg pkg) inputs.environment.systemPackages;
 
   # All packages: union of boot + managed (used for store population and manifest).
   allPackages = lib.unique (bootPackages ++ managedPackages);
@@ -242,9 +218,8 @@ let
 
   # Collect all directories
   homeDirectories = lib.filter (d: d != null) (
-    lib.mapAttrsToList (name: user: if user.createHome or false then user.home else null) (
-      inputs.users.users or { }
-    )
+    lib.mapAttrsToList (name: user: if user.createHome or false then user.home else null)
+      inputs.users.users
   );
 
   # Per-path ownership overrides for redoxfs-ar.
@@ -261,11 +236,11 @@ let
         }
       else
         null
-    ) (inputs.users.users or { })
+    ) inputs.users.users
   );
 
   allDirectories =
-    (inputs.filesystem.extraDirectories or [ ])
+    inputs.filesystem.extraDirectories
     ++ homeDirectories
     ++ (lib.optional networkingEnabled "/var/log")
     ++ (lib.optional logToFile logPath)
@@ -279,24 +254,24 @@ let
       "/nix/var/snix/gcroots"
     ]
     ++ (lib.optional acpiEnabled "/etc/acpi")
-    ++ (lib.optional (helixConfig.enable or false) "/etc/helix")
-    ++ (lib.optional (httpdConfig.enable or false) (httpdConfig.rootDir or "/var/www"))
+    ++ (lib.optional helixConfig.enable "/etc/helix")
+    ++ (lib.optional httpdConfig.enable httpdConfig.rootDir)
     # Typed service module directories
     ++ (lib.optional sshEnabled "/etc/ssh")
     ++ (lib.optional svcHttpdEnabled "/etc/httpd")
     ++ (lib.optional svcHttpdEnabled svcHttpdOpts.rootDir)
     # Activation scripts directory
-    ++ (lib.optional ((inputs.activation.scripts or { }) != { }) "/etc/redox-system/activation.d")
+    ++ (lib.optional (inputs.activation.scripts != { }) "/etc/redox-system/activation.d")
     # Parent directories for user-declared etc files (environment.etc)
     ++ (lib.unique (
       lib.filter (d: d != "" && d != "." && d != "/") (
         builtins.map (key: "/" + builtins.dirOf key)
-          (builtins.attrNames (inputs.environment.etc or { }))
+          (builtins.attrNames inputs.environment.etc)
       )
     ));
 
   # User for serial console
-  nonRootUsers = lib.filterAttrs (name: user: (user.uid or 0) > 0) (inputs.users.users or { });
+  nonRootUsers = lib.filterAttrs (name: user: (user.uid or 0) > 0) inputs.users.users;
   defaultUser =
     if nonRootUsers != { } then
       let
@@ -325,27 +300,27 @@ let
   # ===== BINARY CACHE =====
   # Generate a local Nix binary cache from binaryCachePackages.
   # Included in rootTree at /nix/cache/ when non-empty.
-  binaryCachePackages = inputs.environment.binaryCachePackages or { };
+  binaryCachePackages = inputs.environment.binaryCachePackages;
   hasBinaryCache = binaryCachePackages != { };
 
   # Disk sizing from other modules
-  diskSizeMB = inputs.boot.diskSizeMB or 512;
-  espSizeMB = inputs.boot.espSizeMB or 200;
+  diskSizeMB = inputs.boot.diskSizeMB;
+  espSizeMB = inputs.boot.espSizeMB;
 
   # Network interface resolution (for static config)
   firstIfaceName =
     let
-      names = builtins.attrNames (inputs.networking.interfaces or { });
+      names = builtins.attrNames inputs.networking.interfaces;
     in
     if names != [ ] then builtins.head names else null;
   firstIface =
     if firstIfaceName != null then inputs.networking.interfaces.${firstIfaceName} else null;
 
   # User-declared etc files (for checks validation)
-  userEtcFiles = inputs.environment.etc or { };
+  userEtcFiles = inputs.environment.etc;
 
   # Activation script names (for checks validation)
-  activationScriptNames = builtins.attrNames (inputs.activation.scripts or { });
+  activationScriptNames = builtins.attrNames inputs.activation.scripts;
 
 in
 {
