@@ -83,6 +83,17 @@ in
       default = false;
       description = "Enable USB support";
     };
+    extraPciDrivers = {
+      type = t.attrsOf (t.listOf (t.struct "PciMatch" {
+        name = t.string;
+        class = t.optionalAttr t.string;
+        subclass = t.optionalAttr t.string;
+        vendor = t.optionalAttr t.string;
+        device = t.optionalAttr t.string;
+      }));
+      default = { };
+      description = "Extra PCI driver entries merged with the built-in registry. Keys are driver binary names, values are lists of PCI match rules.";
+    };
   };
 
   impl = { options }: options;

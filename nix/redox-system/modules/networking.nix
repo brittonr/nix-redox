@@ -51,6 +51,16 @@ in
       default = { };
       description = "Network interface configurations";
     };
+    defaultNetmask = {
+      type = t.string;
+      default = "255.255.255.0";
+      description = "Default netmask for interfaces that don't specify one";
+    };
+    extraHosts = {
+      type = t.string;
+      default = "";
+      description = "Extra entries to append to /etc/hosts (one per line)";
+    };
     remoteShellEnable = {
       type = t.bool;
       default = false;

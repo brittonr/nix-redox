@@ -29,40 +29,17 @@ let
   logToFile = inputs.logging.logToFile or true;
   logPath = inputs.logging.logPath or "/var/log";
 
+  # /boot
+  initfsPrompt = inputs.boot.initfsPrompt or "ion> ";
+  rustBacktrace = inputs.boot.rustBacktrace or "1";
+  bootExtraEssentialPackages = inputs.boot.essentialPackages or [ ];
+
   # /security
   # Scheme lists for per-user login namespaces.
-  # Matches upstream userutils DEFAULT_SCHEMES (login.rs) plus proc for root.
+  # Configurable via security.defaultRootSchemes and security.defaultUserSchemes.
   # Used by generated-files.nix to produce /etc/login_schemes.toml.
-  fullSchemes = [
-    # Kernel schemes
-    "debug" "event" "memory" "pipe" "serio" "irq" "time" "sys"
-    # Base schemes
-    "rand" "null" "zero" "log"
-    # Network schemes
-    "ip" "icmp" "tcp" "udp"
-    # IPC schemes
-    "shm" "chan" "uds_stream" "uds_dgram"
-    # File schemes
-    "file"
-    # Display schemes
-    "display.vesa" "display*"
-    # Other schemes
-    "pty" "sudo" "audio"
-    # Debugging (root only)
-    "proc"
-  ];
-
-  # Restricted set for non-root users: no kernel-internal schemes.
-  # Excludes irq, sys, memory, serio — leaves 22 schemes.
-  restrictedSchemes = [
-    "debug" "event" "pipe" "time"
-    "rand" "null" "zero" "log"
-    "ip" "icmp" "tcp" "udp"
-    "shm" "chan" "uds_stream" "uds_dgram"
-    "file"
-    "display.vesa" "display*"
-    "pty" "sudo" "audio"
-  ];
+  fullSchemes = inputs.security.defaultRootSchemes;
+  restrictedSchemes = inputs.security.defaultUserSchemes;
 
   protectKernelSchemes = inputs.security.protectKernelSchemes or true;
   requirePasswords = inputs.security.requirePasswords or false;
@@ -94,6 +71,24 @@ let
       port = 8080;
       rootDir = "/var/www";
     };
+  cargoConfig =
+    inputs.programs.cargo or {
+      buildJobs = 4;
+      home = "/root/.cargo";
+    };
+
+  # /graphics (forwarded for init-scripts / generated-files)
+  virtualTerminal = inputs.graphics.virtualTerminal or 3;
+  graphicsDisplay = inputs.graphics.display or ":0";
+
+  # /networking
+  defaultNetmask = inputs.networking.defaultNetmask or "255.255.255.0";
+  extraHosts = inputs.networking.extraHosts or "";
+
+  # /environment
+  motd = inputs.environment.motd or "Welcome to Redox OS!\n";
+  extraShells = inputs.environment.shells or [ ];
+  extraSelfHostingPackages = inputs.environment.selfHostingPackages or [ ];
 
   # /power
   acpiEnabled = inputs.power.acpiEnable or true;
@@ -175,6 +170,8 @@ let
   # userutils is only boot-essential when the profile includes it in
   # systemPackages. Test profiles exclude userutils so that startup.sh
   # runs the test runner directly instead of getty.
+  # Boot-essential packages: flat-copied to /bin/, survive generation switches.
+  # Extra packages from boot.essentialPackages are merged in.
   bootPackages = lib.unique (
     (lib.optional (pkgs ? base) pkgs.base)
     ++ (lib.optional (pkgs ? ion) pkgs.ion)
@@ -189,10 +186,12 @@ let
       ++ lib.optional (pkgs ? orbterm) pkgs.orbterm
       ++ lib.optional (pkgs ? orbutils) pkgs.orbutils
     ))
+    ++ bootExtraEssentialPackages
   );
 
   # Self-hosting packages: need full store copy (lib/, sysroot/, include/).
   # Same pattern — derivation references, not name strings.
+  # Extra packages from environment.selfHostingPackages are merged in.
   selfHostingPackages = lib.unique (
     lib.optional (pkgs ? redox-rustc) pkgs.redox-rustc
     ++ lib.optional (pkgs ? redox-llvm) pkgs.redox-llvm
@@ -200,6 +199,7 @@ let
     ++ lib.optional (pkgs ? redox-cmake) pkgs.redox-cmake
     ++ lib.optional (pkgs ? redox-libcxx) pkgs.redox-libcxx
     ++ lib.optional (pkgs ? redox-libstdcxx-shim) pkgs.redox-libstdcxx-shim
+    ++ extraSelfHostingPackages
   );
 
   isSelfHostingPkg = pkg: builtins.any (sh: samePackage sh pkg) selfHostingPackages;
@@ -358,6 +358,8 @@ in
     audioEnabled
     initfsEnableGraphics
     initfsSizeMB
+    initfsPrompt
+    rustBacktrace
     hostname
     timezone
     ntpEnabled
@@ -375,6 +377,13 @@ in
     helixConfig
     defaultEditor
     httpdConfig
+    cargoConfig
+    virtualTerminal
+    graphicsDisplay
+    defaultNetmask
+    extraHosts
+    motd
+    extraShells
     acpiEnabled
     powerAction
     rebootOnPanic

@@ -68,7 +68,7 @@ INIT_SCRIPT_EOF
     )}
 
     # Ion shell configuration
-    echo 'let PROMPT = "ion> "' > initfs/etc/ion/initrc
+    echo 'let PROMPT = "${cfg.initfsPrompt}"' > initfs/etc/ion/initrc
 
     redox-initfs-ar initfs ${pkgs.bootstrap}/bin/bootstrap -o initfs.img --max-size ${
       toString (cfg.initfsSizeMB * 1024 * 1024)

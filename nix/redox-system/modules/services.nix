@@ -150,7 +150,7 @@ in
         # (tcsetattr) which the serial debug: scheme doesn't support.
         # This basic prompt loop uses plain blocking I/O instead.
         while true
-          echo -n "redox# "
+          echo -n "$ "
           read cmd
           if not test "$cmd" = ""
             eval $cmd

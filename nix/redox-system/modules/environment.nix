@@ -56,6 +56,21 @@ in
       default = { };
       description = "Packages to include in the local binary cache for `snix install`";
     };
+    motd = {
+      type = t.string;
+      default = "Welcome to Redox OS!\n";
+      description = "Message of the day displayed after login (/etc/motd)";
+    };
+    shells = {
+      type = t.listOf t.string;
+      default = [ ];
+      description = "Extra valid login shells for /etc/shells (ion and sh are always included)";
+    };
+    selfHostingPackages = {
+      type = t.listOf t.derivation;
+      default = [ ];
+      description = "Extra packages that need full store copy (lib/, sysroot/, include/) for self-hosting";
+    };
     etc = {
       type = t.attrsOf etcFileType;
       default = { };
