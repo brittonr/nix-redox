@@ -476,3 +476,6 @@
 {"text":"what next","timestamp":1773919692436}
 {"text":"1","timestamp":1773919823573}
 {"text":"continue","timestamp":1773924753348}
+{"text":"what next","timestamp":1773950919451}
+{"text":"what next","timestamp":1773952384820}
+{"text":"│ Declarative   │ declarative-services,      │ Init scripts are hand-numbered;     │\n │ services      │ profile-scheme             │ modules should declare services     │\n │               │                            │ with deps, and the build system     │\n │               │                            │ toposorts them                      │\n ├───────────────┼────────────────────────────┼────────────────────────","timestamp":1773952469455}
