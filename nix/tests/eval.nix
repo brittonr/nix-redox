@@ -787,10 +787,22 @@ in
         graphics = if vm.graphics then "true" else "false";
         tapNetworking = if vm.tapNetworking then "true" else "false";
         qemuNicModel = vm.qemuNicModel;
+        qemuMachineType = vm.qemuMachineType;
         qemuHostSshPort = toString vm.qemuHostSshPort;
         qemuHostHttpPort = toString vm.qemuHostHttpPort;
         cpuTopology = vm.cpuTopology;
         chMinTimeout = toString vm.chMinTimeout;
+        chNetQueues = toString vm.chNetQueues;
+        chNetQueueSize = toString vm.chNetQueueSize;
+        chApiSocketPath = vm.chApiSocketPath;
+        tapInterface = vm.tapInterface;
+        hostIp = vm.hostIp;
+        guestIp = vm.guestIp;
+        guestNetmask = vm.guestNetmask;
+        guestSubnet = vm.guestSubnet;
+        guestMac = vm.guestMac;
+        sharedFsDir = vm.sharedFsDir;
+        sharedFsTag = vm.sharedFsTag;
       }
       ''
         set -euo pipefail
@@ -800,11 +812,23 @@ in
         [ "$graphics" = "false" ] || { echo "FAIL: expected graphics=false, got $graphics"; exit 1; }
         [ "$tapNetworking" = "false" ] || { echo "FAIL: expected tapNetworking=false, got $tapNetworking"; exit 1; }
         [ "$qemuNicModel" = "e1000" ] || { echo "FAIL: expected qemuNicModel=e1000, got $qemuNicModel"; exit 1; }
+        [ "$qemuMachineType" = "pc" ] || { echo "FAIL: expected qemuMachineType=pc, got $qemuMachineType"; exit 1; }
         [ "$qemuHostSshPort" = "8022" ] || { echo "FAIL: expected qemuHostSshPort=8022, got $qemuHostSshPort"; exit 1; }
         [ "$qemuHostHttpPort" = "8080" ] || { echo "FAIL: expected qemuHostHttpPort=8080, got $qemuHostHttpPort"; exit 1; }
         [ "$cpuTopology" = "1:2:1:2" ] || { echo "FAIL: expected cpuTopology=1:2:1:2, got $cpuTopology"; exit 1; }
         [ "$chMinTimeout" = "180" ] || { echo "FAIL: expected chMinTimeout=180, got $chMinTimeout"; exit 1; }
-        echo "✓ vmConfig defaults correct (including new options)"
+        [ "$chNetQueues" = "2" ] || { echo "FAIL: expected chNetQueues=2, got $chNetQueues"; exit 1; }
+        [ "$chNetQueueSize" = "256" ] || { echo "FAIL: expected chNetQueueSize=256, got $chNetQueueSize"; exit 1; }
+        [ "$chApiSocketPath" = "/tmp/cloud-hypervisor-redox.sock" ] || { echo "FAIL: expected chApiSocketPath, got $chApiSocketPath"; exit 1; }
+        [ "$tapInterface" = "tap0" ] || { echo "FAIL: expected tapInterface=tap0, got $tapInterface"; exit 1; }
+        [ "$hostIp" = "172.16.0.1" ] || { echo "FAIL: expected hostIp=172.16.0.1, got $hostIp"; exit 1; }
+        [ "$guestIp" = "172.16.0.2" ] || { echo "FAIL: expected guestIp=172.16.0.2, got $guestIp"; exit 1; }
+        [ "$guestNetmask" = "24" ] || { echo "FAIL: expected guestNetmask=24, got $guestNetmask"; exit 1; }
+        [ "$guestSubnet" = "172.16.0.0/24" ] || { echo "FAIL: expected guestSubnet=172.16.0.0/24, got $guestSubnet"; exit 1; }
+        [ "$guestMac" = "52:54:00:12:34:56" ] || { echo "FAIL: expected guestMac=52:54:00:12:34:56, got $guestMac"; exit 1; }
+        [ "$sharedFsDir" = "/tmp/redox-shared" ] || { echo "FAIL: expected sharedFsDir=/tmp/redox-shared, got $sharedFsDir"; exit 1; }
+        [ "$sharedFsTag" = "shared" ] || { echo "FAIL: expected sharedFsTag=shared, got $sharedFsTag"; exit 1; }
+        echo "✓ vmConfig defaults correct (all options including TAP, CH tuning, shared FS)"
         touch $out
       '';
 
@@ -1045,6 +1069,18 @@ in
               cpus = 8;
               graphics = true;
               tapNetworking = true;
+              qemuMachineType = "q35";
+              chNetQueues = 4;
+              chNetQueueSize = 512;
+              chApiSocketPath = "/tmp/custom-ch.sock";
+              tapInterface = "tap1";
+              hostIp = "10.0.0.1";
+              guestIp = "10.0.0.2";
+              guestNetmask = "16";
+              guestSubnet = "10.0.0.0/16";
+              guestMac = "AA:BB:CC:DD:EE:FF";
+              sharedFsDir = "/tmp/custom-shared";
+              sharedFsTag = "myfs";
             };
           }
         ];
@@ -1061,6 +1097,18 @@ in
         memorySize = toString vm.memorySize;
         graphics = if vm.graphics then "true" else "false";
         tapNetworking = if vm.tapNetworking then "true" else "false";
+        qemuMachineType = vm.qemuMachineType;
+        chNetQueues = toString vm.chNetQueues;
+        chNetQueueSize = toString vm.chNetQueueSize;
+        chApiSocketPath = vm.chApiSocketPath;
+        tapInterface = vm.tapInterface;
+        hostIp = vm.hostIp;
+        guestIp = vm.guestIp;
+        guestNetmask = vm.guestNetmask;
+        guestSubnet = vm.guestSubnet;
+        guestMac = vm.guestMac;
+        sharedFsDir = vm.sharedFsDir;
+        sharedFsTag = vm.sharedFsTag;
       }
       ''
         set -euo pipefail
@@ -1069,7 +1117,19 @@ in
         [ "$memorySize" = "4096" ] || { echo "FAIL: expected memorySize=4096, got $memorySize"; exit 1; }
         [ "$graphics" = "true" ] || { echo "FAIL: expected graphics=true, got $graphics"; exit 1; }
         [ "$tapNetworking" = "true" ] || { echo "FAIL: expected tapNetworking=true, got $tapNetworking"; exit 1; }
-        echo "✓ vmConfig profile overrides correct"
+        [ "$qemuMachineType" = "q35" ] || { echo "FAIL: expected qemuMachineType=q35, got $qemuMachineType"; exit 1; }
+        [ "$chNetQueues" = "4" ] || { echo "FAIL: expected chNetQueues=4, got $chNetQueues"; exit 1; }
+        [ "$chNetQueueSize" = "512" ] || { echo "FAIL: expected chNetQueueSize=512, got $chNetQueueSize"; exit 1; }
+        [ "$chApiSocketPath" = "/tmp/custom-ch.sock" ] || { echo "FAIL: expected chApiSocketPath, got $chApiSocketPath"; exit 1; }
+        [ "$tapInterface" = "tap1" ] || { echo "FAIL: expected tapInterface=tap1, got $tapInterface"; exit 1; }
+        [ "$hostIp" = "10.0.0.1" ] || { echo "FAIL: expected hostIp=10.0.0.1, got $hostIp"; exit 1; }
+        [ "$guestIp" = "10.0.0.2" ] || { echo "FAIL: expected guestIp=10.0.0.2, got $guestIp"; exit 1; }
+        [ "$guestNetmask" = "16" ] || { echo "FAIL: expected guestNetmask=16, got $guestNetmask"; exit 1; }
+        [ "$guestSubnet" = "10.0.0.0/16" ] || { echo "FAIL: expected guestSubnet=10.0.0.0/16, got $guestSubnet"; exit 1; }
+        [ "$guestMac" = "AA:BB:CC:DD:EE:FF" ] || { echo "FAIL: expected guestMac, got $guestMac"; exit 1; }
+        [ "$sharedFsDir" = "/tmp/custom-shared" ] || { echo "FAIL: expected sharedFsDir, got $sharedFsDir"; exit 1; }
+        [ "$sharedFsTag" = "myfs" ] || { echo "FAIL: expected sharedFsTag=myfs, got $sharedFsTag"; exit 1; }
+        echo "✓ vmConfig profile overrides correct (all new options)"
         touch $out
       '';
 

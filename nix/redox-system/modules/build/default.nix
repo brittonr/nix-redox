@@ -184,6 +184,7 @@ adios:
       espImage = mkEspImage {
         inherit bootloader kernel initfs;
         sizeMB = cfg.espSizeMB;
+        label = cfg.espLabel;
       };
 
       redoxfsImage = mkRedoxfsImage {
@@ -232,8 +233,20 @@ adios:
         qemuHostSshPort = inputs.virtualisation.qemuHostSshPort;
         qemuHostHttpPort = inputs.virtualisation.qemuHostHttpPort;
         qemuExtraArgs = inputs.virtualisation.qemuExtraArgs;
+        qemuMachineType = inputs.virtualisation.qemuMachineType;
         cpuTopology = inputs.virtualisation.cpuTopology;
         chMinTimeout = inputs.virtualisation.chMinTimeout;
+        chNetQueues = inputs.virtualisation.chNetQueues;
+        chNetQueueSize = inputs.virtualisation.chNetQueueSize;
+        chApiSocketPath = inputs.virtualisation.chApiSocketPath;
+        tapInterface = inputs.virtualisation.tapInterface;
+        hostIp = inputs.virtualisation.hostIp;
+        guestIp = inputs.virtualisation.guestIp;
+        guestNetmask = inputs.virtualisation.guestNetmask;
+        guestSubnet = inputs.virtualisation.guestSubnet;
+        guestMac = inputs.virtualisation.guestMac;
+        sharedFsDir = inputs.virtualisation.sharedFsDir;
+        sharedFsTag = inputs.virtualisation.sharedFsTag;
       };
     };
 }

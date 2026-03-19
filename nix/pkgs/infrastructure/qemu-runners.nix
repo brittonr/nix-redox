@@ -17,6 +17,7 @@ let
   defaultMemory = toString (vmConfig.memorySize or 2048);
   defaultCpus = toString (vmConfig.cpus or 4);
   nicModel = vmConfig.qemuNicModel or "e1000";
+  machineType = vmConfig.qemuMachineType or "pc";
   defaultHostSshPort = toString (vmConfig.qemuHostSshPort or 8022);
   defaultHostHttpPort = toString (vmConfig.qemuHostHttpPort or 8080);
 
@@ -39,7 +40,7 @@ let
 
   # Common QEMU arguments shared between graphical and headless modes
   commonQemuArgs = ''
-    -M pc \
+    -M ${machineType} \
     -cpu host \
     -m ${defaultMemory} \
     -smp ${defaultCpus} \

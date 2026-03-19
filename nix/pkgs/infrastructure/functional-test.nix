@@ -27,20 +27,21 @@
   memoryMB ? 1024,
   cpus ? 2,
   defaultTimeout ? 120,
+  vmConfig ? { },
 }:
 
 let
   vmTest = import ./mk-vm-test.nix { inherit pkgs lib; };
+  # vmConfig overrides the function-level defaults when present
+  effectiveMemory = vmConfig.memorySize or memoryMB;
+  effectiveCpus = vmConfig.cpus or cpus;
 in
 vmTest.mkVmTest {
   name = "functional-test";
   title = "Redox OS Functional Test Suite";
-  inherit
-    diskImage
-    bootloader
-    memoryMB
-    cpus
-    defaultTimeout
-    ;
+  inherit diskImage bootloader defaultTimeout;
+  memoryMB = effectiveMemory;
+  cpus = effectiveCpus;
+  chMinTimeout = vmConfig.chMinTimeout or 180;
   testPrefix = "FUNC_TEST";
 }

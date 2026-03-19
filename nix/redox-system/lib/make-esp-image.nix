@@ -22,6 +22,7 @@
   kernel, # Package with boot/kernel
   initfs, # Package with boot/initfs
   sizeMB ? 200,
+  label ? "EFI", # FAT32 volume label
 }:
 
 hostPkgs.runCommand "redox-esp"
@@ -34,7 +35,7 @@ hostPkgs.runCommand "redox-esp"
   ''
     SIZE=$((${toString sizeMB} * 1024 * 1024))
     truncate -s $SIZE esp.img
-    mkfs.vfat -F 32 -n "EFI" esp.img
+    mkfs.vfat -F 32 -n "${label}" esp.img
     mmd -i esp.img ::EFI ::EFI/BOOT
     mcopy -i esp.img ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI ::EFI/BOOT/
     mcopy -i esp.img ${kernel}/boot/kernel ::EFI/BOOT/kernel

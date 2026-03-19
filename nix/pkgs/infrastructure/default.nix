@@ -95,19 +95,26 @@ in
 
   # Boot test factory - requires diskImage and bootloader
   # Produces a script that boots the image and verifies milestones
+  # Optional vmConfig from /virtualisation module for VM resource defaults
   mkBootTest =
-    { diskImage, bootloader }:
+    {
+      diskImage,
+      bootloader,
+      vmConfig ? { },
+    }:
     import ./boot-test.nix {
       inherit
         pkgs
         lib
         diskImage
         bootloader
+        vmConfig
         ;
     };
 
   # Functional test factory - requires diskImage with test startup script
   # Produces a script that boots the image, watches for FUNC_TEST results
+  # Optional vmConfig from /virtualisation module for VM resource defaults
   mkFunctionalTest =
     {
       diskImage,
@@ -115,6 +122,7 @@ in
       memoryMB ? 1024,
       cpus ? 2,
       defaultTimeout ? 300,
+      vmConfig ? { },
     }:
     import ./functional-test.nix {
       inherit
@@ -125,19 +133,26 @@ in
         memoryMB
         cpus
         defaultTimeout
+        vmConfig
         ;
     };
 
   # Network test factory - requires diskImage with network test startup script
   # Uses QEMU SLiRP by default (no root/TAP needed)
+  # Optional vmConfig from /virtualisation module for VM resource defaults
   mkNetworkTest =
-    { diskImage, bootloader }:
+    {
+      diskImage,
+      bootloader,
+      vmConfig ? { },
+    }:
     import ./network-test.nix {
       inherit
         pkgs
         lib
         diskImage
         bootloader
+        vmConfig
         ;
     };
 
