@@ -113,7 +113,7 @@ let
         description = "Static network configuration";
         command = "/bin/netcfg-setup";
         type = "oneshot";
-        args = "static --interface eth0 --address ${cfg.firstIface.address} --gateway ${cfg.firstIface.gateway}";
+        args = "static-auto --address ${cfg.firstIface.address} --gateway ${cfg.firstIface.gateway}";
         wantedBy = "rootfs";
         enable = true;
         after = [ "smolnetd" ];

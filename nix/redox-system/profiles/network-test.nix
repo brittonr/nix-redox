@@ -22,7 +22,7 @@ let
   # Network test script — runs inside the Redox guest (Ion shell syntax)
   #
   # Tests:
-  #   1. Interface exists (eth0 via /scheme/netcfg)
+  #   1. Interface discovered (any PCI-path name via /scheme/netcfg/ifaces)
   #   2. DHCP assigned an IP address
   #   3. IP address is routable (not 0.0.0.0)
   #   4. DNS resolution works
@@ -30,6 +30,9 @@ let
   #   6. ifconfig shows interface
   #   7. Routing table has default route
   #   8. Inbound connection (nc listen + connect)
+  #
+  # Interface names are PCI-path based (e.g. pci-0000-00-04.0_e1000),
+  # NOT "eth0". We discover the first interface at runtime.
   # ==========================================================================
   testScript = ''
     echo ""
@@ -40,9 +43,43 @@ let
     echo "NET_TESTS_START"
     echo ""
 
+    # ── Discover first network interface ───────────────────────
+    # Redox uses PCI-path interface names (e.g. pci-0000-00-04.0_e1000).
+    # Wait for any interface to appear in /scheme/netcfg/ifaces/.
+    let iface = ""
+    let disc_attempts = 0
+    while test $disc_attempts -lt 600
+        let candidates = $(ls /scheme/netcfg/ifaces/ ^> /dev/null)
+        if not test $candidates = ""
+            # Take first non-lo entry. Ion has no head — use for loop + break.
+            for name in @split(candidates)
+                if not test $name = "lo"
+                    let iface = $name
+                    break
+                end
+            end
+            if not test $iface = ""
+                break
+            end
+        end
+        cat /scheme/sys/uname > /dev/null
+        cat /scheme/sys/uname > /dev/null
+        cat /scheme/sys/uname > /dev/null
+        let disc_attempts += 1
+    end
+
+    if test $iface = ""
+        echo "NET_TEST:iface-discover:FAIL:no-interface-found"
+        echo "NET_TESTS_COMPLETE"
+        exit 0
+    end
+    echo "NET_TEST:iface-discover:PASS"
+    echo "  Interface: $iface (found after $disc_attempts polls)"
+    echo ""
+
     # ── Wait for DHCP to complete ──────────────────────────────
     # netcfg-setup runs as nowait, so we may need to wait here too.
-    # Poll /scheme/netcfg/ifaces/eth0/addr/list for an IP.
+    # Poll /scheme/netcfg/ifaces/<iface>/addr/list for an IP.
     # NOTE: No `sleep` binary on Redox — use file I/O reads as delay
     #       (each cat introduces ~50ms of scheme I/O latency)
 
@@ -54,8 +91,8 @@ let
     # NOTE: Don't use `echo $var | grep` — pipe to grep fails silently in Ion.
     #       Use string comparison instead.
     while test $attempts -lt 3000
-        if exists -f /scheme/netcfg/ifaces/eth0/addr/list
-            let content = $(cat /scheme/netcfg/ifaces/eth0/addr/list)
+        if exists -f /scheme/netcfg/ifaces/$iface/addr/list
+            let content = $(cat /scheme/netcfg/ifaces/$iface/addr/list)
             # Reject empty and "Not configured" — anything else is likely an IP
             if not test $content = "" && not test $content = "Not configured"
                 let dhcp_ok = 1
@@ -73,18 +110,18 @@ let
     end
 
     if test $dhcp_ok -eq 0
-        echo "NET_TEST:dhcp-wait:FAIL:no-ip-after-200-polls"
+        echo "NET_TEST:dhcp-wait:FAIL:no-ip-after-3000-polls"
         echo ""
         echo "Network diagnostics (no IP):"
-        if exists -f /scheme/netcfg/ifaces/eth0/mac
-            echo "  eth0/mac = $(cat /scheme/netcfg/ifaces/eth0/mac)"
+        if exists -f /scheme/netcfg/ifaces/$iface/mac
+            echo "  $iface/mac = $(cat /scheme/netcfg/ifaces/$iface/mac)"
         else
-            echo "  eth0/mac: not found"
+            echo "  $iface/mac: not found"
         end
-        if exists -f /scheme/netcfg/ifaces/eth0/addr/list
-            echo "  eth0/addr/list = $(cat /scheme/netcfg/ifaces/eth0/addr/list)"
+        if exists -f /scheme/netcfg/ifaces/$iface/addr/list
+            echo "  $iface/addr/list = $(cat /scheme/netcfg/ifaces/$iface/addr/list)"
         else
-            echo "  eth0/addr/list: not found"
+            echo "  $iface/addr/list: not found"
         end
         echo ""
         echo "NET_TESTS_COMPLETE"
@@ -96,12 +133,12 @@ let
     echo ""
 
     # ── Test 1: Interface exists ────────────────────────────────
-    if exists -f /scheme/netcfg/ifaces/eth0/mac
-        let mac = $(cat /scheme/netcfg/ifaces/eth0/mac)
+    if exists -f /scheme/netcfg/ifaces/$iface/mac
+        let mac = $(cat /scheme/netcfg/ifaces/$iface/mac)
         echo "NET_TEST:iface-exists:PASS"
         echo "  MAC: $mac"
     else
-        echo "NET_TEST:iface-exists:FAIL:no-eth0-mac"
+        echo "NET_TEST:iface-exists:FAIL:no-mac"
     end
 
     # ── Test 2: IP address is valid ─────────────────────────────
@@ -132,7 +169,7 @@ let
 
     # ── Test 5: ifconfig shows interface ────────────────────────
     if exists -f /bin/ifconfig
-        let ifconfig_out = $(ifconfig eth0)
+        let ifconfig_out = $(ifconfig $iface)
         if not test $ifconfig_out = ""
             echo "NET_TEST:ifconfig:PASS"
             echo "  $ifconfig_out"
