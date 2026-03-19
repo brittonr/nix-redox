@@ -39,12 +39,40 @@ let
     let CACHE_URL = "https://cache.nixos.org"
     let TEST_PATH = "${testStorePath}"
 
-    # ── Wait for DHCP ──────────────────────────────────────────
+    # ── Discover first interface + wait for DHCP ─────────────────
+    # Redox uses PCI-path interface names (e.g. pci-0000-00-04.0_e1000).
+    let iface = ""
+    let disc_attempts = 0
+    while test $disc_attempts -lt 600
+        let candidates = $(ls /scheme/netcfg/ifaces/ ^> /dev/null)
+        if not test $candidates = ""
+            for name in @split(candidates)
+                if not test $name = "lo"
+                    let iface = $name
+                    break
+                end
+            end
+            if not test $iface = ""
+                break
+            end
+        end
+        cat /scheme/sys/uname > /dev/null
+        cat /scheme/sys/uname > /dev/null
+        cat /scheme/sys/uname > /dev/null
+        let disc_attempts += 1
+    end
+
+    if test $iface = ""
+        echo "FUNC_TEST:https-dhcp:FAIL:no-interface-found"
+        echo "FUNC_TESTS_COMPLETE"
+        exit 0
+    end
+
     let dhcp_ok = 0
     let attempts = 0
     while test $attempts -lt 3000
-        if exists -f /scheme/netcfg/ifaces/eth0/addr/list
-            let content = $(cat /scheme/netcfg/ifaces/eth0/addr/list)
+        if exists -f /scheme/netcfg/ifaces/$iface/addr/list
+            let content = $(cat /scheme/netcfg/ifaces/$iface/addr/list)
             if not test $content = "" && not test $content = "Not configured"
                 let dhcp_ok = 1
                 break
@@ -64,7 +92,7 @@ let
         exit 0
     end
     echo "FUNC_TEST:https-dhcp:PASS"
-    echo "  DHCP complete after $attempts polls"
+    echo "  Interface: $iface — DHCP complete after $attempts polls"
 
     # ── Test: HTTPS narinfo fetch from cache.nixos.org ─────────
     # snix path-info fetches the narinfo over HTTPS, parses it, and

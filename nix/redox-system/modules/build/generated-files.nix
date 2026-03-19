@@ -128,7 +128,7 @@ let
     (cfg.networkingEnabled && (inputs.networking.mode == "dhcp" || inputs.networking.mode == "auto"))
     {
       "bin/dhcpd-quiet" = {
-        text = "#!/bin/ion\n/bin/dhcpd -v eth0 &> /var/log/dhcpd.log";
+        text = "#!/bin/ion\n/bin/netcfg-setup dhcpd &> /var/log/dhcpd.log";
         mode = "0755";
       };
     }
