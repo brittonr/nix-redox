@@ -74,6 +74,9 @@ adios:
     activation = {
       path = "/activation";
     };
+    system = {
+      path = "/system";
+    };
   };
 
   impl =

@@ -16,6 +16,11 @@ let
 
   # ===== NEW MODULE OPTIONS =====
 
+  # /system — system identity and version
+  systemName = inputs.system.name;
+  systemVersion = inputs.system.version;
+  systemTarget = inputs.system.target;
+
   # /time — adios validates types and applies defaults from the module
   hostname = inputs.time.hostname;
   timezone = inputs.time.timezone;
@@ -33,6 +38,9 @@ let
   initfsPrompt = inputs.boot.initfsPrompt;
   rustBacktrace = inputs.boot.rustBacktrace;
   bootExtraEssentialPackages = inputs.boot.essentialPackages;
+  bootBanner = inputs.boot.banner;
+  initfsExcludeDaemons = inputs.boot.initfsExcludeDaemons;
+  initfsScriptOverrides = inputs.boot.initfsScripts;
 
   # /security
   # Scheme lists for per-user login namespaces.
@@ -56,6 +64,7 @@ let
   # /graphics (forwarded for init-scripts / generated-files)
   virtualTerminal = inputs.graphics.virtualTerminal;
   graphicsDisplay = inputs.graphics.display;
+  graphicsLoginCommand = inputs.graphics.loginCommand;
 
   # /networking
   defaultNetmask = inputs.networking.defaultNetmask;
@@ -65,6 +74,7 @@ let
   motd = inputs.environment.motd;
   extraShells = inputs.environment.shells;
   extraSelfHostingPackages = inputs.environment.selfHostingPackages;
+  extraLdLibraryPath = inputs.environment.ldLibraryPath;
 
   # /power
   acpiEnabled = inputs.power.acpiEnable;
@@ -113,7 +123,10 @@ let
       "usbhidd"
     ]);
 
-  allDaemons = lib.unique (coreDaemons ++ initfsDaemons ++ inputs.boot.initfsExtraBinaries);
+  allDaemons = lib.unique (
+    builtins.filter (d: !(builtins.elem d initfsExcludeDaemons))
+      (coreDaemons ++ initfsDaemons ++ inputs.boot.initfsExtraBinaries)
+  );
 
   # ===== STORE-BASED PACKAGE MANAGEMENT =====
   # Inspired by NixOS's /run/current-system/sw model.
@@ -325,6 +338,9 @@ let
 in
 {
   inherit
+    systemName
+    systemVersion
+    systemTarget
     fullSchemes
     restrictedSchemes
     graphicsEnabled
@@ -335,6 +351,9 @@ in
     initfsSizeMB
     initfsPrompt
     rustBacktrace
+    bootBanner
+    initfsExcludeDaemons
+    initfsScriptOverrides
     hostname
     timezone
     ntpEnabled
@@ -355,10 +374,12 @@ in
     cargoConfig
     virtualTerminal
     graphicsDisplay
+    graphicsLoginCommand
     defaultNetmask
     extraHosts
     motd
     extraShells
+    extraLdLibraryPath
     acpiEnabled
     powerAction
     rebootOnPanic

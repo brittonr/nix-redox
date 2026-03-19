@@ -99,6 +99,25 @@ in
         Only effective when kernelSyscallDebug is true.
       '';
     };
+    banner = {
+      type = t.string;
+      default = ''
+        ==========================================
+          Redox OS Boot Complete!
+        ==========================================
+      '';
+      description = "Banner text displayed on serial console after boot completes";
+    };
+    initfsExcludeDaemons = {
+      type = t.listOf t.string;
+      default = [ ];
+      description = "Daemons to exclude from the default initfs set (e.g. [\"rtcd\" \"hwd\"] for minimal configs)";
+    };
+    initfsScripts = {
+      type = t.attrsOf t.string;
+      default = { };
+      description = "Override individual initfs init.d scripts by name (e.g. \"00_runtime\", \"90_exit_initfs\"). Content replaces the default script entirely.";
+    };
   };
 
   impl = { options }: options;

@@ -438,6 +438,57 @@ in
         touch $out
       '';
 
+  # Test: System identity module overrides
+  system-identity-override =
+    let
+      redoxSystemFactory = import ../redox-system { inherit lib; };
+      system = redoxSystemFactory.redoxSystem {
+        modules = [
+          ../redox-system/profiles/minimal.nix
+          {
+            "/system" = {
+              name = "myos";
+              version = "1.0.0";
+              target = "aarch64-unknown-redox";
+            };
+            "/boot" = {
+              banner = "MyOS Ready!";
+              initfsExcludeDaemons = [ "rtcd" ];
+            };
+            "/graphics" = {
+              loginCommand = "mylogin myterm";
+            };
+            "/environment" = {
+              ldLibraryPath = [ "/opt/mylibs" ];
+            };
+          }
+        ];
+        pkgs = mockPkgs.all;
+        hostPkgs = pkgs;
+      };
+      v = system.version;
+    in
+    pkgs.runCommand "test-eval-system-identity-override"
+      {
+        preferLocalBuild = true;
+        ver = v.redoxSystemVersion;
+        target = v.target;
+        profile = v.profile;
+      }
+      ''
+        set -euo pipefail
+        echo "Version: $ver"
+        echo "Target: $target"
+        echo "Profile: $profile"
+
+        [ "$ver" = "1.0.0" ] || { echo "FAIL: expected version 1.0.0, got $ver"; exit 1; }
+        [ "$target" = "aarch64-unknown-redox" ] || { echo "FAIL: expected aarch64 target, got $target"; exit 1; }
+        [ "$profile" = "myos" ] || { echo "FAIL: expected profile myos, got $profile"; exit 1; }
+
+        echo "✓ System identity overrides work"
+        touch $out
+      '';
+
   # Test: System checks derivation exists
   system-checks-exist = mkEvalTest {
     name = "system-checks-exist";
@@ -587,9 +638,13 @@ in
   # Test 17: All new modules together
   all-new-modules = mkEvalTest {
     name = "all-new-modules";
-    description = "Verifies all 5 new modules work together with existing modules";
+    description = "Verifies all modules work together with existing modules";
     modules = [
       {
+        "/system" = {
+          name = "test-os";
+          version = "2.0.0";
+        };
         "/time" = {
           hostname = "test-box";
           timezone = "Europe/Berlin";
