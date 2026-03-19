@@ -567,6 +567,106 @@ let
     member = "snix-redox";
   };
 
+  irohd = mkCrossPackage {
+    pname = "irohd";
+    src = ../../irohd;
+    plan = ../pkgs/userspace/irohd-build-plan.json;
+    member = "irohd";
+    extraCrateOverrides = {
+      # iroh-quinn-udp: Redox is cfg(unix) but relibc lacks IP_PKTINFO,
+      # IPV6_TCLASS, in6_pktinfo, etc. Route Redox to the fallback module
+      # for the platform impl, but keep the unix From<AsFd> conversion
+      # (tokio UdpSocket implements AsFd on Redox).
+      iroh-quinn-udp = _: {
+        postPatch = ''
+                    # Only redirect the platform MODULE selection (not the From impls).
+                    # The lib.rs has: #[cfg(unix)] #[path = "unix.rs"] mod imp;
+                    # Change that to exclude Redox from unix.rs, add Redox to fallback.
+                    sed -i 's|#\[cfg(unix)\]\n#\[path = "unix.rs"\]|#[cfg(all(unix, not(target_os = "redox")))]\n#[path = "unix.rs"]|' src/lib.rs
+                    # More robust: use python to do the targeted replacement
+                    ${pkgs.python3}/bin/python3 << 'PYEOF'
+          import re
+          with open("src/lib.rs", "r") as f:
+              content = f.read()
+          # Replace: #[cfg(unix)]\n#[path = "unix.rs"] -> exclude redox
+          content = content.replace(
+              '#[cfg(unix)]\n#[path = "unix.rs"]',
+              '#[cfg(all(unix, not(target_os = "redox")))]\n#[path = "unix.rs"]'
+          )
+          # Replace: #[cfg(not(any(wasm_browser, unix, windows)))] -> include redox
+          content = content.replace(
+              '#[cfg(not(any(wasm_browser, unix, windows)))]',
+              '#[cfg(any(target_os = "redox", not(any(wasm_browser, unix, windows))))]'
+          )
+          # Replace the cfg(any(unix, windows)) guard on cmsg module to exclude redox
+          content = content.replace(
+              '#[cfg(any(unix, windows))]',
+              '#[cfg(all(any(unix, windows), not(target_os = "redox")))]'
+          )
+          with open("src/lib.rs", "w") as f:
+              f.write(content)
+          PYEOF
+
+                    # Fix fallback.rs: socket2 on Redox lacks recv_from_vectored,
+                    # send_to returns Result<usize>, and as_socket needs type help.
+                    cp ${../pkgs/patches/iroh-quinn-udp-fallback-redox.rs} src/fallback.rs
+        '';
+      };
+      # netwatch: no Redox backend. Add netmon stub + platform stubs.
+      netwatch = _: {
+        postPatch = ''
+                    # 1. Netmon: add Redox stub backend
+                    cp ${../pkgs/patches/netwatch-redox.rs} src/netmon/redox.rs
+                    sed -i '/#\[cfg(target_os = "windows")\]/i\
+          #[cfg(target_os = "redox")]\
+          mod redox;' src/netmon.rs
+                    sed -i '/use super::windows as os;/a\
+          #[cfg(target_os = "redox")]\
+          use super::redox as os;' src/netmon/actor.rs
+
+                    # 2. Interfaces: add Redox default_route + get_default_gateway stubs
+                    # Insert after the windows import of default_route
+                    sed -i '/use self::windows::default_route;/a\
+          #[cfg(target_os = "redox")]\
+          async fn default_route() -> Option<DefaultRouteDetails> { None }' src/interfaces.rs
+
+                    # Add Redox variant for HomeRouter::get_default_gateway
+                    sed -i '/#\[cfg(any(target_os = "linux", target_os = "android", target_os = "windows"))\]/{
+          N
+          /fn get_default_gateway/i\
+              #[cfg(target_os = "redox")]\
+              fn get_default_gateway() -> Option<std::net::IpAddr> { None }
+          }' src/interfaces.rs
+        '';
+      };
+      # surge-ping: uses socket2::Type::RAW and raw ICMP sockets not in relibc.
+      # Stub it out — iroh uses it for latency probing but works fine without.
+      surge-ping = _: {
+        postPatch = ''
+          cp ${../pkgs/patches/surge-ping-redox-stub.rs} src/lib.rs
+        '';
+      };
+      # ring compiles C/asm — needs cross-CC pointing at relibc sysroot.
+      ring = _: {
+        CC_x86_64_unknown_redox = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
+        CFLAGS_x86_64_unknown_redox = builtins.concatStringsSep " " [
+          "--target=x86_64-unknown-redox"
+          "--sysroot=${modularPkgs.system.relibc}/${redoxTarget}"
+          "-isystem ${modularPkgs.system.relibc}/${redoxTarget}/include"
+        ];
+      };
+      # netdev 0.31 uses getifaddrs and libc IFF_* constants not in relibc,
+      # plus has type inference breakage with our nightly. Replace entire
+      # crate with stubs — Redox has no getifaddrs anyway, iroh works
+      # fine with empty interface lists (falls back to relay).
+      netdev = _: {
+        postPatch = ''
+          ${pkgs.python3}/bin/python3 ${../pkgs/patches/netdev-redox-patch.py}
+        '';
+      };
+    };
+  };
+
   # === Per-crate helix build (unit2nix) ===
   #
   # 191 crates, 11 workspace members. Only helix-term produces a binary (hx).
@@ -1198,6 +1298,7 @@ in
       zoxide
       dust
       snix
+      irohd
       tokei
       lsd
       shellharden

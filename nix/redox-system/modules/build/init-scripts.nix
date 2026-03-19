@@ -295,6 +295,21 @@ let
       };
     };
 
+  # --- iroh P2P networking ---
+  irohServices = lib.optionalAttrs (inputs.iroh.enable or false) {
+    irohd = {
+      description = "iroh P2P networking scheme daemon";
+      command = "/bin/irohd";
+      type = "nowait";
+      args = "";
+      wantedBy = "rootfs";
+      enable = true;
+      after = [ "smolnetd" ];
+      environment = { };
+      priority = 50;
+    };
+  };
+
   # ═══════════════════════════════════════════════════════════════════
   # Merge all service sources
   # ═══════════════════════════════════════════════════════════════════
@@ -310,7 +325,8 @@ let
     // httpdServices
     // exampledServices
     // graphicsServices
-    // snixServices;
+    // snixServices
+    // irohServices;
 
   profileServices = inputs.services.services;
 

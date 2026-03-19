@@ -630,6 +630,19 @@ let
   # User-declared etc files (environment.etc) — applied LAST so they override built-ins.
   # Like NixOS environment.etc: keys are paths relative to / (e.g. "etc/motd").
   # Each entry has text or source content and optional mode (default: 0644).
+  # /iroh: P2P networking config
+  // (lib.optionalAttrs cfg.irohEnabled {
+    "etc/iroh/peers.json" = {
+      text = builtins.toJSON (
+        builtins.listToAttrs (
+          map (p: { name = p.name; value = p.nodeId; })
+            (cfg.irohOpts.peers or [ ])
+        )
+      );
+      mode = "0644";
+    };
+  })
+
   // (lib.mapAttrs (
     name: entry:
     let

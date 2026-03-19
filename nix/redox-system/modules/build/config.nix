@@ -169,6 +169,7 @@ let
     ++ (lib.optional (networkingEnabled && pkgs ? netutils) pkgs.netutils)
     ++ (lib.optional (networkingEnabled && pkgs ? netcfg-setup) pkgs.netcfg-setup)
     ++ (lib.optional (pkgs ? snix) pkgs.snix)
+    ++ (lib.optional (irohEnabled && pkgs ? irohd) pkgs.irohd)
     ++ (lib.optionals graphicsEnabled (
       lib.optional (pkgs ? orbital) pkgs.orbital
       ++ lib.optional (pkgs ? orbdata) pkgs.orbdata
@@ -229,6 +230,9 @@ let
   exampledOpts = inputs.services.exampled;
   exampledEnabled = exampledOpts.enable;
 
+  irohEnabled = inputs.iroh.enable or false;
+  irohOpts = inputs.iroh;
+
   # Collect all directories
   homeDirectories = lib.filter (d: d != null) (
     lib.mapAttrsToList (name: user: if user.createHome or false then user.home else null)
@@ -271,6 +275,7 @@ let
     ++ (lib.optional httpdConfig.enable httpdConfig.rootDir)
     # Typed service module directories
     ++ (lib.optional sshEnabled "/etc/ssh")
+    ++ (lib.optional irohEnabled "/etc/iroh")
     ++ (lib.optional svcHttpdEnabled "/etc/httpd")
     ++ (lib.optional svcHttpdEnabled svcHttpdOpts.rootDir)
     # Activation scripts directory
@@ -425,5 +430,7 @@ in
     gettyEnabled
     exampledOpts
     exampledEnabled
+    irohOpts
+    irohEnabled
     ;
 }
