@@ -68,6 +68,14 @@ let
   # Shared filesystem defaults — driven by /virtualisation module options
   defaultSharedDir = vmConfig.sharedFsDir or "/tmp/redox-shared";
   defaultSharedTag = vmConfig.sharedFsTag or "shared";
+  sharedFsNumQueues = toString (vmConfig.sharedFsNumQueues or 1);
+  sharedFsQueueSize = toString (vmConfig.sharedFsQueueSize or 512);
+  virtiofsdCacheMode = vmConfig.virtiofsdCacheMode or "auto";
+
+  # Cloud Hypervisor platform configuration
+  pciSegments = toString (vmConfig.chPciSegments or 1);
+  mmio32ApertureWeight = toString (vmConfig.chMmio32ApertureWeight or 4);
+  memoryHotplugSizeMB = toString (vmConfig.chMemoryHotplugSizeMB or 2048);
 
   # Use network-optimized disk image if provided, otherwise fall back to default
   networkDiskImage = if diskImageNet != null then diskImageNet else diskImage;
@@ -263,8 +271,8 @@ in
       --disk "$DISK_OPTS" \
       --cpus boot="$CH_CPUS",topology=${cpuTopology} \
       --memory "$MEMORY_OPTS" \
-      --platform num_pci_segments=1 \
-      --pci-segment pci_segment=0,mmio32_aperture_weight=4 \
+      --platform num_pci_segments=${pciSegments} \
+      --pci-segment pci_segment=0,mmio32_aperture_weight=${mmio32ApertureWeight} \
       --serial tty \
       --console off \
       "$@"
@@ -401,8 +409,8 @@ in
       --disk "$DISK_OPTS" \
       --cpus boot="$CH_CPUS",topology=${cpuTopology} \
       --memory "$MEMORY_OPTS" \
-      --platform num_pci_segments=1 \
-      --pci-segment pci_segment=0,mmio32_aperture_weight=4 \
+      --platform num_pci_segments=${pciSegments} \
+      --pci-segment pci_segment=0,mmio32_aperture_weight=${mmio32ApertureWeight} \
       --net tap="$TAP_NAME",mac="$GUEST_MAC",num_queues="$CH_NET_QUEUES",queue_size="$CH_NET_QUEUE_SIZE" \
       --serial tty \
       --console off \
@@ -480,7 +488,7 @@ in
       --shared-dir="$SHARED_DIR" \
       --sandbox=none \
       --announce-submounts \
-      --cache=auto \
+      --cache=${virtiofsdCacheMode} \
       --log-level=info &
     VIRTIOFSD_PID=$!
 
@@ -530,9 +538,9 @@ in
       --disk "$DISK_OPTS" \
       --cpus boot="$CH_CPUS",topology=${cpuTopology} \
       --memory "$MEMORY_OPTS" \
-      --platform num_pci_segments=1 \
-      --pci-segment pci_segment=0,mmio32_aperture_weight=4 \
-      --fs tag="$FS_TAG",socket="$VIRTIOFSD_SOCKET",num_queues=1,queue_size=512 \
+      --platform num_pci_segments=${pciSegments} \
+      --pci-segment pci_segment=0,mmio32_aperture_weight=${mmio32ApertureWeight} \
+      --fs tag="$FS_TAG",socket="$VIRTIOFSD_SOCKET",num_queues=${sharedFsNumQueues},queue_size=${sharedFsQueueSize} \
       --serial tty \
       --console off \
       "$@"
@@ -578,9 +586,9 @@ in
     fi
 
     # Build memory options with hotplug support for development
-    MEMORY_OPTS="size=$CH_MEMORY,hotplug_method=virtio-mem,hotplug_size=2048M"
+    MEMORY_OPTS="size=$CH_MEMORY,hotplug_method=virtio-mem,hotplug_size=${memoryHotplugSizeMB}M"
     if [ -n "$CH_HUGEPAGES" ]; then
-      MEMORY_OPTS="size=$CH_MEMORY,hugepages=on,hotplug_method=virtio-mem,hotplug_size=2048M"
+      MEMORY_OPTS="size=$CH_MEMORY,hugepages=on,hotplug_method=virtio-mem,hotplug_size=${memoryHotplugSizeMB}M"
     fi
 
     echo "Starting Redox OS with Cloud Hypervisor (development mode)..."
@@ -591,7 +599,7 @@ in
     echo ""
     echo "Configuration:"
     echo "  CPUs: $CH_CPUS (topology: ${cpuTopology})"
-    echo "  Memory: $CH_MEMORY + 2048M hotplug''${CH_HUGEPAGES:+ (hugepages enabled)}"
+    echo "  Memory: $CH_MEMORY + ${memoryHotplugSizeMB}M hotplug''${CH_HUGEPAGES:+ (hugepages enabled)}"
     echo "  Direct I/O: $CH_DIRECT_IO"
     echo ""
     echo "Requirements:"
@@ -624,8 +632,8 @@ in
       --disk "$DISK_OPTS" \
       --cpus boot="$CH_CPUS",topology=${cpuTopology} \
       --memory "$MEMORY_OPTS" \
-      --platform num_pci_segments=1 \
-      --pci-segment pci_segment=0,mmio32_aperture_weight=4 \
+      --platform num_pci_segments=${pciSegments} \
+      --pci-segment pci_segment=0,mmio32_aperture_weight=${mmio32ApertureWeight} \
       --api-socket path="$CH_API_SOCKET" \
       --serial tty \
       --console off \

@@ -63,7 +63,7 @@ in
     # Cloud Hypervisor specific
     hugepages = {
       type = t.bool;
-      default = false;
+      default = true;
       description = "Use hugepages for guest memory (Cloud Hypervisor)";
     };
     directIO = {
@@ -90,8 +90,8 @@ in
         "e1000"
         "virtio-net-pci"
       ];
-      default = "e1000";
-      description = "QEMU NIC device model (e1000 for broad compatibility, virtio-net-pci for performance)";
+      default = "virtio-net-pci";
+      description = "QEMU NIC device model (virtio-net-pci for performance, e1000 for broad compatibility)";
     };
     qemuHostSshPort = {
       type = t.int;
@@ -179,12 +179,53 @@ in
       default = "shared";
       description = "Tag name for the virtio-fs mount (guest sees /scheme/<tag>)";
     };
+    sharedFsNumQueues = {
+      type = t.int;
+      default = 1;
+      description = "Number of virtio-fs queues for Cloud Hypervisor shared filesystem";
+    };
+    sharedFsQueueSize = {
+      type = t.int;
+      default = 512;
+      description = "Size of each virtio-fs queue for Cloud Hypervisor shared filesystem";
+    };
+    virtiofsdCacheMode = {
+      type = t.enum "VirtiofsdCacheMode" [
+        "auto"
+        "always"
+        "never"
+      ];
+      default = "auto";
+      description = "virtiofsd cache policy (auto=metadata+content, always=aggressive, never=no caching)";
+    };
+
+    # Cloud Hypervisor platform
+    chPciSegments = {
+      type = t.int;
+      default = 1;
+      description = "Number of PCI segments for Cloud Hypervisor (--platform num_pci_segments)";
+    };
+    chMmio32ApertureWeight = {
+      type = t.int;
+      default = 4;
+      description = "32-bit MMIO aperture weight for Cloud Hypervisor PCI segment 0";
+    };
+    chMemoryHotplugSizeMB = {
+      type = t.int;
+      default = 2048;
+      description = "Memory hotplug pool size in megabytes for Cloud Hypervisor dev mode";
+    };
 
     # QEMU specific
     qemuMachineType = {
       type = t.string;
       default = "pc";
       description = "QEMU machine type (-M flag). Use 'pc' for i440FX or 'q35' for ICH9/PCIe";
+    };
+    qemuExpectTimeout = {
+      type = t.int;
+      default = 120;
+      description = "Expect timeout (seconds) for QEMU graphical mode resolution auto-selection";
     };
   };
 

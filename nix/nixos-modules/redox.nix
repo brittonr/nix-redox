@@ -88,6 +88,48 @@ in
         default = "172.16.0.0/24";
         description = "Network subnet";
       };
+
+      netmask = lib.mkOption {
+        type = lib.types.int;
+        default = 24;
+        description = "Network prefix length (CIDR notation)";
+      };
+
+      guestMac = lib.mkOption {
+        type = lib.types.str;
+        default = "52:54:00:12:34:56";
+        description = "Guest MAC address for TAP networking";
+      };
+
+      netQueues = lib.mkOption {
+        type = lib.types.int;
+        default = 2;
+        description = "Number of virtio-net queues (2 = 1 RX + 1 TX)";
+      };
+
+      netQueueSize = lib.mkOption {
+        type = lib.types.int;
+        default = 256;
+        description = "Size of each virtio-net queue";
+      };
+    };
+
+    cpuTopology = lib.mkOption {
+      type = lib.types.str;
+      default = "1:2:1:2";
+      description = "CPU topology for Cloud Hypervisor (threads_per_core:cores_per_die:dies_per_package:packages)";
+    };
+
+    pciSegments = lib.mkOption {
+      type = lib.types.int;
+      default = 1;
+      description = "Number of PCI segments for Cloud Hypervisor";
+    };
+
+    mmio32ApertureWeight = lib.mkOption {
+      type = lib.types.int;
+      default = 4;
+      description = "32-bit MMIO aperture weight for Cloud Hypervisor PCI segment 0";
     };
 
     stateDir = lib.mkOption {
@@ -130,7 +172,7 @@ in
           ipv4.addresses = [
             {
               address = vmCfg.networking.hostAddress;
-              prefixLength = 24;
+              prefixLength = vmCfg.networking.netmask;
             }
           ];
         };
@@ -179,16 +221,16 @@ in
             ExecStart =
               if vmCfg.vmm == "cloud-hypervisor" then
                 let
-                  netArgs = lib.optionalString vmCfg.networking.enable "--net tap=${vmCfg.networking.tapInterface},mac=52:54:00:12:34:56,num_queues=2,queue_size=256";
+                  netArgs = lib.optionalString vmCfg.networking.enable "--net tap=${vmCfg.networking.tapInterface},mac=${vmCfg.networking.guestMac},num_queues=${toString vmCfg.networking.netQueues},queue_size=${toString vmCfg.networking.netQueueSize}";
                 in
                 lib.concatStringsSep " " [
                   "${cloudHypervisor}/bin/cloud-hypervisor"
                   "--firmware ${firmware}/FV/CLOUDHV.fd"
                   "--disk path=${vmCfg.stateDir}/redox.img"
-                  "--cpus boot=${toString vmCfg.cpus},topology=1:2:1:2"
+                  "--cpus boot=${toString vmCfg.cpus},topology=${vmCfg.cpuTopology}"
                   "--memory size=${toString vmCfg.memory}M"
-                  "--platform num_pci_segments=1"
-                  "--pci-segment pci_segment=0,mmio32_aperture_weight=4"
+                  "--platform num_pci_segments=${toString vmCfg.pciSegments}"
+                  "--pci-segment pci_segment=0,mmio32_aperture_weight=${toString vmCfg.mmio32ApertureWeight}"
                   "--serial file=${vmCfg.stateDir}/serial.log"
                   "--console off"
                   "--api-socket path=/run/redox-vm/api.sock"
