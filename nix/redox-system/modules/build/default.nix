@@ -250,6 +250,13 @@ adios:
         guestMac = inputs.virtualisation.guestMac;
         sharedFsDir = inputs.virtualisation.sharedFsDir;
         sharedFsTag = inputs.virtualisation.sharedFsTag;
+        sharedFsNumQueues = inputs.virtualisation.sharedFsNumQueues;
+        sharedFsQueueSize = inputs.virtualisation.sharedFsQueueSize;
+        virtiofsdCacheMode = inputs.virtualisation.virtiofsdCacheMode;
+        chPciSegments = inputs.virtualisation.chPciSegments;
+        chMmio32ApertureWeight = inputs.virtualisation.chMmio32ApertureWeight;
+        chMemoryHotplugSizeMB = inputs.virtualisation.chMemoryHotplugSizeMB;
+        qemuExpectTimeout = inputs.virtualisation.qemuExpectTimeout;
       };
     };
 }

@@ -20,6 +20,7 @@ let
   machineType = vmConfig.qemuMachineType or "pc";
   defaultHostSshPort = toString (vmConfig.qemuHostSshPort or 8022);
   defaultHostHttpPort = toString (vmConfig.qemuHostHttpPort or 8080);
+  expectTimeout = toString (vmConfig.qemuExpectTimeout or 120);
 
   # Shared bash helpers
   portFinder = ''
@@ -91,7 +92,7 @@ in
 
     ${pkgs.expect}/bin/expect -c "
       log_file -a $LOG_FILE
-      set timeout 120
+      set timeout ${expectTimeout}
 
       spawn ${pkgs.qemu}/bin/qemu-system-x86_64 \
         ${commonQemuArgs} \
@@ -117,7 +118,7 @@ in
     "
 
     echo ""
-    echo "Network: e1000 with user-mode NAT (ports: $SSH_PORT->22, $HTTP_PORT->80)"
+    echo "Network: ${nicModel} with user-mode NAT (ports: $SSH_PORT->22, $HTTP_PORT->80)"
     echo "QEMU has exited. Serial log saved to: $LOG_FILE"
     echo "Displaying last 50 lines of log:"
     echo "----------------------------------------"

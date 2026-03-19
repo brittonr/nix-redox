@@ -803,6 +803,13 @@ in
         guestMac = vm.guestMac;
         sharedFsDir = vm.sharedFsDir;
         sharedFsTag = vm.sharedFsTag;
+        sharedFsNumQueues = toString vm.sharedFsNumQueues;
+        sharedFsQueueSize = toString vm.sharedFsQueueSize;
+        virtiofsdCacheMode = vm.virtiofsdCacheMode;
+        chPciSegments = toString vm.chPciSegments;
+        chMmio32ApertureWeight = toString vm.chMmio32ApertureWeight;
+        chMemoryHotplugSizeMB = toString vm.chMemoryHotplugSizeMB;
+        qemuExpectTimeout = toString vm.qemuExpectTimeout;
       }
       ''
         set -euo pipefail
@@ -811,7 +818,7 @@ in
         [ "$memorySize" = "2048" ] || { echo "FAIL: expected memorySize=2048, got $memorySize"; exit 1; }
         [ "$graphics" = "false" ] || { echo "FAIL: expected graphics=false, got $graphics"; exit 1; }
         [ "$tapNetworking" = "false" ] || { echo "FAIL: expected tapNetworking=false, got $tapNetworking"; exit 1; }
-        [ "$qemuNicModel" = "e1000" ] || { echo "FAIL: expected qemuNicModel=e1000, got $qemuNicModel"; exit 1; }
+        [ "$qemuNicModel" = "virtio-net-pci" ] || { echo "FAIL: expected qemuNicModel=virtio-net-pci, got $qemuNicModel"; exit 1; }
         [ "$qemuMachineType" = "pc" ] || { echo "FAIL: expected qemuMachineType=pc, got $qemuMachineType"; exit 1; }
         [ "$qemuHostSshPort" = "8022" ] || { echo "FAIL: expected qemuHostSshPort=8022, got $qemuHostSshPort"; exit 1; }
         [ "$qemuHostHttpPort" = "8080" ] || { echo "FAIL: expected qemuHostHttpPort=8080, got $qemuHostHttpPort"; exit 1; }
@@ -828,7 +835,14 @@ in
         [ "$guestMac" = "52:54:00:12:34:56" ] || { echo "FAIL: expected guestMac=52:54:00:12:34:56, got $guestMac"; exit 1; }
         [ "$sharedFsDir" = "/tmp/redox-shared" ] || { echo "FAIL: expected sharedFsDir=/tmp/redox-shared, got $sharedFsDir"; exit 1; }
         [ "$sharedFsTag" = "shared" ] || { echo "FAIL: expected sharedFsTag=shared, got $sharedFsTag"; exit 1; }
-        echo "✓ vmConfig defaults correct (all options including TAP, CH tuning, shared FS)"
+        [ "$sharedFsNumQueues" = "1" ] || { echo "FAIL: expected sharedFsNumQueues=1, got $sharedFsNumQueues"; exit 1; }
+        [ "$sharedFsQueueSize" = "512" ] || { echo "FAIL: expected sharedFsQueueSize=512, got $sharedFsQueueSize"; exit 1; }
+        [ "$virtiofsdCacheMode" = "auto" ] || { echo "FAIL: expected virtiofsdCacheMode=auto, got $virtiofsdCacheMode"; exit 1; }
+        [ "$chPciSegments" = "1" ] || { echo "FAIL: expected chPciSegments=1, got $chPciSegments"; exit 1; }
+        [ "$chMmio32ApertureWeight" = "4" ] || { echo "FAIL: expected chMmio32ApertureWeight=4, got $chMmio32ApertureWeight"; exit 1; }
+        [ "$chMemoryHotplugSizeMB" = "2048" ] || { echo "FAIL: expected chMemoryHotplugSizeMB=2048, got $chMemoryHotplugSizeMB"; exit 1; }
+        [ "$qemuExpectTimeout" = "120" ] || { echo "FAIL: expected qemuExpectTimeout=120, got $qemuExpectTimeout"; exit 1; }
+        echo "✓ vmConfig defaults correct (all options including TAP, CH tuning, shared FS, platform, hotplug)"
         touch $out
       '';
 
