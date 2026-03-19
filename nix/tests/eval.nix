@@ -731,6 +731,11 @@ in
         memorySize = toString vm.memorySize;
         graphics = if vm.graphics then "true" else "false";
         tapNetworking = if vm.tapNetworking then "true" else "false";
+        qemuNicModel = vm.qemuNicModel;
+        qemuHostSshPort = toString vm.qemuHostSshPort;
+        qemuHostHttpPort = toString vm.qemuHostHttpPort;
+        cpuTopology = vm.cpuTopology;
+        chMinTimeout = toString vm.chMinTimeout;
       }
       ''
         set -euo pipefail
@@ -739,7 +744,12 @@ in
         [ "$memorySize" = "2048" ] || { echo "FAIL: expected memorySize=2048, got $memorySize"; exit 1; }
         [ "$graphics" = "false" ] || { echo "FAIL: expected graphics=false, got $graphics"; exit 1; }
         [ "$tapNetworking" = "false" ] || { echo "FAIL: expected tapNetworking=false, got $tapNetworking"; exit 1; }
-        echo "✓ vmConfig defaults correct"
+        [ "$qemuNicModel" = "e1000" ] || { echo "FAIL: expected qemuNicModel=e1000, got $qemuNicModel"; exit 1; }
+        [ "$qemuHostSshPort" = "8022" ] || { echo "FAIL: expected qemuHostSshPort=8022, got $qemuHostSshPort"; exit 1; }
+        [ "$qemuHostHttpPort" = "8080" ] || { echo "FAIL: expected qemuHostHttpPort=8080, got $qemuHostHttpPort"; exit 1; }
+        [ "$cpuTopology" = "1:2:1:2" ] || { echo "FAIL: expected cpuTopology=1:2:1:2, got $cpuTopology"; exit 1; }
+        [ "$chMinTimeout" = "180" ] || { echo "FAIL: expected chMinTimeout=180, got $chMinTimeout"; exit 1; }
+        echo "✓ vmConfig defaults correct (including new options)"
         touch $out
       '';
 

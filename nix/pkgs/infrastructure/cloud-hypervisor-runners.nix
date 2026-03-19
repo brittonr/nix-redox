@@ -51,9 +51,9 @@ let
 
   # Performance configuration — driven by /virtualisation module options
   # CPU topology: threads_per_core:cores_per_die:dies_per_package:packages
-  # 1:2:1:2 = 1 thread per core, 2 cores per die, 1 die per package, 2 packages = 4 vCPUs
-  # This presents to guest as 2 sockets with 2 cores each (common server topology)
-  cpuTopology = "1:2:1:2";
+  # Default 1:2:1:2 = 1 thread per core, 2 cores per die, 1 die per package, 2 packages = 4 vCPUs
+  # Presents to guest as 2 sockets with 2 cores each (common server topology)
+  cpuTopology = vmConfig.cpuTopology or "1:2:1:2";
   defaultCpus = toString (vmConfig.cpus or 4);
   defaultMemory = "${toString (vmConfig.memorySize or 2048)}M";
 

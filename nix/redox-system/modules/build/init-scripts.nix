@@ -29,7 +29,7 @@ let
         restart = false
       '';
 
-  startupContent = "#!/bin/sh\n" + (inputs.services.startupScriptText or "/bin/ion\n");
+  startupContent = "#!/bin/sh\n" + inputs.services.startupScriptText;
 
   # ═══════════════════════════════════════════════════════════════════
   # Module-derived service declarations
@@ -121,12 +121,12 @@ let
         priority = 50;
       };
     })
-    // (lib.optionalAttrs (inputs.networking.remoteShellEnable or false) {
+    // (lib.optionalAttrs inputs.networking.remoteShellEnable {
       remote-shell = {
         description = "Remote shell listener";
         command = "/bin/nc";
         type = "nowait";
-        args = "-l -e /bin/sh 0.0.0.0:${toString (inputs.networking.remoteShellPort or 8023)}";
+        args = "-l -e /bin/sh 0.0.0.0:${toString inputs.networking.remoteShellPort}";
         wantedBy = "rootfs";
         enable = true;
         after = [ "smolnetd" ];
@@ -240,7 +240,7 @@ let
         priority = 50;
       };
     }
-    // lib.optionalAttrs (inputs.hardware.audioEnable or false) {
+    // lib.optionalAttrs inputs.hardware.audioEnable {
       audiod = {
         description = "Audio daemon";
         command = "audiod";
@@ -258,12 +258,12 @@ let
   # --- snix scheme daemons ---
   snixServices =
     let
-      storedEnabled = inputs.snix.stored.enable or false;
-      profiledEnabled = inputs.snix.profiled.enable or false;
-      cachePath = inputs.snix.stored.cachePath or "/nix/cache";
-      storeDir = inputs.snix.stored.storeDir or "/nix/store";
-      profilesDir = inputs.snix.profiled.profilesDir or "/nix/var/snix/profiles";
-      profiledStoreDir = inputs.snix.profiled.storeDir or "/nix/store";
+      storedEnabled = inputs.snix.stored.enable;
+      profiledEnabled = inputs.snix.profiled.enable;
+      cachePath = inputs.snix.stored.cachePath;
+      storeDir = inputs.snix.stored.storeDir;
+      profilesDir = inputs.snix.profiled.profilesDir;
+      profiledStoreDir = inputs.snix.profiled.storeDir;
     in
     lib.optionalAttrs storedEnabled {
       stored = {
@@ -309,7 +309,7 @@ let
     // graphicsServices
     // snixServices;
 
-  profileServices = inputs.services.services or { };
+  profileServices = inputs.services.services;
 
   # Filter out disabled services
   allDeclaredServices =
@@ -480,7 +480,7 @@ let
 
   rawInitScripts =
     let
-      profileScripts = inputs.services.initScripts or { };
+      profileScripts = inputs.services.initScripts;
       # Strip 00_base if any old profile still declares it — ipcd/ptyd
       # are structured services with explicit priority 10/11.
       cleaned = builtins.removeAttrs profileScripts [ "00_base" ];

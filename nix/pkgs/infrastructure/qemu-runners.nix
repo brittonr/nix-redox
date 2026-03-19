@@ -16,6 +16,9 @@
 let
   defaultMemory = toString (vmConfig.memorySize or 2048);
   defaultCpus = toString (vmConfig.cpus or 4);
+  nicModel = vmConfig.qemuNicModel or "e1000";
+  defaultHostSshPort = toString (vmConfig.qemuHostSshPort or 8022);
+  defaultHostHttpPort = toString (vmConfig.qemuHostHttpPort or 8080);
 
   # Shared bash helpers
   portFinder = ''
@@ -45,14 +48,14 @@ let
     -drive file=$IMAGE,format=raw,if=none,id=disk0 \
     -device virtio-blk-pci,drive=disk0 \
     -netdev user,id=net0,hostfwd=tcp::$SSH_PORT-:22,hostfwd=tcp::$HTTP_PORT-:80 \
-    -device e1000,netdev=net0'';
+    -device ${nicModel},netdev=net0'';
 
   # Common setup: port discovery, work dir, image copy
   commonSetup = ''
     ${portFinder}
 
-    SSH_PORT=$(find_available_port "''${REDOX_SSH_PORT:-8022}")
-    HTTP_PORT=$(find_available_port "''${REDOX_HTTP_PORT:-8080}")
+    SSH_PORT=$(find_available_port "''${REDOX_SSH_PORT:-${defaultHostSshPort}}")
+    HTTP_PORT=$(find_available_port "''${REDOX_HTTP_PORT:-${defaultHostHttpPort}}")
 
     WORK_DIR=$(mktemp -d)
     trap "rm -rf $WORK_DIR" EXIT

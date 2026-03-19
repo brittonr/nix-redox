@@ -291,6 +291,9 @@ in
       trackShell ? false,
       extraPolling ? "",
       customReport ? null,
+      # Minimum timeout floor for QEMU TCG fallback (no KVM).
+      # Pulled from virtualisation.chMinTimeout when available.
+      chMinTimeout ? 180,
     }:
     let
       hasTests = testPrefix != null;
@@ -340,8 +343,8 @@ in
         else
           echo "  Warning: /dev/kvm not available — falling back to QEMU TCG (slower)"
           MODE="qemu"
-          if [ "$TIMEOUT" -lt 180 ]; then
-            TIMEOUT=180
+          if [ "$TIMEOUT" -lt ${toString chMinTimeout} ]; then
+            TIMEOUT=${toString chMinTimeout}
           fi
         fi
       fi

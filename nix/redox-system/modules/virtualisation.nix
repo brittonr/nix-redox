@@ -85,10 +85,40 @@ in
     };
 
     # QEMU specific
+    qemuNicModel = {
+      type = t.enum "NicModel" [
+        "e1000"
+        "virtio-net-pci"
+      ];
+      default = "e1000";
+      description = "QEMU NIC device model (e1000 for broad compatibility, virtio-net-pci for performance)";
+    };
+    qemuHostSshPort = {
+      type = t.int;
+      default = 8022;
+      description = "Default host port forwarded to guest SSH (port 22) in QEMU user-mode networking";
+    };
+    qemuHostHttpPort = {
+      type = t.int;
+      default = 8080;
+      description = "Default host port forwarded to guest HTTP (port 80) in QEMU user-mode networking";
+    };
     qemuExtraArgs = {
       type = t.listOf t.string;
       default = [ ];
       description = "Extra command-line arguments for QEMU";
+    };
+
+    # Cloud Hypervisor specific
+    cpuTopology = {
+      type = t.string;
+      default = "1:2:1:2";
+      description = "CPU topology for Cloud Hypervisor (threads_per_core:cores_per_die:dies_per_package:packages). Default: 2 sockets with 2 cores each = 4 vCPUs";
+    };
+    chMinTimeout = {
+      type = t.int;
+      default = 180;
+      description = "Minimum timeout floor (seconds) applied when auto-selecting Cloud Hypervisor for tests";
     };
   };
 
