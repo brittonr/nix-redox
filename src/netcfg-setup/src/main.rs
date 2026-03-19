@@ -65,20 +65,67 @@ fn read_config(path: &str) -> Result<String, io::Error> {
     fs::read_to_string(path).map(|s| s.trim().to_string())
 }
 
+// Read the DNS server from /etc/net/dns (first line).
+// Falls back to "1.1.1.1" if the file is missing or empty.
+fn read_dns_config() -> String {
+    read_config("/etc/net/dns")
+        .ok()
+        .and_then(|s| s.lines().next().map(|l| l.trim().to_string()))
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "1.1.1.1".to_string())
+}
+
+// Read the netmask for an interface from /etc/net/{iface}/netmask.
+// Falls back to "24" if the file is missing or empty.
+// Accepts either CIDR prefix ("24") or dotted decimal ("255.255.255.0")
+// and converts dotted decimal to CIDR prefix for smolnetd.
+fn read_netmask_config(iface: &str) -> String {
+    let raw = read_config(&format!("/etc/net/{}/netmask", iface))
+        .ok()
+        .filter(|s| !s.is_empty())
+        .unwrap_or_else(|| "24".to_string());
+
+    // Convert dotted decimal to CIDR if needed
+    if raw.contains('.') {
+        dotted_to_cidr(&raw).unwrap_or_else(|| "24".to_string())
+    } else {
+        raw
+    }
+}
+
+// Convert dotted-decimal netmask (e.g. "255.255.255.0") to CIDR prefix (e.g. "24").
+fn dotted_to_cidr(mask: &str) -> Option<String> {
+    let octets: Vec<u8> = mask
+        .split('.')
+        .filter_map(|s| s.parse().ok())
+        .collect();
+    if octets.len() != 4 {
+        return None;
+    }
+    let bits: u32 = ((octets[0] as u32) << 24)
+        | ((octets[1] as u32) << 16)
+        | ((octets[2] as u32) << 8)
+        | (octets[3] as u32);
+    Some(bits.count_ones().to_string())
+}
+
 // Helper function to apply static network configuration
-// Performs best-effort writes (continues even if one fails)
-fn apply_static_config(iface: &str, address: &str, gateway: &str, dns: &str) {
+// Reads DNS from /etc/net/dns and netmask from /etc/net/{iface}/netmask.
+// Performs best-effort writes (continues even if one fails).
+fn apply_static_config(iface: &str, address: &str, gateway: &str) {
     let addr_set_path = format!("/scheme/netcfg/ifaces/{}/addr/set", iface);
     let route_add_path = "/scheme/netcfg/route/add";
     let nameserver_path = "/scheme/netcfg/resolv/nameserver";
 
-    let addr_content = format!("{}/24", address);
+    let prefix = read_netmask_config(iface);
+    let dns = read_dns_config();
+    let addr_content = format!("{}/{}", address, prefix);
     let route_content = format!("default via {}", gateway);
 
     // Best-effort writes - continue even if one fails
     let _ = write_scheme(&addr_set_path, &addr_content);
     let _ = write_scheme(route_add_path, &route_content);
-    let _ = write_scheme(nameserver_path, dns);
+    let _ = write_scheme(nameserver_path, &dns);
 }
 
 // Subcommand: auto
@@ -141,7 +188,7 @@ fn cmd_auto() -> i32 {
         }
     };
 
-    apply_static_config(&iface, &ip, &gateway, "1.1.1.1");
+    apply_static_config(&iface, &ip, &gateway);
     eprintln!("netcfg-auto: Static config applied on {} ({})", iface, ip);
 
     0
@@ -158,7 +205,7 @@ fn cmd_static(iface: &str, address: &str, gateway: &str) -> i32 {
         return 1;
     }
 
-    apply_static_config(iface, address, gateway, "1.1.1.1");
+    apply_static_config(iface, address, gateway);
     eprintln!("netcfg-static: Network ready ({})", address);
 
     0
@@ -196,8 +243,8 @@ fn cmd_cloud() -> i32 {
         }
     };
 
-    apply_static_config(&iface, &ip, &gateway, "1.1.1.1");
-    eprintln!("Network configured on {}: {}/24 via {}", iface, ip, gateway);
+    apply_static_config(&iface, &ip, &gateway);
+    eprintln!("Network configured on {}: {} via {}", iface, ip, gateway);
 
     0
 }
@@ -237,7 +284,7 @@ fn cmd_static_auto(address: &str, gateway: &str) -> i32 {
     };
     eprintln!("netcfg-static-auto: found interface '{}'", iface);
 
-    apply_static_config(&iface, address, gateway, "1.1.1.1");
+    apply_static_config(&iface, address, gateway);
     eprintln!("netcfg-static-auto: Network ready on {} ({})", iface, address);
 
     0
