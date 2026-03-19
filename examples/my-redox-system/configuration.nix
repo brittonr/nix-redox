@@ -4,21 +4,23 @@
 # should look like and `nix run` builds and boots it.
 #
 # Available modules:
-#   /environment   — packages, shell aliases, env vars, etc files
-#   /networking    — mode (auto/dhcp/static/none), DNS, interfaces
-#   /graphics      — Orbital desktop enable, resolution
-#   /hardware      — storage/network/graphics drivers, audio
-#   /users         — user accounts and groups
-#   /services      — typed services (ssh, httpd, getty), init scripts
-#   /activation    — scripts that run on system switch
-#   /security      — kernel scheme protection, passwords, setuid
-#   /time          — hostname, timezone
-#   /boot          — disk size, initfs size
-#   /power         — ACPI, power button action
-#   /logging       — log levels
-#   /programs      — editor configs (ion, helix)
-#   /filesystem    — extra dirs, symlinks
-#   /virtualisation — VMM backend, memory, CPUs
+#   /environment    — packages, shell aliases, env vars, etc files
+#   /networking     — mode (auto/dhcp/static/none), DNS, interfaces
+#   /graphics       — Orbital desktop enable, resolution
+#   /hardware       — storage/network/graphics drivers, audio, USB
+#   /users          — user accounts and groups
+#   /services       — typed services (ssh, httpd, getty), init scripts
+#   /activation     — scripts that run on system switch
+#   /security       — kernel scheme protection, passwords, setuid, namespaces
+#   /time           — hostname, timezone, NTP
+#   /boot           — disk size, initfs size, ESP label, kernel options
+#   /power          — ACPI, power button action, idle timeout
+#   /logging        — log levels, file logging, retention
+#   /programs       — editor configs (ion, helix, cargo)
+#   /filesystem     — extra dirs, symlinks, extra store paths
+#   /virtualisation — VMM backend, memory, CPUs, TAP networking, shared FS
+#   /system         — system name, version, target triple
+#   /snix           — store/profile scheme daemons, sandbox config
 
 { pkgs, lib }:
 
@@ -132,6 +134,11 @@ in
   "/virtualisation" = {
     memorySize = 2048;
     cpus = 4;
+    # qemuMachineType = "q35";    # QEMU machine type (default: "pc")
+    # tapInterface = "tap0";       # TAP interface for Cloud Hypervisor networking
+    # hostIp = "172.16.0.1";       # Host-side TAP IP
+    # guestIp = "172.16.0.2";      # Guest-side TAP IP
+    # sharedFsDir = "/tmp/redox-shared";  # Host dir for virtio-fs
   };
 
   # ── Disk ──

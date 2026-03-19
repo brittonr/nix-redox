@@ -35,15 +35,21 @@ After editing, `nix run` rebuilds and boots the new image.
 |---|---|
 | `/environment` | `systemPackages`, `shellAliases`, `variables`, `etc` (file injection) |
 | `/networking` | `enable`, `mode` (auto/dhcp/static), `dns`, `remoteShellEnable` |
-| `/graphics` | `enable`, `resolution` |
-| `/users` | User accounts with uid, gid, home, shell, password |
+| `/graphics` | `enable`, `resolution`, `virtualTerminal`, `loginCommand` |
+| `/users` | User accounts with uid, gid, home, shell, password, `createHome` |
 | `/services` | `ssh.enable`, `httpd.enable`, `getty`, custom daemons |
 | `/activation` | Scripts that run on system switch (with dependency ordering) |
-| `/security` | `requirePasswords`, `protectKernelSchemes` |
-| `/time` | `hostname`, `timezone` |
-| `/hardware` | `audioEnable`, `storageDrivers`, `networkDrivers` |
-| `/boot` | `diskSizeMB`, `initfsSizeMB` |
-| `/power` | `acpiEnabled`, `powerAction` |
+| `/security` | `requirePasswords`, `protectKernelSchemes`, `namespaceAccess` |
+| `/time` | `hostname`, `timezone`, `ntpEnable`, `ntpServers` |
+| `/hardware` | `audioEnable`, `storageDrivers`, `networkDrivers`, `extraPciDrivers` |
+| `/boot` | `diskSizeMB`, `espSizeMB`, `espLabel`, `initfsSizeMB`, `kernelSyscallDebug` |
+| `/power` | `acpiEnable`, `powerAction`, `idleAction`, `idleTimeoutMinutes` |
+| `/logging` | `level`, `kernelLogLevel`, `logToFile`, `maxLogSizeMB` |
+| `/programs` | `editor`, `ion.prompt`, `helix.{enable, theme}`, `cargo.buildJobs` |
+| `/virtualisation` | `memorySize`, `cpus`, `qemuMachineType`, `tapInterface`, `sharedFsDir` |
+| `/system` | `name`, `version`, `target` |
+| `/snix` | `stored.enable`, `profiled.enable`, `sandbox` |
+| `/filesystem` | `extraDirectories`, `devSymlinks`, `extraPaths` |
 
 ## Available packages
 
