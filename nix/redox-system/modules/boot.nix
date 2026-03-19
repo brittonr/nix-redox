@@ -55,6 +55,11 @@ in
       default = 200;
       description = "EFI System Partition size in megabytes";
     };
+    espLabel = {
+      type = t.string;
+      default = "EFI";
+      description = "FAT32 volume label for the EFI System Partition";
+    };
     initfsSizeMB = {
       type = t.int;
       default = 64;

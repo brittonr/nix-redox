@@ -19,6 +19,7 @@
   lib,
   diskImage,
   bootloader,
+  vmConfig ? { },
 }:
 
 let
@@ -28,6 +29,9 @@ vmTest.mkVmTest {
   name = "boot-test";
   title = "Redox OS Automated Boot Test";
   inherit diskImage bootloader;
+  memoryMB = vmConfig.memorySize or 1024;
+  cpus = vmConfig.cpus or 2;
   defaultTimeout = 90;
+  chMinTimeout = vmConfig.chMinTimeout or 180;
   trackShell = true;
 }

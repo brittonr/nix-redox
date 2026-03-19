@@ -120,6 +120,72 @@ in
       default = 180;
       description = "Minimum timeout floor (seconds) applied when auto-selecting Cloud Hypervisor for tests";
     };
+    chNetQueues = {
+      type = t.int;
+      default = 2;
+      description = "Number of virtio-net queues for Cloud Hypervisor (2 = 1 RX + 1 TX, multi-queue requires IFF_MULTI_QUEUE TAP)";
+    };
+    chNetQueueSize = {
+      type = t.int;
+      default = 256;
+      description = "Size of each virtio-net queue for Cloud Hypervisor";
+    };
+    chApiSocketPath = {
+      type = t.string;
+      default = "/tmp/cloud-hypervisor-redox.sock";
+      description = "Unix socket path for Cloud Hypervisor API (runtime control: pause/resume/snapshot)";
+    };
+
+    # TAP networking
+    tapInterface = {
+      type = t.string;
+      default = "tap0";
+      description = "TAP interface name for VM networking (Cloud Hypervisor TAP mode)";
+    };
+    hostIp = {
+      type = t.string;
+      default = "172.16.0.1";
+      description = "Host-side IP address on the TAP interface";
+    };
+    guestIp = {
+      type = t.string;
+      default = "172.16.0.2";
+      description = "Guest IP address (used for static network config in TAP mode)";
+    };
+    guestNetmask = {
+      type = t.string;
+      default = "24";
+      description = "Guest network mask (CIDR prefix length)";
+    };
+    guestSubnet = {
+      type = t.string;
+      default = "172.16.0.0/24";
+      description = "Subnet for TAP networking (used in NAT/masquerade rules)";
+    };
+    guestMac = {
+      type = t.string;
+      default = "52:54:00:12:34:56";
+      description = "Guest MAC address for TAP networking";
+    };
+
+    # Shared filesystem (virtio-fs)
+    sharedFsDir = {
+      type = t.string;
+      default = "/tmp/redox-shared";
+      description = "Host directory shared with the guest via virtio-fs";
+    };
+    sharedFsTag = {
+      type = t.string;
+      default = "shared";
+      description = "Tag name for the virtio-fs mount (guest sees /scheme/<tag>)";
+    };
+
+    # QEMU specific
+    qemuMachineType = {
+      type = t.string;
+      default = "pc";
+      description = "QEMU machine type (-M flag). Use 'pc' for i440FX or 'q35' for ICH9/PCIe";
+    };
   };
 
   impl = { options }: options;

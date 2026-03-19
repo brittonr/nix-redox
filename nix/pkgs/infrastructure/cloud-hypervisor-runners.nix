@@ -41,13 +41,13 @@ let
   cloudHypervisor = pkgs.cloud-hypervisor;
   cloudhvFirmware = pkgs.OVMF-cloud-hypervisor.fd;
 
-  # Network configuration
-  tapInterface = "tap0";
-  hostIp = "172.16.0.1";
-  guestIp = "172.16.0.2";
-  netmask = "24";
-  subnet = "172.16.0.0/24";
-  guestMac = "52:54:00:12:34:56";
+  # Network configuration — driven by /virtualisation module options
+  tapInterface = vmConfig.tapInterface or "tap0";
+  hostIp = vmConfig.hostIp or "172.16.0.1";
+  guestIp = vmConfig.guestIp or "172.16.0.2";
+  netmask = vmConfig.guestNetmask or "24";
+  subnet = vmConfig.guestSubnet or "172.16.0.0/24";
+  guestMac = vmConfig.guestMac or "52:54:00:12:34:56";
 
   # Performance configuration — driven by /virtualisation module options
   # CPU topology: threads_per_core:cores_per_die:dies_per_package:packages
@@ -59,11 +59,15 @@ let
 
   # Network queues: 2 = 1 RX + 1 TX (compatible with standard TAP interfaces)
   # Multi-queue (4+) requires TAP created with IFF_MULTI_QUEUE flag
-  netQueues = "2";
-  netQueueSize = "256";
+  netQueues = toString (vmConfig.chNetQueues or 2);
+  netQueueSize = toString (vmConfig.chNetQueueSize or 256);
 
   # Default API socket path for development mode
-  defaultApiSocket = "/tmp/cloud-hypervisor-redox.sock";
+  defaultApiSocket = vmConfig.chApiSocketPath or "/tmp/cloud-hypervisor-redox.sock";
+
+  # Shared filesystem defaults — driven by /virtualisation module options
+  defaultSharedDir = vmConfig.sharedFsDir or "/tmp/redox-shared";
+  defaultSharedTag = vmConfig.sharedFsTag or "shared";
 
   # Use network-optimized disk image if provided, otherwise fall back to default
   networkDiskImage = if diskImageNet != null then diskImageNet else diskImage;
@@ -416,9 +420,9 @@ in
     CH_MEMORY="''${CH_MEMORY:-${defaultMemory}}"
     CH_HUGEPAGES="''${CH_HUGEPAGES:-}"
     CH_DIRECT_IO="''${CH_DIRECT_IO:-on}"
-    SHARED_DIR="''${REDOX_SHARED_DIR:-/tmp/redox-shared}"
+    SHARED_DIR="''${REDOX_SHARED_DIR:-${defaultSharedDir}}"
     VIRTIOFSD_SOCKET="''${VIRTIOFSD_SOCKET:-/tmp/virtiofsd-redox.sock}"
-    FS_TAG="''${FS_TAG:-shared}"
+    FS_TAG="''${FS_TAG:-${defaultSharedTag}}"
 
     # Create shared directory
     mkdir -p "$SHARED_DIR"

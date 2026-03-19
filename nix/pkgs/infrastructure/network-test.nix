@@ -23,6 +23,7 @@
   lib,
   diskImage,
   bootloader,
+  vmConfig ? { },
 }:
 
 let
@@ -34,8 +35,9 @@ vmTest.mkVmTest {
   inherit diskImage bootloader;
   defaultTimeout = 120;
   defaultMode = "qemu";
-  memoryMB = 2048;
-  cpus = 4;
+  memoryMB = vmConfig.memorySize or 2048;
+  cpus = vmConfig.cpus or 4;
+  chMinTimeout = vmConfig.chMinTimeout or 180;
   testPrefix = "NET_TEST";
   qemuExtraArgs = "-netdev user,id=net0 -device e1000,netdev=net0";
 }

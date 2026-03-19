@@ -319,6 +319,10 @@ let
   # Disk sizing from other modules
   diskSizeMB = inputs.boot.diskSizeMB;
   espSizeMB = inputs.boot.espSizeMB;
+  espLabel = inputs.boot.espLabel;
+
+  # System target triple (for cargo config generation)
+  # Already bound above as systemTarget, re-exported for generated-files
 
   # Network interface resolution (for static config)
   firstIfaceName =
@@ -408,6 +412,7 @@ in
     hasBinaryCache
     diskSizeMB
     espSizeMB
+    espLabel
     firstIfaceName
     firstIface
     userEtcFiles
