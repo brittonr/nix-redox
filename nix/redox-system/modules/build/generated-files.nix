@@ -489,17 +489,22 @@ let
         #
         # Available options:
         #   hostname, timezone, packages,
-        #   networking.{enable, mode, dns},
-        #   graphics.{enable, resolution},
+        #   networking.{enable, mode, dns, defaultRouter, remoteShellEnable},
+        #   graphics.{enable, resolution, virtualTerminal, loginCommand},
         #   security.{protectKernelSchemes, requirePasswords, allowRemoteRoot},
-        #   logging.{level, kernelLevel, logToFile},
-        #   power.{acpiEnabled, powerAction, rebootOnPanic},
-        #   users.{name = { uid, gid, home, shell }},
-        #   programs.{editor},
+        #   logging.{level, kernelLevel, logToFile, logPath, maxLogSizeMB},
+        #   power.{acpiEnabled, powerAction, idleAction, idleTimeoutMinutes,
+        #          rebootOnPanic},
+        #   users.{name = { uid, gid, home, shell, password, createHome }},
+        #   programs.{editor, ion.{prompt, initExtra}, helix.{enable, theme},
+        #             cargo.{buildJobs, home}},
         #   services.ssh.{enable, port, permitRootLogin, listenAddress},
         #   services.httpd.{enable, port, rootDir},
         #   services.getty.{enable, device, extraArgs},
-        #   services.exampled.{enable, schemeName}
+        #   services.exampled.{enable, schemeName},
+        #   boot.{diskSizeMB, espSizeMB, espLabel, initfsSizeMB,
+        #         kernelSyscallDebug},
+        #   system.{name, version}
 
         {
           hostname = "${cfg.hostname}";
