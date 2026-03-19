@@ -313,6 +313,16 @@ let
     defaultTimeout = 1800; # graduated workspace tests up to 100 crates — 30 min max
   };
 
+  # Multi-user test: per-user namespaces, file ownership, sudo escalation
+  multiUserTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/multi-user-test.nix ];
+    inherit extraPkgs;
+  };
+  multiUserTest = mkFunctionalTest {
+    diskImage = multiUserTestSystem.diskImage;
+    inherit bootloader;
+  };
+
   # Scheme daemon test: stored + profiled daemons serve store: and profile: schemes
   schemeDaemonTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/scheme-daemon-test.nix ];
@@ -501,6 +511,9 @@ in
 
     redox-parallel-build-test = parallelBuildTestSystem.diskImage;
     parallel-build-test = parallelBuildTest;
+
+    redox-multi-user-test = multiUserTestSystem.diskImage;
+    multi-user-test = multiUserTest;
 
     redox-scheme-daemon-test = schemeDaemonTestSystem.diskImage;
     scheme-daemon-test = schemeDaemonTest;

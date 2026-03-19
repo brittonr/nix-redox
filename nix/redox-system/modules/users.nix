@@ -17,6 +17,10 @@ let
     password = t.string;
     realname = t.optionalAttr t.string;
     createHome = t.optionalAttr t.bool;
+    # Per-user login namespace scheme list.
+    # Set to a list of scheme name strings for the user's login namespace.
+    # When absent, login falls back to DEFAULT_SCHEMES in the userutils binary.
+    schemes = t.optionalAttr (t.listOf t.string);
   };
 
   groupType = t.struct "Group" {

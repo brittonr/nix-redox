@@ -1,0 +1,90 @@
+# ── Multi-User Configuration Tests ────────────────────────
+# Validates the module system produces correct multi-user config:
+# login_schemes.toml, passwd, shadow, group files.
+#
+# These tests verify CONFIG GENERATION, not runtime behavior.
+# Runtime namespace isolation is handled by upstream userutils
+# login binary (mkns/setns) which reads our generated config.
+#
+# All bash -c blocks use double quotes to avoid Ion quote parsing issues.
+
+# ── passwd file ──────────────────────────────────────────
+
+# Test: /etc/passwd has root entry
+/nix/system/profile/bin/bash -c "if grep -q root /etc/passwd 2>/dev/null; then echo FUNC_TEST:passwd-has-root:PASS; else echo FUNC_TEST:passwd-has-root:FAIL:no-root; fi"
+
+# Test: /etc/passwd has user entry with uid 1000
+/nix/system/profile/bin/bash -c "if grep -q user /etc/passwd 2>/dev/null; then echo FUNC_TEST:passwd-has-user:PASS; else echo FUNC_TEST:passwd-has-user:FAIL:no-user; fi"
+
+# ── group file ───────────────────────────────────────────
+
+# Test: /etc/group has sudo group with user as member
+/nix/system/profile/bin/bash -c "if grep -q sudo /etc/group 2>/dev/null; then echo FUNC_TEST:group-has-sudo:PASS; else echo FUNC_TEST:group-has-sudo:FAIL:no-sudo-group; fi"
+
+# ── shadow file ──────────────────────────────────────────
+
+# Test: /etc/shadow exists
+if exists -f /etc/shadow
+    echo "FUNC_TEST:shadow-exists:PASS"
+else
+    echo "FUNC_TEST:shadow-exists:FAIL:/etc/shadow missing"
+end
+
+# Test: shadow has root entry
+/nix/system/profile/bin/bash -c "if grep -q root /etc/shadow 2>/dev/null; then echo FUNC_TEST:shadow-has-root:PASS; else echo FUNC_TEST:shadow-has-root:FAIL:no-root; fi"
+
+# Test: shadow has user entry
+/nix/system/profile/bin/bash -c "if grep -q user /etc/shadow 2>/dev/null; then echo FUNC_TEST:shadow-has-user:PASS; else echo FUNC_TEST:shadow-has-user:FAIL:no-user; fi"
+
+# ── login_schemes.toml ───────────────────────────────────
+
+# Test: login_schemes.toml exists
+if exists -f /etc/login_schemes.toml
+    echo "FUNC_TEST:login-schemes-exists:PASS"
+else
+    echo "FUNC_TEST:login-schemes-exists:FAIL:file-missing"
+end
+
+# Test: root has entry in login_schemes.toml
+/nix/system/profile/bin/bash -c "if grep -q user_schemes.root /etc/login_schemes.toml 2>/dev/null; then echo FUNC_TEST:login-schemes-root:PASS; else echo FUNC_TEST:login-schemes-root:FAIL:no-root; fi"
+
+# Test: user has entry in login_schemes.toml
+/nix/system/profile/bin/bash -c "if grep -q user_schemes.user /etc/login_schemes.toml 2>/dev/null; then echo FUNC_TEST:login-schemes-user:PASS; else echo FUNC_TEST:login-schemes-user:FAIL:no-user; fi"
+
+# Remaining login_schemes tests use a pre-installed bash script
+# to avoid Ion quote/expansion issues with $() and single quotes.
+/nix/system/profile/bin/bash /etc/test-login-schemes.sh
+
+# ── Home directories ─────────────────────────────────────
+
+# Test: user home directory exists
+if exists -d /home/user
+    echo "FUNC_TEST:user-home-exists:PASS"
+else
+    echo "FUNC_TEST:user-home-exists:FAIL:/home/user missing"
+end
+
+# Test: root home directory exists
+if exists -d /root
+    echo "FUNC_TEST:root-home-exists:PASS"
+else
+    echo "FUNC_TEST:root-home-exists:FAIL:/root missing"
+end
+
+# Test: can write to user home
+echo "test_write" > /home/user/write_test
+if exists -f /home/user/write_test
+    echo "FUNC_TEST:user-home-write:PASS"
+    rm /home/user/write_test
+else
+    echo "FUNC_TEST:user-home-write:FAIL:write-failed"
+end
+
+# ── sudod scheme ─────────────────────────────────────────
+
+# Test: sudo scheme visible (sudod daemon running) — only when userutils installed
+if exists -f /bin/sudo
+    /nix/system/profile/bin/bash -c "if ls : 2>/dev/null | grep -q sudo; then echo FUNC_TEST:sudod-running:PASS; else echo FUNC_TEST:sudod-running:FAIL:not-visible; fi"
+else
+    echo "FUNC_TEST:sudod-running:SKIP"
+end

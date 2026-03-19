@@ -119,6 +119,7 @@ let
   vmChecks = {
     boot-test = packages.bootTest;
     functional-test = packages.functionalTest;
+    multi-user-test = packages.multi-user-test;
     bridge-test = packages.bridgeTest;
   };
 

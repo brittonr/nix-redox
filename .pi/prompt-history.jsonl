@@ -464,3 +464,12 @@
 {"text":"i think we're in over our skis","timestamp":1773841669248}
 {"text":"what next","timestamp":1773845294467}
 {"text":"yes, we should see if this is caused by one of our patches","timestamp":1773845428707}
+{"text":"what are missing from this to make this a usable system","timestamp":1773847472622}
+{"text":"6","timestamp":1773847642990}
+{"text":"does our examples/my-redox-system/ have support for snix generations?","timestamp":1773848615868}
+{"text":"does our examples/my-redox-system/ have support for snix generations?","timestamp":1773848659661}
+{"text":"add it to the snix help menu","timestamp":1773849627676}
+{"text":"are we linking the examples/my-redox-system/ to the vm so we can modify the config from within the vm?","timestamp":1773849878927}
+{"text":"what next","timestamp":1773878703221}
+{"text":"3 - make it redox","timestamp":1773878798635}
+{"text":"you got stuck","timestamp":1773918173674}

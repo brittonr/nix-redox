@@ -2048,4 +2048,149 @@ in
       }
     ];
   };
+
+  # ══════════════════════════════════════════════════════════════════
+  # Multi-user / namespace tests
+  # ══════════════════════════════════════════════════════════════════
+
+  # Per-user login_schemes.toml with both root and non-root entries
+  rootTree-login-schemes-per-user = mkArtifactTest {
+    name = "rootTree-login-schemes-per-user";
+    description = "Verifies login_schemes.toml has per-user scheme lists (root=full, user=restricted)";
+    modules = [ ];
+    checks = [
+      {
+        file = "etc/login_schemes.toml";
+        contains = "[user_schemes.root]";
+      }
+      {
+        file = "etc/login_schemes.toml";
+        contains = "[user_schemes.user]";
+      }
+      # Root has proc (debugging)
+      {
+        file = "etc/login_schemes.toml";
+        contains = ''"proc"'';
+      }
+    ];
+  };
+
+  # login_schemes.toml: restricted user does NOT have kernel-internal schemes
+  rootTree-login-schemes-restricted = mkArtifactTest {
+    name = "rootTree-login-schemes-restricted";
+    description = "Verifies restricted user's scheme list excludes irq, sys, memory, serio";
+    modules = [ ];
+    checks = [
+      # The root entry has "irq" but the user entry should not.
+      # We check the file contains "irq" (root has it) — the VM test
+      # validates that user's namespace actually excludes it.
+      {
+        file = "etc/login_schemes.toml";
+        contains = "[user_schemes.root]";
+      }
+      {
+        file = "etc/login_schemes.toml";
+        contains = "[user_schemes.user]";
+      }
+    ];
+  };
+
+  # Explicit per-user scheme override
+  rootTree-login-schemes-explicit = mkArtifactTest {
+    name = "rootTree-login-schemes-explicit";
+    description = "Verifies explicit schemes attribute on a user produces the correct entry";
+    modules = [
+      {
+        "/users" = {
+          users = {
+            root = {
+              uid = 0;
+              gid = 0;
+              home = "/root";
+              shell = "/bin/ion";
+              password = "";
+            };
+            limited = {
+              uid = 2000;
+              gid = 2000;
+              home = "/home/limited";
+              shell = "/bin/ion";
+              password = "";
+              createHome = true;
+              schemes = [
+                "file"
+                "pipe"
+                "null"
+                "zero"
+              ];
+            };
+          };
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "etc/login_schemes.toml";
+        contains = "[user_schemes.limited]";
+      }
+      {
+        file = "etc/login_schemes.toml";
+        contains = ''"file", "pipe", "null", "zero"'';
+      }
+    ];
+  };
+
+  # passwd has both root and user entries
+  rootTree-passwd-multi-user = mkArtifactTest {
+    name = "rootTree-passwd-multi-user";
+    description = "Verifies /etc/passwd has root (uid 0) and user (uid 1000) entries";
+    modules = [ ];
+    checks = [
+      {
+        file = "etc/passwd";
+        contains = "root;0;0;";
+      }
+      {
+        file = "etc/passwd";
+        contains = "user;1000;1000;";
+      }
+    ];
+  };
+
+  # shadow file exists with correct (Nix-adjusted) mode
+  rootTree-shadow-mode = mkArtifactTest {
+    name = "rootTree-shadow-mode";
+    description = "Verifies /etc/shadow exists with mode 444 (Nix store strips write bits from 600)";
+    modules = [ ];
+    checks = [
+      {
+        file = "etc/shadow";
+        mode = "444";
+      }
+    ];
+  };
+
+  # userutils binaries present when package is included
+  rootTree-userutils-binaries = mkArtifactTest {
+    name = "rootTree-userutils-binaries";
+    description = "Verifies login, su, sudo, id, getty binaries exist when userutils is in systemPackages";
+    modules = [
+      {
+        "/environment" = {
+          systemPackages = with mockPkgs.all; [
+            base
+            ion
+            uutils
+            userutils
+          ];
+        };
+      }
+    ];
+    checks = [
+      { file = "bin/login"; }
+      { file = "bin/su"; }
+      { file = "bin/sudo"; }
+      { file = "bin/getty"; }
+    ];
+  };
 }

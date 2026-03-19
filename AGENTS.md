@@ -285,6 +285,17 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 - `-isystem $S/include` for sysroot C headers — do NOT use `--sysroot` (overrides resource header search)
 - Compile-only detection in CC wrapper: `-c`, `-S`, `-E`, `-M`, `-MM` → pass to clang, rest → ld.lld
 
+### Multi-User Namespaces
+- Upstream userutils `login` reads `/etc/login_schemes.toml` → calls `mkns()` → `setns()` to create per-user namespace
+- Format: `[user_schemes.<name>]\nschemes = ["scheme1", "scheme2"]` — TOML parsed by `login.rs`
+- `sudo` binary is also the scheme daemon (`--daemon` mode) — registers `sudo:` scheme
+- Privilege escalation via `SetResugid` proc_call on caller's process fd
+- `su` opens `/scheme/sudo/su` — authenticates with target user's password
+- `su` has NO `-c` flag — spawns an interactive shell only
+- Ion single quotes prevent all expansion but `$()` inside them still crashes Ion at parse time
+- Test scripts with `bash -c` must use double quotes OR write bash to a file and execute it
+- Test script numbering matters: `21-e2e-rebuild.ion` emits its own `FUNC_TESTS_COMPLETE` — tests numbered 22+ never get counted by the harness
+
 ### Shadow Passwords
 - Must be Argon2id PHC format (`$argon2id$v=19$...`) — plaintext causes panic
 - Empty password `user;` skips verification (OK for defaults)
