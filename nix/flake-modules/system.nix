@@ -99,6 +99,7 @@ let
     shellharden = self'.packages.shellharden or null;
     smith = self'.packages.smith or null;
     exampled = self'.packages.exampled or null;
+    irohd = self'.packages.irohd or null;
     snix = self'.packages.snix or null;
     redox-curl = self'.packages.redox-curl or null;
     pkgutils = self'.packages.pkgutils or null;
@@ -323,6 +324,16 @@ let
     inherit bootloader;
   };
 
+  # iroh P2P networking test: irohd scheme daemon
+  irohTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/iroh-test.nix ];
+    inherit extraPkgs;
+  };
+  irohTest = mkFunctionalTest {
+    diskImage = irohTestSystem.diskImage;
+    inherit bootloader;
+  };
+
   # Scheme daemon test: stored + profiled daemons serve store: and profile: schemes
   schemeDaemonTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/scheme-daemon-test.nix ];
@@ -517,6 +528,8 @@ in
 
     redox-scheme-daemon-test = schemeDaemonTestSystem.diskImage;
     scheme-daemon-test = schemeDaemonTest;
+    redox-iroh-test = irohTestSystem.diskImage;
+    iroh-test = irohTest;
 
     redox-scheme-native-test = schemeNativeTestSystem.diskImage;
     scheme-native-test = schemeNativeTest;
