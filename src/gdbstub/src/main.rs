@@ -19,6 +19,7 @@ use std::mem;
 use std::process;
 
 mod regs;
+mod selftest;
 use regs::{int_regs_to_gdb_hex, gdb_hex_to_int_regs};
 
 // Default GDB listen port
@@ -457,6 +458,11 @@ fn main() {
         process::exit(1);
     }
 
+    if args.first().map(|s| s.as_str()) == Some("--selftest") {
+        let ok = selftest::run_selftest();
+        process::exit(if ok { 0 } else { 1 });
+    }
+
     let mut port = DEFAULT_PORT;
     let mut pid: Option<usize> = None;
     let mut exec_path: Option<String> = None;
@@ -503,8 +509,10 @@ fn main() {
         i += 1;
     }
 
+    let launched;
     let target_pid = if let Some(path) = exec_path {
         // Launch mode: fork + SIGSTOP + exec
+        launched = true;
         match launch_process(&path, &exec_args) {
             Ok(child_pid) => child_pid,
             Err(e) => {
@@ -513,6 +521,7 @@ fn main() {
             }
         }
     } else if let Some(p) = pid {
+        launched = false;
         p
     } else {
         usage();
@@ -526,6 +535,12 @@ fn main() {
             process::exit(1);
         }
     };
+
+    // If we launched the process (fork+SIGSTOP), resume it now that ptrace is attached.
+    // The child is stopped by SIGSTOP; SIGCONT resumes it so ptrace breakpoints can fire.
+    if launched {
+        unsafe { libc::kill(target_pid as libc::pid_t, libc::SIGCONT) };
+    }
 
     if let Err(e) = run_stub(&mut target, port) {
         eprintln!("gdbstub: error: {}", e);

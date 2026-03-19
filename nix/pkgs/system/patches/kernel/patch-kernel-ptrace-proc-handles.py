@@ -176,7 +176,6 @@ use rmm::Arch;""",
     Memory {
         addrspace: Arc<crate::context::memory::AddrSpaceWrapper>,
         target: Arc<ContextLock>,
-        offset: Arc<core::sync::atomic::AtomicU64>,
     },
     // TODO: Remove this once openat is implemented, or allow openat-via-dup via e.g. the top-level
     // directory.
@@ -221,7 +220,6 @@ use rmm::Arch;""",
                 (ContextHandle::Memory {
                     addrspace,
                     target: Arc::clone(&context),
-                    offset: Arc::new(core::sync::atomic::AtomicU64::new(0)),
                 }, true)
             }""",
     )
@@ -322,10 +320,10 @@ use rmm::Arch;""",
                 };
                 buf.copy_common_bytes_from_slice(src)
             }
-            ContextHandle::Memory { addrspace, target, offset: off_cell } => {
-                // Read target process memory at the current offset.
-                // The offset is the virtual address in the target's address space.
-                let virt_addr = off_cell.load(core::sync::atomic::Ordering::Relaxed) as usize;
+            ContextHandle::Memory { addrspace, target } => {
+                // Read target process memory. The offset (from lseek/file descriptor)
+                // is the virtual address in the target's address space.
+                let virt_addr = offset as usize;
                 let read_len = buf.len();
 
                 // Allocate kernel buffer for the read
@@ -365,7 +363,6 @@ use rmm::Arch;""",
                         total += chunk;
                     }
 
-                    off_cell.store(current_addr as u64, core::sync::atomic::Ordering::Relaxed);
                     Ok(total)
                 })?;
 
@@ -377,7 +374,7 @@ use rmm::Arch;""",
             _ => Err(Error::new(EBADF)),""",
     )
 
-    # Add write support for Trace and Memory handles in kwriteoff
+    # Add write support for Trace handle in ContextHandle::kwriteoff
     # Insert before the existing OpenViaDup write handler
     patch_file(
         proc_file,
@@ -405,55 +402,6 @@ use rmm::Arch;""",
                 session.tracee.notify(token);
                 Ok(mem::size_of::<u64>())
             }
-            Self::Memory { addrspace, target, offset: off_cell } => {
-                // Write to target process memory at the current offset.
-                let virt_addr = off_cell.load(core::sync::atomic::Ordering::Relaxed) as usize;
-                let mut total_written = 0usize;
-                let src_len = buf.len();
-                let mut remaining = src_len;
-                let mut current_addr = virt_addr;
-
-                // Read all source bytes into a kernel buffer first
-                let mut src_buf = alloc::vec![0u8; src_len];
-                buf.copy_to_slice(&mut src_buf)?;
-
-                // Must stop the target for safe page table access
-                try_stop_context(Arc::clone(&target), token, |_target_ctx| {
-                    let guard = addrspace.acquire_read();
-
-                    while remaining > 0 {
-                        let page_offset = current_addr % PAGE_SIZE;
-                        let chunk = core::cmp::min(remaining, PAGE_SIZE - page_offset);
-
-                        let vaddr = VirtualAddress::new(current_addr);
-                        let page = Page::containing_address(vaddr);
-
-                        match guard.table.utable.translate(page.start_address()) {
-                            Some((phys_base, _flags)) => {
-                                let phys_addr = phys_base.data() + page_offset;
-                                let dst_ptr = unsafe {
-                                    RmmA::phys_to_virt(PhysicalAddress::new(phys_addr)).data()
-                                        as *mut u8
-                                };
-                                let dst_slice = unsafe { slice::from_raw_parts_mut(dst_ptr, chunk) };
-                                dst_slice.copy_from_slice(&src_buf[total_written..total_written + chunk]);
-                            }
-                            None => {
-                                if total_written == 0 {
-                                    return Err(Error::new(EFAULT));
-                                }
-                                break;
-                            }
-                        }
-                        current_addr += chunk;
-                        total_written += chunk;
-                        remaining -= chunk;
-                    }
-
-                    off_cell.store(current_addr as u64, core::sync::atomic::Ordering::Relaxed);
-                    Ok(total_written)
-                })
-            }
             ContextHandle::OpenViaDup => {
                 let mut args = buf.usizes();
 
@@ -465,6 +413,61 @@ use rmm::Arch;""",
                 match context_verb {
                     ContextVerb::ForceKill => {
                         if context::is_current(&context) {""",
+    )
+
+    # Add write support for Memory handle in ProcScheme::kwriteoff (scheme level,
+    # where _offset is available). Intercept Memory before dispatching to ContextHandle.
+    patch_file(
+        proc_file,
+        """        let Handle { context, kind } = handle;
+        kind.kwriteoff(id, context, buf, token)""",
+        """        let Handle { context, kind } = handle;
+
+        // Handle Memory writes at scheme level where offset is available
+        if let ContextHandle::Memory { ref addrspace, ref target } = kind {
+            let virt_addr = _offset as usize;
+            let src_len = buf.len();
+
+            let mut src_buf = alloc::vec![0u8; src_len];
+            buf.copy_to_slice(&mut src_buf)?;
+
+            return try_stop_context(Arc::clone(target), token, |_target_ctx| {
+                let guard = addrspace.acquire_read();
+                let mut total_written = 0usize;
+                let mut remaining = src_len;
+                let mut current_addr = virt_addr;
+
+                while remaining > 0 {
+                    let page_offset = current_addr % PAGE_SIZE;
+                    let chunk = core::cmp::min(remaining, PAGE_SIZE - page_offset);
+                    let page = Page::containing_address(VirtualAddress::new(current_addr));
+
+                    match guard.table.utable.translate(page.start_address()) {
+                        Some((phys_base, _flags)) => {
+                            let phys_addr = phys_base.data() + page_offset;
+                            let dst_ptr = unsafe {
+                                RmmA::phys_to_virt(PhysicalAddress::new(phys_addr)).data()
+                                    as *mut u8
+                            };
+                            let dst_slice = unsafe { slice::from_raw_parts_mut(dst_ptr, chunk) };
+                            dst_slice.copy_from_slice(&src_buf[total_written..total_written + chunk]);
+                        }
+                        None => {
+                            if total_written == 0 {
+                                return Err(Error::new(EFAULT));
+                            }
+                            break;
+                        }
+                    }
+                    current_addr += chunk;
+                    total_written += chunk;
+                    remaining -= chunk;
+                }
+                Ok(total_written)
+            });
+        }
+
+        kind.kwriteoff(id, context, buf, token)""",
     )
 
     # Add kopenat AND kdup support for "PID/operation" paths from Authority handle
