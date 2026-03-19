@@ -71,6 +71,11 @@ in
       default = [ ];
       description = "Extra packages that need full store copy (lib/, sysroot/, include/) for self-hosting";
     };
+    ldLibraryPath = {
+      type = t.listOf t.string;
+      default = [ ];
+      description = "Extra directories for LD_LIBRARY_PATH (appended to the self-hosting default of /lib:/usr/lib/rustc:/nix/system/profile/lib when the Rust toolchain is present)";
+    };
     etc = {
       type = t.attrsOf etcFileType;
       default = { };

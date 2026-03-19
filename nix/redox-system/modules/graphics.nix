@@ -33,6 +33,11 @@ adios:
       default = ":0";
       description = "DISPLAY environment variable value";
     };
+    loginCommand = {
+      type = adios.types.string;
+      default = "";
+      description = "Command for Orbital to launch after startup (e.g. \"orblogin orbterm\"). Empty string auto-detects: uses orblogin+orbterm when orbutils is available, falls back to login.";
+    };
   };
 
   impl = { options }: options;

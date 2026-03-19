@@ -223,7 +223,10 @@ let
   # --- Graphics (orbital, audiod) ---
   graphicsServices = lib.optionalAttrs cfg.graphicsEnabled (
     let
-      loginCmd = if pkgs ? orbutils then "orblogin orbterm" else "login";
+      loginCmd =
+        if cfg.graphicsLoginCommand != "" then cfg.graphicsLoginCommand
+        else if pkgs ? orbutils then "orblogin orbterm"
+        else "login";
     in
     {
       orbital = {
@@ -500,7 +503,7 @@ let
   # These are separate from rootfs services — they run in the initfs
   # environment with different PATH/LD_LIBRARY_PATH.
 
-  initScriptFiles = {
+  defaultInitScriptFiles = {
     "00_runtime" = ''
       # Core runtime daemons (SchemeDaemon binaries use 'scheme <name> <cmd>')
       export PATH /scheme/initfs/bin
@@ -562,20 +565,22 @@ let
       unset LD_LIBRARY_PATH
       run.d /usr/lib/init.d /etc/init.d
       echo ""
-      echo "=========================================="
-      echo "  Redox OS Boot Complete!"
-      echo "=========================================="
+      ${lib.concatMapStringsSep "\n      " (line: "echo \"${line}\"") (lib.splitString "\n" (lib.removeSuffix "\n" cfg.bootBanner))}
       echo ""
       export TERM ${inputs.environment.variables.TERM or "xterm-256color"}
       export XDG_CONFIG_HOME /etc
       export HOME ${cfg.defaultUser.home}
       export USER ${cfg.defaultUser.name}
       export PATH /nix/system/profile/bin:${inputs.environment.variables.PATH or "/bin:/usr/bin"}
-      ${lib.optionalString cfg.hasSelfHosting ''
-        export LD_LIBRARY_PATH /lib:/usr/lib/rustc:/nix/system/profile/lib
+      ${lib.optionalString cfg.hasSelfHosting (
+        let
+          basePaths = [ "/lib" "/usr/lib/rustc" "/nix/system/profile/lib" ];
+          allPaths = basePaths ++ cfg.extraLdLibraryPath;
+        in ''
+        export LD_LIBRARY_PATH ${lib.concatStringsSep ":" allPaths}
         export CARGO_BUILD_JOBS ${toString cfg.cargoConfig.buildJobs}
         export CARGO_HOME ${cfg.cargoConfig.home}
-      ''}
+      '')}
       ${
         if cfg.userutilsInstalled then
           "stdio debug:"
@@ -584,6 +589,9 @@ let
       }
     '';
   };
+
+  # Apply user overrides from boot.initfsScripts — right side wins on //
+  initScriptFiles = defaultInitScriptFiles // cfg.initfsScriptOverrides;
 
   # ═══════════════════════════════════════════════════════════════════
   # Exported: service metadata for manifest

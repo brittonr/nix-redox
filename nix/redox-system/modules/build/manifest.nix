@@ -8,10 +8,10 @@ let
   # ===== VERSION TRACKING =====
   # Inspired by nix-darwin's system/version.nix.
   # Structured metadata embedded in the system for inspection.
-  systemName = "redox";
+  systemName = cfg.systemName;
   versionInfo = {
-    redoxSystemVersion = "0.5.0";
-    target = "x86_64-unknown-redox";
+    redoxSystemVersion = cfg.systemVersion;
+    target = cfg.systemTarget;
     profile = systemName;
     inherit (cfg) hostname timezone;
     graphicsEnabled = cfg.graphicsEnabled;
@@ -163,7 +163,7 @@ let
         ln -s ${rootTree}/etc $out/etc
 
         # System metadata
-        echo -n "x86_64-unknown-redox" > $out/system
+        echo -n "${cfg.systemTarget}" > $out/system
         echo -n "${systemName}" > $out/name
         ln -s ${versionJson} $out/version.json
 

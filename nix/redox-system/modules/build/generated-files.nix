@@ -36,12 +36,15 @@ let
       # snix user profile — packages installed via `snix install`
       export PATH /nix/var/snix/profiles/default/bin:$PATH
     ''}
-    ${lib.optionalString cfg.hasSelfHosting ''
+    ${lib.optionalString cfg.hasSelfHosting (
+      let
+        extraPaths = [ "/usr/lib/rustc" ] ++ cfg.extraLdLibraryPath;
+      in ''
       # Self-hosting: rustc needs its dynamic libraries at runtime
-      export LD_LIBRARY_PATH /usr/lib/rustc:$LD_LIBRARY_PATH
+      export LD_LIBRARY_PATH ${lib.concatStringsSep ":" extraPaths}:$LD_LIBRARY_PATH
       # CARGO_HOME for cargo to store its config and cache
       export CARGO_HOME ${cfg.cargoConfig.home}
-    ''}
+    '')}
     ${inputs.environment.shellInit}
   '';
 
