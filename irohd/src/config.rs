@@ -25,10 +25,36 @@ pub struct IrohConfig {
 }
 
 impl IrohConfig {
-    /// Load config from standard paths, generating a key if needed.
-    pub fn load() -> Result<Self, Box<dyn std::error::Error>> {
-        let key_path = PathBuf::from("/etc/iroh/node.key");
-        let peers_path = PathBuf::from("/etc/iroh/peers.json");
+    /// Parse CLI args and load config.
+    ///
+    /// Supported flags:
+    ///   --key-path PATH    Path to node secret key (default: /etc/iroh/node.key)
+    ///   --peers-path PATH  Path to peers JSON (default: /etc/iroh/peers.json)
+    pub fn from_args(args: &[String]) -> Result<Self, Box<dyn std::error::Error>> {
+        let mut key_path = PathBuf::from("/etc/iroh/node.key");
+        let mut peers_path = PathBuf::from("/etc/iroh/peers.json");
+
+        let mut i = 0;
+        while i < args.len() {
+            match args[i].as_str() {
+                "--key-path" => {
+                    i += 1;
+                    key_path = PathBuf::from(
+                        args.get(i).ok_or("--key-path requires a value")?,
+                    );
+                }
+                "--peers-path" => {
+                    i += 1;
+                    peers_path = PathBuf::from(
+                        args.get(i).ok_or("--peers-path requires a value")?,
+                    );
+                }
+                other => {
+                    return Err(format!("unknown argument: {other}").into());
+                }
+            }
+            i += 1;
+        }
 
         // Load or generate secret key.
         let secret_key = Self::load_or_generate_key(&key_path)?;

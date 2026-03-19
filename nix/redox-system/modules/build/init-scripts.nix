@@ -301,7 +301,12 @@ let
       description = "iroh P2P networking scheme daemon";
       command = "/bin/irohd";
       type = "nowait";
-      args = "";
+      args = lib.concatStringsSep " " [
+        "--key-path"
+        (inputs.iroh.keyPath or "/etc/iroh/node.key")
+        "--peers-path"
+        (inputs.iroh.peersPath or "/etc/iroh/peers.json")
+      ];
       wantedBy = "rootfs";
       enable = true;
       after = [ "smolnetd" ];
