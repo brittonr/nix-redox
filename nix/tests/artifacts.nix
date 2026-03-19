@@ -1294,7 +1294,7 @@ in
       }
       {
         file = "etc/redox-system/manifest.json";
-        contains = ''"manifestVersion": 1'';
+        contains = ''"manifestVersion": 3'';
       }
     ];
   };
@@ -1337,7 +1337,7 @@ in
       }
       {
         file = "etc/redox-system/generations/1/manifest.json";
-        contains = ''"manifestVersion": 1'';
+        contains = ''"manifestVersion": 3'';
       }
       {
         file = "etc/redox-system/generations/1/manifest.json";
