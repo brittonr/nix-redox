@@ -19,10 +19,12 @@ mod scheme;
 fn main() {
     eprintln!("irohd: starting");
 
-    let config = match config::IrohConfig::load() {
+    let args: Vec<String> = std::env::args().collect();
+    let config = match config::IrohConfig::from_args(&args[1..]) {
         Ok(c) => c,
         Err(e) => {
             eprintln!("irohd: failed to load config: {e}");
+            eprintln!("usage: irohd [--key-path PATH] [--peers-path PATH]");
             std::process::exit(1);
         }
     };
