@@ -317,7 +317,7 @@ pkgs.writeShellScriptBin "bridge-test" ''
       else:
           # Fallback: minimal manifest
           manifest = {
-              'manifestVersion': 1,
+              'manifestVersion': 3,
               'system': {
                   'redoxSystemVersion': '0.5.0',
                   'target': 'x86_64-unknown-redox',
