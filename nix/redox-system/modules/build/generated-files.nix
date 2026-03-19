@@ -16,7 +16,7 @@ let
   );
   graphicsVarLines = lib.optionalString cfg.graphicsEnabled ''
     export ORBITAL_RESOLUTION ${inputs.graphics.resolution or "1024x768"}
-    export DISPLAY :0
+    export DISPLAY ${cfg.graphicsDisplay}
   '';
   graphicsAliasLines = lib.optionalString cfg.graphicsEnabled ''
     alias gui = "orbital"
@@ -41,7 +41,7 @@ let
       # Self-hosting: rustc needs its dynamic libraries at runtime
       export LD_LIBRARY_PATH /usr/lib/rustc:$LD_LIBRARY_PATH
       # CARGO_HOME for cargo to store its config and cache
-      export CARGO_HOME /root/.cargo
+      export CARGO_HOME ${cfg.cargoConfig.home}
     ''}
     ${inputs.environment.shellInit or ""}
   '';
@@ -141,7 +141,7 @@ let
         mode = "0644";
       };
       "etc/net/${name}/netmask" = {
-        text = iface.netmask or "255.255.255.0";
+        text = iface.netmask or cfg.defaultNetmask;
         mode = "0644";
       };
       "etc/net/${name}/gateway" = {
@@ -162,7 +162,8 @@ let
       text = ''
         127.0.0.1 localhost ${cfg.hostname}
         ::1       localhost ${cfg.hostname}
-      '';
+      ''
+      + lib.optionalString (cfg.extraHosts != "") (cfg.extraHosts + "\n");
       mode = "0644";
     };
     "etc/timezone" = {
@@ -607,13 +608,14 @@ let
   # Standard /etc files expected by upstream Redox programs
   // {
     "etc/motd" = {
-      text = "Welcome to Redox OS!\n";
+      text = cfg.motd;
       mode = "0644";
     };
     "etc/shells" = {
       text = lib.concatStringsSep "\n" (
         [ "/bin/ion" "/bin/sh" ]
         ++ lib.optional (cfg.hasBash or false) "/bin/bash"
+        ++ cfg.extraShells
       ) + "\n";
       mode = "0644";
     };

@@ -25,6 +25,11 @@ let
     port = t.int;
     rootDir = t.string;
   };
+
+  cargoConfig = t.struct "CargoConfig" {
+    buildJobs = t.int;
+    home = t.string;
+  };
 in
 
 {
@@ -63,6 +68,14 @@ in
         rootDir = "/var/www";
       };
       description = "Simple HTTP server configuration";
+    };
+    cargo = {
+      type = cargoConfig;
+      default = {
+        buildJobs = 4;
+        home = "/root/.cargo";
+      };
+      description = "Cargo build configuration (used when self-hosting toolchain is present)";
     };
   };
 

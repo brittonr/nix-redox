@@ -235,7 +235,7 @@ let
         enable = true;
         after = [ "ptyd" "ipcd" ];
         environment = {
-          VT = "3";
+          VT = toString cfg.virtualTerminal;
         };
         priority = 50;
       };
@@ -505,7 +505,7 @@ let
       # Core runtime daemons (SchemeDaemon binaries use 'scheme <name> <cmd>')
       export PATH /scheme/initfs/bin
       export LD_LIBRARY_PATH /scheme/initfs/lib
-      export RUST_BACKTRACE 1
+      export RUST_BACKTRACE ${cfg.rustBacktrace}
       rtcd
       scheme null nulld
       scheme zero zerod
@@ -573,8 +573,8 @@ let
       export PATH /nix/system/profile/bin:${inputs.environment.variables.PATH or "/bin:/usr/bin"}
       ${lib.optionalString cfg.hasSelfHosting ''
         export LD_LIBRARY_PATH /lib:/usr/lib/rustc:/nix/system/profile/lib
-        export CARGO_BUILD_JOBS 4
-        export CARGO_HOME /root/.cargo
+        export CARGO_BUILD_JOBS ${toString cfg.cargoConfig.buildJobs}
+        export CARGO_HOME ${cfg.cargoConfig.home}
       ''}
       ${
         if cfg.userutilsInstalled then

@@ -102,6 +102,7 @@ adios:
       pcid = import ./pcid.nix {
         inherit lib;
         inherit (cfg) allDrivers;
+        extraPciDrivers = inputs.hardware.extraPciDrivers or { };
       };
 
       # ===== 4. Init scripts and services =====

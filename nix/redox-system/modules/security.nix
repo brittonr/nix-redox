@@ -56,6 +56,41 @@ in
       default = false;
       description = "Allow root login on remote connections";
     };
+    defaultRootSchemes = {
+      type = t.listOf t.string;
+      default = [
+        # Kernel schemes
+        "debug" "event" "memory" "pipe" "serio" "irq" "time" "sys"
+        # Base schemes
+        "rand" "null" "zero" "log"
+        # Network schemes
+        "ip" "icmp" "tcp" "udp"
+        # IPC schemes
+        "shm" "chan" "uds_stream" "uds_dgram"
+        # File schemes
+        "file"
+        # Display schemes
+        "display.vesa" "display*"
+        # Other schemes
+        "pty" "sudo" "audio"
+        # Debugging (root only)
+        "proc"
+      ];
+      description = "Default scheme namespace list for root users (includes kernel-internal schemes)";
+    };
+    defaultUserSchemes = {
+      type = t.listOf t.string;
+      default = [
+        "debug" "event" "pipe" "time"
+        "rand" "null" "zero" "log"
+        "ip" "icmp" "tcp" "udp"
+        "shm" "chan" "uds_stream" "uds_dgram"
+        "file"
+        "display.vesa" "display*"
+        "pty" "sudo" "audio"
+      ];
+      description = "Default scheme namespace list for non-root users (excludes irq, sys, memory, serio)";
+    };
   };
 
   impl = { options }: options;

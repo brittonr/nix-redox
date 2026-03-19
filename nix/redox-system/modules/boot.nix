@@ -60,6 +60,25 @@ in
       default = 64;
       description = "Maximum initfs image size in megabytes (default 64 MiB)";
     };
+    initfsPrompt = {
+      type = t.string;
+      default = "ion> ";
+      description = "Shell prompt used in the initfs environment (before rootfs mount)";
+    };
+    rustBacktrace = {
+      type = t.enum "RustBacktrace" [
+        "0"
+        "1"
+        "full"
+      ];
+      default = "1";
+      description = "RUST_BACKTRACE value for initfs daemons (0=off, 1=basic, full=verbose)";
+    };
+    essentialPackages = {
+      type = t.listOf t.derivation;
+      default = [ ];
+      description = "Extra packages to include as boot-essential (flat-copied to /bin/, survive generation switches)";
+    };
     kernelSyscallDebug = {
       type = t.bool;
       default = false;

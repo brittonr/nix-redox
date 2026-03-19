@@ -1,7 +1,7 @@
 # PCI driver registry and PCID configuration
 # Generates PCID TOML configuration for hardware detection and driver loading.
 
-{ lib, allDrivers }:
+{ lib, allDrivers, extraPciDrivers ? { } }:
 
 let
   # PCI driver registry
@@ -135,8 +135,15 @@ let
     # auto-spawned here. It needs a manual init script when selected.
   };
 
+  # Merge built-in PCI registry with user-supplied extra entries.
+  # extraPciDrivers has the same shape: { driverName = [ { name, class, ... } ]; }
+  mergedRegistry = pciRegistry // (builtins.mapAttrs (
+    name: entries:
+    (pciRegistry.${name} or [ ]) ++ entries
+  ) extraPciDrivers);
+
   pcidDrivers = builtins.concatLists (
-    builtins.map (drv: builtins.map (entry: entry // { command = drv; }) (pciRegistry.${drv} or [ ])) (
+    builtins.map (drv: builtins.map (entry: entry // { command = drv; }) (mergedRegistry.${drv} or [ ])) (
       lib.unique allDrivers
     )
   );
