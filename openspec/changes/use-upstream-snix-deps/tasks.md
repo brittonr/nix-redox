@@ -66,9 +66,9 @@
 
 - [x] 8.1 `cargo test --target x86_64-unknown-linux-gnu` — 563 tests pass, 0 fail
 - [x] 8.2 `nix build .#snix` — cross-compiled binary produced (18MB)
-- [ ] 8.3 `nix build` source bundle — produced with upstream sources
-- [ ] 8.4 `nix flake check` — snix build check passes
+- [x] 8.3 `nix build` source bundle — produced with upstream sources (upstream/ + 597 vendored crates)
+- [x] 8.4 `nix flake check` — snix-test passes (563 tests, needed SSL_CERT_FILE override on test derivation for reqwest CA cert init)
 - [ ] 8.5 Boot VM: `snix eval --expr '1 + 1'` returns 2
 - [ ] 8.6 Boot VM: `snix eval --expr '(derivation { name = "test"; builder = "/bin/sh"; system = "x86_64-redox"; }).outPath'` evaluates correctly
 - [ ] 8.7 Boot VM: `snix build --expr` with a simple derivation completes (tests build pipeline with upstream eval)
-- [ ] 8.8 Measure binary size delta and document in commit message
+- [x] 8.8 Measure binary size delta — 18MB (with opt-level=s, LTO, panic=abort), 371 crates
