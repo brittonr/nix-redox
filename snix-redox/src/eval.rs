@@ -115,6 +115,11 @@ fn evaluate(expr: &str) -> Result<String, Box<dyn std::error::Error>> {
 pub fn evaluate_with_state(
     expr: &str,
 ) -> Result<(String, Rc<SnixStoreIO>), Box<dyn std::error::Error>> {
+    // Install ring as the default rustls crypto provider. Required because
+    // we use reqwest with rustls-no-provider (to avoid aws-lc-rs which
+    // doesn't compile on Redox). This is idempotent — repeated calls are fine.
+    let _ = rustls::crypto::ring::default_provider().install_default();
+
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|e| format!("tokio runtime: {e}"))?;
 
