@@ -646,7 +646,7 @@ let
       src = inputs.uutils-src;
       vendorHash = "sha256-Ucf4C9pXt2Gp125IwA3TuUWXTviHbyzhmfUX1GhuTko=";
       nativeBuildInputs = [ pkgs.jq ];
-      cargoBuildFlags = "--features \"ls head cat echo mkdir touch rm cp mv pwd df du wc sort uniq\" --no-default-features";
+      cargoBuildFlags = "--features \"ls head cat echo mkdir touch rm cp mv pwd df du wc sort uniq sleep\" --no-default-features";
       preConfigure = ''
         # Patch ctrlc to disable semaphore usage on Redox
         # This will be done after vendor-combined is created
@@ -706,7 +706,7 @@ let
         # Create symlinks for multicall binary
         if [ -f "$out/bin/coreutils" ]; then
           cd $out/bin
-          for util in ls head cat echo mkdir touch rm cp mv pwd df du wc sort uniq; do
+          for util in ls head cat echo mkdir touch rm cp mv pwd df du wc sort uniq sleep; do
             ln -sf coreutils $util
           done
         fi
