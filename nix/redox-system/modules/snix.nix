@@ -11,6 +11,7 @@ adios:
 
 let
   t = adios.types;
+  serviceType = import ../lib/service-type.nix { inherit t; };
 
   storedConfig = t.struct "StoredConfig" {
     enable = t.bool;
@@ -51,6 +52,48 @@ in
       type = t.bool;
       default = true;
       description = "Enable namespace sandboxing for snix builds (Redox only)";
+    };
+    services = {
+      type = t.attrsOf serviceType;
+      description = "Snix services (computed from module options)";
+      defaultFunc =
+        { options, ... }:
+        (
+          if options.stored.enable then
+            {
+              stored = {
+                description = "snix store scheme daemon (lazy NAR extraction)";
+                command = "/bin/snix";
+                type = "nowait";
+                args = "stored --cache-path ${options.stored.cachePath} --store-dir ${options.stored.storeDir}";
+                wantedBy = "rootfs";
+                enable = true;
+                after = [ ];
+                environment = { };
+                priority = 50;
+              };
+            }
+          else
+            { }
+        )
+        // (
+          if options.profiled.enable then
+            {
+              profiled = {
+                description = "snix profile scheme daemon (union package views)";
+                command = "/bin/snix";
+                type = "nowait";
+                args = "profiled --profiles-dir ${options.profiled.profilesDir} --store-dir ${options.profiled.storeDir}";
+                wantedBy = "rootfs";
+                enable = true;
+                after = [ ];
+                environment = { };
+                priority = 50;
+              };
+            }
+          else
+            { }
+        );
     };
   };
 

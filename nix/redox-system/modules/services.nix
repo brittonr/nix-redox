@@ -21,47 +21,8 @@ let
     directory = t.string;
   };
 
-  # Structured service type — inspired by NixBSD's init.services
-  # Provides typed service definitions that get rendered to init.d scripts
-  serviceType = t.struct "Service" {
-    # Human-readable description
-    description = t.string;
-    # Binary or script to execute
-    command = t.string;
-    # How to start the service:
-    #   oneshot  — run and wait for completion
-    #   daemon   — start with notify (wait for readiness)
-    #   nowait   — start in background
-    #   scheme   — scheme daemon (scheme <args> <command>)
-    type = t.enum "ServiceType" [
-      "oneshot"
-      "daemon"
-      "nowait"
-      "scheme"
-    ];
-    # Extra arguments (for scheme: the scheme name; for others: CLI args)
-    args = t.string;
-    # Which init phase should start this service:
-    #   initfs  — early boot (before rootfs mount)
-    #   rootfs  — after rootfs is mounted
-    wantedBy = t.enum "Target" [
-      "initfs"
-      "rootfs"
-    ];
-    # Whether the service is enabled
-    enable = t.bool;
-    # Service names that must start before this one (dependency ordering).
-    # The build system topologically sorts services and assigns numeric
-    # prefixes to init scripts based on the dependency graph.
-    after = t.listOf t.string;
-    # Per-service environment variables, rendered as `export KEY VALUE`
-    # lines before the service command in the generated init script.
-    environment = t.attrsOf t.string;
-    # Explicit numeric priority (10-79). When set to a non-default value,
-    # overrides auto-numbering from the dependency graph.
-    # Default 50 means auto-number from topo sort position.
-    priority = t.int;
-  };
+  # Shared service type — imported from lib for cross-module reuse
+  serviceType = import ../lib/service-type.nix { inherit t; };
 
   # ═══════════════════════════════════════════════════════════════════
   # Typed service module options
@@ -123,6 +84,15 @@ in
 {
   name = "services";
 
+  inputs = {
+    pkgs = {
+      path = "/pkgs";
+    };
+    environment = {
+      path = "/environment";
+    };
+  };
+
   options = {
     initScripts = {
       type = t.attrsOf initScriptType;
@@ -132,7 +102,152 @@ in
     services = {
       type = t.attrsOf serviceType;
       default = { };
-      description = "Structured service definitions (rendered to init.d scripts)";
+      description = "Profile-declared service overrides (merged on top of generated services)";
+    };
+    _generatedServices = {
+      type = t.attrsOf serviceType;
+      description = "Auto-generated services from typed service options and core daemons";
+      defaultFunc =
+        { options, inputs, ... }:
+        let
+          pkgs = inputs.pkgs.pkgs;
+
+          # Check if userutils is in the profile's systemPackages
+          # (not just available in pkgs — must be explicitly requested)
+          systemPackages = inputs.environment.systemPackages;
+          uu = pkgs.userutils or null;
+          userutilsInstalled = uu != null && builtins.any (p: toString p == toString uu) systemPackages;
+
+          # Resolve getty "auto" tri-state
+          gettyEnabled =
+            if options.getty.enable == "true" then
+              true
+            else if options.getty.enable == "false" then
+              false
+            else
+              userutilsInstalled;
+        in
+        # Core services (always on)
+        {
+          ipcd = {
+            description = "Inter-process communication daemon";
+            command = "/bin/ipcd";
+            type = "daemon";
+            args = "";
+            wantedBy = "rootfs";
+            enable = true;
+            after = [ ];
+            environment = { };
+            priority = 10;
+          };
+          ptyd = {
+            description = "Pseudo-terminal daemon";
+            command = "/bin/ptyd";
+            type = "daemon";
+            args = "";
+            wantedBy = "rootfs";
+            enable = true;
+            after = [ "ipcd" ];
+            environment = { };
+            priority = 11;
+          };
+        }
+        # Typed service modules
+        // (
+          if options.ssh.enable then
+            {
+              sshd = {
+                description = "SSH server daemon";
+                command = "/bin/sshd";
+                type = "nowait";
+                args = "-p ${toString options.ssh.port} -k ${options.ssh.hostKeyPath}";
+                wantedBy = "rootfs";
+                enable = true;
+                after = [
+                  "ptyd"
+                  "smolnetd"
+                ];
+                environment = { };
+                priority = 50;
+              };
+            }
+          else
+            { }
+        )
+        // (
+          if options.httpd.enable then
+            {
+              httpd = {
+                description = "HTTP file server";
+                command = "/bin/httpd";
+                type = "nowait";
+                args = "-p ${toString options.httpd.port} -r ${options.httpd.rootDir}";
+                wantedBy = "rootfs";
+                enable = true;
+                after = [ "smolnetd" ];
+                environment = { };
+                priority = 50;
+              };
+            }
+          else
+            { }
+        )
+        // (
+          if gettyEnabled then
+            {
+              getty = {
+                description = "Serial console via getty + PTY bridge";
+                command = "getty";
+                type = "nowait";
+                args = "${options.getty.device} ${options.getty.extraArgs}";
+                wantedBy = "rootfs";
+                enable = true;
+                after = [ "ptyd" ];
+                environment = {
+                  XDG_CONFIG_HOME = "/etc";
+                };
+                priority = 50;
+              };
+            }
+          else
+            { }
+        )
+        // (
+          if options.exampled.enable then
+            {
+              exampled = {
+                description = "Example scheme daemon (${options.exampled.schemeName})";
+                command = "/bin/exampled";
+                type = "scheme";
+                args = options.exampled.schemeName;
+                wantedBy = "rootfs";
+                enable = true;
+                after = [ ];
+                environment = { };
+                priority = 50;
+              };
+            }
+          else
+            { }
+        )
+        // (
+          if userutilsInstalled then
+            {
+              sudod = {
+                description = "Privilege escalation daemon (sudo scheme)";
+                command = "/bin/sudo";
+                type = "daemon";
+                args = "--daemon";
+                wantedBy = "rootfs";
+                enable = true;
+                after = [ "ptyd" ];
+                environment = { };
+                priority = 50;
+              };
+            }
+          else
+            { }
+        );
     };
     startupScriptEnable = {
       type = t.bool;

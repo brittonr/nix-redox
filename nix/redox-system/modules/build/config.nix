@@ -62,9 +62,7 @@ let
   cargoConfig = inputs.programs.cargo;
 
   # /graphics (forwarded for init-scripts / generated-files)
-  virtualTerminal = inputs.graphics.virtualTerminal;
   graphicsDisplay = inputs.graphics.display;
-  graphicsLoginCommand = inputs.graphics.loginCommand;
 
   # /networking
   defaultNetmask = inputs.networking.defaultNetmask;
@@ -221,15 +219,6 @@ let
   svcHttpdOpts = inputs.services.httpd;
   svcHttpdEnabled = svcHttpdOpts.enable;
 
-  gettyOpts = inputs.services.getty;
-  gettyEnabled =
-    if gettyOpts.enable == "true" then true
-    else if gettyOpts.enable == "false" then false
-    else userutilsInstalled;  # "auto"
-
-  exampledOpts = inputs.services.exampled;
-  exampledEnabled = exampledOpts.enable;
-
   irohEnabled = inputs.iroh.enable or false;
   irohOpts = inputs.iroh;
 
@@ -329,15 +318,6 @@ let
   # System target triple (for cargo config generation)
   # Already bound above as systemTarget, re-exported for generated-files
 
-  # Network interface resolution (for static config)
-  firstIfaceName =
-    let
-      names = builtins.attrNames inputs.networking.interfaces;
-    in
-    if names != [ ] then builtins.head names else null;
-  firstIface =
-    if firstIfaceName != null then inputs.networking.interfaces.${firstIfaceName} else null;
-
   # User-declared etc files (for checks validation)
   userEtcFiles = inputs.environment.etc;
 
@@ -381,9 +361,7 @@ in
     defaultEditor
     httpdConfig
     cargoConfig
-    virtualTerminal
     graphicsDisplay
-    graphicsLoginCommand
     defaultNetmask
     extraHosts
     motd
@@ -418,18 +396,12 @@ in
     diskSizeMB
     espSizeMB
     espLabel
-    firstIfaceName
-    firstIface
     userEtcFiles
     activationScriptNames
     sshOpts
     sshEnabled
     svcHttpdOpts
     svcHttpdEnabled
-    gettyOpts
-    gettyEnabled
-    exampledOpts
-    exampledEnabled
     irohOpts
     irohEnabled
     ;
