@@ -174,6 +174,24 @@ in
         ;
     };
 
+  # Channel update test factory - requires diskImage with channel update test script
+  # + a pre-built channel cache. Starts HTTP server + boots QEMU with SLiRP.
+  mkChannelUpdateTest =
+    {
+      diskImage,
+      bootloader,
+      channelCache,
+    }:
+    import ./channel-update-test.nix {
+      inherit
+        pkgs
+        lib
+        diskImage
+        bootloader
+        channelCache
+        ;
+    };
+
   # Bridge test factory - requires diskImage with virtio-fsd + test script
   # Orchestrates host-side package push + guest-side snix install via virtio-fs
   mkBridgeTest =

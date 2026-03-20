@@ -231,6 +231,12 @@ in
       meta.description = "Test snix install from remote HTTP binary cache via QEMU SLiRP";
     };
 
+    channel-update-test = {
+      type = "app";
+      program = "${self'.packages.channelUpdateTest}/bin/channel-update-test";
+      meta.description = "Test snix channel add/update + system upgrade from HTTP channel";
+    };
+
     bridge-test = {
       type = "app";
       program = "${self'.packages.bridgeTest}/bin/bridge-test";
