@@ -15,7 +15,7 @@ mod build_proxy;
 mod cache;
 mod cache_source;
 mod channel;
-mod derivation_builtins;
+// mod derivation_builtins; // Replaced by upstream snix-glue::builtins
 mod eval;
 mod fetchers;
 mod file_io_worker;
@@ -27,7 +27,7 @@ mod sandbox;
 mod stored;
 mod vendor;
 mod install;
-mod known_paths;
+// mod known_paths; // Replaced by upstream snix-glue::known_paths
 mod local_cache;
 mod nar;
 mod pathinfo;

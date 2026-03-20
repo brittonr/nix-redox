@@ -10,13 +10,13 @@ pub mod build_proxy;
 pub mod cache;
 pub mod cache_source;
 pub mod channel;
-pub mod derivation_builtins;
+// derivation_builtins: deleted — replaced by upstream snix-glue::builtins
 pub mod eval;
 pub mod fetchers;
 pub mod file_io_worker;
 pub mod flake;
 pub mod install;
-pub mod known_paths;
+// known_paths: deleted — replaced by upstream snix-glue::known_paths
 pub mod local_build;
 pub mod local_cache;
 pub mod nar;
