@@ -92,7 +92,9 @@ prost-build = "0.13.1"
 quote = "1.0.37"
 redb = "3.1.0"
 regex = "1.10.6"
-reqwest = { version = "0.13.1", default-features = true }
+reqwest = { version = "0.13.1", default-features = false, features = ["rustls-no-provider", "http2", "charset", "stream"] }
+# Force rustls to use ring backend instead of aws-lc-rs (relibc lacks __isoc23_sscanf, __fprintf_chk)
+rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
 reqwest-middleware = { version = "0.5.0", default-features = false }
 reqwest-tracing = { version = "0.6.0", default-features = false }
 rnix = "0.14.0"
@@ -121,7 +123,7 @@ tokio-stream = "0.1.15"
 tokio-tar = { package = "astral-tokio-tar", version = "0.5.6" }
 tokio-test = "0.4.4"
 tokio-util = "0.7.11"
-tonic = "0.13.1"
+tonic = { version = "0.13.1", default-features = false, features = ["transport", "codegen", "prost", "tls-ring", "tls-native-roots"] }
 tonic-build = "0.13.1"
 tonic-health = { version = "0.13.1", default-features = false }
 tonic-reflection = "0.13.1"

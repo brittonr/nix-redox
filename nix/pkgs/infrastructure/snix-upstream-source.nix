@@ -42,6 +42,33 @@ pkgs.runCommand "snix-upstream-source" { } ''
     cp -r ${snixSrc}/snix/${crate} $out/${crate}
   '') crates)}
 
+  # Make crates writable for Cargo.toml patching
+  chmod -R u+w $out/build $out/store $out/castore
+
+  # Remove fuse feature requirement from snix-build → snix-castore dep.
+  # Upstream snix-build unconditionally enables snix-castore/fuse, which
+  # pulls in fuse-backend-rs → vm-memory (Linux-only). Since we use
+  # DummyBuildService, we don't need FUSE.
+  sed -i 's|snix-castore = { path = "../castore", features = \["fuse"\] }|snix-castore = { path = "../castore" }|' $out/build/Cargo.toml
+
+  # Disable cloud in snix-castore defaults (pulls bigtable_rs → tonic 0.14 → aws-lc).
+  # Also disable tonic-reflection (unused on Redox).
+  sed -i 's|default = \["cloud"\]|default = []|' $out/castore/Cargo.toml
+
+  # Remove tonic-reflection from snix-store defaults (pulls aws-lc via tonic).
+  sed -i 's|default = \["cloud", "fuse", "otlp", "tonic-reflection"\]|default = []|' $out/store/Cargo.toml
+
+  # Switch tonic from aws-lc TLS backend to ring TLS backend.
+  # aws-lc-sys compiles C code that uses glibc symbols (__isoc23_sscanf,
+  # __fprintf_chk) not present in relibc. ring cross-compiles cleanly
+  # (already proven by irohd and ureq builds on Redox).
+  sed -i 's|features = \["tls-aws-lc"\]|features = ["tls-ring"]|' $out/store/Cargo.toml
+
+  # Switch tonic in upstream workspace deps (for snix-tracing's tonic dep)
+  # The workspace Cargo.toml is at snix-redox/Cargo.toml, not here.
+  # We only need to patch the crate-level Cargo.toml files that specify
+  # tonic features directly.
+
   # Make eval writable for patching
   chmod -R u+w $out/eval
 

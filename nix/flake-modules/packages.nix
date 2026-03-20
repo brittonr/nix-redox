@@ -560,12 +560,59 @@ let
       done
     '';
 
-  snix = mkCrossPackage {
-    pname = "snix-redox";
-    src = ../../snix-redox;
-    plan = ../pkgs/userspace/snix-build-plan.json;
-    member = "snix-redox";
-  };
+  snix =
+    let
+      snixUpstreamSource = import ../pkgs/infrastructure/snix-upstream-source.nix {
+        pkgs = hostPkgs;
+      };
+      # Compose snix-redox source with upstream crates.
+      # The build plan references "upstream/{crate}" paths relative to the
+      # workspace root, so we need upstream/ to exist inside the source tree.
+      snixCombinedSrc = hostPkgs.runCommand "snix-redox-combined-src" { } ''
+        cp -r ${../../snix-redox} $out
+        chmod -R u+w $out
+        rm -f $out/upstream
+        cp -r ${snixUpstreamSource} $out/upstream
+      '';
+    in
+    mkCrossPackage {
+      pname = "snix-redox";
+      src = snixCombinedSrc;
+      plan = ../pkgs/userspace/snix-build-plan.json;
+      member = "snix-redox";
+      extraCrateOverrides = {
+        # Proto compilation needs protoc and PROTO_ROOT for snix proto paths
+        snix-castore = _: {
+          nativeBuildInputs = [ hostPkgs.protobuf ];
+          PROTO_ROOT = snixUpstreamSource;
+          SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+        };
+        snix-store = _: {
+          nativeBuildInputs = [ hostPkgs.protobuf ];
+          PROTO_ROOT = snixUpstreamSource;
+          SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+        };
+        snix-build = _: {
+          nativeBuildInputs = [ hostPkgs.protobuf ];
+          PROTO_ROOT = snixUpstreamSource;
+          SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+        };
+        # prost-wkt-types also needs protoc
+        prost-wkt-types = _: {
+          nativeBuildInputs = [ hostPkgs.protobuf ];
+        };
+        # zstd-sys: C code compiles with glibc fortify symbols (__memcpy_chk)
+        # not in relibc. Override CC to use our cross-compiler targeting relibc.
+        zstd-sys = _: {
+          CC_x86_64_unknown_redox = "${hostPkgs.llvmPackages.clang-unwrapped}/bin/clang";
+          CFLAGS_x86_64_unknown_redox = builtins.concatStringsSep " " [
+            "--target=x86_64-unknown-redox"
+            "--sysroot=${modularPkgs.system.relibc}/${redoxTarget}"
+            "-isystem ${modularPkgs.system.relibc}/${redoxTarget}/include"
+          ];
+        };
+      };
+    };
 
   irohd = mkCrossPackage {
     pname = "irohd";
