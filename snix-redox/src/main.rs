@@ -23,7 +23,7 @@ mod flake;
 mod local_build;
 mod profiled;
 mod sandbox;
-mod snix_io;
+// mod snix_io; // Replaced by upstream snix_glue::snix_store_io
 mod stored;
 mod vendor;
 mod install;

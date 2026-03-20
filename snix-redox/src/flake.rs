@@ -509,11 +509,11 @@ pub fn build_flake_installable(
         )
         .map_err(|e| format!("invalid derivation path '{drv_path_str}': {e}"))?;
 
-    let known_paths = state.known_paths.borrow();
+    let known_paths_ref = state.known_paths.borrow();
     let db = crate::pathinfo::PathInfoDb::open()
         .map_err(|e| format!("opening pathinfo db: {e}"))?;
 
-    let result = crate::local_build::build_needed(&drv_path, &known_paths, &db)?;
+    let result = crate::local_build::build_needed(&drv_path, &*known_paths_ref, &db)?;
 
     // Print output paths
     for (name, path) in &result.outputs {

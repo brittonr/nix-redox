@@ -24,7 +24,7 @@ pub mod pathinfo;
 pub mod profiled;
 pub mod rebuild;
 pub mod sandbox;
-pub mod snix_io;
+// pub mod snix_io; // Replaced by upstream snix_glue::snix_store_io
 pub mod store;
 pub mod stored;
 pub mod system;

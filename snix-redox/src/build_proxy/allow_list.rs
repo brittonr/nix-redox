@@ -156,7 +156,7 @@ pub fn normalize_path(path: &str) -> PathBuf {
 
 use nix_compat::derivation::Derivation;
 
-use crate::known_paths::KnownPaths;
+use snix_glue::known_paths::KnownPaths;
 
 /// System paths that every builder needs read-only access to.
 ///

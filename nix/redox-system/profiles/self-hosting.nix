@@ -63,7 +63,7 @@ dev
 
   # Larger VM for compilation workloads
   "/virtualisation" = (dev."/virtualisation" or { }) // {
-    memorySize = 4096;
+    memorySize = 8192;
     cpus = 4;
   };
 }

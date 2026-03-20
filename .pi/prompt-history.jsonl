@@ -489,3 +489,18 @@
 {"text":"do the remaining task","timestamp":1773959753865}
 {"text":"commit and archive","timestamp":1773960045443}
 {"text":"is this fully configurable through nix","timestamp":1773960166313}
+{"text":"how can we improve performance of redox","timestamp":1773960404817}
+{"text":"are these all config values we can write in nix","timestamp":1773960531667}
+{"text":"lets do the nix config  options","timestamp":1773960564816}
+{"text":"lets audit and find any hardcoded config values and make sure we have that in nix instead","timestamp":1773960742910}
+{"text":"lets audit and find any hardcoded config values and make sure we have that in nix instead","timestamp":1773961453109}
+{"text":"lets audit and find any hardcoded config values and make sure we have that in nix instead","timestamp":1773961957339}
+{"text":"where could we better utilize upstream snix?","timestamp":1773962576564}
+{"text":"write an openspec. assume we cannot upstream a patch, but we should use nix to build in a patch when compiling.","timestamp":1773962782808}
+{"text":"are there any other nix crates we should be using?","timestamp":1773963066673}
+{"text":"are we sure we cant use tokio/async?","timestamp":1773963189751}
+{"text":"snix is core infra though, so thats acceptable","timestamp":1773963641637}
+{"text":"lets begin","timestamp":1773963899939}
+{"text":"continuue","timestamp":1773998772666}
+{"text":"do it","timestamp":1773999554873}
+{"text":"commit and continue","timestamp":1774000170491}
