@@ -39,13 +39,13 @@
 
 ## 5. Cross-compilation crate patches
 
-- [ ] 5.1 Attempt `nix build .#snix` and collect compilation errors for crates that don't support Redox
-- [ ] 5.2 Add `extraCrateOverrides` in `nix/flake-modules/packages.nix` for each failing crate (follow irohd pattern: sed patches, stub files, cfg redirects)
-- [ ] 5.3 Check for overlap with irohd's existing overrides (reqwest, ring, mio, tokio, socket2 may already work)
-- [ ] 5.4 Stub out Linux-only snix-build backends (bubblewrap, OCI) — use `DummyBuildService` or cfg-gated stubs
-- [ ] 5.5 Disable snix-castore features: no fuse, no virtiofs, no cloud
-- [ ] 5.6 Handle prost/tonic compilation if they're pulled in transitionally — may need `--no-default-features` or stubs for build.rs probing
-- [ ] 5.7 Iterate until `nix build .#snix` produces a binary
+- [x] 5.1 Attempt `nix build .#snix` and collect compilation errors for crates that don't support Redox
+- [x] 5.2 Add `extraCrateOverrides` in `nix/flake-modules/packages.nix` for each failing crate (protobuf, zstd-sys CC override)
+- [x] 5.3 Check for overlap with irohd's existing overrides (ring already works via irohd)
+- [x] 5.4 Stub out Linux-only snix-build backends — already cfg(target_os = "linux") gated upstream, removed fuse feature from snix-build→snix-castore dep
+- [x] 5.5 Disable snix-castore features: no fuse, no virtiofs, no cloud (patched default features in source derivation)
+- [x] 5.6 Handle prost/tonic: switched tls-aws-lc to tls-ring (aws-lc-sys uses glibc __isoc23_sscanf), added protoc/PROTO_ROOT/SNIX_BUILD_SANDBOX_SHELL overrides
+- [x] 5.7 `nix build .#snix` produces binary — 18MB snix + 964K proxy_namespace_test, 371 crates compiled
 
 ## 6. Regenerate build plan and source bundle
 

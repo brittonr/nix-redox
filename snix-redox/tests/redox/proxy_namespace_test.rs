@@ -225,6 +225,7 @@ fn run_child_test(
     verify_fn: Option<fn() -> Result<(), String>>,
 ) {
     use std::process::Command;
+    use std::os::unix::process::CommandExt;
 
     print!("{}... ", label);
 
