@@ -19,8 +19,8 @@
     "snix-store": "path+file:///home/brittonr/git/redox/snix-redox/upstream/store#snix-store@0.1.0",
     "snix-tracing": "path+file:///home/brittonr/git/redox/snix-redox/upstream/tracing#snix-tracing@0.1.0"
   },
-  "cargoLockHash": "516e5eff7d5028e83d97d574823588db85df62b0906aff12f8ff31e0291a4186",
-  "inputsHash": "7aab818542511ce5650ebe15c344b700949917312542e161e67e221466b1b879",
+  "cargoLockHash": "420c03bdca1eb8b7922a14ae773434b1d434b239c02571a5743830914cace17e",
+  "inputsHash": "85d14c6490937cff615819b946f609a7bfae9162d2b67a6b9bb93e83a9945b8d",
   "crates": {
     "git+https://github.com/tvlfyi/wu-manber.git#wu-manber@0.1.0": {
       "crateName": "wu-manber",
@@ -115,6 +115,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.37",
+          "externCrateName": "rustls"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#ruzstd@0.8.2",

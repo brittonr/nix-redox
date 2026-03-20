@@ -187,6 +187,9 @@ snix-build = { path = "upstream/build", default-features = false, features = [] 
 # === Async runtime (upstream snix requires tokio) ===
 tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "fs"] }
 
+# === TLS crypto provider (ring, not aws-lc-rs — relibc compatibility) ===
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+
 # === Sync HTTP client for binary cache (Redox-side, not eval) ===
 ureq = { version = "3.0", default-features = false, features = ["rustls"] }
 

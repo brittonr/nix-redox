@@ -49,23 +49,23 @@
 
 ## 6. Regenerate build plan and source bundle
 
-- [ ] 6.1 Update `regenerate-build-plan.sh` to prepare upstream source before `cargo unit-graph`
-- [ ] 6.2 Run regeneration, commit updated `snix-build-plan.json`
-- [ ] 6.3 Update `snix-source-bundle.nix` to copy `upstream/` instead of vendored directories
-- [ ] 6.4 Recompute vendor hash in `snix-source-bundle.nix`
-- [ ] 6.5 Verify `nix build` of the source bundle succeeds
+- [x] 6.1 Update `regenerate-build-plan.sh` to prepare upstream source before `cargo unit-graph`
+- [x] 6.2 Run regeneration, commit updated `snix-build-plan.json`
+- [x] 6.3 Update `snix-source-bundle.nix` to copy `upstream/` instead of vendored directories
+- [x] 6.4 Recompute vendor hash in `snix-source-bundle.nix`
+- [x] 6.5 Verify `nix build` of the source bundle succeeds
 
 ## 7. Delete vendored forks
 
-- [ ] 7.1 Delete `snix-redox/nix-compat-redox/` (17k LOC)
-- [ ] 7.2 Delete `snix-redox/nix-compat-derive/`
-- [ ] 7.3 Delete `snix-redox/snix-eval-vendored/` (17k LOC)
-- [ ] 7.4 Verify `git status` shows expected deletions
+- [x] 7.1 Delete `snix-redox/nix-compat-redox/` (17k LOC)
+- [x] 7.2 Delete `snix-redox/nix-compat-derive/`
+- [x] 7.3 Delete `snix-redox/snix-eval-vendored/` (17k LOC)
+- [x] 7.4 Verify `git status` shows expected deletions
 
 ## 8. Full validation
 
-- [ ] 8.1 `cargo test --target x86_64-unknown-linux-gnu` — all tests pass
-- [ ] 8.2 `nix build .#snix` — cross-compiled binary produced
+- [x] 8.1 `cargo test --target x86_64-unknown-linux-gnu` — 563 tests pass, 0 fail
+- [x] 8.2 `nix build .#snix` — cross-compiled binary produced (18MB)
 - [ ] 8.3 `nix build` source bundle — produced with upstream sources
 - [ ] 8.4 `nix flake check` — snix build check passes
 - [ ] 8.5 Boot VM: `snix eval --expr '1 + 1'` returns 2

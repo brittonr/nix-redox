@@ -51,6 +51,21 @@ pkgs.runCommand "snix-upstream-source" { } ''
   # DummyBuildService, we don't need FUSE.
   sed -i 's|snix-castore = { path = "../castore", features = \["fuse"\] }|snix-castore = { path = "../castore" }|' $out/build/Cargo.toml
 
+  # Gate the bwrap/oci modules that use snix_castore::fs behind a
+  # cargo feature so they don't compile when fs is not enabled.
+  # The modules are already cfg(target_os = "linux"), but they still
+  # compile on a linux host and need castore::fs.
+  # Change: #[cfg(target_os = "linux")] → #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  sed -i 's|#\[cfg(target_os = "linux")\]|#[cfg(all(target_os = "linux", feature = "linux-sandbox"))]|g' $out/build/src/lib.rs $out/build/src/buildservice/mod.rs
+
+  # Also gate imports of bwrap/oci in from_addr.rs
+  chmod u+w $out/build/src/buildservice/from_addr.rs
+  sed -i 's|use crate::buildservice::bwrap|#[cfg(feature = "linux-sandbox")] use crate::buildservice::bwrap|' $out/build/src/buildservice/from_addr.rs
+  sed -i 's|use super::oci|#[cfg(feature = "linux-sandbox")] use super::oci|' $out/build/src/buildservice/from_addr.rs
+  # Gate the match arms that use bwrap/oci
+  sed -i '/"oci" =>/{s/^/        #[cfg(feature = "linux-sandbox")]\n/}' $out/build/src/buildservice/from_addr.rs
+  sed -i '/"bwrap" =>/{s/^/        #[cfg(feature = "linux-sandbox")]\n/}' $out/build/src/buildservice/from_addr.rs
+
   # Disable cloud in snix-castore defaults (pulls bigtable_rs → tonic 0.14 → aws-lc).
   # Also disable tonic-reflection (unused on Redox).
   sed -i 's|default = \["cloud"\]|default = []|' $out/castore/Cargo.toml
