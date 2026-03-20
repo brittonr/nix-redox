@@ -9,3 +9,8 @@ result-*
 wrappers/
 target/
 .pre-commit-config.yaml
+result-snix-upstream
+result-source-bundle
+snix-redox/upstream
+result-snix-upstream
+result-source-bundle

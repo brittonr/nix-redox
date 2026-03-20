@@ -44,10 +44,46 @@ let
     let
       unit2nix = self.inputs.unit2nix;
       buildFromUnitGraph = unit2nix.lib.${pkgs.system}.buildFromUnitGraph;
+      snixUpstreamSource = import ../pkgs/infrastructure/snix-upstream-source.nix {
+        inherit pkgs;
+      };
+      # Compose snix-redox source with upstream crates (same as cross-build)
+      snixCombinedSrc = pkgs.runCommand "snix-redox-combined-src" { } ''
+        cp -r ${../../snix-redox} $out
+        chmod -R u+w $out
+        rm -f $out/upstream
+        cp -r ${snixUpstreamSource} $out/upstream
+      '';
       ws = buildFromUnitGraph {
         inherit pkgs;
-        src = ../../snix-redox;
+        src = snixCombinedSrc;
         resolvedJson = ../../snix-redox/build-plan.json;
+        extraCrateOverrides = {
+          snix-castore = _: {
+            nativeBuildInputs = [ pkgs.protobuf ];
+            PROTO_ROOT = snixUpstreamSource;
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          };
+          snix-store = _: {
+            nativeBuildInputs = [ pkgs.protobuf ];
+            PROTO_ROOT = snixUpstreamSource;
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          };
+          snix-build = _: {
+            nativeBuildInputs = [ pkgs.protobuf ];
+            PROTO_ROOT = snixUpstreamSource;
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          };
+          prost-wkt-types = _: {
+            nativeBuildInputs = [ pkgs.protobuf ];
+          };
+          # snix-redox tests construct SnixStoreIO which creates a reqwest
+          # client that needs CA certificates. Tests don't do HTTP but
+          # reqwest with native-roots panics on missing certs at client init.
+          snix-redox = attrs: {
+            SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+          };
+        };
       };
     in
     ws;
@@ -73,7 +109,12 @@ let
     installer-build = packages.installer;
 
     # snix host-side unit tests (502 tests, runs on linux, no VM needed)
-    snix-test = snixHostTests.test.check."snix-redox";
+    snix-test = snixHostTests.test.check."snix-redox".overrideAttrs (old: {
+      # Upstream snix-glue Fetcher::new() creates a reqwest Client that
+      # needs CA certificates (rustls-platform-verifier). Tests don't do HTTP
+      # but reqwest panics without certs at client init.
+      SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
+    });
 
     # snix clippy lint
     snix-clippy = snixHostTests.clippy.allWorkspaceMembers;
