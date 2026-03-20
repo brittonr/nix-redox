@@ -78,11 +78,11 @@ let
     }
     {
       assertion =
-        cfg.gettyOpts.enable == "auto" || cfg.gettyOpts.enable == "false" || (pkgs ? userutils);
+        inputs.services.getty.enable == "auto" || inputs.services.getty.enable == "false" || (pkgs ? userutils);
       message = "services.getty.enable = 'true' requires the 'userutils' package in pkgs.";
     }
     {
-      assertion = !cfg.exampledEnabled || (pkgs ? exampled);
+      assertion = !inputs.services.exampled.enable || (pkgs ? exampled);
       message = "services.exampled.enable requires the 'exampled' package in pkgs.";
     }
     {

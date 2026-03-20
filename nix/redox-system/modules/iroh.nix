@@ -7,6 +7,7 @@ adios:
 
 let
   t = adios.types;
+  serviceType = import ../lib/service-type.nix { inherit t; };
 
   peerType = t.struct "IrohPeer" {
     name = t.string;
@@ -37,6 +38,28 @@ in
       type = t.listOf peerType;
       default = [ ];
       description = "Pre-configured peers (name/nodeId pairs)";
+    };
+    services = {
+      type = t.attrsOf serviceType;
+      description = "Iroh services (computed from module options)";
+      defaultFunc =
+        { options, ... }:
+        if !options.enable then
+          { }
+        else
+          {
+            irohd = {
+              description = "iroh P2P networking scheme daemon";
+              command = "/bin/irohd";
+              type = "nowait";
+              args = "--key-path ${options.keyPath} --peers-path ${options.peersPath}";
+              wantedBy = "rootfs";
+              enable = true;
+              after = [ "smolnetd" ];
+              environment = { };
+              priority = 50;
+            };
+          };
     };
   };
 

@@ -6,6 +6,7 @@ adios:
 
 let
   t = adios.types;
+  serviceType = import ../lib/service-type.nix { inherit t; };
 
   interfaceType = t.struct "Interface" {
     address = t.string;
@@ -75,6 +76,109 @@ in
       type = t.int;
       default = 8023;
       description = "Remote shell port";
+    };
+    services = {
+      type = t.attrsOf serviceType;
+      description = "Networking services (computed from module options)";
+      defaultFunc =
+        { options, ... }:
+        if !options.enable then
+          { }
+        else
+          let
+            firstIfaceName =
+              let
+                names = builtins.attrNames options.interfaces;
+              in
+              if names != [ ] then builtins.head names else null;
+            firstIface =
+              if firstIfaceName != null then options.interfaces.${firstIfaceName} else null;
+          in
+          {
+            smolnetd = {
+              description = "Network stack daemon";
+              command = "/bin/smolnetd";
+              type = "daemon";
+              args = "";
+              wantedBy = "rootfs";
+              enable = true;
+              after = [ "ptyd" ];
+              environment = { };
+              priority = 50;
+            };
+          }
+          // (
+            if options.mode == "dhcp" || options.mode == "auto" then
+              {
+                dhcpd = {
+                  description = "DHCP client";
+                  command = "/bin/dhcpd-quiet";
+                  type = "nowait";
+                  args = "";
+                  wantedBy = "rootfs";
+                  enable = true;
+                  after = [ "smolnetd" ];
+                  environment = { };
+                  priority = 50;
+                };
+              }
+            else
+              { }
+          )
+          // (
+            if options.mode == "auto" then
+              {
+                netcfg-auto = {
+                  description = "Network auto-configuration";
+                  command = "/bin/netcfg-setup";
+                  type = "nowait";
+                  args = "auto";
+                  wantedBy = "rootfs";
+                  enable = true;
+                  after = [ "smolnetd" ];
+                  environment = { };
+                  priority = 50;
+                };
+              }
+            else
+              { }
+          )
+          // (
+            if options.mode == "static" && firstIface != null then
+              {
+                netcfg-static = {
+                  description = "Static network configuration";
+                  command = "/bin/netcfg-setup";
+                  type = "oneshot";
+                  args = "static-auto --address ${firstIface.address} --gateway ${firstIface.gateway}";
+                  wantedBy = "rootfs";
+                  enable = true;
+                  after = [ "smolnetd" ];
+                  environment = { };
+                  priority = 50;
+                };
+              }
+            else
+              { }
+          )
+          // (
+            if options.remoteShellEnable then
+              {
+                remote-shell = {
+                  description = "Remote shell listener";
+                  command = "/bin/nc";
+                  type = "nowait";
+                  args = "-l -e /bin/sh ${options.remoteShellListenAddress}:${toString options.remoteShellPort}";
+                  wantedBy = "rootfs";
+                  enable = true;
+                  after = [ "smolnetd" ];
+                  environment = { };
+                  priority = 50;
+                };
+              }
+            else
+              { }
+          );
     };
   };
 

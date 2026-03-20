@@ -1,11 +1,12 @@
 # Init scripts and service configuration
 # Generates init.toml, startup.sh, and all numbered init.d scripts.
 #
-# Service declarations come from three sources:
-#   1. Module-derived services — generated here from module inputs
-#      (networking, graphics, snix, etc.)
-#   2. Profile-declared services — set via /services.services in profiles
-#   3. Raw initScripts — legacy numbered scripts with full control
+# Service declarations come from module-owned options:
+#   - /services.services  — core daemons, typed services, profile overrides
+#   - /networking.services — smolnetd, dhcpd, netcfg-*, remote-shell
+#   - /graphics.services   — orbital, audiod
+#   - /snix.services       — stored, profiled
+#   - /iroh.services       — irohd
 #
 # Services are topologically sorted by `after` dependencies and assigned
 # numeric prefixes (10-79). Raw initScripts keep their explicit names.
@@ -32,312 +33,24 @@ let
   startupContent = "#!/bin/sh\n" + inputs.services.startupScriptText;
 
   # ═══════════════════════════════════════════════════════════════════
-  # Module-derived service declarations
+  # Collect services from module-owned options
   # ═══════════════════════════════════════════════════════════════════
-  # Each block mirrors what was previously hardcoded as raw initScript
-  # conditionals. Now they produce structured service entries that go
-  # through topo sort + rendering like any other service.
+  # Each module declares its own services via computed options.
+  # /services owns core daemons, typed services, and profile overrides.
+  # Domain modules own their domain-specific services.
+  # Right-side wins on key collision (later inputs override earlier).
 
-  # --- Core daemons (from 00_base) ---
-  # Explicit priorities guarantee these start before all other rootfs
-  # services. Without them, alphabetical topo-sort of zero-dependency
-  # services would place audiod (10) before ipcd (16) and ptyd (30).
-  coreServices = {
-    ipcd = {
-      description = "Inter-process communication daemon";
-      command = "/bin/ipcd";
-      type = "daemon";
-      args = "";
-      wantedBy = "rootfs";
-      enable = true;
-      after = [ ];
-      environment = { };
-      priority = 10;
-    };
-    ptyd = {
-      description = "Pseudo-terminal daemon";
-      command = "/bin/ptyd";
-      type = "daemon";
-      args = "";
-      wantedBy = "rootfs";
-      enable = true;
-      after = [ "ipcd" ];
-      environment = { };
-      priority = 11;
-    };
-  };
-
-  # --- Networking services ---
-  networkingServices = lib.optionalAttrs cfg.networkingEnabled (
-    {
-      smolnetd = {
-        description = "Network stack daemon";
-        command = "/bin/smolnetd";
-        type = "daemon";
-        args = "";
-        wantedBy = "rootfs";
-        enable = true;
-        after = [ "ptyd" ];
-        environment = { };
-        priority = 50;
-      };
-    }
-    // (lib.optionalAttrs (inputs.networking.mode == "dhcp" || inputs.networking.mode == "auto") {
-      dhcpd = {
-        description = "DHCP client";
-        command = "/bin/dhcpd-quiet";
-        type = "nowait";
-        args = "";
-        wantedBy = "rootfs";
-        enable = true;
-        after = [ "smolnetd" ];
-        environment = { };
-        priority = 50;
-      };
-    })
-    // (lib.optionalAttrs (inputs.networking.mode == "auto") {
-      netcfg-auto = {
-        description = "Network auto-configuration";
-        command = "/bin/netcfg-setup";
-        type = "nowait";
-        args = "auto";
-        wantedBy = "rootfs";
-        enable = true;
-        after = [ "smolnetd" ];
-        environment = { };
-        priority = 50;
-      };
-    })
-    // (lib.optionalAttrs (inputs.networking.mode == "static" && cfg.firstIface != null) {
-      netcfg-static = {
-        description = "Static network configuration";
-        command = "/bin/netcfg-setup";
-        type = "oneshot";
-        args = "static-auto --address ${cfg.firstIface.address} --gateway ${cfg.firstIface.gateway}";
-        wantedBy = "rootfs";
-        enable = true;
-        after = [ "smolnetd" ];
-        environment = { };
-        priority = 50;
-      };
-    })
-    // (lib.optionalAttrs inputs.networking.remoteShellEnable {
-      remote-shell = {
-        description = "Remote shell listener";
-        command = "/bin/nc";
-        type = "nowait";
-        args = "-l -e /bin/sh ${inputs.networking.remoteShellListenAddress}:${toString inputs.networking.remoteShellPort}";
-        wantedBy = "rootfs";
-        enable = true;
-        after = [ "smolnetd" ];
-        environment = { };
-        priority = 50;
-      };
-    })
-  );
-
-  # --- Privilege escalation (sudo scheme daemon) ---
-  # The sudo binary doubles as the scheme daemon when run with --daemon.
-  # It registers the "sudo:" scheme, handles password verification, and
-  # calls SetResugid on behalf of su/sudo clients.
-  sudoServices = lib.optionalAttrs cfg.userutilsInstalled {
-    sudod = {
-      description = "Privilege escalation daemon (sudo scheme)";
-      command = "/bin/sudo";
-      type = "daemon";
-      args = "--daemon";
-      wantedBy = "rootfs";
-      enable = true;
-      after = [ "ptyd" ];
-      environment = { };
-      priority = 50;
-    };
-  };
-
-  # --- Console (getty) — typed service module ---
-  # cfg.gettyEnabled resolves the "auto"/"true"/"false" enum against userutilsInstalled.
-  consoleServices = lib.optionalAttrs cfg.gettyEnabled {
-    getty = {
-      description = "Serial console via getty + PTY bridge";
-      command = "getty";
-      type = "nowait";
-      args = "${cfg.gettyOpts.device} ${cfg.gettyOpts.extraArgs}";
-      wantedBy = "rootfs";
-      enable = true;
-      after = [ "ptyd" ];
-      environment = {
-        XDG_CONFIG_HOME = "/etc";
-      };
-      priority = 50;
-    };
-  };
-
-  # --- SSH server (sshd) — typed service module ---
-  sshServices = lib.optionalAttrs cfg.sshEnabled {
-    sshd = {
-      description = "SSH server daemon";
-      command = "/bin/sshd";
-      type = "nowait";
-      args = lib.concatStringsSep " " [
-        "-p" (toString cfg.sshOpts.port)
-        "-k" cfg.sshOpts.hostKeyPath
-      ];
-      wantedBy = "rootfs";
-      enable = true;
-      after = [ "ptyd" "smolnetd" ];
-      environment = { };
-      priority = 50;
-    };
-  };
-
-  # --- HTTP server (httpd) — typed service module ---
-  httpdServices = lib.optionalAttrs cfg.svcHttpdEnabled {
-    httpd = {
-      description = "HTTP file server";
-      command = "/bin/httpd";
-      type = "nowait";
-      args = "-p ${toString cfg.svcHttpdOpts.port} -r ${cfg.svcHttpdOpts.rootDir}";
-      wantedBy = "rootfs";
-      enable = true;
-      after = [ "smolnetd" ];
-      environment = { };
-      priority = 50;
-    };
-  };
-
-  # --- Example scheme daemon — typed service module ---
-  exampledServices = lib.optionalAttrs cfg.exampledEnabled {
-    exampled = {
-      description = "Example scheme daemon (${cfg.exampledOpts.schemeName})";
-      command = "/bin/exampled";
-      type = "scheme";
-      args = cfg.exampledOpts.schemeName;
-      wantedBy = "rootfs";
-      enable = true;
-      after = [ ];
-      environment = { };
-      priority = 50;
-    };
-  };
-
-  # --- Graphics (orbital, audiod) ---
-  graphicsServices = lib.optionalAttrs cfg.graphicsEnabled (
-    let
-      loginCmd =
-        if cfg.graphicsLoginCommand != "" then cfg.graphicsLoginCommand
-        else if pkgs ? orbutils then "orblogin orbterm"
-        else "login";
-    in
-    {
-      orbital = {
-        description = "Orbital desktop environment";
-        command = "orbital";
-        type = "nowait";
-        args = loginCmd;
-        wantedBy = "rootfs";
-        enable = true;
-        after = [ "ptyd" "ipcd" ];
-        environment = {
-          VT = toString cfg.virtualTerminal;
-        };
-        priority = 50;
-      };
-    }
-    // lib.optionalAttrs inputs.hardware.audioEnable {
-      audiod = {
-        description = "Audio daemon";
-        command = "audiod";
-        type = "daemon";
-        args = "";
-        wantedBy = "rootfs";
-        enable = true;
-        after = [ ];
-        environment = { };
-        priority = 50;
-      };
-    }
-  );
-
-  # --- snix scheme daemons ---
-  snixServices =
-    let
-      storedEnabled = inputs.snix.stored.enable;
-      profiledEnabled = inputs.snix.profiled.enable;
-      cachePath = inputs.snix.stored.cachePath;
-      storeDir = inputs.snix.stored.storeDir;
-      profilesDir = inputs.snix.profiled.profilesDir;
-      profiledStoreDir = inputs.snix.profiled.storeDir;
-    in
-    lib.optionalAttrs storedEnabled {
-      stored = {
-        description = "snix store scheme daemon (lazy NAR extraction)";
-        command = "/bin/snix";
-        type = "nowait";
-        args = "stored --cache-path ${cachePath} --store-dir ${storeDir}";
-        wantedBy = "rootfs";
-        enable = true;
-        after = [ ];
-        environment = { };
-        priority = 50;
-      };
-    }
-    // lib.optionalAttrs profiledEnabled {
-      profiled = {
-        description = "snix profile scheme daemon (union package views)";
-        command = "/bin/snix";
-        type = "nowait";
-        args = "profiled --profiles-dir ${profilesDir} --store-dir ${profiledStoreDir}";
-        wantedBy = "rootfs";
-        enable = true;
-        after = [ ];
-        environment = { };
-        priority = 50;
-      };
-    };
-
-  # --- iroh P2P networking ---
-  irohServices = lib.optionalAttrs (inputs.iroh.enable or false) {
-    irohd = {
-      description = "iroh P2P networking scheme daemon";
-      command = "/bin/irohd";
-      type = "nowait";
-      args = lib.concatStringsSep " " [
-        "--key-path"
-        (inputs.iroh.keyPath or "/etc/iroh/node.key")
-        "--peers-path"
-        (inputs.iroh.peersPath or "/etc/iroh/peers.json")
-      ];
-      wantedBy = "rootfs";
-      enable = true;
-      after = [ "smolnetd" ];
-      environment = { };
-      priority = 50;
-    };
-  };
-
-  # ═══════════════════════════════════════════════════════════════════
-  # Merge all service sources
-  # ═══════════════════════════════════════════════════════════════════
-  # Module-derived services are overridden by profile-declared services
-  # (// merge: right side wins on key collision).
-
-  moduleServices =
-    coreServices
-    // networkingServices
-    // sudoServices
-    // consoleServices
-    // sshServices
-    // httpdServices
-    // exampledServices
-    // graphicsServices
-    // snixServices
-    // irohServices;
-
-  profileServices = inputs.services.services;
-
-  # Filter out disabled services
+  # Generated core + typed services from /services, then domain modules,
+  # then profile-declared overrides on top (right-side wins).
   allDeclaredServices =
-    lib.filterAttrs (_: svc: svc.enable or true) (moduleServices // profileServices);
+    lib.filterAttrs (_: svc: svc.enable or true) (
+      inputs.services._generatedServices
+      // (inputs.networking.services or { })
+      // (inputs.graphics.services or { })
+      // (inputs.snix.services or { })
+      // (inputs.iroh.services or { })
+      // inputs.services.services
+    );
 
   # ═══════════════════════════════════════════════════════════════════
   # Topological sort with auto-numbering
