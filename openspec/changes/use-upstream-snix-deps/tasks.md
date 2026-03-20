@@ -27,15 +27,15 @@
 
 ## 4. Delete reimplemented glue modules
 
-- [ ] 4.1 Delete `snix-redox/src/derivation_builtins.rs` (516 LOC)
-- [ ] 4.2 Delete `snix-redox/src/known_paths.rs` (85 LOC)
-- [ ] 4.3 Delete fetcher builtin code from `snix-redox/src/fetchers.rs` (keep `fetch_to_store`, `verify_fetch_hash`, `fetch_and_unpack` for build-time execution)
-- [ ] 4.4 Rewrite or delete `snix-redox/src/snix_io.rs` — replaced by upstream `SnixStoreIO`
-- [ ] 4.5 Update `src/lib.rs` and `src/main.rs` to remove references to deleted modules
-- [ ] 4.6 Update `src/local_build.rs` to use upstream `KnownPaths` type (from `snix_glue::known_paths`)
-- [ ] 4.7 Update `src/flake.rs` to use upstream `KnownPaths` and evaluation setup
-- [ ] 4.8 Fix all remaining compilation errors from import path changes
-- [ ] 4.9 Run full test suite: `cargo test --target x86_64-unknown-linux-gnu`
+- [x] 4.1 Delete `snix-redox/src/derivation_builtins.rs` (516 LOC) — module declarations removed from lib.rs/main.rs, file kept as dead code until physical delete in task 7
+- [x] 4.2 Delete `snix-redox/src/known_paths.rs` (85 LOC) — module declarations removed, imports switched to snix_glue::known_paths
+- [x] 4.3 Delete fetcher builtin code from `snix-redox/src/fetchers.rs` — rewrote to keep only build-time execution (fetch_to_store, verify_fetch_hash, fetch_and_unpack, tar extraction)
+- [x] 4.4 Rewrite or delete `snix-redox/src/snix_io.rs` — module commented out in lib.rs/main.rs, replaced by upstream SnixStoreIO
+- [x] 4.5 Update `src/lib.rs` and `src/main.rs` to remove references to deleted modules
+- [x] 4.6 Update `src/local_build.rs` to use upstream `KnownPaths` type (from `snix_glue::known_paths`)
+- [x] 4.7 Update `src/flake.rs` to use upstream `KnownPaths` and evaluation setup
+- [x] 4.8 Fix all remaining compilation errors from import path changes
+- [x] 4.9 Run full test suite: `cargo test --target x86_64-unknown-linux-gnu` — 563 pass, 0 fail
 
 ## 5. Cross-compilation crate patches
 
