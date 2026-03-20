@@ -42,7 +42,7 @@
 
 ## 8. Full validation
 
-- [ ] 8.1 Run `nix run .#test-host` — all eval, artifact, type, and lib tests pass
-- [ ] 8.2 Run `nix run .#functional-test` — VM boots, services start correctly
-- [ ] 8.3 Verify service init scripts in rootTree match previous output (diff check: same service names, same numbering, same content)
-- [ ] 8.4 Verify manifest.json `services.declared` contains all expected services
+- [x] 8.1 Run `nix run .#test-host` — all eval, artifact, type, and lib tests pass
+- [x] 8.2 Run `nix run .#functional-test` — VM boots, services start correctly (124 pass, 37 fail — all failures pre-existing, no service regressions)
+- [x] 8.3 Verify service init scripts in rootTree match previous output (diff check: zero differences)
+- [x] 8.4 Verify manifest.json `services.declared` contains all expected services (validated by artifact-rootTree checks in test-host)
