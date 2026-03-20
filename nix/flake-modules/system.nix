@@ -273,6 +273,23 @@ let
     testCache = testBinaryCache;
   };
 
+  # Channel update test: boots with networking, tests channel add/update/upgrade
+  mkChannelUpdateTest = modularPkgs.infrastructure.mkChannelUpdateTest;
+  channelUpdateTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/channel-update-test.nix ];
+    inherit extraPkgs;
+  };
+  channelUpdateCache = import ../pkgs/infrastructure/channel-update-cache.nix {
+    inherit pkgs lib;
+    rootTree = channelUpdateTestSystem.rootTree;
+    inherit testBinaryCache;
+  };
+  channelUpdateTest = mkChannelUpdateTest {
+    diskImage = channelUpdateTestSystem.diskImage;
+    inherit bootloader;
+    channelCache = channelUpdateCache;
+  };
+
   # snix source bundle for self-compile test
   snixSourceBundle = import ../pkgs/infrastructure/snix-source-bundle.nix {
     inherit pkgs;
@@ -510,6 +527,9 @@ in
 
     redox-network-install-test = networkInstallTestSystem.diskImage;
     inherit networkInstallTest testBinaryCache;
+
+    redox-channel-update-test = channelUpdateTestSystem.diskImage;
+    inherit channelUpdateTest channelUpdateCache;
 
     redox-bridge-test = bridgeTestSystem.diskImage;
     inherit bridgeTest;
