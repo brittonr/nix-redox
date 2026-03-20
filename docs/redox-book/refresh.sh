@@ -45,7 +45,7 @@ if [ ${#failed[@]} -gt 0 ]; then
 fi
 
 echo "Converting HTML to markdown ..."
-python3 - "$HTML_DIR" "$PAGES_DIR" << 'PYEOF'
+python3 - "$HTML_DIR" "$PAGES_DIR" <<'PYEOF'
 import os, re, sys
 from html.parser import HTMLParser
 
