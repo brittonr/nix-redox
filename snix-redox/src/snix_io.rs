@@ -109,7 +109,7 @@ impl SnixRedoxIO {
             store_path.to_absolute_path()
         );
 
-        match local_build::build_needed(&drv_path, &known_paths, &db) {
+        match local_build::build_needed(&drv_path, &*known_paths, &db) {
             Ok(_) => path.exists(),
             Err(e) => {
                 eprintln!("snix-io: build failed: {e}");

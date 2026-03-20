@@ -126,7 +126,7 @@ let
         description = "Remote shell listener";
         command = "/bin/nc";
         type = "nowait";
-        args = "-l -e /bin/sh 0.0.0.0:${toString inputs.networking.remoteShellPort}";
+        args = "-l -e /bin/sh ${inputs.networking.remoteShellListenAddress}:${toString inputs.networking.remoteShellPort}";
         wantedBy = "rootfs";
         enable = true;
         after = [ "smolnetd" ];

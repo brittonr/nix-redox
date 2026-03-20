@@ -36,7 +36,7 @@ use nix_compat::nixbase32;
 use nix_compat::store_path::{StorePath, STORE_DIR};
 use sha2::{Digest, Sha256};
 
-use crate::known_paths::KnownPaths;
+use snix_glue::known_paths::KnownPaths;
 use crate::pathinfo::{self, PathInfo, PathInfoDb};
 use crate::sandbox;
 
@@ -1089,11 +1089,11 @@ pub fn run_with_options(
     let drv_path = StorePath::<String>::from_absolute_path(drv_path_str.as_bytes())
         .map_err(|e| format!("invalid derivation path '{drv_path_str}': {e}"))?;
 
-    let known_paths = state.known_paths.borrow();
+    let known_paths_ref = state.known_paths.borrow();
     let db = PathInfoDb::open()
         .map_err(|e| format!("opening pathinfo db: {e}"))?;
 
-    let result = build_needed_with_options(&drv_path, &known_paths, &db, no_sandbox)?;
+    let result = build_needed_with_options(&drv_path, &*known_paths_ref, &db, no_sandbox)?;
 
     // Print output paths. Explicit flush required — stdout is fully
     // buffered when redirected to a file, and Redox's exit handlers

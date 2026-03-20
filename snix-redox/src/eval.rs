@@ -1,14 +1,18 @@
-//! Nix expression evaluation using snix-eval's bytecode VM.
+//! Nix expression evaluation using upstream snix-eval + snix-glue.
+//!
+//! Sets up a tokio runtime, constructs in-memory store services, and
+//! uses upstream SnixStoreIO with derivation/fetcher/import builtins.
 
-use std::cell::RefCell;
 use std::io::{self, BufRead, Write};
 use std::rc::Rc;
+use std::sync::Arc;
 
-use snix_eval::Evaluation;
+use snix_eval::{EvalIO, Evaluation};
 
-use crate::derivation_builtins::{derivation_builtins, SnixRedoxState};
-use crate::fetchers::fetcher_builtins;
-use crate::known_paths::KnownPaths;
+use snix_build::buildservice::DummyBuildService;
+use snix_glue::builtins::{add_derivation_builtins, add_fetcher_builtins, add_import_builtins};
+use snix_glue::snix_store_io::SnixStoreIO;
+use snix_store::utils::{construct_services, ServiceUrlsMemory};
 
 /// Evaluate a Nix expression from --expr or --file
 pub fn run(
@@ -24,10 +28,8 @@ pub fn run(
 
     let result = evaluate(&source)?;
     if raw {
-        // Strip surrounding quotes from string values (e.g. "hello" → hello)
         let s = result.to_string();
         if s.starts_with('"') && s.ends_with('"') && s.len() >= 2 {
-            // Unescape the inner string (handle \" → " and \\ → \ etc.)
             let inner = &s[1..s.len() - 1];
             let unescaped = inner
                 .replace("\\\"", "\"")
@@ -47,8 +49,6 @@ pub fn run(
 /// Show a .drv file in human-readable JSON
 pub fn show_derivation(path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let bytes = std::fs::read(path)?;
-
-    // Trim trailing whitespace (Nix derivations shouldn't have it)
     let trimmed = bytes.as_slice();
 
     match nix_compat::derivation::Derivation::from_aterm_bytes(trimmed) {
@@ -101,32 +101,54 @@ pub fn repl() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Core evaluation function
 fn evaluate(expr: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let (result, _state) = evaluate_with_state(expr)?;
+    let (result, _io) = evaluate_with_state(expr)?;
     Ok(result)
 }
 
 /// Evaluate a Nix expression, returning both the string result and the
-/// shared state (including KnownPaths with all registered derivations).
+/// shared SnixStoreIO (which contains KnownPaths with all registered
+/// derivations).
 ///
-/// Uses [`SnixRedoxIO`] for store-aware imports and build-on-demand.
-/// Used by `snix build` to access derivations after evaluation.
+/// Uses upstream SnixStoreIO with in-memory store services for
+/// derivation path calculation, fetcher builtins, and import builtins.
+/// A tokio runtime is created for the async store operations.
 pub fn evaluate_with_state(
     expr: &str,
-) -> Result<(String, Rc<SnixRedoxState>), Box<dyn std::error::Error>> {
-    let state = Rc::new(SnixRedoxState {
-        known_paths: RefCell::new(KnownPaths::default()),
-    });
+) -> Result<(String, Rc<SnixStoreIO>), Box<dyn std::error::Error>> {
+    let runtime = tokio::runtime::Runtime::new()
+        .map_err(|e| format!("tokio runtime: {e}"))?;
 
-    let io = crate::snix_io::SnixRedoxIO::new(Rc::clone(&state));
+    let (blob_service, directory_service, path_info_service, nar_calculation_service) =
+        runtime.block_on(async {
+            construct_services(
+                <ServiceUrlsMemory as clap::Parser>::parse_from(std::iter::empty::<&str>()),
+            )
+            .await
+        })
+        .map_err(|e| format!("store services: {e}"))?;
 
-    let eval = Evaluation::builder_pure()
-        .enable_impure(Some(Box::new(io) as Box<dyn snix_eval::EvalIO>))
-        .add_builtins(derivation_builtins::builtins(Rc::clone(&state)))
-        .add_builtins(fetcher_builtins::builtins(Rc::clone(&state)))
-        .add_src_builtin("derivation", include_str!("derivation.nix"))
-        .build();
+    let io = Rc::new(SnixStoreIO::new(
+        blob_service,
+        directory_service,
+        path_info_service,
+        nar_calculation_service.into(),
+        Arc::<DummyBuildService>::default(),
+        runtime.handle().clone(),
+        Vec::new(),
+    ));
+
+    let mut eval_builder =
+        Evaluation::builder(io.clone() as Rc<dyn EvalIO>).enable_import();
+    eval_builder = add_derivation_builtins(eval_builder, Rc::clone(&io));
+    eval_builder = add_fetcher_builtins(eval_builder, Rc::clone(&io));
+    eval_builder = add_import_builtins(eval_builder, Rc::clone(&io));
+    let eval = eval_builder.build();
 
     let result = eval.evaluate(expr, None);
+
+    // Keep runtime alive until evaluation completes — SnixStoreIO holds
+    // a handle but the runtime itself must outlive it.
+    let _rt_guard = runtime;
 
     if !result.errors.is_empty() {
         let errors: Vec<String> = result.errors.iter().map(|e| format!("{e}")).collect();
@@ -134,7 +156,7 @@ pub fn evaluate_with_state(
     }
 
     match result.value {
-        Some(v) => Ok((format!("{v}"), state)),
+        Some(v) => Ok((format!("{v}"), io)),
         None => Err("no value produced".into()),
     }
 }
@@ -220,7 +242,6 @@ mod tests {
     #[test]
     fn test_list_simple() {
         let result = evaluate("[1 2 3]").unwrap();
-        // List representation may vary, just check it contains the elements
         assert!(result.contains("1"));
         assert!(result.contains("2"));
         assert!(result.contains("3"));
@@ -271,7 +292,6 @@ mod tests {
     #[test]
     fn test_builtin_attrnames() {
         let result = evaluate("builtins.attrNames { b = 1; a = 2; }").unwrap();
-        // attrNames returns a sorted list
         assert!(result.contains("a"));
         assert!(result.contains("b"));
     }
@@ -332,23 +352,17 @@ mod tests {
 
     #[test]
     fn test_derivation_parsing() {
-        // Embed fixture at compile time so the test works in any working directory
-        // (including Nix sandbox builds where CARGO_MANIFEST_DIR is ephemeral).
         let bytes: &[u8] = include_bytes!("../testdata/4wvvbi4jwn0prsdxb7vs673qa5h9gr7x-foo.drv");
-        // Trim trailing whitespace — pre-commit hooks may add a trailing newline
         let trimmed = bytes.strip_suffix(b"\n").unwrap_or(bytes);
 
         let drv = nix_compat::derivation::Derivation::from_aterm_bytes(trimmed);
         assert!(drv.is_ok(), "failed to parse derivation: {:?}", drv.err());
 
         let drv = drv.unwrap();
-        // Basic sanity checks on the parsed derivation
         assert!(!drv.outputs.is_empty(), "derivation should have outputs");
     }
 
-    // ===== Derivation Builtins =====
-    //
-    // Expected paths verified against Nix (upstream snix test vectors).
+    // ===== Derivation Builtins (upstream) =====
 
     #[test]
     fn test_derivation_outpath() {
@@ -401,7 +415,6 @@ mod tests {
 
     #[test]
     fn test_fod_sha256_algo_omitted() {
-        // When outputHashAlgo is omitted, algo is inferred from the SRI hash.
         let result = evaluate(
             r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; outputHashMode = "recursive"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath"#,
         ).unwrap();
@@ -410,7 +423,6 @@ mod tests {
 
     #[test]
     fn test_fod_sha256_mode_omitted() {
-        // When both outputHashAlgo and outputHashMode are omitted, defaults to flat.
         let result = evaluate(
             r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath"#,
         ).unwrap();
@@ -443,7 +455,6 @@ mod tests {
 
     #[test]
     fn test_derivation_with_dep() {
-        // A derivation that depends on another.
         let result = evaluate(r#"
             let
               bar = builtins.derivation {
@@ -467,8 +478,6 @@ mod tests {
 
     #[test]
     fn test_fod_same_hash_same_outpath() {
-        // Two FODs with the same name and hash but different builders
-        // should produce the same output path.
         let result = evaluate(r#"
             (builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath ==
             (builtins.derivation { name = "foo"; builder = "/bin/aa"; system = "x86_64-linux"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath
@@ -478,8 +487,6 @@ mod tests {
 
     #[test]
     fn test_ignore_nulls_true() {
-        // __ignoreNulls = true, with a null arg — should produce the same path
-        // as without the null arg.
         let without = evaluate(
             r#"(builtins.derivation { name = "foo"; system = ":"; builder = ":"; __ignoreNulls = true; }).drvPath"#,
         ).unwrap();
@@ -514,4 +521,3 @@ mod tests {
         assert!(result.is_err());
     }
 }
-// touch

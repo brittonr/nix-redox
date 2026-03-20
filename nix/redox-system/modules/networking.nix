@@ -66,6 +66,11 @@ in
       default = false;
       description = "Enable remote shell listener";
     };
+    remoteShellListenAddress = {
+      type = t.string;
+      default = "0.0.0.0";
+      description = "Listen address for the remote shell (0.0.0.0 = all interfaces)";
+    };
     remoteShellPort = {
       type = t.int;
       default = 8023;
