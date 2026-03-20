@@ -22,9 +22,9 @@ Hard-won lessons from building RedoxOS with Nix. Read before making changes.
 ### Available Commands
 **In uutils**: cat, cp, df, du, echo, head, ls, mkdir, mv, pwd, rm, sort, touch, uniq, wc
 **In extrautils**: grep, less, tar
-**NOT available**: dd, tail, sleep, sed, awk, cut, find, chmod (use full path `/nix/system/profile/bin/chmod`)
+**NOT available**: dd, tail, sed, awk, cut, find, chmod (use full path `/nix/system/profile/bin/chmod`)
 - `grep` has no `\|` alternation or `-E` extended regex — use separate grep calls
-- `sleep` binary not in uutils (not compiled) — use `read -t N < /dev/null` in bash or FUSE I/O ops in Ion
+- `sleep` is compiled in uutils — uses nanosleep syscall, works correctly
 - nanosleep syscall works correctly (kernel SYS_NANOSLEEP + scheduler wake verified 2026-03-11)
 
 ### Scheme System

@@ -3,7 +3,7 @@
 # work. Tests whether nanosleep (SYS_NANOSLEEP syscall 162) is
 # functional. Uses bash SECONDS (clock_gettime) and read -t (select
 # with timeout) as complementary test vectors.
-# NOTE: No sleep binary exists in uutils. read -t uses select/poll.
+# sleep binary is compiled in uutils (uses nanosleep). read -t uses select/poll.
 
 echo "--- clock-monotonic ---"
 /nix/system/profile/bin/bash -c '
@@ -17,6 +17,20 @@ echo "--- clock-monotonic ---"
     echo "  SECONDS before=$BEFORE after=$AFTER"
   else
     echo "FUNC_TEST:clock-monotonic:FAIL:clock-went-backwards before=$BEFORE after=$AFTER"
+  fi
+'
+
+echo "--- sleep-binary ---"
+/nix/system/profile/bin/bash -c '
+  BEFORE=$SECONDS
+  sleep 2
+  AFTER=$SECONDS
+  ELAPSED=$(( AFTER - BEFORE ))
+  if [ "$ELAPSED" -ge 1 ] && [ "$ELAPSED" -le 5 ]; then
+    echo "FUNC_TEST:sleep-binary:PASS"
+    echo "  sleep 2 took ${ELAPSED}s"
+  else
+    echo "FUNC_TEST:sleep-binary:FAIL:elapsed=${ELAPSED}s expected=2"
   fi
 '
 
