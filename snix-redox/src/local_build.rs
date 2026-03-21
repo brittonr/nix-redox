@@ -40,6 +40,26 @@ use snix_glue::known_paths::KnownPaths;
 use crate::pathinfo::{self, PathInfo, PathInfoDb};
 use crate::sandbox;
 
+/// Standard Nix build environment variables.
+///
+/// Mirrors upstream snix-glue::builder::NIX_ENVIRONMENT_VARS (which is
+/// private). Temp dir paths are overridden at build time with the actual
+/// build directory — upstream uses "/build" assuming a container.
+const NIX_ENVIRONMENT_VARS: [(&str, &str); 12] = [
+    ("HOME", "/homeless-shelter"),
+    ("NIX_BUILD_CORES", "0"),
+    ("NIX_BUILD_TOP", "/build"),
+    ("NIX_LOG_FD", "2"),
+    ("NIX_STORE", "/nix/store"),
+    ("PATH", "/path-not-set"),
+    ("PWD", "/build"),
+    ("TEMP", "/build"),
+    ("TEMPDIR", "/build"),
+    ("TERM", "xterm-256color"),
+    ("TMP", "/build"),
+    ("TMPDIR", "/build"),
+];
+
 // ── Temp Build Directory ───────────────────────────────────────────────────
 
 /// A temporary build directory that is removed on drop.
@@ -207,19 +227,22 @@ fn build_derivation_inner(
         env.insert(key.clone(), value.to_string());
     }
 
-    // Standard Nix build environment variables
+    // Standard Nix build environment variables.
+    // Matches upstream snix-glue::builder::NIX_ENVIRONMENT_VARS, but
+    // substitutes the actual build temp dir for /build (upstream assumes
+    // a container; we run on the real filesystem).
     let build_dir_str = build_dir.path().to_string_lossy().to_string();
-    env.insert("NIX_BUILD_TOP".to_string(), build_dir_str.clone());
-    env.insert("TMPDIR".to_string(), build_dir_str.clone());
-    env.insert("TEMPDIR".to_string(), build_dir_str.clone());
-    env.insert("TMP".to_string(), build_dir_str.clone());
-    env.insert("TEMP".to_string(), build_dir_str);
-    env.insert("HOME".to_string(), "/homeless-shelter".to_string());
-    env.insert("NIX_STORE".to_string(), STORE_DIR.to_string());
-
-    // Don't override PATH if the derivation sets it
-    env.entry("PATH".to_string())
-        .or_insert_with(|| "/path-not-set".to_string());
+    for &(key, value) in NIX_ENVIRONMENT_VARS.iter() {
+        let actual_value = match key {
+            // Temp dirs: use real build dir instead of upstream's "/build"
+            "NIX_BUILD_TOP" | "TMPDIR" | "TEMPDIR" | "TMP" | "TEMP" | "PWD" => {
+                build_dir_str.clone()
+            }
+            _ => value.to_string(),
+        };
+        // Don't override derivation-provided values (e.g., custom PATH)
+        env.entry(key.to_string()).or_insert(actual_value);
+    }
 
     // ── 4. Ensure /nix/store exists ────────────────────────────────────
     fs::create_dir_all(STORE_DIR)
@@ -884,52 +907,55 @@ fn collect_potential_references(
 
 /// Scan all files under `path` for store path references.
 ///
-/// Searches for the 32-character nixbase32 hash component of each
-/// candidate store path. Any file containing a candidate hash is
-/// considered a reference to that store path.
+/// Uses upstream snix-castore's Wu-Manber multi-pattern scanner for
+/// efficient O(file_size) matching regardless of candidate count.
+/// The `candidates` map keys are nixbase32 hashes (32 chars), values
+/// are full store paths.
 pub fn scan_references(
     path: &Path,
     candidates: &HashMap<String, String>,
 ) -> io::Result<BTreeSet<String>> {
-    let mut found = BTreeSet::new();
     if candidates.is_empty() {
-        return Ok(found);
+        return Ok(BTreeSet::new());
     }
-    scan_path(path, candidates, &mut found)?;
+
+    // Build the list of hash patterns for the Wu-Manber scanner.
+    let hashes: Vec<String> = candidates.keys().cloned().collect();
+
+    let scanner = snix_castore::refscan::ReferenceScanner::new(
+        hashes,
+    );
+
+    scan_path_with_scanner(path, &scanner)?;
+
+    // Map matched indices back to store paths.
+    let found: BTreeSet<String> = scanner
+        .candidate_matches()
+        .map(|matched_hash| candidates[matched_hash].clone())
+        .collect();
+
     Ok(found)
 }
 
-fn scan_path(
+/// Recursively feed file/symlink content to the Wu-Manber scanner.
+fn scan_path_with_scanner(
     path: &Path,
-    candidates: &HashMap<String, String>,
-    found: &mut BTreeSet<String>,
+    scanner: &snix_castore::refscan::ReferenceScanner<String>,
 ) -> io::Result<()> {
     let meta = fs::symlink_metadata(path)?;
 
     if meta.is_file() {
         let content = fs::read(path)?;
-        for (hash, store_path) in candidates {
-            if !found.contains(store_path)
-                && content
-                    .windows(hash.len())
-                    .any(|w| w == hash.as_bytes())
-            {
-                found.insert(store_path.clone());
-            }
-        }
+        scanner.scan(&content);
     } else if meta.is_dir() {
         for entry in fs::read_dir(path)? {
             let entry = entry?;
-            scan_path(&entry.path(), candidates, found)?;
+            scan_path_with_scanner(&entry.path(), scanner)?;
         }
     } else if meta.file_type().is_symlink() {
         let target = fs::read_link(path)?;
-        let target_str = target.to_string_lossy();
-        for (hash, store_path) in candidates {
-            if !found.contains(store_path) && target_str.contains(hash.as_str()) {
-                found.insert(store_path.clone());
-            }
-        }
+        let target_bytes = target.to_string_lossy();
+        scanner.scan(target_bytes.as_bytes());
     }
 
     Ok(())
