@@ -199,6 +199,9 @@ lzma-rs = "0.3"
 bzip2-rs = "0.1"
 flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
 
+# === Tar extraction (replaces hand-rolled parser) ===
+tar = "0.4"
+
 # === Standard utilities ===
 clap = { version = "4", features = ["derive", "env"] }
 serde = { version = ">=1.0.100, <1.0.218", features = ["derive"] }

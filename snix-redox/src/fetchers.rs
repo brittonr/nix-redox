@@ -100,6 +100,10 @@ pub fn fetch_and_unpack(url: &str, out: &str) -> Result<(), Box<dyn std::error::
 /// Extract a tar archive to a directory.
 ///
 /// Strips the top-level directory component (like GitHub release tarballs).
+/// Extract a tar archive to a directory using the `tar` crate.
+///
+/// Strips the top-level directory component (like GitHub release tarballs
+/// where all entries are under `project-v1.0/`).
 fn extract_tar<R: std::io::Read>(
     reader: R,
     out: &str,
@@ -107,133 +111,99 @@ fn extract_tar<R: std::io::Read>(
     let out_path = std::path::Path::new(out);
     std::fs::create_dir_all(out_path)?;
 
-    let mut reader = std::io::BufReader::new(reader);
-    let mut header_buf = [0u8; 512];
-    let mut prefix_to_strip: Option<String> = None;
+    let mut archive = tar::Archive::new(reader);
+    // Don't preserve mtime — matches Nix's deterministic store semantics.
+    archive.set_preserve_mtime(false);
 
-    loop {
-        match std::io::Read::read_exact(&mut reader, &mut header_buf) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
-            Err(e) => return Err(e.into()),
-        }
+    // Detect the top-level prefix to strip from the first entry.
+    // We collect entries, find the common prefix, then extract with
+    // path rewriting. Since tar::Archive is streaming, we need to
+    // iterate entries one by one.
+    let mut prefix_to_strip: Option<std::path::PathBuf> = None;
 
-        if header_buf.iter().all(|&b| b == 0) {
-            break;
-        }
+    for entry_result in archive.entries()? {
+        let mut entry = entry_result?;
+        let entry_path = entry.path()?.into_owned();
 
-        let name = parse_tar_string(&header_buf[0..100]);
-        let mode = parse_tar_octal(&header_buf[100..108]);
-        let size = parse_tar_octal(&header_buf[124..136]) as u64;
-        let typeflag = header_buf[156];
-        let linkname = parse_tar_string(&header_buf[157..257]);
-        let prefix = parse_tar_string(&header_buf[345..500]);
-        let full_name = if prefix.is_empty() {
-            name.clone()
-        } else {
-            format!("{prefix}/{name}")
-        };
-
-        if prefix_to_strip.is_none() && !full_name.is_empty() {
-            let first_component = full_name.split('/').next().unwrap_or("");
-            if !first_component.is_empty() {
-                prefix_to_strip = Some(format!("{first_component}/"));
+        // Determine prefix from first non-empty entry.
+        if prefix_to_strip.is_none() {
+            if let Some(first_component) = entry_path.components().next() {
+                prefix_to_strip = Some(std::path::PathBuf::from(first_component.as_os_str()));
             }
         }
 
-        let relative_name = match &prefix_to_strip {
-            Some(pfx) => full_name.strip_prefix(pfx).unwrap_or(&full_name),
-            None => &full_name,
+        // Strip the top-level prefix.
+        let relative = match &prefix_to_strip {
+            Some(pfx) => match entry_path.strip_prefix(pfx) {
+                Ok(stripped) => stripped.to_path_buf(),
+                Err(_) => entry_path.clone(),
+            },
+            None => entry_path.clone(),
         };
 
-        if relative_name.is_empty() || relative_name == "." {
-            skip_tar_data(&mut reader, size)?;
+        // Skip the top-level directory entry itself (empty after stripping).
+        if relative.as_os_str().is_empty() || relative == std::path::Path::new(".") {
             continue;
         }
 
-        let dest = out_path.join(relative_name);
+        let dest = out_path.join(&relative);
 
-        match typeflag {
-            b'0' | 0 => {
+        match entry.header().entry_type() {
+            tar::EntryType::Regular | tar::EntryType::GNUSparse => {
                 if let Some(parent) = dest.parent() {
                     std::fs::create_dir_all(parent)?;
                 }
                 let mut file = std::fs::File::create(&dest)?;
-                let mut remaining = size;
-                let mut buf = [0u8; 8192];
-                while remaining > 0 {
-                    let to_read = std::cmp::min(remaining as usize, buf.len());
-                    std::io::Read::read_exact(&mut reader, &mut buf[..to_read])?;
-                    std::io::Write::write_all(&mut file, &buf[..to_read])?;
-                    remaining -= to_read as u64;
-                }
-                let padding = (512 - (size % 512)) % 512;
-                skip_tar_data(&mut reader, padding)?;
+                std::io::copy(&mut entry, &mut file)?;
 
                 #[cfg(unix)]
                 {
                     use std::os::unix::fs::PermissionsExt;
-                    let perms = std::fs::Permissions::from_mode(mode as u32);
-                    let _ = std::fs::set_permissions(&dest, perms);
+                    if let Ok(mode) = entry.header().mode() {
+                        let _ = std::fs::set_permissions(
+                            &dest,
+                            std::fs::Permissions::from_mode(mode),
+                        );
+                    }
                 }
             }
-            b'5' => {
+            tar::EntryType::Directory => {
                 std::fs::create_dir_all(&dest)?;
-                skip_tar_data(&mut reader, size)?;
             }
-            b'2' => {
+            tar::EntryType::Symlink => {
                 if let Some(parent) = dest.parent() {
                     std::fs::create_dir_all(parent)?;
                 }
                 #[cfg(unix)]
-                std::os::unix::fs::symlink(&linkname, &dest)?;
-                skip_tar_data(&mut reader, size)?;
+                if let Some(target) = entry.link_name()? {
+                    std::os::unix::fs::symlink(target.as_ref(), &dest)?;
+                }
             }
-            b'1' => {
+            tar::EntryType::Link => {
+                // Hard link — copy the target file's contents.
                 if let Some(parent) = dest.parent() {
                     std::fs::create_dir_all(parent)?;
                 }
-                let link_target = match &prefix_to_strip {
-                    Some(pfx) => linkname.strip_prefix(pfx).unwrap_or(&linkname).to_string(),
-                    None => linkname.clone(),
-                };
-                let target_path = out_path.join(&link_target);
-                if target_path.exists() {
-                    std::fs::copy(&target_path, &dest)?;
+                if let Some(link_target) = entry.link_name()? {
+                    let stripped_target = match &prefix_to_strip {
+                        Some(pfx) => link_target
+                            .strip_prefix(pfx.as_path())
+                            .unwrap_or(link_target.as_ref())
+                            .to_path_buf(),
+                        None => link_target.into_owned(),
+                    };
+                    let target_path = out_path.join(&stripped_target);
+                    if target_path.exists() {
+                        std::fs::copy(&target_path, &dest)?;
+                    }
                 }
-                skip_tar_data(&mut reader, size)?;
             }
             _ => {
-                skip_tar_data(&mut reader, size)?;
+                // Skip unknown entry types (pax headers, etc.)
             }
         }
     }
 
-    Ok(())
-}
-
-fn parse_tar_string(field: &[u8]) -> String {
-    let end = field.iter().position(|&b| b == 0).unwrap_or(field.len());
-    String::from_utf8_lossy(&field[..end]).to_string()
-}
-
-fn parse_tar_octal(field: &[u8]) -> u64 {
-    let s = parse_tar_string(field);
-    let s = s.trim();
-    if s.is_empty() {
-        return 0;
-    }
-    u64::from_str_radix(s, 8).unwrap_or(0)
-}
-
-fn skip_tar_data<R: std::io::Read>(reader: &mut R, n: u64) -> Result<(), std::io::Error> {
-    let mut remaining = n;
-    let mut buf = [0u8; 4096];
-    while remaining > 0 {
-        let to_read = std::cmp::min(remaining as usize, buf.len());
-        std::io::Read::read_exact(reader, &mut buf[..to_read])?;
-        remaining -= to_read as u64;
-    }
     Ok(())
 }
 
@@ -308,46 +278,59 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parse_tar_string_simple() {
-        let mut field = [0u8; 100];
-        field[..5].copy_from_slice(b"hello");
-        assert_eq!(parse_tar_string(&field), "hello");
-    }
-
-    #[test]
-    fn parse_tar_string_full() {
-        let field = [b'x'; 100];
-        assert_eq!(parse_tar_string(&field), "x".repeat(100));
-    }
-
-    #[test]
-    fn parse_tar_octal_valid() {
-        let mut field = [0u8; 12];
-        field[..7].copy_from_slice(b"0000644");
-        assert_eq!(parse_tar_octal(&field), 0o644);
-    }
-
-    #[test]
-    fn parse_tar_octal_size() {
-        let mut field = [0u8; 12];
-        field[..11].copy_from_slice(b"00000001234");
-        assert_eq!(parse_tar_octal(&field), 0o1234);
-    }
-
-    #[test]
-    fn parse_tar_octal_empty() {
-        let field = [0u8; 12];
-        assert_eq!(parse_tar_octal(&field), 0);
-    }
-
-    #[test]
     fn extract_tar_empty() {
         let tmp = tempfile::tempdir().unwrap();
         let out = tmp.path().join("output");
+        // An empty tar is just 1024 zero bytes (two 512-byte end-of-archive markers).
         let data = vec![0u8; 1024];
         let result = extract_tar(std::io::Cursor::new(data), out.to_str().unwrap());
         assert!(result.is_ok());
         assert!(out.is_dir());
+    }
+
+    #[test]
+    fn extract_tar_with_file() {
+        let tmp_src = tempfile::tempdir().unwrap();
+        let inner_dir = tmp_src.path().join("project-v1");
+        std::fs::create_dir(&inner_dir).unwrap();
+        std::fs::write(inner_dir.join("hello.txt"), "hello world").unwrap();
+
+        // Build a tar in memory
+        let mut builder = tar::Builder::new(Vec::new());
+        builder
+            .append_dir_all("project-v1", &inner_dir)
+            .unwrap();
+        let tar_data = builder.into_inner().unwrap();
+
+        let tmp_out = tempfile::tempdir().unwrap();
+        let out = tmp_out.path().join("extracted");
+        extract_tar(std::io::Cursor::new(tar_data), out.to_str().unwrap()).unwrap();
+
+        // Top-level "project-v1/" should be stripped
+        assert!(out.join("hello.txt").exists());
+        assert_eq!(
+            std::fs::read_to_string(out.join("hello.txt")).unwrap(),
+            "hello world"
+        );
+    }
+
+    #[test]
+    fn extract_tar_strips_prefix() {
+        let tmp_src = tempfile::tempdir().unwrap();
+        let inner = tmp_src.path().join("nixpkgs-abc123");
+        std::fs::create_dir_all(inner.join("pkgs/tools")).unwrap();
+        std::fs::write(inner.join("pkgs/tools/rg.nix"), "{ }").unwrap();
+
+        let mut builder = tar::Builder::new(Vec::new());
+        builder.append_dir_all("nixpkgs-abc123", &inner).unwrap();
+        let tar_data = builder.into_inner().unwrap();
+
+        let tmp_out = tempfile::tempdir().unwrap();
+        let out = tmp_out.path().join("extracted");
+        extract_tar(std::io::Cursor::new(tar_data), out.to_str().unwrap()).unwrap();
+
+        // "nixpkgs-abc123/" stripped, nested structure preserved
+        assert!(out.join("pkgs/tools/rg.nix").exists());
     }
 
     // ── eval integration (upstream builtins) ───────────────────────────
