@@ -93,6 +93,9 @@ pkgs.writeShellScriptBin "bridge-test" ''
     mkdir -p "$SHARED_DIR/symlink-subdir"
     echo "nested via symlink" > "$SHARED_DIR/symlink-subdir/real.txt"
     ln -s "symlink-subdir" "$SHARED_DIR/symlink-dir-link"
+    # Two-hop symlink chain: chain-a → chain-b → symlink-target.txt
+    ln -s "symlink-target.txt" "$SHARED_DIR/chain-b"
+    ln -s "chain-b" "$SHARED_DIR/chain-a"
 
     # Setup for error propagation test (task 7.4): guest write to read-only file
     echo "read only content" > "$SHARED_DIR/readonly-file.txt"
