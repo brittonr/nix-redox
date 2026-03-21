@@ -90,6 +90,36 @@ in
         '';
         mode = "0755";
       };
+      "etc/test-shadow-format.sh" = {
+        text = ''
+          #!/bin/bash
+          # Validate shadow file entries are Argon2id or empty
+          # Redox format: "user;" (empty) or "user;$argon2id$..."
+          if [ ! -f /etc/shadow ]; then
+            echo FUNC_TEST:rt-shadow-format:SKIP
+            exit 0
+          fi
+          ok=1
+          while IFS= read -r line; do
+            # Skip empty lines
+            [ -z "$line" ] && continue
+            # Extract password field (after first ;)
+            pass="''${line#*;}"
+            if [ -n "$pass" ]; then
+              case "$pass" in
+                \$argon2id\$*) ;;
+                *) ok=0 ;;
+              esac
+            fi
+          done < /etc/shadow
+          if [ "$ok" = 1 ]; then
+            echo FUNC_TEST:rt-shadow-format:PASS
+          else
+            echo FUNC_TEST:rt-shadow-format:FAIL:non-argon2id
+          fi
+        '';
+        mode = "0755";
+      };
     };
   };
 
