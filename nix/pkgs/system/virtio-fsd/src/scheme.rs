@@ -181,13 +181,14 @@ impl<'a> VirtioFsScheme<'a> {
     /// node has `S_IFLNK` mode, calls FUSE_READLINK and continues resolution
     /// from the symlink target. A hop counter prevents infinite loops.
     fn resolve_path(&mut self, path: &str) -> Result<(u64, crate::fuse::FuseAttr)> {
-        self.resolve_path_hops(path, 40)
+        self.resolve_path_hops(path, 40, true)
     }
 
     fn resolve_path_hops(
         &mut self,
         path: &str,
         max_hops: u32,
+        follow_last: bool,
     ) -> Result<(u64, crate::fuse::FuseAttr)> {
         let path = path.trim_matches('/');
 
@@ -219,8 +220,15 @@ impl<'a> VirtioFsScheme<'a> {
                 .lookup(current_nodeid, component)
                 .map_err(fuse_err)?;
 
+            let is_last = i + 1 >= components.len();
+
             // Check if this node is a symlink
             if (entry.attr.mode & S_IFMT) == S_IFLNK {
+                // Final component + no-follow: return the symlink itself
+                if is_last && !follow_last {
+                    return Ok((entry.nodeid, entry.attr));
+                }
+
                 if hops_remaining == 0 {
                     return Err(Error::new(ELOOP));
                 }
@@ -475,7 +483,14 @@ impl<'a> SchemeSync for VirtioFsScheme<'a> {
         }
 
         // Regular open (no O_CREAT)
-        let (nodeid, attr) = self.resolve_path(&full_path)?;
+        // For O_STAT, don't follow the final symlink component so that
+        // lstat() / symlink_metadata() returns the symlink's own attributes.
+        let follow_last = flags & O_STAT != O_STAT;
+        let (nodeid, attr) = self.resolve_path_hops(
+            &full_path,
+            40,
+            follow_last,
+        )?;
         let is_dir = (attr.mode & S_IFMT) == S_IFDIR;
 
         // Stat-only open doesn't need a FUSE file handle
