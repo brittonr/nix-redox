@@ -873,6 +873,8 @@ let
 
   # === Additional Rust packages ===
 
+  redb-demo = import ../pkgs/userspace/redb-demo.nix standaloneCommon;
+
   bottom = import ../pkgs/userspace/bottom.nix (
     standaloneCommon
     // {
@@ -1383,6 +1385,7 @@ in
 
     # Additional Rust CLI tools
     inherit
+      redb-demo
       bottom
       ;
     # onefetch disabled: proc-macro2 1.0.46 uses removed proc_macro_span_shrink feature
