@@ -178,14 +178,14 @@ if exists -f /etc/redox-system/manifest.json
     end
     rm /tmp/diff_manifest.json /tmp/diff_out ^> /dev/null
 
-    # Test: system packages are GC-protected after switch
+    # Test: system packages are GC-protected after switch (per-generation roots)
     /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
     /bin/snix store roots > /tmp/gc_roots ^> /dev/null
     if test $? = 0
-        if grep -q 'system-' /tmp/gc_roots
+        if grep -q 'gen-' /tmp/gc_roots
             echo "FUNC_TEST:gen-gc-safe:PASS"
         else
-            echo "FUNC_TEST:gen-gc-safe:FAIL:no-system-roots"
+            echo "FUNC_TEST:gen-gc-safe:FAIL:no-gen-roots"
         end
     else
         echo "FUNC_TEST:gen-gc-safe:FAIL:roots-cmd-failed"
@@ -200,6 +200,210 @@ if exists -f /etc/redox-system/manifest.json
         echo "FUNC_TEST:gen-gc-dry-run:FAIL"
     end
     rm /tmp/gc_out ^> /dev/null
+
+    # ── Delete-generations tests ──
+
+    # Create several generations so we have material to delete.
+    # We already have some from prior tests; do a few more switches
+    # to guarantee at least 4 generations exist.
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+
+    # Record how many generations exist before deletion tests
+    let pre_del_count = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+
+    # Test: delete-generations dry-run shows plan but doesn't delete
+    /bin/snix system delete-generations --dry-run old > /tmp/del_dry ^> /dev/null
+    if test $? = 0
+        let post_dry_count = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+        if test $pre_del_count = $post_dry_count
+            echo "FUNC_TEST:gen-delete-dry-run:PASS"
+        else
+            echo "FUNC_TEST:gen-delete-dry-run:FAIL:count-changed"
+        end
+    else
+        echo "FUNC_TEST:gen-delete-dry-run:FAIL:exit-code"
+    end
+    rm /tmp/del_dry ^> /dev/null
+
+    # Test: delete-generations refuses to delete current generation
+    # Find the current generation ID from snix system info
+    /nix/system/profile/bin/bash -c "
+        cur_id=\$(/bin/snix system generations 2>/dev/null | grep '(current)' | head -1 | awk '{print \$1}')
+        if [ -z \"\$cur_id\" ]; then
+            echo FUNC_TEST:gen-delete-protects-current:SKIP
+            exit 0
+        fi
+        /bin/snix system delete-generations \$cur_id > /tmp/del_cur_out 2>/tmp/del_cur_err
+        if [ -d /etc/redox-system/generations/\$cur_id ]; then
+            echo FUNC_TEST:gen-delete-protects-current:PASS
+        else
+            echo FUNC_TEST:gen-delete-protects-current:FAIL:deleted
+        fi
+        rm -f /tmp/del_cur_out /tmp/del_cur_err
+    "
+
+    # Test: delete-generations by specific ID removes that generation
+    /nix/system/profile/bin/bash -c "
+        ids=\$(ls /etc/redox-system/generations/ 2>/dev/null | sort -n)
+        cur_id=\$(/bin/snix system generations 2>/dev/null | grep '(current)' | head -1 | awk '{print \$1}')
+        target=''
+        for id in \$ids; do
+            if [ \"\$id\" != \"\$cur_id\" ]; then
+                target=\$id
+                break
+            fi
+        done
+        if [ -z \"\$target\" ]; then
+            echo FUNC_TEST:gen-delete-by-id:SKIP
+            exit 0
+        fi
+        /bin/snix system delete-generations \$target > /dev/null 2>/dev/null
+        if [ ! -d /etc/redox-system/generations/\$target ]; then
+            echo FUNC_TEST:gen-delete-by-id:PASS
+        else
+            echo FUNC_TEST:gen-delete-by-id:FAIL:still-exists
+        fi
+    "
+
+    # Test: delete-generations +N keeps the last N generations
+    # Create fresh generations first
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    let pre_keep_count = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+    /bin/snix system delete-generations +2 > /dev/null ^> /dev/null
+    let post_keep_count = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+    # After +2, should have at most 2 generations (current is always protected)
+    if test $post_keep_count -le 2
+        echo "FUNC_TEST:gen-delete-keep-n:PASS"
+    else
+        # More than 2 remain: could be current + boot-default both protected.
+        # Accept <= 3 as pass (current + boot-default + 1 kept)
+        if test $post_keep_count -le 3
+            echo "FUNC_TEST:gen-delete-keep-n:PASS"
+        else
+            echo "FUNC_TEST:gen-delete-keep-n:FAIL:kept-$post_keep_count"
+        end
+    end
+
+    # Test: delete-generations "old" removes everything except current
+    # Create a couple more so there's something to delete
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    let pre_old_count = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+    /bin/snix system delete-generations old > /dev/null ^> /dev/null
+    let post_old_count = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+    # After "old", only current (and maybe boot-default) should remain
+    if test $post_old_count -le 2
+        echo "FUNC_TEST:gen-delete-old:PASS"
+    else
+        echo "FUNC_TEST:gen-delete-old:FAIL:remaining-$post_old_count"
+    end
+
+    # Test: GC roots cleaned up after delete-generations
+    /bin/snix store roots > /tmp/gc_roots_post ^> /dev/null
+    /nix/system/profile/bin/bash -c "
+        if [ -f /tmp/gc_roots_post ]; then
+            # All remaining gen-N roots should match existing generation dirs
+            ok=1
+            while IFS= read -r line; do
+                case \"\$line\" in
+                    gen-*)
+                        id=\$(echo \"\$line\" | sed 's/gen-//' | sed 's/-.*//')
+                        if [ ! -d /etc/redox-system/generations/\$id ]; then
+                            ok=0
+                        fi
+                        ;;
+                esac
+            done < /tmp/gc_roots_post
+            if [ \"\$ok\" = 1 ]; then
+                echo FUNC_TEST:gen-delete-roots-cleaned:PASS
+            else
+                echo FUNC_TEST:gen-delete-roots-cleaned:FAIL:orphan-roots
+            fi
+        else
+            echo FUNC_TEST:gen-delete-roots-cleaned:SKIP
+        fi
+    "
+    rm /tmp/gc_roots_post ^> /dev/null
+
+    # ── System GC tests ──
+
+    # Test: snix system gc --dry-run runs without error
+    # Create some generations first
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    let pre_sysgc_count = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+    /bin/snix system gc --dry-run > /tmp/sysgc_dry ^> /dev/null
+    if test $? = 0
+        let post_sysgc_count = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+        if test $pre_sysgc_count = $post_sysgc_count
+            echo "FUNC_TEST:gen-sysgc-dry-run:PASS"
+        else
+            echo "FUNC_TEST:gen-sysgc-dry-run:FAIL:modified"
+        end
+    else
+        echo "FUNC_TEST:gen-sysgc-dry-run:FAIL:exit-code"
+    end
+    rm /tmp/sysgc_dry ^> /dev/null
+
+    # Test: snix system gc --keep 1 prunes old generations
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system gc --keep 1 > /tmp/sysgc_out ^> /dev/null
+    if test $? = 0
+        let sysgc_remaining = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+        # keep 1 + current protected = at most 2
+        if test $sysgc_remaining -le 2
+            echo "FUNC_TEST:gen-sysgc-keep:PASS"
+        else
+            echo "FUNC_TEST:gen-sysgc-keep:FAIL:remaining-$sysgc_remaining"
+        end
+    else
+        echo "FUNC_TEST:gen-sysgc-keep:FAIL:exit-code"
+    end
+    rm /tmp/sysgc_out ^> /dev/null
+
+    # Test: snix system gc (no flags) deletes all old, keeps current
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system switch /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+    /bin/snix system gc > /tmp/sysgc_default ^> /dev/null
+    if test $? = 0
+        let sysgc_def_remaining = $(ls /etc/redox-system/generations/ 2>/dev/null | wc -l)
+        if test $sysgc_def_remaining -le 2
+            echo "FUNC_TEST:gen-sysgc-default:PASS"
+        else
+            echo "FUNC_TEST:gen-sysgc-default:FAIL:remaining-$sysgc_def_remaining"
+        end
+    else
+        echo "FUNC_TEST:gen-sysgc-default:FAIL:exit-code"
+    end
+    rm /tmp/sysgc_default ^> /dev/null
+
+    # Test: system still works after GC (snix and ion still run)
+    if exists -f /bin/snix
+        /bin/snix --version > /dev/null ^> /dev/null
+        if test $? = 0
+            echo "FUNC_TEST:gen-post-gc-snix:PASS"
+        else
+            echo "FUNC_TEST:gen-post-gc-snix:FAIL"
+        end
+    else
+        echo "FUNC_TEST:gen-post-gc-snix:FAIL:missing"
+    end
+    if exists -f /bin/ion
+        /bin/ion -c 'echo ok' > /dev/null ^> /dev/null
+        if test $? = 0
+            echo "FUNC_TEST:gen-post-gc-ion:PASS"
+        else
+            echo "FUNC_TEST:gen-post-gc-ion:FAIL"
+        end
+    else
+        echo "FUNC_TEST:gen-post-gc-ion:FAIL:missing"
+    end
 
     # ── Activation tests ──
 
@@ -262,6 +466,17 @@ else
     echo "FUNC_TEST:gen-diff-runs:SKIP"
     echo "FUNC_TEST:gen-gc-safe:SKIP"
     echo "FUNC_TEST:gen-gc-dry-run:SKIP"
+    echo "FUNC_TEST:gen-delete-dry-run:SKIP"
+    echo "FUNC_TEST:gen-delete-protects-current:SKIP"
+    echo "FUNC_TEST:gen-delete-by-id:SKIP"
+    echo "FUNC_TEST:gen-delete-keep-n:SKIP"
+    echo "FUNC_TEST:gen-delete-old:SKIP"
+    echo "FUNC_TEST:gen-delete-roots-cleaned:SKIP"
+    echo "FUNC_TEST:gen-sysgc-dry-run:SKIP"
+    echo "FUNC_TEST:gen-sysgc-keep:SKIP"
+    echo "FUNC_TEST:gen-sysgc-default:SKIP"
+    echo "FUNC_TEST:gen-post-gc-snix:SKIP"
+    echo "FUNC_TEST:gen-post-gc-ion:SKIP"
     echo "FUNC_TEST:activate-dry-run:SKIP"
     echo "FUNC_TEST:switch-dry-run-no-modify:SKIP"
     echo "FUNC_TEST:activate-no-changes:SKIP"

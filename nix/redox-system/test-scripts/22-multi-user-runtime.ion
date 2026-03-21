@@ -1,0 +1,299 @@
+# ── Multi-User Runtime Tests ──────────────────────────────
+# Tests runtime identity, file ownership, and scheme visibility.
+# Complements 05-multi-user.ion which tests config generation.
+#
+# These tests run as root via startup.sh. They verify:
+#   - id/whoami report correct uid/gid for root
+#   - Home directory permissions are correct
+#   - File ownership enforcement works
+#   - Scheme namespace is visible from root context
+#
+# Tests that need userutils (login/su) skip gracefully when
+# userutils is absent. Test script numbering: 22 means it runs
+# after 21-e2e-rebuild.ion. It does NOT emit FUNC_TESTS_COMPLETE
+# (the test runner handles that).
+
+# ── Root identity ────────────────────────────────────────
+# id/whoami come from userutils which activates getty, so they
+# aren't available in startup.sh test profiles. Use id if present,
+# otherwise skip.
+
+# Test: id command runs and reports uid 0
+if exists -f /bin/id
+    /nix/system/profile/bin/bash -c "
+        uid=\$(/bin/id -u 2>/dev/null)
+        if [ \"\$uid\" = \"0\" ]; then
+            echo FUNC_TEST:rt-root-uid:PASS
+        else
+            echo FUNC_TEST:rt-root-uid:FAIL:uid=\$uid
+        fi
+    "
+else
+    echo "FUNC_TEST:rt-root-uid:SKIP"
+end
+
+# Test: whoami reports root
+if exists -f /bin/whoami
+    /nix/system/profile/bin/bash -c "
+        who=\$(/bin/whoami 2>/dev/null)
+        if [ \"\$who\" = \"root\" ]; then
+            echo FUNC_TEST:rt-root-whoami:PASS
+        else
+            echo FUNC_TEST:rt-root-whoami:FAIL:who=\$who
+        fi
+    "
+else
+    echo "FUNC_TEST:rt-root-whoami:SKIP"
+end
+
+# Test: id -g reports gid 0
+if exists -f /bin/id
+    /nix/system/profile/bin/bash -c "
+        gid=\$(/bin/id -g 2>/dev/null)
+        if [ \"\$gid\" = \"0\" ]; then
+            echo FUNC_TEST:rt-root-gid:PASS
+        else
+            echo FUNC_TEST:rt-root-gid:FAIL:gid=\$gid
+        fi
+    "
+else
+    echo "FUNC_TEST:rt-root-gid:SKIP"
+end
+
+# ── Home directory structure ─────────────────────────────
+
+# Test: /root exists and is writable
+if exists -d /root
+    echo "test_runtime" > /root/rt_write_test
+    if exists -f /root/rt_write_test
+        echo "FUNC_TEST:rt-root-home-write:PASS"
+        rm /root/rt_write_test
+    else
+        echo "FUNC_TEST:rt-root-home-write:FAIL:write-failed"
+    end
+else
+    echo "FUNC_TEST:rt-root-home-write:FAIL:no-root-dir"
+end
+
+# Test: /home/user exists (created by build system from user config)
+# Only applies when multi-user config is active
+if exists -d /home/user
+    echo "FUNC_TEST:rt-user-home-present:PASS"
+else
+    echo "FUNC_TEST:rt-user-home-present:SKIP"
+end
+
+# Test: root can write to /home/user (root has full access)
+if exists -d /home/user
+    echo "root_access_test" > /home/user/rt_root_write
+    if exists -f /home/user/rt_root_write
+        echo "FUNC_TEST:rt-root-writes-user-home:PASS"
+        rm /home/user/rt_root_write
+    else
+        echo "FUNC_TEST:rt-root-writes-user-home:FAIL"
+    end
+else
+    echo "FUNC_TEST:rt-root-writes-user-home:SKIP"
+end
+
+# ── Passwd/shadow consistency with runtime ───────────────
+# Redox passwd format: user;uid;gid;name;home;shell
+# Use bash IFS splitting instead of cut (not available on Redox)
+
+# Test: /etc/passwd uid field for root is 0
+/nix/system/profile/bin/bash -c "
+    if [ -f /etc/passwd ]; then
+        line=\$(grep '^root;' /etc/passwd)
+        if [ -z \"\$line\" ]; then
+            echo FUNC_TEST:rt-passwd-root-uid:SKIP
+            exit 0
+        fi
+        IFS=';' read -r _user uid _rest <<< \"\$line\"
+        if [ \"\$uid\" = \"0\" ]; then
+            echo FUNC_TEST:rt-passwd-root-uid:PASS
+        else
+            echo FUNC_TEST:rt-passwd-root-uid:FAIL:uid=\$uid
+        fi
+    else
+        echo FUNC_TEST:rt-passwd-root-uid:SKIP
+    fi
+"
+
+# Test: /etc/passwd uid field for user is 1000
+/nix/system/profile/bin/bash -c "
+    if [ -f /etc/passwd ]; then
+        line=\$(grep '^user;' /etc/passwd)
+        if [ -z \"\$line\" ]; then
+            echo FUNC_TEST:rt-passwd-user-uid:SKIP
+            exit 0
+        fi
+        IFS=';' read -r _user uid _rest <<< \"\$line\"
+        if [ \"\$uid\" = \"1000\" ]; then
+            echo FUNC_TEST:rt-passwd-user-uid:PASS
+        else
+            echo FUNC_TEST:rt-passwd-user-uid:FAIL:uid=\$uid
+        fi
+    else
+        echo FUNC_TEST:rt-passwd-user-uid:SKIP
+    fi
+"
+
+# Test: /etc/passwd shell field for user points to /bin/ion
+/nix/system/profile/bin/bash -c "
+    if [ -f /etc/passwd ]; then
+        line=\$(grep '^user;' /etc/passwd)
+        if [ -z \"\$line\" ]; then
+            echo FUNC_TEST:rt-passwd-user-shell:SKIP
+            exit 0
+        fi
+        IFS=';' read -r _user _uid _gid _name _home shell <<< \"\$line\"
+        if [ \"\$shell\" = \"/bin/ion\" ]; then
+            echo FUNC_TEST:rt-passwd-user-shell:PASS
+        else
+            echo FUNC_TEST:rt-passwd-user-shell:FAIL:shell=\$shell
+        fi
+    else
+        echo FUNC_TEST:rt-passwd-user-shell:SKIP
+    fi
+"
+
+# Test: /etc/passwd home field for user is /home/user
+/nix/system/profile/bin/bash -c "
+    if [ -f /etc/passwd ]; then
+        line=\$(grep '^user;' /etc/passwd)
+        if [ -z \"\$line\" ]; then
+            echo FUNC_TEST:rt-passwd-user-home:SKIP
+            exit 0
+        fi
+        IFS=';' read -r _user _uid _gid _name home _shell <<< \"\$line\"
+        if [ \"\$home\" = \"/home/user\" ]; then
+            echo FUNC_TEST:rt-passwd-user-home:PASS
+        else
+            echo FUNC_TEST:rt-passwd-user-home:FAIL:home=\$home
+        fi
+    else
+        echo FUNC_TEST:rt-passwd-user-home:SKIP
+    fi
+"
+
+# ── Scheme namespace visibility (root context) ──────────
+
+# Test: root can see core schemes (file, proc, sys)
+/nix/system/profile/bin/bash -c "
+    schemes=\$(ls : 2>/dev/null)
+    if [ -z \"\$schemes\" ]; then
+        echo FUNC_TEST:rt-root-schemes-visible:FAIL:empty
+        exit 0
+    fi
+    ok=1
+    for s in file proc; do
+        if ! echo \"\$schemes\" | grep -q \"\$s\"; then
+            ok=0
+        fi
+    done
+    if [ \"\$ok\" = 1 ]; then
+        echo FUNC_TEST:rt-root-schemes-visible:PASS
+    else
+        echo FUNC_TEST:rt-root-schemes-visible:FAIL:missing-core
+    fi
+"
+
+# Test: root can see kernel schemes (irq, sys, memory)
+# These should be visible to root but restricted for non-root users
+/nix/system/profile/bin/bash -c "
+    schemes=\$(ls : 2>/dev/null)
+    if [ -z \"\$schemes\" ]; then
+        echo FUNC_TEST:rt-root-kernel-schemes:FAIL:empty
+        exit 0
+    fi
+    # Check for at least one kernel-level scheme
+    found=0
+    for s in irq sys; do
+        if echo \"\$schemes\" | grep -q \"\$s\"; then
+            found=1
+        fi
+    done
+    if [ \"\$found\" = 1 ]; then
+        echo FUNC_TEST:rt-root-kernel-schemes:PASS
+    else
+        echo FUNC_TEST:rt-root-kernel-schemes:FAIL:not-visible
+    fi
+"
+
+# ── Sudod daemon (if userutils installed) ────────────────
+
+# Test: sudod scheme is registered when userutils is present
+if exists -f /bin/sudo
+    /nix/system/profile/bin/bash -c "
+        if ls : 2>/dev/null | grep -q sudo; then
+            echo FUNC_TEST:rt-sudod-scheme:PASS
+        else
+            echo FUNC_TEST:rt-sudod-scheme:FAIL:not-registered
+        fi
+    "
+else
+    echo "FUNC_TEST:rt-sudod-scheme:SKIP"
+end
+
+# ── Login schemes TOML runtime validation ────────────────
+
+# Test: login_schemes.toml is parseable (no syntax errors)
+/nix/system/profile/bin/bash -c "
+    f=/etc/login_schemes.toml
+    if [ ! -f \"\$f\" ]; then
+        echo FUNC_TEST:rt-login-schemes-parseable:SKIP
+        exit 0
+    fi
+    # Basic structure check: must have [user_schemes.*] sections
+    sections=\$(grep -c '\\[user_schemes\\.' \"\$f\" 2>/dev/null)
+    if [ \"\$sections\" -ge 2 ]; then
+        echo FUNC_TEST:rt-login-schemes-parseable:PASS
+    else
+        echo FUNC_TEST:rt-login-schemes-parseable:FAIL:sections=\$sections
+    fi
+"
+
+# Test: root's scheme list in login_schemes.toml includes kernel schemes
+/nix/system/profile/bin/bash -c "
+    f=/etc/login_schemes.toml
+    if [ ! -f \"\$f\" ]; then
+        echo FUNC_TEST:rt-root-has-kernel-schemes:SKIP
+        exit 0
+    fi
+    # Extract root's section and check for irq, sys
+    # Simple approach: grep for irq in the file (root section has it, user doesn't)
+    if grep -q irq \"\$f\" && grep -q sys \"\$f\"; then
+        echo FUNC_TEST:rt-root-has-kernel-schemes:PASS
+    else
+        echo FUNC_TEST:rt-root-has-kernel-schemes:FAIL
+    fi
+"
+
+# Test: user's scheme list does NOT include kernel-only schemes
+# The user section should omit irq, sys, memory, serio
+# (these appear only once in the file — in root's section)
+/nix/system/profile/bin/bash -c "
+    f=/etc/login_schemes.toml
+    if [ ! -f \"\$f\" ]; then
+        echo FUNC_TEST:rt-user-no-kernel-schemes:SKIP
+        exit 0
+    fi
+    # irq should appear exactly once (in root's section only)
+    count=\$(grep -c irq \"\$f\" 2>/dev/null)
+    if [ \"\$count\" = \"1\" ]; then
+        echo FUNC_TEST:rt-user-no-kernel-schemes:PASS
+    else
+        echo FUNC_TEST:rt-user-no-kernel-schemes:FAIL:irq-count=\$count
+    fi
+"
+
+# ── Shadow file security ─────────────────────────────────
+
+# Test: shadow entries use Argon2id or empty password (no plaintext)
+# Redox shadow format: "user;" (empty pw) or "user;$argon2id$..."
+# Use a helper script to avoid nested quoting issues
+if exists -f /etc/test-shadow-format.sh
+    /nix/system/profile/bin/bash /etc/test-shadow-format.sh
+else
+    echo "FUNC_TEST:rt-shadow-format:SKIP"
+end
