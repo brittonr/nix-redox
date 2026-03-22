@@ -120,6 +120,16 @@ pub fn evaluate_with_state(
     // doesn't compile on Redox). This is idempotent — repeated calls are fine.
     let _ = rustls::crypto::ring::default_provider().install_default();
 
+    // Ensure TLS root certificates are discoverable. rustls-native-certs
+    // checks SSL_CERT_FILE before platform probing. On Redox, the platform
+    // verifier doesn't know about the OS, so we point it at our bundle.
+    if std::env::var_os("SSL_CERT_FILE").is_none() {
+        let cert_path = "/etc/ssl/certs/ca-certificates.crt";
+        if std::path::Path::new(cert_path).exists() {
+            std::env::set_var("SSL_CERT_FILE", cert_path);
+        }
+    }
+
     let runtime = tokio::runtime::Runtime::new()
         .map_err(|e| format!("tokio runtime: {e}"))?;
 

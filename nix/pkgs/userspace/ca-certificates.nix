@@ -23,16 +23,25 @@ pkgs.stdenv.mkDerivation {
   installPhase = ''
     runHook preInstall
 
-    mkdir -p $out/etc/ssl
-    cp -rv ${ca-certificates-src}/certs $out/etc/ssl/certs
+    mkdir -p $out/etc/ssl/certs
+
+    # Generate concatenated bundle file first (before copying read-only PEM files)
+    # This is what rustls-native-certs, curl, and most TLS clients look for.
+    cat ${ca-certificates-src}/certs/*.pem > $out/etc/ssl/certs/ca-certificates.crt
+
+    # Copy individual certs and hash symlinks
+    cp -rv ${ca-certificates-src}/certs/. $out/etc/ssl/certs/
 
     # Compatibility symlink (legacy location)
     ln -s etc/ssl $out/ssl
 
     # Verify
     test -d $out/etc/ssl/certs || { echo "ERROR: no certs directory"; exit 1; }
-    certCount=$(find $out/etc/ssl/certs -name '*.pem' -o -name '*.crt' | wc -l)
+    certCount=$(find $out/etc/ssl/certs -name '*.pem' | wc -l)
     echo "Installed $certCount certificates"
+    test -f $out/etc/ssl/certs/ca-certificates.crt || { echo "ERROR: no bundle file"; exit 1; }
+    bundleSize=$(wc -c < $out/etc/ssl/certs/ca-certificates.crt)
+    echo "Bundle: $bundleSize bytes"
 
     runHook postInstall
   '';

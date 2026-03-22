@@ -617,6 +617,17 @@ enum ChannelCommand {
 }
 
 fn main() {
+    // Bootstrap TLS: install ring crypto provider and ensure CA certs are
+    // discoverable. Must happen before any reqwest Client is constructed
+    // (which happens inside SnixStoreIO → Fetcher::new()).
+    let _ = rustls::crypto::ring::default_provider().install_default();
+    if std::env::var_os("SSL_CERT_FILE").is_none() {
+        let cert_path = "/etc/ssl/certs/ca-certificates.crt";
+        if std::path::Path::new(cert_path).exists() {
+            std::env::set_var("SSL_CERT_FILE", cert_path);
+        }
+    }
+
     let cli = Cli::parse();
 
     let result = match cli.command {

@@ -101,6 +101,7 @@ let
     exampled = self'.packages.exampled or null;
     irohd = self'.packages.irohd or null;
     snix = self'.packages.snix or null;
+    ca-certificates = self'.packages.ca-certificates or null;
     redox-curl = self'.packages.redox-curl or null;
     pkgutils = self'.packages.pkgutils or null;
 

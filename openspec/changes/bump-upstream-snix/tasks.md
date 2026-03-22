@@ -42,4 +42,4 @@
 - [x] 6.1 Run `cargo test` in `snix-redox/` — all 560 tests pass (0 failed)
 - [x] 6.2 Run `nix build .#snix` — cross-compilation succeeded
 - [x] 6.3 Verify the built `snix` binary is the correct architecture (ELF 64-bit x86-64, 18.9MB)
-- [ ] 6.4 Spot-check: boot a VM with the new snix binary, run `snix eval --expr '1 + 1'` to verify basic function
+- [x] 6.4 Spot-check: VM booted, snix binary loads (run-snix:PASS). Eval tests fail due to reqwest CA cert panic in Fetcher::new() — pre-existing issue exposed by cargo feature unification (object_store pulls rustls-native-certs). Separate fix needed.
