@@ -11,14 +11,16 @@
 #
 # Patches applied:
 #   eval/src/systems.rs — add "redox" to is_second_coordinate()
+#
+# Upstream pin: 2207a074ae (2026-03-19) — canon branch
 
 { pkgs }:
 
 let
   snixSrc = pkgs.fetchgit {
     url = "https://git.snix.dev/snix/snix.git";
-    rev = "eee477929d6b500936556e2f8a4e187d37525365";
-    hash = "sha256-S252v2faotFqhRPoRl+2SBLdFOxjzKlWTRncQPcOtts=";
+    rev = "2207a074ae9b19430f66e61c2cc6660295320724";
+    hash = "sha256-1DtTMR7MQ5YuUU5tfw3k5W4gSgmlDi+UB7JTQ1Z9MGo=";
   };
 
   crates = [
@@ -70,19 +72,15 @@ pkgs.runCommand "snix-upstream-source" { } ''
   # Also disable tonic-reflection (unused on Redox).
   sed -i 's|default = \["cloud"\]|default = []|' $out/castore/Cargo.toml
 
-  # Remove tonic-reflection from snix-store defaults (pulls aws-lc via tonic).
-  sed -i 's|default = \["cloud", "fuse", "otlp", "tonic-reflection"\]|default = []|' $out/store/Cargo.toml
+  # Disable default features in snix-store (pulls cloud/bigtable, fuse, tonic-reflection).
+  # Upstream dropped otlp from defaults between eee4779 and 2207a07; the new
+  # default set is ["cloud", "fuse", "tonic-reflection"].
+  sed -i 's|default = \["cloud", "fuse", "tonic-reflection"\]|default = []|' $out/store/Cargo.toml
 
-  # Switch tonic from aws-lc TLS backend to ring TLS backend.
-  # aws-lc-sys compiles C code that uses glibc symbols (__isoc23_sscanf,
-  # __fprintf_chk) not present in relibc. ring cross-compiles cleanly
-  # (already proven by irohd and ureq builds on Redox).
-  sed -i 's|features = \["tls-aws-lc"\]|features = ["tls-ring"]|' $out/store/Cargo.toml
-
-  # Switch tonic in upstream workspace deps (for snix-tracing's tonic dep)
-  # The workspace Cargo.toml is at snix-redox/Cargo.toml, not here.
-  # We only need to patch the crate-level Cargo.toml files that specify
-  # tonic features directly.
+  # NOTE: tonic tls-aws-lc → tls-ring override.
+  # As of 2207a07, store/Cargo.toml uses `tonic.workspace = true` (no inline
+  # features). The tls backend is controlled by the workspace [dependencies]
+  # in snix-redox/Cargo.toml, where we set tls-ring. No sed needed here.
 
   # Make eval writable for patching
   chmod -R u+w $out/eval

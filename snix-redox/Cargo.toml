@@ -30,15 +30,15 @@ version = "0.1.0"
 rust-version = "1.91.1"
 
 # Upstream snix workspace dependency versions.
-# Copied from https://git.snix.dev/snix/snix @ eee477929d6b500936556e2f8a4e187d37525365
+# Copied from https://git.snix.dev/snix/snix @ 2207a074ae9b19430f66e61c2cc6660295320724
 [workspace.dependencies]
 anyhow = "1.0.86"
 async-compression = "0.4.12"
 async-process = "2.2.4"
 async-stream = "0.3.5"
-axum = "0.7.5"
-axum-extra = "0.9.3"
-axum-range = "0.4.0"
+axum = "0.8.8"
+axum-extra = "0.12.5"
+axum-range = "1.0.0"
 bigtable_rs = "0.2.18"
 bitflags = "2.6.0"
 blake3 = "1.5.4"
@@ -90,8 +90,10 @@ proptest = { version = "1.5.0", default-features = false }
 prost = "0.13.1"
 prost-build = "0.13.1"
 quote = "1.0.37"
-redb = "3.1.0"
+redb = "3.1.1"
 regex = "1.10.6"
+# Upstream uses default-features = true for reqwest, which pulls aws-lc-rs.
+# We override with rustls-no-provider + ring to avoid glibc-only symbols.
 reqwest = { version = "0.13.1", default-features = false, features = ["rustls-no-provider", "http2", "charset", "stream"] }
 # Force rustls to use ring backend instead of aws-lc-rs (relibc lacks __isoc23_sscanf, __fprintf_chk)
 rustls = { version = "0.23", default-features = false, features = ["ring", "logging", "std", "tls12"] }
@@ -136,9 +138,11 @@ tracing-indicatif = "0.3.7"
 tracing-opentelemetry = "0.31.0"
 tracing-subscriber = "0.3.18"
 tracing-test = "0.2.5"
-tracing-tracy = "=0.11.1"
+tracing-tracy = "=0.11.4"
 trybuild = "1.0.99"
-url = { version = "2.5.2", features = ["serde"] }
+# Upstream dropped serde feature from workspace url dep, but some crates
+# still need it (snix-store via from_addr). Keep it for compatibility.
+url = "2.5.2"
 vhost = "=0.6.1"
 vhost-user-backend = "=0.8.0"
 virtio-bindings = "=0.2.6"
@@ -204,7 +208,7 @@ tar = "0.4"
 
 # === Standard utilities ===
 clap = { version = "4", features = ["derive", "env"] }
-serde = { version = ">=1.0.100, <1.0.218", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sha2 = "0.10"
 blake3 = { version = "1.8", default-features = false, features = ["pure"] }
