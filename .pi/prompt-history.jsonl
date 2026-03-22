@@ -546,3 +546,6 @@
 {"text":"commit and continue","timestamp":1774205209091}
 {"text":"lets do whatever is the \"correct\" way to handle this.  Three fix paths: embed webpki-roots, handle\n the error gracefully, or ship CA certs on Redox.","timestamp":1774205743461}
 {"text":"lets research and figure this out","timestamp":1774207948746}
+{"text":"what next","timestamp":1774208840474}
+{"text":"5","timestamp":1774208883300}
+{"text":"propose","timestamp":1774210385948}
