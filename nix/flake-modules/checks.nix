@@ -5,18 +5,26 @@
 #   Tier 1 — eval (seconds):   Module system tests with mock packages
 #   Tier 2 — host (minutes):   + snix host-side unit tests, devshells, host tools
 #   Tier 3 — cross (minutes):  + cross-compiled packages
-#   Tier 4 — vm (many minutes): + boot test, functional test, bridge test
+#   Tier 4 — vm (sub-tiered by cost, needs KVM):
+#     fast:  8 tests — boot, functional, daemons, schemes (<3 min each)
+#     full: 13 tests — + rebuild pipelines, networking (3-10 min each)
+#     heavy: 16 tests — + self-hosting, parallel builds (15-30 min each)
 #
 # Quick iteration:
-#   nix build .#checks.x86_64-linux.tier-eval    # seconds
-#   nix build .#checks.x86_64-linux.tier-host    # minutes
-#   nix build .#checks.x86_64-linux.tier-cross   # many minutes
-#   nix build .#checks.x86_64-linux.tier-vm      # many minutes (needs KVM)
+#   nix build .#checks.x86_64-linux.tier-eval      # seconds
+#   nix build .#checks.x86_64-linux.tier-host      # minutes
+#   nix build .#checks.x86_64-linux.tier-cross     # many minutes
+#   nix build .#checks.x86_64-linux.tier-vm        # = tier-vm-fast (backward compat)
+#   nix build .#checks.x86_64-linux.tier-vm-fast   # 8 quick VM tests
+#   nix build .#checks.x86_64-linux.tier-vm-full   # 13 VM tests (+ rebuild, network)
+#   nix build .#checks.x86_64-linux.tier-vm-heavy  # 16 VM tests (+ self-hosting)
+#   nix build .#checks.x86_64-linux.tier-vm-all    # all 16 VM tests
 #
 # Individual checks:
 #   nix build .#checks.x86_64-linux.eval-profile-default
 #   nix build .#checks.x86_64-linux.snix-test
 #   nix build .#checks.x86_64-linux.functional-test
+#   nix build .#checks.x86_64-linux.network-test
 #
 # All checks:
 #   nix flake check
@@ -156,12 +164,34 @@ let
   };
 
   # ── Tier 4: vm (many minutes, needs KVM) ───────────────────────
-  # Full VM boot + test execution.
-  vmChecks = {
+  # Full VM boot + test execution, split into sub-tiers by cost.
+
+  # Fast: core smoke tests + quick offline daemon/scheme tests (<3 min each)
+  vmChecksFast = {
     boot-test = packages.bootTest;
     functional-test = packages.functionalTest;
     multi-user-test = packages.multi-user-test;
     bridge-test = packages.bridgeTest;
+    scheme-daemon-test = packages.scheme-daemon-test;
+    iroh-test = packages.iroh-test;
+    scheme-native-test = packages.scheme-native-test;
+    boot-generation-select-test = packages.boot-generation-select-test;
+  };
+
+  # Full: medium-duration rebuild/upgrade tests + QEMU SLiRP network tests (3-10 min each)
+  vmChecksFull = vmChecksFast // {
+    rebuild-generations-test = packages.rebuild-generations-test;
+    e2e-rebuild-test = packages.e2e-rebuild-test;
+    network-test = packages.networkTest;
+    network-install-test = packages.networkInstallTest;
+    channel-update-test = packages.channelUpdateTest;
+  };
+
+  # Heavy: self-hosting, parallel builds, bridge rebuild (15-30 min each)
+  vmChecksHeavy = vmChecksFull // {
+    bridge-rebuild-test = packages.bridgeRebuildTest;
+    self-hosting-test = packages.self-hosting-test;
+    parallel-build-test = packages.parallel-build-test;
   };
 
   # ── Tier aggregation helpers ────────────────────────────────────
@@ -200,7 +230,7 @@ in
     evalChecks
     // hostChecks
     // crossChecks
-    // vmChecks
+    // vmChecksHeavy # Heavy is cumulative — includes fast + full + heavy
 
     # Tier aggregation targets
     // {
@@ -216,6 +246,17 @@ in
         evalChecks // hostChecks // crossChecks
       );
 
-      tier-vm = mkTierCheck "vm" "Full VM boot and integration tests" vmChecks;
+      # VM sub-tiers by cost
+      tier-vm-fast =
+        mkTierCheck "vm-fast" "Quick VM tests: boot, functional, daemons, schemes"
+          vmChecksFast;
+      tier-vm-full = mkTierCheck "vm-full" "VM tests + rebuild pipelines and networking" vmChecksFull;
+      tier-vm-heavy =
+        mkTierCheck "vm-heavy" "All VM tests including self-hosting and parallel builds"
+          vmChecksHeavy;
+      tier-vm-all = mkTierCheck "vm-all" "All 16 VM tests" vmChecksHeavy;
+
+      # Backward compatibility: tier-vm = tier-vm-fast
+      tier-vm = mkTierCheck "vm" "Quick VM tests (alias for tier-vm-fast)" vmChecksFast;
     };
 }
