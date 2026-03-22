@@ -13,6 +13,11 @@ let
     lib.mapAttrsToList (name: value: ''alias ${name} = "${value}"'')
       inputs.environment.shellAliases
   );
+  networkingVarLines = lib.optionalString cfg.networkingEnabled ''
+    # TLS root certificates for HTTPS (rustls-native-certs, curl, etc.)
+    export SSL_CERT_FILE /etc/ssl/certs/ca-certificates.crt
+    export SSL_CERT_DIR /etc/ssl/certs
+  '';
   graphicsVarLines = lib.optionalString cfg.graphicsEnabled ''
     export ORBITAL_RESOLUTION ${inputs.graphics.resolution}
     export DISPLAY ${cfg.graphicsDisplay}
@@ -27,6 +32,7 @@ let
     export TZ ${cfg.timezone}
     export EDITOR ${cfg.defaultEditor}
     ${varLines}
+    ${networkingVarLines}
     ${graphicsVarLines}
     ${aliasLines}
     ${graphicsAliasLines}
@@ -631,6 +637,16 @@ let
   # Like NixOS environment.etc: keys are paths relative to / (e.g. "etc/motd").
   # Each entry has text or source content and optional mode (default: 0644).
   # /iroh: P2P networking config
+  # TLS root certificates — needed by any program using HTTPS (snix, curl, etc.)
+  # Installs the concatenated Mozilla CA bundle so rustls-native-certs and
+  # openssl can find roots via SSL_CERT_FILE (set in /etc/profile above).
+  // (lib.optionalAttrs (cfg.networkingEnabled && pkgs ? "ca-certificates") {
+    "etc/ssl/certs/ca-certificates.crt" = {
+      source = pkgs."ca-certificates" + "/etc/ssl/certs/ca-certificates.crt";
+      mode = "0644";
+    };
+  })
+
   // (lib.optionalAttrs cfg.irohEnabled {
     "etc/iroh/peers.json" = {
       text = builtins.toJSON (
