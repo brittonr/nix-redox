@@ -882,6 +882,13 @@ let
     }
   );
 
+  wasmtime-redox = import ../pkgs/userspace/wasmtime-redox.nix (
+    standaloneCommon
+    // {
+      inherit (inputs) wasmtime-src;
+    }
+  );
+
   onefetch = import ../pkgs/userspace/onefetch.nix (
     standaloneCommon
     // {
@@ -1387,6 +1394,7 @@ in
     inherit
       redb-demo
       bottom
+      wasmtime-redox
       ;
     # onefetch disabled: proc-macro2 1.0.46 uses removed proc_macro_span_shrink feature
 
