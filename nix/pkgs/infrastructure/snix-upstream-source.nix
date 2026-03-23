@@ -11,6 +11,7 @@
 #
 # Patches applied:
 #   eval/src/systems.rs — add "redox" to is_second_coordinate()
+#   glue/src/builder/mod.rs — make derivation_into_build_request public
 #
 # Upstream pin: 2207a074ae (2026-03-19) — canon branch
 
@@ -99,6 +100,14 @@ pkgs.runCommand "snix-upstream-source" { } ''
 
  /// This function takes an llvm triple (which may have three or four
 PATCH
+
+  # Make derivation_into_build_request public so snix-redox can use it.
+  # Upstream keeps it pub(crate) because only snix-glue's own build
+  # orchestration calls it. We need it in local_build.rs to convert
+  # Derivation → BuildRequest for env var setup, refscan needles, etc.
+  chmod -R u+w $out/glue
+  sed -i 's|pub(crate) fn derivation_into_build_request|pub fn derivation_into_build_request|' $out/glue/src/builder/mod.rs
+  chmod -R a-w $out/glue
 
   # Create proto path resolution structure.
   # The build.rs files reference protos as "snix/{crate}/protos/..." and
