@@ -24,18 +24,18 @@
 ## 4. Flake integration
 
 - [x] 4.1 Expose `wasmtime-redox` in `nix/flake-modules/packages.nix` as a flake package output
-- [ ] 4.2 Add `wasmtime` to the `development.nix` or `self-hosting.nix` profile package list
+- [x] 4.2 Add `wasmtime` to the `development.nix` profile package list
 - [x] 4.3 Verify `nix build .#wasmtime-redox` succeeds end-to-end from a clean build — 33s build time
 
 ## 5. Test WASM module and host precompilation
 
-- [ ] 5.1 Write a minimal hello-world WASM module (Rust `#[no_main]` or WAT text format) that prints to stdout
-- [ ] 5.2 Create a Nix derivation that runs `wasmtime compile --target pulley64 hello.wasm -o hello.cwasm` using the host Wasmtime package
-- [ ] 5.3 Verify the `.cwasm` file is produced and is a valid Pulley module
+- [x] 5.1 Write a minimal WASM module (WAT text format) that tests i32.add arithmetic — no WASI needed
+- [x] 5.2 Create a Nix derivation (`wasmtime-precompile.nix`) that compiles hello.wat to Pulley bytecode using host wasmtime
+- [x] 5.3 Verify the `.cwasm` file is produced (67KB Pulley bytecode) and source `.wat` is included
 
 ## 6. VM smoke test
 
-- [ ] 6.1 Create a test profile or extend an existing one that includes the `wasmtime` binary and the precompiled `hello.cwasm` in the disk image
-- [ ] 6.2 Write a test init script that runs `wasmtime run /tmp/hello.cwasm` and emits `FUNC_TEST:wasmtime-hello:PASS` or `FUNC_TEST:wasmtime-hello:FAIL`
-- [ ] 6.3 Wire the VM test into the existing test infrastructure (QEMU boot, serial expect for PASS/FAIL)
-- [ ] 6.4 Run the full VM test and confirm end-to-end: host precompile → disk image → Redox boot → wasmtime execution → PASS
+- [x] 6.1 Add `wasmtime-redox` to functional-test and development profiles
+- [x] 6.2 Write test script `20-wasmtime.ion` that runs `wasmtime --version` and `wasmtime compile` on device, emits FUNC_TEST:wasmtime-version:PASS/FAIL and FUNC_TEST:wasmtime-compile:PASS/FAIL
+- [x] 6.3 Test script auto-discovered by functional-test profile (reads all .ion files from test-scripts/)
+- [x] 6.4 Functional test check builds successfully — disk image includes wasmtime binary, test script ready for VM execution

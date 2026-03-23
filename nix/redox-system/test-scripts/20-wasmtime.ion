@@ -1,0 +1,30 @@
+# ── Wasmtime WebAssembly Runtime ───────────────────────────
+# Tests that the wasmtime binary runs and can compile WASM modules
+# to Pulley bytecode on Redox.
+
+if exists -f /nix/system/profile/bin/wasmtime
+    # Test 1: wasmtime binary executes (--version)
+    /nix/system/profile/bin/wasmtime --version > /dev/null
+    if test $? = 0
+        echo "FUNC_TEST:wasmtime-version:PASS"
+    else
+        echo "FUNC_TEST:wasmtime-version:FAIL"
+    end
+
+    # Test 2: compile a WAT module to Pulley bytecode on device
+    # Write a minimal WAT module
+    echo '(module (func (export "_start") nop))' > /tmp/test.wat
+    /nix/system/profile/bin/wasmtime compile /tmp/test.wat -o /tmp/test.cwasm
+    if test $? = 0
+        if exists -f /tmp/test.cwasm
+            echo "FUNC_TEST:wasmtime-compile:PASS"
+        else
+            echo "FUNC_TEST:wasmtime-compile:FAIL:no output file"
+        end
+    else
+        echo "FUNC_TEST:wasmtime-compile:FAIL:compile error"
+    end
+else
+    echo "FUNC_TEST:wasmtime-version:SKIP"
+    echo "FUNC_TEST:wasmtime-compile:SKIP"
+end

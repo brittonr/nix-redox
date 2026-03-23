@@ -105,7 +105,8 @@ in
       ++ opt "zoxide"
       ++ opt "dust"
       ++ opt "snix"
-      ++ opt "redox-bash";
+      ++ opt "redox-bash"
+      ++ opt "wasmtime-redox";
 
     shellAliases = {
       ls = "ls --color=auto";
