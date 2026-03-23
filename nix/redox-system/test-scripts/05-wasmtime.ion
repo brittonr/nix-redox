@@ -1,9 +1,13 @@
 # ── Wasmtime WebAssembly Runtime ───────────────────────────
-# Tests that the wasmtime binary runs and can compile WASM modules
-# to Pulley bytecode on Redox.
+# Tests wasmtime compilation and execution on Redox OS.
+#
+# On x86_64 Redox, Engine::default() compiles to NATIVE x86_64 via Cranelift
+# (not Pulley) because has_host_compiler_backend=true. Traps use libcall path
+# (has_native_signals=false). So all wasm-runner .wat tests exercise native
+# x86_64 execution with software trap handling.
 
 if exists -f /nix/system/profile/bin/wasmtime
-    # Test 1: wasmtime binary executes (--version)
+    # ── Basic: wasmtime binary runs ──
     /nix/system/profile/bin/wasmtime --version > /dev/null
     if test $? = 0
         echo "FUNC_TEST:wasmtime-version:PASS"
@@ -11,20 +15,102 @@ if exists -f /nix/system/profile/bin/wasmtime
         echo "FUNC_TEST:wasmtime-version:FAIL"
     end
 
-    # Test 2: compile a WAT module to Pulley bytecode on device
-    # Write a minimal WAT module
-    echo '(module (func (export "_start") nop))' > /tmp/test.wat
-    /nix/system/profile/bin/wasmtime compile /tmp/test.wat -o /tmp/test.cwasm
+    # ── Compile: Pulley bytecode ──
+    echo '(module (func (export "_start") nop))' > /tmp/wt-nop.wat
+    /nix/system/profile/bin/wasmtime compile --target pulley64 /tmp/wt-nop.wat -o /tmp/wt-pulley.cwasm
     if test $? = 0
-        if exists -f /tmp/test.cwasm
-            echo "FUNC_TEST:wasmtime-compile:PASS"
+        echo "FUNC_TEST:wasmtime-compile-pulley:PASS"
+    else
+        echo "FUNC_TEST:wasmtime-compile-pulley:FAIL"
+    end
+
+    # ── Compile: Native x86_64 (no --target) ──
+    /nix/system/profile/bin/wasmtime compile /tmp/wt-nop.wat -o /tmp/wt-native.cwasm
+    if test $? = 0
+        echo "FUNC_TEST:wasmtime-compile-native:PASS"
+    else
+        echo "FUNC_TEST:wasmtime-compile-native:FAIL"
+    end
+
+    if exists -f /nix/system/profile/bin/wasm-runner
+        # ── Run: arithmetic + _start (native x86_64 via Engine::default) ──
+        echo '(module (func (export "add") (param i32 i32) (result i32) local.get 0 local.get 1 i32.add) (func (export "_start") (if (i32.ne (call 0 (i32.const 2) (i32.const 3)) (i32.const 5)) (then unreachable))))' > /tmp/wt-hello.wat
+        let out = $(/nix/system/profile/bin/wasm-runner /tmp/wt-hello.wat)
+        if test "$out" = "OK"
+            echo "FUNC_TEST:wasmtime-run-hello:PASS"
         else
-            echo "FUNC_TEST:wasmtime-compile:FAIL:no output file"
+            echo "FUNC_TEST:wasmtime-run-hello:FAIL:got=$out"
+        end
+
+        # ── Run: memory load/store (exercises mmap platform) ──
+        echo '(module (memory (export "memory") 1) (func $sl (param i32 i32) (result i32) local.get 0 local.get 1 i32.store local.get 0 i32.load) (func (export "_start") (if (i32.ne (call $sl (i32.const 0) (i32.const 42)) (i32.const 42)) (then unreachable))))' > /tmp/wt-mem.wat
+        let out = $(/nix/system/profile/bin/wasm-runner /tmp/wt-mem.wat)
+        if test "$out" = "OK"
+            echo "FUNC_TEST:wasmtime-run-memory:PASS"
+        else
+            echo "FUNC_TEST:wasmtime-run-memory:FAIL:got=$out"
+        end
+
+        # ── Run: GCD (loops, branches, locals) ──
+        echo '(module (func $gcd (export "gcd") (param i32 i32) (result i32) (local i32) block block local.get 0 br_if 0 local.get 1 local.set 2 br 1 end loop local.get 1 local.get 0 local.tee 2 i32.rem_u local.set 0 local.get 2 local.set 1 local.get 0 br_if 0 end end local.get 2))' > /tmp/wt-gcd.wat
+        let out = $(/nix/system/profile/bin/wasm-runner /tmp/wt-gcd.wat --invoke gcd 6 27)
+        if test "$out" = "3"
+            echo "FUNC_TEST:wasmtime-run-gcd:PASS"
+        else
+            echo "FUNC_TEST:wasmtime-run-gcd:FAIL:expected=3:got=$out"
+        end
+
+        # ── Run: precompiled native cwasm (compile + deserialize + execute) ──
+        echo '(module (func (export "add") (param i32 i32) (result i32) local.get 0 local.get 1 i32.add))' > /tmp/wt-add.wat
+        /nix/system/profile/bin/wasmtime compile /tmp/wt-add.wat -o /tmp/wt-add-native.cwasm
+        if exists -f /tmp/wt-add-native.cwasm
+            let out = $(/nix/system/profile/bin/wasm-runner /tmp/wt-add-native.cwasm --invoke add 10 20)
+            if test "$out" = "30"
+                echo "FUNC_TEST:wasmtime-run-cwasm:PASS"
+            else
+                echo "FUNC_TEST:wasmtime-run-cwasm:FAIL:expected=30:got=$out"
+            end
+        else
+            echo "FUNC_TEST:wasmtime-run-cwasm:SKIP"
         end
     else
-        echo "FUNC_TEST:wasmtime-compile:FAIL:compile error"
+        echo "FUNC_TEST:wasmtime-run-hello:SKIP"
+        echo "FUNC_TEST:wasmtime-run-memory:SKIP"
+        echo "FUNC_TEST:wasmtime-run-gcd:SKIP"
+        echo "FUNC_TEST:wasmtime-run-cwasm:SKIP"
+    end
+
+    # ── Async: fiber-based execution ──
+    if exists -f /nix/system/profile/bin/wasm-async-runner
+        # Async add with args (fiber context switch)
+        echo '(module (func (export "add") (param i32 i32) (result i32) local.get 0 local.get 1 i32.add))' > /tmp/wt-async-add.wat
+        let out = $(/nix/system/profile/bin/wasm-async-runner /tmp/wt-async-add.wat add 6 27)
+        if test "$out" = "33"
+            echo "FUNC_TEST:wasmtime-async-add:PASS"
+        else
+            echo "FUNC_TEST:wasmtime-async-add:FAIL:expected=33:got=$out"
+        end
+
+        # Async _start with computation (fiber instantiation + void call)
+        echo '(module (func (export "add") (param i32 i32) (result i32) local.get 0 local.get 1 i32.add) (func (export "_start") (if (i32.ne (call 0 (i32.const 2) (i32.const 3)) (i32.const 5)) (then unreachable))))' > /tmp/wt-async-hello.wat
+        let out = $(/nix/system/profile/bin/wasm-async-runner /tmp/wt-async-hello.wat)
+        if test "$out" = "OK"
+            echo "FUNC_TEST:wasmtime-async-start:PASS"
+        else
+            echo "FUNC_TEST:wasmtime-async-start:FAIL:got=$out"
+        end
+    else
+        echo "FUNC_TEST:wasmtime-async-add:SKIP"
+        echo "FUNC_TEST:wasmtime-async-start:SKIP"
     end
 else
     echo "FUNC_TEST:wasmtime-version:SKIP"
-    echo "FUNC_TEST:wasmtime-compile:SKIP"
+    echo "FUNC_TEST:wasmtime-compile-pulley:SKIP"
+    echo "FUNC_TEST:wasmtime-compile-native:SKIP"
+    echo "FUNC_TEST:wasmtime-run-hello:SKIP"
+    echo "FUNC_TEST:wasmtime-run-memory:SKIP"
+    echo "FUNC_TEST:wasmtime-run-gcd:SKIP"
+    echo "FUNC_TEST:wasmtime-run-cwasm:SKIP"
+    echo "FUNC_TEST:wasmtime-async-add:SKIP"
+    echo "FUNC_TEST:wasmtime-async-start:SKIP"
 end
