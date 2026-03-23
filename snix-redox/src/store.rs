@@ -300,6 +300,14 @@ pub fn register_path_with_files(
     db.register(&info)
 }
 
+/// Register a store path from a PathInfo struct directly.
+pub fn register_path_from_info(
+    db: &PathInfoDb,
+    info: &PathInfo,
+) -> Result<(), PathInfoError> {
+    db.register(info)
+}
+
 /// Verify the local store — check that all store paths are parseable.
 pub fn verify() -> Result<(), Box<dyn std::error::Error>> {
     let store = Path::new(STORE_DIR);
