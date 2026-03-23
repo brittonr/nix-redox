@@ -36,29 +36,11 @@ use nix_compat::nixbase32;
 use nix_compat::store_path::{StorePath, STORE_DIR};
 use sha2::{Digest, Sha256};
 
+use snix_build::buildservice::{BuildConstraints, BuildRequest};
+use snix_glue::builder::derivation_into_build_request;
 use snix_glue::known_paths::KnownPaths;
 use crate::pathinfo::{self, PathInfo, PathInfoDb};
 use crate::sandbox;
-
-/// Standard Nix build environment variables.
-///
-/// Mirrors upstream snix-glue::builder::NIX_ENVIRONMENT_VARS (which is
-/// private). Temp dir paths are overridden at build time with the actual
-/// build directory — upstream uses "/build" assuming a container.
-const NIX_ENVIRONMENT_VARS: [(&str, &str); 12] = [
-    ("HOME", "/homeless-shelter"),
-    ("NIX_BUILD_CORES", "0"),
-    ("NIX_BUILD_TOP", "/build"),
-    ("NIX_LOG_FD", "2"),
-    ("NIX_STORE", "/nix/store"),
-    ("PATH", "/path-not-set"),
-    ("PWD", "/build"),
-    ("TEMP", "/build"),
-    ("TEMPDIR", "/build"),
-    ("TERM", "xterm-256color"),
-    ("TMP", "/build"),
-    ("TMPDIR", "/build"),
-];
 
 // ── Temp Build Directory ───────────────────────────────────────────────────
 
@@ -219,29 +201,41 @@ fn build_derivation_inner(
     let build_dir = make_build_dir()
         .map_err(|e| BuildError::Io(format!("creating temp build dir: {e}")))?;
 
-    // ── 3. Set up environment ──────────────────────────────────────────
-    let mut env: HashMap<String, String> = HashMap::new();
+    // ── 3. Convert Derivation → BuildRequest ───────────────────────────
+    // Use upstream snix-glue to produce environment variables, command
+    // args, output paths, refscan needles, constraints, and additional
+    // files. We pass an empty inputs map because we don't have castore
+    // Nodes — the function still produces correct env/args/needles.
+    let build_request = derivation_into_build_request(drv.clone(), &BTreeMap::new())
+        .map_err(|e| BuildError::Io(format!("converting derivation to build request: {e}")))?;
 
-    // Derivation environment (includes $out, $src, etc.)
-    for (key, value) in &drv.environment {
-        env.insert(key.clone(), value.to_string());
-    }
-
-    // Standard Nix build environment variables.
-    // Matches upstream snix-glue::builder::NIX_ENVIRONMENT_VARS, but
-    // substitutes the actual build temp dir for /build (upstream assumes
-    // a container; we run on the real filesystem).
+    // Build environment from BuildRequest, substituting upstream's
+    // "/build" temp dir paths with the actual build directory.
     let build_dir_str = build_dir.path().to_string_lossy().to_string();
-    for &(key, value) in NIX_ENVIRONMENT_VARS.iter() {
-        let actual_value = match key {
+    let mut env: HashMap<String, String> = HashMap::new();
+    for ev in &build_request.environment_vars {
+        let value = String::from_utf8_lossy(&ev.value).to_string();
+        let actual_value = match ev.key.as_str() {
             // Temp dirs: use real build dir instead of upstream's "/build"
             "NIX_BUILD_TOP" | "TMPDIR" | "TEMPDIR" | "TMP" | "TEMP" | "PWD" => {
                 build_dir_str.clone()
             }
-            _ => value.to_string(),
+            _ => value,
         };
-        // Don't override derivation-provided values (e.g., custom PATH)
-        env.entry(key.to_string()).or_insert(actual_value);
+        env.insert(ev.key.clone(), actual_value);
+    }
+
+    // ── 3a. Write additional files (passAsFile / structuredAttrs) ──────
+    for af in &build_request.additional_files {
+        let file_path = build_dir.path().join(
+            af.path.strip_prefix("/").unwrap_or(&af.path)
+        );
+        if let Some(parent) = file_path.parent() {
+            fs::create_dir_all(parent)
+                .map_err(|e| BuildError::Io(format!("creating dir for {}: {e}", af.path.display())))?;
+        }
+        fs::write(&file_path, &af.contents)
+            .map_err(|e| BuildError::Io(format!("writing additional file {}: {e}", af.path.display())))?;
     }
 
     // ── 4. Ensure /nix/store exists ────────────────────────────────────
@@ -255,8 +249,8 @@ fn build_derivation_inner(
         return build_builtin_fetcher(drv, drv_path, known_paths, db);
     }
 
-    let mut cmd = Command::new(&drv.builder);
-    cmd.args(&drv.arguments);
+    let mut cmd = Command::new(&build_request.command_args[0]);
+    cmd.args(&build_request.command_args[1..]);
     cmd.current_dir(build_dir.path());
     cmd.env_clear();
     for (k, v) in &env {
@@ -556,7 +550,7 @@ fn build_derivation_inner(
         .cloned()
         .expect("derivation has at least one output");
 
-    let candidates = collect_potential_references(drv, known_paths, &primary_out);
+    let candidates = needles_to_candidates(&build_request, drv, known_paths);
     let references = scan_references(Path::new(&primary_out), &candidates)
         .map_err(|e| BuildError::Io(format!("scanning references: {e}")))?;
 
@@ -631,8 +625,11 @@ fn build_result_from_existing(
         });
     }
 
-    // Exists on disk but not registered — scan and register
-    let candidates = collect_potential_references(drv, known_paths, &primary_out);
+    // Exists on disk but not registered — scan and register.
+    // Build a BuildRequest to get refscan needles from upstream.
+    let build_request = derivation_into_build_request(drv.clone(), &BTreeMap::new())
+        .map_err(|e| BuildError::Io(format!("converting derivation: {e}")))?;
+    let candidates = needles_to_candidates(&build_request, drv, known_paths);
     let references = scan_references(Path::new(&primary_out), &candidates)
         .map_err(|e| BuildError::Io(format!("scanning references: {e}")))?;
 
@@ -858,19 +855,35 @@ fn write_path_to_nar<W: io::Write>(
 
 // ── Reference Scanning ─────────────────────────────────────────────────────
 
-/// Collect all store paths that could potentially be referenced by a
-/// derivation output.
+/// Map BuildRequest refscan needles to full store paths.
 ///
-/// Returns a map from nixbase32 hash (32 chars) → full store path.
-/// The hash is the only thing we scan for in output files.
-fn collect_potential_references(
+/// The BuildRequest contains nixbase32 hash needles for all output and
+/// input store paths. This function maps each needle back to its full
+/// absolute store path using the derivation outputs and KnownPaths.
+///
+/// Returns a map from nixbase32 hash (32 chars) → full store path,
+/// suitable for passing to `scan_references`.
+fn needles_to_candidates(
+    build_request: &BuildRequest,
     drv: &nix_compat::derivation::Derivation,
     known_paths: &KnownPaths,
-    output_path: &str,
 ) -> HashMap<String, String> {
     let mut candidates: HashMap<String, String> = HashMap::new();
 
-    // Input sources (plain store path inputs)
+    // Build a lookup table: nixbase32 hash → full store path.
+    // Sources: output paths, input derivation output paths, input sources.
+
+    // Output paths (self-references)
+    for output in drv.outputs.values() {
+        if let Some(ref sp) = output.path {
+            candidates.insert(
+                nixbase32::encode(sp.digest()),
+                sp.to_absolute_path(),
+            );
+        }
+    }
+
+    // Input sources
     for src in &drv.input_sources {
         candidates.insert(
             nixbase32::encode(src.digest()),
@@ -894,13 +907,9 @@ fn collect_potential_references(
         }
     }
 
-    // Self-reference (the output path itself)
-    if let Ok(sp) = StorePath::<String>::from_absolute_path(output_path.as_bytes()) {
-        candidates.insert(
-            nixbase32::encode(sp.digest()),
-            output_path.to_string(),
-        );
-    }
+    // Filter to only include needles from the BuildRequest. This ensures
+    // we scan for exactly the same set that upstream would.
+    candidates.retain(|hash, _| build_request.refscan_needles.contains(hash));
 
     candidates
 }
@@ -1025,7 +1034,9 @@ fn build_builtin_fetcher(
     })?;
 
     // Scan for references and compute NAR hash
-    let candidates = collect_potential_references(drv, known_paths, &out_path);
+    let fetcher_request = derivation_into_build_request(drv.clone(), &BTreeMap::new())
+        .map_err(|e| BuildError::Io(format!("converting derivation: {e}")))?;
+    let candidates = needles_to_candidates(&fetcher_request, drv, known_paths);
     let references = scan_references(Path::new(&out_path), &candidates)
         .map_err(|e| BuildError::Io(format!("scanning references: {e}")))?;
 
@@ -1563,32 +1574,60 @@ mod tests {
         }
     }
 
-    // ── Collect Potential References ────────────────────────────────────
+    // ── Needles to Candidates ────────────────────────────────────────
 
     #[test]
-    fn potential_refs_includes_self() {
-        let drv = Derivation::default();
+    fn needles_includes_output_self_ref() {
+        // Build a derivation with a known output path
+        let mut drv = Derivation::default();
+        drv.builder = "/bin/sh".to_string();
+        drv.system = "x86_64-linux".to_string();
+        drv.outputs.insert(
+            "out".to_string(),
+            Output {
+                path: Some(
+                    StorePath::<String>::from_absolute_path(
+                        b"/nix/store/5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r-hello-1.0",
+                    )
+                    .unwrap(),
+                ),
+                ca_hash: None,
+            },
+        );
         let kp = KnownPaths::default();
-        let out = "/nix/store/5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r-hello-1.0";
+        let br = derivation_into_build_request(drv.clone(), &BTreeMap::new()).unwrap();
 
-        let refs = collect_potential_references(&drv, &kp, out);
+        let refs = needles_to_candidates(&br, &drv, &kp);
         assert!(refs.contains_key("5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r"));
-        assert_eq!(refs["5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r"], out);
     }
 
     #[test]
-    fn potential_refs_includes_input_sources() {
+    fn needles_includes_input_sources() {
         let mut drv = Derivation::default();
+        drv.builder = "/bin/sh".to_string();
+        drv.system = "x86_64-linux".to_string();
         let src = StorePath::<String>::from_absolute_path(
             b"/nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-src",
         )
         .unwrap();
         drv.input_sources.insert(src);
+        drv.outputs.insert(
+            "out".to_string(),
+            Output {
+                path: Some(
+                    StorePath::<String>::from_absolute_path(
+                        b"/nix/store/5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r-hello-1.0",
+                    )
+                    .unwrap(),
+                ),
+                ca_hash: None,
+            },
+        );
 
         let kp = KnownPaths::default();
-        let out = "/nix/store/5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r-hello-1.0";
+        let br = derivation_into_build_request(drv.clone(), &BTreeMap::new()).unwrap();
 
-        let refs = collect_potential_references(&drv, &kp, out);
+        let refs = needles_to_candidates(&br, &drv, &kp);
         assert!(refs.contains_key("1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r"));
     }
 

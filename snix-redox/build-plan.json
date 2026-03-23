@@ -19,8 +19,8 @@
     "snix-store": "path+file:///home/brittonr/git/redox/snix-redox/upstream/store#snix-store@0.1.0",
     "snix-tracing": "path+file:///home/brittonr/git/redox/snix-redox/upstream/tracing#snix-tracing@0.1.0"
   },
-  "cargoLockHash": "420c03bdca1eb8b7922a14ae773434b1d434b239c02571a5743830914cace17e",
-  "inputsHash": "6f4e5df500d6bc6836c3f172671b682ee91091fa7a18bbe10a8ac4909c91cb40",
+  "cargoLockHash": "fe7d1fb109df9328faa220b73159661721434219e4caeeb91ec403af4cd9aa2f",
+  "inputsHash": "b15fed24c1a5c3883debd81afc6f961567eb4a17187443f75a158e994b097a4b",
   "crates": {
     "git+https://github.com/tvlfyi/wu-manber.git#wu-manber@0.1.0": {
       "crateName": "wu-manber",
@@ -109,11 +109,11 @@
           "externCrateName": "ruzstd"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.143",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
           "externCrateName": "serde_json"
         },
         {
@@ -141,6 +141,10 @@
           "externCrateName": "snix_store"
         },
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tar@0.4.45",
+          "externCrateName": "tar"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
           "externCrateName": "thiserror"
         },
@@ -149,17 +153,11 @@
           "externCrateName": "tokio"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ureq@3.2.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ureq@3.3.0",
           "externCrateName": "ureq"
         }
       ],
       "buildDependencies": [],
-      "devDependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.27.0",
-          "externCrateName": "tempfile"
-        }
-      ],
       "procMacro": false,
       "build": null,
       "libPath": null,
@@ -231,16 +229,12 @@
           "externCrateName": "prost"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.143",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
           "externCrateName": "serde_json"
         },
         {
           "packageId": "path+file:///home/brittonr/git/redox/snix-redox/upstream/castore#snix-castore@0.1.0",
           "externCrateName": "snix_castore"
-        },
-        {
-          "packageId": "path+file:///home/brittonr/git/redox/snix-redox/upstream/tracing#snix-tracing@0.1.0",
-          "externCrateName": "snix_tracing"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
@@ -346,7 +340,7 @@
           "externCrateName": "digest"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#erased-serde@0.4.6",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#erased-serde@0.4.10",
           "externCrateName": "erased_serde"
         },
         {
@@ -390,7 +384,7 @@
           "externCrateName": "redb"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         },
         {
@@ -402,7 +396,7 @@
           "externCrateName": "serde_tagged"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_with@3.14.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_with@3.18.0",
           "externCrateName": "serde_with"
         },
         {
@@ -621,11 +615,11 @@
           "externCrateName": "rustc_hash"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.143",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
           "externCrateName": "serde_json"
         },
         {
@@ -758,6 +752,10 @@
           "externCrateName": "futures"
         },
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.15.5",
+          "externCrateName": "hashbrown"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#md-5@0.10.6",
           "externCrateName": "md5"
         },
@@ -778,11 +776,11 @@
           "externCrateName": "reqwest"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.143",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
           "externCrateName": "serde_json"
         },
         {
@@ -869,6 +867,7 @@
         "default",
         "flakeref",
         "futures",
+        "hashbrown",
         "nix-compat-derive",
         "pin-project-lite",
         "serde",
@@ -907,6 +906,10 @@
           "externCrateName": "futures"
         },
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.15.5",
+          "externCrateName": "hashbrown"
+        },
+        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#mimalloc@0.1.48",
           "externCrateName": "mimalloc"
         },
@@ -927,15 +930,15 @@
           "externCrateName": "pin_project_lite"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.143",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
           "externCrateName": "serde_json"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_with@3.14.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_with@3.18.0",
           "externCrateName": "serde_with"
         },
         {
@@ -1113,11 +1116,11 @@
           "externCrateName": "reqwest_middleware"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.143",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
           "externCrateName": "serde_json"
         },
         {
@@ -1125,7 +1128,7 @@
           "externCrateName": "serde_qs"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_with@3.14.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_with@3.18.0",
           "externCrateName": "serde_with"
         },
         {
@@ -1229,7 +1232,6 @@
       "features": [
         "clap",
         "default",
-        "otlp",
         "reqwest",
         "tonic"
       ],
@@ -1243,32 +1245,8 @@
           "externCrateName": "clap_verbosity_flag"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#enumset@1.1.10",
-          "externCrateName": "enumset"
-        },
-        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#http@1.4.0",
           "externCrateName": "http"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry@0.30.0",
-          "externCrateName": "opentelemetry"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry-http@0.30.0",
-          "externCrateName": "opentelemetry_http"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry-otlp@0.30.0",
-          "externCrateName": "opentelemetry_otlp"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry-semantic-conventions@0.30.0",
-          "externCrateName": "opentelemetry_semantic_conventions"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry_sdk@0.30.0",
-          "externCrateName": "opentelemetry_sdk"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#reqwest-tracing@0.6.0",
@@ -1293,10 +1271,6 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing-indicatif@0.3.14",
           "externCrateName": "tracing_indicatif"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing-opentelemetry@0.31.0",
-          "externCrateName": "tracing_opentelemetry"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing-subscriber@0.3.23",
@@ -2150,7 +2124,7 @@
           "externCrateName": "regex_automata"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         }
       ],
@@ -2435,7 +2409,7 @@
           "externCrateName": "num_traits"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         }
       ],
@@ -3360,11 +3334,11 @@
       "license": "MIT",
       "repository": "https://github.com/TedDriggs/darling"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#darling@0.21.3": {
+    "registry+https://github.com/rust-lang/crates.io-index#darling@0.23.0": {
       "crateName": "darling",
-      "version": "0.21.3",
+      "version": "0.23.0",
       "edition": "2021",
-      "sha256": "9cdf337090841a411e2a7f3deb9187445851f91b309c0c0a29e05f74a00a48c0",
+      "sha256": "25ae13da2f202d56bd7f91c25fba009e7717a1e4a1cc98a76d844b65ae912e9d",
       "source": {
         "type": "crates-io"
       },
@@ -3374,11 +3348,11 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#darling_core@0.21.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#darling_core@0.23.0",
           "externCrateName": "darling_core"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#darling_macro@0.21.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#darling_macro@0.23.0",
           "externCrateName": "darling_macro"
         }
       ],
@@ -3454,11 +3428,11 @@
       "license": "MIT",
       "repository": "https://github.com/TedDriggs/darling"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#darling_core@0.21.3": {
+    "registry+https://github.com/rust-lang/crates.io-index#darling_core@0.23.0": {
       "crateName": "darling_core",
-      "version": "0.21.3",
+      "version": "0.23.0",
       "edition": "2021",
-      "sha256": "1247195ecd7e3c85f83c8d2a366e4210d588e802133e1e355180a9870b517ea4",
+      "sha256": "9865a50f7c335f53564bb694ef660825eb8610e0a53d3e11bf1b0d3df31e03b0",
       "source": {
         "type": "crates-io"
       },
@@ -3467,10 +3441,6 @@
         "suggestions"
       ],
       "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#fnv@1.0.7",
-          "externCrateName": "fnv"
-        },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#ident_case@1.0.1",
           "externCrateName": "ident_case"
@@ -3549,18 +3519,18 @@
       "license": "MIT",
       "repository": "https://github.com/TedDriggs/darling"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#darling_macro@0.21.3": {
+    "registry+https://github.com/rust-lang/crates.io-index#darling_macro@0.23.0": {
       "crateName": "darling_macro",
-      "version": "0.21.3",
+      "version": "0.23.0",
       "edition": "2021",
-      "sha256": "d38308df82d1080de0afee5d069fa14b0326a88c14f15c5ccda35b4a6c414c81",
+      "sha256": "ac3984ec7bd6cfa798e62b4a642426a5be0e68f9401cfc2a01e3fa9ea2fcdb8d",
       "source": {
         "type": "crates-io"
       },
       "features": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#darling_core@0.21.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#darling_core@0.23.0",
           "externCrateName": "darling_core"
         },
         {
@@ -3996,82 +3966,6 @@
       "license": "(Apache-2.0 OR MIT) AND BSD-3-Clause",
       "repository": "https://github.com/hsivonen/encoding_rs"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#enumset@1.1.10": {
-      "crateName": "enumset",
-      "version": "1.1.10",
-      "edition": "2021",
-      "sha256": "25b07a8dfbbbfc0064c0a6bdf9edcf966de6b1c33ce344bdeca3b41615452634",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#enumset_derive@0.14.0",
-          "externCrateName": "enumset_derive"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Alissa Rao <aura@aura.moe>"
-      ],
-      "description": "A library for creating compact sets of enums.",
-      "license": "MIT/Apache-2.0",
-      "repository": "https://github.com/Lymia/enumset"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#enumset_derive@0.14.0": {
-      "crateName": "enumset_derive",
-      "version": "0.14.0",
-      "edition": "2021",
-      "sha256": "f43e744e4ea338060faee68ed933e46e722fb7f3617e722a5772d7e856d8b3ce",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#darling@0.21.3",
-          "externCrateName": "darling"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
-          "externCrateName": "proc_macro2"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
-          "externCrateName": "quote"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
-          "externCrateName": "syn"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": true,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "proc-macro"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Alissa Rao <aura@aura.moe>"
-      ],
-      "description": "An internal helper crate for enumset. Not public API.",
-      "license": "MIT/Apache-2.0",
-      "repository": "https://github.com/Lymia/enumset"
-    },
     "registry+https://github.com/rust-lang/crates.io-index#equivalent@1.0.2": {
       "crateName": "equivalent",
       "version": "1.0.2",
@@ -4096,11 +3990,11 @@
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/indexmap-rs/equivalent"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#erased-serde@0.4.6": {
+    "registry+https://github.com/rust-lang/crates.io-index#erased-serde@0.4.10": {
       "crateName": "erased-serde",
-      "version": "0.4.6",
+      "version": "0.4.10",
       "edition": "2021",
-      "sha256": "e004d887f51fcb9fef17317a2f3525c887d8aa3f4f50fed920816a688284a5b7",
+      "sha256": "d2add8a07dd6a8d93ff627029c51de145e12686fbc36ecb298ac22e74cf02dec",
       "source": {
         "type": "crates-io"
       },
@@ -4109,10 +4003,11 @@
         "default",
         "std"
       ],
+      "hostFeatures": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
-          "externCrateName": "serde"
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228",
+          "externCrateName": "serde_core"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#typeid@1.0.3",
@@ -4577,7 +4472,6 @@
         "type": "crates-io"
       },
       "features": [
-        "default",
         "std"
       ],
       "dependencies": [
@@ -5160,7 +5054,7 @@
           "externCrateName": "http"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.11.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.13.0",
           "externCrateName": "indexmap"
         },
         {
@@ -5272,7 +5166,6 @@
         "inline-more",
         "raw-entry"
       ],
-      "hostFeatures": [],
       "dependencies": [
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#allocator-api2@0.2.21",
@@ -5287,6 +5180,33 @@
           "externCrateName": "foldhash"
         }
       ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Amanieu d'Antras <amanieu@gmail.com>"
+      ],
+      "description": "A Rust port of Google's SwissTable hash map",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/hashbrown"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.16.1": {
+      "crateName": "hashbrown",
+      "version": "0.16.1",
+      "edition": "2021",
+      "sha256": "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
@@ -6351,11 +6271,11 @@
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/bluss/indexmap"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.11.1": {
+    "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.13.0": {
       "crateName": "indexmap",
-      "version": "2.11.1",
+      "version": "2.13.0",
       "edition": "2021",
-      "sha256": "206a8042aec68fa4a62e8d3f7aa4ceb508177d9324faf261e1959e495b7a1921",
+      "sha256": "7714e70437a7dc3ac8eb7e6f8df75fd8eb422675fc7678aff7364301092b1017",
       "source": {
         "type": "crates-io"
       },
@@ -6369,7 +6289,7 @@
           "externCrateName": "equivalent"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.15.5",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.16.1",
           "externCrateName": "hashbrown"
         }
       ],
@@ -7884,7 +7804,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro-crate@3.4.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro-crate@3.5.0",
           "externCrateName": "proc_macro_crate"
         },
         {
@@ -8015,11 +7935,11 @@
           "externCrateName": "ring"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.143",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
           "externCrateName": "serde_json"
         },
         {
@@ -8089,11 +8009,11 @@
           "externCrateName": "regex"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.143",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149",
           "externCrateName": "serde_json"
         },
         {
@@ -8188,356 +8108,6 @@
       "homepage": "https://github.com/rustls/openssl-probe",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rustls/openssl-probe"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#opentelemetry-http@0.30.0": {
-      "crateName": "opentelemetry-http",
-      "version": "0.30.0",
-      "edition": "2021",
-      "sha256": "50f6639e842a97dbea8886e3439710ae463120091e2e064518ba8e716e6ac36d",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default",
-        "internal-logs",
-        "reqwest"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#async-trait@0.1.89",
-          "externCrateName": "async_trait"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bytes@1.11.1",
-          "externCrateName": "bytes"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#http@1.4.0",
-          "externCrateName": "http"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry@0.30.0",
-          "externCrateName": "opentelemetry"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#reqwest@0.12.28",
-          "externCrateName": "reqwest"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Helper implementations for sending HTTP requests. Uses include propagating and extracting context over http, exporting telemetry, requesting sampling strategies.",
-      "homepage": "https://github.com/open-telemetry/opentelemetry-rust/tree/main/opentelemetry-http",
-      "license": "Apache-2.0",
-      "repository": "https://github.com/open-telemetry/opentelemetry-rust/tree/main/opentelemetry-http"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#opentelemetry-otlp@0.30.0": {
-      "crateName": "opentelemetry-otlp",
-      "version": "0.30.0",
-      "edition": "2021",
-      "sha256": "dbee664a43e07615731afc539ca60c6d9f1a9425e25ca09c57bc36c87c55852b",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default",
-        "grpc-tonic",
-        "http",
-        "http-proto",
-        "internal-logs",
-        "logs",
-        "metrics",
-        "opentelemetry-http",
-        "prost",
-        "reqwest",
-        "reqwest-blocking-client",
-        "tokio",
-        "tonic",
-        "trace",
-        "tracing"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#http@1.4.0",
-          "externCrateName": "http"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry@0.30.0",
-          "externCrateName": "opentelemetry"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry-http@0.30.0",
-          "externCrateName": "opentelemetry_http"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry-proto@0.30.0",
-          "externCrateName": "opentelemetry_proto"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry_sdk@0.30.0",
-          "externCrateName": "opentelemetry_sdk"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#prost@0.13.5",
-          "externCrateName": "prost"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#reqwest@0.12.28",
-          "externCrateName": "reqwest"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
-          "externCrateName": "thiserror"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
-          "externCrateName": "tokio"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tonic@0.13.1",
-          "externCrateName": "tonic"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44",
-          "externCrateName": "tracing"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Exporter for the OpenTelemetry Collector",
-      "homepage": "https://github.com/open-telemetry/opentelemetry-rust/tree/main/opentelemetry-otlp",
-      "license": "Apache-2.0",
-      "repository": "https://github.com/open-telemetry/opentelemetry-rust/tree/main/opentelemetry-otlp"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#opentelemetry-proto@0.30.0": {
-      "crateName": "opentelemetry-proto",
-      "version": "0.30.0",
-      "edition": "2021",
-      "sha256": "2e046fd7660710fe5a05e8748e70d9058dc15c94ba914e7c4faa7c728f0e8ddc",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "gen-tonic",
-        "gen-tonic-messages",
-        "logs",
-        "metrics",
-        "prost",
-        "tonic",
-        "trace"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry@0.30.0",
-          "externCrateName": "opentelemetry"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry_sdk@0.30.0",
-          "externCrateName": "opentelemetry_sdk"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#prost@0.13.5",
-          "externCrateName": "prost"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tonic@0.13.1",
-          "externCrateName": "tonic"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Protobuf generated files and transformations.",
-      "homepage": "https://github.com/open-telemetry/opentelemetry-rust/tree/main/opentelemetry-proto",
-      "license": "Apache-2.0",
-      "repository": "https://github.com/open-telemetry/opentelemetry-rust/tree/main/opentelemetry-proto"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#opentelemetry-semantic-conventions@0.30.0": {
-      "crateName": "opentelemetry-semantic-conventions",
-      "version": "0.30.0",
-      "edition": "2021",
-      "sha256": "83d059a296a47436748557a353c5e6c5705b9470ef6c95cfc52c21a8814ddac2",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default"
-      ],
-      "dependencies": [],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "Semantic conventions for OpenTelemetry",
-      "homepage": "https://github.com/open-telemetry/opentelemetry-rust/tree/main/opentelemetry-semantic-conventions",
-      "license": "Apache-2.0",
-      "repository": "https://github.com/open-telemetry/opentelemetry-rust/tree/main/opentelemetry-semantic-conventions"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#opentelemetry@0.30.0": {
-      "crateName": "opentelemetry",
-      "version": "0.30.0",
-      "edition": "2021",
-      "sha256": "aaf416e4cb72756655126f7dd7bb0af49c674f4c1b9903e80c009e0c37e552e6",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default",
-        "futures",
-        "futures-core",
-        "futures-sink",
-        "internal-logs",
-        "logs",
-        "metrics",
-        "pin-project-lite",
-        "thiserror",
-        "trace",
-        "tracing"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#futures-core@0.3.32",
-          "externCrateName": "futures_core"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#futures-sink@0.3.32",
-          "externCrateName": "futures_sink"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#pin-project-lite@0.2.17",
-          "externCrateName": "pin_project_lite"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
-          "externCrateName": "thiserror"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44",
-          "externCrateName": "tracing"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "OpenTelemetry API for Rust",
-      "homepage": "https://github.com/open-telemetry/opentelemetry-rust/tree/main/opentelemetry",
-      "license": "Apache-2.0",
-      "repository": "https://github.com/open-telemetry/opentelemetry-rust/tree/main/opentelemetry"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#opentelemetry_sdk@0.30.0": {
-      "crateName": "opentelemetry_sdk",
-      "version": "0.30.0",
-      "edition": "2021",
-      "sha256": "11f644aa9e5e31d11896e024305d7e3c98a88884d9f8919dbf37a9991bc47a4b",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default",
-        "experimental_async_runtime",
-        "internal-logs",
-        "logs",
-        "metrics",
-        "percent-encoding",
-        "rand",
-        "rt-tokio",
-        "serde_json",
-        "tokio",
-        "tokio-stream",
-        "trace"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#futures-channel@0.3.32",
-          "externCrateName": "futures_channel"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#futures-executor@0.3.32",
-          "externCrateName": "futures_executor"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#futures-util@0.3.32",
-          "externCrateName": "futures_util"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry@0.30.0",
-          "externCrateName": "opentelemetry"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#percent-encoding@2.3.2",
-          "externCrateName": "percent_encoding"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rand@0.9.2",
-          "externCrateName": "rand"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.143",
-          "externCrateName": "serde_json"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
-          "externCrateName": "thiserror"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio@1.50.0",
-          "externCrateName": "tokio"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tokio-stream@0.1.18",
-          "externCrateName": "tokio_stream"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "The SDK for the OpenTelemetry metrics collection and distributed tracing framework",
-      "homepage": "https://github.com/open-telemetry/opentelemetry-rust/tree/main/opentelemetry-sdk",
-      "license": "Apache-2.0",
-      "repository": "https://github.com/open-telemetry/opentelemetry-rust/tree/main/opentelemetry-sdk"
     },
     "registry+https://github.com/rust-lang/crates.io-index#os_str_bytes@6.6.1": {
       "crateName": "os_str_bytes",
@@ -8732,7 +8302,7 @@
           "externCrateName": "fixedbitset"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.11.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.13.0",
           "externCrateName": "indexmap"
         }
       ],
@@ -8769,7 +8339,7 @@
           "externCrateName": "fixedbitset"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.11.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.13.0",
           "externCrateName": "indexmap"
         }
       ],
@@ -9069,18 +8639,18 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/dtolnay/prettyplease"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#proc-macro-crate@3.4.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#proc-macro-crate@3.5.0": {
       "crateName": "proc-macro-crate",
-      "version": "3.4.0",
+      "version": "3.5.0",
       "edition": "2021",
-      "sha256": "219cb19e96be00ab2e37d6e299658a0cfa83e52429179969b0f0121b4ac46983",
+      "sha256": "e67ba7e9b2b56446f1d419b1d807906278ffa1a658a8a5d8a39dcb1f5a78614f",
       "source": {
         "type": "crates-io"
       },
       "features": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml_edit@0.23.4",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml_edit@0.25.5+spec-1.1.0",
           "externCrateName": "toml_edit"
         }
       ],
@@ -9527,7 +9097,7 @@
           "externCrateName": "memchr"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         }
       ],
@@ -9591,7 +9161,6 @@
       "features": [
         "alloc",
         "os_rng",
-        "small_rng",
         "std",
         "std_rng",
         "thread_rng"
@@ -10054,11 +9623,7 @@
       "source": {
         "type": "crates-io"
       },
-      "features": [
-        "opentelemetry_0_30",
-        "opentelemetry_0_30_pkg",
-        "tracing-opentelemetry_0_31_pkg"
-      ],
+      "features": [],
       "dependencies": [
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#anyhow@1.0.102",
@@ -10077,10 +9642,6 @@
           "externCrateName": "matchit"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry@0.30.0",
-          "externCrateName": "opentelemetry_0_30_pkg"
-        },
-        {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#reqwest@0.13.2",
           "externCrateName": "reqwest"
         },
@@ -10091,10 +9652,6 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44",
           "externCrateName": "tracing"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing-opentelemetry@0.31.0",
-          "externCrateName": "tracing_opentelemetry_0_31_pkg"
         }
       ],
       "buildDependencies": [],
@@ -10126,7 +9683,6 @@
         "__rustls",
         "__rustls-ring",
         "__tls",
-        "blocking",
         "h2",
         "http2",
         "rustls-tls-native-roots",
@@ -10141,10 +9697,6 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#bytes@1.11.1",
           "externCrateName": "bytes"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#futures-channel@0.3.32",
-          "externCrateName": "futures_channel"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#futures-core@0.3.32",
@@ -10207,7 +9759,7 @@
           "externCrateName": "rustls_pki_types"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         },
         {
@@ -10753,7 +10305,7 @@
           "externCrateName": "rustls_native_certs"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.9",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.10",
           "externCrateName": "webpki"
         }
       ],
@@ -10771,11 +10323,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rustls/rustls-platform-verifier"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.9": {
+    "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.10": {
       "crateName": "rustls-webpki",
-      "version": "0.103.9",
+      "version": "0.103.10",
       "edition": "2021",
-      "sha256": "d7df23109aa6c1567d1c575b9952556388da57401e4ace1d15f79eedad0d8f53",
+      "sha256": "df33b2b81ac578cabaf06b89b0631153a3f416b0a886e8a7a1707fb51abbd1ef",
       "source": {
         "type": "crates-io"
       },
@@ -10846,7 +10398,7 @@
           "externCrateName": "pki_types"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.9",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.10",
           "externCrateName": "webpki"
         },
         {
@@ -11049,11 +10601,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/dtolnay/semver"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217": {
+    "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228": {
       "crateName": "serde",
-      "version": "1.0.217",
-      "edition": "2018",
-      "sha256": "02fc4265df13d6fa1d00ecff087228cc0a2b5f3c0e87e258d8b94a156e984c70",
+      "version": "1.0.228",
+      "edition": "2021",
+      "sha256": "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e",
       "source": {
         "type": "crates-io"
       },
@@ -11068,7 +10620,11 @@
       "hostFeatures": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228",
+          "externCrateName": "serde_core"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.228",
           "externCrateName": "serde_derive"
         }
       ],
@@ -11091,11 +10647,46 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/serde-rs/serde"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.217": {
+    "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228": {
+      "crateName": "serde_core",
+      "version": "1.0.228",
+      "edition": "2021",
+      "sha256": "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "rc",
+        "result",
+        "std"
+      ],
+      "hostFeatures": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Erick Tryzelaar <erick.tryzelaar@gmail.com>",
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "Serde traits only, with no support for derive -- use the `serde` crate instead",
+      "homepage": "https://serde.rs",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/serde-rs/serde"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.228": {
       "crateName": "serde_derive",
-      "version": "1.0.217",
-      "edition": "2015",
-      "sha256": "5a9bf7cf98d04a2b28aead066b7496853d4779c9cc183c440dbac457641e19a0",
+      "version": "1.0.228",
+      "edition": "2021",
+      "sha256": "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79",
       "source": {
         "type": "crates-io"
       },
@@ -11135,11 +10726,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/serde-rs/serde"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.143": {
+    "registry+https://github.com/rust-lang/crates.io-index#serde_json@1.0.149": {
       "crateName": "serde_json",
-      "version": "1.0.143",
+      "version": "1.0.149",
       "edition": "2021",
-      "sha256": "d401abef1d108fbd9cbaebc3e46611f4b1021f714a0597a71f41ee463f5f4a5a",
+      "sha256": "83fc039473c5595ace860d8c4fafa220ff474b3fc6bfdb4293327f1a37e94d86",
       "source": {
         "type": "crates-io"
       },
@@ -11158,12 +10749,12 @@
           "externCrateName": "memchr"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ryu@1.0.23",
-          "externCrateName": "ryu"
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228",
+          "externCrateName": "serde_core"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
-          "externCrateName": "serde"
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.21",
+          "externCrateName": "zmij"
         }
       ],
       "buildDependencies": [],
@@ -11201,7 +10792,7 @@
           "externCrateName": "percent_encoding"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         },
         {
@@ -11239,7 +10830,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         }
       ],
@@ -11272,11 +10863,11 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#erased-serde@0.4.6",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#erased-serde@0.4.10",
           "externCrateName": "erased_serde"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         }
       ],
@@ -11320,7 +10911,7 @@
           "externCrateName": "ryu"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         }
       ],
@@ -11341,11 +10932,11 @@
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/nox/serde_urlencoded"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#serde_with@3.14.1": {
+    "registry+https://github.com/rust-lang/crates.io-index#serde_with@3.18.0": {
       "crateName": "serde_with",
-      "version": "3.14.1",
+      "version": "3.18.0",
       "edition": "2021",
-      "sha256": "c522100790450cf78eeac1507263d0a350d4d5b30df0c8e1fe051a10c22b376e",
+      "sha256": "dd5414fad8e6907dbdd5bc441a50ae8d6e26151a03b1de04d89a5576de61d01f",
       "source": {
         "type": "crates-io"
       },
@@ -11354,15 +10945,11 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
-          "externCrateName": "serde"
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228",
+          "externCrateName": "serde_core"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.217",
-          "externCrateName": "serde_derive"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_with_macros@3.14.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_with_macros@3.18.0",
           "externCrateName": "serde_with_macros"
         }
       ],
@@ -11384,18 +10971,18 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/jonasbb/serde_with/"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#serde_with_macros@3.14.1": {
+    "registry+https://github.com/rust-lang/crates.io-index#serde_with_macros@3.18.0": {
       "crateName": "serde_with_macros",
-      "version": "3.14.1",
+      "version": "3.18.0",
       "edition": "2021",
-      "sha256": "327ada00f7d64abaac1e55a6911e90cf665aa051b9a561c7006c157f4633135e",
+      "sha256": "d3db8978e608f1fe7357e211969fd9abdcae80bac1ba7a3369bb7eb6b404eb65",
       "source": {
         "type": "crates-io"
       },
       "features": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#darling@0.21.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#darling@0.23.0",
           "externCrateName": "darling"
         },
         {
@@ -12333,6 +11920,50 @@
       "license": "Unlicense/MIT",
       "repository": "https://github.com/BurntSushi/tabwriter"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#tar@0.4.45": {
+      "crateName": "tar",
+      "version": "0.4.45",
+      "edition": "2021",
+      "sha256": "22692a6476a21fa75fdfc11d452fda482af402c008cdbaf3476414e122040973",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "xattr"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#filetime@0.2.27",
+          "externCrateName": "filetime"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.183",
+          "externCrateName": "libc"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#xattr@1.6.1",
+          "externCrateName": "xattr"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Alex Crichton <alex@alexcrichton.com>"
+      ],
+      "description": "A Rust implementation of a TAR file reader and writer. This library does not currently handle compression, but it is abstract over all I/O readers and writers. Additionally, great lengths are taken to ensure that the entire contents are never required to be entirely resident in memory all at once. ",
+      "homepage": "https://github.com/alexcrichton/tar-rs",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/alexcrichton/tar-rs"
+    },
     "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.27.0": {
       "crateName": "tempfile",
       "version": "3.27.0",
@@ -12934,6 +12565,7 @@
         "bytes",
         "default",
         "fs",
+        "io-std",
         "io-util",
         "libc",
         "macros",
@@ -13012,7 +12644,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         },
         {
@@ -13059,7 +12691,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         }
       ],
@@ -13081,11 +12713,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/toml-rs/toml"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#toml_datetime@0.7.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#toml_datetime@1.0.1+spec-1.1.0": {
       "crateName": "toml_datetime",
-      "version": "0.7.0",
+      "version": "1.0.1+spec-1.1.0",
       "edition": "2021",
-      "sha256": "bade1c3e902f58d73d3f294cd7f20391c1cb2fbcb643b73566bc773971df91e3",
+      "sha256": "9b320e741db58cac564e26c607d3cc1fdc4a88fd36c879568c07856ed83ff3e9",
       "source": {
         "type": "crates-io"
       },
@@ -13131,7 +12763,7 @@
           "externCrateName": "nom8"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         },
         {
@@ -13161,11 +12793,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/ordian/toml_edit"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#toml_edit@0.23.4": {
+    "registry+https://github.com/rust-lang/crates.io-index#toml_edit@0.25.5+spec-1.1.0": {
       "crateName": "toml_edit",
-      "version": "0.23.4",
+      "version": "0.25.5+spec-1.1.0",
       "edition": "2021",
-      "sha256": "7211ff1b8f0d3adae1663b7da9ffe396eabe1ca25f0b0bee42b0da29a9ddce93",
+      "sha256": "8ca1a40644a28bce036923f6a431df0b34236949d111cc07cb6dca830c9ef2e1",
       "source": {
         "type": "crates-io"
       },
@@ -13174,11 +12806,11 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.11.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.13.0",
           "externCrateName": "indexmap"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml_datetime@0.7.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml_datetime@1.0.1+spec-1.1.0",
           "externCrateName": "toml_datetime"
         },
         {
@@ -13186,7 +12818,7 @@
           "externCrateName": "toml_parser"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#winnow@0.7.15",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#winnow@1.0.0",
           "externCrateName": "winnow"
         }
       ],
@@ -13709,7 +13341,7 @@
           "externCrateName": "futures_util"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.11.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.13.0",
           "externCrateName": "indexmap"
         },
         {
@@ -13927,69 +13559,6 @@
       "homepage": "https://tokio.rs",
       "license": "MIT",
       "repository": "https://github.com/tokio-rs/tracing"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#tracing-opentelemetry@0.31.0": {
-      "crateName": "tracing-opentelemetry",
-      "version": "0.31.0",
-      "edition": "2021",
-      "sha256": "ddcf5959f39507d0d04d6413119c04f33b623f4f951ebcbdddddfad2d0623a9c",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default",
-        "metrics",
-        "smallvec",
-        "tracing-log"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#once_cell@1.21.4",
-          "externCrateName": "once_cell"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry@0.30.0",
-          "externCrateName": "opentelemetry"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#opentelemetry_sdk@0.30.0",
-          "externCrateName": "opentelemetry_sdk"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#smallvec@1.15.1",
-          "externCrateName": "smallvec"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing@0.1.44",
-          "externCrateName": "tracing"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing-core@0.1.36",
-          "externCrateName": "tracing_core"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing-log@0.2.0",
-          "externCrateName": "tracing_log"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tracing-subscriber@0.3.23",
-          "externCrateName": "tracing_subscriber"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "OpenTelemetry integration for tracing",
-      "homepage": "https://github.com/tokio-rs/tracing-opentelemetry",
-      "license": "MIT",
-      "repository": "https://github.com/tokio-rs/tracing-opentelemetry"
     },
     "registry+https://github.com/rust-lang/crates.io-index#tracing-subscriber@0.3.23": {
       "crateName": "tracing-subscriber",
@@ -14459,11 +14028,11 @@
       "license": "ISC",
       "repository": "https://github.com/briansmith/untrusted"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#ureq-proto@0.5.3": {
+    "registry+https://github.com/rust-lang/crates.io-index#ureq-proto@0.6.0": {
       "crateName": "ureq-proto",
-      "version": "0.5.3",
-      "edition": "2021",
-      "sha256": "d81f9efa9df032be5934a46a068815a10a042b494b6a58cb0a1a97bb5467ed6f",
+      "version": "0.6.0",
+      "edition": "2024",
+      "sha256": "e994ba84b0bd1b1b0cf92878b7ef898a5c1760108fe7b6010327e274917a808c",
       "source": {
         "type": "crates-io"
       },
@@ -14505,11 +14074,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/algesten/ureq-proto"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#ureq@3.2.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#ureq@3.3.0": {
       "crateName": "ureq",
-      "version": "3.2.0",
-      "edition": "2018",
-      "sha256": "fdc97a28575b85cfedf2a7e7d3cc64b3e11bd8ac766666318003abbacc7a21fc",
+      "version": "3.3.0",
+      "edition": "2024",
+      "sha256": "dea7109cdcd5864d4eeb1b58a1648dc9bf520360d7af16ec26d0a9354bafcfc0",
       "source": {
         "type": "crates-io"
       },
@@ -14543,12 +14112,12 @@
           "externCrateName": "rustls_pki_types"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ureq-proto@0.5.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ureq-proto@0.6.0",
           "externCrateName": "ureq_proto"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#utf-8@0.7.6",
-          "externCrateName": "utf8"
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#utf8-zero@0.8.1",
+          "externCrateName": "utf8_zero"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@1.0.6",
@@ -14600,11 +14169,11 @@
           "externCrateName": "percent_encoding"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.217",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_derive@1.0.228",
           "externCrateName": "serde_derive"
         }
       ],
@@ -14625,32 +14194,36 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/servo/rust-url"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#utf-8@0.7.6": {
-      "crateName": "utf-8",
-      "version": "0.7.6",
-      "edition": "2015",
-      "sha256": "09cc8ee72d2a9becf2f2febe0205bbed8fc6615b7cb429ad062dc7b7ddd036a9",
+    "registry+https://github.com/rust-lang/crates.io-index#utf8-zero@0.8.1": {
+      "crateName": "utf8-zero",
+      "version": "0.8.1",
+      "edition": "2021",
+      "sha256": "b8c0a043c9540bae7c578c88f91dda8bd82e59ae27c21baca69c8b191aaf5a6e",
       "source": {
         "type": "crates-io"
       },
-      "features": [],
+      "features": [
+        "default",
+        "std"
+      ],
       "dependencies": [],
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
       "libPath": null,
-      "libName": "utf8",
+      "libName": null,
       "libCrateTypes": [
         "lib"
       ],
       "crateBin": [],
       "links": null,
       "authors": [
-        "Simon Sapin <simon.sapin@exyr.org>"
+        "Simon Sapin <simon.sapin@exyr.org>",
+        "Martin Algesten <martin@algesten.se>"
       ],
-      "description": "Incremental, zero-copy UTF-8 decoding with error handling",
+      "description": "Zero-copy, incremental UTF-8 decoding with error handling",
       "license": "MIT OR Apache-2.0",
-      "repository": "https://github.com/SimonSapin/rust-utf8"
+      "repository": "https://github.com/algesten/utf8-zero"
     },
     "registry+https://github.com/rust-lang/crates.io-index#utf8_iter@1.0.4": {
       "crateName": "utf8_iter",
@@ -15015,34 +14588,6 @@
       "license": "MIT",
       "repository": "https://github.com/harryfei/which-rs.git"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#winnow@0.7.15": {
-      "crateName": "winnow",
-      "version": "0.7.15",
-      "edition": "2021",
-      "sha256": "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "alloc",
-        "default",
-        "std"
-      ],
-      "dependencies": [],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "description": "A byte-oriented, zero-copy, parser combinators library",
-      "license": "MIT",
-      "repository": "https://github.com/winnow-rs/winnow"
-    },
     "registry+https://github.com/rust-lang/crates.io-index#winnow@1.0.0": {
       "crateName": "winnow",
       "version": "1.0.0",
@@ -15051,7 +14596,14 @@
       "source": {
         "type": "crates-io"
       },
-      "features": [],
+      "features": [
+        "alloc",
+        "ascii",
+        "binary",
+        "default",
+        "parser",
+        "std"
+      ],
       "dependencies": [],
       "buildDependencies": [],
       "procMacro": false,
@@ -15482,6 +15034,33 @@
       "description": "Zero-copy vector backed by a byte array",
       "license": "Unicode-3.0",
       "repository": "https://github.com/unicode-org/icu4x"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#zmij@1.0.21": {
+      "crateName": "zmij",
+      "version": "1.0.21",
+      "edition": "2021",
+      "sha256": "b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "A double-to-string conversion algorithm based on Schubfach and yy",
+      "license": "MIT",
+      "repository": "https://github.com/dtolnay/zmij"
     },
     "registry+https://github.com/rust-lang/crates.io-index#zstd-safe@7.2.4": {
       "crateName": "zstd-safe",
