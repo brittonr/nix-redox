@@ -99,6 +99,7 @@ let
     shellharden = self'.packages.shellharden or null;
     smith = self'.packages.smith or null;
     exampled = self'.packages.exampled or null;
+    wasmtime-redox = self'.packages.wasmtime-redox or null;
     irohd = self'.packages.irohd or null;
     snix = self'.packages.snix or null;
     ca-certificates = self'.packages.ca-certificates or null;
