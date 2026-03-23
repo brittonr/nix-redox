@@ -33,6 +33,8 @@ in
       ++ opt "shellharden"
       ++ opt "smith"
       ++ opt "exampled"
+      # WebAssembly
+      ++ opt "wasmtime-redox"
       # System management
       ++ opt "snix"
       ++ opt "redox-curl"
