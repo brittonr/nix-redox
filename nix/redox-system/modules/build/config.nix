@@ -74,6 +74,22 @@ let
   extraSelfHostingPackages = inputs.environment.selfHostingPackages;
   extraLdLibraryPath = inputs.environment.ldLibraryPath;
 
+  # /locale
+  localeLang = inputs.locale.lang;
+  localeLcAll = inputs.locale.lcAll;
+  localeLcCollate = inputs.locale.lcCollate;
+  localeLcCtype = inputs.locale.lcCtype;
+  localeLcMessages = inputs.locale.lcMessages;
+  localeLcMonetary = inputs.locale.lcMonetary;
+  localeLcNumeric = inputs.locale.lcNumeric;
+  localeLcTime = inputs.locale.lcTime;
+
+  # /console
+  consoleFbcondVT = inputs.console.fbcondVT;
+  consoleInputdVT = inputs.console.inputdVT;
+  consoleInputd = inputs.console.inputd;
+  consoleBootLog = inputs.console.bootLog;
+
   # /power
   acpiEnabled = inputs.power.acpiEnable;
   powerAction = inputs.power.powerAction;
@@ -367,6 +383,18 @@ in
     motd
     extraShells
     extraLdLibraryPath
+    localeLang
+    localeLcAll
+    localeLcCollate
+    localeLcCtype
+    localeLcMessages
+    localeLcMonetary
+    localeLcNumeric
+    localeLcTime
+    consoleFbcondVT
+    consoleInputdVT
+    consoleInputd
+    consoleBootLog
     acpiEnabled
     powerAction
     rebootOnPanic

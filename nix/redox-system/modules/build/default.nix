@@ -74,6 +74,15 @@ adios:
     iroh = {
       path = "/iroh";
     };
+    audio = {
+      path = "/audio";
+    };
+    locale = {
+      path = "/locale";
+    };
+    console = {
+      path = "/console";
+    };
     activation = {
       path = "/activation";
     };

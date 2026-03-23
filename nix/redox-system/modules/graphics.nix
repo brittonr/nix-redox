@@ -15,9 +15,6 @@ in
   name = "graphics";
 
   inputs = {
-    hardware = {
-      path = "/hardware";
-    };
     pkgs = {
       path = "/pkgs";
     };
@@ -87,25 +84,7 @@ in
               };
               priority = 50;
             };
-          }
-          // (
-            if inputs.hardware.audioEnable then
-              {
-                audiod = {
-                  description = "Audio daemon";
-                  command = "audiod";
-                  type = "daemon";
-                  args = "";
-                  wantedBy = "rootfs";
-                  enable = true;
-                  after = [ ];
-                  environment = { };
-                  priority = 50;
-                };
-              }
-            else
-              { }
-          );
+          };
     };
   };
 

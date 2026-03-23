@@ -19,6 +19,10 @@ dev
     enable = true;
   };
 
+  "/audio" = {
+    enable = true;
+  };
+
   "/hardware" = (dev."/hardware" or { }) // {
     audioEnable = true;
   };

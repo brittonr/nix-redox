@@ -18,6 +18,23 @@ let
     export SSL_CERT_FILE /etc/ssl/certs/ca-certificates.crt
     export SSL_CERT_DIR /etc/ssl/certs
   '';
+  localeVarLines =
+    let
+      langLine = "export LANG ${cfg.localeLang}";
+      lcLines = lib.concatStringsSep "\n" (
+        lib.filter (s: s != "") [
+          (lib.optionalString (cfg.localeLcAll != "") "export LC_ALL ${cfg.localeLcAll}")
+          (lib.optionalString (cfg.localeLcCollate != "") "export LC_COLLATE ${cfg.localeLcCollate}")
+          (lib.optionalString (cfg.localeLcCtype != "") "export LC_CTYPE ${cfg.localeLcCtype}")
+          (lib.optionalString (cfg.localeLcMessages != "") "export LC_MESSAGES ${cfg.localeLcMessages}")
+          (lib.optionalString (cfg.localeLcMonetary != "") "export LC_MONETARY ${cfg.localeLcMonetary}")
+          (lib.optionalString (cfg.localeLcNumeric != "") "export LC_NUMERIC ${cfg.localeLcNumeric}")
+          (lib.optionalString (cfg.localeLcTime != "") "export LC_TIME ${cfg.localeLcTime}")
+        ]
+      );
+    in
+    langLine + lib.optionalString (lcLines != "") "\n${lcLines}";
+
   graphicsVarLines = lib.optionalString cfg.graphicsEnabled ''
     export ORBITAL_RESOLUTION ${inputs.graphics.resolution}
     export DISPLAY ${cfg.graphicsDisplay}
@@ -32,6 +49,7 @@ let
     export TZ ${cfg.timezone}
     export EDITOR ${cfg.defaultEditor}
     ${varLines}
+    ${localeVarLines}
     ${networkingVarLines}
     ${graphicsVarLines}
     ${aliasLines}
@@ -309,8 +327,16 @@ let
             HOSTNAME = cfg.hostname;
             TZ = cfg.timezone;
             EDITOR = cfg.defaultEditor;
+            LANG = cfg.localeLang;
             TERM = inputs.environment.variables.TERM or "xterm-256color";
           }
+          // (lib.optionalAttrs (cfg.localeLcAll != "") { LC_ALL = cfg.localeLcAll; })
+          // (lib.optionalAttrs (cfg.localeLcCollate != "") { LC_COLLATE = cfg.localeLcCollate; })
+          // (lib.optionalAttrs (cfg.localeLcCtype != "") { LC_CTYPE = cfg.localeLcCtype; })
+          // (lib.optionalAttrs (cfg.localeLcMessages != "") { LC_MESSAGES = cfg.localeLcMessages; })
+          // (lib.optionalAttrs (cfg.localeLcMonetary != "") { LC_MONETARY = cfg.localeLcMonetary; })
+          // (lib.optionalAttrs (cfg.localeLcNumeric != "") { LC_NUMERIC = cfg.localeLcNumeric; })
+          // (lib.optionalAttrs (cfg.localeLcTime != "") { LC_TIME = cfg.localeLcTime; })
           // (lib.filterAttrs (n: _: n != "HOME" && n != "USER" && n != "SHELL" && n != "PATH")
             inputs.environment.variables
           );
