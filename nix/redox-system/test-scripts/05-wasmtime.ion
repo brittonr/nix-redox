@@ -60,18 +60,13 @@ if exists -f /nix/system/profile/bin/wasmtime
             echo "FUNC_TEST:wasmtime-run-gcd:FAIL:expected=3:got=$out"
         end
 
-        # ── Run: precompiled native cwasm (compile + deserialize + execute) ──
+        # ── Run: cwasm roundtrip (compile → serialize → deserialize → run) ──
         echo '(module (func (export "add") (param i32 i32) (result i32) local.get 0 local.get 1 i32.add))' > /tmp/wt-add.wat
-        /nix/system/profile/bin/wasmtime compile /tmp/wt-add.wat -o /tmp/wt-add-native.cwasm
-        if exists -f /tmp/wt-add-native.cwasm
-            let out = $(/nix/system/profile/bin/wasm-runner /tmp/wt-add-native.cwasm --invoke add 10 20)
-            if test "$out" = "30"
-                echo "FUNC_TEST:wasmtime-run-cwasm:PASS"
-            else
-                echo "FUNC_TEST:wasmtime-run-cwasm:FAIL:expected=30:got=$out"
-            end
+        let out = $(/nix/system/profile/bin/wasm-runner /tmp/wt-add.wat --invoke add 10 20 --roundtrip)
+        if test "$out" = "30"
+            echo "FUNC_TEST:wasmtime-run-cwasm:PASS"
         else
-            echo "FUNC_TEST:wasmtime-run-cwasm:SKIP"
+            echo "FUNC_TEST:wasmtime-run-cwasm:FAIL:expected=30:got=$out"
         end
     else
         echo "FUNC_TEST:wasmtime-run-hello:SKIP"
@@ -91,7 +86,7 @@ if exists -f /nix/system/profile/bin/wasmtime
             echo "FUNC_TEST:wasmtime-async-add:FAIL:expected=33:got=$out"
         end
 
-        # Async _start with computation (fiber instantiation + void call)
+        # Async _start (fiber instantiation + void call)
         echo '(module (func (export "add") (param i32 i32) (result i32) local.get 0 local.get 1 i32.add) (func (export "_start") (if (i32.ne (call 0 (i32.const 2) (i32.const 3)) (i32.const 5)) (then unreachable))))' > /tmp/wt-async-hello.wat
         let out = $(/nix/system/profile/bin/wasm-async-runner /tmp/wt-async-hello.wat)
         if test "$out" = "OK"
