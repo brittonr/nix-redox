@@ -1661,8 +1661,8 @@
         "wasmtime-src": "wasmtime-src"
       },
       "locked": {
-        "lastModified": 1774304444,
-        "narHash": "sha256-wQndhngbEkZiXcxBo+3jHRQQEPKjhEKSVP1Y57ergBM=",
+        "lastModified": 1774307200,
+        "narHash": "sha256-94x0tv3MWVwmI+T/OjoVK6uRAvfGmWtJOdMMWB19yxs=",
         "path": "/home/brittonr/git/wasmtime-redox",
         "type": "path"
       },
