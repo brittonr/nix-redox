@@ -1,0 +1,36 @@
+diff --git a/crates/wasmtime/build.rs b/crates/wasmtime/build.rs
+index c80e4bf..46153a2 100644
+--- a/crates/wasmtime/build.rs
++++ b/crates/wasmtime/build.rs
+@@ -13,7 +13,13 @@ fn main() {
+     // A boolean indicating whether there's a `sys` module for this platform.
+     // This is true for `unix` or `windows`, but both of those require the `std`
+     // feature to also be active so check that too.
+-    let supported_os = (unix || windows) && cfg!(feature = "std");
++    //
++    // Redox is cfg(unix) but routes through the custom platform module because
++    // it lacks ucontext_t, sigaltstack, and siginfo_t.si_addr() needed by the
++    // unix signal handler. It still gets has_virtual_memory via
++    // custom-virtual-memory.
++    let is_redox = std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("redox");
++    let supported_os = (unix || windows) && cfg!(feature = "std") && !is_redox;
+
+     // Determine if the current host architecture is supported by Cranelift
+     // meaning that we might be executing native code.
+diff --git a/crates/wasmtime/src/runtime/vm/sys/mod.rs b/crates/wasmtime/src/runtime/vm/sys/mod.rs
+index b257d44..12e8e0a 100644
+--- a/crates/wasmtime/src/runtime/vm/sys/mod.rs
++++ b/crates/wasmtime/src/runtime/vm/sys/mod.rs
+@@ -59,6 +59,12 @@ cfg_if::cfg_if! {
+     } else if #[cfg(windows)] {
+         mod windows;
+         pub use windows::*;
++    } else if #[cfg(target_os = "redox")] {
++        // Redox is cfg(unix) but lacks ucontext_t, sigaltstack, and
++        // siginfo_t.si_addr(). Route through the custom platform API
++        // which uses wasmtime_* C symbols for mmap/tls instead.
++        mod custom;
++        pub use custom::*;
+     } else if #[cfg(unix)] {
+         mod unix;
+         pub use unix::*;

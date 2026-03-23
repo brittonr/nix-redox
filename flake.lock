@@ -1376,6 +1376,7 @@
         "unit2nix": "unit2nix",
         "userutils-src": "userutils-src",
         "uutils-src": "uutils-src",
+        "wasmtime-src": "wasmtime-src",
         "zoxide-src": "zoxide-src"
       }
     },
@@ -1635,6 +1636,23 @@
         "owner": "uutils",
         "ref": "0.0.27",
         "repo": "coreutils",
+        "type": "github"
+      }
+    },
+    "wasmtime-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1773985178,
+        "narHash": "sha256-Mo+vNPxGprgjSRTw9LuZc3ms0DjCJyPG879wEasJzMA=",
+        "owner": "bytecodealliance",
+        "repo": "wasmtime",
+        "rev": "be23469ece57c0be64904f12111c8d808b0ce4ac",
+        "type": "github"
+      },
+      "original": {
+        "owner": "bytecodealliance",
+        "ref": "v43.0.0",
+        "repo": "wasmtime",
         "type": "github"
       }
     },
