@@ -18,7 +18,7 @@ use nix_compat::store_path::StorePath;
 use sha2::{Digest, Sha256};
 
 use crate::nar;
-use crate::pathinfo::PathInfoDb;
+use crate::pathinfo::{PathInfo, PathInfoDb};
 use crate::store;
 
 /// Fetch and display narinfo for a store path.
@@ -145,17 +145,8 @@ pub fn fetch_recursive(
             fetch_inner(&path, cache_url, Some(&db))?;
         } else if !already_registered {
             // Present on disk but not registered — register it
-            let nar_hash_hex = data_encoding::HEXLOWER.encode(&narinfo.nar_hash);
-            let signatures: Vec<String> =
-                narinfo.signatures.iter().map(|s| s.to_string()).collect();
-            store::register_path(
-                &db,
-                &path,
-                &nar_hash_hex,
-                narinfo.nar_size,
-                references.clone(),
-                signatures,
-            )?;
+            let info = PathInfo::from_narinfo(&narinfo, &path);
+            store::register_path_from_info(&db, &info)?;
             eprintln!("✓ registered: {path}");
             skipped_count += 1;
         }
@@ -248,16 +239,8 @@ fn fetch_inner(
 
     // Register in PathInfo database if provided
     if let Some(db) = db {
-        let nar_hash_hex = data_encoding::HEXLOWER.encode(&narinfo.nar_hash);
-        let references: Vec<String> = narinfo
-            .references
-            .iter()
-            .map(|r| r.to_absolute_path())
-            .collect();
-        let signatures: Vec<String> =
-            narinfo.signatures.iter().map(|s| s.to_string()).collect();
-
-        store::register_path(db, &dest, &nar_hash_hex, narinfo.nar_size, references, signatures)?;
+        let info = PathInfo::from_narinfo(&narinfo, &dest);
+        store::register_path_from_info(db, &info)?;
     }
 
     eprintln!("✓ verified and installed: {dest}");

@@ -52,6 +52,123 @@ pub struct PathInfo {
     pub files: Vec<crate::nar::ManifestEntry>,
 }
 
+// ── Upstream Type Conversions ──────────────────────────────────────────────
+
+impl PathInfo {
+    /// Convert to upstream `snix_store::path_info::PathInfo`.
+    ///
+    /// The `node` field uses a dummy placeholder (empty file) because we
+    /// don't have castore content addressing yet. Code that needs a real
+    /// node must handle this case.
+    pub fn to_upstream(&self) -> Result<snix_store::path_info::PathInfo, Box<dyn std::error::Error>> {
+        let store_path = StorePath::<String>::from_absolute_path(self.store_path.as_bytes())
+            .map_err(|e| format!("invalid store_path '{}': {e}", self.store_path))?;
+
+        let nar_sha256 = parse_nar_hash(&self.nar_hash)?;
+
+        let references: Result<Vec<_>, _> = self.references.iter()
+            .map(|r| StorePath::<String>::from_absolute_path(r.as_bytes())
+                .map_err(|e| format!("invalid reference '{r}': {e}")))
+            .collect();
+        let references = references?;
+
+        let deriver = self.deriver.as_ref()
+            .map(|d| {
+                // Upstream deriver StorePath omits the .drv suffix in the name field,
+                // but from_absolute_path handles the full path including .drv.
+                StorePath::<String>::from_absolute_path(d.as_bytes())
+                    .map_err(|e| format!("invalid deriver '{d}': {e}"))
+            })
+            .transpose()?;
+
+        let signatures: Result<Vec<_>, _> = self.signatures.iter()
+            .map(|s| nix_compat::narinfo::Signature::<String>::parse(s)
+                .map_err(|e| format!("invalid signature '{s}': {e}")))
+            .collect();
+        let signatures = signatures?;
+
+        Ok(snix_store::path_info::PathInfo {
+            store_path,
+            node: snix_castore::Node::File {
+                digest: snix_castore::B3Digest::from(&[0u8; 32]),
+                size: 0,
+                executable: false,
+            },
+            references,
+            nar_size: self.nar_size,
+            nar_sha256,
+            signatures,
+            deriver,
+            ca: None,
+        })
+    }
+
+    /// Construct from upstream `snix_store::path_info::PathInfo`.
+    pub fn from_upstream(upstream: &snix_store::path_info::PathInfo) -> Self {
+        let nar_hash = format!("sha256:{}", data_encoding::HEXLOWER.encode(&upstream.nar_sha256));
+        let references: Vec<String> = upstream.references.iter()
+            .map(|r| r.to_absolute_path())
+            .collect();
+        let deriver = upstream.deriver.as_ref()
+            .map(|d| d.to_absolute_path());
+        let signatures: Vec<String> = upstream.signatures.iter()
+            .map(|s| s.to_string())
+            .collect();
+
+        PathInfo {
+            store_path: upstream.store_path.to_absolute_path(),
+            nar_hash,
+            nar_size: upstream.nar_size,
+            references,
+            deriver,
+            registration_time: current_timestamp(),
+            signatures,
+            files: vec![],
+        }
+    }
+
+    /// Construct from a `NarInfo` response and its store path.
+    ///
+    /// Used when fetching from binary caches — replaces manual field
+    /// extraction scattered across cache.rs.
+    pub fn from_narinfo(narinfo: &nix_compat::narinfo::NarInfo<'_>, store_path: &str) -> Self {
+        let nar_hash = format!("sha256:{}", data_encoding::HEXLOWER.encode(&narinfo.nar_hash));
+        let references: Vec<String> = narinfo.references.iter()
+            .map(|r| r.to_absolute_path())
+            .collect();
+        let deriver = narinfo.deriver.as_ref()
+            .map(|d| d.to_absolute_path());
+        let signatures: Vec<String> = narinfo.signatures.iter()
+            .map(|s| s.to_string())
+            .collect();
+
+        PathInfo {
+            store_path: store_path.to_string(),
+            nar_hash,
+            nar_size: narinfo.nar_size,
+            references,
+            deriver,
+            registration_time: current_timestamp(),
+            signatures,
+            files: vec![],
+        }
+    }
+}
+
+/// Parse our `"sha256:{hex}"` nar_hash format into `[u8; 32]`.
+fn parse_nar_hash(nar_hash: &str) -> Result<[u8; 32], Box<dyn std::error::Error>> {
+    let hex = nar_hash.strip_prefix("sha256:")
+        .ok_or_else(|| format!("nar_hash missing 'sha256:' prefix: {nar_hash}"))?;
+    let bytes = data_encoding::HEXLOWER.decode(hex.as_bytes())
+        .map_err(|e| format!("invalid hex in nar_hash: {e}"))?;
+    if bytes.len() != 32 {
+        return Err(format!("nar_hash is {} bytes, expected 32", bytes.len()).into());
+    }
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&bytes);
+    Ok(arr)
+}
+
 /// Filesystem-backed path info database.
 ///
 /// Each store path's metadata is stored in its own JSON file,
@@ -550,5 +667,109 @@ mod tests {
         assert!(!ts.is_empty());
         assert!(ts.contains('T'));
         assert!(ts.ends_with('Z'));
+    }
+
+    // ── Upstream Conversion Tests ──────────────────────────────────────
+
+    /// A sample PathInfo with proper sha256:hex nar_hash for conversion tests.
+    fn convertible_info() -> PathInfo {
+        PathInfo {
+            store_path: P_HELLO.to_string(),
+            nar_hash: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
+            nar_size: 12345,
+            references: vec![P_HELLO.to_string(), P_GLIBC.to_string()],
+            deriver: Some("/nix/store/5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r-hello-1.0.drv".to_string()),
+            registration_time: "2026-02-20T12:00:00Z".to_string(),
+            signatures: vec![],
+            files: vec![],
+        }
+    }
+
+    #[test]
+    fn to_upstream_store_path() {
+        let info = convertible_info();
+        let upstream = info.to_upstream().unwrap();
+        assert_eq!(upstream.store_path.to_absolute_path(), P_HELLO);
+    }
+
+    #[test]
+    fn to_upstream_nar_hash() {
+        let info = convertible_info();
+        let upstream = info.to_upstream().unwrap();
+        // sha256 of empty string
+        let expected_hex = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        let expected = data_encoding::HEXLOWER.decode(expected_hex.as_bytes()).unwrap();
+        assert_eq!(upstream.nar_sha256.as_slice(), expected.as_slice());
+    }
+
+    #[test]
+    fn to_upstream_references() {
+        let info = convertible_info();
+        let upstream = info.to_upstream().unwrap();
+        assert_eq!(upstream.references.len(), 2);
+        assert_eq!(upstream.references[0].to_absolute_path(), P_HELLO);
+        assert_eq!(upstream.references[1].to_absolute_path(), P_GLIBC);
+    }
+
+    #[test]
+    fn to_upstream_deriver() {
+        let info = convertible_info();
+        let upstream = info.to_upstream().unwrap();
+        assert!(upstream.deriver.is_some());
+    }
+
+    #[test]
+    fn roundtrip_upstream() {
+        let info = convertible_info();
+        let upstream = info.to_upstream().unwrap();
+        let back = PathInfo::from_upstream(&upstream);
+
+        assert_eq!(back.store_path, info.store_path);
+        assert_eq!(back.nar_hash, info.nar_hash);
+        assert_eq!(back.nar_size, info.nar_size);
+        assert_eq!(back.references, info.references);
+        // deriver round-trips
+        assert_eq!(back.deriver, info.deriver);
+        // files and registration_time are not preserved
+        assert!(back.files.is_empty());
+    }
+
+    #[test]
+    fn parse_nar_hash_valid() {
+        let hash = "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+        let result = parse_nar_hash(hash).unwrap();
+        assert_eq!(result.len(), 32);
+    }
+
+    #[test]
+    fn parse_nar_hash_missing_prefix() {
+        assert!(parse_nar_hash("e3b0c44298fc1c14").is_err());
+    }
+
+    #[test]
+    fn parse_nar_hash_bad_hex() {
+        assert!(parse_nar_hash("sha256:zzzz").is_err());
+    }
+
+    #[test]
+    fn from_narinfo_basic() {
+        // Build a minimal NarInfo
+        let narinfo_text = format!(
+            "StorePath: {P_HELLO}\n\
+             URL: nar/abc.nar.zst\n\
+             Compression: zstd\n\
+             NarHash: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n\
+             NarSize: 100\n\
+             References: \n\
+             Sig: cache.nixos.org-1:GsRiRVPLUMZF0Cvo7bJkRBo+bU7FfGe6+SnWighIblEgaaBKzXFgWOjM//nHuu+GjlJfPl0YaqWCmH/kCdJZDA==\n"
+        );
+        let narinfo = nix_compat::narinfo::NarInfo::parse(&narinfo_text).unwrap();
+        let info = PathInfo::from_narinfo(&narinfo, P_HELLO);
+
+        assert_eq!(info.store_path, P_HELLO);
+        assert_eq!(info.nar_size, 100);
+        assert!(info.nar_hash.starts_with("sha256:"));
+        assert_eq!(info.signatures.len(), 1);
+        assert!(info.signatures[0].starts_with("cache.nixos.org-1:"));
     }
 }
