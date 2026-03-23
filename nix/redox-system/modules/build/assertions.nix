@@ -86,6 +86,10 @@ let
       message = "services.exampled.enable requires the 'exampled' package in pkgs.";
     }
     {
+      assertion = !(inputs.audio.enable or false) || cfg.audioEnabled;
+      message = "audio.enable requires hardware.audioEnable = true for audio drivers (ihdad, ac97d, sb16d).";
+    }
+    {
       assertion =
         !(inputs.boot.kernelSyscallDebugProcesses or [ ] != [ ])
         || (inputs.boot.kernelSyscallDebug or false);

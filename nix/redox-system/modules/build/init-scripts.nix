@@ -4,7 +4,8 @@
 # Service declarations come from module-owned options:
 #   - /services.services  — core daemons, typed services, profile overrides
 #   - /networking.services — smolnetd, dhcpd, netcfg-*, remote-shell
-#   - /graphics.services   — orbital, audiod
+#   - /graphics.services   — orbital
+#   - /audio.services      — audiod
 #   - /snix.services       — stored, profiled
 #   - /iroh.services       — irohd
 #
@@ -47,6 +48,7 @@ let
       inputs.services._generatedServices
       // (inputs.networking.services or { })
       // (inputs.graphics.services or { })
+      // (inputs.audio.services or { })
       // (inputs.snix.services or { })
       // (inputs.iroh.services or { })
       // inputs.services.services
@@ -258,12 +260,12 @@ let
 
     "20_graphics" = lib.optionalString cfg.initfsEnableGraphics ''
       # Graphics and input (SchemeDaemons: inputd, fbbootlogd, fbcond)
-      scheme input inputd
+      ${lib.optionalString cfg.consoleInputd "scheme input inputd"}
       notify vesad
       unset FRAMEBUFFER_ADDR FRAMEBUFFER_VIRT FRAMEBUFFER_WIDTH FRAMEBUFFER_HEIGHT FRAMEBUFFER_STRIDE
-      scheme fbbootlog fbbootlogd
-      inputd -A 1
-      scheme fbcon fbcond 2
+      ${lib.optionalString cfg.consoleBootLog "scheme fbbootlog fbbootlogd"}
+      ${lib.optionalString cfg.consoleInputd "inputd -A ${toString cfg.consoleInputdVT}"}
+      scheme fbcon fbcond ${toString cfg.consoleFbcondVT}
     '';
 
     "30_live" = ''
