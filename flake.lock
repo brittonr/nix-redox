@@ -1376,7 +1376,7 @@
         "unit2nix": "unit2nix",
         "userutils-src": "userutils-src",
         "uutils-src": "uutils-src",
-        "wasmtime-src": "wasmtime-src",
+        "wasmtime-redox": "wasmtime-redox",
         "zoxide-src": "zoxide-src"
       }
     },
@@ -1637,6 +1637,21 @@
         "ref": "0.0.27",
         "repo": "coreutils",
         "type": "github"
+      }
+    },
+    "wasmtime-redox": {
+      "inputs": {
+        "wasmtime-src": "wasmtime-src"
+      },
+      "locked": {
+        "lastModified": 1774241353,
+        "narHash": "sha256-KqlRUPqlc1Ogv3kPOyOxRIrS8oypejLao58Ispe0zxM=",
+        "path": "/home/brittonr/git/wasmtime-redox",
+        "type": "path"
+      },
+      "original": {
+        "path": "/home/brittonr/git/wasmtime-redox",
+        "type": "path"
       }
     },
     "wasmtime-src": {

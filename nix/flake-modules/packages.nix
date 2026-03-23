@@ -882,12 +882,7 @@ let
     }
   );
 
-  wasmtime-redox = import ../pkgs/userspace/wasmtime-redox.nix (
-    standaloneCommon
-    // {
-      inherit (inputs) wasmtime-src;
-    }
-  );
+  wasmtime-redox = inputs.wasmtime-redox.lib.mkWasmtime standaloneCommon;
 
   onefetch = import ../pkgs/userspace/onefetch.nix (
     standaloneCommon

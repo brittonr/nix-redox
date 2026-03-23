@@ -432,10 +432,9 @@
       flake = false;
     };
 
-    # wasmtime - WebAssembly runtime (upstream, custom platform for Redox)
-    wasmtime-src = {
-      url = "github:bytecodealliance/wasmtime/v43.0.0";
-      flake = false;
+    # wasmtime - WebAssembly runtime cross-compiled for Redox
+    wasmtime-redox = {
+      url = "path:/home/brittonr/git/wasmtime-redox";
     };
 
     # bottom - graphical system monitor (Redox fork)
