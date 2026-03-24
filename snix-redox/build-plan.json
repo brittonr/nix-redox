@@ -20,7 +20,7 @@
     "snix-tracing": "path+file:///home/brittonr/git/redox/snix-redox/upstream/tracing#snix-tracing@0.1.0"
   },
   "cargoLockHash": "fe7d1fb109df9328faa220b73159661721434219e4caeeb91ec403af4cd9aa2f",
-  "inputsHash": "b15fed24c1a5c3883debd81afc6f961567eb4a17187443f75a158e994b097a4b",
+  "inputsHash": "9261fd752cc9dc4f5444421da0e060942edb49bde7720c775b32e9e4a00c9729",
   "crates": {
     "git+https://github.com/tvlfyi/wu-manber.git#wu-manber@0.1.0": {
       "crateName": "wu-manber",
@@ -158,6 +158,12 @@
         }
       ],
       "buildDependencies": [],
+      "devDependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#tempfile@3.27.0",
+          "externCrateName": "tempfile"
+        }
+      ],
       "procMacro": false,
       "build": null,
       "libPath": null,
