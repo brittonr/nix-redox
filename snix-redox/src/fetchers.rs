@@ -4,23 +4,27 @@
 //! provided by upstream `snix-glue`. This module handles the build-time
 //! side: downloading URLs, extracting tarballs, and verifying content hashes
 //! when a derivation with `builder = "builtin:fetchurl"` is executed.
+//!
+//! Derivation parsing uses upstream `snix_glue::fetchurl::fetchurl_derivation_to_fetch()`
+//! which returns a typed `Fetch` enum. Download execution is sync via ureq.
 
-use nix_compat::nixhash::{CAHash, NixHash};
+use nix_compat::nixhash::NixHash;
+use snix_glue::fetchers::Fetch;
+use snix_glue::fetchurl::fetchurl_derivation_to_fetch;
 
 // ── Build-time fetcher execution ───────────────────────────────────────────
 
-/// Download a URL and write the content to a file.
+/// Download a URL and write the content to the output path.
 ///
 /// Called from [`local_build::build_derivation`] when the builder is
-/// `"builtin:fetchurl"`. Reads `url` from the derivation environment.
+/// `"builtin:fetchurl"`. Uses upstream `fetchurl_derivation_to_fetch()` to
+/// parse the derivation into a typed `Fetch`, then dispatches to sync
+/// download routines.
 pub fn fetch_to_store(
     drv: &nix_compat::derivation::Derivation,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let url = drv
-        .environment
-        .get("url")
-        .ok_or("builtin:fetchurl: 'url' not set in environment")?
-        .to_string();
+    // Parse derivation → typed Fetch (validates builder, system, outputs, URL).
+    let (_name, fetch) = fetchurl_derivation_to_fetch(drv)?;
 
     let out = drv
         .environment
@@ -28,26 +32,146 @@ pub fn fetch_to_store(
         .ok_or("builtin:fetchurl: 'out' not set in environment")?
         .to_string();
 
-    let unpack = drv
-        .environment
-        .get("unpack")
-        .is_some_and(|v| v.to_string() == "1");
-
-    eprintln!("fetching {url}...");
-
     if let Some(parent) = std::path::Path::new(&out).parent() {
         std::fs::create_dir_all(parent)?;
     }
 
-    if unpack {
-        fetch_and_unpack(&url, &out)?;
-    } else {
-        fetch_flat(&url, &out)?;
+    // The Fetch variant determines the download mode. However, upstream
+    // maps `unpack=1` derivations to Fetch::NAR (since the hash is NAR),
+    // but the URL is actually a tarball. Check `unpack` directly.
+    let unpack = drv
+        .environment
+        .get("unpack")
+        .is_some_and(|v| v == "1");
+
+    match &fetch {
+        Fetch::URL { url, .. } => {
+            eprintln!("fetching {url}...");
+            fetch_flat(url.as_str(), &out)?;
+        }
+        Fetch::Tarball { url, .. } => {
+            eprintln!("fetching tarball {url}...");
+            fetch_and_unpack(url.as_str(), &out)?;
+        }
+        Fetch::NAR { url, .. } if unpack => {
+            eprintln!("fetching tarball {url}...");
+            fetch_and_unpack(url.as_str(), &out)?;
+        }
+        Fetch::NAR { url, .. } => {
+            // NAR download (e.g., from binary cache nar/ URL)
+            eprintln!("fetching NAR {url}...");
+            fetch_nar(url.as_str(), &out)?;
+        }
+        Fetch::Executable { url, .. } => {
+            eprintln!("fetching executable {url}...");
+            fetch_flat(url.as_str(), &out)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let perms = std::fs::Permissions::from_mode(0o755);
+                std::fs::set_permissions(&out, perms)?;
+            }
+        }
+        Fetch::Git() => {
+            return Err("builtin:fetchurl: git fetches not supported".into());
+        }
     }
 
     eprintln!("✓ fetched to {out}");
     Ok(())
 }
+
+/// Verify the content hash of a fetched output against the expected hash
+/// from the `Fetch` variant.
+pub fn verify_fetch_hash(
+    drv: &nix_compat::derivation::Derivation,
+    out_path: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (_name, fetch) = fetchurl_derivation_to_fetch(drv)?;
+
+    match &fetch {
+        Fetch::URL {
+            exp_hash: Some(expected),
+            ..
+        } => verify_flat_hash(out_path, expected),
+
+        Fetch::URL {
+            exp_hash: None, ..
+        } => Ok(()),
+
+        Fetch::Tarball {
+            exp_nar_sha256: Some(expected),
+            ..
+        } => {
+            let expected_hash = NixHash::Sha256(*expected);
+            verify_nar_hash(out_path, &expected_hash)
+        }
+
+        Fetch::Tarball {
+            exp_nar_sha256: None,
+            ..
+        } => Ok(()),
+
+        Fetch::NAR { hash, .. } | Fetch::Executable { hash, .. } => {
+            verify_nar_hash(out_path, hash)
+        }
+
+        Fetch::Git() => Ok(()),
+    }
+}
+
+// ── Hash verification helpers ──────────────────────────────────────────────
+
+/// Verify the flat (content) hash of a file.
+fn verify_flat_hash(
+    out_path: &str,
+    expected: &NixHash,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use sha2::{Digest, Sha256};
+    let content = std::fs::read(out_path)?;
+    let actual = Sha256::digest(&content);
+    let expected_bytes = match expected {
+        NixHash::Sha256(h) => h,
+        _ => return Err("fetchurl only supports SHA-256 for flat hashes".into()),
+    };
+    if actual.as_slice() != expected_bytes {
+        return Err(format!(
+            "hash mismatch for {}:\n  expected: {}\n  got:      {}",
+            out_path,
+            data_encoding::HEXLOWER.encode(expected_bytes),
+            data_encoding::HEXLOWER.encode(actual.as_slice()),
+        )
+        .into());
+    }
+    Ok(())
+}
+
+/// Verify the NAR hash of a path (file or directory).
+fn verify_nar_hash(
+    out_path: &str,
+    expected: &NixHash,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let path = std::path::Path::new(out_path);
+    let (nar_hash_str, _) = crate::local_build::nar_hash_path(path)?;
+    let actual_hex = nar_hash_str
+        .strip_prefix("sha256:")
+        .ok_or("unexpected hash format")?;
+    let expected_bytes = match expected {
+        NixHash::Sha256(h) => h,
+        _ => return Err("fetchurl only supports SHA-256 for NAR hashes".into()),
+    };
+    let expected_hex = data_encoding::HEXLOWER.encode(expected_bytes);
+    if actual_hex != expected_hex {
+        return Err(format!(
+            "hash mismatch (NAR) for {}:\n  expected: {}\n  got:      {}",
+            out_path, expected_hex, actual_hex,
+        )
+        .into());
+    }
+    Ok(())
+}
+
+// ── Download helpers (sync, ureq-based) ────────────────────────────────────
 
 /// Download a URL and write the raw content to a file (flat mode).
 fn fetch_flat(url: &str, out: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -58,6 +182,19 @@ fn fetch_flat(url: &str, out: &str) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+/// Download a NAR file from a URL and extract it.
+///
+/// The URL may point to a compressed NAR (.nar.xz, .nar.zst, etc.).
+fn fetch_nar(url: &str, out: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let resp = ureq::get(url).call()?;
+    let reader = resp.into_body().into_reader();
+
+    let decompressed: Box<dyn std::io::Read + Send> = decompress_reader(url, reader)?;
+    let mut buf_reader = std::io::BufReader::new(decompressed);
+    crate::nar::extract(&mut buf_reader, out)?;
+    Ok(())
+}
+
 /// Download a tarball, decompress, and extract to a directory (unpack mode).
 ///
 /// Supports `.tar.gz`, `.tar.xz`, `.tar.bz2`, `.tar.zst`, and plain `.tar`.
@@ -65,41 +202,47 @@ pub fn fetch_and_unpack(url: &str, out: &str) -> Result<(), Box<dyn std::error::
     let resp = ureq::get(url).call()?;
     let reader = resp.into_body().into_reader();
 
-    let decompressed: Box<dyn std::io::Read> = if url.ends_with(".tar.gz") || url.ends_with(".tgz")
-    {
-        Box::new(flate2::read::GzDecoder::new(reader))
-    } else if url.ends_with(".tar.xz") || url.ends_with(".txz") {
-        let mut input = std::io::BufReader::new(reader);
-        let mut output = Vec::new();
-        lzma_rs::xz_decompress(&mut input, &mut output)
-            .map_err(|e| format!("xz decompression failed: {e}"))?;
-        Box::new(std::io::Cursor::new(output))
-    } else if url.ends_with(".tar.bz2") || url.ends_with(".tbz2") {
-        Box::new(bzip2_rs::DecoderReader::new(reader))
-    } else if url.ends_with(".tar.zst") || url.ends_with(".tar.zstd") {
-        Box::new(
-            ruzstd::decoding::StreamingDecoder::new(reader)
-                .map_err(|e| format!("zstd decompression failed: {e}"))?,
-        )
-    } else if url.ends_with(".tar") {
-        Box::new(reader)
-    } else {
-        let mut compressed = Vec::new();
-        std::io::Read::read_to_end(&mut std::io::BufReader::new(reader), &mut compressed)?;
-        if compressed.len() >= 2 && compressed[0] == 0x1f && compressed[1] == 0x8b {
-            Box::new(flate2::read::GzDecoder::new(std::io::Cursor::new(compressed)))
-        } else {
-            Box::new(std::io::Cursor::new(compressed))
-        }
-    };
-
+    let decompressed: Box<dyn std::io::Read + Send> = decompress_reader(url, reader)?;
     extract_tar(decompressed, out)?;
     Ok(())
 }
 
-/// Extract a tar archive to a directory.
-///
-/// Strips the top-level directory component (like GitHub release tarballs).
+/// Select a decompressor based on URL suffix.
+fn decompress_reader(
+    url: &str,
+    reader: impl std::io::Read + Send + 'static,
+) -> Result<Box<dyn std::io::Read + Send>, Box<dyn std::error::Error>> {
+    if url.ends_with(".gz") || url.ends_with(".tgz") {
+        Ok(Box::new(flate2::read::GzDecoder::new(reader)))
+    } else if url.ends_with(".xz") || url.ends_with(".txz") {
+        let mut input = std::io::BufReader::new(reader);
+        let mut output = Vec::new();
+        lzma_rs::xz_decompress(&mut input, &mut output)
+            .map_err(|e| format!("xz decompression failed: {e}"))?;
+        Ok(Box::new(std::io::Cursor::new(output)))
+    } else if url.ends_with(".bz2") || url.ends_with(".tbz2") {
+        Ok(Box::new(bzip2_rs::DecoderReader::new(reader)))
+    } else if url.ends_with(".zst") || url.ends_with(".zstd") {
+        Ok(Box::new(
+            ruzstd::decoding::StreamingDecoder::new(reader)
+                .map_err(|e| format!("zstd decompression failed: {e}"))?,
+        ))
+    } else if url.ends_with(".tar") || url.ends_with(".nar") {
+        Ok(Box::new(reader))
+    } else {
+        // Unknown suffix — try gzip magic, fall back to raw.
+        let mut compressed = Vec::new();
+        std::io::Read::read_to_end(&mut std::io::BufReader::new(reader), &mut compressed)?;
+        if compressed.len() >= 2 && compressed[0] == 0x1f && compressed[1] == 0x8b {
+            Ok(Box::new(flate2::read::GzDecoder::new(
+                std::io::Cursor::new(compressed),
+            )))
+        } else {
+            Ok(Box::new(std::io::Cursor::new(compressed)))
+        }
+    }
+}
+
 /// Extract a tar archive to a directory using the `tar` crate.
 ///
 /// Strips the top-level directory component (like GitHub release tarballs
@@ -115,10 +258,6 @@ fn extract_tar<R: std::io::Read>(
     // Don't preserve mtime — matches Nix's deterministic store semantics.
     archive.set_preserve_mtime(false);
 
-    // Detect the top-level prefix to strip from the first entry.
-    // We collect entries, find the common prefix, then extract with
-    // path rewriting. Since tar::Archive is streaming, we need to
-    // iterate entries one by one.
     let mut prefix_to_strip: Option<std::path::PathBuf> = None;
 
     for entry_result in archive.entries()? {
@@ -207,70 +346,6 @@ fn extract_tar<R: std::io::Read>(
     Ok(())
 }
 
-// ── Hash verification for FODs ─────────────────────────────────────────────
-
-/// Verify the content hash of a fetched output against the declared hash.
-pub fn verify_fetch_hash(
-    drv: &nix_compat::derivation::Derivation,
-    out_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let output = drv
-        .outputs
-        .get("out")
-        .ok_or("no 'out' output in derivation")?;
-
-    let ca_hash = match &output.ca_hash {
-        Some(h) => h,
-        None => return Ok(()),
-    };
-
-    let path = std::path::Path::new(out_path);
-
-    match ca_hash {
-        CAHash::Flat(expected) => {
-            use sha2::{Digest, Sha256};
-            let content = std::fs::read(path)?;
-            let actual = Sha256::digest(&content);
-            let expected_bytes = match expected {
-                NixHash::Sha256(h) => h,
-                _ => return Err("fetchurl only supports SHA-256".into()),
-            };
-            if actual.as_slice() != expected_bytes {
-                return Err(format!(
-                    "hash mismatch for {}:\n  expected: {}\n  got:      {}",
-                    out_path,
-                    data_encoding::HEXLOWER.encode(expected_bytes),
-                    data_encoding::HEXLOWER.encode(actual.as_slice()),
-                )
-                .into());
-            }
-        }
-        CAHash::Nar(expected) => {
-            let (nar_hash_str, _) = crate::local_build::nar_hash_path(path)?;
-            let actual_hex = nar_hash_str
-                .strip_prefix("sha256:")
-                .ok_or("unexpected hash format")?;
-            let expected_bytes = match expected {
-                NixHash::Sha256(h) => h,
-                _ => return Err("fetchurl only supports SHA-256".into()),
-            };
-            let expected_hex = data_encoding::HEXLOWER.encode(expected_bytes);
-            if actual_hex != expected_hex {
-                return Err(format!(
-                    "hash mismatch (NAR) for {}:\n  expected: {}\n  got:      {}",
-                    out_path, expected_hex, actual_hex,
-                )
-                .into());
-            }
-        }
-        _ => {
-            return Err("unsupported CA hash type".into());
-        }
-    }
-
-    Ok(())
-}
-
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -342,8 +417,6 @@ mod tests {
         );
         assert!(result.is_ok(), "error: {:?}", result.err());
         let (path, _io) = result.unwrap();
-        // Upstream fetchurl returns a path value (not string), so the
-        // formatted result may or may not have surrounding quotes.
         let clean = path.trim_matches('"');
         assert!(clean.starts_with("/nix/store/"), "got: {path}");
     }
