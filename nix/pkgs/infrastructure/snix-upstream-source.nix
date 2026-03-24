@@ -15,15 +15,15 @@
 #   glue/src/lib.rs — make fetchurl module public
 #   glue/src/fetchurl.rs — make fetchurl_derivation_to_fetch and Error public
 #
-# Upstream pin: 2207a074ae (2026-03-19) — canon branch
+# Upstream pin: 6f7069cd68 (2026-03-22) — canon branch
 
 { pkgs }:
 
 let
   snixSrc = pkgs.fetchgit {
     url = "https://git.snix.dev/snix/snix.git";
-    rev = "2207a074ae9b19430f66e61c2cc6660295320724";
-    hash = "sha256-1DtTMR7MQ5YuUU5tfw3k5W4gSgmlDi+UB7JTQ1Z9MGo=";
+    rev = "6f7069cd68c86113192f2a5479599063c31e222f";
+    hash = "sha256-wpoJBM2Eu3mQKpAUIKWSH2vLQy4sEQhu0kF51L17I1M=";
   };
 
   crates = [
