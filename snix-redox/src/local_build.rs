@@ -1610,7 +1610,7 @@ mod tests {
             b"/nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-src",
         )
         .unwrap();
-        drv.input_sources.insert(src);
+        drv.input_sources.insert(src.clone());
         drv.outputs.insert(
             "out".to_string(),
             Output {
@@ -1625,7 +1625,18 @@ mod tests {
         );
 
         let kp = KnownPaths::default();
-        let br = derivation_into_build_request(drv.clone(), &BTreeMap::new()).unwrap();
+        // Input sources must be in the inputs map for refscan_needles to include them.
+        // In the real build path, get_all_inputs() populates this from input_sources.
+        let mut inputs = BTreeMap::new();
+        inputs.insert(
+            src,
+            snix_castore::Node::File {
+                digest: snix_castore::B3Digest::from(&[0u8; 32]),
+                size: 0,
+                executable: false,
+            },
+        );
+        let br = derivation_into_build_request(drv.clone(), &inputs).unwrap();
 
         let refs = needles_to_candidates(&br, &drv, &kp);
         assert!(refs.contains_key("1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r"));
