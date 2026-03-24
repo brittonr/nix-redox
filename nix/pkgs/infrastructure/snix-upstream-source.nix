@@ -12,6 +12,8 @@
 # Patches applied:
 #   eval/src/systems.rs — add "redox" to is_second_coordinate()
 #   glue/src/builder/mod.rs — make derivation_into_build_request public
+#   glue/src/lib.rs — make fetchurl module public
+#   glue/src/fetchurl.rs — make fetchurl_derivation_to_fetch and Error public
 #
 # Upstream pin: 2207a074ae (2026-03-19) — canon branch
 
@@ -107,6 +109,12 @@ PATCH
   # Derivation → BuildRequest for env var setup, refscan needles, etc.
   chmod -R u+w $out/glue
   sed -i 's|pub(crate) fn derivation_into_build_request|pub fn derivation_into_build_request|' $out/glue/src/builder/mod.rs
+
+  # Make fetchurl module public so snix-redox can use fetchurl_derivation_to_fetch.
+  sed -i 's|^mod fetchurl;|pub mod fetchurl;|' $out/glue/src/lib.rs
+  sed -i 's|pub(crate) fn fetchurl_derivation_to_fetch|pub fn fetchurl_derivation_to_fetch|' $out/glue/src/fetchurl.rs
+  sed -i 's|pub(crate) enum Error|pub enum Error|' $out/glue/src/fetchurl.rs
+
   chmod -R a-w $out/glue
 
   # Create proto path resolution structure.
