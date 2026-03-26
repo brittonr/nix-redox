@@ -922,7 +922,7 @@ let
                                   kill -9 $CARGO_PID 2>/dev/null
                                   exit 0
                                 fi
-                                cat /scheme/sys/uname >/dev/null 2>/dev/null
+                                read -t 1 < /dev/null 2>/dev/null || true
                               done
                               wait $CARGO_PID
                               echo "spy2-exit=$?"
@@ -1000,7 +1000,7 @@ let
                               echo "cargo-abs=TIMEOUT" > /tmp/cargo-abs-result
                               break
                             fi
-                            cat /scheme/sys/uname >/dev/null 2>/dev/null
+                            read -t 1 < /dev/null 2>/dev/null || true
                           done
                           if ! kill -0 $CARGO_PID 2>/dev/null; then
                             wait $CARGO_PID
@@ -1057,9 +1057,7 @@ let
                               echo "cargo-direct=TIMEOUT" > /tmp/cargo-direct-result
                               break
                             fi
-                            # Busy-wait: no sleep/read -t on Redox (nanosleep hangs).
-                            # Use /scheme/sys/uname reads as a ~5ms delay to avoid CPU spin.
-                            cat /scheme/sys/uname >/dev/null 2>/dev/null
+                            read -t 1 < /dev/null 2>/dev/null || true
                           done
                           if ! kill -0 $CARGO_PID 2>/dev/null; then
                             wait $CARGO_PID
@@ -1220,7 +1218,7 @@ let
                           rm -f /root/.cargo/.package-cache* /root/.cargo/.global-cache* 2>/dev/null
                           echo "[realtest] starting cargo build..."
                           cargo build --offline >/dev/null 2>/tmp/realtest-stderr &
-                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
+                          PID=$!; wait $PID
                           CARGO_EXIT=$?
                           echo "cargo-exit=$CARGO_EXIT" > /tmp/realtest-result
 
@@ -1365,7 +1363,7 @@ let
                           cd /tmp/multifile
                           echo "[multifile] starting cargo build (offline)..."
                           cargo build --offline >/dev/null 2>/tmp/multifile-stderr &
-                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
+                          PID=$!; wait $PID
                           CARGO_EXIT=$?
 
                           if [ $CARGO_EXIT -eq 0 ]; then
@@ -1608,7 +1606,7 @@ let
                           rm -f /root/.cargo/.package-cache* /root/.cargo/.global-cache* 2>/dev/null
                           echo "[minigrep] cargo build..."
                           cargo build --offline >/dev/null 2>/tmp/minigrep-stderr &
-                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
+                          PID=$!; wait $PID
                           MG_EXIT=$?
                           echo "[minigrep] cargo exit: $MG_EXIT"
 
@@ -1801,7 +1799,7 @@ let
                           cd /tmp/buildrs-test
                           echo "[buildrs] starting cargo build with build.rs..."
                           cargo build --offline -vv >/dev/null 2>/tmp/buildrs-stderr &
-                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
+                          PID=$!; wait $PID
                           CARGO_EXIT=$?
                           echo "[buildrs] cargo exit code: $CARGO_EXIT"
                           echo "cargo-exit=$CARGO_EXIT" > /tmp/buildrs-result
@@ -1878,7 +1876,7 @@ let
 
                           cd /tmp/env-pkg-test
                           cargo build --offline >/dev/null 2>/tmp/env-pkg-stderr &
-                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
+                          PID=$!; wait $PID
                           CARGO_EXIT=$?
                           if [ $CARGO_EXIT -eq 0 ]; then
                             BIN=./target/x86_64-unknown-redox/debug/envpkgtest
@@ -1995,7 +1993,7 @@ let
                           cd /tmp/heavyfork
                           echo "[heavyfork] starting cargo build..."
                           cargo build --offline -vv >/dev/null 2>/tmp/heavyfork-stderr &
-                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
+                          PID=$!; wait $PID
                           CARGO_EXIT=$?
                           echo "[heavyfork] cargo exit=$CARGO_EXIT"
 
@@ -2116,7 +2114,7 @@ let
                           rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
 
                           cargo build --offline >/dev/null 2>/tmp/pathdep-stderr &
-                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
+                          PID=$!; wait $PID
                           CARGO_EXIT=$?
 
                           BIN=./target/x86_64-unknown-redox/debug/pathdep
@@ -2258,7 +2256,7 @@ let
 
                           # Merge stderr into stdout, redirect to file
                           cargo build --offline >/tmp/vendored-build-log 2>&1 &
-                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
+                          PID=$!; wait $PID
                           CARGO_EXIT=$?
                           echo "[vendored] cargo exit=$CARGO_EXIT"
 
@@ -2412,7 +2410,7 @@ let
 
                           # Merge stderr into stdout, redirect to file
                           cargo build --offline >/tmp/procmacro-build-log 2>&1 &
-                          PID=$!; while kill -0 $PID 2>/dev/null; do cat /scheme/sys/uname >/dev/null 2>/dev/null; done; wait $PID
+                          PID=$!; wait $PID
                           CARGO_EXIT=$?
                           echo "[procmacro] cargo exit=$CARGO_EXIT"
 
@@ -2714,7 +2712,7 @@ let
               rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
               continue 2
             fi
-            cat /scheme/sys/uname >/dev/null 2>/dev/null
+            read -t 1 < /dev/null 2>/dev/null || true
           done
           wait $PID
           CARGO_EXIT=$?
@@ -2970,7 +2968,7 @@ let
                               rm -rf /tmp/test-j2 /tmp/cargo-home-j2
                               exit 0
                             fi
-                            cat /scheme/sys/uname > /dev/null 2>&1
+                            read -t 1 < /dev/null 2>/dev/null || true
                           done
                           wait $PID
                           RC=$?

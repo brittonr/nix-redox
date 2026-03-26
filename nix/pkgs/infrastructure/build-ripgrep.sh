@@ -59,8 +59,7 @@ for attempt in 1 2 3; do
       rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
       continue 2
     fi
-    # Polling I/O to yield scheduler (Redox foreground exec workaround)
-    cat /scheme/sys/uname >/dev/null 2>/dev/null
+    read -t 1 < /dev/null 2>/dev/null || true
   done
   wait $PID
   CARGO_EXIT=$?

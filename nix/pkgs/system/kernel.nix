@@ -72,6 +72,10 @@ let
 
       # Restore ptrace proc: scheme handles (trace + mem)
       python3 ${./patches/kernel/patch-kernel-ptrace-proc-handles.py} .
+
+      # LAPIC timer for scheduling on KVM — Cloud Hypervisor doesn't
+      # deliver PIT interrupts when all CPUs are in HLT
+      python3 ${./patches/kernel/patch-kernel-lapic-timer.py} .
     '';
 
     installPhase = ''
