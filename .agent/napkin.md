@@ -39,6 +39,17 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - `git add` alone doesn't force re-evaluation if content hash hasn't changed.
 - Check with `nix eval --raw '.#pkg.drvPath'` before and after to confirm drv changed.
 
+## Kernel Two-Phase Build
+
+### Cargo fingerprint leakage across Nix derivations
+- The two-phase kernel build (kernelDeps → kernel) recompiles ~11 crates in phase 2 instead of just 1.
+- Root cause: cargo's fingerprints for build-script crates use mtime-based freshness checks. Nix store normalizes all timestamps to epoch (1), and even `touch` doesn't fully fix it because source files in vendor-combined retain epoch mtime while target/ files get a new time.
+- Affected crates: serde_core, serde, zerocopy, ahash, rmm, toml_datetime, serde_spanned, toml_edit, toml, hashbrown — all have build scripts or depend on crates with build scripts.
+- Despite the leakage, phase 2 takes ~5.5s vs ~12s full build = ~2x speedup.
+- `dontFixup = true` on kernelDeps is critical — patchelf modifies build script binaries, breaking fingerprints completely.
+- Must delete `.cargo-lock` files from copied target dir (cargo can't re-acquire stale locks).
+- Must also delete Cargo.lock's git source for fdt (patched to path dep) so cargo doesn't re-lock.
+
 ## Active Workarounds (still needed)
 
 ### Proxy scheme socket close doesn't unblock next_request() (kernel bug)

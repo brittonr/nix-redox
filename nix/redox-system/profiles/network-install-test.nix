@@ -58,9 +58,7 @@ let
                 break
             end
         end
-        cat /scheme/sys/uname > /dev/null
-        cat /scheme/sys/uname > /dev/null
-        cat /scheme/sys/uname > /dev/null
+        /nix/system/profile/bin/bash -c 'read -t 1 < /dev/null' 2>/dev/null
         let disc_attempts += 1
     end
 
@@ -80,11 +78,7 @@ let
                 break
             end
         end
-        cat /scheme/sys/uname > /dev/null
-        cat /scheme/sys/uname > /dev/null
-        cat /scheme/sys/uname > /dev/null
-        cat /scheme/sys/uname > /dev/null
-        cat /scheme/sys/uname > /dev/null
+        /nix/system/profile/bin/bash -c 'read -t 1 < /dev/null' 2>/dev/null
         let attempts += 1
     end
 
