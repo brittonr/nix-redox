@@ -30,7 +30,7 @@ version = "0.1.0"
 rust-version = "1.91.1"
 
 # Upstream snix workspace dependency versions.
-# Copied from https://git.snix.dev/snix/snix @ 2207a074ae9b19430f66e61c2cc6660295320724
+# Copied from https://git.snix.dev/snix/snix @ 34604636d7e3adbad6f7f909c98bb493f26855f9
 [workspace.dependencies]
 anyhow = "1.0.86"
 async-compression = "0.4.12"
