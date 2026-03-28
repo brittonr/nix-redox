@@ -218,14 +218,27 @@ rec {
           else
             ''
               # Standard fetchCargoVendor output - copy crates directly
-              for crate in ${projectVendor}/*/; do
+              # Handle both flat (old) and nested source-registry-0/ (new) formats
+              copy_project_crate() {
+                local crate="$1"
+                local crate_name
                 crate_name=$(basename "$crate")
                 if [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
-                  continue
+                  return
                 fi
-                if [ -d "$crate" ]; then
+                if [[ "$crate_name" == source-* ]] && [ -d "$crate" ]; then
+                  for nested in "$crate"/*/; do
+                    copy_project_crate "$nested"
+                  done
+                  return
+                fi
+                if [ -d "$crate" ] && [ ! -d "vendor-combined/$crate_name" ]; then
                   cp -rL "$crate" "vendor-combined/$crate_name"
                 fi
+              }
+
+              for crate in ${projectVendor}/*/; do
+                copy_project_crate "$crate"
               done
             ''
         }
@@ -233,10 +246,21 @@ rec {
 
         ${lib.optionalString (sysrootVendor != null) ''
           # Merge sysroot vendor with version conflict resolution
-          for crate in ${sysrootVendor}/*/; do
+          # Handle both flat (old) and nested source-registry-0/ (new fetchCargoVendor) formats
+          merge_crate() {
+            local crate="$1"
+            local crate_name
             crate_name=$(basename "$crate")
-            if [ ! -d "$crate" ]; then
-              continue
+            if [ ! -d "$crate" ] || [ "$crate_name" = ".cargo" ] || [ "$crate_name" = "Cargo.lock" ]; then
+              return
+            fi
+            # Skip source-* dirs — they are containers, not crates
+            if [[ "$crate_name" == source-* ]]; then
+              # Recurse into the nested directory
+              for nested_crate in "$crate"/*/; do
+                merge_crate "$nested_crate"
+              done
+              return
             fi
             if [ -d "vendor-combined/$crate_name" ]; then
               base_version=$(get_version "vendor-combined/$crate_name")
@@ -250,6 +274,10 @@ rec {
             else
               cp -rL "$crate" "vendor-combined/$crate_name"
             fi
+          }
+
+          for crate in ${sysrootVendor}/*/; do
+            merge_crate "$crate"
           done
           chmod -R u+w vendor-combined/
         ''}

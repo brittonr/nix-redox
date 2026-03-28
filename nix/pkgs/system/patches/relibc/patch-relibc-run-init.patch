@@ -1,7 +1,6 @@
-diff -ruN a/src/ld_so/linker.rs b/src/ld_so/linker.rs
---- a/src/ld_so/linker.rs	2026-03-13 12:36:26.658466271 -0400
-+++ b/src/ld_so/linker.rs	2026-03-13 12:36:26.709564392 -0400
-@@ -947,12 +947,87 @@
+--- a/src/ld_so/linker.rs	2026-03-27 15:36:13.725058888 -0400
++++ b/src/ld_so/linker.rs	2026-03-27 15:36:24.229099943 -0400
+@@ -947,12 +947,86 @@
      fn run_init(&self, obj: &DSO) {
          use crate::platform::{self, types::*};
  
@@ -79,8 +78,7 @@ diff -ruN a/src/ld_so/linker.rs b/src/ld_so/linker.rs
 +        #[cfg(target_os = "redox")]
 +        {
 +            if let Some((symbol, _)) = obj.get_sym("__relibc_init_ns_fd") {
-+                let ns_fd = redox_rt::current_namespace_fd();
-+                if ns_fd != usize::MAX {
++                if let Ok(ns_fd) = redox_rt::current_namespace_fd() {
 +                    unsafe {
 +                        symbol.as_ptr().cast::<usize>().write(ns_fd);
 +                    }

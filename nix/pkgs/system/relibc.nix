@@ -46,6 +46,8 @@ let
       # causing EBADF on scheme access (e.g., File::open("/scheme/rand")).
       ./patches/relibc/patch-relibc-ns-fd.patch
       ./patches/relibc/patch-relibc-run-init.patch
+      # CWD injection for DSOs via ld_so run_init()
+      ./patches/relibc/patch-relibc-ld-so-cwd.patch
       # DSO environ propagation — getenv() self-initializes from __relibc_init_environ
       ./patches/relibc/patch-relibc-dso-environ.patch
       # Broadcast environ to __relibc_init_environ after relibc_start_v1
@@ -54,16 +56,10 @@ let
       ./patches/relibc/patch-relibc-prefault-stack.patch
       # Main thread gets 8MB mmap'd stack (kernel only gives ~8KB)
       ./patches/relibc/patch-relibc-grow-main-stack.patch
-      # chdir() uses try_lock() to prevent post-fork deadlock
-      ./patches/relibc/patch-relibc-chdir-deadlock.patch
       # abort() uses _exit(134) instead of ud2 instruction
       ./patches/relibc/patch-relibc-abort-dso.patch
       # Guard p_align=0 in PT_GNU_STACK (prevents division by zero)
       ./patches/relibc/patch-relibc-ld-so-align.patch
-      # CWD injection for DSOs via ld_so run_init()
-      ./patches/relibc/patch-relibc-ld-so-cwd.patch
-      # fcntl file locking no-op (Redox kernel lacks POSIX file locks)
-      ./patches/relibc/patch-relibc-fcntl-lock.patch
       # Add execvpe() for PATH search with explicit envp
       ./patches/relibc/patch-relibc-execvpe.patch
       # ld_so argv UTF-8: to_string_lossy() instead of _exit(1)

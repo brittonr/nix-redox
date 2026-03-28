@@ -578,3 +578,22 @@
 {"text":"lets look into 2","timestamp":1774565054337}
 {"text":"B","timestamp":1774565541168}
 {"text":"yes see if those are needed still","timestamp":1774567530925}
+{"text":"can we rebase from upstream?","timestamp":1774639187094}
+{"text":"i mean i want to update redox to upstream and see if our nix improvement sstill work","timestamp":1774639226134}
+{"text":"continue","timestamp":1774652383491}
+{"text":"lets research and write an openspec for booting redoxos on a latte panda mu on a carrier lite board","timestamp":1774653484398}
+{"text":"lets research and write an openspec for booting redoxos on a latte panda mu on a carrier lite board. its the 16gb n150 variant","timestamp":1774653501389}
+{"text":"lets research and write an openspec for booting redoxos on a latte panda mu on a carrier lite board. its the 16gb n100 variant","timestamp":1774653562215}
+{"text":"yes","timestamp":1774653882834}
+{"text":"we actually have the 8gb version. LattePanda Mu - A Micro x86 Compute Module (N100 CPU,8GB RAM,64GB eMMC)     DFR1146     1     $139.00     $139.00\nLite Carrier Board for LattePanda Mu Compute Module (USB 3.0, Ethernet, PCIe 3.0, M.2 M key, HDMI)","timestamp":1774654005618}
+{"text":"https://docs.lattepanda.com/content/mu_edition/lite_carrier/","timestamp":1774654217861}
+{"text":"how likely is this going to work?","timestamp":1774654393804}
+{"text":"what prep should I do to give you a way to automate the come up of the device","timestamp":1774654477587}
+{"text":"continue","timestamp":1774654599586}
+{"text":"uart to the jetkvm or this pc","timestamp":1774655249277}
+{"text":"you're in wezterm so you dont need picocom","timestamp":1774655327896}
+{"text":"we're connectred with the jetkvm and serial","timestamp":1774655917493}
+{"text":"192.168.1.89","timestamp":1774655932967}
+{"text":"its boot looping","timestamp":1774656116053}
+{"text":"just use serial for now","timestamp":1774656258441}
+{"text":"sio_uart","timestamp":1774656329540}

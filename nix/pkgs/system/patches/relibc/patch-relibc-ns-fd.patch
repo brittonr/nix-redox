@@ -1,7 +1,6 @@
-diff -ruN a/redox-rt/src/lib.rs b/redox-rt/src/lib.rs
---- a/redox-rt/src/lib.rs	2026-03-13 12:36:26.641078805 -0400
-+++ b/redox-rt/src/lib.rs	2026-03-13 12:36:26.673215378 -0400
-@@ -257,15 +257,52 @@
+--- a/redox-rt/src/lib.rs	2026-03-27 15:31:52.004614358 -0400
++++ b/redox-rt/src/lib.rs	2026-03-27 15:36:13.740872711 -0400
+@@ -256,15 +256,52 @@
  
  #[inline]
  pub(crate) fn static_proc_info() -> &'static StaticProcInfo {
@@ -46,11 +45,11 @@ diff -ruN a/redox-rt/src/lib.rs b/redox-rt/src/lib.rs
 +pub static mut __relibc_init_proc_fd: usize = usize::MAX;
 +
  #[inline]
- pub fn current_namespace_fd() -> usize {
+ pub fn current_namespace_fd() -> syscall::Result<usize> {
 +    // Check ld_so-injected ns_fd first (for shared libraries).
 +    let injected = unsafe { __relibc_init_ns_fd };
 +    if injected != usize::MAX {
-+        return injected;
++        return Ok(injected);
 +    }
      DYNAMIC_PROC_INFO
          .lock()
