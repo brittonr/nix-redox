@@ -268,7 +268,7 @@ let
   baseVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "base-cargo-vendor";
     src = patchedSrc;
-    hash = "sha256-7EcGCW6hQCgsfykbBuT233J2axZE1/Jt68fPjKvzCE8=";
+    hash = "sha256-SnetwqeSdrTmBK59zZfenkYQ0OPKNwFYzVQOs+dzdn0=";
   };
 
   # Create merged vendor directory (cached as separate derivation)
