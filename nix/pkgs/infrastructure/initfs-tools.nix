@@ -29,24 +29,36 @@ let
         # FOD for generating Cargo.lock
         outputHashAlgo = "sha256";
         outputHashMode = "recursive";
-        outputHash = "sha256-BRnDGzaljJ0KqTPD17yYRPO2ham6IOOOhNjGpy9dTR8=";
+        outputHash = "sha256-5yIX7Kh7VE8xrDG4ZV+7FOEuXuVrGI5B8KH4inSkwh4=";
         SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
       }
       ''
         export HOME=$(mktemp -d)
-        mkdir -p $out
+        mkdir -p $out/initfs
         # Copy entire initfs directory to include archive-common
-        cp -r ${base-src}/initfs/* $out/
+        cp -r ${base-src}/initfs/. $out/initfs/
         chmod -R u+w $out
 
-        # Replace workspace-inherited dependencies with explicit versions.
+        # Create a workspace root with the dependency versions that
+        # initfs/ and initfs/tools/ inherit via workspace = true.
         # These values come from the base root Cargo.toml [workspace.dependencies].
-        find $out -name Cargo.toml -exec sed -i \
-          -e 's/anyhow.workspace = true/anyhow = "1"/g' \
-          -e 's/log.workspace = true/log = "0.4"/g' \
-          {} +
+        cat > $out/Cargo.toml << 'WORKSPACE'
+        [workspace]
+        resolver = "2"
+        members = ["initfs", "initfs/tools"]
 
-        cd $out/tools
+        [workspace.dependencies]
+        anyhow = "1"
+        clap = "4"
+        log = "0.4"
+        plain = "0.2.3"
+
+        [workspace.lints.rust]
+
+        [workspace.lints.clippy]
+        WORKSPACE
+
+        cd $out/initfs/tools
         cargo generate-lockfile
       '';
 
@@ -54,8 +66,7 @@ let
   initfsToolsVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "initfs-tools-vendor";
     src = initfsToolsSrc;
-    sourceRoot = "initfs-tools-src/tools";
-    hash = "sha256-TroLyEAMVKxZyWPrs3EFjcCqjxrlgDwriTAkWznzmhk=";
+    hash = "sha256-pZo5NkEKDgPWvnkPtMUVqHZkVU0T4fQFl806wUjtEnA=";
   };
 
   # Create vendor directory (no sysroot merge needed for host tools)
@@ -84,15 +95,9 @@ pkgs.stdenv.mkDerivation {
 
     export HOME=$(mktemp -d)
 
-    # Copy initfs source
-    cp -r ${base-src}/initfs/* .
+    # Copy workspace source from initfsToolsSrc (has workspace root + generated lockfile)
+    cp -r ${initfsToolsSrc}/. .
     chmod -R u+w .
-
-    # Replace workspace-inherited dependencies with explicit versions
-    find . -name Cargo.toml -exec sed -i \
-      -e 's/anyhow.workspace = true/anyhow = "1"/g' \
-      -e 's/log.workspace = true/log = "0.4"/g' \
-      {} +
 
     # Use pre-merged vendor directory
     cp -rL ${mergedVendor} vendor-combined
@@ -104,25 +109,16 @@ pkgs.stdenv.mkDerivation {
     ${vendor.mkCargoConfig { }}
   EOF
 
-    # Ensure tools directory exists and is writable before copying lockfile
-    mkdir -p tools
-    chmod -R u+w tools
-
-    # Copy lockfile from the initfsToolsSrc which has the generated lock
-    cp ${initfsToolsSrc}/tools/Cargo.lock tools/
-    # Make the lockfile writable so cargo can update it if needed
-    chmod u+w tools/Cargo.lock
-
     # Build tools
-    cargo build --manifest-path tools/Cargo.toml --release
+    cargo build --manifest-path initfs/tools/Cargo.toml --release
 
     runHook postBuild
   '';
 
   installPhase = ''
     mkdir -p $out/bin
-    cp tools/target/release/redox-initfs-ar $out/bin/
-    cp tools/target/release/redox-initfs-dump $out/bin/
+    cp target/release/redox-initfs-ar $out/bin/
+    cp target/release/redox-initfs-dump $out/bin/
   '';
 
   meta = with lib; {
