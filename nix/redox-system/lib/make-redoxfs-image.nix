@@ -63,10 +63,11 @@ hostPkgs.runCommand "redox-redoxfs"
       cp ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI "$blStore/boot/EFI/BOOT/BOOTX64.EFI"
     ''}
 
-    # /boot/ copies for bootloader compatibility (reads from RedoxFS /boot/)
-    mkdir -p root/boot
-    cp ${kernel}/boot/kernel root/boot/kernel
-    cp ${initfs}/boot/initfs root/boot/initfs
+    # /usr/lib/boot/ copies for bootloader compatibility
+    # (bootloader reads from RedoxFS /usr/lib/boot/ since upstream commit a8dc023)
+    mkdir -p root/usr/lib/boot
+    cp ${kernel}/boot/kernel root/usr/lib/boot/kernel
+    cp ${initfs}/boot/initfs root/usr/lib/boot/initfs
 
     # Pre-allocate the image file — redoxfs-ar requires it to exist
     dd if=/dev/zero of=redoxfs.img bs=1M count=${toString sizeMB} 2>/dev/null

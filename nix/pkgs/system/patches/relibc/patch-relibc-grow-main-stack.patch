@@ -10,7 +10,7 @@ diff -ruN a/src/start.rs b/src/start.rs
      ld_so::{self, linker::Linker},
      platform::{self, Pal, Sys, get_auxvs, types::*},
      sync::mutex::Mutex,
-@@ -263,6 +263,76 @@
+@@ -263,6 +263,79 @@
          }
      }
  
@@ -57,16 +57,19 @@ diff -ruN a/src/start.rs b/src/start.rs
 +
 +            // Switch RSP to the new stack, call main(), switch back.
 +            // RBX is callee-saved, so main() preserves it for us.
++            // main_fn MUST use a fixed register (r12) to prevent the
++            // compiler from allocating it to RBX, which is overwritten
++            // by "mov rbx, rsp" before the call.
 +            unsafe {
 +                core::arch::asm!(
 +                    "push rbx",
 +                    "mov rbx, rsp",
 +                    "mov rsp, {new_rsp}",
-+                    "call {main_fn}",
++                    "call r12",
 +                    "mov rsp, rbx",
 +                    "pop rbx",
 +                    new_rsp = in(reg) new_rsp,
-+                    main_fn = in(reg) main_fn_ptr,
++                    in("r12") main_fn_ptr,
 +                    in("rdi") argc as i64,
 +                    in("rsi") platform::argv as usize,
 +                    in("rdx") platform::environ as usize,
