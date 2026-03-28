@@ -162,6 +162,7 @@ adios:
           assertionCheck
           warningCheck
           binaryCache
+          etcDerivation
           ;
         inherit (generatedFiles) allGeneratedFiles;
         inherit initScripts;

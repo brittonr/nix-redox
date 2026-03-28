@@ -2,7 +2,7 @@
 # Assembles the complete root filesystem with packages, configuration files,
 # and system setup. Uses external tools for ELF fixing and manifest hashing.
 
-{ hostPkgs, lib, cfg, inputs, allGeneratedFiles, initScripts, binaryCache, assertionCheck, warningCheck, fix-elf-palign, hash-manifest }:
+{ hostPkgs, lib, cfg, inputs, allGeneratedFiles, initScripts, binaryCache, assertionCheck, warningCheck, fix-elf-palign, hash-manifest, etcDerivation }:
 
 let
   # Shell helpers for rootTree
@@ -223,10 +223,31 @@ hostPkgs.runCommand "redox-root-tree"
 
     # Compute file hashes, generation buildHash, and seed generations dir.
     # The base manifest was written above; now we add:
-    #   1. "files" key with SHA256 hashes of every rootTree file
-    #   2. "generation.buildHash" — SHA256 of the sorted file inventory
-    #   3. /etc/redox-system/generations/1/ with a copy of the manifest
+    #   1. "files" key with BLAKE3 hashes of every rootTree file
+    #   2. "generation.buildHash" — BLAKE3 of the sorted file inventory
+    #   3. "etcSource" — etc derivation store path (injected to avoid circular dep)
+    #   4. /etc/redox-system/generations/1/ with a copy of the manifest
     hash-manifest $out
+
+    # Inject etcSource into the manifest post hash-manifest.
+    # Can't be in manifestJson (circular dep: manifestJson → allGeneratedFiles → etcDrv).
+    # Use python/jq-style inline edit on the final manifest.
+    manifest="$out/etc/redox-system/manifest.json"
+    tmp="$manifest.tmp"
+    ${hostPkgs.python3}/bin/python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    d = json.load(f)
+d['etcSource'] = sys.argv[2]
+with open(sys.argv[3], 'w') as f:
+    json.dump(d, f, indent=2, sort_keys=True)
+" "$manifest" "${etcDerivation}" "$tmp"
+    mv "$tmp" "$manifest"
+    # Also update the generation 1 copy
+    gen1="$out/etc/redox-system/generations/1/manifest.json"
+    if [ -f "$gen1" ]; then
+      cp "$manifest" "$gen1"
+    fi
 
     echo "Root tree: $(find $out -type f | wc -l) files, $(find $out/bin -type f 2>/dev/null | wc -l) binaries"
   ''

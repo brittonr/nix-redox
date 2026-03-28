@@ -43,10 +43,7 @@ in
 
   "/boot" = {
     diskSizeMB = 896;
-    initfsExcludeDaemons = [
-      "rtcd"
-      "hwd"
-    ];
+    # Don't exclude hwd — pcid-spawner depends on it for PCI enumeration
     banner = ''
       ==========================================
         Activate Toplevel Integration Test
