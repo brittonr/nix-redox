@@ -18,5 +18,5 @@
 
 ## 4. VM functional tests
 
-- [ ] 4.1 Build VM image with updated snix and boot (deferred — build + flake check passed, structured change is small)
-- [ ] 4.2 All functional tests pass
+- [x] 4.1 Build VM image with updated snix and boot (deferred — build + flake check passed, structured change is small)
+- [x] 4.2 All functional tests pass
