@@ -19,17 +19,9 @@ let
   # init.toml and startup.sh
   # ═══════════════════════════════════════════════════════════════════
 
-  initToml =
-    if cfg.userutilsInstalled then
-      ""
-    else
-      ''
-        [[services]]
-        name = "shell"
-        command = "/startup.sh"
-        stdio = "debug"
-        restart = false
-      '';
+  # init.toml is no longer used by the new init binary (TOML unit files
+  # replaced it). Kept empty for backwards compat with generated-files.nix.
+  initToml = "";
 
   startupContent = "#!/bin/sh\n" + inputs.services.startupScriptText;
 
@@ -44,14 +36,18 @@ let
   # Generated core + typed services from /services, then domain modules,
   # then profile-declared overrides on top (right-side wins).
   allDeclaredServices =
-    lib.filterAttrs (_: svc: svc.enable or true) (
-      inputs.services._generatedServices
-      // (inputs.networking.services or { })
-      // (inputs.graphics.services or { })
-      // (inputs.audio.services or { })
-      // (inputs.snix.services or { })
-      // (inputs.iroh.services or { })
-      // inputs.services.services
+    # Filter out logd — the upstream init starts it explicitly between
+    # the two SwitchRoot calls (hardcoded in init binary).
+    lib.filterAttrs (name: _: name != "logd") (
+      lib.filterAttrs (_: svc: svc.enable or true) (
+        inputs.services._generatedServices
+        // (inputs.networking.services or { })
+        // (inputs.graphics.services or { })
+        // (inputs.audio.services or { })
+        // (inputs.snix.services or { })
+        // (inputs.iroh.services or { })
+        // inputs.services.services
+      )
     );
 
   # ═══════════════════════════════════════════════════════════════════
@@ -173,42 +169,117 @@ let
     ) sorted;
 
   # ═══════════════════════════════════════════════════════════════════
-  # Service rendering
+  # Service rendering — TOML unit files
   # ═══════════════════════════════════════════════════════════════════
 
-  # Render a single service to init script text
-  renderServiceText = svc:
-    let
-      envLines = lib.concatStringsSep "\n" (
-        lib.mapAttrsToList (k: v: "export ${k} ${v}") (svc.environment or { })
-      );
-      cmdLine =
-        if svc.type == "scheme" then
-          "scheme ${svc.args} ${svc.command}"
-        else if svc.type == "daemon" then
-          "notify ${svc.command}${lib.optionalString (svc.args != "") " ${svc.args}"}"
-        else if svc.type == "nowait" then
-          "nowait ${svc.command}${lib.optionalString (svc.args != "") " ${svc.args}"}"
-        else
-          "${svc.command}${lib.optionalString (svc.args != "") " ${svc.args}"}";
-    in
-    "# ${svc.description}"
-    + lib.optionalString (envLines != "") "\n${envLines}"
-    + "\n${cmdLine}";
-
-  # Convert auto-numbered services to the allInitScripts format
-  renderedServices = builtins.listToAttrs (
+  # Build a mapping from service name → unit filename for dependency refs
+  serviceFilenameMap = builtins.listToAttrs (
     map (entry: {
-      name = "${entry.numStr}_${entry.name}";
-      value = {
-        text = renderServiceText entry.service;
-        directory =
-          if (entry.service.wantedBy or "rootfs") == "initfs" then
-            "etc/init.d"
-          else
-            "usr/lib/init.d";
-      };
+      name = entry.name;
+      value = "${entry.numStr}_${entry.name}.service";
     }) autoNumbered
+  );
+
+  # Render a single service declaration to TOML .service file content.
+  # Maps our service types to upstream init's TOML schema:
+  #   scheme → { scheme = "name" }
+  #   daemon → "notify"
+  #   oneshot → "oneshot"
+  #   nowait  → "oneshot_async"
+  renderServiceToml =
+    {
+      svc,
+      defaultDependencies ? true,
+      requiresWeak ? [ ],
+    }:
+    let
+      # Map service type to TOML type field
+      tomlType =
+        if svc.type == "scheme" then
+          ''{ scheme = "${svc.args}" }''
+        else if svc.type == "daemon" then
+          ''"notify"''
+        else if svc.type == "oneshot" then
+          ''"oneshot"''
+        else if svc.type == "nowait" then
+          ''"oneshot_async"''
+        else
+          throw "Unknown service type: ${svc.type}";
+
+      # Build args array — scheme services pass scheme name as first arg
+      argsArray =
+        if svc.type == "scheme" then
+          ''["${svc.args}"]''
+        else if svc.args == "" then
+          "[]"
+        else
+          let
+            parts = lib.splitString " " svc.args;
+          in
+          "[" + lib.concatMapStringsSep ", " (a: ''"${a}"'') parts + "]";
+
+      cmdName = builtins.baseNameOf svc.command;
+
+      # [unit] section lines
+      unitLines =
+        [ ''description = "${svc.description}"'' ]
+        ++ lib.optional (!defaultDependencies) "default_dependencies = false"
+        ++ lib.optional (requiresWeak != [ ]) (
+          "requires_weak = ["
+          + lib.concatMapStringsSep ", " (d: ''"${d}"'') requiresWeak
+          + "]"
+        );
+
+      # [service] section lines
+      serviceLines =
+        [
+          ''cmd = "${cmdName}"''
+          "args = ${argsArray}"
+          "type = ${tomlType}"
+        ]
+        ++ lib.optional (svc.environment or { } != { }) (
+          "envs = { "
+          + lib.concatStringsSep ", " (lib.mapAttrsToList (k: v: ''${k} = "${v}"'') svc.environment)
+          + " }"
+        );
+    in
+    lib.concatStringsSep "\n" (
+      [ "[unit]" ]
+      ++ unitLines
+      ++ [ "" "[service]" ]
+      ++ serviceLines
+    );
+
+  # Convert auto-numbered services to allInitScripts format with TOML content.
+  # Each entry gets a .service extension and TOML rendering.
+  # Rootfs services get rootfsBaseEnv merged into their envs so
+  # PATH, TERM, HOME etc. are available to all rootfs daemons.
+  renderedServices = builtins.listToAttrs (
+    map (entry:
+      let
+        isRootfs = (entry.service.wantedBy or "rootfs") == "rootfs";
+        mergedEnv =
+          if isRootfs then
+            rootfsBaseEnv // (entry.service.environment or { })
+          else
+            entry.service.environment or { };
+        svcWithEnv = entry.service // { environment = mergedEnv; };
+      in
+      {
+        name = "${entry.numStr}_${entry.name}.service";
+        value = {
+          text = renderServiceToml {
+            svc = svcWithEnv;
+            requiresWeak = map (dep: serviceFilenameMap.${dep}) (entry.service.after or [ ]);
+          };
+          directory =
+            if isRootfs then
+              "usr/lib/init.d"
+            else
+              "etc/init.d";
+        };
+      }
+    ) autoNumbered
   );
 
   # ═══════════════════════════════════════════════════════════════════
@@ -226,105 +297,338 @@ let
     in
     cleaned;
 
-  # Merge: raw scripts + rendered services. Raw scripts take precedence
-  # on name collision (profile can override an auto-numbered service).
-  allInitScripts = renderedServices // rawInitScripts;
+  # ═══════════════════════════════════════════════════════════════════
+  # Rootfs environment setup (legacy extensionless script)
+  # ═══════════════════════════════════════════════════════════════════
+  # Post-switchroot environment variables that were previously set in
+  # 90_exit_initfs. The init binary's SwitchRoot handles PATH and
+  # LD_LIBRARY_PATH basics; this script adds user-facing variables.
+
+  # Base environment passed to all services by init via config.envs.
+  # SwitchRoot sets PATH and LD_LIBRARY_PATH; we extend via envs on
+  # individual services that need the full Nix PATH.
+  rootfsBaseEnv = {
+    TERM = inputs.environment.variables.TERM or "xterm-256color";
+    XDG_CONFIG_HOME = "/etc";
+    HOME = cfg.defaultUser.home;
+    USER = cfg.defaultUser.name;
+    PATH = "/nix/system/profile/bin:${inputs.environment.variables.PATH or "/bin:/usr/bin"}";
+  } // lib.optionalAttrs cfg.hasSelfHosting (
+    let
+      basePaths = [
+        "/lib"
+        "/usr/lib/rustc"
+        "/nix/system/profile/lib"
+      ];
+      allPaths = basePaths ++ cfg.extraLdLibraryPath;
+    in
+    {
+      LD_LIBRARY_PATH = lib.concatStringsSep ":" allPaths;
+      CARGO_BUILD_JOBS = toString cfg.cargoConfig.buildJobs;
+      CARGO_HOME = cfg.cargoConfig.home;
+    }
+  );
+
+  # Boot banner — legacy script using only echo commands (supported by
+  # the new init's script parser).
+  rootfsEnvScript =
+    {
+      "99_environment" = {
+        text = lib.concatStringsSep "\n" (
+          [ "# Boot banner" ]
+          ++ map (line: "echo ${line}") (
+            [ "" ]
+            ++ lib.splitString "\n" (lib.removeSuffix "\n" cfg.bootBanner)
+            ++ [ "" ]
+          )
+        );
+        directory = "usr/lib/init.d";
+      };
+    }
+    # For non-userutils profiles: start the test/shell script via
+    # a oneshot_async service (replaces the old init.toml [[services]]).
+    // lib.optionalAttrs (!cfg.userutilsInstalled) {
+      "99_startup.service" = {
+        text = lib.concatStringsSep "\n" [
+          "[unit]"
+          ''description = "Startup shell"''
+          ""
+          "[service]"
+          ''cmd = "/startup.sh"''
+          ''type = "oneshot_async"''
+        ];
+        directory = "usr/lib/init.d";
+      };
+    };
+
+  # Merge: raw scripts + rendered services + rootfs env.
+  # Raw scripts take precedence on name collision.
+  allInitScripts = renderedServices // rootfsEnvScript // rawInitScripts;
 
   # For backwards compat: allInitScriptsWithServices is the same as allInitScripts
   allInitScriptsWithServices = allInitScripts;
 
   # ═══════════════════════════════════════════════════════════════════
-  # Initfs init.d scripts (early boot, before rootfs)
+  # Initfs unit files — TOML .service, .target, and legacy scripts
   # ═══════════════════════════════════════════════════════════════════
-  # These are separate from rootfs services — they run in the initfs
-  # environment with different PATH/LD_LIBRARY_PATH.
+  # Replaces numbered shell scripts with upstream-compatible TOML unit
+  # files. The init binary loads 00_runtime.target and 90_initfs.target,
+  # recursively resolving requires_weak dependencies.
+  #
+  # logd and stdio redirection are handled by init between SwitchRoot
+  # calls — no unit file needed.
 
-  defaultInitScriptFiles = {
-    "00_runtime" = ''
-      # Core runtime daemons (SchemeDaemon binaries use 'scheme <name> <cmd>')
-      export PATH /scheme/initfs/bin
-      export LD_LIBRARY_PATH /scheme/initfs/lib
-      export RUST_BACKTRACE ${cfg.rustBacktrace}
-      rtcd
-      scheme null nulld
-      scheme zero zerod
-      scheme rand randd
+  # --- Runtime services (default_dependencies = false) ---
+  runtimeServices = {
+    "00_nulld.service" = ''
+      [unit]
+      description = "/dev/null"
+      default_dependencies = false
+
+      [service]
+      cmd = "zerod"
+      args = ["null"]
+      type = { scheme = "null" }
     '';
 
-    "10_logging" = ''
-      # Logging infrastructure
-      scheme log logd
-      stdio /scheme/log
-      scheme logging ramfs logging
+    "00_zerod.service" = ''
+      [unit]
+      description = "/dev/zero"
+      default_dependencies = false
+
+      [service]
+      cmd = "zerod"
+      args = ["zero"]
+      type = { scheme = "zero" }
     '';
 
-    "20_graphics" = lib.optionalString cfg.initfsEnableGraphics ''
-      # Graphics and input (SchemeDaemons: inputd, fbbootlogd, fbcond)
-      ${lib.optionalString cfg.consoleInputd "scheme input inputd"}
-      notify vesad
-      unset FRAMEBUFFER_ADDR FRAMEBUFFER_VIRT FRAMEBUFFER_WIDTH FRAMEBUFFER_HEIGHT FRAMEBUFFER_STRIDE
-      ${lib.optionalString cfg.consoleBootLog "scheme fbbootlog fbbootlogd"}
-      ${lib.optionalString cfg.consoleInputd "inputd -A ${toString cfg.consoleInputdVT}"}
-      scheme fbcon fbcond ${toString cfg.consoleFbcondVT}
+    "00_randd.service" = ''
+      [unit]
+      description = "/dev/urandom"
+      default_dependencies = false
+
+      [service]
+      cmd = "randd"
+      args = ["rand"]
+      type = { scheme = "rand" }
     '';
 
-    "30_live" = ''
-      # Live daemon (Daemon)
-      notify lived
+    "00_rtcd.service" = ''
+      [unit]
+      description = "RTC"
+      default_dependencies = false
+
+      [service]
+      cmd = "rtcd"
+      type = "oneshot"
     '';
 
-    "40_drivers" = ''
-      # Hardware and PCI drivers
-      ${lib.optionalString cfg.initfsEnableGraphics "notify ps2d"}
-      notify hwd
-      unset RSDP_ADDR RSDP_SIZE
-      pcid-spawner --initfs
-    '';
+    "ramfs@.service" = ''
+      [unit]
+      description = "$INSTANCE ramfs"
+      default_dependencies = false
+      requires_weak = ["00_randd.service"]
 
-    "50_rootfs" = ''
-      # Mount root filesystem
-      redoxfs --uuid $REDOXFS_UUID file $REDOXFS_BLOCK
-      unset REDOXFS_UUID REDOXFS_BLOCK REDOXFS_PASSWORD_ADDR REDOXFS_PASSWORD_SIZE
-    '';
-
-    "85_generation_select" = ''
-      # Boot-time generation activation
-      cd /
-      /bin/snix system activate-boot
-    '';
-
-    "90_exit_initfs" = ''
-      # Exit initfs and enter userspace
-      cd /
-      export PATH /usr/bin
-      export LD_LIBRARY_PATH /usr/lib
-      unset LD_LIBRARY_PATH
-      run.d /usr/lib/init.d /etc/init.d
-      echo ""
-      ${lib.concatMapStringsSep "\n      " (line: "echo \"${line}\"") (lib.splitString "\n" (lib.removeSuffix "\n" cfg.bootBanner))}
-      echo ""
-      export TERM ${inputs.environment.variables.TERM or "xterm-256color"}
-      export XDG_CONFIG_HOME /etc
-      export HOME ${cfg.defaultUser.home}
-      export USER ${cfg.defaultUser.name}
-      export PATH /nix/system/profile/bin:${inputs.environment.variables.PATH or "/bin:/usr/bin"}
-      ${lib.optionalString cfg.hasSelfHosting (
-        let
-          basePaths = [ "/lib" "/usr/lib/rustc" "/nix/system/profile/lib" ];
-          allPaths = basePaths ++ cfg.extraLdLibraryPath;
-        in ''
-        export LD_LIBRARY_PATH ${lib.concatStringsSep ":" allPaths}
-        export CARGO_BUILD_JOBS ${toString cfg.cargoConfig.buildJobs}
-        export CARGO_HOME ${cfg.cargoConfig.home}
-      '')}
-      ${
-        if cfg.userutilsInstalled then
-          "stdio debug:"
-        else
-          "stdio debug:\n/startup.sh"
-      }
+      [service]
+      cmd = "ramfs"
+      args = ["$INSTANCE"]
+      type = { scheme = "$INSTANCE" }
     '';
   };
+
+  # --- Graphics services (conditional on initfsEnableGraphics) ---
+  graphicsServices = lib.optionalAttrs cfg.initfsEnableGraphics (
+    {
+      "20_vesad.service" = ''
+        [unit]
+        description = "VESA display daemon"
+
+        [service]
+        cmd = "vesad"
+        args = []
+        type = "notify"
+      '';
+
+      "23_fbcond.service" = ''
+        [unit]
+        description = "Framebuffer console daemon"
+        requires_weak = ["20_vesad.service"]
+
+        [service]
+        cmd = "fbcond"
+        args = ["fbcon", "${toString cfg.consoleFbcondVT}"]
+        type = { scheme = "fbcon" }
+      '';
+    }
+    // lib.optionalAttrs cfg.consoleInputd {
+      "21_inputd.service" = ''
+        [unit]
+        description = "Input daemon"
+
+        [service]
+        cmd = "inputd"
+        args = ["input"]
+        type = { scheme = "input" }
+      '';
+
+      "24_inputd_config.service" = ''
+        [unit]
+        description = "Configure input daemon active VT"
+        requires_weak = ["21_inputd.service", "20_vesad.service"]
+
+        [service]
+        cmd = "inputd"
+        args = ["-A", "${toString cfg.consoleInputdVT}"]
+        type = "oneshot"
+      '';
+    }
+    // lib.optionalAttrs cfg.consoleBootLog {
+      "22_fbbootlogd.service" = ''
+        [unit]
+        description = "Framebuffer boot log daemon"
+        requires_weak = ["20_vesad.service"]
+
+        [service]
+        cmd = "fbbootlogd"
+        args = ["fbbootlog"]
+        type = { scheme = "fbbootlog" }
+      '';
+    }
+  );
+
+  # Collect graphics service filenames for the target
+  graphicsServiceFiles = builtins.attrNames graphicsServices;
+
+  # --- Driver services ---
+  driverServices =
+    {
+      "40_hwd.service" = ''
+        [unit]
+        description = "Hardware manager"
+        requires_weak = ["30_lived.service"]
+
+        [service]
+        cmd = "hwd"
+        inherit_envs = ["RSDP_ADDR", "RSDP_SIZE"]
+        type = "notify"
+      '';
+
+      "40_pcid-spawner.service" = ''
+        [unit]
+        description = "PCI driver spawner"
+        requires_weak = ["30_lived.service", "40_hwd.service"]
+
+        [service]
+        cmd = "pcid-spawner"
+        args = ["--initfs"]
+        type = "oneshot"
+      '';
+    }
+    // lib.optionalAttrs cfg.initfsEnableGraphics {
+      "40_ps2d.service" = ''
+        [unit]
+        description = "PS/2 keyboard and mouse daemon"
+
+        [service]
+        cmd = "ps2d"
+        type = "notify"
+      '';
+    };
+
+  driverServiceFiles = builtins.attrNames driverServices;
+
+  # --- Live daemon ---
+  liveService = {
+    "30_lived.service" = ''
+      [unit]
+      description = "Live daemon"
+
+      [service]
+      cmd = "lived"
+      type = "notify"
+    '';
+  };
+
+  # --- Rootfs mount ---
+  # Uses TOML .service format. The init binary expands $VAR in args
+  # via subst_env (checks if arg starts with '$' and does env::var).
+  rootfsService = {
+    "50_redoxfs.service" = ''
+      [unit]
+      description = "Rootfs"
+      requires_weak = ["40_drivers.target"]
+
+      [service]
+      cmd = "redoxfs"
+      args = ["--uuid", "$REDOXFS_UUID", "file", "$REDOXFS_BLOCK"]
+      inherit_envs = ["REDOXFS_PASSWORD_ADDR", "REDOXFS_PASSWORD_SIZE"]
+      type = "oneshot"
+    '';
+  };
+
+  # --- Legacy scripts (extensionless — init's UnitKind::LegacyScript) ---
+  # The new init's script parser only supports: echo, notify, scheme,
+  # nowait, requires_weak, and plain commands (treated as oneshot).
+  # No export, unset, cd, stdio, run.d.
+  legacyScripts = {
+    "85_generation_select" = ''
+      requires_weak 50_redoxfs.service
+      /bin/snix system activate-boot
+    '';
+  };
+
+  # --- Targets ---
+  runtimeTargetReqs = [
+    "00_nulld.service"
+    "00_zerod.service"
+    "00_randd.service"
+    "00_rtcd.service"
+    "ramfs@logging.service"
+  ];
+
+  initfsTargetReqs =
+    [ "50_redoxfs.service" ];
+
+  targetFiles =
+    {
+      "00_runtime.target" = ''
+        [unit]
+        description = "Core runtime services"
+        default_dependencies = false
+        requires_weak = [${lib.concatMapStringsSep ", " (r: ''"${r}"'') (lib.sort builtins.lessThan runtimeTargetReqs)}]
+      '';
+
+      "40_drivers.target" = let
+        allDriverDeps = lib.sort builtins.lessThan (driverServiceFiles ++ [ "30_lived.service" ]);
+      in ''
+        [unit]
+        description = "Initfs drivers"
+        requires_weak = [${lib.concatMapStringsSep ", " (r: ''"${r}"'') allDriverDeps}]
+      '';
+
+      "90_initfs.target" = ''
+        [unit]
+        description = "Initfs boot complete"
+        requires_weak = [${lib.concatMapStringsSep ", " (r: ''"${r}"'') initfsTargetReqs}]
+      '';
+    }
+    // lib.optionalAttrs cfg.initfsEnableGraphics {
+      "20_graphics.target" = ''
+        [unit]
+        description = "Graphics and input subsystem"
+        requires_weak = [${lib.concatMapStringsSep ", " (r: ''"${r}"'') (lib.sort builtins.lessThan graphicsServiceFiles)}]
+      '';
+    };
+
+  # --- Combine all initfs files ---
+  defaultInitScriptFiles =
+    runtimeServices
+    // graphicsServices
+    // driverServices
+    // liveService
+    // rootfsService
+    // legacyScripts
+    // targetFiles;
 
   # Apply user overrides from boot.initfsScripts — right side wins on //
   initScriptFiles = defaultInitScriptFiles // cfg.initfsScriptOverrides;

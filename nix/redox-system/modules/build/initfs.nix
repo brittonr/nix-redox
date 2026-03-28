@@ -58,7 +58,7 @@ hostPkgs.stdenv.mkDerivation {
     ${pcidToml}
 PCID_EOF
 
-    # Write numbered init.d scripts (new init system format)
+    # Write unit files (.service, .target) and legacy scripts to etc/init.d/
     ${lib.concatStringsSep "\n" (
       lib.mapAttrsToList (name: content: ''
         cat > initfs/etc/init.d/${name} << 'INIT_SCRIPT_EOF'
