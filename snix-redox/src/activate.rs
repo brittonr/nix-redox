@@ -643,11 +643,15 @@ pub fn activate(
         }
     }
 
-    // ── Step 4b: Update /run/current-system link ──
-    if let Some(ref toplevel) = new.toplevel {
-        if let Err(e) = update_current_system_link(toplevel) {
-            warnings.push(format!("/run/current-system update failed: {e}"));
-        }
+    // ── Step 4b: Update /run/current-system ──
+    // Use the toplevel path from the manifest, or fall back to the
+    // manifest's own generation directory as the system identity.
+    let current_system_target = new
+        .toplevel
+        .as_deref()
+        .unwrap_or("/etc/redox-system");
+    if let Err(e) = update_current_system_link(current_system_target) {
+        warnings.push(format!("/run/current-system update failed: {e}"));
     }
 
     // ── Step 5: Run activation scripts ──
