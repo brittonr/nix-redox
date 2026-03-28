@@ -23,4 +23,4 @@
 - [x] 4.1 Run `nix build .#checks.x86_64-linux.tier-cross --no-link` and confirm it passes
 - [x] 4.2 Run `nix build .#checks.x86_64-linux.tier-eval --no-link` to confirm no regressions
 - [x] 4.3 Run `nix build .#checks.x86_64-linux.tier-host --no-link` to confirm no regressions
-- [ ] 4.4 Commit all changes with descriptive message
+- [x] 4.4 Commit all changes with descriptive message
