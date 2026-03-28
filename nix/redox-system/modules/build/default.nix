@@ -129,7 +129,7 @@ adios:
       # manifestJson must be created before generated-files (it's embedded in rootTree)
       manifest = import ./manifest.nix {
         inherit hostPkgs lib cfg inputs initScripts;
-        inherit rootTree initfs diskImage systemChecks;
+        inherit rootTree initfs diskImage systemChecks etcDerivation;
       };
 
       # ===== 6. Generated configuration files =====
@@ -137,6 +137,13 @@ adios:
         inherit lib cfg inputs hostPkgs pkgs redoxLib;
         inherit initScripts;
         inherit (manifest) manifestJson;
+      };
+
+      # ===== 6b. Standalone etc derivation =====
+      mkEtcDerivation = import ../../lib/make-etc-derivation.nix;
+      etcDerivation = mkEtcDerivation {
+        inherit hostPkgs lib;
+        inherit (generatedFiles) allGeneratedFiles;
       };
 
       # ===== 7. Binary cache =====
@@ -227,6 +234,7 @@ adios:
         espImage
         redoxfsImage
         systemChecks
+        etcDerivation
         ;
       inherit (manifest) toplevel;
       version = manifest.versionInfo;

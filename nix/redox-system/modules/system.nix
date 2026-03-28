@@ -28,6 +28,11 @@ in
       default = "x86_64-unknown-redox";
       description = "Rust target triple for the system";
     };
+    stateVersion = {
+      type = t.int;
+      default = 1;
+      description = "Configuration schema version. Prevents breaking changes on upgrade — old defaults are preserved for systems below the version that introduced the change. Bump only when upgrading to a new release.";
+    };
   };
 
   impl = { options }: options;

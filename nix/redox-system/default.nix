@@ -109,6 +109,9 @@ let
       espImage = buildOutput.espImage;
       redoxfsImage = buildOutput.redoxfsImage;
 
+      # Standalone etc derivation (for activation symlink farm)
+      etcDerivation = buildOutput.etcDerivation;
+
       # VM configuration (from /virtualisation module, for runner scripts)
       vmConfig = buildOutput.vmConfig;
 

@@ -502,7 +502,41 @@
       # System-agnostic outputs
       flake =
         { withSystem }:
+        let
+          nixpkgsLib = inputs.nixpkgs.lib;
+          redoxSystemFactory = import ./nix/redox-system { lib = nixpkgsLib; };
+        in
         {
+          # Primary API — build a Redox system from modules
+          # Usage: redox.lib.redoxSystem { modules = [ ./config.nix ]; pkgs = ...; hostPkgs = ...; }
+          lib = {
+            inherit (redoxSystemFactory) redoxSystem;
+          };
+
+          # Named system configurations (like darwinConfigurations / nixosConfigurations)
+          redoxConfigurations = withSystem "x86_64-linux" (
+            { self', pkgs, ... }:
+            let
+              mkSys = modules: self'.legacyPackages.mkRedoxSystem { inherit modules; };
+            in
+            {
+              default = mkSys [ ./nix/redox-system/profiles/development.nix ];
+              minimal = mkSys [ ./nix/redox-system/profiles/minimal.nix ];
+              graphical = mkSys [ ./nix/redox-system/profiles/graphical.nix ];
+              cloud = mkSys [ ./nix/redox-system/profiles/cloud-hypervisor.nix ];
+              self-hosting = mkSys [ ./nix/redox-system/profiles/self-hosting.nix ];
+            }
+          );
+
+          # Flake module for downstream flake-parts / adios-flake consumers
+          flakeModules.default = ./nix/flake-module.nix;
+
+          # Template: nix flake init -t github:user/redox
+          templates.default = {
+            path = ./templates/default;
+            description = "Minimal Redox OS system configuration";
+          };
+
           # NixOS modules for host integration
           nixosModules = import ./nix/nixos-modules { inherit self; };
 
