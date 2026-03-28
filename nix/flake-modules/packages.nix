@@ -1202,6 +1202,16 @@ let
         src = inputs.relibc-src;
         workspace_member = "generic-rt";
       };
+      # Upstream userutils hasn't been updated for the relibc API change
+      # where redox_rt::protocol was moved to redox_protocols (libredox).
+      # ProcCall now lives in libredox::protocol instead of redox_rt::protocol.
+      userutils = _: {
+        postPatch = ''
+          if [ -f src/bin/sudo.rs ]; then
+            sed -i 's|use redox_rt::protocol::ProcCall;|use libredox::protocol::ProcCall;|' src/bin/sudo.rs
+          fi
+        '';
+      };
     };
   };
 

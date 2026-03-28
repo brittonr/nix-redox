@@ -49,7 +49,7 @@ mkUserspace.mkPackage {
   # Perl needed by ring's build.rs to generate assembly from .pl files
   nativeBuildInputs = [ pkgs.perl ];
 
-  vendorHash = "sha256-JNfrHJu/H3+M9PSHYS+MQs2mBjl238YFP7TGJlFTqiw=";
+  vendorHash = "sha256-RK9KDZ6wUw06C/Oi7j7X/7hvI+grU0GObWdWdfke7GU=";
 
   gitSources = [
     {

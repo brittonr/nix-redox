@@ -617,7 +617,7 @@ let
     redoxfsTarget = mkUserspace.mkPackage {
       pname = "redoxfs-target";
       src = inputs.redoxfs-src;
-      vendorHash = "sha256-BXxNEwDIeMEpUFGBhSk1Q2lNG6h0n7/Kqm5RCsI8k0I=";
+      vendorHash = "sha256-4xwpe+fhNI+YnB3FC8GZsXvEc7DznR6759zE3mkO0bE=";
       cargoBuildFlags = "--bin redoxfs";
       installPhase = ''
         runHook preInstall

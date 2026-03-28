@@ -22,6 +22,7 @@ mod session;
 mod transport;
 
 use pcid_interface::PciFunctionHandle;
+use redox_scheme::scheme::SchemeState;
 use redox_scheme::{RequestKind, SignalBehavior, Socket};
 
 use crate::scheme::VirtioFsScheme;
@@ -128,6 +129,7 @@ fn run_daemon(
     let socket = Socket::create()?;
 
     let mut scheme_handler = VirtioFsScheme::new(session, tag.clone());
+    let mut scheme_state = SchemeState::new();
 
     // Register the scheme (calls scheme_root internally)
     eprintln!("virtio-fsd: registering scheme '{}'...", tag);
@@ -150,15 +152,21 @@ fn run_daemon(
 
         match req.kind() {
             RequestKind::Call(call_req) => {
-                // handle_sync is on CallRequest, dispatches to SchemeSync trait methods
-                let response = call_req.handle_sync(&mut scheme_handler);
+                // handle_sync dispatches to SchemeSync trait methods
+                let response = call_req.handle_sync(&mut scheme_handler, &mut scheme_state);
                 if !socket.write_response(response, SignalBehavior::Restart)? {
                     break;
                 }
             }
             RequestKind::OnClose { id } => {
                 use redox_scheme::scheme::SchemeSync;
+                scheme_state.on_close(id);
                 scheme_handler.on_close(id);
+            }
+            RequestKind::OnDetach { id, pid } => {
+                // Advisory lock cleanup for detached processes.
+                // virtio-fsd doesn't implement inode(), so pass 0.
+                scheme_state.on_detach(id, 0, pid);
             }
             _ => continue,
         }

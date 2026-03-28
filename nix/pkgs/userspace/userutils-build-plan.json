@@ -1,26 +1,26 @@
 {
   "version": 1,
-  "workspaceRoot": "/tmp/tmp.V7YoAd8EG5",
+  "workspaceRoot": "/tmp/tmp.13xGn9x3cG/userutils",
   "roots": [
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0",
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0",
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0",
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0",
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0",
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0",
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0",
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0",
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0",
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0",
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0",
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0",
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0"
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0",
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0",
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0",
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0",
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0",
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0",
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0",
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0",
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0",
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0",
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0",
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0",
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0"
   ],
   "workspaceMembers": {
-    "userutils": "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0"
+    "userutils": "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0"
   },
-  "target": "x86_64-unknown-redox",
-  "cargoLockHash": "4672b99373ac78ddd437b6ac02441f5bcb35b33a948ae66899cad56b157c1809",
+  "cargoLockHash": "78a75e8df9e0110ee0a15fa825b9e03975d114de1f5767a12af93f28c4cf367a",
+  "inputsHash": "7a48b6475013e3c30a5bb8b687c551d023c0260babd88a0c53eed77cf03c28b5",
   "crates": {
     "git+https://gitlab.redox-os.org/redox-os/libextra.git#extra@0.1.0": {
       "crateName": "extra",
@@ -31,7 +31,7 @@
         "type": "git",
         "url": "https://gitlab.redox-os.org/redox-os/libextra.git",
         "rev": "cf213969493db8667052a591e32a1e26d43c4234",
-        "sha256": "09f498271llvlih7xy231q0bfnxvkanrywp2vza221h3ykr0rs1m"
+        "sha256": "0j8c0n4q0b89hsmb8zwxighv6labhf1xwhqsk0yh5kfkmp7y8r5j"
       },
       "features": [],
       "dependencies": [],
@@ -52,17 +52,14 @@
       "license": "MIT",
       "repository": "https://gitlab.redox-os.org/redox-os/libextra"
     },
-    "git+https://gitlab.redox-os.org/redox-os/relibc#generic-rt@0.1.0": {
+    "path+file:///nix/store/gmfcnr03kijqvavv91ns4sqdz4mcd12n-source/generic-rt#0.1.0": {
       "crateName": "generic-rt",
       "version": "0.1.0",
       "edition": "2024",
       "sha256": null,
       "source": {
-        "type": "git",
-        "url": "https://gitlab.redox-os.org/redox-os/relibc",
-        "rev": "3a8f64aa143184dc11fe1927a4f9e55c33ae3052",
-        "subDir": "generic-rt",
-        "sha256": "1azz3zsai9afsrmwpck5zarcg5ms3m6468pl6051rwn9wi1p9j4w"
+        "type": "local",
+        "path": "/nix/store/gmfcnr03kijqvavv91ns4sqdz4mcd12n-source/generic-rt"
       },
       "features": [],
       "dependencies": [],
@@ -77,35 +74,36 @@
       "crateBin": [],
       "links": null
     },
-    "git+https://gitlab.redox-os.org/redox-os/relibc#redox-rt@0.1.0": {
+    "path+file:///nix/store/gmfcnr03kijqvavv91ns4sqdz4mcd12n-source/redox-rt#0.1.0": {
       "crateName": "redox-rt",
       "version": "0.1.0",
       "edition": "2024",
       "sha256": null,
       "source": {
-        "type": "git",
-        "url": "https://gitlab.redox-os.org/redox-os/relibc",
-        "rev": "3a8f64aa143184dc11fe1927a4f9e55c33ae3052",
-        "subDir": "redox-rt",
-        "sha256": "1azz3zsai9afsrmwpck5zarcg5ms3m6468pl6051rwn9wi1p9j4w"
+        "type": "local",
+        "path": "/nix/store/gmfcnr03kijqvavv91ns4sqdz4mcd12n-source/redox-rt"
       },
       "features": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.9.4",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0",
           "externCrateName": "bitflags"
         },
         {
-          "packageId": "git+https://gitlab.redox-os.org/redox-os/relibc#generic-rt@0.1.0",
+          "packageId": "path+file:///nix/store/gmfcnr03kijqvavv91ns4sqdz4mcd12n-source/generic-rt#0.1.0",
           "externCrateName": "generic_rt"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#goblin@0.7.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#goblin@0.10.5",
           "externCrateName": "goblin"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#ioslice@0.6.0",
           "externCrateName": "ioslice"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.15",
+          "externCrateName": "redox_protocols"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#plain@0.2.3",
@@ -116,7 +114,7 @@
           "externCrateName": "redox_path"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
         }
       ],
@@ -136,7 +134,7 @@
       "description": "Libc-independent runtime for Redox",
       "license": "MIT"
     },
-    "path+file:///tmp/tmp.V7YoAd8EG5#userutils@0.1.0": {
+    "path+file:///tmp/tmp.13xGn9x3cG/userutils#0.1.0": {
       "crateName": "userutils",
       "version": "0.1.0",
       "edition": "2024",
@@ -160,15 +158,15 @@
           "externCrateName": "ioslice"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.176",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.183",
           "externCrateName": "libc"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.12",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.15",
           "externCrateName": "libredox"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#orbclient@0.3.48",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#orbclient@0.3.51",
           "externCrateName": "orbclient"
         },
         {
@@ -176,15 +174,15 @@
           "externCrateName": "plain"
         },
         {
-          "packageId": "git+https://gitlab.redox-os.org/redox-os/relibc#redox-rt@0.1.0",
+          "packageId": "path+file:///nix/store/gmfcnr03kijqvavv91ns4sqdz4mcd12n-source/redox-rt#0.1.0",
           "externCrateName": "redox_rt"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox-scheme@0.9.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox-scheme@0.9.1",
           "externCrateName": "redox_scheme"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_event@0.4.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_event@0.4.6",
           "externCrateName": "event"
         },
         {
@@ -192,7 +190,7 @@
           "externCrateName": "liner"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
         },
         {
@@ -208,7 +206,7 @@
           "externCrateName": "serde"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#termion@4.0.5",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#termion@4.0.6",
           "externCrateName": "termion"
         },
         {
@@ -371,7 +369,7 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.176",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.183",
           "externCrateName": "libc"
         }
       ],
@@ -454,11 +452,11 @@
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/bitflags/bitflags"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.9.4": {
+    "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0": {
       "crateName": "bitflags",
-      "version": "2.9.4",
+      "version": "2.11.0",
       "edition": "2021",
-      "sha256": "2261d10cca569e4643e526d8dc2e62e433cc8aba21ab764233731f8d369bf394",
+      "sha256": "843867be96c8daad0d758b57df9392b6d8d271134fce549de6ce169ff98a92af",
       "source": {
         "type": "crates-io"
       },
@@ -553,11 +551,11 @@
       "license": "Apache-2.0/MIT",
       "repository": "https://github.com/llogiq/bytecount"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.3": {
+    "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.4": {
       "crateName": "cfg-if",
-      "version": "1.0.3",
+      "version": "1.0.4",
       "edition": "2018",
-      "sha256": "2fd1289c04a9ea8cb22300a459a72a385d7c73d3259e2ed7dcb2af674838cfa9",
+      "sha256": "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801",
       "source": {
         "type": "crates-io"
       },
@@ -755,11 +753,11 @@
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/indexmap-rs/equivalent"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.2.16": {
+    "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.2.17": {
       "crateName": "getrandom",
-      "version": "0.2.16",
+      "version": "0.2.17",
       "edition": "2018",
-      "sha256": "335ff9f135e4384c8150d6f27c6daed433577f86b4750418338c01a1a2528592",
+      "sha256": "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0",
       "source": {
         "type": "crates-io"
       },
@@ -768,11 +766,11 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.4",
           "externCrateName": "cfg_if"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.176",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.183",
           "externCrateName": "libc"
         }
       ],
@@ -793,11 +791,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-random/getrandom"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#goblin@0.7.1": {
+    "registry+https://github.com/rust-lang/crates.io-index#goblin@0.10.5": {
       "crateName": "goblin",
-      "version": "0.7.1",
-      "edition": "2021",
-      "sha256": "f27c1b4369c2cd341b5de549380158b105a04c331be5db9110eef7b6d2742134",
+      "version": "0.10.5",
+      "edition": "2024",
+      "sha256": "983a6aafb3b12d4c41ea78d39e189af4298ce747353945ff5105b54a056e5cd9",
       "source": {
         "type": "crates-io"
       },
@@ -810,7 +808,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.28",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.29",
           "externCrateName": "log"
         },
         {
@@ -818,7 +816,7 @@
           "externCrateName": "plain"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#scroll@0.11.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#scroll@0.13.0",
           "externCrateName": "scroll"
         }
       ],
@@ -837,17 +835,18 @@
         "seu <seu@panopticon.re>",
         "Will Glynn <will@willglynn.com>",
         "Philip Craig <philipjcraig@gmail.com>",
-        "Lzu Tao <taolzu@gmail.com>"
+        "Lzu Tao <taolzu@gmail.com>",
+        "Kento <hrn832@gmail.com>"
       ],
       "description": "An impish, cross-platform, ELF, Mach-o, and PE binary parsing and loading crate",
       "license": "MIT",
       "repository": "https://github.com/m4b/goblin"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.16.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.16.1": {
       "crateName": "hashbrown",
-      "version": "0.16.0",
+      "version": "0.16.1",
       "edition": "2021",
-      "sha256": "5419bdc4f6a9207fbeba6d11b604d481addf78ecd10c11ad51e76c2f6482748d",
+      "sha256": "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100",
       "source": {
         "type": "crates-io"
       },
@@ -870,11 +869,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/hashbrown"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.11.4": {
+    "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.13.0": {
       "crateName": "indexmap",
-      "version": "2.11.4",
+      "version": "2.13.0",
       "edition": "2021",
-      "sha256": "4b0f83760fb341a774ed326568e19f5a863af4a952def8c39f9ab92fd95b88e5",
+      "sha256": "7714e70437a7dc3ac8eb7e6f8df75fd8eb422675fc7678aff7364301092b1017",
       "source": {
         "type": "crates-io"
       },
@@ -888,7 +887,7 @@
           "externCrateName": "equivalent"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.16.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hashbrown@0.16.1",
           "externCrateName": "hashbrown"
         }
       ],
@@ -924,7 +923,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.176",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.183",
           "externCrateName": "libc"
         }
       ],
@@ -981,11 +980,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-itertools/itertools"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.176": {
+    "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.183": {
       "crateName": "libc",
-      "version": "0.2.176",
+      "version": "0.2.183",
       "edition": "2021",
-      "sha256": "58f929b4d672ea937a23a1ab494143d968337a5f47e56d0815df1e0890ddf174",
+      "sha256": "b5b646652bf6661599e1da8901b3b9522896f01e736bad5f723fe7a3a27f899d",
       "source": {
         "type": "crates-io"
       },
@@ -1012,25 +1011,30 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/libc"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.12": {
+    "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.15": {
       "crateName": "libredox",
-      "version": "0.1.12",
+      "version": "0.1.15",
       "edition": "2021",
-      "sha256": "3d0b95e02c851351f877147b7deea7b1afb1df71b63aa5f8270716e0c5720616",
+      "sha256": "7ddbf48fd451246b1f8c2610bd3b4ac0cc6e149d89832867093ab69a17194f08",
       "source": {
         "type": "crates-io"
       },
       "features": [
+        "base",
+        "bitflags",
         "call",
         "default",
         "ioslice",
+        "libc",
         "mkns",
+        "plain",
+        "protocol",
         "redox_syscall",
         "std"
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.9.4",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0",
           "externCrateName": "bitflags"
         },
         {
@@ -1038,11 +1042,15 @@
           "externCrateName": "ioslice"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.176",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.183",
           "externCrateName": "libc"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#plain@0.2.3",
+          "externCrateName": "plain"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
         }
       ],
@@ -1063,11 +1071,11 @@
       "license": "MIT",
       "repository": "https://gitlab.redox-os.org/redox-os/libredox.git"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#log@0.4.28": {
+    "registry+https://github.com/rust-lang/crates.io-index#log@0.4.29": {
       "crateName": "log",
-      "version": "0.4.28",
+      "version": "0.4.29",
       "edition": "2021",
-      "sha256": "34080505efa8e45a4b816c349525ebe327ceaa8559756f0356cba97ef3bf7432",
+      "sha256": "5e5032e24019045c762d3c0f28f5b6b8bbf38563a65908389bf7978758920897",
       "source": {
         "type": "crates-io"
       },
@@ -1090,11 +1098,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rust-lang/log"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.6": {
+    "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.0": {
       "crateName": "memchr",
-      "version": "2.7.6",
+      "version": "2.8.0",
       "edition": "2021",
-      "sha256": "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273",
+      "sha256": "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79",
       "source": {
         "type": "crates-io"
       },
@@ -1150,27 +1158,28 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://gitlab.com/mmstick/numtoa"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#orbclient@0.3.48": {
+    "registry+https://github.com/rust-lang/crates.io-index#orbclient@0.3.51": {
       "crateName": "orbclient",
-      "version": "0.3.48",
+      "version": "0.3.51",
       "edition": "2018",
-      "sha256": "ba0b26cec2e24f08ed8bb31519a9333140a6599b867dac464bb150bdb796fd43",
+      "sha256": "59aed3b33578edcfa1bc96a321d590d31832b6ad55a26f0313362ce687e9abd6",
       "source": {
         "type": "crates-io"
       },
       "features": [
         "default",
-        "libc",
         "sdl",
-        "sdl2",
-        "sdl2-sys",
         "std",
         "unifont"
       ],
       "hostFeatures": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.12",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.183",
+          "externCrateName": "libc"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.15",
           "externCrateName": "libredox"
         }
       ],
@@ -1219,11 +1228,11 @@
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/randomites/plain"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.101": {
+    "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106": {
       "crateName": "proc-macro2",
-      "version": "1.0.101",
+      "version": "1.0.106",
       "edition": "2021",
-      "sha256": "89ae43fd86e4158d6db51ad8e2b80f313af9cc74f5c0e03ccb87de09998732de",
+      "sha256": "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934",
       "source": {
         "type": "crates-io"
       },
@@ -1233,7 +1242,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.19",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.24",
           "externCrateName": "unicode_ident"
         }
       ],
@@ -1255,11 +1264,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/dtolnay/proc-macro2"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.41": {
+    "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45": {
       "crateName": "quote",
-      "version": "1.0.41",
-      "edition": "2018",
-      "sha256": "ce25767e7b499d1b604768e7cde645d14cc8584231ea6b295e9c9eb22c02e1d1",
+      "version": "1.0.45",
+      "edition": "2021",
+      "sha256": "41f2619966050689382d2b44f664f4bc593e129785a36d6ee376ddf37259b924",
       "source": {
         "type": "crates-io"
       },
@@ -1269,7 +1278,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.101",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
           "externCrateName": "proc_macro2"
         }
       ],
@@ -1313,11 +1322,11 @@
       "description": "Path parsing primitives for Redox",
       "license": "MIT"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#redox-scheme@0.9.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#redox-scheme@0.9.1": {
       "crateName": "redox-scheme",
-      "version": "0.9.0",
+      "version": "0.9.1",
       "edition": "2021",
-      "sha256": "5eb0cee524a5c6e4db180250f699e101ee25f3f79ad2618527e539e028cb6722",
+      "sha256": "0ef5279a1ad9567f8a87818ba80320afdf858853db93742c2bb32be31a82ccdb",
       "source": {
         "type": "crates-io"
       },
@@ -1327,11 +1336,11 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.12",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.15",
           "externCrateName": "libredox"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.0",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
         }
       ],
@@ -1352,11 +1361,11 @@
       "license": "MIT",
       "repository": "https://gitlab.redox-os.org/redox-os/redox-scheme"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#redox_event@0.4.3": {
+    "registry+https://github.com/rust-lang/crates.io-index#redox_event@0.4.6": {
       "crateName": "redox_event",
-      "version": "0.4.3",
+      "version": "0.4.6",
       "edition": "2021",
-      "sha256": "c30b73c93693667b5a8e6f54bddcc5a57449ef17c99f4b55c12d5bae4ab79e82",
+      "sha256": "4ea3e412d205440c7b0218af26247226f979ed1201674cda7a33cc70609084b5",
       "source": {
         "type": "crates-io"
       },
@@ -1366,11 +1375,11 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.9.4",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0",
           "externCrateName": "bitflags"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.12",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.15",
           "externCrateName": "libredox"
         }
       ],
@@ -1414,7 +1423,7 @@
           "externCrateName": "strip_ansi_escapes"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#termion@4.0.5",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#termion@4.0.6",
           "externCrateName": "termion"
         },
         {
@@ -1443,11 +1452,11 @@
       "license": "MIT",
       "repository": "https://gitlab.redox-os.org/redox-os/liner"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3": {
       "crateName": "redox_syscall",
-      "version": "0.7.0",
+      "version": "0.7.3",
       "edition": "2021",
-      "sha256": "49f3fe0889e69e2ae9e41f4d6c4c0181701d00e4697b356fb1f74173a5e0ee27",
+      "sha256": "6ce70a74e890531977d37e532c34d45e9055d2409ed08ddba14529471ed0be16",
       "source": {
         "type": "crates-io"
       },
@@ -1457,7 +1466,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.9.4",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.0",
           "externCrateName": "bitflags"
         }
       ],
@@ -1521,11 +1530,11 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.2.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#getrandom@0.2.17",
           "externCrateName": "getrandom"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.12",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.15",
           "externCrateName": "libredox"
         },
         {
@@ -1607,21 +1616,20 @@
       "license": "MIT/Apache-2.0",
       "repository": "https://github.com/sru-systems/rust-argon2"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#scroll@0.11.0": {
+    "registry+https://github.com/rust-lang/crates.io-index#scroll@0.13.0": {
       "crateName": "scroll",
-      "version": "0.11.0",
-      "edition": "2021",
-      "sha256": "04c565b551bafbef4157586fa379538366e4385d42082f255bfd96e4fe8519da",
+      "version": "0.13.0",
+      "edition": "2024",
+      "sha256": "c1257cd4248b4132760d6524d6dda4e053bc648c9070b960929bf50cfb1e7add",
       "source": {
         "type": "crates-io"
       },
       "features": [
-        "derive",
-        "scroll_derive"
+        "derive"
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#scroll_derive@0.11.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#scroll_derive@0.13.1",
           "externCrateName": "scroll_derive"
         }
       ],
@@ -1643,26 +1651,26 @@
       "license": "MIT",
       "repository": "https://github.com/m4b/scroll"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#scroll_derive@0.11.1": {
+    "registry+https://github.com/rust-lang/crates.io-index#scroll_derive@0.13.1": {
       "crateName": "scroll_derive",
-      "version": "0.11.1",
-      "edition": "2018",
-      "sha256": "1db149f81d46d2deba7cd3c50772474707729550221e69588478ebf9ada425ae",
+      "version": "0.13.1",
+      "edition": "2024",
+      "sha256": "ed76efe62313ab6610570951494bdaa81568026e0318eaa55f167de70eeea67d",
       "source": {
         "type": "crates-io"
       },
       "features": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.101",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.41",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.106",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
           "externCrateName": "syn"
         }
       ],
@@ -1775,15 +1783,15 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.101",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.41",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.106",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
           "externCrateName": "syn"
         }
       ],
@@ -1898,11 +1906,11 @@
       "license": "MIT",
       "repository": "https://github.com/dguo/strsim-rs"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.106": {
+    "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117": {
       "crateName": "syn",
-      "version": "2.0.106",
+      "version": "2.0.117",
       "edition": "2021",
-      "sha256": "ede7c438028d4436d71104916910f5bb611972c5cfd7f89b8300a8186e6fada6",
+      "sha256": "e665b8803e7b1d2a727f4023456bbbbe74da67099c585258af0ad9c5013b9b99",
       "source": {
         "type": "crates-io"
       },
@@ -1919,15 +1927,15 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.101",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.41",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.19",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.24",
           "externCrateName": "unicode_ident"
         }
       ],
@@ -1948,27 +1956,23 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/dtolnay/syn"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#termion@4.0.5": {
+    "registry+https://github.com/rust-lang/crates.io-index#termion@4.0.6": {
       "crateName": "termion",
-      "version": "4.0.5",
+      "version": "4.0.6",
       "edition": "2015",
-      "sha256": "3669a69de26799d6321a5aa713f55f7e2cd37bd47be044b50f2acafc42c122bb",
+      "sha256": "f44138a9ae08f0f502f24104d82517ef4da7330c35acd638f1f29d3cd5475ecb",
       "source": {
         "type": "crates-io"
       },
       "features": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.12",
-          "externCrateName": "libredox"
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.183",
+          "externCrateName": "libc"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#numtoa@0.2.4",
           "externCrateName": "numtoa"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_termios@0.1.3",
-          "externCrateName": "redox_termios"
         }
       ],
       "buildDependencies": [],
@@ -2034,15 +2038,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.101",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.41",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.106",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
           "externCrateName": "syn"
         }
       ],
@@ -2186,7 +2190,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.11.4",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#indexmap@2.13.0",
           "externCrateName": "indexmap"
         },
         {
@@ -2206,7 +2210,7 @@
           "externCrateName": "toml_write"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#winnow@0.7.13",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#winnow@0.7.15",
           "externCrateName": "winnow"
         }
       ],
@@ -2252,11 +2256,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/toml-rs/toml"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.19": {
+    "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.24": {
       "crateName": "unicode-ident",
-      "version": "1.0.19",
-      "edition": "2018",
-      "sha256": "f63a545481291138910575129486daeaf8ac54aee4387fe7906919f7830c7d9d",
+      "version": "1.0.24",
+      "edition": "2021",
+      "sha256": "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75",
       "source": {
         "type": "crates-io"
       },
@@ -2339,13 +2343,13 @@
         "tbu- <>",
         "Manish Goregaokar <>",
         "Aaron Turon <aturon@mozilla.com>",
-        "Adolfo Ochagav\u00eda <>",
+        "Adolfo Ochagavía <>",
         "Niko Matsakis <>",
         "Steven Fackler <>",
         "Chase Southwood <csouth3@illinois.edu>",
         "Eduard Burtescu <>",
         "Florian Wilkens <>",
-        "F\u00e9lix Raimundo <>",
+        "Félix Raimundo <>",
         "Tibor Benke <>",
         "Markus Siemens <markus@m-siemens.de>",
         "Josh Branchaud <jbranchaud@gmail.com>",
@@ -2375,7 +2379,7 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.7.6",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#memchr@2.8.0",
           "externCrateName": "memchr"
         }
       ],
@@ -2397,11 +2401,11 @@
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/alacritty/vte"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#winnow@0.7.13": {
+    "registry+https://github.com/rust-lang/crates.io-index#winnow@0.7.15": {
       "crateName": "winnow",
-      "version": "0.7.13",
+      "version": "0.7.15",
       "edition": "2021",
-      "sha256": "21a0236b59786fed61e2a80582dd500fe61f18b5dca67a4a067d0bc9039339cf",
+      "sha256": "df79d97927682d2fd8adb29682d1140b343be4ac0f08fd68b7765d9c059d3945",
       "source": {
         "type": "crates-io"
       },
@@ -2440,7 +2444,7 @@
       ],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zeroize_derive@1.4.2",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zeroize_derive@1.4.3",
           "externCrateName": "zeroize_derive"
         }
       ],
@@ -2462,26 +2466,26 @@
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/utils"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#zeroize_derive@1.4.2": {
+    "registry+https://github.com/rust-lang/crates.io-index#zeroize_derive@1.4.3": {
       "crateName": "zeroize_derive",
-      "version": "1.4.2",
+      "version": "1.4.3",
       "edition": "2021",
-      "sha256": "ce36e65b0d2999d2aafac989fb249189a141aee1f53c612c1f37d72631959f69",
+      "sha256": "85a5b4158499876c763cb03bc4e49185d3cccbabb15b33c627f7884f43db852e",
       "source": {
         "type": "crates-io"
       },
       "features": [],
       "dependencies": [
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.101",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.106",
           "externCrateName": "proc_macro2"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.41",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.45",
           "externCrateName": "quote"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.106",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@2.0.117",
           "externCrateName": "syn"
         }
       ],
