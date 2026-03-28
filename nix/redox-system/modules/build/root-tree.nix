@@ -227,21 +227,26 @@ hostPkgs.runCommand "redox-root-tree"
     #   2. "generation.buildHash" — BLAKE3 of the sorted file inventory
     #   3. "etcSource" — etc derivation store path (injected to avoid circular dep)
     #   4. /etc/redox-system/generations/1/ with a copy of the manifest
+    # Copy the etc derivation into the rootTree's nix store so
+    # activate can find it at runtime for /etc/static symlinks.
+    etc_store="$out/nix/store/$(basename ${etcDerivation})"
+    cp -r ${etcDerivation} "$etc_store"
+    chmod -R u+w "$etc_store"
+
     hash-manifest $out
 
     # Inject etcSource into the manifest post hash-manifest.
     # Can't be in manifestJson (circular dep: manifestJson → allGeneratedFiles → etcDrv).
-    # Use python/jq-style inline edit on the final manifest.
     manifest="$out/etc/redox-system/manifest.json"
     tmp="$manifest.tmp"
     ${hostPkgs.python3}/bin/python3 -c "
 import json, sys
 with open(sys.argv[1]) as f:
     d = json.load(f)
-d['etcSource'] = sys.argv[2]
+d['etcSource'] = '/nix/store/' + sys.argv[2].split('/')[-1]
 with open(sys.argv[3], 'w') as f:
     json.dump(d, f, indent=2, sort_keys=True)
-" "$manifest" "${etcDerivation}" "$tmp"
+" "$manifest" "$etc_store" "$tmp"
     mv "$tmp" "$manifest"
     # Also update the generation 1 copy
     gen1="$out/etc/redox-system/generations/1/manifest.json"

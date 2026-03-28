@@ -275,6 +275,8 @@ let
       "/nix/var/snix/profiles/default/bin"
       "/nix/var/snix/pathinfo"
       "/nix/var/snix/gcroots"
+      "/nix/var/nix/gcroots"
+      "/run"
     ]
     ++ (lib.optional acpiEnabled "/etc/acpi")
     ++ (lib.optional helixConfig.enable "/etc/helix")
