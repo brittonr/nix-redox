@@ -1,83 +1,44 @@
 ## ADDED Requirements
 
-### Requirement: Pin updated to latest upstream canon
-The `snix-upstream-source.nix` derivation SHALL fetch upstream snix at a commit from 2026-03-19 or later on the canon branch.
+### Requirement: Pin updated to upstream commit 34604636d7
+The snix upstream source derivation SHALL fetch commit `34604636d7` from the snix canon branch. The fetchgit hash SHALL match the actual content at that revision.
 
-#### Scenario: Fetched commit is recent
-- **WHEN** the `snix-upstream-source` derivation is built
-- **THEN** the `rev` field in `fetchgit` references a commit dated 2026-03-19 or later
+#### Scenario: Source derivation builds with new pin
+- **WHEN** `nix build .#snix` is invoked
+- **THEN** the snix-upstream-source derivation fetches the correct commit and all Redox patches apply without error
 
-#### Scenario: Hash matches the new commit
-- **WHEN** the `snix-upstream-source` derivation is built
-- **THEN** the `hash` field in `fetchgit` produces a successful fixed-output derivation (no hash mismatch)
+### Requirement: Redox patches apply cleanly on new upstream
+All existing sed-based patches in `snix-upstream-source.nix` SHALL apply without error on the new upstream code. The patches cover: eval systems.rs (redox coordinate), glue pub visibility (derivation_into_build_request, fetchurl module/function/error), build/castore/store feature gating, and build bwrap/oci cfg gating.
 
-### Requirement: All extraction patches re-verified against new source
-Each sed transform and patch in `snix-upstream-source.nix` SHALL still apply correctly against the new upstream source. Transforms that are no longer needed (because upstream made the same change) SHALL be removed.
+#### Scenario: Systems patch applies
+- **WHEN** the eval/src/systems.rs patch is applied
+- **THEN** `is_second_coordinate` includes `"redox"` in the match list
 
-#### Scenario: FUSE feature removal from snix-build
-- **WHEN** the derivation is built
-- **THEN** `build/Cargo.toml` does not list `fuse` in the snix-castore dependency features
+#### Scenario: Glue visibility patches apply
+- **WHEN** the glue sed commands run
+- **THEN** `derivation_into_build_request` is `pub fn`, `fetchurl` module is `pub mod`, and `fetchurl_derivation_to_fetch` and `Error` are `pub`
 
-#### Scenario: bwrap/oci gating behind linux-sandbox feature
-- **WHEN** the derivation is built
-- **THEN** `build/src/lib.rs` and `build/src/buildservice/mod.rs` gate bwrap/oci modules with `cfg(all(target_os = "linux", feature = "linux-sandbox"))`
-
-#### Scenario: Cloud disabled in snix-castore defaults
-- **WHEN** the derivation is built
-- **THEN** `castore/Cargo.toml` has `default = []` (not `default = ["cloud"]`)
-
-#### Scenario: snix-store defaults stripped
-- **WHEN** the derivation is built
-- **THEN** `store/Cargo.toml` has `default = []` (no cloud, fuse, otlp, or tonic-reflection)
-
-#### Scenario: tonic uses ring TLS backend
-- **WHEN** the derivation is built
-- **THEN** `store/Cargo.toml` references `tls-ring` (not `tls-aws-lc`) in tonic features
-
-#### Scenario: Redox systems patch applied
-- **WHEN** the derivation is built
-- **THEN** `eval/src/systems.rs` contains `"redox"` in the `is_second_coordinate()` match
-
-#### Scenario: Obsolete transforms removed
-- **WHEN** an upstream change already makes one of our seds a no-op
-- **THEN** that sed line SHALL be removed from `snix-upstream-source.nix` and a comment notes why
+#### Scenario: Feature default overrides apply
+- **WHEN** the castore and store default feature sed commands run
+- **THEN** castore defaults are `[]` and store defaults are `[]`
 
 ### Requirement: Workspace dependency versions synchronized
-The `[workspace.dependencies]` in `snix-redox/Cargo.toml` SHALL match the versions declared in upstream snix's root `Cargo.toml` at the pinned commit, plus any Redox-specific overrides (e.g., rustls ring backend).
+The `[workspace.dependencies]` section in `snix-redox/Cargo.toml` SHALL reflect the upstream workspace dependency versions at the pinned commit. The comment referencing the upstream commit hash SHALL be updated.
 
-#### Scenario: Upstream crate versions match
-- **WHEN** `snix-redox/Cargo.toml` is compared to upstream's workspace dependencies
-- **THEN** all shared dependency versions match (except for explicitly documented Redox overrides like `rustls`)
+#### Scenario: No version drift
+- **WHEN** upstream workspace dependencies are compared to snix-redox Cargo.toml
+- **THEN** all shared dependency versions match
 
-#### Scenario: New upstream workspace deps added
-- **WHEN** upstream added a new workspace dependency that our extracted crates use
-- **THEN** that dependency is present in our `[workspace.dependencies]` at the correct version
+### Requirement: Host-side tests pass
+`nix flake check` SHALL pass with the updated pin, confirming that snix-redox compiles and all host-side tests succeed.
 
-### Requirement: snix-redox compiles against updated upstream
-All `snix-redox` source files SHALL compile without errors against the updated upstream crate APIs.
+#### Scenario: Flake check passes
+- **WHEN** `nix flake check` is run
+- **THEN** all checks pass (clippy, nextest, build)
 
-#### Scenario: Host-side compilation
-- **WHEN** `cargo check` is run in the snix-redox workspace
-- **THEN** compilation succeeds with zero errors
+### Requirement: VM functional tests pass
+The standard VM functional test suite SHALL pass with the updated snix binary, confirming no regressions in on-Redox eval, build, fetch, and store operations.
 
-#### Scenario: Cross-compilation to Redox
-- **WHEN** `nix build .#snix-redox` is run
-- **THEN** the build succeeds and produces a `snix` binary for x86_64-unknown-redox
-
-### Requirement: Test suite passes
-The full snix-redox test suite SHALL pass after the version bump with no new failures.
-
-#### Scenario: All host-side tests pass
-- **WHEN** `cargo test` is run in the snix-redox workspace
-- **THEN** all 562+ tests pass (no regressions)
-
-### Requirement: Vendor hashes updated
-The vendor hashes in `snix.nix` and `snix-source-bundle.nix` SHALL be updated to reflect any dependency version changes.
-
-#### Scenario: snix.nix builds successfully
-- **WHEN** `nix build .#snix-redox` is run
-- **THEN** vendor fetching succeeds (no hash mismatch)
-
-#### Scenario: Source bundle builds successfully
-- **WHEN** `nix build .#snix-source-bundle` is run (if it exists)
-- **THEN** vendor fetching succeeds (no hash mismatch)
+#### Scenario: VM tests pass
+- **WHEN** the VM functional test profile boots and runs test scripts
+- **THEN** all functional tests report PASS

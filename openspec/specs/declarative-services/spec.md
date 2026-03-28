@@ -1,111 +1,60 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
-### Requirement: Modules declare services through structured options
-Each module (networking, graphics, snix, etc.) SHALL declare its services using a `services` option in its own module namespace with a `defaultFunc` that computes service entries from the module's options. The build system SHALL collect services from all module inputs and merge them into a single service set.
+### Requirement: Services render to TOML unit files instead of shell script text
 
-#### Scenario: Networking module declares smolnetd
-- **WHEN** `networking.enable = true`
-- **THEN** `networking.services` contains a `smolnetd` entry with `type = "daemon"` and `command = "/bin/smolnetd"`
+The `renderServiceText` function SHALL produce TOML content for a `.service` file instead of shell script lines. The module declaration API (type, command, args, environment, after, wantedBy) is unchanged.
 
-#### Scenario: Networking disabled omits smolnetd
-- **WHEN** `networking.enable = false`
-- **THEN** `networking.services` is empty
+#### Scenario: Scheme service rendering
 
-#### Scenario: Graphics module declares orbital
-- **WHEN** `graphics.enable = true`
-- **THEN** `graphics.services` contains an `orbital` entry with `type = "nowait"` and `environment` containing `VT = "3"`
+- **GIVEN** a service with `type = "scheme"`, `args = "null"`, `command = "zerod"`
+- **WHEN** `renderServiceText` is called
+- **THEN** the output is valid TOML with `[unit]` and `[service]` sections
+- **AND** `type = { scheme = "null" }` appears under `[service]`
 
-#### Scenario: Multiple modules contribute services
-- **WHEN** both networking and graphics are enabled
-- **THEN** the merged service set collected by `/build` contains entries from both modules
-- **AND** no naming conflicts exist
+#### Scenario: Environment variables in TOML
 
-### Requirement: Services declare dependencies with after field
-Each service MAY declare an `after` field containing a list of service names that MUST start before it. The build system SHALL topologically sort services and reject cycles at build time.
+- **GIVEN** a service with `environment = { VT = "3", DISPLAY = ":0" }`
+- **WHEN** rendered as TOML
+- **THEN** the `[service]` section contains `envs = { DISPLAY = ":0", VT = "3" }`
+- **AND** no `export` shell lines appear
 
-#### Scenario: Getty depends on ptyd
-- **WHEN** the `getty` service declares `after = [ "ptyd" ]`
-- **THEN** the generated init script for `getty` has a higher numeric prefix than `ptyd`
+### Requirement: Service files use .service extension in output path
 
-#### Scenario: Dependency cycle is rejected
-- **WHEN** service `a` declares `after = [ "b" ]` and service `b` declares `after = [ "a" ]`
-- **THEN** the build fails with an error message identifying the cycle
+The `renderedServices` map SHALL produce filenames with `.service` extension instead of extensionless names.
 
-#### Scenario: No dependencies produces alphabetical ordering
-- **WHEN** services `smolnetd` and `dhcpd` both have empty `after` lists and the same `wantedBy` target
-- **THEN** the generated init scripts are ordered alphabetically (`dhcpd` before `smolnetd`)
+#### Scenario: Auto-numbered service filename
 
-### Requirement: Services have per-service environment variables
-Each service MAY declare an `environment` attrset. The build system SHALL render each key-value pair as an `export KEY VALUE` line before the service command in the generated init script.
+- **GIVEN** a service `smolnetd` assigned number 42
+- **WHEN** the service is rendered
+- **THEN** the output key is `42_smolnetd.service` (not `42_smolnetd`)
+- **AND** the file `directory` is `usr/lib/init.d` for rootfs or `etc/init.d` for initfs
 
-#### Scenario: Orbital has VT environment variable
-- **WHEN** the `orbital` service declares `environment = { VT = "3"; }`
-- **THEN** the generated init script contains `export VT 3` before the orbital command
+### Requirement: Initfs scripts replaced by unit files and targets
 
-#### Scenario: Multiple environment variables rendered in order
-- **WHEN** a service declares `environment = { A = "1"; B = "2"; }`
-- **THEN** the generated init script contains `export A 1` and `export B 2` before the service command, sorted alphabetically
+The `defaultInitScriptFiles` map SHALL produce `.service` and `.target` TOML files instead of shell scripts for the initfs boot sequence.
 
-### Requirement: Services are rendered to numbered init scripts
-The build system SHALL render each enabled service declaration into a numbered init script file. Initfs services go to `etc/init.d/`, rootfs services go to `usr/lib/init.d/`.
+#### Scenario: Old 00_runtime shell script replaced
 
-#### Scenario: Rootfs service generates usr/lib/init.d script
-- **WHEN** a service `getty` has `wantedBy = "rootfs"` and is assigned number 30
-- **THEN** a file `usr/lib/init.d/30_getty` is generated in the rootTree
+- **GIVEN** the old `00_runtime` script with `export PATH`, `rtcd`, `scheme null nulld`
+- **WHEN** the new initfs files are generated
+- **THEN** `00_runtime.target` exists with `requires_weak` listing all runtime services
+- **AND** separate `.service` files exist for each daemon (nulld, zerod, randd, rtcd)
+- **AND** no `export PATH` or `export LD_LIBRARY_PATH` appears (handled by init's SwitchRoot)
 
-#### Scenario: Initfs service generates etc/init.d script
-- **WHEN** a service `logd` has `wantedBy = "initfs"` and is assigned number 10
-- **THEN** a file `etc/init.d/10_logd` is generated in the rootTree
+#### Scenario: Old 90_exit_initfs replaced
 
-#### Scenario: Disabled service produces no init script
-- **WHEN** a service has `enable = false`
-- **THEN** no init script is generated for that service
+- **GIVEN** the old `90_exit_initfs` script with `run.d`, `export PATH`, env setup
+- **WHEN** the new initfs files are generated
+- **THEN** `90_initfs.target` exists as a dependency grouping target
+- **AND** no `run.d` or `switchroot` commands appear in any file
 
-### Requirement: Raw initScripts coexist with structured services
-The `services.initScripts` option SHALL continue to work alongside structured service declarations. Raw scripts use explicitly numbered names and are not subject to auto-numbering.
+### Requirement: Post-switchroot environment setup preserved
 
-#### Scenario: Raw script and structured service both rendered
-- **WHEN** `initScripts` contains `"00_runtime"` and `services` contains `smolnetd`
-- **THEN** both `etc/init.d/00_runtime` and the auto-numbered smolnetd script appear in the rootTree
+Environment variables set after rootfs mount (TERM, HOME, USER, XDG_CONFIG_HOME, CARGO_HOME, LD_LIBRARY_PATH for self-hosting) SHALL still be configured, using a legacy extensionless init script in `usr/lib/init.d/`.
 
-#### Scenario: Reserved number ranges prevent collisions
-- **WHEN** auto-numbered services are assigned numbers
-- **THEN** auto-numbering uses range 10-79 and does not overlap with raw script numbers in 00-09 or 80-99
+#### Scenario: Self-hosting env vars available after boot
 
-### Requirement: Service type determines startup command format
-The service `type` field SHALL control how the command is rendered in the init script: `daemon` uses `notify`, `nowait` uses `nowait`, `scheme` uses `scheme <args> <command>`, `oneshot` uses bare command.
-
-#### Scenario: Daemon service uses notify
-- **WHEN** a service has `type = "daemon"` and `command = "/bin/ptyd"`
-- **THEN** the init script line is `notify /bin/ptyd`
-
-#### Scenario: Scheme service uses scheme prefix
-- **WHEN** a service has `type = "scheme"`, `command = "nulld"`, and `args = "null"`
-- **THEN** the init script line is `scheme null nulld`
-
-#### Scenario: Oneshot service uses bare command
-- **WHEN** a service has `type = "oneshot"` and `command = "rtcd"`
-- **THEN** the init script line is `rtcd`
-
-### Requirement: Build check validates service dependency graph
-The build system SHALL include a check that verifies the service dependency graph is acyclic and all referenced dependencies exist.
-
-#### Scenario: Valid dependency graph passes check
-- **WHEN** all service `after` references point to existing services
-- **AND** no cycles exist
-- **THEN** the build check passes
-
-#### Scenario: Missing dependency fails check
-- **WHEN** a service declares `after = [ "nonexistent" ]`
-- **THEN** the build check fails with an error identifying the unknown dependency
-
-### Requirement: Manifest tracks full service declarations
-The system manifest SHALL include the full set of declared services with their type, command, wantedBy, and environment fields. This data is used by the activation plan to produce meaningful service diffs.
-
-#### Scenario: Manifest includes service metadata
-- **WHEN** the system has `smolnetd` declared as `type = "daemon"`, `wantedBy = "rootfs"`
-- **THEN** the manifest JSON at `/etc/redox-system/manifest.json` contains a `services.declared` object with `smolnetd` and its full metadata
-
-#### Scenario: Manifest reflects disabled services as absent
-- **WHEN** a service has `enable = false`
-- **THEN** the `services.declared` object does not contain that service
+- **GIVEN** a profile with self-hosting enabled
+- **WHEN** the rootfs is assembled
+- **THEN** a legacy init script in `usr/lib/init.d/` sets LD_LIBRARY_PATH, CARGO_HOME, CARGO_BUILD_JOBS
+- **AND** a legacy init script sets TERM, HOME, USER, XDG_CONFIG_HOME, PATH
