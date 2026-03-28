@@ -1464,6 +1464,16 @@ in
     # Per-crate builds (unit2nix incremental)
     inherit kernelPerCrate basePerCrate kernelSyscallDebug;
 
+    # Options documentation (auto-generated from module definitions)
+    inherit
+      (import ../pkgs/host/options-doc.nix {
+        hostPkgs = pkgs;
+        inherit lib;
+      })
+      optionsJSON
+      optionsMarkdown
+      ;
+
     # Default package is set in system.nix (diskImageGraphical)
   };
 

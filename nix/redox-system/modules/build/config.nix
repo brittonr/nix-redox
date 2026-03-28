@@ -16,10 +16,11 @@ let
 
   # ===== NEW MODULE OPTIONS =====
 
-  # /system — system identity and version
+  # /system — system identity, version, and state version
   systemName = inputs.system.name;
   systemVersion = inputs.system.version;
   systemTarget = inputs.system.target;
+  stateVersion = inputs.system.stateVersion;
 
   # /time — adios validates types and applies defaults from the module
   hostname = inputs.time.hostname;
@@ -346,6 +347,7 @@ in
     systemName
     systemVersion
     systemTarget
+    stateVersion
     fullSchemes
     restrictedSchemes
     graphicsEnabled
