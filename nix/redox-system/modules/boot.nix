@@ -47,7 +47,7 @@ in
     };
     diskSizeMB = {
       type = t.int;
-      default = 768;
+      default = 896;
       description = "Disk image size in megabytes";
     };
     espSizeMB = {

@@ -3,6 +3,17 @@
 # The bootstrap loader is the first program that runs in the initfs.
 # It's built as a staticlib and linked with a custom linker script
 # to create an ELF binary that can be prepended to the initfs archive.
+#
+# == Lockfile Regeneration ==
+# When relibc-src or base-src deps change (e.g., after `nix flake update`),
+# regenerate bootstrap-Cargo.lock:
+#   1. Copy base-src bootstrap/ and initfs/ to a temp dir
+#   2. Patch bootstrap/Cargo.toml: replace redox-rt git dep with path to relibc-src/redox-rt
+#   3. Fix initfs workspace deps: plain.workspace=true → plain="0.2", remove [lints] workspace
+#   4. Run `cargo generate-lockfile` in the bootstrap dir
+#   5. Copy resulting Cargo.lock to nix/pkgs/infrastructure/bootstrap-Cargo.lock
+#   6. Update the vendor hash below (set dummy, build, get real hash from error)
+# This avoids Nix FOD reference checks that fail when store paths appear in source.
 
 {
   pkgs,
@@ -41,7 +52,11 @@ let
       find initfs -name Cargo.toml -exec sed -i \
         -e 's/anyhow.workspace = true/anyhow = "1"/g' \
         -e 's/log.workspace = true/log = "0.4"/g' \
+        -e 's/plain.workspace = true/plain = "0.2"/g' \
         {} +
+
+      # Remove workspace lints inherited from base root (not available standalone)
+      find initfs -name Cargo.toml -exec sed -i '/^\[lints\]$/,/^workspace = true$/d' {} +
 
       # Fix linker script for page alignment (mprotect requires aligned addresses)
       cat > bootstrap/src/x86_64.ld << 'LINKERSCRIPT'
@@ -98,6 +113,9 @@ let
       }
     LINKERSCRIPT
 
+      # Handle new ProcCall variants (SetPriority, GetPriority) added in redox_syscall 0.7.3
+      sed -i 's/ProcCall::Setrens => Response::ready_err(EINVAL, op),/ProcCall::Setrens => Response::ready_err(EINVAL, op),\n                    ProcCall::SetPriority | ProcCall::GetPriority => Response::ready_err(ENOSYS, op),/' bootstrap/src/procmgr.rs
+
       # Forward ptrace handle opens (trace, mem) from procmgr to kernel
       ${pkgs.python3}/bin/python3 ${../system/patches/bootstrap/patch-procmgr-ptrace-forward.py} .
 
@@ -110,6 +128,10 @@ let
       mkdir -p $out
       cp -r bootstrap $out/
       cp -r initfs $out/
+
+      # Copy pre-generated lockfile over the stale upstream one.
+      # See bootstrap-Cargo.lock regen procedure in comment below.
+      cp ${./bootstrap-Cargo.lock} $out/bootstrap/Cargo.lock
     '';
   };
 
@@ -118,7 +140,7 @@ let
     name = "bootstrap-cargo-vendor";
     src = patchedSrc;
     sourceRoot = "bootstrap-src-patched/bootstrap";
-    hash = "sha256-Pw+r2ephGdxri5VskRi8pdE/c5UfsJ15fHoMB0HNA/c=";
+    hash = "sha256-KJFHCkOyJArvbEyOdRSzzBYEVpDxfpRwjvCxuU2KHaE=";
   };
 
   # Create merged vendor directory (cached as separate derivation)
