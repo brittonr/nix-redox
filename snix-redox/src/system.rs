@@ -54,6 +54,14 @@ pub struct Manifest {
     pub files: BTreeMap<String, FileInfo>,
     #[serde(default, rename = "systemProfile")]
     pub system_profile: String,
+    /// Toplevel store path (nix-darwin-style system identity).
+    /// Used for /run/current-system symlink. None for pre-v4 manifests.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toplevel: Option<String>,
+    /// Etc derivation store path (for /etc/static symlink farm).
+    /// None for pre-v4 manifests.
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "etcSource")]
+    pub etc_source: Option<String>,
 }
 
 /// System profile directory (managed by generation switching)
@@ -2044,6 +2052,8 @@ mod tests {
             activation_scripts: Vec::new(),
             files: BTreeMap::new(),
             system_profile: String::new(),
+            toplevel: None,
+            etc_source: None,
         }
     }
 

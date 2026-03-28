@@ -1,0 +1,130 @@
+# ── Activate Toplevel Integration Test ─────────────────────
+# Tests the nix-darwin-style activation pipeline:
+#   1. snix system switch creates /etc/static
+#   2. /run/current-system symlink exists
+#   3. /nix/var/nix/gcroots/current-system exists
+#   4. Per-file symlinks through /etc/static work
+
+echo ""
+echo "========================================"
+echo "  Activate Toplevel Integration Test"
+echo "========================================"
+echo ""
+echo "FUNC_TESTS_START"
+echo ""
+
+# ── Pre-flight checks ─────────────────────────────────────
+
+if exists -f /bin/snix
+    echo "FUNC_TEST:snix-exists:PASS"
+else
+    echo "FUNC_TEST:snix-exists:FAIL:snix not in /bin"
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+
+if exists -f /etc/redox-system/manifest.json
+    echo "FUNC_TEST:manifest-exists:PASS"
+else
+    echo "FUNC_TEST:manifest-exists:FAIL"
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+
+# ── Phase 1: Run snix system switch (switch to self) ──────
+# This triggers the full activation pipeline including
+# /etc/static setup and /run/current-system creation.
+
+echo "--- Phase 1: switch to self ---"
+
+/nix/system/profile/bin/bash -c '
+    # Switch to the current manifest (self-switch triggers activation)
+    /bin/snix system switch /etc/redox-system/manifest.json 2>&1
+    if [ $? -eq 0 ]; then
+        echo FUNC_TEST:system-switch:PASS
+    else
+        echo "FUNC_TEST:system-switch:FAIL:exit-code-$?"
+    fi
+'
+
+# ── Phase 2: Verify /etc/static ───────────────────────────
+
+echo "--- Phase 2: /etc/static ---"
+
+/nix/system/profile/bin/bash -c '
+    if [ -L /etc/static ]; then
+        target=$(readlink /etc/static 2>/dev/null)
+        case "$target" in
+            /nix/store/*)
+                echo FUNC_TEST:etc-static-symlink:PASS
+                ;;
+            *)
+                echo "FUNC_TEST:etc-static-symlink:FAIL:target=$target"
+                ;;
+        esac
+    else
+        echo "FUNC_TEST:etc-static-symlink:FAIL:not-a-symlink"
+    fi
+'
+
+# ── Phase 3: Verify /run/current-system ───────────────────
+
+echo "--- Phase 3: /run/current-system ---"
+
+/nix/system/profile/bin/bash -c '
+    if [ -L /run/current-system ]; then
+        echo FUNC_TEST:run-current-system:PASS
+    else
+        if [ -e /run/current-system ]; then
+            echo "FUNC_TEST:run-current-system:FAIL:exists-but-not-symlink"
+        else
+            echo "FUNC_TEST:run-current-system:FAIL:does-not-exist"
+        fi
+    fi
+'
+
+# ── Phase 4: Verify GC root ──────────────────────────────
+
+echo "--- Phase 4: GC root ---"
+
+/nix/system/profile/bin/bash -c '
+    gc_link="/nix/var/nix/gcroots/current-system"
+    if [ -L "$gc_link" ]; then
+        target=$(readlink "$gc_link" 2>/dev/null)
+        if [ "$target" = "/run/current-system" ]; then
+            echo FUNC_TEST:gcroot-current-system:PASS
+        else
+            echo "FUNC_TEST:gcroot-current-system:FAIL:target=$target"
+        fi
+    else
+        echo "FUNC_TEST:gcroot-current-system:FAIL:not-a-symlink"
+    fi
+'
+
+# ── Phase 5: Verify per-file symlink through /etc/static ─
+
+echo "--- Phase 5: per-file symlinks ---"
+
+/nix/system/profile/bin/bash -c '
+    # Check that /etc/hostname is a symlink through /etc/static
+    if [ -L /etc/hostname ]; then
+        target=$(readlink /etc/hostname 2>/dev/null)
+        case "$target" in
+            /etc/static/*)
+                echo FUNC_TEST:etc-hostname-symlink:PASS
+                ;;
+            *)
+                echo "FUNC_TEST:etc-hostname-symlink:FAIL:target=$target"
+                ;;
+        esac
+    else
+        if [ -e /etc/hostname ]; then
+            echo "FUNC_TEST:etc-hostname-symlink:FAIL:regular-file-not-symlink"
+        else
+            echo "FUNC_TEST:etc-hostname-symlink:FAIL:does-not-exist"
+        fi
+    fi
+'
+
+echo ""
+echo "FUNC_TESTS_COMPLETE"
