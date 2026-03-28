@@ -636,6 +636,20 @@ pub fn activate(
         warnings.push(format!("GC root update failed: {e}"));
     }
 
+    // ── Step 3d: Set up /etc/static symlink farm ──
+    if let Some(ref etc_source) = new.etc_source {
+        if let Err(e) = setup_etc_static(etc_source) {
+            warnings.push(format!("/etc/static setup failed: {e}"));
+        }
+    }
+
+    // ── Step 4b: Update /run/current-system link ──
+    if let Some(ref toplevel) = new.toplevel {
+        if let Err(e) = update_current_system_link(toplevel) {
+            warnings.push(format!("/run/current-system update failed: {e}"));
+        }
+    }
+
     // ── Step 5: Run activation scripts ──
     let scripts_run = run_activation_scripts(&new.activation_scripts, &mut warnings);
     if scripts_run > 0 {
@@ -1165,6 +1179,160 @@ fn run_activation_scripts_at(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// /etc/static Symlink Farm (nix-darwin pattern)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Set up the /etc/static symlink farm.
+///
+/// 1. Create/update /etc/static → etc_source (the etc derivation store path)
+/// 2. Walk the etc derivation, create per-file symlinks:
+///    /etc/foo → /etc/static/etc/foo
+/// 3. Remove stale symlinks that target old /etc/static entries
+///
+/// This mirrors nix-darwin's /etc/static pattern. The etc derivation
+/// contains files at paths like `etc/profile`, `etc/passwd`, etc.
+pub fn setup_etc_static(etc_source: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let etc_source_path = Path::new(etc_source);
+    if !etc_source_path.exists() {
+        return Err(format!("etc source not found: {etc_source}").into());
+    }
+
+    // Step 1: Atomic /etc/static update
+    let etc_static = Path::new("/etc/static");
+    // Remove old symlink/file if it exists
+    if etc_static.symlink_metadata().is_ok() {
+        std::fs::remove_file(etc_static)
+            .or_else(|_| std::fs::remove_dir_all(etc_static))?;
+    }
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(etc_source, etc_static)?;
+    #[cfg(not(unix))]
+    return Err("etc/static requires unix symlinks".into());
+
+    println!("  /etc/static → {etc_source}");
+
+    // Step 2: Create per-file symlinks through /etc/static
+    // The etc derivation has files at etc/profile, etc/passwd, etc.
+    // We create /etc/profile → /etc/static/etc/profile
+    let etc_subdir = etc_source_path.join("etc");
+    if etc_subdir.is_dir() {
+        create_etc_symlinks(&etc_subdir, Path::new("/etc"), Path::new("/etc/static/etc"))?;
+    }
+
+    // Step 3: Clean stale symlinks in /etc/ that point to old /etc/static
+    clean_stale_etc_symlinks(Path::new("/etc"), "/etc/static/")?;
+
+    Ok(())
+}
+
+/// Recursively create symlinks: for each file at `src_dir/rel`, ensure
+/// `etc_dir/rel` is a symlink to `static_base/rel`.
+fn create_etc_symlinks(
+    src_dir: &Path,
+    etc_dir: &Path,
+    static_base: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for entry in std::fs::read_dir(src_dir)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let src_path = entry.path();
+        let etc_path = etc_dir.join(&name);
+        let static_path = static_base.join(&name);
+
+        if src_path.is_dir() {
+            // Recurse into subdirectories
+            std::fs::create_dir_all(&etc_path)?;
+            create_etc_symlinks(&src_path, &etc_path, &static_path)?;
+        } else {
+            // Create symlink: /etc/foo → /etc/static/etc/foo
+            // If the target is already correct, skip
+            if let Ok(target) = std::fs::read_link(&etc_path) {
+                if target == static_path {
+                    continue;
+                }
+                // Wrong target — remove and recreate
+                let _ = std::fs::remove_file(&etc_path);
+            } else if etc_path.exists() {
+                // Regular file exists (baked-in from rootTree) — replace with symlink
+                let _ = std::fs::remove_file(&etc_path);
+            }
+
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(&static_path, &etc_path)?;
+        }
+    }
+    Ok(())
+}
+
+/// Remove symlinks in /etc/ that target paths under /etc/static/ but
+/// whose target no longer exists (stale entries from a previous generation).
+fn clean_stale_etc_symlinks(
+    dir: &Path,
+    static_prefix: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(e) => e,
+        Err(_) => return Ok(()),
+    };
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() && !path.is_symlink() {
+            // Recurse, but skip /etc/static itself
+            if path.file_name().map(|n| n == "static").unwrap_or(false) {
+                continue;
+            }
+            clean_stale_etc_symlinks(&path, static_prefix)?;
+        } else if path.is_symlink() {
+            if let Ok(target) = std::fs::read_link(&path) {
+                let target_str = target.to_string_lossy();
+                if target_str.starts_with(static_prefix) && !target.exists() {
+                    let _ = std::fs::remove_file(&path);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// /run/current-system Link
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Create /run/current-system → toplevel and the GC root symlink.
+///
+/// This mirrors nix-darwin's activation: /run/current-system points to the
+/// active system's toplevel store path, and a GC root prevents collection.
+pub fn update_current_system_link(toplevel: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let run_dir = Path::new("/run");
+    let current_system = run_dir.join("current-system");
+    let gcroots_dir = Path::new("/nix/var/nix/gcroots");
+    let gc_link = gcroots_dir.join("current-system");
+
+    // Create /run if needed
+    std::fs::create_dir_all(run_dir)?;
+
+    // Update /run/current-system
+    if current_system.symlink_metadata().is_ok() {
+        std::fs::remove_file(&current_system)?;
+    }
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(toplevel, &current_system)?;
+
+    println!("  /run/current-system → {toplevel}");
+
+    // Create GC root: /nix/var/nix/gcroots/current-system → /run/current-system
+    std::fs::create_dir_all(gcroots_dir)?;
+    if gc_link.symlink_metadata().is_ok() {
+        std::fs::remove_file(&gc_link)?;
+    }
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("/run/current-system", &gc_link)?;
+
+    Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -1300,6 +1468,8 @@ mod tests {
                 ),
             ]),
             system_profile: String::new(),
+            toplevel: None,
+            etc_source: None,
         }
     }
 

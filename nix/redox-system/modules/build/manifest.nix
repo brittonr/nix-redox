@@ -234,6 +234,11 @@ let
         echo -n "${systemName}" > $out/name
         ln -s ${versionJson} $out/version.json
 
+        # Inject store paths that can't be in manifestJson (circular deps).
+        # The Rust activate reads these from adjacent files.
+        echo -n "$out" > $out/toplevel-path
+        echo -n "${etcDerivation}" > $out/etc-source-path
+
         # Record what profile/options produced this system
         echo "rootTree: ${rootTree}" >> $out/nix-support/build-info
         echo "initfs: ${initfs}" >> $out/nix-support/build-info

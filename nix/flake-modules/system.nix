@@ -405,6 +405,17 @@ let
     defaultTimeout = 300;
   };
 
+  # Activate toplevel test: /etc/static, /run/current-system, GC roots
+  activateToplevelTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/activate-toplevel-test.nix ];
+    inherit extraPkgs;
+  };
+  activateToplevelTest = mkFunctionalTest {
+    diskImage = activateToplevelTestSystem.diskImage;
+    inherit bootloader;
+    defaultTimeout = 300;
+  };
+
   mkBridgeTest = modularPkgs.infrastructure.mkBridgeTest;
   bridgeTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/bridge-test.nix ];
@@ -564,6 +575,9 @@ in
 
     redox-e2e-rebuild-test = e2eRebuildTestSystem.diskImage;
     e2e-rebuild-test = e2eRebuildTest;
+
+    redox-activate-toplevel-test = activateToplevelTestSystem.diskImage;
+    activate-toplevel-test = activateToplevelTest;
 
     redox-https-cache-test = httpsCacheTestSystem.diskImage;
     inherit httpsCacheTest;
