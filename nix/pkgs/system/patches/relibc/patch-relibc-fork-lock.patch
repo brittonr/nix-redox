@@ -1,7 +1,6 @@
-diff -ruN a/src/platform/redox/mod.rs b/src/platform/redox/mod.rs
---- a/src/platform/redox/mod.rs	2026-03-13 12:36:27.106904921 -0400
-+++ b/src/platform/redox/mod.rs	2026-03-13 12:36:27.161576896 -0400
-@@ -52,7 +52,6 @@
+--- a/src/platform/redox/mod.rs	2026-03-27 15:36:52.684966644 -0400
++++ b/src/platform/redox/mod.rs	2026-03-27 15:37:13.698390360 -0400
+@@ -55,7 +55,6 @@
      ld_so::tcb::OsSpecific,
      out::Out,
      platform::sys::timer::{timer_routine, timer_update_wake_time},
@@ -9,7 +8,7 @@ diff -ruN a/src/platform/redox/mod.rs b/src/platform/redox/mod.rs
  };
  
  pub use redox_rt::proc::FdGuard;
-@@ -97,7 +96,12 @@
+@@ -100,7 +99,12 @@
      }};
  }
  
@@ -23,7 +22,7 @@ diff -ruN a/src/platform/redox/mod.rs b/src/platform/redox/mod.rs
  
  /// Redox syscall implementation of the platform abstraction layer.
  pub struct Sys;
-@@ -327,10 +331,29 @@
+@@ -432,10 +436,29 @@
      }
  
      unsafe fn fork() -> Result<pid_t> {
@@ -31,7 +30,7 @@ diff -ruN a/src/platform/redox/mod.rs b/src/platform/redox/mod.rs
 -        let _guard = CLONE_LOCK.write();
 +        use core::sync::atomic::Ordering as AtomOrd;
  
--        Ok(fork_impl(&redox_rt::proc::ForkArgs::Managed)? as pid_t)
+-        Ok(redox_rt::proc::fork_impl(&redox_rt::proc::ForkArgs::Managed)? as pid_t)
 +        // Acquire exclusive lock (writers block readers and other writers)
 +        loop {
 +            match FORK_CLONE_LOCK.compare_exchange_weak(
@@ -42,7 +41,7 @@ diff -ruN a/src/platform/redox/mod.rs b/src/platform/redox/mod.rs
 +            }
 +        }
 +
-+        let pid = fork_impl(&redox_rt::proc::ForkArgs::Managed)? as pid_t;
++        let pid = redox_rt::proc::fork_impl(&redox_rt::proc::ForkArgs::Managed)? as pid_t;
 +
 +        if pid == 0 {
 +            // Child: only one thread, reset lock directly
@@ -56,7 +55,7 @@ diff -ruN a/src/platform/redox/mod.rs b/src/platform/redox/mod.rs
      }
  
      fn fstat(fildes: c_int, mut buf: Out<stat>) -> Result<()> {
-@@ -973,9 +996,27 @@
+@@ -1046,9 +1069,27 @@
          stack: *mut usize,
          os_specific: &mut OsSpecific,
      ) -> Result<crate::pthread::OsTid> {
