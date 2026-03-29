@@ -87,7 +87,7 @@ let
 
   # Prepare source with patched dependencies
   patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "base-src-patched-v14"; # v14: Stub AML Match opcode, enable usbscsid
+    name = "base-src-patched-v15"; # v15: Revert xhcid sub-driver path fix (causes hang)
     src = base-src;
 
     nativeBuildInputs = [ pkgs.gnupatch ];
@@ -161,10 +161,7 @@ let
         # pcid-spawner prepends /usr/lib/drivers/ to bare names, but xhcid
         # spawns sub-drivers with bare Command::new(). Use full paths so
         # they're found during both initfs and rootfs boot.
-        echo "Patching xhcid drivers.toml with full paths..."
-        sed -i 's|"usbhubd"|"/scheme/initfs/bin/usbhubd"|' drivers/usb/xhcid/drivers.toml
-        sed -i 's|"usbhidd"|"/scheme/initfs/bin/usbhidd"|' drivers/usb/xhcid/drivers.toml
-        echo "Done patching xhcid driver paths"
+        echo "Done patching xhcid"
       fi
 
       # Add Queue::repost_buffer() to virtio-core for RX buffer recycling.

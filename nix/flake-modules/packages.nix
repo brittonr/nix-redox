@@ -488,6 +488,15 @@ let
         # Real hardware ACPI tables (Intel N100) use Match, which is
         # unimplemented. Return error for Match, but don't let it kill
         # the entire DSDT/SSDT table load — log and continue.
+        # Revert xhcid sub-driver full paths — usbhidd blocks on
+        # /scheme/input/producer when inputd isn't running, stalling boot.
+        # Keep bare names so spawn fails fast with ENOENT.
+        xhcid = _: {
+          postPatch = ''
+            sed -i 's|"/scheme/initfs/bin/usbhubd"|"usbhubd"|' drivers.toml
+            sed -i 's|"/scheme/initfs/bin/usbhidd"|"usbhidd"|' drivers.toml
+          '';
+        };
         acpi = _: {
           postPatch = ''
             # 1. Replace Match todo!() with error return
