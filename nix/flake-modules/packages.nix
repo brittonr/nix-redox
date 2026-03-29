@@ -484,26 +484,13 @@ let
           src = inputs.relibc-src;
           workspace_member = "redox-rt";
         };
-        # Stub AML Match opcode and make table loading resilient.
-        # Real hardware ACPI tables (Intel N100) use Match, which is
-        # unimplemented. Return error for Match, but don't let it kill
-        # the entire DSDT/SSDT table load — log and continue.
-        # Revert xhcid sub-driver full paths — usbhidd blocks on
-        # /scheme/input/producer when inputd isn't running, stalling boot.
-        # Keep bare names so spawn fails fast with ENOENT.
-        xhcid = _: {
-          postPatch = ''
-            sed -i 's|"/scheme/initfs/bin/usbhubd"|"usbhubd"|' drivers.toml
-            sed -i 's|"/scheme/initfs/bin/usbhidd"|"usbhidd"|' drivers.toml
-          '';
-        };
+        # xhcid sub-driver paths handled by patch-xhcid-driver-paths.py in base-src patching.
+        # acpi: Full Match opcode implementation for Intel N100 DSDT tables.
+        # The patch adds multi-phase retirement for the Match opcode (0x89)
+        # and makes table loading resilient (log errors, continue).
         acpi = _: {
           postPatch = ''
-            # 1. Replace Match todo!() with error return
-            sed -i 's|Opcode::Match => todo!()|Opcode::Match => return Err(AmlError::IllegalOpcode(0x89))|' src/aml/mod.rs
-
-            # 2. Make load_table resilient — log errors but don't propagate
-            sed -i 's|self.do_execute_method(context)?;|match self.do_execute_method(context) { Ok(_) => {}, Err(e) => log::warn!("AML table load error (continuing): {:?}", e), }|' src/aml/mod.rs
+            ${pkgs.python3}/bin/python3 ${../pkgs/patches/patch-acpi-match-opcode.py} .
           '';
         };
       };

@@ -65,6 +65,9 @@ let
   # Patch for usbhidd timeout on input scheme open
   patchUsbhiddTimeout = ../patches/patch-usbhidd-timeout.py;
 
+  # Patch for inputd daemon startup order (setup_logging after SchemeDaemon::new)
+  patchInputdDaemonOrder = ../patches/patch-inputd-daemon-order.py;
+
   # virtio-fsd driver source (injected into base workspace)
   virtioFsdSrc = ./virtio-fsd;
 
@@ -177,6 +180,13 @@ let
         echo "Patching inputd ProducerHandle: adding 5s timeout..."
         ${pkgs.python3}/bin/python3 ${patchUsbhiddTimeout} drivers/inputd/src/lib.rs
         echo "Done patching inputd ProducerHandle"
+
+        # Move setup_logging() inside daemon callback for inputd.
+        # Without this, setup_logging() runs before SchemeDaemon::new() and can
+        # interfere with INIT_NOTIFY fd or cause blocking I/O.
+        echo "Patching inputd daemon startup order..."
+        ${pkgs.python3}/bin/python3 ${patchInputdDaemonOrder} drivers/inputd/src/main.rs
+        echo "Done patching inputd daemon order"
       fi
 
       # Add Queue::repost_buffer() to virtio-core for RX buffer recycling.
