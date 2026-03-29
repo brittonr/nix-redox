@@ -98,7 +98,14 @@ in
     diskSizeMB = 1024;
     initfsSizeMB = 128;
     # ps2d crashes on N100 (no PS/2 controller, USB-only)
-    initfsExcludeDaemons = [ "ps2d" ];
+    # acpid: stubbed Match opcode lets it run, but drivers hang with MCFG.
+    # Exclude acpid for now — pcid falls back to PCI 3.0 (no BAR mapping
+    # but boots to login prompt). Re-enable once driver hang is debugged.
+    initfsExcludeDaemons = [
+      "ps2d"
+      "acpid"
+      "usbscsid"
+    ];
     # USB mass storage driver — needed for JetKVM virtual media boot
     initfsExtraDrivers = [ "usbscsid" ];
     # vesad + fbcond for text console on HDMI (no Orbital needed)
