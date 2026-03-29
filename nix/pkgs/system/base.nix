@@ -56,6 +56,15 @@ let
   # Patch for randd to allow reads from scheme root handles (unified diff)
   randdPatch = ../patches/randd-scheme-root-read.patch;
 
+  # Patch for acpi crate: implement AML Match opcode (0x89)
+  patchAcpiMatchOpcode = ../patches/patch-acpi-match-opcode.py;
+
+  # Patch for xhcid sub-driver path lookup (initfs + rootfs)
+  patchXhcidDriverPaths = ../patches/patch-xhcid-driver-paths.py;
+
+  # Patch for usbhidd timeout on input scheme open
+  patchUsbhiddTimeout = ../patches/patch-usbhidd-timeout.py;
+
   # virtio-fsd driver source (injected into base workspace)
   virtioFsdSrc = ./virtio-fsd;
 
@@ -87,7 +96,7 @@ let
 
   # Prepare source with patched dependencies
   patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "base-src-patched-v15"; # v15: Revert xhcid sub-driver path fix (causes hang)
+    name = "base-src-patched-v16"; # v16: usbhidd timeout, xhcid multi-path driver lookup
     src = base-src;
 
     nativeBuildInputs = [ pkgs.gnupatch ];
@@ -157,11 +166,17 @@ let
           drivers/usb/xhcid/src/xhci/mod.rs
         echo "Done patching xhcid"
 
-        # Fix sub-driver paths in xhcid drivers.toml.
-        # pcid-spawner prepends /usr/lib/drivers/ to bare names, but xhcid
-        # spawns sub-drivers with bare Command::new(). Use full paths so
-        # they're found during both initfs and rootfs boot.
+        # Fix sub-driver paths: try multiple locations so drivers are found
+        # in both initfs (/bin/) and rootfs (/usr/lib/drivers/) environments.
+        echo "Patching xhcid sub-driver path lookup for initfs+rootfs..."
+        ${pkgs.python3}/bin/python3 ${patchXhcidDriverPaths} drivers/usb/xhcid/src/xhci/mod.rs
         echo "Done patching xhcid"
+
+        # Add timeout to usbhidd's input scheme connection via ProducerHandle.
+        # Without this, usbhidd blocks forever if inputd hasn't registered yet.
+        echo "Patching inputd ProducerHandle: adding 5s timeout..."
+        ${pkgs.python3}/bin/python3 ${patchUsbhiddTimeout} drivers/inputd/src/lib.rs
+        echo "Done patching inputd ProducerHandle"
       fi
 
       # Add Queue::repost_buffer() to virtio-core for RX buffer recycling.
@@ -375,6 +390,19 @@ pkgs.stdenv.mkDerivation {
         panic = "abort";
       }}
     CARGOCONF
+
+      # Patch vendored acpi crate: implement AML Match opcode (0x89)
+      # This must happen after vendor-combined is created and writable.
+      echo "Patching vendored acpi crate: Match opcode implementation..."
+      ACPI_DIR=$(find vendor-combined -maxdepth 1 -name "acpi*" -type d | head -1)
+      if [ -n "$ACPI_DIR" ] && [ -f "$ACPI_DIR/src/aml/mod.rs" ]; then
+        ${pkgs.python3}/bin/python3 ${patchAcpiMatchOpcode} vendor-combined
+        # Clear cargo checksum so cargo doesn't reject the patched files
+        echo '{"files":{}}' > "$ACPI_DIR/.cargo-checksum.json"
+        echo "acpi Match opcode patch applied"
+      else
+        echo "WARNING: acpi crate not found in vendor-combined, skipping Match opcode patch"
+      fi
 
       runHook postConfigure
   '';
