@@ -157,13 +157,14 @@ let
           drivers/usb/xhcid/src/xhci/mod.rs
         echo "Done patching xhcid"
 
-        # Enable USB mass storage (usbscsid) in xhcid's driver config.
-        # Upstream has it commented out with "TODO: causes XHCI errors".
-        # Needed for JetKVM virtual media and USB flash drive boot.
-        echo "Enabling usbscsid in xhcid drivers.toml..."
-        sed -i '/^#\[\[drivers\]\]/,/^#command = \["usbscsid"/{s/^#//}' \
-          drivers/usb/xhcid/drivers.toml
-        echo "Done enabling usbscsid"
+        # Fix sub-driver paths in xhcid drivers.toml.
+        # pcid-spawner prepends /usr/lib/drivers/ to bare names, but xhcid
+        # spawns sub-drivers with bare Command::new(). Use full paths so
+        # they're found during both initfs and rootfs boot.
+        echo "Patching xhcid drivers.toml with full paths..."
+        sed -i 's|"usbhubd"|"/scheme/initfs/bin/usbhubd"|' drivers/usb/xhcid/drivers.toml
+        sed -i 's|"usbhidd"|"/scheme/initfs/bin/usbhidd"|' drivers/usb/xhcid/drivers.toml
+        echo "Done patching xhcid driver paths"
       fi
 
       # Add Queue::repost_buffer() to virtio-core for RX buffer recycling.
