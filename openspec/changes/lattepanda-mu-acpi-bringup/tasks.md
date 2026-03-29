@@ -9,11 +9,11 @@
 
 ## 2. AML Match Opcode Implementation
 
-- [ ] 2.1 Study the ACPI spec section 20.2.5.4 (DefMatch) for argument format and semantics
-- [ ] 2.2 Design the multi-phase parsing approach: read SearchPkg TermArg, then read MatchOp1 byte in retirement handler, start next TermArg, etc.
-- [ ] 2.3 Add `ResolveBehaviour::ByteData` or use `OpInFlight::new_with` with pre-loaded byte args to handle the interleaved byte/TermArg pattern
-- [ ] 2.4 Implement the six match operators (MTR, MEQ, MLE, MLT, MGE, MGT) as a comparison function
-- [ ] 2.5 Implement the Match retirement handler: iterate SearchPkg from StartIndex, apply both conditions, return index or ONES
+- [x] 2.1 Study the ACPI spec section 20.2.5.4 (DefMatch) for argument format and semantics
+- [x] 2.2 Design the multi-phase parsing approach: read SearchPkg TermArg, then read MatchOp1 byte in retirement handler, start next TermArg, etc.
+- [x] 2.3 Add `ResolveBehaviour::ByteData` or use `OpInFlight::new_with` with pre-loaded byte args to handle the interleaved byte/TermArg pattern
+- [x] 2.4 Implement the six match operators (MTR, MEQ, MLE, MLT, MGE, MGT) as a comparison function
+- [x] 2.5 Implement the Match retirement handler: iterate SearchPkg from StartIndex, apply both conditions, return index or ONES
 - [ ] 2.6 Test in QEMU with a synthetic DSDT containing Match opcodes
 - [ ] 2.7 Test on LattePanda Mu — verify acpid loads DSDT/SSDT without errors and populates the ACPI namespace
 
@@ -34,8 +34,8 @@
 
 ## 5. USB Input Chain
 
-- [ ] 5.1 Add a timeout (5 seconds) to usbhidd's `ProducerHandle::new()` — if `/scheme/input/producer` doesn't open, exit with error instead of blocking
-- [ ] 5.2 Fix xhcid sub-driver paths: use a PATH-based lookup that works in both initfs and rootfs, or set PATH in xhcid's environment before spawning sub-drivers
+- [x] 5.1 Add a timeout (5 seconds) to usbhidd's `ProducerHandle::new()` — if `/scheme/input/producer` doesn't open, exit with error instead of blocking
+- [x] 5.2 Fix xhcid sub-driver paths: use a PATH-based lookup that works in both initfs and rootfs, or set PATH in xhcid's environment before spawning sub-drivers
 - [ ] 5.3 Verify the full input chain: vesad (display:) → inputd (input:) → usbhidd (keyboard) → fbcond (console) → getty (login)
 - [ ] 5.4 Test keyboard input at the `redox login:` prompt via JetKVM and physical USB keyboard
 
