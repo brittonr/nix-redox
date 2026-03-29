@@ -20,17 +20,21 @@ import glob
 def main():
     vendor_dir = sys.argv[1]
 
-    # Find the acpi crate in vendor directory
-    acpi_dirs = glob.glob(os.path.join(vendor_dir, "acpi-*"))
-    if not acpi_dirs:
-        # Try without version suffix (git deps sometimes omit it)
-        acpi_dirs = [os.path.join(vendor_dir, "acpi")]
-        if not os.path.isdir(acpi_dirs[0]):
-            print("ERROR: acpi crate not found in vendor directory: " + vendor_dir)
-            sys.exit(1)
-
-    acpi_dir = acpi_dirs[0]
-    aml_file = os.path.join(acpi_dir, "src", "aml", "mod.rs")
+    # Find the acpi crate: either a vendor directory with acpi-* subdirs,
+    # or the acpi crate root itself (per-crate build mode).
+    aml_file = os.path.join(vendor_dir, "src", "aml", "mod.rs")
+    if os.path.exists(aml_file):
+        # Direct crate root mode (per-crate build)
+        pass
+    else:
+        # Vendor directory mode: look for acpi-* subdirectory
+        acpi_dirs = glob.glob(os.path.join(vendor_dir, "acpi-*"))
+        if not acpi_dirs:
+            acpi_dirs = [os.path.join(vendor_dir, "acpi")]
+            if not os.path.isdir(acpi_dirs[0]):
+                print("ERROR: acpi crate not found in: " + vendor_dir)
+                sys.exit(1)
+        aml_file = os.path.join(acpi_dirs[0], "src", "aml", "mod.rs")
 
     if not os.path.exists(aml_file):
         print("ERROR: " + aml_file + " not found")

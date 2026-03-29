@@ -2,7 +2,7 @@
   description = "Redox OS for LattePanda Mu (N100) on Carrier Lite — bare metal boot";
 
   inputs = {
-    redox.url = "github:brittonr/nix-redox";
+    redox.url = "path:../../";
   };
 
   outputs =

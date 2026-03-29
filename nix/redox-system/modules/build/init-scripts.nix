@@ -467,7 +467,7 @@ let
 
         [service]
         cmd = "inputd"
-        args = ["input"]
+        args = []
         type = { scheme = "input" }
       '';
 

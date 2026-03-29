@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Patch inputd's ProducerHandle::new() to add a 5-second timeout.
+"""Patch inputd's ProducerHandle::new() to retry with backoff.
 
-Without this, usbhidd blocks forever if inputd hasn't registered the
-input: scheme yet. The timeout uses a thread + mpsc channel to avoid
-blocking the main thread on File::open.
+On Redox, File::open on a non-existent scheme returns ENODEV immediately
+(doesn't block). usbhidd is spawned by xhcid when USB HID devices are
+detected, but inputd may not have registered the input: scheme yet.
+
+This patch replaces the single open attempt with a retry loop:
+try every 500ms for up to 30 seconds. This handles both race conditions
+(inputd starting up) and the case where the open would block.
 
 Usage: python3 patch-usbhidd-timeout.py <path-to-inputd-lib.rs>
 """
@@ -21,23 +25,32 @@ def main():
     }"""
 
     new = """    pub fn new() -> io::Result<Self> {
-        Self::new_with_timeout(5)
+        Self::new_with_retry(30, 500)
     }
 
-    pub fn new_with_timeout(timeout_secs: u64) -> io::Result<Self> {
-        // Use a thread to avoid blocking forever if inputd hasn't registered yet.
-        // The thread performs the blocking File::open, and we wait with a timeout.
-        let (tx, rx) = std::sync::mpsc::channel();
-        std::thread::spawn(move || {
-            let _ = tx.send(File::open("/scheme/input/producer"));
-        });
-        match rx.recv_timeout(std::time::Duration::from_secs(timeout_secs)) {
-            Ok(result) => result.map(ProducerHandle),
-            Err(_) => Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "input scheme not available within timeout",
-            )),
+    pub fn new_with_retry(max_attempts: u32, interval_ms: u64) -> io::Result<Self> {
+        // Retry opening input:producer with backoff.
+        // On Redox, opening a non-existent scheme returns ENODEV immediately
+        // (no blocking), so we need an explicit retry loop to wait for inputd
+        // to register the input: scheme.
+        let mut last_err = None;
+        for attempt in 0..max_attempts {
+            match File::open("/scheme/input/producer") {
+                Ok(f) => return Ok(ProducerHandle(f)),
+                Err(e) => {
+                    if attempt == 0 {
+                        eprintln!("usbhidd: input: scheme not ready, retrying for {}s...",
+                            (max_attempts as u64 * interval_ms) / 1000);
+                    }
+                    last_err = Some(e);
+                    std::thread::sleep(std::time::Duration::from_millis(interval_ms));
+                }
+            }
         }
+        Err(last_err.unwrap_or_else(|| io::Error::new(
+            io::ErrorKind::NotFound,
+            "input scheme not available after retries",
+        )))
     }"""
 
     if old not in content:
@@ -49,7 +62,7 @@ def main():
     with open(path, "w") as f:
         f.write(content)
 
-    print("ProducerHandle timeout patch applied")
+    print("ProducerHandle retry patch applied")
 
 
 if __name__ == "__main__":
