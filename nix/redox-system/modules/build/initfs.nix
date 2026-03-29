@@ -44,10 +44,10 @@ hostPkgs.stdenv.mkDerivation {
     )}
 
     ${lib.optionalString cfg.usbEnabled ''
-      for drv in xhcid usbhubd usbhidd; do
+      for drv in xhcid usbhubd usbhidd usbscsid; do
         [ -f ${pkgs.base}/bin/$drv ] && cp -f ${pkgs.base}/bin/$drv initfs/lib/drivers/
       done
-      for bin in usbhubd usbhidd; do
+      for bin in usbhubd usbhidd usbscsid; do
         [ -f ${pkgs.base}/bin/$bin ] && cp -f ${pkgs.base}/bin/$bin initfs/bin/
         [ -f ${pkgs.base}/bin/$bin ] && cp -f ${pkgs.base}/bin/$bin initfs/usr/lib/drivers/
       done

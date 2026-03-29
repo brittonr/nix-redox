@@ -87,7 +87,7 @@ let
             # while the orbital Cargo.lock has newer versions vendored.
             # Handle both simple ("X.Y") and table ({ version = "X.Y", ... }) formats.
             find base/ -name Cargo.toml -exec sed -i \
-              -e 's|redox-scheme = "0\.[0-8][^"]*"|redox-scheme = "0.9"|g' \
+              -e 's|redox-scheme = "0\.[0-9][^"]*"|redox-scheme = "0.11"|g' \
               -e 's|redox_syscall = "0\.[0-5][^"]*"|redox_syscall = "0.7"|g' \
               -e '/redox_syscall/s|version = "0\.[0-5][^"]*"|version = "0.7"|g' \
               -e 's|libredox = "0\.1\.[0-9]*"|libredox = "0.1"|g' \
@@ -277,7 +277,7 @@ let
   orbitalVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "orbital-cargo-vendor";
     src = patchedSrc;
-    hash = "sha256-ME5/M62yhh6D6pfw+PfKsnSzD0fQxntxGfM2meE3i3Y=";
+    hash = "sha256-za8LnNzcaKG7WRu0RwEBl4hyeDtIAbi++AsBQT2TL04=";
   };
 
   # Create merged vendor directory (project + sysroot)
