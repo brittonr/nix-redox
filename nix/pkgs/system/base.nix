@@ -87,7 +87,7 @@ let
 
   # Prepare source with patched dependencies
   patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "base-src-patched-v13"; # v13: Forward ptrace handle opens in procmgr
+    name = "base-src-patched-v14"; # v14: Stub AML Match opcode, enable usbscsid
     src = base-src;
 
     nativeBuildInputs = [ pkgs.gnupatch ];
@@ -156,6 +156,14 @@ let
         sed -i 's/\.stdin(process::Stdio::null())/.stdin(process::Stdio::inherit())/' \
           drivers/usb/xhcid/src/xhci/mod.rs
         echo "Done patching xhcid"
+
+        # Enable USB mass storage (usbscsid) in xhcid's driver config.
+        # Upstream has it commented out with "TODO: causes XHCI errors".
+        # Needed for JetKVM virtual media and USB flash drive boot.
+        echo "Enabling usbscsid in xhcid drivers.toml..."
+        sed -i '/^#\[\[drivers\]\]/,/^#command = \["usbscsid"/{s/^#//}' \
+          drivers/usb/xhcid/drivers.toml
+        echo "Done enabling usbscsid"
       fi
 
       # Add Queue::repost_buffer() to virtio-core for RX buffer recycling.

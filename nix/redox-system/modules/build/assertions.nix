@@ -20,10 +20,13 @@ let
       message = "networking.mode = 'static' requires at least one interface in networking.interfaces.";
     }
     {
+      # vesad (UEFI GOP framebuffer) is always loaded when graphics is enabled,
+      # so an empty graphicsDrivers list is valid for bare metal (no PCI GPU driver needed).
       assertion =
         !cfg.graphicsEnabled
+        || (inputs.hardware.graphicsDrivers or [ ]) == [ ]
         || builtins.any (d: d == "virtio-gpud" || d == "bgad") (inputs.hardware.graphicsDrivers or [ ]);
-      message = "graphics.enable is set but no graphics drivers configured in hardware.graphicsDrivers.";
+      message = "graphics.enable is set but graphicsDrivers contains unrecognized drivers. Use [] for vesad-only (bare metal) or include virtio-gpud/bgad for VMs.";
     }
     {
       assertion = cfg.diskSizeMB > cfg.espSizeMB;

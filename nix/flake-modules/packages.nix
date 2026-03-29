@@ -484,6 +484,19 @@ let
           src = inputs.relibc-src;
           workspace_member = "redox-rt";
         };
+        # Stub AML Match opcode and make table loading resilient.
+        # Real hardware ACPI tables (Intel N100) use Match, which is
+        # unimplemented. Return error for Match, but don't let it kill
+        # the entire DSDT/SSDT table load — log and continue.
+        acpi = _: {
+          postPatch = ''
+            # 1. Replace Match todo!() with error return
+            sed -i 's|Opcode::Match => todo!()|Opcode::Match => return Err(AmlError::IllegalOpcode(0x89))|' src/aml/mod.rs
+
+            # 2. Make load_table resilient — log errors but don't propagate
+            sed -i 's|self.do_execute_method(context)?;|match self.do_execute_method(context) { Ok(_) => {}, Err(e) => log::warn!("AML table load error (continuing): {:?}", e), }|' src/aml/mod.rs
+          '';
+        };
       };
 
       ws = buildFromUnitGraph {
