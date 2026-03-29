@@ -447,7 +447,6 @@ let
         cmd = "vesad"
         args = []
         type = "notify"
-        inherit_envs = ["FRAMEBUFFER_ADDR", "FRAMEBUFFER_VIRT", "FRAMEBUFFER_WIDTH", "FRAMEBUFFER_HEIGHT", "FRAMEBUFFER_STRIDE"]
       '';
 
       "23_fbcond.service" = ''
