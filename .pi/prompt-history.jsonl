@@ -708,3 +708,20 @@
 {"text":"write an openspec to resolve those","timestamp":1774878728369}
 {"text":"boot nixos-anywhere with nixos-facter and get the json from that","timestamp":1774879581971}
 {"text":"no internet on the booted image","timestamp":1774880849163}
+{"text":"check the serial","timestamp":1774881550853}
+{"text":"no, i rebooted with a different power supply","timestamp":1774881579503}
+{"text":"can you release serial and give me the command i can use to connect","timestamp":1774881632709}
+{"text":"FATAL: cannot lock /dev/ttyusb0","timestamp":1774881670127}
+{"text":"im not getting anything from there? how were you?","timestamp":1774881750339}
+{"text":"it exists, i just rebooted again. its hard to tell because hdmi doesnt work, but usb does work through the jetkvm. the difference is i used a 12v power supply that allows pcie to start on the carrier lite board","timestamp":1774881883063}
+{"text":"screenshot isnt going to work right now","timestamp":1774881937685}
+{"text":"mount nixos and let me try to reboot","timestamp":1774882003359}
+{"text":"anything?","timestamp":1774882044496}
+{"text":"jetkvm pass is Brlee065!","timestamp":1774882159039}
+{"text":"https://docs.lattepanda.com/content/mu_edition/lite_carrier/#hardware-interface https://docs.lattepanda.com/content/mu_edition/design_guide_power/","timestamp":1774882211013}
+{"text":"100w","timestamp":1774882280371}
+{"text":"is 3 dangerous","timestamp":1774882312672}
+{"text":"oh wait its booted nix!","timestamp":1774882323474}
+{"text":"hmm after the bootloader i cant see anything","timestamp":1774882358454}
+{"text":"oh its up","timestamp":1774882411491}
+{"text":"oh its up","timestamp":1774882412787}

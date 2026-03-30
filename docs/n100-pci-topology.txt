@@ -57,14 +57,26 @@
 [    0.417993] pci 0000:00:1c.0: [8086:54ba] type 01 class 0x060400 PCIe Root Port
 [    0.418676] pci 0000:00:1c.6: [8086:54be] type 01 class 0x060400 PCIe Root Port
 
+## With 12V DC power supply (lspci -n, PCIe devices visible)
+
+01:00.0 0108: c0a9:5426 (rev 01)   ← NVMe SSD (vendor c0a9 = Silicon Motion?, device 5426)
+02:00.0 0200: 10ec:8168 (rev 15)   ← RTL8168 Gigabit Ethernet (Realtek)
+
+PCIe Root Port mapping:
+  00:1c.0 [8086:54ba] PCIe Root Port #3 → bus 01 → NVMe SSD
+  00:1c.6 [8086:54be] PCIe Root Port #7 → bus 02 → RTL8168 NIC
+
 ## Notes
 
-- Two PCIe Root Ports detected (00:1c.0 → bus 01, 00:1c.6 → bus 02) but BOTH EMPTY
-- No NVMe, no RTL8168 visible — even Linux can't see them
-- No UART in dmesg (no legacy 16550 at 0x3F8, no HSUART detected)
+- PCIe devices ONLY visible with 12V DC power supply (not USB-C alone)
+- Carrier Lite docs confirm: "PCIe slot only available with 12V supply via DC 5.5x2.5mm"
+- NIC is RTL8111/8168 (Realtek 10ec:8168) — use rtl8168d driver in Redox
+- NVMe is c0a9:5426 — need to check if nvmed supports this controller
+- USB-C only: PCIe buses 01/02 are empty, no NIC, no NVMe
+- 12V DC only: HDMI output stops working (JetKVM shows no signal), serial also stops
+- May need BOTH USB-C + 12V DC simultaneously for full functionality
+- No legacy 16550 UART (dmesg shows nothing for uart)
 - /proc/ioports shows "0000-0000 : serial" (zero-length range)
-- ip a / networkctl show only loopback — no ethernet interface
-- PCIe ASPM disabled by FADT, PCIeHotplug/PME not supported by platform
 - Two xHCI controllers: 00:0d.0 (Processor USB 3.2) and 00:14.0 (PCH USB 3.2 Gen 2x1)
-- eMMC controller at 00:1a.0 — might be usable for storage
+- eMMC controller at 00:1a.0
 - HDA audio at 00:1f.3 [8086:54c8]
