@@ -283,6 +283,16 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 - `redoxfs-ar` requires pre-allocated image file (`dd if=/dev/zero`)
 - `redoxfs-ar --max-size` defaults to 64 MiB — graphical initfs needs 128
 
+### Bare Metal ACPI Workarounds
+- Alder Lake-N (N100/N150) firmware references phantom Thunderbolt `_SB_.PC00.TXHC`
+- AML interpreter returns `LevelDoesNotExist` error — acpid logs it and continues
+- `hwd.probe()` reads `/scheme/acpi/symbols` after the error → **deadlocks** in acpid event loop
+- acpid IS required — PCI BAR mapping needs it for USB, NVMe, network on Alder Lake-N
+- Fix: override initfs scripts to start acpid + pcid directly, skip hwd entirely
+- Override `40_hwd.service` (→ acpid), add `40_pcid.service` (→ pcid), override `40_pcid-spawner.service` (→ depends on both)
+- Without acpid: boots to login but USB HID doesn't work (JetKVM shows "USB not connected")
+- Confirmed working on: GMKtec NucBoxG3 Plus (N150), LattePanda Mu (N100, no workaround needed)
+
 ### Init Scripts
 - Numbered: 00_base, 12_stored, 13_profiled, 20_orbital, 30_console, 90_exit_initfs
 - `notify` blocks until daemon signals readiness; `nowait` fires and forgets

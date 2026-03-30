@@ -739,3 +739,24 @@
 {"text":"remount the nixos image","timestamp":1774885116331}
 {"text":"anything on serial?","timestamp":1774885658711}
 {"text":"while we wait can we work on building an image with the correct pcie/nvme and network","timestamp":1774885855336}
+{"text":"lets do some repo cleanup. anything we should untrack and remove from .gitignore?","timestamp":1774894106283}
+{"text":"do all","timestamp":1774894175747}
+{"text":"what repo clean uup should we do","timestamp":1774894342516}
+{"text":"new plan, we hooked up a gmktec /home/brittonr/git/clan-aspen/machines/gmk1 and see if we can get redox working on it instead.","timestamp":1774894510870}
+{"text":"192.168.1.89 is the jetkvm that is attached","timestamp":1774894521951}
+{"text":"192.168.1.89 is the jetkvm that is attached","timestamp":1774894535994}
+{"text":"192.168.1.89 is the jetkvm that is attached","timestamp":1774894538439}
+{"text":"Brlee065! is the password","timestamp":1774894819069}
+{"text":"lets do 2 jetkm virt usb","timestamp":1774894832787}
+{"text":"try now, i unmounted the iso that was nixos","timestamp":1774895130689}
+{"text":"thats not the write way to move it over","timestamp":1774895285458}
+{"text":"use your jetkvm extension for this","timestamp":1774895309659}
+{"text":"it hangs there","timestamp":1774895813680}
+{"text":"there isnt a tb controller","timestamp":1774896254893}
+{"text":"ssh into ssh root@192.168.1.146 -i .ssh/framework and run nixos-facter to get the full hardware","timestamp":1774896443189}
+{"text":"ssh root@192.168.1.146 -i .ssh/framework and run nixos-facter to get all the hardware specs","timestamp":1774896466889}
+{"text":"please dont do that, we boot into the img automatically.","timestamp":1774896883131}
+{"text":"neither are the issue. its a conffig in redox causing this i think.","timestamp":1774897113632}
+{"text":"check our latte panda mu config for this, we had it working there","timestamp":1774897287274}
+{"text":"check our latte panda mu config for this, we had it working there","timestamp":1774897299829}
+{"text":"1 min","timestamp":1774897741608}
