@@ -15,6 +15,18 @@
 ## 3. Build and test
 
 - [x] 3.1 Create any needed patches in `nix/pkgs/patches/` and wire into per-crate overrides in `nix/flake-modules/packages.nix`
-- [ ] 3.2 Build, flash via JetKVM virtual media, and boot
+- [x] 3.2 Build, flash via JetKVM virtual media, and boot
 - [ ] 3.3 Verify multiple keystrokes flow through to the login prompt without stalling
 - [ ] 3.4 Complete a full login (type "root", Enter, type "redox", Enter) and verify shell prompt appears
+
+## Status
+
+Transfers #1-3 succeed then xHC stops polling. The endpoint handle reopen
+in usbhidd only resets scheme file handles, not xHC hardware state. The
+fix requires xhcid changes: Stop Endpoint + Set TR Dequeue Pointer command
+cycle between interrupt IN transfers to reset the hardware ring state on
+Intel N100. This is a separate xhcid-level change.
+
+Progress so far: USB enabled in dev profile, inputd wired for USB-only
+mode, mouse interfaces filtered, resilient transfer loop with diagnostics.
+The input pipeline works for ~3 reports before the hardware stalls.
