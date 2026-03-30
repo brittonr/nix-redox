@@ -1,0 +1,70 @@
+# Intel N100 LattePanda Mu + Carrier Lite — PCI Topology
+# Captured from NixOS minimal ISO, 2026-03-30
+
+## lspci -nn
+
+00:00.0 Host bridge [0600]: Intel Corporation Alder Lake-N Processor Host Bridge/DRAM Registers [8086:461c]
+00:02.0 VGA compatible controller [0300]: Intel Corporation Alder Lake-N [UHD Graphics] [8086:46d1]
+00:0a.0 Signal processing controller [1180]: Intel Corporation Platform Monitoring Technology [8086:467d] (rev 01)
+00:0d.0 USB controller [0c03]: Intel Corporation Processor USB 3.2 xHCI Controller [8086:464e]
+00:14.0 USB controller [0c03]: Intel Corporation Alder Lake-N PCH USB 3.2 Gen 2x1 (10 Gb/s) xHCI Host Controller [8086:54ed]
+00:14.2 RAM memory [0500]: Intel Corporation Alder Lake-N PCH Shared SRAM [8086:54ef]
+00:15.0 Serial bus controller [0c80]: Intel Corporation Alder Lake-N PCH I2C Controller [8086:54e8]
+00:15.1 Serial bus controller [0c80]: Intel Corporation Alder Lake-N PCH I2C Controller [8086:54e9]
+00:15.2 Serial bus controller [0c80]: Intel Corporation Alder Lake-N PCH I2C Controller [8086:54ea]
+00:15.3 Serial bus controller [0c80]: Intel Corporation Alder Lake-N PCH I2C Controller [8086:54eb]
+00:16.0 Communication controller [0780]: Intel Corporation Alder Lake-N PCH HECI Controller [8086:54e0]
+00:19.0 Serial bus controller [0c80]: Intel Corporation Alder Lake-N I2C Controller #4 [8086:54c5]
+00:19.1 Serial bus controller [0c80]: Intel Corporation Alder Lake-N I2C Controller #5 [8086:54c6]
+00:1a.0 SD Host controller [0805]: Intel Corporation Alder Lake-N eMMC Controller [8086:54c4]
+00:1c.0 PCI bridge [0604]: Intel Corporation Alder Lake-N PCI Express Root Port #3 [8086:54ba]
+00:1c.6 PCI bridge [0604]: Intel Corporation Alder Lake-N PCI Express Root Port #7 [8086:54be]
+00:1f.0 ISA bridge [0601]: Intel Corporation Alder Lake-N PCH eSPI Controller [8086:5481]
+00:1f.3 Audio device [0403]: Intel Corporation Alder Lake-N PCH High Definition Audio Controller [8086:54c8]
+00:1f.4 SMBus [0c05]: Intel Corporation Alder Lake-N SMBus [8086:54a3]
+00:1f.5 Serial bus controller [0c80]: Intel Corporation Alder Lake-N SPI (flash) Controller [8086:54a4]
+
+## lspci -tv
+
+-[0000:00]-+-00.0  Intel Corporation Alder Lake-N Processor Host Bridge/DRAM Registers
+           +-02.0  Intel Corporation Alder Lake-N [UHD Graphics]
+           +-0a.0  Intel Corporation Platform Monitoring Technology
+           +-0d.0  Intel Corporation Processor USB 3.2 xHCI Controller
+           +-14.0  Intel Corporation Alder Lake-N PCH USB 3.2 Gen 2x1 (10 Gb/s) xHCI Host Controller
+           +-14.2  Intel Corporation Alder Lake-N PCH Shared SRAM
+           +-15.0  Intel Corporation Alder Lake-N PCH I2C Controller
+           +-15.1  Intel Corporation Alder Lake-N PCH I2C Controller
+           +-15.2  Intel Corporation Alder Lake-N PCH I2C Controller
+           +-15.3  Intel Corporation Alder Lake-N PCH I2C Controller
+           +-16.0  Intel Corporation Alder Lake-N PCH HECI Controller
+           +-19.0  Intel Corporation Alder Lake-N I2C Controller #4
+           +-19.1  Intel Corporation Alder Lake-N I2C Controller #5
+           +-1a.0  Intel Corporation Alder Lake-N eMMC Controller
+           +-1c.0-[01]--
+           +-1c.6-[02]--
+           +-1f.0  Intel Corporation Alder Lake-N PCH eSPI Controller
+           +-1f.3  Intel Corporation Alder Lake-N PCH High Definition Audio Controller
+           +-1f.4  Intel Corporation Alder Lake-N SMBus
+           \-1f.5  Intel Corporation Alder Lake-N SPI (flash) Controller
+
+## dmesg | grep -i pcie
+
+[    0.122767] ACPI FADT declares the system doesn't support PCIe ASPM, so disable it
+[    0.348658] acpi PNP0A08:00: _OSC: platform does not support [PCIeHotplug PME]
+[    0.349047] acpi PNP0A08:00: _OSC: OS now controls [PCIeCapability LTR]
+[    0.352213] pci 0000:00:02.0: [8086:46d1] type 00 class 0x030000 PCIe Root Complex Integrated Endpoint
+[    0.352453] pci 0000:00:0a.0: [8086:467d] type 00 class 0x118000 PCIe Root Complex Integrated Endpoint
+[    0.417993] pci 0000:00:1c.0: [8086:54ba] type 01 class 0x060400 PCIe Root Port
+[    0.418676] pci 0000:00:1c.6: [8086:54be] type 01 class 0x060400 PCIe Root Port
+
+## Notes
+
+- Two PCIe Root Ports detected (00:1c.0 → bus 01, 00:1c.6 → bus 02) but BOTH EMPTY
+- No NVMe, no RTL8168 visible — even Linux can't see them
+- No UART in dmesg (no legacy 16550 at 0x3F8, no HSUART detected)
+- /proc/ioports shows "0000-0000 : serial" (zero-length range)
+- ip a / networkctl show only loopback — no ethernet interface
+- PCIe ASPM disabled by FADT, PCIeHotplug/PME not supported by platform
+- Two xHCI controllers: 00:0d.0 (Processor USB 3.2) and 00:14.0 (PCH USB 3.2 Gen 2x1)
+- eMMC controller at 00:1a.0 — might be usable for storage
+- HDA audio at 00:1f.3 [8086:54c8]
