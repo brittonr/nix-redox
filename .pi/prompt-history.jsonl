@@ -705,3 +705,6 @@
 {"text":"how do i cat","timestamp":1774852063794}
 {"text":"there is an nvme installed actually. but lets do 1, 3","timestamp":1774852488836}
 {"text":"we're logged in","timestamp":1774878646348}
+{"text":"write an openspec to resolve those","timestamp":1774878728369}
+{"text":"boot nixos-anywhere with nixos-facter and get the json from that","timestamp":1774879581971}
+{"text":"no internet on the booted image","timestamp":1774880849163}
