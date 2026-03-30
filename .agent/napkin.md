@@ -98,6 +98,33 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Modern Redox routes kill/waitpid/getpid through proc: scheme `SYS_CALL` interface
 - strace binary needs full rewrite or redox_syscall upgrade to work
 
+## Bare Metal: GMKtec N150 (Alder Lake-N) ACPI Deadlock
+
+### hwd.probe() deadlocks on N150 after AML init failure
+- N150 firmware ACPI tables reference phantom Thunderbolt controller `_SB_.PC00.TXHC`
+- `Interpreter::new_from_platform()` returns `Aml(LevelDoesNotExist(...))` — error is logged
+- hwd.probe() then reads `/scheme/acpi/symbols` → acpid handles request → **deadlocks**
+- The deadlock is in acpid's single-threaded event loop processing the symbols read
+- acpid IS required — PCI BAR mapping needs it for USB, NVMe, network on Alder Lake-N
+- Skipping acpid entirely → boots to login but USB HID doesn't work (no BAR mapping)
+- Fix: override initfs scripts to start acpid + pcid directly, skip hwd entirely
+- Three services: `40_hwd.service` → acpid, `40_pcid.service` → pcid, `40_pcid-spawner.service` → pcid-spawner
+- pcid-spawner must `requires_weak` the new `40_pcid.service` (not just `40_hwd.service`)
+
+### JetKVM virtual media: image must be flash drive, not CD-ROM
+- `jetkvm_virtual_media mount` with `local_file` uploads via SSH cat pipe
+- 1GB image upload takes ~60s over SSH to JetKVM's ARM SoC
+- UEFI auto-boots from the virtual USB — no need to enter BIOS boot menu
+
+### JetKVM "USB not connected" means host USB stack isn't running
+- Not a cable issue — means xhcid/usbhubd/usbhidd chain isn't initializing
+- Root cause was missing acpid (PCI BAR mapping) when we skipped hwd
+
+### kernelSyscallDebug patch broken with empty process list
+- `kernelSyscallDebugProcesses = []` generates `.contains()` (no argument)
+- `kernelSyscallDebugProcesses = ["foo"]` also generates `.contains()` — the patch script has a bug
+- Use strace-redox or custom diagnostic services instead for now
+
 ## Ion Shell Gotchas (keep forgetting)
 
 ### `$()` crashes on empty output
