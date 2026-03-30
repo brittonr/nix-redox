@@ -657,3 +657,35 @@
 {"text":"no change","timestamp":1774764160693}
 {"text":"write an openspec","timestamp":1774764687040}
 {"text":"https://github.com/redox-os/drivers","timestamp":1774764942493}
+{"text":"lets begin openspec/changes/lattepanda-mu-input-hang/","timestamp":1774833070739}
+{"text":"lets do it","timestamp":1774834669304}
+{"text":"192.168.1.89","timestamp":1774834697695}
+{"text":"jetkvm screenshot doesnt work. just upload the image","timestamp":1774834762748}
+{"text":"we dont have that hooked up. im just going to do it manually and post screenshots manually. /tmp/pi-clipboard-38dbfb7a-ce52-4f03-b7a1-4a9243db7209.png","timestamp":1774835082318}
+{"text":"nothing","timestamp":1774835110634}
+{"text":"yes it is connected, its how i launch the live build from the jetkvm","timestamp":1774835238236}
+{"text":"continue","timestamp":1774835368932}
+{"text":"remount. you also now can use jetkvm screenshot and the keyboard to input","timestamp":1774838111905}
+{"text":"done","timestamp":1774838327514}
+{"text":"the login is Brlee065!","timestamp":1774838485972}
+{"text":"no thats the pass for jetkvm ui. heres the screenshot. /tmp/pi-clipboard-67c9c9b7-1dba-49b0-af72-e3d6fad5e4a3.png","timestamp":1774838551928}
+{"text":"no thats the latest","timestamp":1774838627681}
+{"text":"you mnay not have done l for live boot at the bootloader. heres the result when i booted into the live disk. /tmp/pi-clipboard-ecd85930-3ba7-4498-a333-7c4001bf0aa4.png - note i still cant type anything","timestamp":1774838754424}
+{"text":"no update","timestamp":1774839403210}
+{"text":"are hidg0 writes different than a normal keyboard input?","timestamp":1774839730014}
+{"text":"are hidg0 writes different than a normal keyboard input?","timestamp":1774839890574}
+{"text":"add these as reference.  https://gitlab.redox-os.org/redox-os/book https://gitlab.redox-os.org/redox-os/benchmarks https://gitlab.redox-os.org/redox-os/kernel https://gitlab.redox-os.org/redox-os/syscall https://gitlab.redox-os.org/redox-os/acid","timestamp":1774840107501}
+{"text":"does agent.md know when to use those","timestamp":1774840195834}
+{"text":"yes","timestamp":1774840218174}
+{"text":"add this too https://gitlab.redox-os.org/redox-os/base/-/tree/main/drivers","timestamp":1774840374046}
+{"text":"and https://gitlab.redox-os.org/redox-os/base in general","timestamp":1774840417117}
+{"text":"no change","timestamp":1774840615275}
+{"text":"lets read from our references in AGENTS.md","timestamp":1774840711708}
+{"text":"remount please","timestamp":1774841597439}
+{"text":"it seems like it gets to the redox login: only sometimes. could there be a race condition?","timestamp":1774842080910}
+{"text":"it feels like we're going in circles. /tmp/pi-clipboard-56ad9971-93c2-4a0b-9b14-7759c1f3f241.png how can we add better debugging","timestamp":1774843047577}
+{"text":"if this helps heres this /tmp/pi-clipboard-04fd614b-af2d-4df3-ac48-610b0cb06446.png","timestamp":1774843160576}
+{"text":"no keystrokes","timestamp":1774844364338}
+{"text":"nothing","timestamp":1774845648304}
+{"text":"it doesnt get passed the third","timestamp":1774847192690}
+{"text":"also /commit when done","timestamp":1774847324792}

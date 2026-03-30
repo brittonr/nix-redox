@@ -2,6 +2,21 @@
 
 Hard-won lessons from building RedoxOS with Nix. Read before making changes.
 
+## Reference Repos
+
+Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
+
+| Repo | When to use |
+|------|-------------|
+| `redox-os--kernel` | Syscall implementation details, scheduler behavior, memory management, arch-specific code |
+| `redox-os--syscall` | Syscall numbers, flags, data structures, scheme v2 interface |
+| `redox-os--acid` | Existing test patterns, regression test examples, what's already covered |
+| `redox-os--book` | Redox concepts, architecture docs (also mirrored in `docs/redox-book/`) |
+| `redox-os--benchmarks` | Performance benchmark scripts, recorded baseline numbers |
+| `redox-os--pkgutils` | Package manager internals (pkg-lib, pkgar format) |
+| `redox-os--redoxfs` | Filesystem scheme implementation, handle management, mmap |
+| `redox-os--base` | Base system repo — core daemons (init, bootstrap, ptyd, ipcd, logd, netstack, ramfs, randd, zerod, audiod) + `drivers/` (acpid, pcid, storage, graphics, input, audio, net, USB, virtio-core) + initfs, daemon lib, config |
+
 ## Redox OS Platform
 
 ### Ion Shell (NOT POSIX)
