@@ -240,6 +240,16 @@ impl Igc {
 
         // 10. Wait for link
         self.wait_for_link();
+
+        // 11. Post-init register dump
+        let s = hw::read_reg(self.base, regs::STATUS);
+        log::info!("DIAG CTRL={:#010X} STATUS={:#010X} LU={} RCTL={:#010X} TCTL={:#010X}",
+            hw::read_reg(self.base, regs::CTRL), s, s & STATUS_LU != 0,
+            hw::read_reg(self.base, regs::RCTL), hw::read_reg(self.base, regs::TCTL));
+        log::info!("DIAG RDH={} RDT={} TDH={} TDT={} RAL0={:#010X} RAH0={:#010X}",
+            hw::read_reg(self.base, regs::RDH0), hw::read_reg(self.base, regs::RDT0),
+            hw::read_reg(self.base, regs::TDH0), hw::read_reg(self.base, regs::TDT0),
+            hw::read_reg(self.base, regs::RAL0), hw::read_reg(self.base, regs::RAH0));
     }
 
     /// Perform a global device reset.
