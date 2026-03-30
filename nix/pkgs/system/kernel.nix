@@ -76,6 +76,11 @@ let
       # LAPIC timer for scheduling on KVM — Cloud Hypervisor doesn't
       # deliver PIT interrupts when all CPUs are in HLT
       python3 ${./patches/kernel/patch-kernel-lapic-timer.py} .
+
+      # Skip 16550 loopback self-test during serial init. Intel N100
+      # maps an LPSS HSUART to 0x3F8 ("COM0") which fails loopback,
+      # causing COM1=NotPresent and all debug output to be dropped.
+      python3 ${../patches/patch-kernel-serial-no-loopback.py} src/devices/uart_16550.rs
     '';
 
     installPhase = ''
