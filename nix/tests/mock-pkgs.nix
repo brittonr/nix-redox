@@ -75,6 +75,7 @@ rec {
       "virtio-blkd"
       # Network drivers
       "e1000d"
+      "igcd"
       "virtio-netd"
       "smolnetd"
       # Graphics drivers

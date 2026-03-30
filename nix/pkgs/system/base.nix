@@ -77,6 +77,9 @@ let
   # virtio-fsd driver source (injected into base workspace)
   virtioFsdSrc = ./virtio-fsd;
 
+  # igcd driver source (Intel I225/I226 2.5GbE, injected into base workspace)
+  igcdSrc = ./igcd;
+
   # Cargo.toml for virtio-fsd (external to avoid heredoc indentation issues in patchPhase)
   virtioFsdCargoToml = pkgs.writeText "virtio-fsd-Cargo.toml" ''
     [package]
@@ -290,6 +293,39 @@ let
       # Handle::File, not Handle::SchemeRoot, returning EBADF.
       echo "Patching randd: allow reads from scheme root..."
       patch -p1 --fuzz=3 < ${randdPatch}
+
+      # ─── igcd: inject Intel I225/I226 network driver into workspace ───
+      echo "Adding igcd network driver to workspace..."
+      cp -r ${igcdSrc} drivers/net/igcd
+      chmod -R u+w drivers/net/igcd
+
+      # Write Cargo.toml (same deps as e1000d)
+      cat > drivers/net/igcd/Cargo.toml << 'IGCD_CARGO_EOF'
+      [package]
+      name = "igcd"
+      description = "Intel I225/I226 2.5GbE network driver"
+      version = "0.1.0"
+      edition = "2021"
+
+      [dependencies]
+      bitflags.workspace = true
+      log.workspace = true
+      libredox.workspace = true
+      redox_event.workspace = true
+      redox_syscall.workspace = true
+
+      common = { path = "../../common" }
+      daemon = { path = "../../../daemon" }
+      driver-network = { path = "../driver-network" }
+      pcid = { path = "../../pcid" }
+
+      [lints]
+      workspace = true
+IGCD_CARGO_EOF
+
+      # Add igcd to workspace members
+      sed -i 's|"drivers/net/e1000d",|"drivers/net/e1000d",\n    "drivers/net/igcd",|' Cargo.toml
+      echo "Done adding igcd"
 
       # ─── virtio-fsd: inject driver source into workspace ───
       echo "Adding virtio-fsd driver to workspace..."

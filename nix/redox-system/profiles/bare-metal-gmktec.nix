@@ -1,8 +1,10 @@
-# GMKtec N150 — bare metal
+# GMKtec NucBoxG3 Plus (Intel N150) — bare metal profile
 #
-# Intel N150 (Alder Lake-N), 16GB RAM, 512GB NVMe.
-# Drivers: NVMe, Realtek RTL8168 Ethernet, xHCI USB, vesad (UEFI GOP).
-# Based on LattePanda Mu (N100) config — same SoC family.
+# Alder Lake-N, 16GB RAM, NVMe, Intel I226-V 2.5GbE.
+# Boots via JetKVM virtual media (UEFI USB).
+#
+# N150 ACPI workaround: hwd.probe() deadlocks after AML init fails
+# on phantom _SB_.PC00.TXHC. Replace hwd with direct acpid+pcid launch.
 
 { pkgs, lib }:
 
@@ -17,21 +19,16 @@ in
 
   "/environment" = {
     systemPackages =
-      # Shell & coreutils
       opt "ion"
       ++ opt "uutils"
       ++ opt "extrautils"
       ++ opt "userutils"
-      # Editors
       ++ opt "helix"
-      # CLI tools
       ++ opt "ripgrep"
       ++ opt "fd"
       ++ opt "bat"
-      # Networking
       ++ opt "netutils"
       ++ opt "redox-curl"
-      # System management
       ++ opt "snix";
 
     shellAliases = {
@@ -41,14 +38,11 @@ in
     };
   };
 
-  # Text console on HDMI: route keyboard input to fbcond's VT so getty
-  # receives keypresses from JetKVM USB HID (inputd → fbcond → pty → login).
   "/console" = {
-    inputdVT = 2; # Match fbcondVT (default 2) so input reaches text console
+    inputdVT = 2;
   };
 
   "/hardware" = {
-    # Real hardware — no virtio drivers
     storageDrivers = [
       "nvmed"
       "ahcid"
@@ -57,7 +51,6 @@ in
     networkDrivers = [
       "igcd"
     ];
-    # vesad handles UEFI GOP framebuffer — no extra graphics drivers
     graphicsDrivers = [ ];
     usbEnable = true;
     audioEnable = false;
@@ -102,11 +95,10 @@ in
     editor = "/bin/hx";
   };
 
-  # Getty on fbcond VT 2 (HDMI text console)
   "/services" = {
     getty = {
       enable = "true";
-      device = "2"; # Maps to /scheme/fbcon/2 (fbcond VT)
+      device = "2";
       extraArgs = "-J";
     };
   };
@@ -114,24 +106,17 @@ in
   "/boot" = {
     diskSizeMB = 1024;
     initfsSizeMB = 128;
-    # ps2d crashes on N150 (no PS/2 controller, USB-only)
     initfsExcludeDaemons = [
       "ps2d"
       "usbscsid"
     ];
-    # USB mass storage driver — needed for JetKVM virtual media boot
     initfsExtraDrivers = [ "usbscsid" ];
-    # vesad + fbcond for text console on HDMI
     initfsEnableGraphics = true;
-    # acpid required for ACPI/PCI BAR mapping (USB, NVMe, network).
-    # AML interpreter errors on phantom _SB_.PC00.TXHC but continues.
-    # N150 ACPI workaround: hwd.probe() deadlocks reading
-    # /scheme/acpi/symbols after AML init fails on phantom TXHC.
-    # Replace hwd with direct acpid+pcid launch (skip probe).
+    # N150 ACPI workaround: skip hwd.probe() which deadlocks
     initfsScripts = {
       "40_hwd.service" = ''
         [unit]
-        description = "ACPI + PCI daemons (skip hwd probe — N150 AML bug)"
+        description = "ACPI + PCI daemons (skip hwd probe)"
         requires_weak = ["30_lived.service"]
 
         [service]

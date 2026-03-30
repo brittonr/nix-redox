@@ -16,6 +16,7 @@ let
   ];
   networkDriver = t.enum "NetworkDriver" [
     "e1000d"
+    "igcd"
     "virtio-netd"
     "rtl8168d"
   ];

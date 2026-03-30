@@ -54,6 +54,44 @@ let
         device = "0x100e";
       }
     ];
+    igcd = [
+      {
+        name = "Intel I225-LM 2.5GbE";
+        class = "0x02";
+        vendor = "0x8086";
+        device = "0x15F2";
+      }
+      {
+        name = "Intel I225-V 2.5GbE";
+        class = "0x02";
+        vendor = "0x8086";
+        device = "0x15F3";
+      }
+      {
+        name = "Intel I226-LM 2.5GbE";
+        class = "0x02";
+        vendor = "0x8086";
+        device = "0x125B";
+      }
+      {
+        name = "Intel I226-V 2.5GbE";
+        class = "0x02";
+        vendor = "0x8086";
+        device = "0x125C";
+      }
+      {
+        name = "Intel I226-IT 2.5GbE";
+        class = "0x02";
+        vendor = "0x8086";
+        device = "0x125D";
+      }
+      {
+        name = "Intel I225-K 2.5GbE";
+        class = "0x02";
+        vendor = "0x8086";
+        device = "0x3100";
+      }
+    ];
     virtio-netd = [
       {
         name = "VirtIO Net Legacy";

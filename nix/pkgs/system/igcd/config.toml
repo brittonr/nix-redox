@@ -1,0 +1,5 @@
+[[drivers]]
+name = "Intel I225/I226 2.5GbE NIC"
+class = 0x02
+ids = { 0x8086 = [0x15F2, 0x15F3, 0x125B, 0x125C, 0x125D, 0x3100] }
+command = ["igcd"]
