@@ -68,6 +68,9 @@ let
   # Patch for usbhidd resilient interrupt transfer loop
   patchUsbhiddResilientLoop = ../patches/patch-usbhidd-resilient-loop.py;
 
+  # Patch for xhcid: stop+restart interrupt endpoints after each transfer
+  patchXhcidInterruptRestart = ../patches/patch-xhcid-interrupt-restart.py;
+
   # Patch for inputd daemon startup order (setup_logging after SchemeDaemon::new)
   patchInputdDaemonOrder = ../patches/patch-inputd-daemon-order.py;
 
@@ -102,7 +105,7 @@ let
 
   # Prepare source with patched dependencies
   patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "base-src-patched-v26"; # v26: skip mouse + endpoint reopen via reopen_ep u8
+    name = "base-src-patched-v28"; # v28: xhcid interrupt transfer diagnostics only
     src = base-src;
 
     nativeBuildInputs = [ pkgs.gnupatch ];
@@ -198,6 +201,14 @@ let
         echo "Patching usbhidd: resilient transfer loop + usage 0x0 fix..."
         ${pkgs.python3}/bin/python3 ${patchUsbhiddResilientLoop} drivers/input/usbhidd/src/main.rs
         echo "Done patching usbhidd"
+
+        # Reset interrupt endpoint hardware state after each transfer.
+        # Intel N100 xHCI controllers stop generating Transfer Events after
+        # ~3 successful interrupt transfers. Issue Stop Endpoint + Set TR
+        # Dequeue Pointer between transfers to reset the hardware ring state.
+        echo "Patching xhcid: stop+restart interrupt endpoints..."
+        ${pkgs.python3}/bin/python3 ${patchXhcidInterruptRestart} drivers/usb/xhcid/src/xhci/scheme.rs
+        echo "Done patching xhcid interrupt restart"
       fi
 
       # Add Queue::repost_buffer() to virtio-core for RX buffer recycling.

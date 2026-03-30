@@ -689,3 +689,13 @@
 {"text":"nothing","timestamp":1774845648304}
 {"text":"it doesnt get passed the third","timestamp":1774847192690}
 {"text":"also /commit when done","timestamp":1774847324792}
+{"text":"Summary\n\n Progress: 10/12 tasks complete.\n\n ### What's working\n\n - USB HID pipeline fully functional: xhcid → usbhidd → inputd\n → fbcond → getty\n - Mouse interfaces filtered (protocol=2 skip prevents scheme\n loop starvation)\n - inputd starts reliably in USB-only mode with { scheme =\n \"input\" } readiness\n - Resilient transfer loop with error recovery, diagnostics,\n usage 0x00 handling\n - First ~3 interrupt IN transfers deliver successfully\n\n ### What's blocking (tasks 3.3, 3.4)\n\n The Intel N100 xHCI controller stops generating Transfer\n Events for interrupt endpoints after ~3 successful transfers.\n The endpoint handle reopen only resets the xhcid scheme file\n state, not the hardware's transfer ring dequeue pointer.\n\n Next step: Patch xhcid's execute_transfer or on_read_endp_data\n  to issue a Stop Endpoint Command + Set TR Dequeue Pointer\n Command between interrupt IN transfers. This resets the\n hardware ring state so the xHC resumes polling. The functions\n reset_endpoint() and restart_endpoint() in xhci/mod.rs already\n implement this flow — they just need to be called for\n non-halted interrupt endpoints. its connected to the jetkvm at 192.168.1.89 i will manually power on and off, and manually screenshot for you","timestamp":1774848255182}
+{"text":"continue","timestamp":1774848379274}
+{"text":"use jetkvm virt media mount","timestamp":1774848947801}
+{"text":"m/tmp/pi-clipboard-7b557a14-b32b-4a70-b256-60e31ea0c85f.png i get this but i cant type","timestamp":1774849338773}
+{"text":"same issue - i think what is more imporant is to add more debugging, and maybe getting serial working after the bootloader","timestamp":1774850138457}
+{"text":"what if its on com0","timestamp":1774850266896}
+{"text":"not the jetkvm, we have usb0 connected to the mu","timestamp":1774850317880}
+{"text":"not the jetkvm, we have usb0 connected to the mu from the host we are running this all on","timestamp":1774850332134}
+{"text":"its not a serial! its a screenshot! /tmp/pi-clipboard-93ac123e-bee1-4a9c-8dda-b9c925cbe675.png we booted! we have ion shell","timestamp":1774850891244}
+{"text":"commit. that seemed to fix.","timestamp":1774851733454}
