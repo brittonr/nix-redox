@@ -50,6 +50,32 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Must delete `.cargo-lock` files from copied target dir (cargo can't re-acquire stale locks).
 - Must also delete Cargo.lock's git source for fdt (patched to path dep) so cargo doesn't re-lock.
 
+## igcd (I225/I226) Driver Debugging
+
+### RCTL_UPE (promiscuous mode) causes boot deadlock on N150
+- Adding RCTL_UPE flag to RCTL register causes the NIC to receive ALL network traffic
+- The resulting interrupt storm during boot (before the event loop runs) deadlocks init
+- Symptom: boot hangs at "fbbootlogd: mapped display" — same as the RSDP missing hang
+- Root cause: igcd's init enables RCTL before the IRQ event loop is running, so incoming packets generate interrupts that are never acknowledged, causing IRQ storm
+- Fix: do NOT enable RCTL_UPE; use MAC filter only (ensure RAL0/RAH0 are correct)
+
+### redox-log file output is broken during initfs boot
+- `common::setup_logging("net", "pci", &name, Info, Info)` creates log files at `/scheme/logging/net/pci/<name>.log` but they are always 0 bytes
+- The logging: scheme exists and directories are created, but no data is ever written
+- Even after ping activity (which calls write_packet/read_packet), log file stays empty
+- Workaround needed: can't use log::info!/debug!/trace! for diagnostics during initfs boot
+- Alternative approaches for initfs driver debugging:
+  - Write to `/scheme/debug` directly (kernel serial, but AGENTS.md says reads don't work from Ion)
+  - Modify driver-network to support a "diag" read path on the scheme itself
+  - Use kernel syscall_debug tracer
+  - CANNOT write to `/tmp/` (doesn't exist during initfs), `/scheme/fbbootlog` (deadlocks through initnsmgr)
+
+### initnsmgr deadlock during driver init (scheme I/O)
+- Any file: I/O from igcd during init (before scheme registration) can deadlock
+- This includes: opening fbbootlog scheme, writing to files, debug-level logging (too many writes)
+- Root cause: initnsmgr is single-threaded, and pcid-spawner → igcd init path goes through initnsmgr
+- Safe: `log::info!` at default rate (4-6 calls); NOT safe: `log::debug!` (dozens of calls), file opens
+
 ## Active Workarounds (still needed)
 
 ### Proxy scheme socket close doesn't unblock next_request() (kernel bug)
