@@ -2,15 +2,9 @@
 result
 result-*
 
-# redox-rebuild generation tracking
-.redox-generations/
-
-# Temporary build artifacts
-wrappers/
+# Build artifacts
 target/
 .pre-commit-config.yaml
 result-snix-upstream
 result-source-bundle
 snix-redox/upstream
-result-snix-upstream
-result-source-bundle
