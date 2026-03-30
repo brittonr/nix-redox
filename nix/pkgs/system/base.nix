@@ -65,6 +65,9 @@ let
   # Patch for usbhidd timeout on input scheme open
   patchUsbhiddTimeout = ../patches/patch-usbhidd-timeout.py;
 
+  # Patch for usbhidd resilient interrupt transfer loop
+  patchUsbhiddResilientLoop = ../patches/patch-usbhidd-resilient-loop.py;
+
   # Patch for inputd daemon startup order (setup_logging after SchemeDaemon::new)
   patchInputdDaemonOrder = ../patches/patch-inputd-daemon-order.py;
 
@@ -99,7 +102,7 @@ let
 
   # Prepare source with patched dependencies
   patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "base-src-patched-v16"; # v16: usbhidd timeout, xhcid multi-path driver lookup
+    name = "base-src-patched-v26"; # v26: skip mouse + endpoint reopen via reopen_ep u8
     src = base-src;
 
     nativeBuildInputs = [ pkgs.gnupatch ];
@@ -187,6 +190,14 @@ let
         echo "Patching inputd daemon startup order..."
         ${pkgs.python3}/bin/python3 ${patchInputdDaemonOrder} drivers/inputd/src/main.rs
         echo "Done patching inputd daemon order"
+
+        # Make usbhidd's main loop resilient to transfer errors.
+        # On real xHCI hardware (Intel N100), interrupt transfers can fail
+        # after the first successful report. Without this patch, the error
+        # propagates via ? and crashes usbhidd, killing all USB HID input.
+        echo "Patching usbhidd: resilient transfer loop + usage 0x0 fix..."
+        ${pkgs.python3}/bin/python3 ${patchUsbhiddResilientLoop} drivers/input/usbhidd/src/main.rs
+        echo "Done patching usbhidd"
       fi
 
       # Add Queue::repost_buffer() to virtio-core for RX buffer recycling.

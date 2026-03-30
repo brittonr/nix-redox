@@ -436,21 +436,22 @@ let
     '';
   };
 
+  # --- Input service (needed for both graphics and USB HID) ---
+  inputService = lib.optionalAttrs (cfg.initfsEnableGraphics || cfg.usbEnabled) {
+    "19_inputd.service" = ''
+      [unit]
+      description = "Input daemon"
+
+      [service]
+      cmd = "inputd"
+      args = []
+      type = { scheme = "input" }
+    '';
+  };
+
   # --- Graphics services (conditional on initfsEnableGraphics) ---
   graphicsServices = lib.optionalAttrs cfg.initfsEnableGraphics (
     {
-      # inputd must start BEFORE vesad — vesad's GraphicsScheme::new()
-      # opens an input event handle, which requires input: scheme.
-      "19_inputd.service" = ''
-        [unit]
-        description = "Input daemon"
-
-        [service]
-        cmd = "inputd"
-        args = []
-        type = { scheme = "input" }
-      '';
-
       "20_vesad.service" = ''
         [unit]
         description = "VESA display daemon"
@@ -592,7 +593,8 @@ let
 
   initfsTargetReqs =
     [ "50_redoxfs.service" ]
-    ++ lib.optional cfg.initfsEnableGraphics "20_graphics.target";
+    ++ lib.optional cfg.initfsEnableGraphics "20_graphics.target"
+    ++ lib.optional (cfg.usbEnabled && !cfg.initfsEnableGraphics) "19_inputd.service";
 
   targetFiles =
     {
@@ -628,6 +630,7 @@ let
   # --- Combine all initfs files ---
   defaultInitScriptFiles =
     runtimeServices
+    // inputService
     // graphicsServices
     // driverServices
     // liveService

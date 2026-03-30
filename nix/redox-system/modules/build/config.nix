@@ -136,6 +136,7 @@ let
       "xhcid"
       "usbhubd"
       "usbhidd"
+      "inputd"
     ]);
 
   allDaemons = lib.unique (

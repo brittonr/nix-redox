@@ -83,6 +83,11 @@ in
     };
   };
 
+  # Enable USB HID input for bare metal (JetKVM, physical keyboards)
+  "/hardware" = {
+    usbEnable = true;
+  };
+
   # VM runner defaults for development
   "/virtualisation" = {
     vmm = "cloud-hypervisor";
