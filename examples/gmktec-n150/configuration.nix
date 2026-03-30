@@ -53,9 +53,9 @@ in
       "nvmed"
       "ahcid"
     ];
-    # Intel I226-V [8086:125c] — e1000d compatible
+    # Intel I226-V [8086:125c] — igc family (I225/I226 2.5GbE)
     networkDrivers = [
-      "e1000d"
+      "igcd"
     ];
     # vesad handles UEFI GOP framebuffer — no extra graphics drivers
     graphicsDrivers = [ ];
@@ -136,6 +136,7 @@ in
 
         [service]
         cmd = "acpid"
+        inherit_envs = ["RSDP_ADDR", "RSDP_SIZE"]
         type = "notify"
       '';
       "40_pcid.service" = ''

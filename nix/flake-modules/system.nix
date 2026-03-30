@@ -158,6 +158,14 @@ let
       modules = [ ../redox-system/profiles/self-hosting.nix ];
       inherit extraPkgs;
     };
+
+    bare-metal-gmktec = mkSystem {
+      modules = [ ../redox-system/profiles/bare-metal-gmktec.nix ];
+      # Use FOD base build (has igcd) instead of basePerCrate (no igcd in plan yet)
+      extraPkgs = extraPkgs // {
+        base = modularPkgs.system.base;
+      };
+    };
   };
 
   # Runner factory functions from the infrastructure module
@@ -506,6 +514,9 @@ in
 
     # Default: graphical disk image (what `nix build` produces)
     default = systems.graphical.diskImage;
+
+    # Bare metal images
+    diskImage-gmktec = systems.bare-metal-gmktec.diskImage;
 
     # === Backward-compatible aliases ===
     diskImage = systems.default.diskImage;
