@@ -32,11 +32,12 @@ in
     };
   };
 
-  # Graphics disabled until orbital build is fixed
-  # "/graphics" = {
-  #   enable = true;
-  #   resolution = "1920x1080";
-  # };
+  # Text console on HDMI: route keyboard input to fbcond's VT so getty
+  # receives keypresses from JetKVM USB HID (inputd → fbcond → pty → login).
+  # Default inputdVT=1 routes input to VT 1 (nobody listening).
+  "/console" = {
+    inputdVT = 2; # Match fbcondVT (default 2) so input reaches text console
+  };
 
   "/hardware" = {
     # Real hardware — no virtio drivers
@@ -92,6 +93,15 @@ in
       theme = "default";
     };
     editor = "/bin/hx";
+  };
+
+  # Getty on fbcond VT 2 (HDMI text console) instead of default debug: serial
+  "/services" = {
+    getty = {
+      enable = "true";
+      device = "2"; # Maps to /scheme/fbcon/2 (fbcond VT)
+      extraArgs = "-J";
+    };
   };
 
   "/boot" = {
