@@ -439,13 +439,27 @@ let
   # --- Graphics services (conditional on initfsEnableGraphics) ---
   graphicsServices = lib.optionalAttrs cfg.initfsEnableGraphics (
     {
+      # inputd must start BEFORE vesad — vesad's GraphicsScheme::new()
+      # opens an input event handle, which requires input: scheme.
+      "19_inputd.service" = ''
+        [unit]
+        description = "Input daemon"
+
+        [service]
+        cmd = "inputd"
+        args = []
+        type = { scheme = "input" }
+      '';
+
       "20_vesad.service" = ''
         [unit]
         description = "VESA display daemon"
+        requires_weak = ["19_inputd.service"]
 
         [service]
         cmd = "vesad"
         args = []
+        inherit_envs = ["FRAMEBUFFER_ADDR", "FRAMEBUFFER_WIDTH", "FRAMEBUFFER_HEIGHT", "FRAMEBUFFER_STRIDE"]
         type = "notify"
       '';
 
@@ -456,25 +470,15 @@ let
 
         [service]
         cmd = "fbcond"
-        args = ["fbcon", "${toString cfg.consoleFbcondVT}"]
+        args = ["${toString cfg.consoleFbcondVT}"]
         type = { scheme = "fbcon" }
       '';
     }
     // lib.optionalAttrs cfg.consoleInputd {
-      "21_inputd.service" = ''
-        [unit]
-        description = "Input daemon"
-
-        [service]
-        cmd = "inputd"
-        args = []
-        type = { scheme = "input" }
-      '';
-
       "24_inputd_config.service" = ''
         [unit]
         description = "Configure input daemon active VT"
-        requires_weak = ["21_inputd.service", "20_vesad.service"]
+        requires_weak = ["19_inputd.service", "20_vesad.service"]
 
         [service]
         cmd = "inputd"
@@ -587,7 +591,8 @@ let
   ];
 
   initfsTargetReqs =
-    [ "50_redoxfs.service" ];
+    [ "50_redoxfs.service" ]
+    ++ lib.optional cfg.initfsEnableGraphics "20_graphics.target";
 
   targetFiles =
     {
