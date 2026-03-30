@@ -725,3 +725,17 @@
 {"text":"hmm after the bootloader i cant see anything","timestamp":1774882358454}
 {"text":"oh its up","timestamp":1774882411491}
 {"text":"oh its up","timestamp":1774882412787}
+{"text":"btw usb + dc didnt change anything","timestamp":1774883462517}
+{"text":"hmm i restarted and no hdmi again. what did we do last time to get it working","timestamp":1774883839283}
+{"text":"im on a 12v 8a to dc","timestamp":1774883918776}
+{"text":"i rebooted","timestamp":1774883931178}
+{"text":"check serial","timestamp":1774884251434}
+{"text":"yes hdmi was still dead. wehen we got it working, i was just using dc","timestamp":1774884475440}
+{"text":"i think the issue why its not boioting now is i installed teh cmos back in. ive since removed it","timestamp":1774884544749}
+{"text":"anything?","timestamp":1774884627272}
+{"text":"its also not turning on the blue led for the nvme in m.2","timestamp":1774884705348}
+{"text":"when we were using redox we were using dc only","timestamp":1774884746773}
+{"text":"anything?","timestamp":1774885007671}
+{"text":"remount the nixos image","timestamp":1774885116331}
+{"text":"anything on serial?","timestamp":1774885658711}
+{"text":"while we wait can we work on building an image with the correct pcie/nvme and network","timestamp":1774885855336}
