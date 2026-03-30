@@ -5,6 +5,7 @@
 // descriptor formats in desc.rs, NVM access in nvm.rs.
 
 use std::convert::TryInto;
+use std::fmt::Write as FmtWrite;
 use std::{cmp, mem, slice, thread, time};
 
 use driver_network::NetworkAdapter;
@@ -51,6 +52,10 @@ fn dma_array<T, const N: usize>() -> Result<[Dma<T>; N]> {
 impl NetworkAdapter for Igc {
     fn mac_address(&mut self) -> [u8; 6] {
         self.mac_address
+    }
+
+    fn diagnostic_info(&mut self) -> Vec<u8> {
+        unsafe { self.build_diag_string() }.into_bytes()
     }
 
     fn available_for_read(&mut self) -> usize {
@@ -310,9 +315,8 @@ impl Igc {
             (self.receive_ring.len() * mem::size_of::<AdvRxDesc>()) as u32,
         );
 
-        // Set head and tail
+        // Set head to 0 (tail set AFTER queue enable per I225/I226 spec)
         hw::write_reg(self.base, regs::RDH0, 0);
-        hw::write_reg(self.base, regs::RDT0, (self.receive_ring.len() - 1) as u32);
 
         // Enable RX queue
         hw::set_flag(self.base, regs::RXDCTL0, RXDCTL_ENABLE);
@@ -331,6 +335,10 @@ impl Igc {
             regs::RCTL,
             RCTL_EN | RCTL_BAM | RCTL_SECRC | RCTL_BSIZE_2048,
         );
+
+        // Set tail AFTER queue and receiver are enabled (I225/I226 ignores
+        // RDT writes before RXDCTL.ENABLE is set)
+        hw::write_reg(self.base, regs::RDT0, (self.receive_ring.len() - 1) as u32);
 
         log::debug!("RX ring initialized: {} descriptors, {}B buffers", RING_SIZE, BUF_SIZE);
     }
@@ -358,9 +366,8 @@ impl Igc {
             (self.transmit_ring.len() * mem::size_of::<AdvTxDesc>()) as u32,
         );
 
-        // TX ring starts empty
+        // Set head to 0 (tail set AFTER queue enable)
         hw::write_reg(self.base, regs::TDH0, 0);
-        hw::write_reg(self.base, regs::TDT0, 0);
 
         // Enable TX queue
         hw::set_flag(self.base, regs::TXDCTL0, TXDCTL_ENABLE);
@@ -379,6 +386,9 @@ impl Igc {
             regs::TCTL,
             TCTL_EN | TCTL_PSP | TCTL_CT_VAL | TCTL_COLD_FD,
         );
+
+        // TX ring starts empty — set tail after queue enable
+        hw::write_reg(self.base, regs::TDT0, 0);
 
         log::debug!("TX ring initialized: {} descriptors", RING_SIZE);
     }
@@ -410,6 +420,41 @@ impl Igc {
             thread::sleep(time::Duration::from_millis(100));
         }
         log::warn!("Link did not come up after 5s (STATUS={:#010X})", hw::read_reg(self.base, regs::STATUS));
+    }
+
+    /// Build register dump string for the diag scheme path.
+    unsafe fn build_diag_string(&self) -> String {
+        let mut s = String::with_capacity(1024);
+        let status = hw::read_reg(self.base, regs::STATUS);
+        let ctrl = hw::read_reg(self.base, regs::CTRL);
+        let _ = writeln!(s, "CTRL={:#010X}", ctrl);
+        let _ = writeln!(s, "STATUS={:#010X}", status);
+        let _ = writeln!(s, "Link={}", if status & STATUS_LU != 0 { "UP" } else { "DOWN" });
+        let _ = writeln!(s, "Speed={}", if status & STATUS_SPEED_2500 != 0 { "2500" } else {
+            match status & STATUS_SPEED_MASK {
+                STATUS_SPEED_10 => "10", STATUS_SPEED_100 => "100",
+                STATUS_SPEED_1000 => "1000", _ => "?",
+            }
+        });
+        let _ = writeln!(s, "RCTL={:#010X}", hw::read_reg(self.base, regs::RCTL));
+        let _ = writeln!(s, "TCTL={:#010X}", hw::read_reg(self.base, regs::TCTL));
+        let _ = writeln!(s, "IMS={:#010X}", hw::read_reg(self.base, regs::IMS));
+        let _ = writeln!(s, "RXDCTL0={:#010X}", hw::read_reg(self.base, regs::RXDCTL0));
+        let _ = writeln!(s, "TXDCTL0={:#010X}", hw::read_reg(self.base, regs::TXDCTL0));
+        let _ = writeln!(s, "SRRCTL0={:#010X}", hw::read_reg(self.base, regs::SRRCTL0));
+        let _ = writeln!(s, "RDH0={}", hw::read_reg(self.base, regs::RDH0));
+        let _ = writeln!(s, "RDT0={}", hw::read_reg(self.base, regs::RDT0));
+        let _ = writeln!(s, "TDH0={}", hw::read_reg(self.base, regs::TDH0));
+        let _ = writeln!(s, "TDT0={}", hw::read_reg(self.base, regs::TDT0));
+        let _ = writeln!(s, "RAL0={:#010X}", hw::read_reg(self.base, regs::RAL0));
+        let _ = writeln!(s, "RAH0={:#010X}", hw::read_reg(self.base, regs::RAH0));
+        let _ = writeln!(s, "RXPBS={:#010X}", hw::read_reg(self.base, regs::RXPBS));
+        let _ = writeln!(s, "TXPBS={:#010X}", hw::read_reg(self.base, regs::TXPBS));
+        let _ = writeln!(s, "ICR={:#010X}", hw::read_reg(self.base, regs::ICR));
+        let _ = writeln!(s, "MAC={:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+            self.mac_address[0], self.mac_address[1], self.mac_address[2],
+            self.mac_address[3], self.mac_address[4], self.mac_address[5]);
+        s
     }
 
     /// Log the current link speed.

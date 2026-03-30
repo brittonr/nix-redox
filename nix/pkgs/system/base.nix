@@ -49,6 +49,9 @@ let
   graphicscreenPatch = ../patches/graphicscreen-mmap.patch;
   graphicscreenPatchPy = ../patches/graphicscreen-mmap.py;
 
+  # Patch driver-network to support diagnostic read path
+  patchDriverNetworkDiag = ../patches/patch-driver-network-diag.py;
+
   # Patches for virtio-netd RX buffer recycling and IRQ wakeup
   virtioNetRxPatch = ../patches/virtio-netd-rx-recycle.patch;
   virtioNetIrqPatch = ../patches/virtio-netd-irq-wakeup.patch;
@@ -326,6 +329,11 @@ IGCD_CARGO_EOF
       # Add igcd to workspace members
       sed -i 's|"drivers/net/e1000d",|"drivers/net/e1000d",\n    "drivers/net/igcd",|' Cargo.toml
       echo "Done adding igcd"
+
+      # Patch driver-network: add diagnostic read path ("diag" scheme file)
+      echo "Patching driver-network: adding diag read path..."
+      ${pkgs.python3}/bin/python3 ${patchDriverNetworkDiag} .
+      echo "Done patching driver-network"
 
       # ─── virtio-fsd: inject driver source into workspace ───
       echo "Adding virtio-fsd driver to workspace..."
