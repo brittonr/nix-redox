@@ -123,6 +123,26 @@ in
       default = { };
       description = "Override individual initfs init.d scripts by name (e.g. \"00_runtime\", \"90_exit_initfs\"). Content replaces the default script entirely.";
     };
+    initDebug = {
+      type = t.bool;
+      default = false;
+      description = ''
+        Enable init debug logging. When true, sets INIT_LOG_LEVEL=DEBUG
+        in init's process environment via bootstrap, causing init to log
+        every service spawn, script command, and target transition to the
+        serial console.
+      '';
+    };
+    initSkip = {
+      type = t.listOf t.string;
+      default = [ ];
+      description = ''
+        List of init command names to skip during boot. Sets INIT_SKIP
+        in init's process environment via bootstrap. Each entry is
+        matched against the cmd field of services. Examples:
+        ["hwd"] ["hwd" "pcid-spawner"].
+      '';
+    };
   };
 
   impl = { options }: options;

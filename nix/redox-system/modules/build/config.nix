@@ -42,6 +42,8 @@ let
   bootBanner = inputs.boot.banner;
   initfsExcludeDaemons = inputs.boot.initfsExcludeDaemons;
   initfsScriptOverrides = inputs.boot.initfsScripts;
+  initDebug = inputs.boot.initDebug;
+  initSkip = inputs.boot.initSkip;
 
   # /security
   # Scheme lists for per-user login namespaces.
@@ -364,6 +366,8 @@ in
     bootBanner
     initfsExcludeDaemons
     initfsScriptOverrides
+    initDebug
+    initSkip
     hostname
     timezone
     ntpEnabled
