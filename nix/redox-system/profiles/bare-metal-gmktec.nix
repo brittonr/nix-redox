@@ -112,6 +112,7 @@ in
     initfsSizeMB = 128;
     liveMode = true;
     initDebug = true;
+    autoLogin = "root";
     initfsExcludeDaemons = [
       "ps2d"
       "usbscsid"

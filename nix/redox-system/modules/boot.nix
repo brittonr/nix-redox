@@ -127,6 +127,16 @@ in
       default = { };
       description = "Override individual initfs init.d scripts by name (e.g. \"00_runtime\", \"90_exit_initfs\"). Content replaces the default script entirely.";
     };
+    autoLogin = {
+      type = t.string;
+      default = "";
+      description = ''
+        Username to auto-login as on the console. When non-empty,
+        getty's -C flag is used to run a contain_login wrapper that
+        skips the login prompt and directly spawns the user's shell.
+        Empty string (default) means normal interactive login.
+      '';
+    };
     liveMode = {
       type = t.bool;
       default = false;
