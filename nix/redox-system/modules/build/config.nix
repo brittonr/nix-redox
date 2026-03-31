@@ -42,6 +42,7 @@ let
   bootBanner = inputs.boot.banner;
   initfsExcludeDaemons = inputs.boot.initfsExcludeDaemons;
   initfsScriptOverrides = inputs.boot.initfsScripts;
+  autoLogin = inputs.boot.autoLogin;
   initDebug = inputs.boot.initDebug;
   initSkip = inputs.boot.initSkip;
   liveMode = inputs.boot.liveMode;
@@ -369,6 +370,7 @@ in
     bootBanner
     initfsExcludeDaemons
     initfsScriptOverrides
+    autoLogin
     initDebug
     initSkip
     liveMode

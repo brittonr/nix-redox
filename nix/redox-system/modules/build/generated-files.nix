@@ -150,6 +150,19 @@ let
       mode = "0644";
     };
   })
+  // (lib.optionalAttrs (cfg.autoLogin != "") (
+    let
+      loginUser = cfg.autoLogin;
+      userCfg = inputs.users.users.${loginUser} or null;
+      userHome = if userCfg != null then userCfg.home or "/root" else "/root";
+      userShell = if userCfg != null then userCfg.shell or "/bin/ion" else "/bin/ion";
+    in {
+      "bin/contain_login" = {
+        text = "#!/bin/ion\nexec ${userShell}";
+        mode = "0755";
+      };
+    }
+  ))
   // (lib.optionalAttrs
     (cfg.networkingEnabled && (inputs.networking.mode == "dhcp" || inputs.networking.mode == "auto"))
     {

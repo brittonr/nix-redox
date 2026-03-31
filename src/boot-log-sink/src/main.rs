@@ -11,6 +11,7 @@
 //! to avoid vendoring redox_syscall or libredox crates.
 
 use std::fs::{self, OpenOptions};
+use std::io::Write;
 use std::os::fd::AsRawFd;
 
 // Redox syscall numbers
@@ -25,19 +26,19 @@ const CALL_FD: usize = 1 << 11;
 
 #[cfg(target_os = "redox")]
 unsafe fn syscall5(nr: usize, a: usize, b: usize, c: usize, d: usize, e: usize) -> usize {
-    let ret: usize;
-    // rbx is reserved by LLVM — save/restore around the syscall
+    let mut ret: usize = nr;
+    // x86_64 Redox: syscall instruction, regs = rax,rdi,rsi,rdx,r10,r8
+    // syscall clobbers rcx and r11
     core::arch::asm!(
-        "push rbx",
-        "mov rbx, {a}",
-        "int 0x80",
-        "pop rbx",
-        a = in(reg) a,
-        inlateout("rax") nr => ret,
-        in("rcx") b,
+        "syscall",
+        inout("rax") ret,
+        in("rdi") a,
+        in("rsi") b,
         in("rdx") c,
-        in("rsi") d,
-        in("rdi") e,
+        in("r10") d,
+        in("r8") e,
+        out("rcx") _,
+        out("r11") _,
         options(nostack),
     );
     ret
@@ -60,8 +61,9 @@ fn redox_sendfd(scheme_fd: usize, fd_to_send: usize) -> Result<usize, usize> {
             core::ptr::null::<u64>() as usize,
         )
     };
-    if ret > usize::MAX / 2 {
-        Err(ret)
+    let errno = -(ret as isize) as i32;
+    if errno >= 1 && errno < 4096 {
+        Err(errno as usize)
     } else {
         Ok(ret)
     }
@@ -108,12 +110,27 @@ fn main() {
     };
     let add_sink_fd = add_sink.as_raw_fd() as usize;
 
+    // Write diagnostic info directly to the file (bypasses logd)
+    {
+        let mut f = &file;
+        let _ = writeln!(f, "boot-log-sink: file_fd={} add_sink_fd={}", file_fd, add_sink_fd);
+        let _ = f.flush();
+    }
+
     // Send the file fd to logd — logd will backfill buffered lines
     // and continue writing new log output to this fd.
     match redox_sendfd(add_sink_fd, file_fd) {
-        Ok(_) => eprintln!("boot-log-sink: registered {} as log sink", log_path),
+        Ok(v) => {
+            eprintln!("boot-log-sink: registered {} as log sink (ret={})", log_path, v);
+            let mut f = &file;
+            let _ = writeln!(f, "boot-log-sink: sendfd ok, ret={}", v);
+            let _ = f.flush();
+        }
         Err(e) => {
-            eprintln!("boot-log-sink: sendfd failed: error {}", e);
+            let mut f = &file;
+            let _ = writeln!(f, "boot-log-sink: sendfd FAILED, error={:#x}", e);
+            let _ = f.flush();
+            eprintln!("boot-log-sink: sendfd failed: error {:#x}", e);
             std::process::exit(1);
         }
     }

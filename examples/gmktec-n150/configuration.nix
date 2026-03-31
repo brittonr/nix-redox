@@ -120,6 +120,7 @@ in
     initfsSizeMB = 128;
     liveMode = true;
     initDebug = true;
+    autoLogin = "root";
     # ps2d crashes on N150 (no PS/2 controller, USB-only)
     initfsExcludeDaemons = [
       "ps2d"

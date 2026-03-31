@@ -197,12 +197,17 @@ in
         )
         // (
           if gettyEnabled then
+            let
+              autoLogin = inputs.boot.autoLogin or "";
+              gettyArgs = "${options.getty.device} ${options.getty.extraArgs}"
+                + (if autoLogin != "" then " -C" else "");
+            in
             {
               getty = {
                 description = "Serial console via getty + PTY bridge";
                 command = "getty";
                 type = "nowait";
-                args = "${options.getty.device} ${options.getty.extraArgs}";
+                args = gettyArgs;
                 wantedBy = "rootfs";
                 enable = true;
                 after = [ "ptyd" ];
