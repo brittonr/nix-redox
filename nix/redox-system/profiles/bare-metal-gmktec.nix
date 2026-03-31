@@ -110,6 +110,8 @@ in
   "/boot" = {
     diskSizeMB = 1024;
     initfsSizeMB = 128;
+    liveMode = true;
+    initDebug = true;
     initfsExcludeDaemons = [
       "ps2d"
       "usbscsid"

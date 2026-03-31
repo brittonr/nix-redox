@@ -16,6 +16,7 @@
   uefi-src,
   fdt-src,
   vendor,
+  bootloaderFeatures ? [],
   ...
 }:
 
@@ -36,6 +37,10 @@ let
 
     patchPhase = ''
       runHook prePatch
+
+      ${lib.optionalString (builtins.elem "autoboot" bootloaderFeatures) ''
+        ${pkgs.python3}/bin/python3 ${./patches/bootloader/patch-bootloader-autoboot.py} .
+      ''}
 
       # Replace git dependencies with paths
       substituteInPlace Cargo.toml \
@@ -113,6 +118,7 @@ pkgs.stdenv.mkDerivation {
       --bin bootloader \
       --target ${uefiTarget} \
       --release \
+      ${lib.optionalString (bootloaderFeatures != []) "--features ${lib.concatStringsSep "," bootloaderFeatures}"} \
       -Z build-std=core,alloc \
       -Z build-std-features=compiler-builtins-mem
 

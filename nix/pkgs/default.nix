@@ -133,6 +133,15 @@ let
       }
     );
 
+    # Bootloader with autoboot (auto-select resolution + live mode)
+    bootloaderAutoboot = import ./system/bootloader.nix (
+      commonArgs
+      // {
+        inherit (inputs) bootloader-src uefi-src fdt-src;
+        bootloaderFeatures = [ "autoboot" ];
+      }
+    );
+
     base = import ./system/base.nix (
       commonArgs
       // {
@@ -612,6 +621,9 @@ let
 
     # netcfg-setup - network configuration tool (replaces Ion scripts)
     netcfg-setup = import ./userspace/netcfg-setup.nix (userspaceArgs);
+
+    # boot-log-sink - captures logd output to /var/log/boot.log
+    boot-log-sink = import ./userspace/boot-log-sink.nix (userspaceArgs);
 
     # redoxfs compiled for Redox target (goes into initfs)
     redoxfsTarget = mkUserspace.mkPackage {

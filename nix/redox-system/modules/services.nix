@@ -91,6 +91,9 @@ in
     environment = {
       path = "/environment";
     };
+    boot = {
+      path = "/boot";
+    };
   };
 
   options = {
@@ -243,6 +246,24 @@ in
                 after = [ "ptyd" ];
                 environment = { };
                 priority = 50;
+              };
+            }
+          else
+            { }
+        )
+        // (
+          if inputs.boot.initDebug then
+            {
+              boot-log-sink = {
+                description = "Boot log file sink";
+                command = "/bin/boot-log-sink";
+                type = "nowait";
+                args = "/var/log/boot.log";
+                wantedBy = "rootfs";
+                enable = true;
+                after = [ "ipcd" ];
+                environment = { };
+                priority = 12;
               };
             }
           else
