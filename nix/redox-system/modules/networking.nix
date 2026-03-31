@@ -149,7 +149,7 @@ in
                 netcfg-static = {
                   description = "Static network configuration";
                   command = "/bin/netcfg-static-quiet";
-                  type = "oneshot";
+                  type = "nowait";
                   args = "";
                   wantedBy = "rootfs";
                   enable = true;
