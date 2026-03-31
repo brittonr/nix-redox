@@ -76,6 +76,51 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Root cause: initnsmgr is single-threaded, and pcid-spawner → igcd init path goes through initnsmgr
 - Safe: `log::info!` at default rate (4-6 calls); NOT safe: `log::debug!` (dozens of calls), file opens
 
+### I225/I226 RDT must be written AFTER RXDCTL enable
+- The I225/I226 silently ignores writes to RDT before RXDCTL.ENABLE is set
+- Symptom: RDH=0 RDT=0 after boot — ring empty, no RX possible
+- Fix: set RDH=0, enable RXDCTL, wait for enable, enable RCTL, THEN set RDT=N-1
+- Same applies to TDT (write after TXDCTL enable) for consistency
+- Discovered via diag scheme: `cat /scheme/network.pci-0000-03-00.0_igc/diag`
+
+### Driver diag scheme path — only reliable diagnostic on Redox
+- Added "diag" read path to driver-network via patch-driver-network-diag.py
+- `cat /scheme/network.*/diag` reads registers from the running driver's own event loop
+- No initnsmgr involvement, no logging infrastructure dependency
+- Returns: CTRL, STATUS, RCTL, TCTL, IMS, RXDCTL, TXDCTL, SRRCTL, RDH, RDT, TDH, TDT, RAL, RAH, ICR, MAC
+- This is the ONLY reliable way to get driver state — log files are always empty, fbbootlog deadlocks
+
+### smolnetd netcfg scheme hardcodes interface as "eth0"
+- smolnetd's `mk_root_node` in `netstack/src/scheme/netcfg/mod.rs` uses hardcoded `"eth0"`
+- netcfg-setup must use `eth0` for configuration, not PCI-path names
+- `discover_first_interface()` must fall back to checking `/scheme/netcfg/ifaces/eth0/mac`
+- The netcfg scheme does NOT support directory listing (getdents) — `read_dir` always fails
+
+### netcfg-setup CIDR double-prefix bug
+- `apply_static_config` appended `/prefix` to addresses already containing `/24`
+- Result: `192.168.1.100/24/24` → smolnetd rejects silently
+- Fix: check if address already contains `/` before appending prefix
+
+### init-scripts.nix strips command paths via baseNameOf
+- `renderServiceToml` uses `builtins.baseNameOf svc.command` → strips `/bin/` prefix
+- After rootfs switchroot, init's PATH = `/usr/bin` (NOT `/bin`)
+- Commands at `/bin/` are unreachable without full path
+- Fix: preserve full path when command starts with `/`
+
+### Rootfs oneshot services fail silently — boot-time networking blocked
+- Services in `/usr/lib/init.d/` with type "oneshot" run after rootfs mount
+- Service command executes (confirmed: binary exists, service file correct) but writes to netcfg scheme don't take effect
+- Manual execution of identical command from login shell works perfectly
+- Tried: netcfg-setup binary, Ion wrapper script, direct echo to scheme — all fail at boot, all work manually
+- Root cause unknown — needs serial console or init debug logging to trace
+- Possible causes: smolnetd scheme registration race, init env_clear side effects, Ion script execution in init context
+- Workaround: run `/bin/netcfg-setup static-auto --address X --gateway Y` manually after login
+
+### Ion `&>` redirect doesn't work
+- `#!/bin/ion\ncommand &> /var/log/file.log` — the `&>` syntax doesn't capture output
+- Log file is never created
+- Same issue affects `dhcpd-quiet` wrapper (also uses `&>` in Ion)
+
 ## Active Workarounds (still needed)
 
 ### Proxy scheme socket close doesn't unblock next_request() (kernel bug)
