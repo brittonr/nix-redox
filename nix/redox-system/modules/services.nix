@@ -244,7 +244,7 @@ in
               sudod = {
                 description = "Privilege escalation daemon (sudo scheme)";
                 command = "/bin/sudo";
-                type = "daemon";
+                type = "nowait";
                 args = "--daemon";
                 wantedBy = "rootfs";
                 enable = true;
