@@ -20,17 +20,28 @@ fn wait_for_interface(iface: &str, attempts: u32, interval_ms: u64) -> bool {
 }
 
 // Discover the first network interface by listing /scheme/netcfg/ifaces/.
-// Skips "lo" (loopback). Returns None if the directory doesn't exist or is empty.
+// Skips "lo" (loopback). Falls back to "eth0" if directory listing fails
+// (smolnetd's netcfg scheme doesn't support getdents/readdir, but always
+// registers the interface as "eth0" regardless of PCI path).
 fn discover_first_interface() -> Option<String> {
-    let entries = fs::read_dir("/scheme/netcfg/ifaces").ok()?;
-    for entry in entries {
-        if let Ok(entry) = entry {
-            let name = entry.file_name().to_string_lossy().to_string();
-            if name != "lo" {
-                return Some(name);
+    // Try directory listing first
+    if let Ok(entries) = fs::read_dir("/scheme/netcfg/ifaces") {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                let name = entry.file_name().to_string_lossy().to_string();
+                if name != "lo" {
+                    return Some(name);
+                }
             }
         }
     }
+
+    // Fallback: smolnetd hardcodes "eth0" — check if it's reachable
+    let mac_path = "/scheme/netcfg/ifaces/eth0/mac";
+    if Path::new(mac_path).exists() {
+        return Some("eth0".to_string());
+    }
+
     None
 }
 
@@ -117,9 +128,15 @@ fn apply_static_config(iface: &str, address: &str, gateway: &str) {
     let route_add_path = "/scheme/netcfg/route/add";
     let nameserver_path = "/scheme/netcfg/resolv/nameserver";
 
-    let prefix = read_netmask_config(iface);
     let dns = read_dns_config();
-    let addr_content = format!("{}/{}", address, prefix);
+    // If address already has a CIDR prefix (e.g., "192.168.1.100/24"), use as-is.
+    // Otherwise append the prefix from /etc/net/{iface}/netmask or default /24.
+    let addr_content = if address.contains('/') {
+        address.to_string()
+    } else {
+        let prefix = read_netmask_config(iface);
+        format!("{}/{}", address, prefix)
+    };
     let route_content = format!("default via {}", gateway);
 
     // Best-effort writes - continue even if one fails
