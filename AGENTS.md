@@ -295,6 +295,11 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 - Confirmed working on: GMKtec NucBoxG3 Plus (N150), LattePanda Mu (N100, no workaround needed)
 
 ### Init Scripts
+- After rootfs switchroot, init PATH = `/usr/bin` (from `prefix: "/usr"`)
+- Rootfs service binaries at `/bin/` or `/nix/system/profile/bin/` are NOT in init's PATH
+- `renderServiceToml` uses `baseNameOf` on command — strips `/bin/` prefix by default
+- Fix: check `hasPrefix "/"` and preserve full path; or ensure binary is in `/usr/bin/`
+- Rootfs oneshot services may fail silently — no error output visible without serial console
 - Numbered: 00_base, 12_stored, 13_profiled, 20_orbital, 30_console, 90_exit_initfs
 - `notify` blocks until daemon signals readiness; `nowait` fires and forgets
 - Our init (base fc162ac) does NOT support inline `KEY=VALUE cmd` syntax — use `export` on separate line
@@ -302,6 +307,15 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 - `acpid` is spawned by pcid-spawner — do NOT notify directly
 - `audiod` uses `daemon` type (notify); if no audio HW, it exits and parent gets EOF → continues
 - VT=3 for Orbital (VT=1 conflicts with inputd, VT=2 with fbcond)
+
+### I225/I226 (igc) NIC Driver Notes
+- RDT register write MUST happen AFTER RXDCTL.ENABLE is set — hardware silently ignores earlier writes
+- RCTL_UPE (promiscuous mode) causes boot deadlock — interrupt storm before event loop runs
+- `log::debug!` level logging deadlocks during initfs boot (too many writes through logging scheme)
+- redox-log file output (`/scheme/logging/`) always 0 bytes during initfs boot
+- Driver diag path: `cat /scheme/network.*/diag` — reads registers from driver's own event loop, only reliable diagnostic
+- smolnetd netcfg scheme hardcodes interface as `eth0` — use `eth0` for configuration, not PCI-path names
+- smolnetd signals readiness (daemon.ready()) BEFORE registering netcfg scheme (race window)
 
 ### Clang on Redox
 - Clang works for C/asm compilation on Redox with `-no-canonical-prefixes` + explicit `-resource-dir`
