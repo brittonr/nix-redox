@@ -8,10 +8,10 @@
 
 ## 2. Verify boot-time auto-configuration
 
-- [ ] 2.1 Build disk image with fixed netcfg-setup, boot on GMKtec
-- [ ] 2.2 Verify dhcpd.log exists at `/var/log/dhcpd.log` after boot — confirms dhcpd-quiet ran
-- [ ] 2.3 Verify IP is configured: `cat /scheme/netcfg/ifaces/eth0/addr/list` shows DHCP-assigned address
-- [ ] 2.4 Verify ping works immediately after login (no manual config): `ping -c 4 192.168.1.1`
+- [x] 2.1 Build disk image with fixed netcfg-setup, boot on GMKtec
+- [ ] 2.2 Boot-time static config not working — init service runs but netcfg-setup can't configure IP. Root cause: smolnetd signals readiness BEFORE registering netcfg scheme (race in smolnetd main.rs: daemon.ready() at line ~before Smolnetd::new()). Manual `/bin/netcfg-setup static-auto` works perfectly after boot. Needs upstream smolnetd fix to move daemon.ready() after scheme registration.
+- [ ] 2.3 Verify IP is configured: `cat /scheme/netcfg/ifaces/eth0/addr/list` shows configured address — WORKS with manual command
+- [ ] 2.4 Verify ping works immediately after login — WORKS with manual command (1ms RTT)
 
 ## 3. Test TCP and cleanup
 

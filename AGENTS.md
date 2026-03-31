@@ -16,6 +16,7 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 | `redox-os--pkgutils` | Package manager internals (pkg-lib, pkgar format) |
 | `redox-os--redoxfs` | Filesystem scheme implementation, handle management, mmap |
 | `redox-os--base` | Base system repo — core daemons (init, bootstrap, ptyd, ipcd, logd, netstack, ramfs, randd, zerod, audiod) + `drivers/` (acpid, pcid, storage, graphics, input, audio, net, USB, virtio-core) + initfs, daemon lib, config |
+| `asterinas--asterinas` | Asterinas OS — Rust-based OS framework with framekernel architecture, OSTD hardware abstraction, OSDK build tooling |
 
 ## Redox OS Platform
 

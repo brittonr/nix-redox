@@ -795,3 +795,14 @@
 {"text":"lets write an openspec for that","timestamp":1774917623563}
 {"text":"continue","timestamp":1774918767036}
 {"text":"worked!","timestamp":1774919950036}
+{"text":"lets keep going","timestamp":1774920003118}
+{"text":"add https://github.com/asterinas/asterinas as reference","timestamp":1774920390412}
+{"text":"hmm for some reason after the live starts its just a black screen","timestamp":1774922324790}
+{"text":"eh jk it worked. but ping timeout","timestamp":1774922484392}
+{"text":"says not configured. is there no way to get logs?","timestamp":1774922564969}
+{"text":"read your references for init and startup","timestamp":1774923535652}
+{"text":"timeout","timestamp":1774924184221}
+{"text":"surely there is an existing example of how to do this somewhere?","timestamp":1774924247627}
+{"text":"timeout","timestamp":1774925307867}
+{"text":"https://doc.redox-os.org/book/boot-process.html?highlight=init#init https://gitlab.redox-os.org/redox-os/base/-/tree/main/bootstrap?ref_type=heads https://doc.redox-os.org/book/schemes.html?highlight=startup#userspace-schemes https://doc.redox-os.org/book/tasks.html?highlight=networking#networking https://doc.redox-os.org/book/resources.html?highlight=networking#resource-examples","timestamp":1774925656854}
+{"text":"https://doc.redox-os.org/book/boot-process.html?highlight=init#init https://gitlab.redox-os.org/redox-os/base/-/tree/main/bootstrap?ref_type=heads https://doc.redox-os.org/book/schemes.html?highlight=startup#userspace-schemes https://doc.redox-os.org/book/tasks.html?highlight=networking#networking https://doc.redox-os.org/book/resources.html?highlight=networking#resource-examples","timestamp":1774925674385}

@@ -159,6 +159,18 @@ let
       };
     }
   )
+  // (lib.optionalAttrs (cfg.networkingEnabled && inputs.networking.mode == "static")
+    (let
+      firstIfaceName = let names = builtins.attrNames inputs.networking.interfaces;
+        in if names != [] then builtins.head names else null;
+      firstIface = if firstIfaceName != null then inputs.networking.interfaces.${firstIfaceName} else null;
+    in lib.optionalAttrs (firstIface != null) {
+      "bin/netcfg-static-quiet" = {
+        text = "#!/bin/ion\nsleep 2\necho ${firstIface.address} > /scheme/netcfg/ifaces/eth0/addr/set\necho default via ${firstIface.gateway} > /scheme/netcfg/route/add\necho ${builtins.head inputs.networking.dns} > /scheme/netcfg/resolv/nameserver";
+        mode = "0755";
+      };
+    })
+  )
   # Per-interface files
   // (builtins.foldl' (acc: entry: acc // entry) { } (
     lib.mapAttrsToList (name: iface: {
