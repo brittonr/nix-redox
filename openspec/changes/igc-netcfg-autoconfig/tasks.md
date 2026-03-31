@@ -1,10 +1,10 @@
 ## 1. Fix netcfg-setup interface discovery
 
-- [ ] 1.1 In `src/netcfg-setup/src/main.rs`, modify `discover_first_interface()` to fall back to `"eth0"` when `fs::read_dir("/scheme/netcfg/ifaces")` fails — smolnetd's netcfg scheme doesn't support directory listing, so read_dir always returns Err. The fallback should check if `/scheme/netcfg/ifaces/eth0/mac` is readable before accepting `"eth0"`.
-- [ ] 1.2 Modify `wait_for_any_interface()` to also try the `"eth0"` fallback on each poll attempt — the interface may not be available immediately at boot (smolnetd starts after igcd)
-- [ ] 1.3 Verify `netcfg-setup auto` works from the shell on the GMKtec — should discover `eth0`, run DHCP, configure IP
-- [ ] 1.4 Verify `netcfg-setup dhcpd` works from the shell — should discover `eth0`, send DHCP Discover, get lease
-- [ ] 1.5 Verify `netcfg-setup static-auto --address 192.168.1.100/24 --gateway 192.168.1.1` works from the shell
+- [x] 1.1 In `src/netcfg-setup/src/main.rs`, modify `discover_first_interface()` to fall back to `"eth0"` when `fs::read_dir("/scheme/netcfg/ifaces")` fails — smolnetd's netcfg scheme doesn't support directory listing, so read_dir always returns Err. The fallback should check if `/scheme/netcfg/ifaces/eth0/mac` is readable before accepting `"eth0"`.
+- [x] 1.2 Modify `wait_for_any_interface()` to also try the `"eth0"` fallback on each poll attempt — the interface may not be available immediately at boot (smolnetd starts after igcd)
+- [x] 1.3 Verify `netcfg-setup auto` works from the shell on the GMKtec — should discover `eth0`, run DHCP, configure IP
+- [x] 1.4 Verify `netcfg-setup dhcpd` works from the shell — should discover `eth0`, send DHCP Discover, get lease
+- [x] 1.5 Verify `netcfg-setup static-auto --address 192.168.1.146/24 --gateway 192.168.1.1` works from the shell
 
 ## 2. Verify boot-time auto-configuration
 
