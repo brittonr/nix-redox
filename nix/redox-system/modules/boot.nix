@@ -27,8 +27,12 @@ in
     bootloader = {
       # attrs not derivation: defaultFunc may return {} when package missing
       type = t.attrs;
-      defaultFunc = { inputs }: inputs.pkgs.pkgs.bootloader or { };
-      description = "Bootloader package";
+      defaultFunc = { inputs, options }: 
+        if options.liveMode then
+          inputs.pkgs.pkgs.bootloaderAutoboot or inputs.pkgs.pkgs.bootloader or { }
+        else
+          inputs.pkgs.pkgs.bootloader or { };
+      description = "Bootloader package. Auto-selects autoboot variant when liveMode is true.";
     };
     initfsExtraBinaries = {
       type = t.listOf t.string;
@@ -122,6 +126,17 @@ in
       type = t.attrsOf t.string;
       default = { };
       description = "Override individual initfs init.d scripts by name (e.g. \"00_runtime\", \"90_exit_initfs\"). Content replaces the default script entirely.";
+    };
+    liveMode = {
+      type = t.bool;
+      default = false;
+      description = ''
+        Build for live disk boot (USB stick, JetKVM virtual media).
+        The entire disk image is loaded into RAM by the bootloader.
+        lived provides a COW overlay so writes go to memory, not disk.
+        When true, storage drivers (nvmed, ahcid) are excluded from
+        initfs since the rootfs is served from RAM, not a real disk.
+      '';
     };
     initDebug = {
       type = t.bool;

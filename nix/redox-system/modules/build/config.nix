@@ -44,6 +44,7 @@ let
   initfsScriptOverrides = inputs.boot.initfsScripts;
   initDebug = inputs.boot.initDebug;
   initSkip = inputs.boot.initSkip;
+  liveMode = inputs.boot.liveMode;
 
   # /security
   # Scheme lists for per-user login namespaces.
@@ -99,8 +100,9 @@ let
   rebootOnPanic = inputs.power.rebootOnPanic;
 
   # Compute all drivers
+  # In live mode, storage drivers are excluded — rootfs is RAM-backed via lived.
   allDrivers = lib.unique (
-    inputs.hardware.storageDrivers
+    (if liveMode then [] else inputs.hardware.storageDrivers)
     ++ inputs.hardware.networkDrivers
     ++ (lib.optionals graphicsEnabled inputs.hardware.graphicsDrivers)
     ++ (lib.optionals audioEnabled inputs.hardware.audioDrivers)
@@ -186,6 +188,7 @@ let
     ++ (lib.optional (pkgs ? userutils && inSystemPackages pkgs.userutils) pkgs.userutils)
     ++ (lib.optional (networkingEnabled && pkgs ? netutils) pkgs.netutils)
     ++ (lib.optional (networkingEnabled && pkgs ? netcfg-setup) pkgs.netcfg-setup)
+    ++ (lib.optional (initDebug && pkgs ? boot-log-sink) pkgs.boot-log-sink)
     ++ (lib.optional (pkgs ? snix) pkgs.snix)
     ++ (lib.optional (irohEnabled && pkgs ? irohd) pkgs.irohd)
     ++ (lib.optionals graphicsEnabled (
@@ -368,6 +371,7 @@ in
     initfsScriptOverrides
     initDebug
     initSkip
+    liveMode
     hostname
     timezone
     ntpEnabled

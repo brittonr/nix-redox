@@ -118,6 +118,8 @@ in
   "/boot" = {
     diskSizeMB = 1024;
     initfsSizeMB = 128;
+    liveMode = true;
+    initDebug = true;
     # ps2d crashes on N150 (no PS/2 controller, USB-only)
     initfsExcludeDaemons = [
       "ps2d"

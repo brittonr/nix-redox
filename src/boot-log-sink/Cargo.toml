@@ -1,0 +1,7 @@
+[package]
+name = "boot-log-sink"
+version = "0.1.0"
+edition = "2021"
+
+# Zero external dependencies — uses raw Redox syscalls via inline asm
+[dependencies]
