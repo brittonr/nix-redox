@@ -59,7 +59,11 @@ in
 
   "/networking" = {
     enable = true;
-    mode = "auto";
+    mode = "static";
+    interfaces.eth0 = {
+      address = "192.168.1.146/24";
+      gateway = "192.168.1.1";
+    };
     dns = [
       "1.1.1.1"
       "8.8.8.8"

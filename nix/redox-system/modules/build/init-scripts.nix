@@ -218,7 +218,9 @@ let
           in
           "[" + lib.concatMapStringsSep ", " (a: ''"${a}"'') parts + "]";
 
-      cmdName = builtins.baseNameOf svc.command;
+      # Use full path if command starts with /; otherwise strip to basename
+      # (initfs commands are in PATH, rootfs commands may need full path)
+      cmdName = if lib.hasPrefix "/" svc.command then svc.command else builtins.baseNameOf svc.command;
 
       # [unit] section lines
       unitLines =

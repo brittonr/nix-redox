@@ -148,9 +148,9 @@ in
               {
                 netcfg-static = {
                   description = "Static network configuration";
-                  command = "/bin/netcfg-setup";
+                  command = "/bin/netcfg-static-quiet";
                   type = "oneshot";
-                  args = "static-auto --address ${firstIface.address} --gateway ${firstIface.gateway}";
+                  args = "";
                   wantedBy = "rootfs";
                   enable = true;
                   after = [ "smolnetd" ];
