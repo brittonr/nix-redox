@@ -70,6 +70,16 @@ INIT_SCRIPT_EOF
     # Ion shell configuration
     echo 'let PROMPT = "${cfg.initfsPrompt}"' > initfs/etc/ion/initrc
 
+    ${let
+      initEnvLines =
+        lib.optional cfg.initDebug "INIT_LOG_LEVEL=DEBUG"
+        ++ lib.optional (cfg.initSkip != []) "INIT_SKIP=${lib.concatStringsSep "," cfg.initSkip}";
+    in lib.optionalString (initEnvLines != []) (
+      "# Init debug/skip environment (read by bootstrap before exec'ing init)\n"
+      + lib.concatMapStringsSep "\n" (line: "echo '${line}' >> initfs/etc/init.env") initEnvLines
+      + "\n"
+    )}
+
     redox-initfs-ar initfs ${pkgs.bootstrap}/bin/bootstrap -o initfs.img --max-size ${
       toString (cfg.initfsSizeMB * 1024 * 1024)
     }
