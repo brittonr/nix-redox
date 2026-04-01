@@ -481,7 +481,7 @@ let
       "24_inputd_config.service" = ''
         [unit]
         description = "Configure input daemon active VT"
-        requires_weak = ["19_inputd.service", "20_vesad.service"]
+        requires_weak = ["19_inputd.service", "20_vesad.service", "23_fbcond.service"]
 
         [service]
         cmd = "inputd"

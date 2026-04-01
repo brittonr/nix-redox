@@ -807,3 +807,12 @@
 {"text":"https://doc.redox-os.org/book/boot-process.html?highlight=init#init https://gitlab.redox-os.org/redox-os/base/-/tree/main/bootstrap?ref_type=heads https://doc.redox-os.org/book/schemes.html?highlight=startup#userspace-schemes https://doc.redox-os.org/book/tasks.html?highlight=networking#networking https://doc.redox-os.org/book/resources.html?highlight=networking#resource-examples","timestamp":1774925656854}
 {"text":"https://doc.redox-os.org/book/boot-process.html?highlight=init#init https://gitlab.redox-os.org/redox-os/base/-/tree/main/bootstrap?ref_type=heads https://doc.redox-os.org/book/schemes.html?highlight=startup#userspace-schemes https://doc.redox-os.org/book/tasks.html?highlight=networking#networking https://doc.redox-os.org/book/resources.html?highlight=networking#resource-examples","timestamp":1774925674385}
 {"text":"write down lessons learned in the napkin. if its really important add it to agents.md.","timestamp":1774926107744}
+{"text":"what next","timestamp":1775006067285}
+{"text":"lets keep going wtih the n150, working our way to self hosting on the device","timestamp":1775006124415}
+{"text":"write an openspec to get ssh working","timestamp":1775006393406}
+{"text":"jetkvm is 192.168.1.89","timestamp":1775006607641}
+{"text":"jetkvm is 192.168.1.89, dont do screenshots, you dont have connectoto power the n150. ill handle that. just plan on flashing to jetkvm virtual media","timestamp":1775006640427}
+{"text":"can we check upstream redox ssh story?","timestamp":1775007071862}
+{"text":"yes","timestamp":1775007548038}
+{"text":"im having issues with the keyboard input not being reliable after log in still. sometimes it works, others i have to reboot","timestamp":1775011302091}
+{"text":"commit and ubild the full image to flash","timestamp":1775012157720}
