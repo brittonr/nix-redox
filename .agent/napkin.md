@@ -39,6 +39,16 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - `git add` alone doesn't force re-evaluation if content hash hasn't changed.
 - Check with `nix eval --raw '.#pkg.drvPath'` before and after to confirm drv changed.
 
+## UEFI liveMode Memory Limit
+
+### N150 can't allocate >~3GB contiguous UEFI memory for liveMode
+- `diskSizeMB = 4096` → 3892 MiB RedoxFS → bootloader panics: "out of resources" (Status 0x8000000000000009)
+- UEFI `AllocatePages` needs contiguous conventional memory — firmware memory map is fragmented
+- 1024 MiB works, 2560 MiB (2470 MiB RedoxFS) works, 4096 MiB fails
+- Root tree actual data was 1.6GB — the 4GB disk was massively oversized
+- Fix: size `diskSizeMB` to actual data + ~50% headroom, not raw toolchain package sizes
+- The toolchain packages (rustc 426M + llvm 802M + sysroot 32M) overlap/share files in the root tree
+
 ## Kernel Two-Phase Build
 
 ### Cargo fingerprint leakage across Nix derivations

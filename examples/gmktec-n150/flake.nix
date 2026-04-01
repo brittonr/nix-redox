@@ -1,5 +1,5 @@
 {
-  description = "Redox OS for GMKtec N150 — bare metal boot";
+  description = "Redox OS for GMKtec N150 — bare metal boot (base + self-hosting)";
 
   inputs = {
     redox.url = "path:../../";
@@ -11,29 +11,52 @@
       system = "x86_64-linux";
       redoxLib = redox.legacyPackages.${system};
 
-      mySystem = redoxLib.mkRedoxSystem {
+      base = redoxLib.mkRedoxSystem {
         modules = [ ./configuration.nix ];
       };
 
-      qemuRunners = redoxLib.mkQemuRunners {
-        inherit (mySystem) diskImage vmConfig;
+      selfHosting = redoxLib.mkRedoxSystem {
+        modules = [ ./self-hosting.nix ];
+      };
+
+      baseRunners = redoxLib.mkQemuRunners {
+        inherit (base) diskImage vmConfig;
+      };
+
+      shRunners = redoxLib.mkQemuRunners {
+        inherit (selfHosting) diskImage vmConfig;
       };
     in
     {
       apps.${system} = {
-        # `nix run` — graphical desktop (QEMU + GTK, for pre-flight testing)
+        # `nix run` — base config, graphical QEMU
         default = {
           type = "app";
-          program = "${qemuRunners.graphical}/bin/run-redox-graphical";
+          program = "${baseRunners.graphical}/bin/run-redox-graphical";
         };
 
-        # `nix run .#headless` — serial console (QEMU, no display)
+        # `nix run .#headless` — base config, serial console
         headless = {
           type = "app";
-          program = "${qemuRunners.headless}/bin/run-redox";
+          program = "${baseRunners.headless}/bin/run-redox";
+        };
+
+        # `nix run .#self-hosting` — self-hosting config, graphical QEMU
+        self-hosting = {
+          type = "app";
+          program = "${shRunners.graphical}/bin/run-redox-graphical";
+        };
+
+        # `nix run .#self-hosting-headless` — self-hosting, serial console
+        self-hosting-headless = {
+          type = "app";
+          program = "${shRunners.headless}/bin/run-redox";
         };
       };
 
-      packages.${system}.default = mySystem.diskImage;
+      packages.${system} = {
+        default = base.diskImage;
+        self-hosting = selfHosting.diskImage;
+      };
     };
 }
