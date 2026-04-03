@@ -827,3 +827,5 @@
 {"text":"ensure you have proper timings/sleeps whatever to know when to check","timestamp":1775197290724}
 {"text":"continue with openspec/changes/nix-self-hosting-next","timestamp":1775228242098}
 {"text":"yes","timestamp":1775228469616}
+{"text":"what next for self hosting on redox with nix/snix","timestamp":1775228881796}
+{"text":"write an openspec for this. 1 should be its own","timestamp":1775228995667}
