@@ -2761,6 +2761,129 @@ let
                           fi
                         '
 
+                        # ══════════════════════════════════════════════════════
+                        # FLAKE INSTALLABLE BUILD TEST
+                        # ══════════════════════════════════════════════════════
+                        # Tests `snix build .#hello` end-to-end: installable
+                        # parsing, flake.lock resolution, eval, build.
+                        echo ""
+                        echo "========================================"
+                        echo "  FLAKE INSTALLABLE BUILD TEST"
+                        echo "========================================"
+                        echo ""
+
+                        if exists -d /usr/src/test-flake
+                          echo "FUNC_TEST:test-flake-present:PASS"
+                        else
+                          echo "FUNC_TEST:test-flake-present:FAIL:not found at /usr/src/test-flake"
+                        end
+
+                        # Build the flake installable
+                        echo "--- flake-build: snix build .#hello ---"
+                        /nix/system/profile/bin/bash -c '
+                          mkdir -p /nix/store /nix/var/snix/pathinfo
+                          OUTPUT=$(/bin/snix build "/usr/src/test-flake#hello" 2>/tmp/flake-build-err)
+                          EXIT=$?
+                          echo "$OUTPUT" > /tmp/flake-build-output
+                          if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/hello" ]; then
+                            RUN=$("$OUTPUT/bin/hello" 2>&1)
+                            if [ "$RUN" = "Hello from flake!" ]; then
+                              echo "FUNC_TEST:flake-build:PASS"
+                            else
+                              echo "FUNC_TEST:flake-build:FAIL:wrong output: $RUN"
+                            fi
+                          else
+                            echo "FUNC_TEST:flake-build:FAIL:exit=$EXIT output=$OUTPUT"
+                            cat /tmp/flake-build-err 2>/dev/null | head -20
+                          fi
+                        '
+
+                        # Cached rebuild test
+                        echo "--- flake-cached: same output on rebuild ---"
+                        /nix/system/profile/bin/bash -c '
+                          ORIG=$(cat /tmp/flake-build-output 2>/dev/null)
+                          OUTPUT=$(/bin/snix build "/usr/src/test-flake#hello" 2>/dev/null)
+                          if [ "$OUTPUT" = "$ORIG" ] && [ -n "$OUTPUT" ]; then
+                            echo "FUNC_TEST:flake-cached:PASS"
+                          else
+                            echo "FUNC_TEST:flake-cached:FAIL:output=$OUTPUT orig=$ORIG"
+                          fi
+                        '
+
+                        # Store registration test
+                        echo "--- flake-registered: output in pathinfo db ---"
+                        /nix/system/profile/bin/bash -c '
+                          OUTPUT=$(cat /tmp/flake-build-output 2>/dev/null)
+                          if [ -n "$OUTPUT" ]; then
+                            INFO=$(/bin/snix store info "$OUTPUT" 2>&1)
+                            if echo "$INFO" | grep -qi "sha256"; then
+                              echo "FUNC_TEST:flake-registered:PASS"
+                            else
+                              echo "FUNC_TEST:flake-registered:FAIL:$INFO"
+                            fi
+                          else
+                            echo "FUNC_TEST:flake-registered:FAIL:no output"
+                          fi
+                        '
+
+                        # ══════════════════════════════════════════════════════
+                        # COMPLEX BUILD TESTS (CC-dep + Workspace)
+                        # ══════════════════════════════════════════════════════
+                        echo ""
+                        echo "========================================"
+                        echo "  COMPLEX BUILD TESTS"
+                        echo "========================================"
+                        echo ""
+
+                        # ── CC-dep build test ─────────────────────────────────
+                        if exists -d /usr/src/cc-dep-test
+                          echo "FUNC_TEST:cc-dep-src-present:PASS"
+                        else
+                          echo "FUNC_TEST:cc-dep-src-present:FAIL:not at /usr/src/cc-dep-test"
+                        end
+
+                        echo "--- cc-dep-build: Rust + C via cc-rs ---"
+                        /nix/system/profile/bin/bash -c '
+                          mkdir -p /nix/store /nix/var/snix/pathinfo
+                          OUTPUT=$(/bin/snix build --file /usr/src/cc-dep-test/build.nix 2>/tmp/cc-dep-build-err)
+                          EXIT=$?
+                          if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/cc-dep-test" ]; then
+                            RUN=$("$OUTPUT/bin/cc-dep-test" 2>&1)
+                            if echo "$RUN" | grep -q "CC_DEP_OK"; then
+                              echo "FUNC_TEST:cc-dep-build:PASS"
+                            else
+                              echo "FUNC_TEST:cc-dep-build:FAIL:output=$RUN"
+                            fi
+                          else
+                            echo "FUNC_TEST:cc-dep-build:FAIL:exit=$EXIT"
+                            cat /tmp/cc-dep-build-err 2>/dev/null | head -20
+                          fi
+                        '
+
+                        # ── Workspace build test ──────────────────────────────
+                        if exists -d /usr/src/workspace-test
+                          echo "FUNC_TEST:workspace-src-present:PASS"
+                        else
+                          echo "FUNC_TEST:workspace-src-present:FAIL:not at /usr/src/workspace-test"
+                        end
+
+                        echo "--- workspace-build: two-crate workspace ---"
+                        /nix/system/profile/bin/bash -c '
+                          OUTPUT=$(/bin/snix build --file /usr/src/workspace-test/build.nix 2>/tmp/workspace-build-err)
+                          EXIT=$?
+                          if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/mybin" ]; then
+                            RUN=$("$OUTPUT/bin/mybin" 2>&1)
+                            if echo "$RUN" | grep -q "WORKSPACE_OK"; then
+                              echo "FUNC_TEST:workspace-build:PASS"
+                            else
+                              echo "FUNC_TEST:workspace-build:FAIL:output=$RUN"
+                            fi
+                          else
+                            echo "FUNC_TEST:workspace-build:FAIL:exit=$EXIT"
+                            cat /tmp/workspace-build-err 2>/dev/null | head -20
+                          fi
+                        '
+
                         # ── Test: Self-compile snix on Redox ─────────────────
                         # THE ultimate self-hosting test. Compile snix-redox
                         # (a real 45K-line Rust project with 183 crate deps,
@@ -3034,6 +3157,39 @@ selfHosting
             {
               source = pkgs.ripgrep-source-bundle;
               target = "usr/src/ripgrep";
+            }
+          ]
+        else
+          [ ]
+      )
+      ++ (
+        if pkgs ? test-flake-bundle then
+          [
+            {
+              source = pkgs.test-flake-bundle;
+              target = "usr/src/test-flake";
+            }
+          ]
+        else
+          [ ]
+      )
+      ++ (
+        if pkgs ? cc-dep-test-bundle then
+          [
+            {
+              source = pkgs.cc-dep-test-bundle;
+              target = "usr/src/cc-dep-test";
+            }
+          ]
+        else
+          [ ]
+      )
+      ++ (
+        if pkgs ? workspace-test-bundle then
+          [
+            {
+              source = pkgs.workspace-test-bundle;
+              target = "usr/src/workspace-test";
             }
           ]
         else

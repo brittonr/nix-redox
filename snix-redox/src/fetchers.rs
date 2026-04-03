@@ -171,6 +171,176 @@ fn verify_nar_hash(
     Ok(())
 }
 
+// ── Git fetch (via git CLI) ─────────────────────────────────────────────────
+
+/// Clone a git repository and checkout a specific revision to a store path.
+///
+/// Shells out to the `git` binary (must be in PATH or at a known location).
+/// The `.git` directory is stripped from the output.
+///
+/// If `nar_hash_sri` is provided, verifies the NAR hash of the output.
+/// If the store path already exists, returns immediately (cached).
+pub fn fetch_git(
+    url: &str,
+    rev: &str,
+    out: &str,
+    nar_hash_sri: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Cache check: if output already exists, skip
+    if std::path::Path::new(out).exists() {
+        eprintln!("using cached git fetch at {out}");
+        return Ok(());
+    }
+
+    let git = find_git()?;
+
+    // Create a temp dir for the bare clone
+    let tmp_parent = std::path::Path::new(out)
+        .parent()
+        .unwrap_or(std::path::Path::new("/tmp"));
+    std::fs::create_dir_all(tmp_parent)?;
+    let tmp_bare = format!("{out}.git-bare-tmp");
+    let _ = std::fs::remove_dir_all(&tmp_bare);
+
+    // Clone bare (faster — no working tree)
+    eprintln!("git clone {url} (rev {})...", &rev[..std::cmp::min(rev.len(), 12)]);
+    let clone_out = std::process::Command::new(&git)
+        .args(["clone", "--bare", url, &tmp_bare])
+        .output()
+        .map_err(|e| format!("failed to run git clone: {e}"))?;
+
+    if !clone_out.status.success() {
+        let stderr = String::from_utf8_lossy(&clone_out.stderr);
+        let _ = std::fs::remove_dir_all(&tmp_bare);
+        return Err(format!(
+            "git clone failed for '{url}':\n{stderr}"
+        ).into());
+    }
+
+    // Create the output directory and checkout the specific rev
+    std::fs::create_dir_all(out)?;
+    let checkout_out = std::process::Command::new(&git)
+        .args([
+            "--git-dir", &tmp_bare,
+            "--work-tree", out,
+            "checkout", rev, "--", ".",
+        ])
+        .output()
+        .map_err(|e| format!("failed to run git checkout: {e}"))?;
+
+    if !checkout_out.status.success() {
+        let stderr = String::from_utf8_lossy(&checkout_out.stderr);
+        let _ = std::fs::remove_dir_all(&tmp_bare);
+        let _ = std::fs::remove_dir_all(out);
+        return Err(format!(
+            "git checkout failed for rev '{rev}':\n{stderr}"
+        ).into());
+    }
+
+    // Clean up bare clone
+    let _ = std::fs::remove_dir_all(&tmp_bare);
+
+    // Verify NAR hash if provided
+    if let Some(expected_sri) = nar_hash_sri {
+        verify_nar_hash_sri(out, expected_sri)?;
+    }
+
+    eprintln!("✓ fetched git {url} @ {} to {out}", &rev[..std::cmp::min(rev.len(), 12)]);
+    Ok(())
+}
+
+/// Resolve a git ref (branch/tag) to a commit hash via `git ls-remote`.
+pub fn resolve_git_ref(
+    url: &str,
+    ref_name: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let git = find_git()?;
+    let output = std::process::Command::new(&git)
+        .args(["ls-remote", url, ref_name])
+        .output()
+        .map_err(|e| format!("failed to run git ls-remote: {e}"))?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "git ls-remote failed for '{url}' ref '{ref_name}':\n{stderr}"
+        ).into());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // ls-remote output: "<hash>\t<ref>\n"
+    let hash = stdout
+        .lines()
+        .next()
+        .and_then(|line| line.split_whitespace().next())
+        .ok_or_else(|| format!(
+            "git ls-remote returned no results for ref '{ref_name}' at '{url}'"
+        ))?;
+
+    Ok(hash.to_string())
+}
+
+/// Verify NAR hash of a path against an SRI hash string.
+fn verify_nar_hash_sri(
+    out_path: &str,
+    expected_sri: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use nix_compat::nixhash::{HashAlgo, NixHash};
+
+    let expected = NixHash::from_str(expected_sri, Some(HashAlgo::Sha256))
+        .map_err(|e| format!("invalid expected hash: {e}"))?;
+
+    let (actual_hash_str, _size) =
+        crate::local_build::nar_hash_path(std::path::Path::new(out_path))?;
+
+    let actual_hex = actual_hash_str
+        .strip_prefix("sha256:")
+        .ok_or("unexpected hash format from nar_hash_path")?;
+
+    let expected_bytes = match &expected {
+        NixHash::Sha256(h) => h,
+        _ => return Err("only SHA-256 hashes supported for fetchGit".into()),
+    };
+    let expected_hex = data_encoding::HEXLOWER.encode(expected_bytes);
+
+    if actual_hex != expected_hex {
+        let _ = std::fs::remove_dir_all(out_path);
+        return Err(format!(
+            "NAR hash mismatch for fetchGit output {}:\n  expected: {}\n  got:      {}",
+            out_path, expected_hex, actual_hex
+        ).into());
+    }
+
+    Ok(())
+}
+
+/// Find the git binary.
+fn find_git() -> Result<String, Box<dyn std::error::Error>> {
+    // Check common locations on Redox and standard paths
+    for path in [
+        "/nix/system/profile/bin/git",
+        "/usr/bin/git",
+        "/bin/git",
+    ] {
+        if std::path::Path::new(path).exists() {
+            return Ok(path.to_string());
+        }
+    }
+    // Fall back to PATH lookup
+    let which = std::process::Command::new("which")
+        .arg("git")
+        .output();
+    if let Ok(out) = which {
+        if out.status.success() {
+            let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !path.is_empty() {
+                return Ok(path);
+            }
+        }
+    }
+    Err("git command not found — install git to use fetchGit".into())
+}
+
 // ── Download helpers (sync, ureq-based) ────────────────────────────────────
 
 /// Download a URL and write the raw content to a file (flat mode).
@@ -443,5 +613,87 @@ mod tests {
         ).unwrap();
 
         assert_eq!(path1, path2);
+    }
+
+    // ── fetchGit tests ───────────────────────────────────────────────
+
+    #[test]
+    fn fetch_git_from_local_repo() {
+        // Skip if git is not available
+        if find_git().is_err() {
+            eprintln!("skipping fetch_git_from_local_repo: git not found");
+            return;
+        }
+
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_dir = tmp.path().join("test-repo");
+        std::fs::create_dir(&repo_dir).unwrap();
+
+        // Create a git repo with one commit
+        let run_git = |args: &[&str], dir: &std::path::Path| {
+            std::process::Command::new(find_git().unwrap())
+                .args(args)
+                .current_dir(dir)
+                .env("GIT_AUTHOR_NAME", "test")
+                .env("GIT_AUTHOR_EMAIL", "test@test")
+                .env("GIT_COMMITTER_NAME", "test")
+                .env("GIT_COMMITTER_EMAIL", "test@test")
+                .output()
+                .expect("git command failed")
+        };
+
+        run_git(&["init"], &repo_dir);
+        std::fs::write(repo_dir.join("hello.txt"), "hello from git").unwrap();
+        run_git(&["add", "."], &repo_dir);
+        run_git(&["commit", "-m", "initial"], &repo_dir);
+
+        // Get the commit hash
+        let rev_output = run_git(&["rev-parse", "HEAD"], &repo_dir);
+        let rev = String::from_utf8(rev_output.stdout).unwrap().trim().to_string();
+
+        // Fetch via file:// URL
+        let out_dir = tmp.path().join("output");
+        let url = format!("file://{}", repo_dir.display());
+        fetch_git(&url, &rev, out_dir.to_str().unwrap(), None).unwrap();
+
+        // Verify output
+        assert!(out_dir.join("hello.txt").exists());
+        assert_eq!(
+            std::fs::read_to_string(out_dir.join("hello.txt")).unwrap(),
+            "hello from git"
+        );
+        // .git should NOT be in the output
+        assert!(!out_dir.join(".git").exists());
+    }
+
+    #[test]
+    fn fetch_git_cached_skips_clone() {
+        let tmp = tempfile::tempdir().unwrap();
+        let out_dir = tmp.path().join("already-exists");
+        std::fs::create_dir(&out_dir).unwrap();
+        std::fs::write(out_dir.join("marker"), "cached").unwrap();
+
+        // Should succeed without actually cloning (path exists)
+        let result = fetch_git(
+            "https://example.com/nonexistent.git",
+            "abc123",
+            out_dir.to_str().unwrap(),
+            None,
+        );
+        assert!(result.is_ok());
+        // Original content preserved (not overwritten)
+        assert_eq!(
+            std::fs::read_to_string(out_dir.join("marker")).unwrap(),
+            "cached"
+        );
+    }
+
+    #[test]
+    fn find_git_returns_path() {
+        // Just verify find_git doesn't panic
+        match find_git() {
+            Ok(path) => assert!(!path.is_empty()),
+            Err(_) => eprintln!("git not installed, skipping"),
+        }
     }
 }

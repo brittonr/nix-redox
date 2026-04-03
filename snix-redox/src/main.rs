@@ -527,6 +527,10 @@ enum SystemCommand {
         #[arg(long, conflicts_with = "bridge")]
         local: bool,
 
+        /// Build packages from source using Nix expressions (packageSources in config)
+        #[arg(long)]
+        source: bool,
+
         /// Shared directory for bridge communication (default: /scheme/shared)
         #[arg(long)]
         shared_dir: Option<String>,
@@ -872,11 +876,21 @@ fn main() {
                 cache_index,
                 bridge,
                 local,
+                source,
                 shared_dir,
                 timeout,
             } => {
                 if init {
                     rebuild::init_config(config.as_deref())
+                } else if source {
+                    // Source build: compile packages from Nix expressions
+                    rebuild::rebuild_from_source(
+                        config.as_deref(),
+                        dry_run,
+                        manifest.as_deref(),
+                        gen_dir.as_deref(),
+                        cache_index.as_deref(),
+                    )
                 } else if bridge {
                     // Explicit --bridge: always use bridge path
                     bridge::rebuild_via_bridge(
