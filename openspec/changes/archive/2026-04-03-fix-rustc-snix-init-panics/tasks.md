@@ -35,10 +35,10 @@
   - FIX: snix-redox/src/main.rs — set SSL_CERT_FILE=/dev/null when no system CA certs exist, so rustls initializes with empty root store instead of panicking. Also patched upstream/glue fetcher to fall back to danger_accept_invalid_certs.
 - [x] 4.2 Verify `snix --version` exits 0
   - PASS
-- [ ] 4.3 Verify `snix eval --expr "1 + 1"` exits 0
-  - FAIL: SSL_CERT_FILE fix not included in disk image. snix binary is cached old version.
-- [ ] 4.4 Verify `snix build` exits 0
-  - BLOCKED on 4.3
+- [x] 4.3 Verify `snix eval --expr "1 + 1"` exits 0
+  - PASS: Option<Client> fallback + postPatch in extraCrateOverrides.snix-glue
+- [x] 4.4 Verify `snix build` exits 0
+  - PASS: snix-build-simple, snix-build-dep, snix-build-exec, snix-build-file all pass
 
 ## 5. Validate compilation pipeline
 
@@ -48,4 +48,5 @@
   - Done: /nix/store/p7lsjb81lkd6kjcmyrfrjniphacrlkh0-functional-test
 - [x] 5.3 Run the 76-test suite and compare pass/fail counts
   - 52 pass / 26 fail / 0 skip (was 14/51/1). ALL rustc/cargo tests pass. Remaining 26 failures = snix CA cert.
-- [ ] 5.4 Update AGENTS.md with root causes and fix details
+- [x] 5.4 Update AGENTS.md with root causes and fix details
+  - Added .symtab fallback knowledge, object crate API notes, snix TLS handling, packages.nix vs snix.nix distinction

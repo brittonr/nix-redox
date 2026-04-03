@@ -5,6 +5,8 @@ The snix self-compile test SHALL invoke `snix build --file /usr/src/snix-redox/b
 
 Additionally, the local builder SHALL handle derivations whose build scripts invoke the CC wrapper to compile C source code via clang. The per-path sandbox SHALL grant read-only access to system profile tool paths (`/nix/system/profile/bin/cc`, `clang`, `ld.lld`) and sysroot headers (`/usr/lib/redox-sysroot/`). The sandbox SHALL allow build scripts to create and link against static C libraries produced by cc-rs.
 
+snix SHALL initialize without panicking — its evaluator, store resolution, and CLI argument parsing SHALL complete before any build work begins. If snix previously exited 134 (abort) during initialization, that init path SHALL be fixed so `snix build --expr` reaches the builder.
+
 #### Scenario: snix self-compile via snix build
 - **WHEN** the self-hosting test reaches the snix-compile phase
 - **THEN** it runs `snix build --file /usr/src/snix-redox/build.nix` and the output path contains a working `snix` binary at `$out/bin/snix`
@@ -23,16 +25,7 @@ Additionally, the local builder SHALL handle derivations whose build scripts inv
 - **THEN** the CC wrapper is invoked, clang compiles the C file, and the resulting `.a` is linked into the binary
 - **AND** the sandbox does not block access to clang, lld, or sysroot headers
 
-## ADDED Requirements
-
-### Requirement: Workspace crate builds complete without deadlock
-The local builder SHALL build Cargo workspace projects containing multiple crates with inter-crate path dependencies. The builder SHALL set `CARGO_BUILD_JOBS` and `CARGO_INCREMENTAL=0` to prevent fingerprint instability.
-
-#### Scenario: Two-crate workspace builds and links
-- **WHEN** a derivation builds a workspace with `members = ["mylib", "mybin"]` and `mybin` depends on `mylib`
-- **THEN** cargo compiles both crates and produces the `mybin` binary in the output
-
-#### Scenario: Workspace build respects JOBS setting
-- **WHEN** `CARGO_BUILD_JOBS=2` is set in the derivation environment
-- **THEN** cargo schedules up to 2 parallel compilation units
-- **AND** the build completes within the timeout (no deadlock)
+#### Scenario: snix init does not abort
+- **WHEN** the user runs `snix --version` or `snix eval --expr "1"`
+- **THEN** snix exits 0 (not 134)
+- **AND** no "relibc: abort() called" appears in output

@@ -101,6 +101,17 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 - On-image stubs (redox-sysroot.nix) must match the same per-function pattern
 - `RAYON_NUM_THREADS=4` must be set in self-hosting profiles — Rayon/rustc call available_parallelism() which panics (sysconf _SC_NPROCESSORS_ONLN unimplemented)
 
+### Dynamic Linking — .symtab Fallback for LOCAL Symbols
+- Pre-built DSOs (librustc_driver.so) have `__relibc_init_*` as LOCAL in `.symtab` due to Rust `local: *;` version scripts
+- ld_so's `get_sym()` only searches `.dynsym` hash table — misses LOCAL symbols entirely
+- Fix: `patch-relibc-symtab-fallback.py` scans `.symtab` during DSO construction via `FileHeader::sections()` + `symbol_table_by_index()`
+- Stores addresses in `LocalInitSyms` struct on DSO; `run_init` uses them as fallback when `get_sym` returns None
+- Covers all 6 init symbols: `environ`, `proc_fd`, `ns_fd`, `cwd_ptr`, `cwd_len`, `cwd_fd`
+- The `object` crate with `["elf", "read_core"]` features does NOT have `SectionTable::symbol_table()` — must iterate sections manually to find `SHT_SYMTAB`, then call `symbol_table_by_index()`
+- `Object` trait's `symbol_table()` returns `Option<ElfSymbolTable>` (not `Result`), but `ElfSymbolTable` methods differ from raw `SymbolTable` — use raw `FileHeader` API instead
+- `current_namespace_fd()` returns `Result<usize>` (not plain `usize`) after `patch-relibc-ns-fd.patch`
+- `std::env::set_var` is unsafe in Rust edition 2024
+
 ### Dynamic Linking
 - Each DSO gets its own copy of relibc statics (CWD, ns_fd, proc_fd, environ)
 - `ld_so run_init()` injects ns_fd, proc_fd, CWD, environ into DSOs via `__relibc_init_*` symbols
@@ -332,6 +343,15 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 - Driver diag path: `cat /scheme/network.*/diag` — reads registers from driver's own event loop, only reliable diagnostic
 - smolnetd netcfg scheme hardcodes interface as `eth0` — use `eth0` for configuration, not PCI-path names
 - smolnetd signals readiness (daemon.ready()) BEFORE registering netcfg scheme (race window)
+
+### snix TLS/CA Certificate Handling
+- Redox has no system CA certificate store — `rustls-native-certs` panics with "No CA certificates were loaded"
+- `SSL_CERT_FILE=/dev/null` does NOT fix it — Redox's rustls-native-certs doesn't support env vars
+- reqwest with `rustls-no-provider` feature strips TLS config methods (`tls_built_in_root_certs`, `tls_built_in_native_certs`, `danger_accept_invalid_certs` all absent)
+- Fix: change `http_client` from `Client` to `Option<Client>`, store `None` on build failure
+- Patch goes in `extraCrateOverrides.snix-glue` in `packages.nix` (NOT in `snix.nix` — that file isn't used for system image builds)
+- snix system image binary is built via `mkCrossPackage` in `packages.nix`, not `mkBinary` in `snix.nix`
+- `self.http_client.get(...)` → `self.http_client.as_ref().expect("HTTP client not available").get(...)`
 
 ### Clang on Redox
 - Clang works for C/asm compilation on Redox with `-no-canonical-prefixes` + explicit `-resource-dir`
