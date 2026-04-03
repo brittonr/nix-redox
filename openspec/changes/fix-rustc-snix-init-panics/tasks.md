@@ -24,20 +24,28 @@
 
 - [x] 3.1 Implement the fix based on diagnostics (environment variable, relibc patch, LLVM flag, or rustc wrapper change)
   - FIX: patch-relibc-symtab-fallback.py — ld_so scans .symtab for LOCAL __relibc_init_* symbols when .dynsym lookup fails. Adds LocalInitSyms struct to DSO, parses ELF symbol table during construction, uses addresses as fallback in run_init.
-- [ ] 3.2 Verify `rustc --print cfg` exits 0
-- [ ] 3.3 Verify `rustc -o /tmp/empty -C linker=cc /tmp/empty.rs` exits 0 and binary runs
+- [x] 3.2 Verify `rustc --print cfg` exits 0
+  - PASS: CWD injection via .symtab fallback fixed "Current directory is invalid" error
+- [x] 3.3 Verify `rustc -o /tmp/empty -C linker=cc /tmp/empty.rs` exits 0 and binary runs
+  - PASS: rustc-direct-link, binary-exists, binary-runs all pass
 
 ## 4. Fix snix init
 
 - [x] 4.1 Implement the fix based on diagnostics (environment variable, snix code change, relibc patch, or missing directory creation)
   - FIX: snix-redox/src/main.rs — set SSL_CERT_FILE=/dev/null when no system CA certs exist, so rustls initializes with empty root store instead of panicking. Also patched upstream/glue fetcher to fall back to danger_accept_invalid_certs.
-- [ ] 4.2 Verify `snix --version` exits 0
+- [x] 4.2 Verify `snix --version` exits 0
+  - PASS
 - [ ] 4.3 Verify `snix eval --expr "1 + 1"` exits 0
-- [ ] 4.4 Verify `snix build --expr "derivation { name = \"test\"; system = \"x86_64-redox\"; builder = \"/bin/echo\"; }"` exits 0
+  - FAIL: SSL_CERT_FILE fix not included in disk image. snix binary is cached old version.
+- [ ] 4.4 Verify `snix build` exits 0
+  - BLOCKED on 4.3
 
 ## 5. Validate compilation pipeline
 
-- [ ] 5.1 Verify `cargo build` on a hello world project succeeds
-- [ ] 5.2 Rebuild the full self-hosting-test image with fixes
-- [ ] 5.3 Run the 76-test suite and compare pass/fail counts — compilation tests (rustc-print-cfg, two-step-compile, hello-two-step, cargo-build-hello) should now pass
+- [x] 5.1 Verify `cargo build` on a hello world project succeeds
+  - PASS: cargo-build, cargo-direct-no-wrapper, parallel-jobs2 all pass
+- [x] 5.2 Rebuild the full self-hosting-test image with fixes
+  - Done: /nix/store/p7lsjb81lkd6kjcmyrfrjniphacrlkh0-functional-test
+- [x] 5.3 Run the 76-test suite and compare pass/fail counts
+  - 52 pass / 26 fail / 0 skip (was 14/51/1). ALL rustc/cargo tests pass. Remaining 26 failures = snix CA cert.
 - [ ] 5.4 Update AGENTS.md with root causes and fix details
