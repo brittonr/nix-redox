@@ -56,53 +56,84 @@ pkgs.runCommand "redox-sysroot"
     # libstd references _Unwind_* symbols for backtraces and panic_unwind.
     # On Redox we use panic=abort, so these are never called at runtime.
     # Provide stub implementations so the linker can resolve them.
-    echo "Creating stub libgcc_eh.a..."
-    cat > $TMPDIR/unwind_stubs.c << 'STUBS'
-    /* Stub implementations of GCC/LLVM unwind ABI functions.
-     * These are referenced by libstd for backtrace/panic support but
-     * never called when panic=abort is used. */
+    #
+    # CRITICAL: Each stub goes in its own .o file. Static archive linking
+    # pulls in entire .o files. If all stubs share one .o, needing
+    # _Unwind_Backtrace (for libstd) also drags in _Unwind_RaiseException
+    # which breaks panic=unwind binaries (rustc) that need real unwinding.
+    echo "Creating per-function stub libgcc_eh.a..."
+
+    cat > $TMPDIR/types.h << 'TYPES'
     typedef int _Unwind_Reason_Code;
     typedef void* _Unwind_Context;
     typedef void* _Unwind_Exception;
     typedef _Unwind_Reason_Code (*_Unwind_Trace_Fn)(_Unwind_Context*, void*);
+    TYPES
 
-    unsigned long _Unwind_GetIP(_Unwind_Context* c) { return 0; }
-    void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }
-    _Unwind_Reason_Code _Unwind_Backtrace(_Unwind_Trace_Fn fn, void* data) { return 0; }
-    unsigned long _Unwind_GetCFA(_Unwind_Context* c) { return 0; }
-    unsigned long _Unwind_GetTextRelBase(_Unwind_Context* c) { return 0; }
-    unsigned long _Unwind_GetDataRelBase(_Unwind_Context* c) { return 0; }
-    void _Unwind_SetIP(_Unwind_Context* c, unsigned long val) {}
-    void _Unwind_SetGR(_Unwind_Context* c, int reg, unsigned long val) {}
-    unsigned long _Unwind_GetGR(_Unwind_Context* c, int reg) { return 0; }
-    _Unwind_Reason_Code _Unwind_RaiseException(_Unwind_Exception* e) { return 0; }
-    void _Unwind_Resume(_Unwind_Exception* e) {}
-    void _Unwind_DeleteException(_Unwind_Exception* e) {}
-    void* _Unwind_GetLanguageSpecificData(_Unwind_Context* c) { return 0; }
-    unsigned long _Unwind_GetRegionStart(_Unwind_Context* c) { return 0; }
+    # Backtrace / info stubs (one per .o)
+    echo '#include "types.h"
+    unsigned long _Unwind_GetIP(_Unwind_Context* c) { return 0; }' > $TMPDIR/stub_getip.c
+    echo '#include "types.h"
+    void* _Unwind_FindEnclosingFunction(void* pc) { return 0; }' > $TMPDIR/stub_findenclosing.c
+    echo '#include "types.h"
+    _Unwind_Reason_Code _Unwind_Backtrace(_Unwind_Trace_Fn fn, void* data) { return 0; }' > $TMPDIR/stub_backtrace.c
+    echo '#include "types.h"
+    unsigned long _Unwind_GetCFA(_Unwind_Context* c) { return 0; }' > $TMPDIR/stub_getcfa.c
+    echo '#include "types.h"
+    unsigned long _Unwind_GetTextRelBase(_Unwind_Context* c) { return 0; }' > $TMPDIR/stub_gettextrelbase.c
+    echo '#include "types.h"
+    unsigned long _Unwind_GetDataRelBase(_Unwind_Context* c) { return 0; }' > $TMPDIR/stub_getdatarelbase.c
+    echo '#include "types.h"
+    void _Unwind_SetIP(_Unwind_Context* c, unsigned long val) {}' > $TMPDIR/stub_setip.c
+    echo '#include "types.h"
+    void _Unwind_SetGR(_Unwind_Context* c, int reg, unsigned long val) {}' > $TMPDIR/stub_setgr.c
+    echo '#include "types.h"
+    unsigned long _Unwind_GetGR(_Unwind_Context* c, int reg) { return 0; }' > $TMPDIR/stub_getgr.c
+    echo '#include "types.h"
+    void* _Unwind_GetLanguageSpecificData(_Unwind_Context* c) { return 0; }' > $TMPDIR/stub_getlsd.c
+    echo '#include "types.h"
+    unsigned long _Unwind_GetRegionStart(_Unwind_Context* c) { return 0; }' > $TMPDIR/stub_getregionstart.c
+    echo '#include "types.h"
     unsigned long _Unwind_GetIPInfo(_Unwind_Context* c, int* ip_before_insn) {
       if (ip_before_insn) *ip_before_insn = 0;
       return 0;
-    }
-    int __gcc_personality_v0() { return 0; }
-    STUBS
+    }' > $TMPDIR/stub_getipinfo.c
 
-    ${pkgs.llvmPackages.clang}/bin/clang \
-      --target=x86_64-unknown-redox \
-      --sysroot=$out/${sysrootRelPath} \
-      -nostdlib -ffreestanding \
-      -c $TMPDIR/unwind_stubs.c \
-      -o $TMPDIR/unwind_stubs.o
+    # Active unwind stubs (one per .o) — return 0 (no-op)
+    echo '#include "types.h"
+    _Unwind_Reason_Code _Unwind_RaiseException(_Unwind_Exception* e) { return 0; }' > $TMPDIR/stub_raise.c
+    echo '#include "types.h"
+    void _Unwind_Resume(_Unwind_Exception* e) {}' > $TMPDIR/stub_resume.c
+    echo '#include "types.h"
+    void _Unwind_DeleteException(_Unwind_Exception* e) {}' > $TMPDIR/stub_delete.c
+
+    # Personality + EH frame registration
+    echo 'int __gcc_personality_v0() { return 0; }' > $TMPDIR/stub_personality.c
+    echo 'void __register_frame(void* begin) { (void)begin; }
+    void __deregister_frame(void* begin) { (void)begin; }
+    void __register_frame_info(void* begin, void* ob) { (void)begin; (void)ob; }
+    void __deregister_frame_info(void* begin) { (void)begin; }' > $TMPDIR/stub_ehframe.c
+
+    # Compile each stub into its own .o
+    for src in $TMPDIR/stub_*.c; do
+      obj="''${src%.c}.o"
+      ${pkgs.llvmPackages.clang}/bin/clang \
+        --target=x86_64-unknown-redox \
+        --sysroot=$out/${sysrootRelPath} \
+        -nostdlib -ffreestanding \
+        -I$TMPDIR \
+        -c "$src" -o "$obj"
+    done
 
     ${pkgs.llvmPackages.llvm}/bin/llvm-ar rcs \
       $out/${sysrootRelPath}/lib/libgcc_eh.a \
-      $TMPDIR/unwind_stubs.o
+      $TMPDIR/stub_*.o
 
     # Also create libgcc.a (some linker invocations look for -lgcc)
     cp $out/${sysrootRelPath}/lib/libgcc_eh.a \
        $out/${sysrootRelPath}/lib/libgcc.a
 
-    echo "Stub libgcc_eh.a and libgcc.a created"
+    echo "Per-function stub libgcc_eh.a and libgcc.a created"
 
     # ===== Rust allocator shim (liballoc_shim.a) =====
     # When rustc links a binary, it generates an "allocator shim" object file

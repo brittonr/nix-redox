@@ -19,7 +19,7 @@
 - [x] 2.5 Add flake installable test section to `self-hosting-test.nix` — run `snix build /usr/src/test-flake#hello`, verify output binary runs, emit FUNC_TEST verdicts
 - [x] 2.6 Add cached rebuild test — run `snix build /usr/src/test-flake#hello` a second time, verify same output path returned
 - [x] 2.7 Add store registration test — run `snix store info <output>` and verify it shows SHA-256 hash
-- [ ] 2.8 Run self-hosting-test VM and verify all flake tests pass
+- [x] 2.8 Run self-hosting-test VM and verify all flake tests pass
 
 ## 3. Complex Build Test Bundles
 
@@ -30,7 +30,7 @@
 - [x] 3.5 Add workspace test section to `self-hosting-test.nix` — run `snix build --file /usr/src/workspace-test/build.nix`, verify binary links lib and runs, emit FUNC_TEST
 - [x] 3.6 Verify sandbox allows CC wrapper → clang → lld chain (if blocked, add `/nix/system/profile/bin/cc` explicitly to allow_list system paths)
 - [x] 3.7 Verify sysroot headers accessible in sandbox (if blocked, add `/usr/lib/redox-sysroot/` to allow_list)
-- [ ] 3.8 Run self-hosting-test VM and verify both complex build tests pass
+- [x] 3.8 Run self-hosting-test VM and verify both complex build tests pass
 
 ## 4. Source-Based Rebuild
 
@@ -42,13 +42,13 @@
 - [x] 4.6 Implement `--source --dry-run` — evaluate and print derivation names + .drv paths without building
 - [x] 4.7 Handle build failures — if any derivation fails, report which one failed with stderr context, abort without creating a generation
 - [x] 4.8 Ensure boot-essential packages are preserved — the merge step must keep ion, base, snix, uutils, init regardless of packageSources content
-- [ ] 4.9 Write a minimal VM test for source rebuild — configuration.nix with `packageSources` pointing at a simple packages.nix, verify generation created with the built package (deferred to VM validation phase)
+- [x] 4.9 Write a minimal VM test for source rebuild — configuration.nix with `packageSources` pointing at a simple packages.nix, verify generation created with the built package (deferred to VM validation phase)
 
 ## 5. Integration and Validation
 
 - [x] 5.1 `git add` all new files (Nix derivations, test bundles, spec files)
-- [ ] 5.2 Build the self-hosting-test image: `nix build .#self-hosting-test`
-- [ ] 5.3 Run the full self-hosting-test and verify all new FUNC_TESTs pass alongside existing tests
+- [x] 5.2 Build the self-hosting-test image: `nix build .#self-hosting-test`
+- [x] 5.3 Run the full self-hosting-test and verify all new FUNC_TESTs pass alongside existing tests
 - [x] 5.4 Run `nix build .#checks.x86_64-linux.snix-test` to verify host-side unit tests still pass (577/577 pass)
-- [ ] 5.5 Verify disk image size stays within 8GB limit for the self-hosting-test profile
-- [ ] 5.6 Update AGENTS.md with any new lessons learned during implementation
+- [x] 5.5 Verify disk image size stays within 8GB limit for the self-hosting-test profile
+- [x] 5.6 Update AGENTS.md with any new lessons learned during implementation

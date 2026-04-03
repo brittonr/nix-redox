@@ -816,3 +816,12 @@
 {"text":"yes","timestamp":1775007548038}
 {"text":"im having issues with the keyboard input not being reliable after log in still. sometimes it works, others i have to reboot","timestamp":1775011302091}
 {"text":"commit and ubild the full image to flash","timestamp":1775012157720}
+{"text":"continue with openspec/changes/nix-self-hosting-next","timestamp":1775185697262}
+{"text":"still running?","timestamp":1775187365305}
+{"text":"still running?","timestamp":1775187366384}
+{"text":"still seems like its getting stuck","timestamp":1775187987266}
+{"text":"what do we need to do next?","timestamp":1775190483041}
+{"text":"write the recommendation as a new openspec","timestamp":1775190621424}
+{"text":"lets begin /opsx:apply fix-relibc-panic-abort","timestamp":1775190834815}
+{"text":"getting stuck. lets continue working on this until all tests pass.","timestamp":1775196642400}
+{"text":"ensure you have proper timings/sleeps whatever to know when to check","timestamp":1775197290724}

@@ -28,6 +28,10 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 - Redirect stderr: `^>` (not `2>`)
 - Export: `export VAR value` (not `export VAR=value`); `export VAR` alone fails if VAR doesn't exist
 - `$()` command substitution crashes on empty output: `let var = $(grep ...)` → "Variable '' does not exist"
+- `command not found` in Ion kills the entire script — no error recovery, subsequent lines never execute
+- Setting PATH: `let PATH = "/nix/system/profile/bin:/bin:/usr/bin"` then `export PATH` — `export PATH /value` fails if PATH doesn't exist yet
+- Test scripts MUST set PATH at the top — startup.sh runs before profile.ion is sourced, so `/nix/system/profile/bin` may not be in PATH
+- Wrap diagnostic sections in `/nix/system/profile/bin/bash -c '...'` to isolate failures from Ion — one bad command in Ion kills the whole script
 - `@()` process expansion unreliable with pipes and `matches`
 - No heredoc (`<< EOF`) support
 - Single quotes prevent all expansion — safe for Nix expressions with `{}[]()`
@@ -85,6 +89,17 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 - Missing POSIX functions: `*at` variants (openat, unlinkat, utimensat), `strtof_l` family, `REG_STARTEND`
 - `S_IRWXU` etc. are `i32` not `u32` — needs cast
 - Open flags differ: `O_RDONLY=0x10000`, `O_CREAT=0x02000000` — translate for FUSE
+
+### Unwind Stubs (stub-libs.nix)
+- Stub archives (libgcc.a, libgcc_eh.a, libunwind.a) MUST use per-function .o files
+- Old single-file approach: ALL stubs in one unwind_stubs.o → linking ANY _Unwind symbol drags in ALL stubs including _Unwind_RaiseException
+- _Unwind_RaiseException returning 0 → "failed to initiate panic, error 0" → abort in panic=unwind binaries (rustc)
+- Per-function .o files: linker pulls only the stubs actually referenced — _Unwind_RaiseException stays in archive for panic=abort packages
+- Real libunwind (from libc++) was tried for panic=unwind but the DWARF stack walker overflows rustc's already-deep LLVM init stack
+- abort() stubs were tried but break DSO init paths that touch _Unwind_Resume during C++ landing pad cleanup
+- Return-0 stubs are the working compromise: panic=abort never calls them, panic=unwind gets "error 0" then clean abort
+- On-image stubs (redox-sysroot.nix) must match the same per-function pattern
+- `RAYON_NUM_THREADS=4` must be set in self-hosting profiles — Rayon/rustc call available_parallelism() which panics (sysconf _SC_NPROCESSORS_ONLN unimplemented)
 
 ### Dynamic Linking
 - Each DSO gets its own copy of relibc statics (CWD, ns_fd, proc_fd, environ)
@@ -172,6 +187,7 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - Source bundles with `.cargo/config.toml` silently lost their config when `/*` was used
 
 ### Vendor Hash Workflow
+- crates.io `fetchurl` hashes go stale — crates.io regenerates tarballs periodically, changing the hash even for the same version
 - Dummy hash `sha256-0000...` triggers mismatch error revealing the real hash
 - Nix 2.31 FOD reference check: test fixture files with `/nix/store/` paths → `fixed-output derivations must not reference store paths`
 - The check only fires on hash MISMATCH — correct hash skips it

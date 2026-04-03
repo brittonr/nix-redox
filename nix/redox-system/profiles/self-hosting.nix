@@ -58,6 +58,9 @@ dev
       # Redox's relibc doesn't support sysconf(_SC_NPROCESSORS_ONLN) yet,
       # so std::thread::available_parallelism() panics. Set jobs explicitly.
       CARGO_BUILD_JOBS = "4";
+      # Rayon calls available_parallelism() on pool init unless this is set.
+      # Without it, rustc panics during LLVM init → stack overflow in unwind.
+      RAYON_NUM_THREADS = "4";
     };
   };
 

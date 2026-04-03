@@ -10,7 +10,7 @@ let
   # Vendor the cc crate for offline builds
   ccCrateSrc = pkgs.fetchurl {
     url = "https://crates.io/api/v1/crates/cc/1.2.21/download";
-    hash = "sha256-4g5PJi5MhRHxR5MKbpTpCJVQfDe1f6m2IJrGpDCr0aE=";
+    hash = "sha256-hpF4KUVFHBw4OULEh02+Y4FPYctX73c82ilyaCt7s8A=";
   };
 in
 pkgs.runCommand "cc-dep-test-bundle" { } ''
