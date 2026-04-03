@@ -606,6 +606,19 @@ let
           PROTO_ROOT = snixUpstreamSource;
           SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
         };
+        # Patch reqwest Client to not panic when no CA certificates exist.
+        # Redox has no system cert store; the default rustls-native-certs
+        # loader panics with "No CA certificates were loaded from the system".
+        # Disable built-in native cert loading so the client creates with an
+        # empty root store. Local eval/build work without TLS.
+        snix-glue = _: {
+          nativeBuildInputs = [ hostPkgs.protobuf ];
+          PROTO_ROOT = snixUpstreamSource;
+          SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          postPatch = ''
+            ${hostPkgs.python3}/bin/python3 ${../pkgs/userspace/patches/patch-snix-fetcher-no-tls-panic.py} src/fetchers/mod.rs
+          '';
+        };
         # prost-wkt-types also needs protoc
         prost-wkt-types = _: {
           nativeBuildInputs = [ hostPkgs.protobuf ];
