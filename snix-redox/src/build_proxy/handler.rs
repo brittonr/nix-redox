@@ -350,12 +350,29 @@ impl SchemeSync for BuildFsHandler {
 
         // Check allow-list.
         let perm = self.check_with_symlink_resolution(&abs_path);
-        eprintln!("buildfs: openat {:?} flags={:?} perm={:?}", abs_path, oflags, perm);
-        if perm == Permission::Denied {
+
+        // If the path is denied by the allow-list, check if it's an
+        // ancestor of an allowed path (e.g., "/nix" is an ancestor of
+        // "/nix/store"). Ancestor dirs must be accessible read-only
+        // because `mkdir -p $out/bin` walks up the directory tree to
+        // find existing parents. Without this, mkdir gets EACCES on
+        // "/nix" and "/" and fails with "Permission denied".
+        let effective_perm = if perm == Permission::Denied && !oflags.wants_write() {
+            if self.is_ancestor_of_allowed(&abs_path) {
+                Permission::ReadOnly
+            } else {
+                Permission::Denied
+            }
+        } else {
+            perm
+        };
+
+        eprintln!("buildfs: openat {:?} flags={:?} perm={:?}", abs_path, oflags, effective_perm);
+        if effective_perm == Permission::Denied {
             return Err(Error::new(EACCES));
         }
 
-        if oflags.wants_write() && perm != Permission::ReadWrite {
+        if oflags.wants_write() && effective_perm != Permission::ReadWrite {
             return Err(Error::new(EACCES));
         }
 
@@ -654,6 +671,68 @@ impl SchemeSync for BuildFsHandler {
         Ok(buf)
     }
 
+    fn fchmod(&mut self, id: usize, new_mode: u16, _ctx: &CallerCtx) -> Result<()> {
+        match self.handles.get(&id) {
+            Some(ProxyHandle::File(fh)) => {
+                if !fh.writable {
+                    return Err(Error::new(EACCES));
+                }
+                // Apply chmod via raw fchmod syscall on the real fd.
+                use std::os::unix::io::AsRawFd;
+                let raw_fd = fh.real_file.as_raw_fd() as usize;
+                unsafe {
+                    syscall::syscall2(
+                        syscall::SYS_FCHMOD,
+                        raw_fd,
+                        new_mode as usize,
+                    )?;
+                }
+                Ok(())
+            }
+            Some(ProxyHandle::Dir(dh)) => {
+                // chmod on a directory — open it, chmod, close.
+                let path_str = dh.real_path.to_string_lossy();
+                let clean = path_str.trim_start_matches('/');
+                let open_path = if clean.is_empty() { "." } else { clean };
+                if let Ok(dir_fd) = raw_openat(self.root_fd, open_path, O_RDONLY | O_DIRECTORY) {
+                    let result = unsafe {
+                        syscall::syscall2(
+                            syscall::SYS_FCHMOD,
+                            dir_fd,
+                            new_mode as usize,
+                        )
+                    };
+                    raw_close(dir_fd);
+                    result?;
+                    Ok(())
+                } else {
+                    // If we can't open the dir, silently succeed.
+                    // mkdir -p calls chmod after creation; failure here
+                    // is non-fatal for the build.
+                    Ok(())
+                }
+            }
+            None => Err(Error::new(EBADF)),
+        }
+    }
+
+    fn ftruncate(&mut self, id: usize, len: u64, _ctx: &CallerCtx) -> Result<()> {
+        match self.handles.get_mut(&id) {
+            Some(ProxyHandle::File(fh)) => {
+                if !fh.writable {
+                    return Err(Error::new(EACCES));
+                }
+                fh.real_file.set_len(len).map_err(|_| Error::new(EIO))?;
+                if len < fh.size {
+                    fh.size = len;
+                }
+                Ok(())
+            }
+            Some(ProxyHandle::Dir(_)) => Err(Error::new(EISDIR)),
+            None => Err(Error::new(EBADF)),
+        }
+    }
+
     fn fevent(&mut self, id: usize, _flags: syscall::flag::EventFlags, _ctx: &CallerCtx) -> Result<syscall::flag::EventFlags> {
         match self.handles.get(&id) {
             Some(ProxyHandle::File(fh)) => {
@@ -677,6 +756,21 @@ impl SchemeSync for BuildFsHandler {
 }
 
 impl BuildFsHandler {
+    /// Check if a path is an ancestor of any allowed path.
+    ///
+    /// Returns true if any allowed prefix starts with `path`. For example,
+    /// `/nix` is an ancestor of `/nix/store`, and `/` is an ancestor of
+    /// everything. Used by `openat` to grant read-only access to ancestor
+    /// directories that `mkdir -p` needs to stat.
+    fn is_ancestor_of_allowed(&self, path: &Path) -> bool {
+        for prefix in self.allow_list.all_prefixes() {
+            if prefix.starts_with(path) && prefix != path {
+                return true;
+            }
+        }
+        false
+    }
+
     /// Check if a directory entry should be visible in a listing.
     ///
     /// An entry is visible if:

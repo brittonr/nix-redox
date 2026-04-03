@@ -35,18 +35,27 @@ const BOOT_DEFAULT_PATH: &str = "/etc/redox-system/boot-default";
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Manifest {
+    /// Manifest format version. Defaults to 0 for pre-versioned manifests.
+    #[serde(default)]
     pub manifest_version: u32,
+    #[serde(default)]
     pub system: SystemInfo,
     #[serde(default)]
     pub generation: GenerationInfo,
     /// Boot component store paths (v2+). Missing/default for v1 manifests.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub boot: Option<BootComponents>,
+    #[serde(default)]
     pub configuration: Configuration,
+    #[serde(default)]
     pub packages: Vec<Package>,
+    #[serde(default)]
     pub drivers: Drivers,
+    #[serde(default)]
     pub users: BTreeMap<String, User>,
+    #[serde(default)]
     pub groups: BTreeMap<String, Group>,
+    #[serde(default)]
     pub services: Services,
     #[serde(default)]
     pub activation_scripts: Vec<ActivationScript>,
@@ -94,7 +103,7 @@ impl Default for GenerationInfo {
     }
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SystemInfo {
     pub redox_system_version: String,
@@ -104,7 +113,7 @@ pub struct SystemInfo {
     pub timezone: String,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct Configuration {
     pub boot: BootConfig,
     pub hardware: HardwareConfig,
@@ -115,11 +124,11 @@ pub struct Configuration {
     pub power: PowerConfig,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct BootConfig {
-    #[serde(rename = "diskSizeMB")]
+    #[serde(default, rename = "diskSizeMB")]
     pub disk_size_mb: u32,
-    #[serde(rename = "espSizeMB")]
+    #[serde(default, rename = "espSizeMB")]
     pub esp_size_mb: u32,
 }
 
@@ -139,52 +148,71 @@ pub struct BootComponents {
     pub bootloader: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct HardwareConfig {
+    #[serde(default)]
     pub storage_drivers: Vec<String>,
+    #[serde(default)]
     pub network_drivers: Vec<String>,
+    #[serde(default)]
     pub graphics_drivers: Vec<String>,
+    #[serde(default)]
     pub audio_drivers: Vec<String>,
+    #[serde(default)]
     pub usb_enabled: bool,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct NetworkingConfig {
+    #[serde(default)]
     pub enabled: bool,
+    #[serde(default)]
     pub mode: String,
+    #[serde(default)]
     pub dns: Vec<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct GraphicsConfig {
+    #[serde(default)]
     pub enabled: bool,
+    #[serde(default)]
     pub resolution: String,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct SecurityConfig {
+    #[serde(default)]
     pub protect_kernel_schemes: bool,
+    #[serde(default)]
     pub require_passwords: bool,
+    #[serde(default)]
     pub allow_remote_root: bool,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct LoggingConfig {
+    #[serde(default)]
     pub log_level: String,
+    #[serde(default)]
     pub kernel_log_level: String,
+    #[serde(default)]
     pub log_to_file: bool,
-    #[serde(rename = "maxLogSizeMB")]
+    #[serde(default, rename = "maxLogSizeMB")]
     pub max_log_size_mb: u32,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct PowerConfig {
+    #[serde(default)]
     pub acpi_enabled: bool,
+    #[serde(default)]
     pub power_action: String,
+    #[serde(default)]
     pub reboot_on_panic: bool,
 }
 
@@ -196,10 +224,13 @@ pub struct Package {
     pub store_path: String,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 pub struct Drivers {
+    #[serde(default)]
     pub all: Vec<String>,
+    #[serde(default)]
     pub initfs: Vec<String>,
+    #[serde(default)]
     pub core: Vec<String>,
 }
 
@@ -217,14 +248,16 @@ pub struct Group {
     pub members: Vec<String>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct Services {
     /// Full service declarations (for semantic diffing during activation).
     /// Added in manifest v3. Falls back to empty map for v2 manifests.
     #[serde(default)]
     pub declared: BTreeMap<String, ServiceInfo>,
+    #[serde(default)]
     pub init_scripts: Vec<String>,
+    #[serde(default)]
     pub startup_script: String,
 }
 
