@@ -73,7 +73,7 @@ let
       # Intercept Rust's version script to add __relibc_init_ns_fd to exported
       # symbols. Without this, the version script's "local: *;" hides the symbol,
       # preventing ld_so from injecting the process namespace fd into .so files.
-      for arg in "$@"; do
+      for arg in "''${ARGS[@]}"; do
         case "$arg" in
           -Wl,--version-script=*)
             vs="''${arg#-Wl,--version-script=}"

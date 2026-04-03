@@ -17,6 +17,10 @@ let
   # No external test source files needed — written inline via Ion echo
 
   testScript = ''
+                        # Ensure /nix/system/profile/bin is in PATH for bare rustc/cargo calls
+                        let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
+                        export PATH
+
                         echo ""
                         echo "========================================"
                         echo "  RedoxOS Self-Hosting Test Suite"
@@ -99,12 +103,8 @@ let
 
                         # Test: librustc_driver.so accessible (check all lib paths)
                         # Ion's @(ls)+matches is unreliable for glob detection; use bash glob instead
-                        let driver_found = $(bash -c 'ls /usr/lib/rustc/librustc_driver*.so /nix/system/profile/lib/librustc_driver*.so /lib/librustc_driver*.so 2>/dev/null | head -1')
-                        if not test $driver_found = ""
-                          echo "FUNC_TEST:rustc-driver-so:PASS"
-                        else
-                          echo "FUNC_TEST:rustc-driver-so:FAIL:librustc_driver.so not found"
-                        end
+                        # Check for librustc_driver.so via bash (Ion $() crashes on empty output)
+                        /nix/system/profile/bin/bash -c 'ls /nix/system/profile/lib/librustc_driver*.so /usr/lib/rustc/librustc_driver*.so /lib/librustc_driver*.so 2>/dev/null | head -1 > /tmp/driver-check; [ -s /tmp/driver-check ] && echo FUNC_TEST:rustc-driver-so:PASS || echo FUNC_TEST:rustc-driver-so:FAIL:librustc_driver.so_not_found'
 
                         # ── Cargo Config ────────────────────────────────────────
                         # Test: cargo config exists
@@ -141,6 +141,11 @@ let
                         export LD_LIBRARY_PATH
                         let CARGO_BUILD_JOBS = "2"
                         export CARGO_BUILD_JOBS
+                        # Rayon calls available_parallelism() which panics on Redox
+                        # (sysconf _SC_NPROCESSORS_ONLN unimplemented). Set thread count
+                        # explicitly to prevent the panic.
+                        let RAYON_NUM_THREADS = "4"
+                        export RAYON_NUM_THREADS
                         # CARGO_HOME must be /root/.cargo where config.toml lives
                         # (config.toml has linker=ld.lld and rustflags for Redox target)
                         let CARGO_HOME = "/root/.cargo"
@@ -198,9 +203,12 @@ let
                           echo "=== end ==="
                         end
 
-                        # Sysroot check
-                        let sysroot = $(rustc --print sysroot)
-                        echo "Sysroot: $sysroot"
+                        # Sysroot check (write to file — Ion $() crashes on empty output)
+                        # Also set the Ion variable for later use in the script
+                        /nix/system/profile/bin/bash -c 'S=$(rustc --print sysroot 2>/dev/null); [ -n "$S" ] && echo "$S" > /tmp/sysroot-path || echo "/nix/system/profile" > /tmp/sysroot-path; echo "Sysroot: $(cat /tmp/sysroot-path)"'
+                        let sysroot = $(cat /tmp/sysroot-path)
+                        let rust_sysroot = $sysroot
+                        let target_lib = "$sysroot/lib/rustlib/x86_64-unknown-redox/lib"
 
                         # Test: repeated rustc invocations to detect state issues
                         echo "=== Sequential rustc tests ==="
@@ -235,39 +243,20 @@ let
                         # ── Diagnostics: clang directly ────────────────────────
                         # Narrow down clang failure: test small vs large clang tools
                         # clang-format (5.9MB, no codegen) and clang-tblgen (4.3MB)
-                        echo "--- clang-format --version ---"
-                        /nix/system/profile/bin/clang-format --version &>/tmp/clang-format-out
-                        echo "clang-format exit: $?"
-                        cat /tmp/clang-format-out
-
-                        echo "--- diagtool --version ---"
-                        /nix/system/profile/bin/diagtool &>/tmp/diagtool-out
-                        echo "diagtool exit: $?"
-                        cat /tmp/diagtool-out
-
-                        # llc --version with merged output to see targets
-                        echo "--- llc --version (merged) ---"
-                        /nix/system/profile/bin/llc --version &>/tmp/llc-out
-                        echo "llc exit: $?"
-                        cat /tmp/llc-out
-
-                        # Try clang-21 --help-hidden (different code path than --version)
-                        echo "--- clang-21 --help (first 5 lines) ---"
-                        /nix/system/profile/bin/clang-21 --help &>/tmp/clang-help-out
-                        echo "clang --help exit: $?"
-                        head -c 200 /tmp/clang-help-out
-
-                        # Try clang-scan-deps (uses Clang frontend but not driver)
-                        echo "--- clang-scan-deps --version ---"
-                        /nix/system/profile/bin/clang-scan-deps --version &>/tmp/csd-out
-                        echo "clang-scan-deps exit: $?"
-                        cat /tmp/csd-out
-
-                        # ld.lld + llvm-ar still work (confirms stack growth)
-                        /nix/system/profile/bin/ld.lld --version &>/dev/null
-                        echo "ld.lld: $?"
-                        /nix/system/profile/bin/llvm-ar --version &>/dev/null
-                        echo "llvm-ar: $?"
+                        # LLVM tool diagnostics — run in bash to avoid Ion crash on missing binaries
+                        /nix/system/profile/bin/bash -c '
+                          for tool in clang-format diagtool llc clang-21 clang-scan-deps; do
+                            BIN="/nix/system/profile/bin/$tool"
+                            if [ -x "$BIN" ]; then
+                              echo "--- $tool: exists ---"
+                              $BIN --version </dev/null >/dev/null 2>&1 || true
+                            else
+                              echo "--- $tool: not found (skipped) ---"
+                            fi
+                          done
+                          /nix/system/profile/bin/ld.lld --version >/dev/null 2>&1 && echo "ld.lld: 0" || echo "ld.lld: $?"
+                          /nix/system/profile/bin/llvm-ar --version >/dev/null 2>&1 && echo "llvm-ar: 0" || echo "llvm-ar: $?"
+                        '
 
                         ls -la /nix/system/profile/bin/clang /nix/system/profile/bin/clang-21
 
@@ -364,20 +353,24 @@ let
                         end
 
                         echo "--- Step 3b: Rust sysroot contents ---"
-                        let rust_sysroot = $(rustc --print sysroot)
-                        echo "Rust sysroot: $rust_sysroot"
-                        echo "Rust target lib dir:"
-                        ls $rust_sysroot/lib/rustlib/x86_64-unknown-redox/lib/ ^>/dev/null
-                        echo "---"
+                        /nix/system/profile/bin/bash -c '
+                          SYSROOT=$(rustc --print sysroot 2>/dev/null || echo "/nix/system/profile")
+                          echo "Rust sysroot: $SYSROOT"
+                          echo "Rust target lib dir:"
+                          ls "$SYSROOT/lib/rustlib/x86_64-unknown-redox/lib/" 2>/dev/null || echo "(not found)"
+                          echo "---"
+                        '
 
                         echo "--- Step 3c: Show cargo config ---"
                         cat /root/.cargo/config.toml
 
                         echo "--- Step 3d: Link with ld.lld + all Rust libs ---"
-                        /nix/system/profile/bin/ld.lld /usr/lib/redox-sysroot/lib/crt0.o /usr/lib/redox-sysroot/lib/crti.o /tmp/empty.o -L $rust_sysroot/lib/rustlib/x86_64-unknown-redox/lib -L /usr/lib/redox-sysroot/lib -l:libc.a -l:libpthread.a /usr/lib/redox-sysroot/lib/crtn.o -o /tmp/empty-lld &>/tmp/lld-full-out
-                        let lld_full_exit = $?
-                        echo "ld.lld manual link exit: $lld_full_exit"
-                        cat /tmp/lld-full-out
+                        /nix/system/profile/bin/bash -c '
+                          SYSROOT=$(rustc --print sysroot 2>/dev/null || echo "/nix/system/profile")
+                          /nix/system/profile/bin/ld.lld /usr/lib/redox-sysroot/lib/crt0.o /usr/lib/redox-sysroot/lib/crti.o /tmp/empty.o -L "$SYSROOT/lib/rustlib/x86_64-unknown-redox/lib" -L /usr/lib/redox-sysroot/lib -l:libc.a -l:libpthread.a /usr/lib/redox-sysroot/lib/crtn.o -o /tmp/empty-lld 2>/tmp/lld-full-out
+                          echo "ld.lld manual link exit: $?"
+                          cat /tmp/lld-full-out 2>/dev/null
+                        '
 
                         # ── Linker tests: safe first, risky last ──────────────
                         # The rustc linker invocation may crash the process (Invalid opcode in
@@ -984,6 +977,7 @@ let
                           rm -f /tmp/abort.log /tmp/panic.log
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
                           export CARGO_BUILD_JOBS=2
+                          export RAYON_NUM_THREADS=4
                           export CARGO_HOME=/root/.cargo
                           export CARGO_INCREMENTAL=0
                           export RUSTC=/nix/system/profile/bin/rustc
@@ -1041,6 +1035,7 @@ let
                           rm -f /tmp/abort.log /tmp/panic.log
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
                           export CARGO_BUILD_JOBS=2
+                          export RAYON_NUM_THREADS=4
                           export CARGO_HOME=/root/.cargo
                           export CARGO_INCREMENTAL=0
                           # Run cargo build in background with timeout using bash SECONDS
@@ -1123,6 +1118,7 @@ let
                         /nix/system/profile/bin/bash -c '
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
                           export CARGO_BUILD_JOBS=2
+                          export RAYON_NUM_THREADS=4
                           # Fresh cargo home per test to avoid stale flock hangs
                           rm -rf /tmp/cargo-realtest
                           mkdir -p /tmp/cargo-realtest
@@ -1255,6 +1251,7 @@ let
                         /nix/system/profile/bin/bash -c '
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
                           export CARGO_BUILD_JOBS=2
+                          export RAYON_NUM_THREADS=4
                           # Use a FRESH cargo home (copy config, avoid stale locks)
                           rm -rf /tmp/cargo-multifile
                           mkdir -p /tmp/cargo-multifile
@@ -1499,6 +1496,7 @@ let
                         /nix/system/profile/bin/bash -c '
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
                           export CARGO_BUILD_JOBS=2
+                          export RAYON_NUM_THREADS=4
                           rm -rf /tmp/cargo-minigrep
                           mkdir -p /tmp/cargo-minigrep
                           cp /root/.cargo/config.toml /tmp/cargo-minigrep/
@@ -1749,6 +1747,7 @@ let
                         /nix/system/profile/bin/bash -c '
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
                           export CARGO_BUILD_JOBS=2
+                          export RAYON_NUM_THREADS=4
                           rm -rf /tmp/cargo-buildrs
                           mkdir -p /tmp/cargo-buildrs
                           cp /root/.cargo/config.toml /tmp/cargo-buildrs/
@@ -2102,6 +2101,7 @@ let
                           cd /tmp/pathdep
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
                           export CARGO_BUILD_JOBS=2
+                          export RAYON_NUM_THREADS=4
                           # Fresh CARGO_HOME to avoid corrupted flock state from earlier tests
                           rm -rf /tmp/cargo-pathdep
                           mkdir -p /tmp/cargo-pathdep
@@ -2244,6 +2244,7 @@ let
                           cd /tmp/vendored
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
                           export CARGO_BUILD_JOBS=2
+                          export RAYON_NUM_THREADS=4
                           rm -rf /tmp/cargo-vendored
                           mkdir -p /tmp/cargo-vendored
                           cp /root/.cargo/config.toml /tmp/cargo-vendored/
@@ -2398,6 +2399,7 @@ let
                           cd /tmp/procmacro
                           export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
                           export CARGO_BUILD_JOBS=2
+                          export RAYON_NUM_THREADS=4
                           rm -rf /tmp/cargo-procmacro
                           mkdir -p /tmp/cargo-procmacro
                           cp /root/.cargo/config.toml /tmp/cargo-procmacro/
@@ -3079,6 +3081,7 @@ let
                           echo "fn main() { println!(\"parallel\"); }" > src/main.rs
 
                           export CARGO_BUILD_JOBS=2
+                          export RAYON_NUM_THREADS=4
                           cargo build --offline > /tmp/j2-out 2>&1 &
                           PID=$!
                           SECONDS=0
@@ -3103,6 +3106,129 @@ let
                             cat /tmp/j2-out 2>/dev/null | head -10
                           fi
                           rm -rf /tmp/test-j2 /tmp/cargo-home-j2
+                        '
+
+                        # ══════════════════════════════════════════════════════
+                        # SOURCE-BASED REBUILD TEST
+                        # ══════════════════════════════════════════════════════
+                        # Tests `snix system rebuild --source` end-to-end:
+                        #   1. Create configuration.nix with packageSources
+                        #   2. Create packages.nix with a simple derivation
+                        #   3. Run snix system rebuild --source
+                        #   4. Verify generation created with the built package
+                        echo ""
+                        echo "========================================"
+                        echo "  SOURCE-BASED REBUILD TEST"
+                        echo "========================================"
+                        echo ""
+
+                        echo "--- source-rebuild: snix system rebuild --source ---"
+                        /nix/system/profile/bin/bash -c '
+                          # Set up a temp configuration dir
+                          CFGDIR=/tmp/source-rebuild-test
+                          rm -rf "$CFGDIR"
+                          mkdir -p "$CFGDIR"
+                          mkdir -p /nix/store /nix/var/snix/pathinfo
+
+                          # Create packages.nix — a simple derivation producing a hello script
+                          cat > "$CFGDIR/packages.nix" << '"'"'PKGNIX'"'"'
+        {
+          hello-source = derivation {
+            name = "hello-source";
+            builder = "/nix/system/profile/bin/bash";
+            args = ["-c" "mkdir -p $out/bin; echo hello-from-source-rebuild > $out/bin/hello-source"];
+            system = "x86_64-unknown-redox";
+          };
+        }
+  PKGNIX
+
+                          # Create configuration.nix with packageSources
+                          cat > "$CFGDIR/configuration.nix" << '"'"'CFGNIX'"'"'
+        {
+          packageSources = "/tmp/source-rebuild-test/packages.nix";
+        }
+  CFGNIX
+
+                          # Set up a writable gen dir and manifest for this test
+                          GENDIR="$CFGDIR/generations"
+                          MANIFEST="$CFGDIR/manifest.json"
+                          mkdir -p "$GENDIR"
+
+                          # Create a minimal initial manifest (rebuild merges into this)
+                          cat > "$MANIFEST" << '"'"'MFJSON'"'"'
+        {
+          "generation": { "id": 0, "timestamp": "", "description": "initial" },
+          "packages": []
+        }
+  MFJSON
+
+                          echo "[source-rebuild] running snix system rebuild --source..."
+                          /bin/snix system rebuild --source \
+                            --config "$CFGDIR/configuration.nix" \
+                            --manifest "$MANIFEST" \
+                            --gen-dir "$GENDIR" \
+                            >/tmp/source-rebuild-stdout 2>/tmp/source-rebuild-stderr
+                          EXIT=$?
+                          echo "[source-rebuild] exit=$EXIT"
+
+                          if [ $EXIT -eq 0 ]; then
+                            echo "FUNC_TEST:source-rebuild:PASS"
+
+                            # Verify: generation directory was created
+                            GEN_COUNT=$(ls "$GENDIR" 2>/dev/null | wc -l)
+                            if [ "$GEN_COUNT" -ge 1 ]; then
+                              echo "FUNC_TEST:source-rebuild-gen:PASS"
+                              echo "  generations: $GEN_COUNT"
+                            else
+                              echo "FUNC_TEST:source-rebuild-gen:FAIL:no generation created"
+                            fi
+
+                            # Verify: manifest was updated with hello-source package
+                            if grep -q "hello-source" "$MANIFEST" 2>/dev/null; then
+                              echo "FUNC_TEST:source-rebuild-pkg:PASS"
+                            else
+                              echo "FUNC_TEST:source-rebuild-pkg:FAIL:hello-source not in manifest"
+                              cat "$MANIFEST" 2>/dev/null | head -20
+                            fi
+                          else
+                            echo "FUNC_TEST:source-rebuild:FAIL:exit=$EXIT"
+                            echo "FUNC_TEST:source-rebuild-gen:FAIL:rebuild failed"
+                            echo "FUNC_TEST:source-rebuild-pkg:FAIL:rebuild failed"
+                            echo "=== stdout ==="
+                            cat /tmp/source-rebuild-stdout 2>/dev/null
+                            echo "=== stderr ==="
+                            cat /tmp/source-rebuild-stderr 2>/dev/null
+                          fi
+                        '
+
+                        # ── Source rebuild dry-run test ──
+                        echo "--- source-rebuild-dry: snix system rebuild --source --dry-run ---"
+                        /nix/system/profile/bin/bash -c '
+                          CFGDIR=/tmp/source-rebuild-test
+                          MANIFEST="$CFGDIR/manifest.json"
+                          GENDIR="$CFGDIR/generations"
+                          GEN_BEFORE=$(ls "$GENDIR" 2>/dev/null | wc -l)
+
+                          /bin/snix system rebuild --source --dry-run \
+                            --config "$CFGDIR/configuration.nix" \
+                            --manifest "$MANIFEST" \
+                            --gen-dir "$GENDIR" \
+                            >/tmp/source-dry-stdout 2>/tmp/source-dry-stderr
+                          EXIT=$?
+
+                          GEN_AFTER=$(ls "$GENDIR" 2>/dev/null | wc -l)
+
+                          if [ $EXIT -eq 0 ]; then
+                            # Dry run should not create a new generation
+                            if [ "$GEN_BEFORE" = "$GEN_AFTER" ]; then
+                              echo "FUNC_TEST:source-rebuild-dry:PASS"
+                            else
+                              echo "FUNC_TEST:source-rebuild-dry:FAIL:generation created during dry-run"
+                            fi
+                          else
+                            echo "FUNC_TEST:source-rebuild-dry:FAIL:exit=$EXIT"
+                            cat /tmp/source-dry-stderr 2>/dev/null | head -10
+                          fi
                         '
 
                         echo ""
