@@ -32,7 +32,7 @@ fi
 cd "$SRCDIR"
 
 echo "[build-snix] Starting cargo build (JOBS=2, 168 crates)..." >&2
-echo "[build-snix] Vendor crates: $(ls vendor/ | wc -l)" >&2
+echo "[build-snix] Vendor crates: $(ls "$SRCDIR/vendor/" 2>/dev/null | wc -l)" >&2
 
 # Build with timeout — 30 minutes for a 168-crate project.
 # Uses file redirection, NOT pipes. Pipes on Redox break with deep
