@@ -71,6 +71,9 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 - Redox open flags translated explicitly: `O_RDONLY=0x10000`, `O_CREAT=0x02000000`, etc.
 - `O_APPEND` mode: handler seeks to end before each write (cargo log files use append)
 - `getdents` filters directory listings: ancestor dirs show only navigable children, allowed dirs show all real entries
+- `/dev/*` paths are scheme-backed on Redox (null:, rand:) — can't open via `raw_openat(root_fd, ...)` (gives EXDEV)
+- Fix: detect `/dev/` prefix in handler, use `File::open()` through parent namespace instead of raw_openat
+- `/dev/null` must be read-WRITE (bash `>/dev/null` needs write), `/dev/urandom` read-only
 - Fallback chain: proxy → scheme-only sandbox (includes real `file:`) → unsandboxed
 - Validated against 193-crate snix build, 33-crate ripgrep build, proc-macros, JOBS=2 parallel builds
 

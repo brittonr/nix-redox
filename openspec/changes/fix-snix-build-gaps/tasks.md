@@ -9,14 +9,14 @@
 - [x] 2.1 Read the `snix-build-dir` stderr from the verbose log — identify whether it's an output verification issue, NAR hash issue, or builder failure
 - [x] 2.2 Read `snix-redox/src/local_build.rs` output verification code — check how it handles `$out` as a directory vs a file
 - [x] 2.3 Implement the fix in `local_build.rs`
-- [ ] 2.4 Rebuild and verify `snix-build-dir` passes
+- [x] 2.4 Rebuild and verify `snix-build-dir` passes
 
 ## 3. Fix flake installable builds (`flake-build`, `flake-cached`, `flake-registered`)
 
-- [ ] 3.1 Read the `flake-build` stderr from the verbose log — identify whether it's eval failure, input resolution, or build failure
-- [ ] 3.2 Read `snix-redox/src/flake.rs` — trace the flake evaluation path for `/usr/src/test-flake#hello`
-- [ ] 3.3 Check the test flake contents on the disk image (`/usr/src/test-flake/flake.nix`, `flake.lock`)
-- [ ] 3.4 Implement the fix in `flake.rs` or the test flake definition
+- [x] 3.1 Read the `flake-build` stderr from the verbose log — identify whether it's eval failure, input resolution, or build failure
+- [x] 3.2 Read `snix-redox/src/flake.rs` — trace the flake evaluation path for `/usr/src/test-flake#hello`
+- [x] 3.3 Check the test flake contents on the disk image (`/usr/src/test-flake/flake.nix`, `flake.lock`)
+- [x] 3.4 Implement the fix in `flake.rs` or the test flake definition
 - [ ] 3.5 Rebuild and verify `flake-build` passes (which should cascade to `flake-cached` and `flake-registered`)
 
 ## 4. Fix sandbox gaps for cargo builds (`snix-build-cargo`, `cc-dep-build`, `workspace-build`, `rg-build`)
@@ -31,18 +31,25 @@
 - [ ] 4.8 Verify `cc-dep-build` and `workspace-build` pass
 - [ ] 4.9 Verify `rg-build` passes (and downstream `rg-version`, `rg-search`, `rg-store-path`, `rg-binary-size`)
 
+Note: /dev/null EXDEV fix in daf86cc4 resolved sandbox device path access. All cargo-based
+builds now proceed past initialization (0 failures at timeout). Need longer test timeout
+for 168-crate snix and 33-crate ripgrep builds.
+
 ## 5. Fix source-based rebuild (`source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`)
 
 - [x] 5.1 Read the `source-rebuild` stderr from the verbose log
 - [x] 5.2 Read `snix-redox/src/rebuild.rs` `rebuild_from_source()` — trace the failure path
 - [x] 5.3 Implement the fix (likely depends on fixes from tasks 2-4 since rebuild invokes snix build internally)
-- [ ] 5.4 Rebuild and verify `source-rebuild` passes (cascades to `source-rebuild-gen` and `source-rebuild-pkg`)
+- [x] 5.4 Rebuild and verify `source-rebuild` passes (cascades to `source-rebuild-gen` and `source-rebuild-pkg`)
 
 ## 6. Fix snix self-compile (`snix-compile`)
 
 - [x] 6.1 Read the `snix-compile` stderr — determine if it's a timeout, sandbox issue, or build failure
 - [x] 6.2 If sandbox issue: apply same fixes as task 4. If timeout: increase test timeout or optimize build.
 - [ ] 6.3 Rebuild and verify `snix-compile` passes
+
+Note: snix-compile now proceeds past sandbox init but needs ~900s+ for 168 crates.
+Test timeout (1800s) is reached before all tests complete.
 
 ## 7. End-to-end validation
 
