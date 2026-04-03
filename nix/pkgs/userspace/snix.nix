@@ -50,6 +50,20 @@ mkUserspace.mkBinary {
   binaryName = "snix";
   cargoBuildFlags = "--bin snix --bin proxy_namespace_test";
 
+  # Patch upstream fetcher to not panic when no CA certificates exist.
+  # Redox has no system cert store; reqwest::Client::new() calls
+  # rustls-native-certs which panics with "No CA certificates were loaded".
+  # Fix: disable built-in native cert loading so the client creates with
+  # an empty root store. Local eval/build work without TLS; remote fetches
+  # will fail with a clear TLS handshake error instead of an abort.
+  preBuild = ''
+    if [ -f upstream/glue/src/fetchers/mod.rs ]; then
+      chmod u+w upstream/glue/src/fetchers/mod.rs
+      sed -i 's/.user_agent(crate::USER_AGENT)/.user_agent(crate::USER_AGENT)\n                .tls_built_in_native_certs(false)/' \
+        upstream/glue/src/fetchers/mod.rs
+    fi
+  '';
+
   installPhase = ''
     runHook preInstall
     mkdir -p $out/bin
