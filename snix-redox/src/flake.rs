@@ -10,10 +10,11 @@
 //! ## Scope
 //!
 //! - Supports `github` and `gitlab` locked input types (via tarball URLs)
-//! - Supports `path` and `git` locked input types (local paths)
+//! - Supports `path` and `git` locked input types
 //! - Handles `flake: false` inputs (just source trees, no recursive eval)
 //! - Handles `follows` chains in the lock file
-//! - Does NOT support: lock file writing, `fetchGit`, flake registries,
+//! - `git` inputs: tries forge tarball first (GitHub/GitLab), falls back to git clone
+//! - Does NOT support: lock file writing, flake registries,
 //!   `--override-input`, recursive flake-of-flakes evaluation
 //!
 //! ## Architecture
@@ -582,13 +583,51 @@ fn fetch_locked_input(
             Ok(path.to_string())
         }
         "git" => {
-            // For git inputs with a URL, we could try to resolve as tarball
-            // if it's from a known forge. For now, error.
-            Err(format!(
-                "git input '{}' not yet supported (use github/gitlab type or bridge mode)",
-                name
-            )
-            .into())
+            let url = locked.url.as_deref().ok_or_else(|| {
+                format!("git input '{}' has no url field", name)
+            })?;
+            let rev = locked.rev.as_deref().ok_or_else(|| {
+                format!("git input '{}' has no rev field", name)
+            })?;
+            let nar_hash = locked.nar_hash.as_deref();
+
+            // Optimization: if the git URL matches a known forge, download
+            // the archive tarball instead of cloning (much faster).
+            if let Some(tarball_url) = git_url_to_forge_tarball(url, rev) {
+                if let Some(nar_hash) = nar_hash {
+                    let store_path = compute_fod_store_path(name, nar_hash)?;
+                    if Path::new(&store_path).exists() {
+                        eprintln!("using cached input '{name}' at {store_path}");
+                        return Ok(store_path);
+                    }
+                    eprintln!("fetching input '{name}' from {tarball_url} (forge tarball)...");
+                    fetch_and_extract_to_store(&tarball_url, &store_path)?;
+                    verify_nar_hash(&store_path, nar_hash)?;
+                    return Ok(store_path);
+                }
+            }
+
+            // Fall back to git clone. Compute store path from narHash if available.
+            let store_path = if let Some(nar_hash) = nar_hash {
+                let sp = compute_fod_store_path(name, nar_hash)?;
+                if Path::new(&sp).exists() {
+                    eprintln!("using cached input '{name}' at {sp}");
+                    return Ok(sp);
+                }
+                sp
+            } else {
+                // Without narHash, use a content-addressed temp path
+                let hash_input = format!("git-{}-{}", url, rev);
+                let hash = {
+                    use sha2::{Sha256, Digest};
+                    let h = Sha256::digest(hash_input.as_bytes());
+                    data_encoding::HEXLOWER.encode(&h)[..32].to_string()
+                };
+                format!("/nix/store/{}-source", hash)
+            };
+
+            crate::fetchers::fetch_git(url, rev, &store_path, nar_hash)?;
+            Ok(store_path)
         }
         other => {
             Err(format!(
@@ -625,6 +664,42 @@ fn compute_fod_store_path(
             .map_err(|e| format!("computing store path for '{}': {e}", name))?;
 
     Ok(store_path.to_absolute_path())
+}
+
+/// Try to convert a git URL to a forge archive tarball URL.
+///
+/// GitHub: `https://github.com/owner/repo.git` → `https://github.com/owner/repo/archive/<rev>.tar.gz`
+/// GitLab: `https://gitlab.com/owner/repo.git` → `https://gitlab.com/owner/repo/-/archive/<rev>/repo-<rev>.tar.gz`
+fn git_url_to_forge_tarball(url: &str, rev: &str) -> Option<String> {
+    let url = url.strip_suffix(".git").unwrap_or(url);
+
+    // GitHub
+    if let Some(rest) = url.strip_prefix("https://github.com/") {
+        // rest = "owner/repo"
+        if rest.matches('/').count() == 1 && !rest.is_empty() {
+            return Some(format!("https://github.com/{rest}/archive/{rev}.tar.gz"));
+        }
+    }
+
+    // GitLab (any host with gitlab in the domain, or gitlab.com)
+    // Pattern: https://<host>/<owner>/<repo>
+    if url.contains("gitlab") {
+        if let Some((_scheme_host, path)) = url.split_once("://") {
+            let parts: Vec<&str> = _scheme_host.split('/').chain(path.split('/')).collect();
+            // parts[0] = host, then owner/repo segments
+            if let Some(slash_pos) = path.find('/') {
+                let host = _scheme_host;
+                let owner_repo = path;
+                if let Some(repo_name) = owner_repo.rsplit('/').next() {
+                    return Some(format!(
+                        "https://{host}/{owner_repo}/-/archive/{rev}/{repo_name}-{rev}.tar.gz"
+                    ));
+                }
+            }
+        }
+    }
+
+    None
 }
 
 /// Download a tarball and extract it to a store path.
@@ -1268,5 +1343,62 @@ mod tests {
             non_flake_count > 30,
             "expected >30 non-flake inputs, got {non_flake_count}"
         );
+    }
+
+    // ── git_url_to_forge_tarball ───────────────────────────────────
+
+    #[test]
+    fn forge_tarball_github() {
+        let url = git_url_to_forge_tarball(
+            "https://github.com/NixOS/nixpkgs.git",
+            "abc123",
+        );
+        assert_eq!(
+            url.unwrap(),
+            "https://github.com/NixOS/nixpkgs/archive/abc123.tar.gz"
+        );
+    }
+
+    #[test]
+    fn forge_tarball_github_no_dot_git() {
+        let url = git_url_to_forge_tarball(
+            "https://github.com/owner/repo",
+            "def456",
+        );
+        assert_eq!(
+            url.unwrap(),
+            "https://github.com/owner/repo/archive/def456.tar.gz"
+        );
+    }
+
+    #[test]
+    fn forge_tarball_gitlab() {
+        let url = git_url_to_forge_tarball(
+            "https://gitlab.redox-os.org/redox-os/relibc.git",
+            "abc123",
+        );
+        assert!(url.is_some());
+        let url = url.unwrap();
+        assert!(url.contains("gitlab.redox-os.org"), "url: {url}");
+        assert!(url.contains("abc123"), "url: {url}");
+    }
+
+    #[test]
+    fn forge_tarball_not_a_forge() {
+        let url = git_url_to_forge_tarball(
+            "https://git.example.com/foo/bar.git",
+            "abc123",
+        );
+        assert!(url.is_none());
+    }
+
+    #[test]
+    fn forge_tarball_ssh_not_supported() {
+        let url = git_url_to_forge_tarball(
+            "git@github.com:owner/repo.git",
+            "abc123",
+        );
+        // SSH URLs don't start with https:// so shouldn't match
+        assert!(url.is_none());
     }
 }

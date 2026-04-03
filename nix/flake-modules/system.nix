@@ -312,12 +312,28 @@ let
     ripgrep-src = inputs.ripgrep-src;
   };
 
+  # test flake bundle for `snix build .#hello` VM test
+  testFlakeBundle = import ../pkgs/infrastructure/test-flake-bundle.nix {
+    inherit pkgs;
+  };
+
+  # cc-dep and workspace test bundles for complex build VM tests
+  ccDepTestBundle = import ../pkgs/infrastructure/cc-dep-test-bundle.nix {
+    inherit pkgs;
+  };
+  workspaceTestBundle = import ../pkgs/infrastructure/workspace-test-bundle.nix {
+    inherit pkgs;
+  };
+
   # Self-hosting test: boots self-hosting image, tests cargo build
   selfHostingTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/self-hosting-test.nix ];
     extraPkgs = extraPkgs // {
       snix-source-bundle = snixSourceBundle;
       ripgrep-source-bundle = ripgrepSourceBundle;
+      test-flake-bundle = testFlakeBundle;
+      cc-dep-test-bundle = ccDepTestBundle;
+      workspace-test-bundle = workspaceTestBundle;
     };
   };
   selfHostingTest = mkFunctionalTest {

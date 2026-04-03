@@ -68,6 +68,10 @@ pub struct RebuildConfig {
     pub hardware: Option<HardwareConfigInput>,
     /// Declared service names — additions/removals require initfs rebuild via bridge.
     pub services: Option<Vec<String>>,
+    /// Path to a .nix file returning `{ name = derivation; ... }` for source builds.
+    /// Used with `snix system rebuild --source`.
+    #[serde(rename = "packageSources")]
+    pub package_sources: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -1032,6 +1036,223 @@ pub fn init_config(path: Option<&str>) -> Result<(), Box<dyn std::error::Error>>
     Ok(())
 }
 
+// ===== Source-based rebuild =====
+
+/// Rebuild the system by compiling packages from Nix expressions.
+///
+/// Reads `packageSources` from configuration.nix, evaluates the referenced
+/// .nix file to get `{ name = derivation; ... }`, builds each derivation
+/// locally, and activates the result.
+pub fn rebuild_from_source(
+    config_path: Option<&str>,
+    dry_run: bool,
+    manifest_path: Option<&str>,
+    gen_dir: Option<&str>,
+    cache_index_path: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let cfg_path = config_path.unwrap_or(DEFAULT_CONFIG_PATH);
+    let mpath = manifest_path.unwrap_or(DEFAULT_MANIFEST_PATH);
+    let cache_path = cache_index_path.unwrap_or(DEFAULT_CACHE_INDEX);
+
+    // Step 1: Evaluate configuration.nix
+    println!("Evaluating {cfg_path}...");
+    let config = evaluate_config(cfg_path)?;
+
+    // Step 2: Resolve packageSources path
+    let sources_path = config.package_sources.as_deref().ok_or(
+        "configuration.nix has no 'packageSources' attribute.\n\
+         Add: packageSources = \"/etc/redox-system/packages.nix\";\n\
+         Or use 'snix system rebuild' (without --source) for binary cache mode."
+    )?;
+
+    if !Path::new(sources_path).exists() {
+        return Err(format!(
+            "packageSources file not found: {sources_path}"
+        ).into());
+    }
+
+    // Step 3: Evaluate the package sources file
+    println!("Evaluating {sources_path}...");
+    let source_packages = evaluate_package_sources(sources_path)?;
+
+    if source_packages.is_empty() {
+        println!("No packages defined in {sources_path}.");
+        return Ok(());
+    }
+
+    println!("Found {} source packages:", source_packages.len());
+    for (name, drv_path) in &source_packages {
+        println!("  {name}: {drv_path}");
+    }
+
+    if dry_run {
+        println!();
+        println!("Dry run complete. {} derivation(s) would be built.", source_packages.len());
+        return Ok(());
+    }
+
+    // Step 4: Build each derivation
+    println!();
+    let built_packages = build_source_packages(&source_packages, sources_path)?;
+
+    // Step 5: Load current manifest and merge
+    let current = system::load_manifest_from(mpath)?;
+
+    // Resolve any binary-cache packages too
+    let cache_packages = if has_package_changes(&config) {
+        resolve_packages(&config.packages, cache_path).unwrap_or_default()
+    } else {
+        vec![]
+    };
+
+    // Merge: source-built packages + cache packages + boot essentials
+    let mut merged = merge_config(&current, &config, &cache_packages)?;
+
+    // Add source-built packages to the manifest
+    for (name, store_path) in &built_packages {
+        let pkg = system::Package {
+            name: name.clone(),
+            version: "source".to_string(),
+            store_path: store_path.clone(),
+        };
+        // Replace existing or append
+        if let Some(existing) = merged.packages.iter_mut().find(|p| p.name == *name) {
+            *existing = pkg;
+        } else {
+            merged.packages.push(pkg);
+        }
+    }
+
+    // Ensure boot essentials are preserved
+    for essential in BOOT_ESSENTIAL {
+        if !merged.packages.iter().any(|p| {
+            p.name == *essential || p.name.ends_with(essential)
+        }) {
+            // Keep from current manifest
+            if let Some(pkg) = current.packages.iter().find(|p| {
+                p.name == *essential || p.name.ends_with(essential)
+            }) {
+                merged.packages.push(pkg.clone());
+            }
+        }
+    }
+
+    // Step 6: Write and switch
+    let tmp_path = format!("/tmp/snix-source-rebuild-{}.json", std::process::id());
+    let json = serde_json::to_string_pretty(&merged)?;
+    fs::write(&tmp_path, &json)?;
+
+    let desc = format!("source rebuild ({} packages from {})", built_packages.len(), sources_path);
+    let result = system::switch(
+        &tmp_path,
+        Some(&desc),
+        false,
+        gen_dir,
+        manifest_path,
+    );
+
+    let _ = fs::remove_file(&tmp_path);
+    result?;
+
+    println!();
+    println!(
+        "\u{2713} System rebuilt from source ({} packages from {cfg_path})",
+        built_packages.len()
+    );
+
+    Ok(())
+}
+
+/// Evaluate a package sources .nix file and return `{ name: drv_path }`.
+fn evaluate_package_sources(
+    sources_path: &str,
+) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+    let expr = format!("builtins.attrNames (import {})", sources_path);
+    let (names_str, state) = crate::eval::evaluate_with_state(&expr)?;
+
+    // Parse the list of names
+    let names_str = names_str.trim();
+    if !names_str.starts_with('[') || !names_str.ends_with(']') {
+        return Err(format!(
+            "packageSources must return an attrset, got: {names_str}"
+        ).into());
+    }
+
+    let inner = &names_str[1..names_str.len()-1].trim();
+    let names: Vec<String> = inner
+        .split_whitespace()
+        .map(|s| s.trim_matches('"').to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    // For each name, evaluate the drvPath
+    let mut result = Vec::new();
+    for name in &names {
+        let drv_expr = format!(
+            "(import {}).{}.drvPath",
+            sources_path, name
+        );
+        let (drv_path, _) = crate::eval::evaluate_with_state(&drv_expr)?;
+        let drv_path = drv_path.trim_matches('"').to_string();
+        result.push((name.clone(), drv_path));
+    }
+
+    Ok(result)
+}
+
+/// Build each source package derivation and return `{ name: output_store_path }`.
+///
+/// `sources_path` is the path to the .nix file that returns the package attrset.
+fn build_source_packages(
+    packages: &[(String, String)],
+    sources_path: &str,
+) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
+    let db = crate::pathinfo::PathInfoDb::open()?;
+    let mut results = Vec::new();
+
+    for (name, _drv_path) in packages {
+        println!("Building {name}...");
+
+        // Evaluate the package from the sources file to populate KnownPaths
+        let drv_path_expr = format!(
+            "(import {}).{}.drvPath",
+            sources_path, name
+        );
+        let (drv_path_str, state) = crate::eval::evaluate_with_state(&drv_path_expr)
+            .map_err(|e| format!("evaluating drvPath for '{name}': {e}"))?;
+        let drv_path_str = drv_path_str.trim_matches('"').to_string();
+
+        let store_path = nix_compat::store_path::StorePath::<String>::from_absolute_path(
+            drv_path_str.as_bytes(),
+        ).map_err(|e| format!("invalid drv path '{drv_path_str}': {e}"))?;
+
+        let known_paths_ref = state.known_paths.borrow();
+
+        match crate::local_build::build_needed(&store_path, &*known_paths_ref, &db) {
+            Ok(build_result) => {
+                if let Some(out) = build_result.outputs.get("out") {
+                    println!("  {name}: built at {out}");
+                    results.push((name.clone(), out.clone()));
+                } else {
+                    return Err(format!(
+                        "build of {name} succeeded but produced no 'out' output"
+                    ).into());
+                }
+            }
+            Err(e) => {
+                eprintln!("\nBuild FAILED for package '{name}':");
+                eprintln!("  derivation: {drv_path_str}");
+                eprintln!("  error: {e}");
+                return Err(format!(
+                    "source rebuild aborted: package '{name}' failed to build"
+                ).into());
+            }
+        }
+    }
+
+    Ok(results)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1162,6 +1383,8 @@ mod tests {
             activation_scripts: Vec::new(),
             files: BTreeMap::new(),
             system_profile: String::new(),
+            toplevel: None,
+            etc_source: None,
         }
     }
 
@@ -1396,6 +1619,7 @@ mod tests {
             programs: None,
             hardware: None,
             services: None,
+            package_sources: None,
         };
 
         let merged = merge_config(&current, &config, &[]).unwrap();
@@ -1667,6 +1891,7 @@ mod tests {
         // manifest has ptyd, smolnetd — remove smolnetd
         let config = RebuildConfig {
             services: Some(vec!["ptyd".to_string()]),
+            package_sources: None,
             ..Default::default()
         };
         assert!(has_boot_affecting_changes(&config, Some(&manifest)));
@@ -1698,6 +1923,7 @@ mod tests {
         // No manifest to compare — any declared services are potentially changing
         let config = RebuildConfig {
             services: Some(vec!["ptyd".to_string()]),
+            package_sources: None,
             ..Default::default()
         };
         assert!(has_boot_affecting_changes(&config, None));
@@ -1765,6 +1991,7 @@ mod tests {
         let manifest = sample_manifest();
         let config = RebuildConfig {
             services: Some(vec!["ptyd".to_string(), "smolnetd".to_string(), "new_svc".to_string()]),
+            package_sources: None,
             ..Default::default()
         };
         assert!(needs_bridge(&config, Some(&manifest)));
