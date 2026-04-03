@@ -146,6 +146,9 @@ let
                         # explicitly to prevent the panic.
                         let RAYON_NUM_THREADS = "4"
                         export RAYON_NUM_THREADS
+                        # Enable Rust backtraces for panic diagnostics
+                        let RUST_BACKTRACE = "1"
+                        export RUST_BACKTRACE
                         # CARGO_HOME must be /root/.cargo where config.toml lives
                         # (config.toml has linker=ld.lld and rustflags for Redox target)
                         let CARGO_HOME = "/root/.cargo"
@@ -192,14 +195,16 @@ let
                         end
 
                         # Test: rustc --print cfg (target config query — LLVM option parsing)
-                        rustc --print cfg >/tmp/rustc-print-cfg-out
+                        rustc --print cfg >/tmp/rustc-print-cfg-out ^>/tmp/rustc-print-cfg-err
                         let print_cfg_exit = $?
                         if test $print_cfg_exit = 0
                           echo "FUNC_TEST:rustc-print-cfg:PASS"
                         else
                           echo "FUNC_TEST:rustc-print-cfg:FAIL:rustc --print cfg exited $print_cfg_exit"
-                          echo "=== rustc print cfg output ==="
+                          echo "=== rustc print cfg stdout ==="
                           cat /tmp/rustc-print-cfg-out
+                          echo "=== rustc print cfg stderr ==="
+                          cat /tmp/rustc-print-cfg-err
                           echo "=== end ==="
                         end
 
@@ -2446,6 +2451,67 @@ let
                         end
 
                         # ══════════════════════════════════════════════════════
+                        # Phase 3.5: snix init diagnostics
+                        # ══════════════════════════════════════════════════════
+                        echo ""
+                        echo "======================================="
+                        echo "  SNIX INIT DIAGNOSTICS"
+                        echo "======================================="
+                        echo ""
+
+                        # Diagnostic: snix --version with stderr capture
+                        echo "--- snix --version ---"
+                        /nix/system/profile/bin/bash -c '
+                          /bin/snix --version >/tmp/snix-version-out 2>/tmp/snix-version-err
+                          EXIT=$?
+                          echo "snix --version exit: $EXIT"
+                          if [ $EXIT -eq 0 ]; then
+                            echo "FUNC_TEST:snix-version:PASS"
+                            cat /tmp/snix-version-out
+                          else
+                            echo "FUNC_TEST:snix-version:FAIL:exit=$EXIT"
+                            echo "=== snix version stdout ==="
+                            cat /tmp/snix-version-out 2>/dev/null
+                            echo "=== snix version stderr ==="
+                            cat /tmp/snix-version-err 2>/dev/null
+                            echo "=== end ==="
+                          fi
+                        '
+
+                        # Diagnostic: snix eval with stderr capture
+                        echo "--- snix eval ---"
+                        /nix/system/profile/bin/bash -c '
+                          /bin/snix eval --expr "1 + 1" >/tmp/snix-eval-out 2>/tmp/snix-eval-err
+                          EXIT=$?
+                          echo "snix eval exit: $EXIT"
+                          if [ $EXIT -eq 0 ]; then
+                            RESULT=$(cat /tmp/snix-eval-out)
+                            echo "FUNC_TEST:snix-eval:PASS (result=$RESULT)"
+                          else
+                            echo "FUNC_TEST:snix-eval:FAIL:exit=$EXIT"
+                            echo "=== snix eval stdout ==="
+                            cat /tmp/snix-eval-out 2>/dev/null
+                            echo "=== snix eval stderr ==="
+                            cat /tmp/snix-eval-err 2>/dev/null
+                            echo "=== end ==="
+                          fi
+                        '
+
+                        # Diagnostic: strace snix --version (if strace-redox is available)
+                        echo "--- strace snix --version ---"
+                        /nix/system/profile/bin/bash -c '
+                          if [ -x /nix/system/profile/bin/strace ]; then
+                            /nix/system/profile/bin/strace /bin/snix --version >/tmp/snix-strace-out 2>/tmp/snix-strace-err
+                            echo "strace snix exit: $?"
+                            echo "=== strace output (last 100 lines) ==="
+                            tail -n 100 /tmp/snix-strace-err 2>/dev/null || cat /tmp/snix-strace-err 2>/dev/null
+                            echo "=== end ==="
+                          else
+                            echo "strace-redox not available, skipping"
+                          fi
+                        '
+
+                        # ══════════════════════════════════════════════════════
                         # Phase 4: snix build — Nix derivation builder on Redox
                         # ══════════════════════════════════════════════════════
                         #
@@ -3251,10 +3317,12 @@ selfHosting
   };
 
   # No userutils — run the test script directly (not via login loop)
+  # Add strace-redox for init panic diagnostics
   "/environment" = selfHosting."/environment" // {
     systemPackages = builtins.filter (
       p: !(pkgs ? userutils && toString p == toString pkgs.userutils)
-    ) (selfHosting."/environment".systemPackages or [ ]);
+    ) (selfHosting."/environment".systemPackages or [ ])
+    ++ opt "strace-redox";
   };
 
   # Include snix source bundle on the filesystem for self-compile test

@@ -61,6 +61,8 @@ dev
       # Rayon calls available_parallelism() on pool init unless this is set.
       # Without it, rustc panics during LLVM init → stack overflow in unwind.
       RAYON_NUM_THREADS = "4";
+      # Enable backtraces for panic diagnostics during init
+      RUST_BACKTRACE = "1";
     };
   };
 

@@ -34,6 +34,8 @@ let
     name = "relibc-src-patched";
     src = relibc-src;
 
+    nativeBuildInputs = [ pkgs.python3 ];
+
     phases = [
       "unpackPhase"
       "patchPhase"
@@ -86,6 +88,10 @@ let
     postPatch = ''
       # Fix shell script interpreters for Nix sandbox
       patchShebangs .
+
+      # Patch ld_so to search .symtab for LOCAL __relibc_init_* symbols
+      # (pre-built DSOs like librustc_driver.so hide these with version scripts)
+      python3 ${./patches/relibc/patch-relibc-symtab-fallback.py} .
 
       # Use LLVM tools instead of target-prefixed GNU tools
       sed -i 's/export CC=x86_64-unknown-redox-gcc/export CC=clang/g' config.mk
