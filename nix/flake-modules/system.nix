@@ -344,6 +344,25 @@ let
     defaultTimeout = 1500; # snix self-compile (168 crates) + ripgrep build need ~900s
   };
 
+  # Focused snix sandbox build test — skips the 42 quick tests
+  snixSandboxTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/snix-sandbox-test.nix ];
+    extraPkgs = extraPkgs // {
+      snix-source-bundle = snixSourceBundle;
+      ripgrep-source-bundle = ripgrepSourceBundle;
+      test-flake-bundle = testFlakeBundle;
+      cc-dep-test-bundle = ccDepTestBundle;
+      workspace-test-bundle = workspaceTestBundle;
+    };
+  };
+  snixSandboxTest = mkFunctionalTest {
+    diskImage = snixSandboxTestSystem.diskImage;
+    inherit bootloader;
+    memoryMB = 8192;
+    cpus = 4;
+    defaultTimeout = 600; # 4 sandbox builds, ~2 min each
+  };
+
   # Parallel build test: JOBS=1 baseline + JOBS=2 validation
   parallelBuildTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/parallel-build-test.nix ];
@@ -579,6 +598,8 @@ in
 
     redox-self-hosting-test = selfHostingTestSystem.diskImage;
     self-hosting-test = selfHostingTest;
+
+    snix-sandbox-test = snixSandboxTest;
 
     redox-parallel-build-test = parallelBuildTestSystem.diskImage;
     parallel-build-test = parallelBuildTest;
