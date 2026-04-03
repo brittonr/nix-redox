@@ -629,6 +629,12 @@ fn main() {
         let cert_path = "/etc/ssl/certs/ca-certificates.crt";
         if std::path::Path::new(cert_path).exists() {
             std::env::set_var("SSL_CERT_FILE", cert_path);
+        } else {
+            // No system CA certs (e.g. Redox OS). Point SSL_CERT_FILE at
+            // /dev/null so rustls initializes with an empty root store
+            // instead of panicking. Local eval/build work without TLS;
+            // remote fetches will fail with a clear TLS error.
+            std::env::set_var("SSL_CERT_FILE", "/dev/null");
         }
     }
 
