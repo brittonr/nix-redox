@@ -306,8 +306,47 @@ impl BuildFsHandler {
     }
 
     /// Open a real file via the root fd (bypassing initnsmgr).
+    ///
+    /// For `/dev/*` paths, uses the normal namespace open instead of
+    /// `raw_openat(root_fd, ...)`. Device paths like `/dev/null` and
+    /// `/dev/urandom` are scheme-backed on Redox (null:, rand:) and
+    /// can't be opened through the redoxfs root fd — that would give
+    /// EXDEV (cross-device link). The proxy thread runs in the parent
+    /// namespace which has access to all schemes.
     fn open_real_file(&self, path: &str, flags: usize) -> Result<(File, Stat)> {
-        let raw_fd = raw_openat(self.root_fd, path, flags)?;
+        let clean = path.trim_start_matches('/');
+        let is_dev_path = clean.starts_with("dev/") || clean == "dev";
+
+        let raw_fd = if is_dev_path {
+            // Device paths: open via normal namespace (scheme-backed).
+            // The proxy thread has the parent's namespace with all schemes.
+            let abs_path = format!("/{clean}");
+            use std::os::unix::io::IntoRawFd;
+            use std::fs::OpenOptions;
+            let mut opts = OpenOptions::new();
+            // Translate raw flags to OpenOptions
+            let access = flags & O_ACCMODE;
+            if access == O_RDONLY {
+                opts.read(true);
+            } else if access == O_WRONLY {
+                opts.write(true);
+            } else if access == O_RDWR {
+                opts.read(true).write(true);
+            }
+            if flags & O_CREAT != 0 { opts.create(true); }
+            if flags & O_TRUNC != 0 { opts.truncate(true); }
+            if flags & O_APPEND != 0 { opts.append(true); }
+            match opts.open(&abs_path) {
+                Ok(f) => Ok(f.into_raw_fd() as usize),
+                Err(e) => {
+                    let code = e.raw_os_error().unwrap_or(EIO as i32);
+                    Err(Error::new(code))
+                }
+            }?
+        } else {
+            raw_openat(self.root_fd, path, flags)?
+        };
+
         let stat = match raw_fstat(raw_fd) {
             Ok(s) => s,
             Err(e) => {

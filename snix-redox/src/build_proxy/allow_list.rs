@@ -188,6 +188,7 @@ const SYSTEM_READ_ONLY_PATHS: &[&str] = &[
     "/etc",
     "/bin",
     "/usr/bin",
+
 ];
 
 /// Build an `AllowList` from a derivation's declared inputs.
@@ -212,6 +213,21 @@ pub fn build_allow_list(
     // Read-write: output directory and temp directory.
     list.read_write.insert(normalize_path(output_dir));
     list.read_write.insert(normalize_path(tmp_dir));
+
+    // Read-write: device paths that builders need.
+    // /dev/null is a sink — writes are discarded. Bash scripts use
+    // `>/dev/null 2>/dev/null` extensively. Must be writable.
+    // /dev/zero provides zero bytes on read, accepts writes.
+    // /dev/tty may need write for terminal control.
+    // On Redox these are scheme-backed (null:, rand:) but accessed
+    // via file: paths through our proxy.
+    list.read_write.insert(normalize_path("/dev/null"));
+    list.read_write.insert(normalize_path("/dev/zero"));
+    list.read_write.insert(normalize_path("/dev/tty"));
+
+    // Read-only: randomness sources. Cargo/rustls need these.
+    list.read_only.insert(normalize_path("/dev/urandom"));
+    list.read_only.insert(normalize_path("/dev/random"));
 
     // Read-only: system paths needed for builder execution.
     // The builder binary, dynamic linker, shared libraries, and
