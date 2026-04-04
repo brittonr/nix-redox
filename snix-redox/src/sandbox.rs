@@ -118,7 +118,10 @@ pub fn config_from_derivation(
 /// - `rand` — random number generation (getrandom reads `rand:`)
 /// - `null` — /dev/null (builders redirect stderr there constantly)
 /// - `zero` — /dev/zero (occasionally used for zeroed reads)
-const REQUIRED_SCHEMES: &[&str] = &["file", "memory", "pipe", "rand", "null", "zero"];
+const REQUIRED_SCHEMES: &[&str] = &[
+    "file", "memory", "pipe", "rand", "null", "zero",
+    "proc", "sys", "time", "debug", "shm", "thisproc",
+];
 
 /// Schemes for proxy-based sandbox (NO `file` — proxy registers as `file`).
 ///
@@ -126,7 +129,17 @@ const REQUIRED_SCHEMES: &[&str] = &["file", "memory", "pipe", "rand", "null", "z
 /// as `file` in this namespace, so builders get filtered filesystem
 /// access instead of the raw redoxfs `file:` scheme.
 #[cfg(target_os = "redox")]
-const PROXY_REQUIRED_SCHEMES: &[&str] = &["memory", "pipe", "rand", "null", "zero"];
+const PROXY_REQUIRED_SCHEMES: &[&str] = &[
+    "memory", "pipe", "rand", "null", "zero",
+    // relibc init needs these — without them, exec'd binaries crash
+    // during relibc_start_v1 before reaching main().
+    "proc",   // process fd (proc_fd) — needed by relibc for PID, etc.
+    "sys",    // system info (uname, cpu count)
+    "time",   // clock_gettime
+    "debug",  // serial console (stderr output)
+    "shm",    // shared memory (needed by some allocators)
+    "thisproc", // /scheme/thisproc — relibc uses this for self-info
+];
 
 /// Additional schemes granted to fixed-output derivations.
 const FOD_SCHEMES: &[&str] = &["net"];

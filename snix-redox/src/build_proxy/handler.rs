@@ -504,6 +504,7 @@ impl SchemeSync for BuildFsHandler {
     ) -> Result<usize> {
         match self.handles.get_mut(&id) {
             Some(ProxyHandle::File(fh)) => {
+                eprintln!("buildfs: read id={} len={} offset={} path={:?}", id, buf.len(), offset, fh.scheme_path);
                 let start = std::time::Instant::now();
                 fh.real_file
                     .seek(SeekFrom::Start(offset))
