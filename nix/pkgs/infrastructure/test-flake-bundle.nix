@@ -29,32 +29,26 @@ fn main() {
 }
 RUST
 
-  # ── Builder script ─────────────────────────────────────────────
-  cat > $out/build-hello.sh << 'BUILDER'
-set -e
-export PATH=/nix/system/profile/bin:/bin:/usr/bin
-export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
-export HOME="$TMPDIR"
-export CARGO_HOME="$TMPDIR/cargo-home"
-
+  # ── Builder script (Ion syntax — static binary, works in sandbox) ──
+  cat > $out/build-hello.ion << 'BUILDER'
+let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
+export PATH
+let LD_LIBRARY_PATH = "/nix/system/profile/lib:/usr/lib/rustc:/lib"
+export LD_LIBRARY_PATH
+let HOME = "$TMPDIR"
+export HOME
+let CARGO_HOME = "$TMPDIR/cargo-home"
+export CARGO_HOME
 mkdir -p "$CARGO_HOME" "$out/bin"
-
-# Copy source to writable location
 cp -r "$src" "$TMPDIR/src"
-chmod -R u+w "$TMPDIR/src"
-
-# Create cargo config for offline build
 mkdir -p "$TMPDIR/src/.cargo"
-cat > "$TMPDIR/src/.cargo/config.toml" << CFG
-[build]
-jobs = 2
-target = "x86_64-unknown-redox"
-[target.x86_64-unknown-redox]
-linker = "/nix/system/profile/bin/cc"
-CFG
-
+echo "[build]" > "$TMPDIR/src/.cargo/config.toml"
+echo "jobs = 2" >> "$TMPDIR/src/.cargo/config.toml"
+echo 'target = "x86_64-unknown-redox"' >> "$TMPDIR/src/.cargo/config.toml"
+echo "[target.x86_64-unknown-redox]" >> "$TMPDIR/src/.cargo/config.toml"
+echo 'linker = "/nix/system/profile/bin/cc"' >> "$TMPDIR/src/.cargo/config.toml"
 cd "$TMPDIR/src"
-cargo build --offline -j2 2>&1
+cargo build --offline -j2
 cp target/x86_64-unknown-redox/debug/hello-flake "$out/bin/hello"
 BUILDER
 
@@ -66,8 +60,8 @@ BUILDER
   outputs = { self, ... }: {
     packages."x86_64-unknown-redox".hello = derivation {
       name = "hello-flake";
-      builder = "/nix/system/profile/bin/bash";
-      args = [ "''${builtins.toString self}/build-hello.sh" ];
+      builder = "/bin/sh";
+      args = [ "''${builtins.toString self}/build-hello.ion" ];
       system = "x86_64-unknown-redox";
       src = "''${builtins.toString self}/src";
     };

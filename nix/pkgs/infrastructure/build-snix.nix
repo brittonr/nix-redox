@@ -3,6 +3,6 @@
 derivation {
   name = "snix-self-compiled";
   system = "x86_64-unknown-redox";
-  builder = "/nix/system/profile/bin/bash";
+  builder = "/bin/sh";
   args = [ "/usr/src/snix-redox/build-snix.sh" ];
 }
