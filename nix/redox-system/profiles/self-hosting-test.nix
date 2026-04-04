@@ -2819,6 +2819,8 @@ let
                             fi
                           else
                             echo "FUNC_TEST:snix-build-cargo:FAIL:exit=$EXIT"
+                            echo "=== snix stderr ==="
+                            cat /tmp/snix-build-cargo-err 2>/dev/null | head -30
                             echo "=== cc-wrapper-raw-args ==="
                             cat /tmp/.cc-wrapper-raw-args 2>/dev/null
                             echo "=== cc-wrapper-stderr (lld errors) ==="
