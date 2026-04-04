@@ -31,9 +31,15 @@
 - [ ] 4.8 Verify `cc-dep-build` and `workspace-build` pass
 - [ ] 4.9 Verify `rg-build` passes (and downstream `rg-version`, `rg-search`, `rg-store-path`, `rg-binary-size`)
 
-Note: /dev/null EXDEV fix in daf86cc4 resolved sandbox device path access. All cargo-based
-builds now proceed past initialization (0 failures at timeout). Need longer test timeout
-for 168-crate snix and 33-crate ripgrep builds.
+Note: Three sandbox device issues fixed:
+1. /dev/null not in allow list (daf86cc4)
+2. /dev/null needs read-WRITE not read-only (daf86cc4)
+3. /dev/* opens via File::open() deadlocks initnsmgr (6bb97e16) — fixed with pre-opened fds
+
+Remaining blocker: bash crashes immediately inside sandbox (only 8 proxy requests).
+Bash loads but exits before executing the build script. Likely dynamic linker or CWD
+issue in the setns'd namespace — the builder's LD_LIBRARY_PATH or CWD is wrong after
+setns. The non-sandbox cargo builds pass fine (cargo-build, cargo-direct-no-wrapper).
 
 ## 5. Fix source-based rebuild (`source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`)
 
