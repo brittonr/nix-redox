@@ -384,3 +384,12 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 - Nix store strips write bits: `chmod 755` → `555`, `chmod 644` → `444`
 - Tests checking file modes must use Nix-adjusted values
 - Must `chmod u+w` directory before copying additional files into store copies
+
+### Sandbox Proxy exec Issue
+- Static binaries (bash, Ion) crash during relibc init after exec inside proxy namespace
+- The kernel loads the binary (ELF reads through proxy work), but relibc's _start crashes
+- Likely cause: relibc_start_v1 accesses scheme fds (ns_fd, proc_fd, cwd_fd) that are invalid after setns
+- The child inherits parent's ns_fd/proc_fd/cwd_fd fds, but after setns to proxy namespace, those fds point to the OLD namespace
+- relibc init code opens /scheme/thisproc or proc: which may not route correctly in the proxy namespace
+- Non-proxy sandbox (scheme-level with real file:) works because all scheme fds remain valid
+- Per-path proxy sandbox (file: = our proxy) breaks because the namespace switch invalidates relibc's fd assumptions
