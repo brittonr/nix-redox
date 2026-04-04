@@ -21,7 +21,7 @@
 //! Only compiled on Redox (`#[cfg(target_os = "redox")]`).
 
 use std::fs::File;
-use std::os::unix::io::AsRawFd;
+use std::os::unix::io::{AsRawFd, IntoRawFd};
 use std::panic;
 use std::thread::{self, JoinHandle};
 
@@ -111,6 +111,20 @@ impl BuildFsProxy {
         let root_fd = root_file.as_raw_fd() as usize;
         eprintln!("buildfs: root_fd={}", root_fd);
         handler.root_fd = root_fd;
+
+        // Pre-open device paths that can't use raw_openat (scheme-backed).
+        // Must be done BEFORE the event loop starts — File::open() from
+        // within the event loop deadlocks initnsmgr (see AGENTS.md).
+        if let Ok(f) = File::open("/dev/null") {
+            let fd = f.into_raw_fd() as usize;
+            handler.dev_null_fd = Some(fd);
+            eprintln!("buildfs: dev_null_fd={}", fd);
+        }
+        if let Ok(f) = File::open("/dev/urandom") {
+            let fd = f.into_raw_fd() as usize;
+            handler.dev_urandom_fd = Some(fd);
+            eprintln!("buildfs: dev_urandom_fd={}", fd);
+        }
 
         // Spawn the event loop thread.
         // Move root_file into the thread to keep it alive (it owns the fd
@@ -234,6 +248,13 @@ fn run_event_loop(
             eprintln!("buildfs: all handles closed, exiting event loop");
             break;
         }
+    }
+    // Clean up pre-opened device fds.
+    if let Some(fd) = handler.dev_null_fd {
+        let _ = syscall::close(fd);
+    }
+    if let Some(fd) = handler.dev_urandom_fd {
+        let _ = syscall::close(fd);
     }
     eprintln!("buildfs: event loop exited");
 }
