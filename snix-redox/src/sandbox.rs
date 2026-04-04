@@ -120,7 +120,7 @@ pub fn config_from_derivation(
 /// - `zero` — /dev/zero (occasionally used for zeroed reads)
 const REQUIRED_SCHEMES: &[&str] = &[
     "file", "memory", "pipe", "rand", "null", "zero",
-    "proc", "sys", "time", "debug", "shm", "thisproc",
+    "proc", "sys", "time", "debug", "shm",
 ];
 
 /// Schemes for proxy-based sandbox (NO `file` — proxy registers as `file`).
@@ -138,7 +138,6 @@ const PROXY_REQUIRED_SCHEMES: &[&str] = &[
     "time",   // clock_gettime
     "debug",  // serial console (stderr output)
     "shm",    // shared memory (needed by some allocators)
-    "thisproc", // /scheme/thisproc — relibc uses this for self-info
 ];
 
 /// Additional schemes granted to fixed-output derivations.

@@ -2737,74 +2737,44 @@ let
                         # to the terminal (Stdio::inherit in build_derivation).
                         echo "--- snix-build-cargo: Rust crate in Nix derivation ---"
                         /nix/system/profile/bin/bash -c '
-                          # Write builder script as Ion (statically linked — no dynamic linker
-                          # needed in the sandbox proxy namespace)
-                          cat > /tmp/build-hello-cargo.sh << '"'"'BUILDEOF'"'"'
-        let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
-        export PATH
-        let LD_LIBRARY_PATH = "/nix/system/profile/lib:/usr/lib/rustc:/lib"
-        export LD_LIBRARY_PATH
-        let HOME = "$TMPDIR"
-        export HOME
-        let CARGO_HOME = "$TMPDIR/cargo-home"
-        export CARGO_HOME
-        let SRCDIR = "$TMPDIR/hello-src"
-        mkdir -p "$SRCDIR/src" "$CARGO_HOME" "$out/bin"
-        cat > "$SRCDIR/Cargo.toml" << TOML
-        [package]
-        name = "hello"
-        version = "0.1.0"
-        edition = "2021"
-  TOML
-        cat > "$SRCDIR/src/main.rs" << RUST
-        fn main() {
-            println!("Hello from Nix-built Rust on Redox!");
-        }
-  RUST
-        mkdir -p "$SRCDIR/.cargo"
-        cat > "$SRCDIR/.cargo/config.toml" << CFG
-        [build]
-        jobs = 2
-        target = "x86_64-unknown-redox"
-        [target.x86_64-unknown-redox]
-        linker = "/nix/system/profile/bin/cc"
-  CFG
-        cd "$SRCDIR"
-        # cargo timeout+retry — handles intermittent startup hangs
-        MAX_TIME=120
-        for attempt in 1 2 3; do
-          cargo build --offline -j2 &
-          PID=$!
-          SECONDS=0
-          while kill -0 $PID 2>/dev/null; do
-            if [ $SECONDS -ge $MAX_TIME ]; then
-              echo "[builder] cargo timeout attempt $attempt" >&2
-              kill $PID 2>/dev/null; wait $PID 2>/dev/null
-              kill -9 $PID 2>/dev/null; wait $PID 2>/dev/null
-              rm -f "$CARGO_HOME/.package-cache"* 2>/dev/null
-              continue 2
-            fi
-            read -t 1 < /dev/null 2>/dev/null || true
-          done
-          wait $PID
-          CARGO_EXIT=$?
-          if [ $CARGO_EXIT -eq 0 ]; then
-            break
-          else
-            echo "[builder] cargo failed (exit=$CARGO_EXIT) attempt $attempt" >&2
-            if [ $attempt -eq 3 ]; then
-              exit $CARGO_EXIT
-            fi
-          fi
-        done
-        cp target/x86_64-unknown-redox/debug/hello "$out/bin/hello"
-  BUILDEOF
+                          # Write builder script in Ion syntax (Ion is statically linked,
+                          # works inside the per-path proxy sandbox namespace where bash
+                          # crashes during relibc init).
+                          # No heredocs in Ion — use echo lines for file creation.
+                          cat > /tmp/build-hello-cargo.ion << '"'"'BUILDEOF'"'"'
+let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
+export PATH
+let LD_LIBRARY_PATH = "/nix/system/profile/lib:/usr/lib/rustc:/lib"
+export LD_LIBRARY_PATH
+let HOME = "$TMPDIR"
+export HOME
+let CARGO_HOME = "$TMPDIR/cargo-home"
+export CARGO_HOME
+let SRCDIR = "$TMPDIR/hello-src"
+mkdir -p "$SRCDIR/src" "$CARGO_HOME" "$out/bin"
+echo "[package]" > "$SRCDIR/Cargo.toml"
+echo 'name = "hello"' >> "$SRCDIR/Cargo.toml"
+echo 'version = "0.1.0"' >> "$SRCDIR/Cargo.toml"
+echo 'edition = "2021"' >> "$SRCDIR/Cargo.toml"
+echo 'fn main() {' > "$SRCDIR/src/main.rs"
+echo '    println!("Hello from Nix-built Rust on Redox!");' >> "$SRCDIR/src/main.rs"
+echo '}' >> "$SRCDIR/src/main.rs"
+mkdir -p "$SRCDIR/.cargo"
+echo "[build]" > "$SRCDIR/.cargo/config.toml"
+echo "jobs = 2" >> "$SRCDIR/.cargo/config.toml"
+echo 'target = "x86_64-unknown-redox"' >> "$SRCDIR/.cargo/config.toml"
+echo "[target.x86_64-unknown-redox]" >> "$SRCDIR/.cargo/config.toml"
+echo 'linker = "/nix/system/profile/bin/cc"' >> "$SRCDIR/.cargo/config.toml"
+cd "$SRCDIR"
+cargo build --offline -j2
+cp target/x86_64-unknown-redox/debug/hello "$out/bin/hello"
+BUILDEOF
 
                           cat > /tmp/hello-cargo.nix << '"'"'HELLONIX'"'"'
         derivation {
           name = "hello-cargo";
-          builder = "/nix/system/profile/bin/bash";
-          args = ["/tmp/build-hello-cargo.sh"];
+          builder = "/bin/sh";
+          args = ["/tmp/build-hello-cargo.ion"];
           system = "x86_64-unknown-redox";
         }
   HELLONIX
