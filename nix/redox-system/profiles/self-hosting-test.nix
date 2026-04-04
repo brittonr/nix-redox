@@ -2742,33 +2742,33 @@ let
                           # crashes during relibc init).
                           # No heredocs in Ion — use echo lines for file creation.
                           cat > /tmp/build-hello-cargo.ion << '"'"'BUILDEOF'"'"'
-let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
-export PATH
-let LD_LIBRARY_PATH = "/nix/system/profile/lib:/usr/lib/rustc:/lib"
-export LD_LIBRARY_PATH
-let HOME = "$TMPDIR"
-export HOME
-let CARGO_HOME = "$TMPDIR/cargo-home"
-export CARGO_HOME
-let SRCDIR = "$TMPDIR/hello-src"
-mkdir -p "$SRCDIR/src" "$CARGO_HOME" "$out/bin"
-echo "[package]" > "$SRCDIR/Cargo.toml"
-echo 'name = "hello"' >> "$SRCDIR/Cargo.toml"
-echo 'version = "0.1.0"' >> "$SRCDIR/Cargo.toml"
-echo 'edition = "2021"' >> "$SRCDIR/Cargo.toml"
-echo 'fn main() {' > "$SRCDIR/src/main.rs"
-echo '    println!("Hello from Nix-built Rust on Redox!");' >> "$SRCDIR/src/main.rs"
-echo '}' >> "$SRCDIR/src/main.rs"
-mkdir -p "$SRCDIR/.cargo"
-echo "[build]" > "$SRCDIR/.cargo/config.toml"
-echo "jobs = 2" >> "$SRCDIR/.cargo/config.toml"
-echo 'target = "x86_64-unknown-redox"' >> "$SRCDIR/.cargo/config.toml"
-echo "[target.x86_64-unknown-redox]" >> "$SRCDIR/.cargo/config.toml"
-echo 'linker = "/nix/system/profile/bin/cc"' >> "$SRCDIR/.cargo/config.toml"
-cd "$SRCDIR"
-cargo build --offline -j2
-cp target/x86_64-unknown-redox/debug/hello "$out/bin/hello"
-BUILDEOF
+                          let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
+                          export PATH
+                          let LD_LIBRARY_PATH = "/nix/system/profile/lib:/usr/lib/rustc:/lib"
+                          export LD_LIBRARY_PATH
+                          let HOME = "$TMPDIR"
+                          export HOME
+                          let CARGO_HOME = "$TMPDIR/cargo-home"
+                          export CARGO_HOME
+                          let SRCDIR = "$TMPDIR/hello-src"
+                          mkdir -p "$SRCDIR/src" "$CARGO_HOME" "$out/bin"
+                          echo "[package]" > "$SRCDIR/Cargo.toml"
+                          echo 'name = "hello"' >> "$SRCDIR/Cargo.toml"
+                          echo 'version = "0.1.0"' >> "$SRCDIR/Cargo.toml"
+                          echo 'edition = "2021"' >> "$SRCDIR/Cargo.toml"
+                          echo 'fn main() {' > "$SRCDIR/src/main.rs"
+                          echo '    println!("Hello from Nix-built Rust on Redox!");' >> "$SRCDIR/src/main.rs"
+                          echo '}' >> "$SRCDIR/src/main.rs"
+                          mkdir -p "$SRCDIR/.cargo"
+                          echo "[build]" > "$SRCDIR/.cargo/config.toml"
+                          echo "jobs = 2" >> "$SRCDIR/.cargo/config.toml"
+                          echo 'target = "x86_64-unknown-redox"' >> "$SRCDIR/.cargo/config.toml"
+                          echo "[target.x86_64-unknown-redox]" >> "$SRCDIR/.cargo/config.toml"
+                          echo 'linker = "/nix/system/profile/bin/cc"' >> "$SRCDIR/.cargo/config.toml"
+                          cd "$SRCDIR"
+                          cargo build --offline -j2
+                          cp target/x86_64-unknown-redox/debug/hello "$out/bin/hello"
+  BUILDEOF
 
                           cat > /tmp/hello-cargo.nix << '"'"'HELLONIX'"'"'
         derivation {
