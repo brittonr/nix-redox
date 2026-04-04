@@ -253,6 +253,12 @@ pub struct BuildFsHandler {
     /// Opened before the proxy starts (while initnsmgr is free).
     /// All real file I/O uses `SYS_OPENAT(root_fd, ...)` to bypass initnsmgr.
     pub root_fd: usize,
+    /// Pre-opened device fds. Opened before the proxy starts so we
+    /// don't call File::open() from within the event loop (which
+    /// would deadlock initnsmgr — see AGENTS.md). The builder gets
+    /// a dup'd copy of these fds when it opens a /dev/* path.
+    pub dev_null_fd: Option<usize>,
+    pub dev_urandom_fd: Option<usize>,
     /// True after at least one openat request from a client.
     /// Guards the "all handles closed → exit" optimization so the
     /// proxy doesn't exit if the scheme_root handle is closed before
@@ -269,6 +275,8 @@ impl BuildFsHandler {
             allow_list,
             handles: HashMap::new(),
             root_fd,
+            dev_null_fd: None,
+            dev_urandom_fd: None,
             had_client_opens: false,
             next_id: 1,
         }
@@ -307,42 +315,31 @@ impl BuildFsHandler {
 
     /// Open a real file via the root fd (bypassing initnsmgr).
     ///
-    /// For `/dev/*` paths, uses the normal namespace open instead of
-    /// `raw_openat(root_fd, ...)`. Device paths like `/dev/null` and
-    /// `/dev/urandom` are scheme-backed on Redox (null:, rand:) and
-    /// can't be opened through the redoxfs root fd — that would give
-    /// EXDEV (cross-device link). The proxy thread runs in the parent
-    /// namespace which has access to all schemes.
+    /// For `/dev/*` paths, uses pre-opened fds (dup'd) instead of
+    /// opening through the namespace. Device paths like `/dev/null`
+    /// and `/dev/urandom` are scheme-backed on Redox (null:, rand:)
+    /// and can't be opened through `raw_openat(root_fd, ...)` (EXDEV)
+    /// or through `File::open()` (deadlocks initnsmgr — the proxy IS
+    /// a scheme daemon, so File::open from within the event loop
+    /// re-enters initnsmgr which is blocked waiting for our response).
+    ///
+    /// The device fds are pre-opened before the proxy starts, when
+    /// initnsmgr is free. Each request gets a dup'd copy.
     fn open_real_file(&self, path: &str, flags: usize) -> Result<(File, Stat)> {
         let clean = path.trim_start_matches('/');
-        let is_dev_path = clean.starts_with("dev/") || clean == "dev";
 
-        let raw_fd = if is_dev_path {
-            // Device paths: open via normal namespace (scheme-backed).
-            // The proxy thread has the parent's namespace with all schemes.
-            let abs_path = format!("/{clean}");
-            use std::os::unix::io::IntoRawFd;
-            use std::fs::OpenOptions;
-            let mut opts = OpenOptions::new();
-            // Translate raw flags to OpenOptions
-            let access = flags & O_ACCMODE;
-            if access == O_RDONLY {
-                opts.read(true);
-            } else if access == O_WRONLY {
-                opts.write(true);
-            } else if access == O_RDWR {
-                opts.read(true).write(true);
-            }
-            if flags & O_CREAT != 0 { opts.create(true); }
-            if flags & O_TRUNC != 0 { opts.truncate(true); }
-            if flags & O_APPEND != 0 { opts.append(true); }
-            match opts.open(&abs_path) {
-                Ok(f) => Ok(f.into_raw_fd() as usize),
-                Err(e) => {
-                    let code = e.raw_os_error().unwrap_or(EIO as i32);
-                    Err(Error::new(code))
-                }
-            }?
+        // Check for pre-opened device paths.
+        let preopen_fd = if clean == "dev/null" {
+            self.dev_null_fd
+        } else if clean == "dev/urandom" || clean == "dev/random" {
+            self.dev_urandom_fd
+        } else {
+            None
+        };
+
+        let raw_fd = if let Some(src_fd) = preopen_fd {
+            // Dup the pre-opened fd so the builder gets its own copy.
+            syscall::dup(src_fd, &[])?
         } else {
             raw_openat(self.root_fd, path, flags)?
         };
