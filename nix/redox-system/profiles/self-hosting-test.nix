@@ -2737,14 +2737,18 @@ let
                         # to the terminal (Stdio::inherit in build_derivation).
                         echo "--- snix-build-cargo: Rust crate in Nix derivation ---"
                         /nix/system/profile/bin/bash -c '
-                          # Write builder script (bash, not executable — no chmod)
+                          # Write builder script as Ion (statically linked — no dynamic linker
+                          # needed in the sandbox proxy namespace)
                           cat > /tmp/build-hello-cargo.sh << '"'"'BUILDEOF'"'"'
-        set -e
-        export PATH=/nix/system/profile/bin:/bin:/usr/bin
-        export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
-        export HOME="$TMPDIR"
-        export CARGO_HOME="$TMPDIR/cargo-home"
-        SRCDIR="$TMPDIR/hello-src"
+        let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
+        export PATH
+        let LD_LIBRARY_PATH = "/nix/system/profile/lib:/usr/lib/rustc:/lib"
+        export LD_LIBRARY_PATH
+        let HOME = "$TMPDIR"
+        export HOME
+        let CARGO_HOME = "$TMPDIR/cargo-home"
+        export CARGO_HOME
+        let SRCDIR = "$TMPDIR/hello-src"
         mkdir -p "$SRCDIR/src" "$CARGO_HOME" "$out/bin"
         cat > "$SRCDIR/Cargo.toml" << TOML
         [package]
