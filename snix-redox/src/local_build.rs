@@ -258,22 +258,20 @@ fn build_derivation_inner(
     }
 
     // ── 5a. Set up build sandbox ───────────────────────────────────
-    // On Redox, restrict the builder's scheme namespace AND filesystem
-    // access. Two layers:
-    //   1. Scheme-level: mkns excludes file: from the child namespace
-    //   2. Path-level: a proxy daemon registers as file: in the child
-    //      namespace, filtering I/O to the derivation's declared inputs
+    // On Redox, restrict the builder's scheme namespace to limit which
+    // schemes the builder can access (file, memory, pipe, rand, etc.).
+    // This is the scheme-level sandbox — it includes real file: so the
+    // builder gets full filesystem access, but blocks display:, disk:,
+    // irq:, audio:, and other sensitive schemes.
     //
-    // Falls back gracefully: if the proxy can't start, the build runs
-    // with the old scheme-level-only sandbox (file: included in mkns).
-    #[cfg(target_os = "redox")]
-    let mut _proxy_guard: Option<crate::build_proxy::BuildFsProxy> = None;
-    #[cfg(target_os = "redox")]
-    let mut _child_ns_fd: Option<usize> = None;
-    // Pre-open "/" for direct redoxfs access. This fd bypasses initnsmgr
-    // and is used for post-build output verification when the proxy
-    // thread may still be alive (its detached thread can deadlock
-    // initnsmgr if we use normal file: I/O).
+    // The per-path proxy (build_proxy module) is disabled due to a
+    // deadlock: the proxy thread's raw_openat blocks when the owning
+    // process holds a scheme socket. See AGENTS.md "Sandbox Proxy
+    // exec Issue" for details. The proxy code is preserved for future
+    // re-enablement once the kernel allows cross-scheme I/O.
+    //
+    // Pre-open "/" for direct redoxfs access — used by post-build
+    // output verification to bypass initnsmgr.
     #[cfg(target_os = "redox")]
     let verify_root_fd: Option<usize> = {
         use std::os::unix::io::{AsRawFd, IntoRawFd};
@@ -328,69 +326,40 @@ fn build_derivation_inner(
         {
             use std::os::unix::process::CommandExt;
 
-            // Try to start the per-path proxy. If it works, the proxy
-            // registers as file: in a child namespace that excludes
-            // the real file: scheme. If it fails, fall back to the
-            // scheme-level-only sandbox (includes real file:).
-            match sandbox::setup_proxy_namespace(&sandbox_config, allow_list) {
-                Ok((child_ns_fd, proxy)) => {
-                    // Proxy is running. Child will use setns to switch
-                    // to the namespace where file: = our proxy.
-                    //
-                    // We also need to close the scheme socket fd in the
-                    // child so it doesn't leak across exec. The child
-                    // inherits all parent fds after fork; if the socket
-                    // fd survives exec (missing CLOEXEC or CLOEXEC not
-                    // honored), closing it during the child's _exit can
-                    // disrupt the scheme registration and prevent pipe
-                    // EOF or waitpid from completing in the parent.
-                    let proxy_socket_fd = proxy.socket_fd();
-                    _proxy_guard = Some(proxy);
-                    _child_ns_fd = Some(child_ns_fd);
-                    unsafe {
-                        cmd.pre_exec(move || {
-                            // Close inherited proxy fds in the CHILD
-                            // (does not affect the parent's fd table).
-                            if let Some(fd) = proxy_socket_fd {
-                                let _ = syscall::close(fd);
-                            }
+            // Per-path proxy sandbox is disabled: it deadlocks on Redox
+            // because the proxy thread's raw_openat (to redoxfs) blocks
+            // when the owning process holds a scheme socket. The kernel
+            // blocks all file: I/O from a scheme-socket-owning process,
+            // even via pre-opened root_fd that bypasses initnsmgr.
+            //
+            // Use scheme-level sandbox instead: mkns with file: included
+            // grants full filesystem access but restricts scheme visibility.
+            // Re-enable the proxy once the kernel allows cross-scheme I/O
+            // from scheme daemon processes.
+            //
+            // The proxy code is preserved (build_proxy module, allow_list,
+            // setup_proxy_namespace) for future re-enablement.
+            let _allow_list = allow_list;
 
-                            libredox::call::setns(child_ns_fd).map_err(|e| {
-                                std::io::Error::new(
-                                    std::io::ErrorKind::Other,
-                                    format!("setns: {e}"),
-                                )
-                            })?;
-                            // Do NOT close child_ns_fd here — setns stores
-                            // the raw fd as the current namespace. Closing
-                            // it invalidates the namespace for this process.
+            // Scheme-level sandbox: file: included, full fs access.
+            unsafe {
+                cmd.pre_exec(move || {
+                    match sandbox::setup_build_namespace(&sandbox_config) {
+                        Ok(()) => Ok(()),
+                        Err(sandbox::SandboxError::Unavailable) => Ok(()),
+                        Err(e) => {
+                            eprintln!("warning: sandbox setup failed: {e}");
                             Ok(())
-                        });
+                        }
                     }
-                }
-                Err(e) => {
-                    eprintln!("warning: per-path proxy failed ({e}), falling back to scheme-level sandbox");
-                    // Fallback: use the old scheme-level sandbox (file: included).
-                    unsafe {
-                        cmd.pre_exec(move || {
-                            match sandbox::setup_build_namespace(&sandbox_config) {
-                                Ok(()) => Ok(()),
-                                Err(sandbox::SandboxError::Unavailable) => Ok(()),
-                                Err(e) => {
-                                    eprintln!("warning: sandbox setup failed: {e}");
-                                    Ok(())
-                                }
-                            }
-                        });
-                    }
-                }
+                });
             }
         }
 
         #[cfg(not(target_os = "redox"))]
         {
             let _ = sandbox_config;
-            let _ = allow_list;
+            let _ = _allow_list;
         }
     }
 
@@ -408,16 +377,10 @@ fn build_derivation_inner(
             BuildError::Io(format!("executing builder '{}': {e}", drv.builder))
         })?;
 
-        // Close the child namespace fd in the parent. The child already
-        // called setns() in pre_exec and no longer needs it. Keeping
-        // this fd open prevents the namespace from being destroyed when
-        // the child exits — which keeps the proxy scheme registered,
-        // blocking the proxy event loop's next_request() indefinitely,
-        // and preventing initnsmgr from servicing other requests.
-        #[cfg(target_os = "redox")]
-        if let Some(ns_fd) = _child_ns_fd.take() {
-            let _ = syscall::close(ns_fd);
-        }
+        // (No proxy namespace fd to close — proxy is disabled.
+        // When the proxy is re-enabled, the child_ns_fd must be
+        // closed here after fork so the namespace can be cleaned
+        // up when the child exits.)
 
         // Take ownership of the pipe read-ends. The child holds the
         // write-ends (fd 1, fd 2). When the child exits, write-ends
@@ -479,13 +442,8 @@ fn build_derivation_inner(
     };
 
     // ── 5b. Shut down the filesystem proxy ───────────────────────────
-    // The builder has exited. Shut down the proxy thread (if running)
-    // before checking results. This closes the scheme socket and joins
-    // the thread. Must happen even on build failure.
-    #[cfg(target_os = "redox")]
-    if let Some(proxy) = _proxy_guard.take() {
-        proxy.shutdown();
-    }
+    // (Proxy shutdown disabled — proxy is not started.
+    // Re-enable when per-path proxy deadlock is resolved.)
 
     if !status.success() {
         return Err(BuildError::BuildFailed {

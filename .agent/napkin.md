@@ -131,6 +131,19 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Log file is never created
 - Same issue affects `dhcpd-quiet` wrapper (also uses `&>` in Ion)
 
+## Per-Path Proxy Deadlock — Root Cause Found
+
+### The proxy deadlocks because the kernel blocks file: I/O from scheme-socket owners
+- NOT a relibc init/exec issue — setns correctly updates ns_fd, exec passes it through auxv
+- The proxy thread owns a scheme socket (file: in child namespace)
+- When it does raw_openat(root_fd, ...) to forward requests to redoxfs, the kernel blocks it
+- The kernel policy: any process owning a scheme socket cannot do file: I/O, even to different file: instances
+- This is a blanket name-based block, not per-instance
+- The proxy starts successfully, receives the first request, but deadlocks trying to forward it
+- Test evidence: snix-sandbox-test boots fine but hangs after "SNIX SANDBOX BUILD TESTS" — zero test output
+- Fix applied: disabled proxy in local_build.rs, using scheme-level sandbox (mkns with real file:)
+- Proxy code preserved in build_proxy/ for future kernel fix
+
 ## Active Workarounds (still needed)
 
 ### Proxy scheme socket close doesn't unblock next_request() (kernel bug)
