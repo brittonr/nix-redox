@@ -19,19 +19,18 @@
 //!
 //! | Mode | file: scheme | Filesystem access | Status |
 //! |------|-------------|-------------------|--------|
-//! | Full (proxy) | proxy daemon | allow-list only | **Default** |
-//! | Fallback (scheme-only) | real redoxfs | everything | Fallback on proxy failure |
+//! | Scheme-only | real redoxfs | everything | **Default** |
+//! | Full (proxy) | proxy daemon | allow-list only | Disabled (deadlock) |
 //! | Unsandboxed | real redoxfs | everything | `--no-sandbox` / config |
 //!
-//! The per-path proxy is the default sandbox mode. It has been validated
-//! against the full self-hosting suite: 193-crate snix build, 33-crate
-//! ripgrep build, proc-macro compilation, build scripts, and parallel
-//! builds with JOBS=2.
+//! The per-path proxy is currently disabled due to a deadlock: the
+//! proxy thread's file I/O (even via pre-opened root_fd) blocks when
+//! the owning process holds a scheme socket. The kernel blocks all
+//! file: operations from scheme-socket-owning processes. The proxy
+//! code is preserved for future re-enablement.
 //!
-//! `local_build.rs` tries the full proxy first. If that fails (kernel
-//! doesn't support `register_scheme_to_ns` for "file", or proxy thread
-//! setup fails), it falls back to scheme-only sandboxing. If that also
-//! fails (`ENOSYS`), it runs unsandboxed.
+//! `local_build.rs` uses scheme-only sandboxing as the default. If
+//! mkns/setns returns `ENOSYS`, it runs unsandboxed.
 //!
 //! ## Call sites
 //!
