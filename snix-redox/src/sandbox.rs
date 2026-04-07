@@ -1,43 +1,55 @@
 //! Build sandboxing for Redox OS.
 //!
-//! Two layers of isolation for builder processes:
+//! Restricts builder processes using Redox's namespace system
+//! (`mkns`/`setns`) to control which schemes a builder can access.
+//! Blocks `display:`, `disk:`, `irq:`, `audio:`, etc. while keeping
+//! `file:` (full redoxfs access), `memory:`, `pipe:`, `rand:`, and
+//! other essential schemes.
 //!
-//! ## Layer 1: Scheme-level namespace filtering
+//! ## Current sandbox mode: scheme-only
 //!
-//! Uses Redox's `mkns`/`setns` to control which schemes a builder can
-//! access. Blocks `display:`, `disk:`, `irq:`, `audio:`, etc.
+//! The default sandbox creates a restricted namespace that includes
+//! the real `file:` scheme (redoxfs). Builders get full filesystem
+//! access but cannot reach display, disk, IRQ, audio, or other
+//! sensitive schemes. FOD (fixed-output derivation) builds also get
+//! `net:` for network access.
 //!
-//! ## Layer 2: Per-path filesystem proxy (build_proxy module)
+//! Use `--no-sandbox` or `SNIX_NO_SANDBOX=1` to disable sandboxing
+//! entirely.
 //!
-//! A proxy daemon registers as `file:` in the builder's namespace,
-//! filtering every filesystem operation against an allow-list of
-//! declared inputs, `$out`, and `$TMPDIR`. The real `file:` scheme
-//! (redoxfs) is excluded from the builder's namespace — all file I/O
-//! routes through the proxy.
+//! ## Per-path proxy (disabled)
 //!
-//! ## Sandbox modes
+//! A per-path filesystem proxy (`build_proxy` module) was designed
+//! to replace `file:` with a filtering proxy that restricts access
+//! to declared inputs only. It is disabled due to a kernel deadlock:
+//! the proxy thread's `raw_openat` blocks when the owning process
+//! holds a scheme socket. The kernel blocks all `file:` I/O from
+//! scheme-socket-owning processes, even via pre-opened root fds.
+//! The proxy code is preserved for future re-enablement once the
+//! kernel allows cross-scheme I/O from scheme daemon processes.
+//! See AGENTS.md "Sandbox Proxy Deadlock" for details.
+//!
+//! ## Sandbox modes summary
 //!
 //! | Mode | file: scheme | Filesystem access | Status |
 //! |------|-------------|-------------------|--------|
-//! | Scheme-only | real redoxfs | everything | **Default** |
-//! | Full (proxy) | proxy daemon | allow-list only | Disabled (deadlock) |
+//! | Scheme-only | real redoxfs | everything | **Active default** |
+//! | Per-path proxy | proxy daemon | allow-list only | Disabled (kernel deadlock) |
 //! | Unsandboxed | real redoxfs | everything | `--no-sandbox` / config |
-//!
-//! The per-path proxy is currently disabled due to a deadlock: the
-//! proxy thread's file I/O (even via pre-opened root_fd) blocks when
-//! the owning process holds a scheme socket. The kernel blocks all
-//! file: operations from scheme-socket-owning processes. The proxy
-//! code is preserved for future re-enablement.
-//!
-//! `local_build.rs` uses scheme-only sandboxing as the default. If
-//! mkns/setns returns `ENOSYS`, it runs unsandboxed.
 //!
 //! ## Call sites
 //!
-//! - `setup_proxy_namespace()` — creates child namespace + starts proxy
-//!   (called from `local_build.rs` before fork)
-//! - `setup_build_namespace()` — legacy scheme-only sandbox, runs in
-//!   child's `pre_exec` (fallback path)
+//! - `setup_build_namespace()` — creates restricted namespace in
+//!   child's `pre_exec` (the active sandbox path)
+//! - `setup_proxy_namespace()` — creates namespace + starts proxy
+//!   (disabled, preserved for future kernel fix)
+//!
+//! ## Scheme list
+//!
+//! Normal builds: `file`, `memory`, `pipe`, `rand`, `null`, `zero`,
+//! `proc`, `sys`, `time`, `debug`, `shm`.
+//!
+//! FOD builds additionally get: `net`.
 //!
 //! Feature-gated behind `#[cfg(target_os = "redox")]`.
 //! On other platforms, all functions are no-ops.
@@ -107,16 +119,21 @@ pub fn config_from_derivation(
     }
 }
 
-/// Schemes that every build needs (legacy: includes `file`).
+/// Schemes included in every build namespace.
 ///
-/// Used by `setup_build_namespace()` as a fallback when the per-path
-/// proxy is unavailable. Grants full filesystem access.
+/// Used by `setup_build_namespace()` to create the restricted
+/// namespace. Includes `file:` for full filesystem access.
 /// - `file` — filesystem I/O ($out, $TMPDIR, /nix/store/*)
 /// - `memory` — anonymous memory mappings (required by allocator)
 /// - `pipe` — stdout/stderr/stdin pipes
 /// - `rand` — random number generation (getrandom reads `rand:`)
 /// - `null` — /dev/null (builders redirect stderr there constantly)
 /// - `zero` — /dev/zero (occasionally used for zeroed reads)
+/// - `proc` — process fd (needed by relibc for PID, etc.)
+/// - `sys` — system info (uname, cpu count)
+/// - `time` — clock_gettime
+/// - `debug` — serial console (stderr output)
+/// - `shm` — shared memory (needed by some allocators)
 const REQUIRED_SCHEMES: &[&str] = &[
     "file", "memory", "pipe", "rand", "null", "zero",
     "proc", "sys", "time", "debug", "shm",
@@ -124,9 +141,10 @@ const REQUIRED_SCHEMES: &[&str] = &[
 
 /// Schemes for proxy-based sandbox (NO `file` — proxy registers as `file`).
 ///
-/// Used by `setup_proxy_namespace()`. The proxy daemon registers itself
-/// as `file` in this namespace, so builders get filtered filesystem
-/// access instead of the raw redoxfs `file:` scheme.
+/// Used by the disabled `setup_proxy_namespace()`. The proxy daemon
+/// would register itself as `file` in this namespace, giving builders
+/// filtered filesystem access. Currently unused due to kernel deadlock
+/// (see module docs).
 #[cfg(target_os = "redox")]
 const PROXY_REQUIRED_SCHEMES: &[&str] = &[
     "memory", "pipe", "rand", "null", "zero",
@@ -145,25 +163,19 @@ const FOD_SCHEMES: &[&str] = &["net"];
 /// Set up the build namespace for the current process.
 ///
 /// On Redox: creates a new namespace via `mkns` containing only the
-/// schemes the builder needs, then switches to it via `setns`.
+/// schemes the builder needs (see `REQUIRED_SCHEMES`), then switches
+/// to it via `setns`.
 /// On other platforms: no-op (returns Ok).
 ///
 /// This MUST be called in the child process between fork() and exec().
 /// The parent process is not affected.
 ///
-/// # Scheme visibility
+/// This is the active sandbox path. It includes the real `file:`
+/// scheme, giving the builder full filesystem access while blocking
+/// sensitive schemes like `display:`, `disk:`, `irq:`, `audio:`,
+/// `input:`, `orbital:`, `ptyd:`, etc.
 ///
-/// Normal builds:
-///   - `file` — filesystem I/O ($out, $TMPDIR, /nix/store/*)
-///   - `memory` — anonymous memory mappings (required by allocator)
-///   - `pipe` — stdout/stderr/stdin pipes (required by shell/processes)
-///   - `rand` — random number generation (required by getrandom/tempfile)
-///
-/// Fixed-output derivations (FODs) additionally get:
-///   - `net` — network access for URL fetching
-///
-/// Everything else is excluded: `display`, `disk`, `irq`, `debug`,
-/// `ptyd`, `audio`, `input`, `orbital`, etc.
+/// FOD builds additionally get `net:` for URL fetching.
 pub fn setup_build_namespace(config: &SandboxConfig) -> Result<(), SandboxError> {
     #[cfg(target_os = "redox")]
     {

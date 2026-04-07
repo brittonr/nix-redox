@@ -263,10 +263,27 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - `cargo build` (hello world, dependencies, vendored deps, path deps, build scripts)
 - `snix build --expr/--file` (Nix derivations built on Redox)
 - `snix build .#ripgrep` (flake installables, 33 crates compiled)
+- `snix build .#hello` (flake installables)
+- workspace builds via `snix build` (multi-crate)
+- scheme-only sandbox: 65/78 self-hosting tests pass (2026-04-07 baseline)
 
 ### What Doesn't
+- `cc-dep-build` via `snix build`: cc-rs build script fails inside sandbox (exit=1)
+- `snix-compile` (self-build): 168 crates take >1800s, exceeds test harness timeout
 - `CARGO_BUILD_JOBS > 1` had two issues: (1) lld stack overflow — fixed by `lld-wrapper` (16MB stack thread + exec); (2) cargo job manager hangs on multi-crate workspace builds — fixed by `patch-relibc-fork-lock.py` (see below)
 - `env!("CARGO_PKG_*")` in proc-macro crates: works via DSO environ propagation
+
+### Self-Hosting Baseline (2026-04-07)
+- Sandbox mode: scheme-only (per-path proxy disabled due to kernel deadlock)
+- 65 pass, 13 fail out of 78 tests (all tests report results)
+- Test order: snix-compile moved to end so rg-build/source-rebuild run first
+- flake-build, flake-cached, flake-registered: all pass
+- snix-build-cargo, workspace-build, parallel-jobs2: pass
+- cc-dep-build: FAIL (cc-rs exit=1 under sandbox)
+- rg-build: FAIL (exit=0 but binary not at output path — undiagnosed)
+- source-rebuild: FAIL (exit=1 from snix system rebuild --source)
+- snix-compile: FAIL (binary not at expected output path — undiagnosed)
+- `--no-sandbox` flag now threads through flake installables (previously bypassed)
 
 ### Key Patches (all still required)
 **relibc** (13 patches): abort-dso, chdir-cwd, dso-environ, environ-dso-init, execvpe, fcntl-lock, fork-lock,

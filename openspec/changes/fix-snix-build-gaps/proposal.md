@@ -1,16 +1,21 @@
 ## Why
 
-With rustc and snix init panics fixed, 62 of 78 self-hosting tests pass. The remaining 16 failures are all snix builder/evaluator functional issues — the builds start but produce incorrect results or exit(1). These are the last blockers before the self-hosting image can compile real Rust programs via `snix build`.
+After the sandbox rollback from per-path proxy to scheme-only (70b70d74),
+the self-hosting baseline was re-established on 2026-04-07:
+65 pass, 13 fail out of 78 tests (all tests report after test reorder).
 
-The failures cluster into 4 root causes that need diagnosis and fix: directory output derivations, flake installable evaluation, multi-crate builds (cc-rs, workspaces, ripgrep), and `snix system rebuild --source`.
+Most of the original 16 failures from the proxy era are now fixed. The
+remaining gaps are: cc-dep-build (cc-rs exits non-zero under sandbox),
+snix-compile timeout (168 crates exceed 1800s budget), and tests blocked
+behind the snix-compile timeout that never got a chance to run.
 
 ## What Changes
 
-- Fix `snix build` for derivations producing directory trees (`$out/bin/`, `$out/version`)
-- Fix `snix build .#hello` flake installable evaluation and building
-- Fix `snix build` for derivations that invoke cargo (cc-rs, workspace, ripgrep) — likely sandbox allow-list or environment gaps
-- Fix `snix system rebuild --source` for source-based system rebuilds
-- Unblock ripgrep 33-crate build as the flagship end-to-end test
+- Fix `cc-dep-build`: diagnose why cc-rs build script fails under scheme-only sandbox
+- Fix `snix-compile` timeout: increase test budget or restructure to skip in main suite
+- Unblock remaining tests (source-rebuild, rg-build, parallel, e2e-rebuild) that are
+  currently blocked behind the snix-compile timeout
+- Validate ripgrep 33-crate build as the flagship end-to-end test
 
 ## Capabilities
 

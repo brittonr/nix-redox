@@ -1,6 +1,12 @@
-## 1. VM-validate 4-gaps code (depends on fix-relibc-panic-abort)
+## 0. Prerequisites (blocked on stabilize-self-hosting-baseline)
 
-- [ ] 1.1 Build self-hosting-test disk image with the 4-gaps commit included
+All tasks below are blocked until the stabilization baseline is complete:
+- [ ] 0.1 `stabilize-self-hosting-baseline` exit criteria met (full test run, failures classified, flake parity, forge URL tests)
+- [ ] 0.2 `fix-snix-build-gaps` remaining tasks updated to reflect post-rollback failure set
+
+## 1. VM-validate remaining gaps (after stabilization)
+
+- [ ] 1.1 Build self-hosting-test disk image with stabilized snix
 - [ ] 1.2 Boot VM and run full self-hosting test suite, capture serial output
 - [ ] 1.3 Triage failures: classify as sandbox gap, env var missing, Ion/bash script issue, or snix bug
 - [ ] 1.4 Fix fetchGit test phase — ensure local bare repo + builtins.fetchGit works on guest
@@ -8,9 +14,9 @@
 - [ ] 1.6 Fix cc-dep test — ensure cc-rs build script invokes CC wrapper through sandbox
 - [ ] 1.7 Fix workspace test — ensure multi-crate workspace builds through snix on guest
 - [ ] 1.8 Fix source-rebuild dry-run test — ensure `snix system rebuild --source --dry-run` works
-- [ ] 1.9 All five 4-gaps FUNC_TESTs pass: fetchgit, flake-build, cc-dep-build, workspace-build, source-rebuild-dryrun
+- [ ] 1.9 All five remaining FUNC_TESTs pass: fetchgit, flake-build, cc-dep-build, workspace-build, source-rebuild-dryrun
 
-## 2. Remote binary cache client
+## 2. Remote binary cache client (blocked on section 0-1)
 
 - [ ] 2.1 Add minreq to snix-redox Cargo.toml and vendor for cross-compilation
 - [ ] 2.2 Implement `CacheSource::Remote` HTTP methods: fetch_package_index, fetch_narinfo, fetch_nar
@@ -21,7 +27,7 @@
 - [ ] 2.7 Host-side unit tests for remote cache source (mock HTTP or test fixtures)
 - [ ] 2.8 VM test: boot guest, serve cache from host on port 8080, run `snix install ripgrep --cache-url http://10.0.2.2:8080`
 
-## 3. Store scheme daemon (stored)
+## 3. Store scheme daemon (stored) (blocked on section 0-1)
 
 - [ ] 3.1 Implement stored binary entry point: pre-open root fd, register `store:` scheme, enter event loop
 - [ ] 3.2 Implement open handler: parse store path from scheme-relative path, resolve to /nix/store/ via root fd
@@ -32,7 +38,7 @@
 - [ ] 3.7 Add `store` to login_schemes.toml for user session access
 - [ ] 3.8 VM test: boot with stored, verify `cat store:hash-name/bin/rg` returns binary content
 
-## 4. Full guest rebuild flow
+## 4. Full guest rebuild flow (blocked on section 0-3)
 
 - [ ] 4.1 Wire remote cache resolution into rebuild.rs: try remote → local → source fallback chain
 - [ ] 4.2 Implement generation creation in rebuild: mkdir /nix/system/generations/N, write manifest.json + metadata.json
@@ -43,7 +49,7 @@
 - [ ] 4.7 VM test: modify configuration.nix hostname, run rebuild, verify /etc/hostname changed
 - [ ] 4.8 VM test: run rebuild, verify new generation in `snix system generations`
 
-## 5. Generation management and rollback
+## 5. Generation management and rollback (blocked on section 0-4)
 
 - [ ] 5.1 Implement `snix system generations` — list generations with ID, timestamp, current marker
 - [ ] 5.2 Implement `snix system switch-generation N` — activate generation N, update symlink and etc files
@@ -53,7 +59,7 @@
 - [ ] 5.6 Add reboot-recommended warning when switching to generation with different boot components
 - [ ] 5.7 VM test: rebuild twice, list generations, rollback, verify previous config restored
 
-## 6. End-to-end rebuild validation
+## 6. End-to-end rebuild validation (blocked on section 0-5)
 
 - [ ] 6.1 Add rebuild cycle test to self-hosting-test profile: change hostname via rebuild, verify
 - [ ] 6.2 Add rebuild cycle test: add etc file via rebuild, verify file exists

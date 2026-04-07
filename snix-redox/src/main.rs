@@ -659,7 +659,7 @@ fn main() {
                         // Delegate to host via bridge
                         bridge_build::run(None, None, Some(inst.attr_path), shared_dir, timeout)
                     } else {
-                        flake::build_flake_installable(&inst)
+                        flake::build_flake_installable(&inst, no_sandbox)
                     }
                 } else {
                     Err(format!(

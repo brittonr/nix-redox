@@ -1,8 +1,23 @@
 ## Context
 
-snix on Redox can evaluate Nix expressions, build derivations through a sandboxed local builder, and manage a binary cache of pre-built packages. The latest commit (d5ee1559) added fetchGit, flake installable support, C-dep builds, workspace builds, and source-based rebuild — but all of this is host-side unit-tested only. The guest has been broken since the DSO panic-abort regression (tracked in `fix-relibc-panic-abort`). Once that's fixed, five layers of work remain before "Nix manages a Redox system from source" is real.
+snix on Redox can evaluate Nix expressions, build derivations through a sandboxed local builder, and manage a binary cache of pre-built packages. The DSO panic-abort regression is fixed, and the self-hosting test suite runs end-to-end. The sandbox was rolled back from per-path proxy to scheme-only (commit `70b70d74`) due to a kernel deadlock.
 
-Existing code that needs VM validation: `fetchers.rs` (fetchGit + forge tarball), `flake.rs` (installable parse/lock/eval/build), `rebuild.rs` (source-based path), `local_build.rs` (cc-rs sandbox permissions), and the test bundles in `nix/pkgs/infrastructure/`.
+Before any of the expansion work below can proceed, the stabilization baseline from `stabilize-self-hosting-baseline` must be complete. That change re-validates the current build pipeline after the sandbox rollback, fixes flake option parity and GitLab forge URLs, and records the current pass/fail set.
+
+## Execution order
+
+1. **Stabilize** (`stabilize-self-hosting-baseline`): fresh test run, classify failures, fix flake/forge bugs, record baseline.
+2. **Close gaps** (`fix-snix-build-gaps`): fix remaining correctness failures found during stabilization.
+3. **VM-validate remaining gaps** (section 1 below): run test suite with stabilized snix, fix what breaks.
+4. **Remote cache** (section 2): HTTP transport for `snix install` and `snix system rebuild`.
+5. **Store scheme** (section 3): `stored` daemon with lazy NAR extraction.
+6. **Rebuild flow** (section 4): full `snix system rebuild` end-to-end.
+7. **Generation management** (section 5): list, switch, rollback, delete.
+8. **E2E validation** (section 6): rebuild cycle tests in self-hosting-test profile.
+
+Hardware bring-up (NIC drivers, ACPI, bare metal) is out of scope and should not interleave with self-hosting stabilization.
+
+Existing code that needs VM validation: `fetchers.rs` (fetchGit + forge tarball), `flake.rs` (installable parse/lock/eval/build), `rebuild.rs` (source-based path), `local_build.rs` (sandbox permissions), and the test bundles in `nix/pkgs/infrastructure/`.
 
 Existing code that needs completion: `cache_source.rs` (HTTP transport stubbed, no actual reqwest/minreq), `stored/` (scheme daemon scaffolded, lazy extraction partially wired), `rebuild.rs` (remote cache integration missing), `system.rs` (generation list/switch/delete commands missing).
 

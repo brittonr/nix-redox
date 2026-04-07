@@ -57,8 +57,23 @@ setns. The non-sandbox cargo builds pass fine (cargo-build, cargo-direct-no-wrap
 Note: snix-compile now proceeds past sandbox init but needs ~900s+ for 168 crates.
 Test timeout (1800s) is reached before all tests complete.
 
-## 7. End-to-end validation
+## 7. End-to-end validation (post-rollback baseline: 2026-04-07)
 
-- [ ] 7.1 Run the full 78-test suite and confirm ≥72 pass (all except potential timeout-sensitive tests)
-- [ ] 7.2 Document any remaining failures and their root causes
-- [ ] 7.3 Update AGENTS.md with new snix builder knowledge
+Full baseline after test reorder (all 78 tests report):
+  65 pass, 13 fail (out of 78 tests)
+
+Remaining failures (classified):
+- cc-dep-build: exit=1 — builder-path bug: cc-rs build script fails inside sandbox
+- rg-build: FAIL — exit=0 but binary not at output path (likely output path mismatch)
+- rg-version, rg-search, rg-store-path, rg-binary-size: FAIL (cascading, no binary)
+- source-rebuild: exit=1 — rebuild bug: snix system rebuild --source fails
+- source-rebuild-gen, source-rebuild-pkg: FAIL (cascading, rebuild failed)
+- snix-compile: FAIL — binary not at expected output path (build may succeed but output check wrong)
+- snix-binary-exists, snix-eval-works: FAIL (cascading, no binary)
+
+- [ ] 7.1 Fix cc-dep-build: diagnose cc-rs exit=1 under scheme-only sandbox
+- [ ] 7.2 Fix rg-build: diagnose why binary not at output path (exit=0 but no binary)
+- [ ] 7.3 Fix source-rebuild: diagnose exit=1 from snix system rebuild --source
+- [ ] 7.4 Fix snix-compile: diagnose why binary not at expected output path
+- [ ] 7.5 Document remaining failures and root causes
+- [ ] 7.6 Update AGENTS.md with new snix builder knowledge

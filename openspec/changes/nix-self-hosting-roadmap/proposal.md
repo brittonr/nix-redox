@@ -1,6 +1,19 @@
 ## Why
 
-snix can compile itself and build ripgrep through `snix build --file` on a running Redox guest, and the code for fetchGit, flake installables, C-dep builds, workspace builds, and source-based rebuilds was just landed (d5ee1559) — but none of it has been VM-validated because every DSO-linked binary currently aborts (tracked separately in `fix-relibc-panic-abort`). Once that blocker clears, there's a concrete sequence of work needed to go from "cargo works on Redox" to "Nix manages a Redox system end-to-end": validate the already-written code, add remote binary cache support, wire up the store scheme, and close the rebuild loop so `snix system rebuild` can pull packages, build missing ones from source, activate the result, and roll back if needed.
+snix can compile itself and build ripgrep through `snix build --file` on a running Redox guest, and the code for fetchGit, flake installables, C-dep builds, workspace builds, and source-based rebuilds was just landed (d5ee1559). The DSO-linked binary abort issue is fixed, and the self-hosting test suite runs end-to-end.
+
+There's a concrete sequence of work needed to go from "cargo works on Redox" to "Nix manages a Redox system end-to-end": add remote binary cache support, wire up the store scheme, and close the rebuild loop so `snix system rebuild` can pull packages, build missing ones from source, activate the result, and roll back if needed.
+
+## Phase ordering
+
+This roadmap is **phase-two work**, gated on the stabilization baseline from `stabilize-self-hosting-baseline`. All tasks below are blocked until:
+
+1. A full `self-hosting-test` run completes under the current scheme-only sandbox model
+2. Remaining failures are classified and reflected in `fix-snix-build-gaps`
+3. Flake installables honor the same sandbox-control path as other local builds
+4. GitLab forge tarball URLs are verified by unit tests
+
+Do not start remote cache, `stored`, generation management, or rebuild loop work until those exit criteria are met. See `stabilize-self-hosting-baseline` for the stabilization plan.
 
 ## What Changes
 

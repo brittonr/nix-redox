@@ -845,3 +845,14 @@
 {"text":"lets do it","timestamp":1775272083359}
 {"text":"1, 2","timestamp":1775280176015}
 {"text":"what next","timestamp":1775284185858}
+{"text":"what next","timestamp":1775315799954}
+{"text":"Build and run the snix-sandbox-test to verify the deadlock is gone.\n That was the test hanging at zero output — if the proxy disable\n works, those 5 tests should produce results now.\n\n After that, run the full self-hosting test. The 13 sandbox failures\n should flip to passes, potentially taking you from 61/77 to 74/77.\n The remaining 3 would be source-rebuild-pkg plus whatever else.","timestamp":1775315841182}
+{"text":"lets review the status of this project","timestamp":1775576061208}
+{"text":"do all of those","timestamp":1775576350226}
+{"text":"do those","timestamp":1775577057012}
+{"text":"write an openspec of what we should do. focus on self hosting, not hardware","timestamp":1775577390077}
+{"text":"lets start stabilize-self-hosting-baseline","timestamp":1775577607842}
+{"text":"edit ~/git/redox/snix-redox/src/flake.rs\n\n Expected ',' or ']' after array element in JSON at position 564\n (line 1 column 565)","timestamp":1775577858249}
+{"text":"do them","timestamp":1775586444925}
+{"text":"do them","timestamp":1775586652338}
+{"text":"do those","timestamp":1775587654112}
