@@ -2962,72 +2962,6 @@ let
                           echo "FUNC_TEST:snix-vendor-present:FAIL:vendor dir not found"
                         end
 
-                        # Build snix through a Nix derivation (the Nix way)
-                        echo "--- snix self-compile: snix build --file ---"
-                        /nix/system/profile/bin/bash -c '
-                          OUTPUT=$(/bin/snix build --file /usr/src/snix-redox/build.nix 2>/tmp/snix-compile-err)
-                          EXIT=$?
-                          echo "$OUTPUT" > /tmp/snix-compile-output
-                          echo "snix-compile-exit=$EXIT"
-                          echo "snix-compile-output=$OUTPUT"
-                        '
-
-                        let snix_output = $(cat /tmp/snix-compile-output)
-                        let snix_exit = $(/nix/system/profile/bin/bash -c 'cat /tmp/snix-compile-err 2>/dev/null | grep -c "build complete" || true')
-
-                        # Check if snix build produced a store path with the binary
-                        /nix/system/profile/bin/bash -c '
-                          OUTPUT=$(cat /tmp/snix-compile-output 2>/dev/null)
-                          if [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/snix" ]; then
-                            echo "FUNC_TEST:snix-compile:PASS"
-
-                            # Verify output is in /nix/store
-                            case "$OUTPUT" in
-                              /nix/store/*) echo "  output in store: $OUTPUT" ;;
-                              *) echo "  WARNING: output not in /nix/store: $OUTPUT" ;;
-                            esac
-                          else
-                            echo "FUNC_TEST:snix-compile:FAIL:exit or no binary at $OUTPUT/bin/snix"
-                            echo "=== snix build stderr ==="
-                            cat /tmp/snix-compile-err 2>/dev/null
-                            echo "=== end stderr ==="
-                          fi
-                        '
-
-                        # Check if binary was produced and works
-                        /nix/system/profile/bin/bash -c '
-                          OUTPUT=$(cat /tmp/snix-compile-output 2>/dev/null)
-                          SNIX_BIN="$OUTPUT/bin/snix"
-
-                          if [ -x "$SNIX_BIN" ]; then
-                            echo "FUNC_TEST:snix-binary-exists:PASS"
-                            ls -la "$SNIX_BIN"
-
-                            # Test: run the self-compiled snix
-                            "$SNIX_BIN" --version > /tmp/snix-selfbuilt-out 2>/tmp/snix-selfbuilt-err
-                            if [ $? -eq 0 ]; then
-                              echo "FUNC_TEST:snix-binary-runs:PASS"
-                              cat /tmp/snix-selfbuilt-out
-                            else
-                              echo "FUNC_TEST:snix-binary-runs:FAIL:exit $?"
-                              cat /tmp/snix-selfbuilt-err
-                            fi
-
-                            # Test: self-compiled snix can evaluate a Nix expression
-                            EVAL_RESULT=$("$SNIX_BIN" eval --expr "1 + 1" 2>/tmp/snix-selfbuilt-eval-err)
-                            if [ $? -eq 0 ] && [ "$EVAL_RESULT" = "2" ]; then
-                              echo "FUNC_TEST:snix-eval-works:PASS"
-                            else
-                              echo "FUNC_TEST:snix-eval-works:FAIL:expected 2, got $EVAL_RESULT"
-                              cat /tmp/snix-selfbuilt-eval-err
-                            fi
-                          else
-                            echo "FUNC_TEST:snix-binary-exists:FAIL:binary not produced"
-                            echo "FUNC_TEST:snix-binary-runs:FAIL:no binary"
-                            echo "FUNC_TEST:snix-eval-works:FAIL:no binary"
-                          fi
-                        '
-
                         # ══════════════════════════════════════════════
                         #  SNIX BUILD RIPGREP — NIX DERIVATION BUILD
                         # ══════════════════════════════════════════════
@@ -3283,6 +3217,72 @@ let
                         '
 
                         echo ""
+                        # Build snix through a Nix derivation (the Nix way)
+                        echo "--- snix self-compile: snix build --file ---"
+                        /nix/system/profile/bin/bash -c '
+                          OUTPUT=$(/bin/snix build --file /usr/src/snix-redox/build.nix 2>/tmp/snix-compile-err)
+                          EXIT=$?
+                          echo "$OUTPUT" > /tmp/snix-compile-output
+                          echo "snix-compile-exit=$EXIT"
+                          echo "snix-compile-output=$OUTPUT"
+                        '
+
+                        let snix_output = $(cat /tmp/snix-compile-output)
+                        let snix_exit = $(/nix/system/profile/bin/bash -c 'cat /tmp/snix-compile-err 2>/dev/null | grep -c "build complete" || true')
+
+                        # Check if snix build produced a store path with the binary
+                        /nix/system/profile/bin/bash -c '
+                          OUTPUT=$(cat /tmp/snix-compile-output 2>/dev/null)
+                          if [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/snix" ]; then
+                            echo "FUNC_TEST:snix-compile:PASS"
+
+                            # Verify output is in /nix/store
+                            case "$OUTPUT" in
+                              /nix/store/*) echo "  output in store: $OUTPUT" ;;
+                              *) echo "  WARNING: output not in /nix/store: $OUTPUT" ;;
+                            esac
+                          else
+                            echo "FUNC_TEST:snix-compile:FAIL:exit or no binary at $OUTPUT/bin/snix"
+                            echo "=== snix build stderr ==="
+                            cat /tmp/snix-compile-err 2>/dev/null
+                            echo "=== end stderr ==="
+                          fi
+                        '
+
+                        # Check if binary was produced and works
+                        /nix/system/profile/bin/bash -c '
+                          OUTPUT=$(cat /tmp/snix-compile-output 2>/dev/null)
+                          SNIX_BIN="$OUTPUT/bin/snix"
+
+                          if [ -x "$SNIX_BIN" ]; then
+                            echo "FUNC_TEST:snix-binary-exists:PASS"
+                            ls -la "$SNIX_BIN"
+
+                            # Test: run the self-compiled snix
+                            "$SNIX_BIN" --version > /tmp/snix-selfbuilt-out 2>/tmp/snix-selfbuilt-err
+                            if [ $? -eq 0 ]; then
+                              echo "FUNC_TEST:snix-binary-runs:PASS"
+                              cat /tmp/snix-selfbuilt-out
+                            else
+                              echo "FUNC_TEST:snix-binary-runs:FAIL:exit $?"
+                              cat /tmp/snix-selfbuilt-err
+                            fi
+
+                            # Test: self-compiled snix can evaluate a Nix expression
+                            EVAL_RESULT=$("$SNIX_BIN" eval --expr "1 + 1" 2>/tmp/snix-selfbuilt-eval-err)
+                            if [ $? -eq 0 ] && [ "$EVAL_RESULT" = "2" ]; then
+                              echo "FUNC_TEST:snix-eval-works:PASS"
+                            else
+                              echo "FUNC_TEST:snix-eval-works:FAIL:expected 2, got $EVAL_RESULT"
+                              cat /tmp/snix-selfbuilt-eval-err
+                            fi
+                          else
+                            echo "FUNC_TEST:snix-binary-exists:FAIL:binary not produced"
+                            echo "FUNC_TEST:snix-binary-runs:FAIL:no binary"
+                            echo "FUNC_TEST:snix-eval-works:FAIL:no binary"
+                          fi
+                        '
+
                         echo "FUNC_TESTS_COMPLETE"
   '';
 

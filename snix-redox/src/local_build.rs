@@ -359,7 +359,7 @@ fn build_derivation_inner(
         #[cfg(not(target_os = "redox"))]
         {
             let _ = sandbox_config;
-            let _ = _allow_list;
+            let _ = allow_list;
         }
     }
 

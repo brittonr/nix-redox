@@ -434,6 +434,7 @@ fn nix_safe_ident(name: &str) -> String {
 /// 5. Evaluate and build
 pub fn build_flake_installable(
     installable: &Installable,
+    no_sandbox: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let flake_dir = &installable.flake_dir;
 
@@ -514,7 +515,7 @@ pub fn build_flake_installable(
     let db = crate::pathinfo::PathInfoDb::open()
         .map_err(|e| format!("opening pathinfo db: {e}"))?;
 
-    let result = crate::local_build::build_needed(&drv_path, &*known_paths_ref, &db)?;
+    let result = crate::local_build::build_needed_with_options(&drv_path, &*known_paths_ref, &db, no_sandbox)?;
 
     // Print output paths
     for (name, path) in &result.outputs {
@@ -684,16 +685,16 @@ fn git_url_to_forge_tarball(url: &str, rev: &str) -> Option<String> {
     // GitLab (any host with gitlab in the domain, or gitlab.com)
     // Pattern: https://<host>/<owner>/<repo>
     if url.contains("gitlab") {
-        if let Some((_scheme_host, path)) = url.split_once("://") {
-            let parts: Vec<&str> = _scheme_host.split('/').chain(path.split('/')).collect();
-            // parts[0] = host, then owner/repo segments
-            if let Some(slash_pos) = path.find('/') {
-                let host = _scheme_host;
-                let owner_repo = path;
+        if let Some(after_scheme) = url.strip_prefix("https://") {
+            // after_scheme = "gitlab.redox-os.org/redox-os/relibc"
+            // Split into host and owner/repo path
+            if let Some((host, owner_repo)) = after_scheme.split_once('/') {
                 if let Some(repo_name) = owner_repo.rsplit('/').next() {
-                    return Some(format!(
-                        "https://{host}/{owner_repo}/-/archive/{rev}/{repo_name}-{rev}.tar.gz"
-                    ));
+                    if !repo_name.is_empty() {
+                        return Some(format!(
+                            "https://{host}/{owner_repo}/-/archive/{rev}/{repo_name}-{rev}.tar.gz"
+                        ));
+                    }
                 }
             }
         }
@@ -1377,10 +1378,34 @@ mod tests {
             "https://gitlab.redox-os.org/redox-os/relibc.git",
             "abc123",
         );
-        assert!(url.is_some());
-        let url = url.unwrap();
-        assert!(url.contains("gitlab.redox-os.org"), "url: {url}");
-        assert!(url.contains("abc123"), "url: {url}");
+        assert_eq!(
+            url.unwrap(),
+            "https://gitlab.redox-os.org/redox-os/relibc/-/archive/abc123/relibc-abc123.tar.gz"
+        );
+    }
+
+    #[test]
+    fn forge_tarball_gitlab_default_host() {
+        let url = git_url_to_forge_tarball(
+            "https://gitlab.com/user/project.git",
+            "def456",
+        );
+        assert_eq!(
+            url.unwrap(),
+            "https://gitlab.com/user/project/-/archive/def456/project-def456.tar.gz"
+        );
+    }
+
+    #[test]
+    fn forge_tarball_gitlab_no_dot_git() {
+        let url = git_url_to_forge_tarball(
+            "https://gitlab.redox-os.org/redox-os/kernel",
+            "aaa111",
+        );
+        assert_eq!(
+            url.unwrap(),
+            "https://gitlab.redox-os.org/redox-os/kernel/-/archive/aaa111/kernel-aaa111.tar.gz"
+        );
     }
 
     #[test]
