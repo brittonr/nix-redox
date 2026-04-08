@@ -1,13 +1,19 @@
 ## Why
 
 After the sandbox rollback from per-path proxy to scheme-only (70b70d74),
-the self-hosting baseline was re-established on 2026-04-07:
-65 pass, 13 fail out of 78 tests (all tests report after test reorder).
+the self-hosting baseline started at 65 pass, 13 fail out of 78 tests.
+The 13 failures fell into test fixture/bundle issues (Ion builders for
+derivations needing HOME, missing vendored crates, wrong Cargo vendor
+paths) plus one snix-redox gap (`--no-sandbox` not threaded through
+flake installables).
 
-Most of the original 16 failures from the proxy era are now fixed. The
-remaining gaps are: cc-dep-build (cc-rs exits non-zero under sandbox),
-snix-compile timeout (168 crates exceed 1800s budget), and tests blocked
-behind the snix-compile timeout that never got a chance to run.
+Current state (2026-04-07 baseline, task 131): **77 pass, 1 fail** out
+of 78 tests. The sole remaining failure is `snix-compile`: the
+168-crate self-build reaches proc-macro build-script compilation
+(proc-macro2, quote), then linking via `/nix/system/profile/bin/cc`
+aborts with `failed to initiate panic, error 0` / exit 134 (unwind
+stubs in the return-0 stub libraries). This is a platform-level issue
+in the unwind stub strategy, not a sandbox or fixture bug.
 
 ## What Changes
 

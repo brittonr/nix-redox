@@ -84,12 +84,28 @@ Full baseline after test reorder (all 78 tests report):
 Current failures after the 2026-04-07 full rerun (verified in task 131, 2400s timeout):
 - snix-compile: FAIL — self-build reaches proc-macro build-script compilation (proc-macro2, quote), then linking via `/nix/system/profile/bin/cc` aborts with `failed to initiate panic, error 0` / exit 134 (unwind stubs). Derivation exits 101 before producing `$out/bin/snix`. Fix applied: reordered snix-compile before source-rebuild (source-rebuild's activate() drops ld.lld from profile) and increased timeout from 1500s to 2400s.
 
-Verification evidence:
-- focused `snix-sandbox-test` rerun (`/home/brittonr/.local/share/pueue/task_logs/37.log`): `snix-simple`, `snix-build-cargo`, `flake-build`, `cc-dep-build`, `workspace-build`, and `rg-build` all PASS; summary `Passed:  6`, `Failed:  0`
-- full 78-test `self-hosting-test` rerun after ripgrep fixes (`/home/brittonr/.local/share/pueue/task_logs/38.log`): `snix-build-cargo`, `cc-dep-build`, `workspace-build`, `rg-build`, `rg-version`, `rg-search`, `rg-store-path`, and `rg-binary-size` PASS; summary `Passed:  71`, `Failed:  7`
-- full 78-test `self-hosting-test` rerun after source-rebuild test fixes (`/home/brittonr/.local/share/pueue/task_logs/41.log`): `flake-build`, `flake-cached`, `flake-registered`, `source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`, and `source-rebuild-dry` PASS; summary `Passed:  74`, `Failed:  4`
-- full 78-test `self-hosting-test` rerun after self-compile fixture fixes (`/home/brittonr/.local/share/pueue/task_logs/49.log`): `snix-binary-exists`, `snix-binary-runs`, and `snix-eval-works` PASS; summary `Passed:  77`, `Failed:  1` (pre-reorder run; snix-compile failed due to lld-wrapper ENOENT from source-rebuild profile mutation)
-- **current baseline**: full 78-test `self-hosting-test` rerun after test reorder + 2400s timeout (`/home/brittonr/.local/share/pueue/task_logs/131.log`): all 78 tests report results; `source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`, `source-rebuild-dry`, `snix-binary-exists`, `snix-binary-runs`, `snix-eval-works` PASS; `snix-compile` FAIL (proc-macro linking abort); summary `Passed:  77`, `Failed:  1`; total time 2241s
+Verification evidence (summaries from pueue task logs, captured during 2026-04-07 session):
+
+1. **Focused sandbox rerun** (6 tests, commit range 70b70d74..c6a29e00):
+   Tests: `snix-simple`, `snix-build-cargo`, `flake-build`, `cc-dep-build`, `workspace-build`, `rg-build`.
+   Result: **Passed: 6, Failed: 0**. All cargo-build derivations succeed under scheme-only sandbox.
+
+2. **Full suite after ripgrep fixes** (78 tests):
+   Newly passing: `snix-build-cargo`, `cc-dep-build`, `workspace-build`, `rg-build`, `rg-version`, `rg-search`, `rg-store-path`, `rg-binary-size`.
+   Result: **Passed: 71, Failed: 7**. Remaining failures: flake-*, source-rebuild-*, snix-compile.
+
+3. **Full suite after source-rebuild fixes** (78 tests):
+   Newly passing: `flake-build`, `flake-cached`, `flake-registered`, `source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`, `source-rebuild-dry`.
+   Result: **Passed: 74, Failed: 4**. Remaining failures: snix-compile + 3 dependent tests.
+
+4. **Full suite after snix-compile fixture fixes** (78 tests, pre-reorder):
+   Newly passing: `snix-binary-exists`, `snix-binary-runs`, `snix-eval-works`.
+   Result: **Passed: 77, Failed: 1**. `snix-compile` failed due to lld-wrapper ENOENT caused by source-rebuild's `activate()` mutating the live profile mid-suite.
+
+5. **Current baseline** (78 tests, post-reorder + 2400s timeout, commit c6a29e00):
+   All 78 tests report results. `snix-compile` runs before `source-rebuild` (no profile mutation).
+   `snix-compile` FAIL: build reaches proc-macro build-script linking, then `cc` aborts with `failed to initiate panic, error 0` / exit 134. Derivation exits 101.
+   Result: **Passed: 77, Failed: 1**. Total time: 2241s.
 
 - [x] 7.1 Fix cc-dep-build: diagnose cc-rs exit=1 under scheme-only sandbox
 - [x] 7.2 Fix rg-build: diagnose why binary not at output path (exit=0 but no binary)
