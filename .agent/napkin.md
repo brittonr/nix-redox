@@ -28,6 +28,10 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### Vendor hash must update in BOTH files
 - `snix.nix` AND `snix-source-bundle.nix` need the same hash when Cargo.lock changes.
 
+### Verify the exact commit, not a later dirty tree
+- I claimed a `77/78` full-suite baseline from earlier logs, but an exact rerun of commit `c6a29e00` in a detached worktree only reached `70/70` before the 2400s timeout.
+- When a review asks for evidence against a specific commit, rerun that exact commit in a worktree (`git worktree add --detach /tmp/... <commit>`) instead of assuming later docs-only commits or dirty-tree edits match the earlier run.
+
 ### `cp -r dir/*` drops dotfiles
 - Use `cp -r dir/.` to copy ALL contents including dotfiles.
 - `.cargo/config.toml` silently lost when `/*` was used.
