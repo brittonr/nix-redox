@@ -37,6 +37,7 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 - Single quotes prevent all expansion — safe for Nix expressions with `{}[]()`
 - Apostrophes in `bash -c '...'` blocks break Ion's quote parser
 - `$?` unreliable between external commands — emit PASS/FAIL directly from bash blocks
+- `let HOME = ...` fails — HOME is a protected variable in Ion; use bash for scripts that need to set HOME
 - `echo $var | grep` pipes fail silently — use Ion-native `test` or `is` for comparisons
 
 ### Available Commands
@@ -152,7 +153,9 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - Patching vendored crates requires regenerating `.cargo-checksum.json` (SHA-256)
 - Both `snix.nix` and `snix-source-bundle.nix` need the SAME vendor hash
 - Git dependencies need `gitSources` in package args for offline vendor config
+- `fetchCargoVendor` registry bundles may be laid out as `vendor/source-registry-0/*` — `.cargo/config.toml` must point Cargo at that exact directory, not just `vendor/`
 - ring crate from git needs `pregenerated/` assembly files not in registry download
+- cc-rs 1.2.x depends on `shlex` crate — must vendor both cc AND shlex for offline builds
 
 ### C Library Cross-Compilation
 - CRITICAL: C builds CANNOT build test/app binaries — `-nostdlib -static` in LDFLAGS
@@ -265,25 +268,30 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - `snix build .#ripgrep` (flake installables, 33 crates compiled)
 - `snix build .#hello` (flake installables)
 - workspace builds via `snix build` (multi-crate)
-- scheme-only sandbox: 65/78 self-hosting tests pass (2026-04-07 baseline)
+- focused `snix-sandbox-test` rerun (2026-04-07): `snix-simple`, `snix-build-cargo`, `flake-build`, `cc-dep-build`, `workspace-build`, and `rg-build` all pass (6/6; see `/home/brittonr/.local/share/pueue/task_logs/37.log`)
+- `cc-dep-build` fix was in the test fixture, not `snix-redox` sandbox code: (1) Ion builder scripts cannot `let HOME = ...`, so use bash; (2) `cc` 1.2.21 needs vendored `shlex` for offline builds
+- `rg-build` fix was also in the test fixture/bundle: (1) ripgrep builder must use bash because it sets `HOME`; (2) `ripgrep-source-bundle.nix` must point Cargo at `vendor/source-registry-0`, matching `fetchCargoVendor` output
+- `source-rebuild` fix was in the self-hosting test fixture: seed the temp manifest from `/etc/redox-system/manifest.json` instead of an empty manifest (otherwise activation rebuilds the live profile with only the source-built package), and use full paths like `/bin/mkdir` in `packageSources` test derivations because source-rebuild builders do not get `PATH`
+- `snix-compile` fixture had the same two harness issues as ripgrep: `build-snix.nix` needed a bash builder and `build-snix.sh` needed a real bash rewrite with `set -e`; `snix-source-bundle.nix` also had to point Cargo at `vendor/source-registry-0` and `vendor/source-git-0`
+- scheme-only sandbox: 77/78 self-hosting tests pass in the latest full-suite baseline (2026-04-07; see `/home/brittonr/.local/share/pueue/task_logs/131.log`)
+- `snix-compile` moved to run before `source-rebuild` (source-rebuild's activate() drops ld.lld from profile)
 
 ### What Doesn't
-- `cc-dep-build` via `snix build`: cc-rs build script fails inside sandbox (exit=1)
-- `snix-compile` (self-build): 168 crates take >1800s, exceeds test harness timeout
+- `snix-compile` (self-build): 168 crates compile but proc-macro build-script linking aborts with `failed to initiate panic, error 0` (unwind stubs); derivation exits 101 before producing `$out/bin/snix`
 - `CARGO_BUILD_JOBS > 1` had two issues: (1) lld stack overflow — fixed by `lld-wrapper` (16MB stack thread + exec); (2) cargo job manager hangs on multi-crate workspace builds — fixed by `patch-relibc-fork-lock.py` (see below)
 - `env!("CARGO_PKG_*")` in proc-macro crates: works via DSO environ propagation
 
 ### Self-Hosting Baseline (2026-04-07)
 - Sandbox mode: scheme-only (per-path proxy disabled due to kernel deadlock)
-- 65 pass, 13 fail out of 78 tests (all tests report results)
-- Test order: snix-compile moved to end so rg-build/source-rebuild run first
+- 77 pass, 1 fail out of 78 tests (all tests report results; verified `/home/brittonr/.local/share/pueue/task_logs/131.log`, total time 2241s)
+- Test order: snix-compile moved BEFORE source-rebuild (source-rebuild's activate() drops ld.lld from the live profile)
 - flake-build, flake-cached, flake-registered: all pass
-- snix-build-cargo, workspace-build, parallel-jobs2: pass
-- cc-dep-build: FAIL (cc-rs exit=1 under sandbox)
-- rg-build: FAIL (exit=0 but binary not at output path — undiagnosed)
-- source-rebuild: FAIL (exit=1 from snix system rebuild --source)
-- snix-compile: FAIL (binary not at expected output path — undiagnosed)
+- snix-build-cargo, cc-dep-build, workspace-build, rg-build, rg-version, rg-search, rg-store-path, rg-binary-size, parallel-jobs2, source-rebuild, source-rebuild-gen, source-rebuild-pkg, source-rebuild-dry, snix-binary-exists, snix-binary-runs, snix-eval-works: pass
+- Remaining failure is: `snix-compile` only
+- `cc-dep-build`, `rg-build`, `source-rebuild`, and most of the `snix-compile` progress came from test fixtures/bundles, not `snix-redox` sandbox core: use bash for builders that need `HOME`; vendor missing crates; point Cargo at `vendor/source-registry-0` when using `fetchCargoVendor`; add `vendor/source-git-0` for git deps; seed source-rebuild tests from the real system manifest; and use full paths in source derivations when builder `PATH` is empty
+- Current real blocker after the fixture fixes: self-compile reaches proc-macro build-script compilation, then linking `quote`/`proc-macro2` build scripts via `/nix/system/profile/bin/cc` aborts with `failed to initiate panic, error 0` / exit 134 inside rustc, so the derivation exits 101 before producing `$out/bin/snix`
 - `--no-sandbox` flag now threads through flake installables (previously bypassed)
+- focused test harness note: `snix-sandbox-test` originally checked `$out/bin/workspace-test`, but `workspace-build.nix` installs `$out/bin/mybin`
 
 ### Key Patches (all still required)
 **relibc** (13 patches): abort-dso, chdir-cwd, dso-environ, environ-dso-init, execvpe, fcntl-lock, fork-lock,

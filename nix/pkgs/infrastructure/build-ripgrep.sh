@@ -1,5 +1,5 @@
-#!/bin/sh
-# Builder script for compiling ripgrep on Redox OS (Ion syntax).
+#!/nix/system/profile/bin/bash
+# Builder script for compiling ripgrep on Redox OS.
 # Called by snix build --file build.nix as a Nix derivation builder.
 #
 # Expects:
@@ -7,28 +7,26 @@
 #   $TMPDIR — writable temp directory (set by snix)
 #   Source bundle at /usr/src/ripgrep with vendor/ and .cargo/config.toml
 
-let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
-export PATH
-let LD_LIBRARY_PATH = "/nix/system/profile/lib:/usr/lib/rustc:/lib"
-export LD_LIBRARY_PATH
-let HOME = "$TMPDIR"
-export HOME
-let CARGO_HOME = "$TMPDIR/cargo-home"
-export CARGO_HOME
-let AR = "/nix/system/profile/bin/llvm-ar"
-export AR
+set -e
+export PATH=/nix/system/profile/bin:/bin:/usr/bin
+export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+export HOME="$TMPDIR"
+export CARGO_HOME="$TMPDIR/cargo-home"
+export CARGO_INCREMENTAL=0
+export AR=/nix/system/profile/bin/llvm-ar
 
 mkdir -p "$CARGO_HOME" "$out/bin"
 
-# Copy source to writable directory (source bundle is read-only)
-let SRCDIR = "$TMPDIR/rg-src"
-cp -r /usr/src/ripgrep "$SRCDIR"
+# Copy source to a writable directory, including dotfiles like .cargo/.
+SRCDIR="$TMPDIR/rg-src"
+mkdir -p "$SRCDIR"
+cp -r /usr/src/ripgrep/. "$SRCDIR"
 
-# Ensure .cargo/config.toml survived the copy
+# Keep a defensive fallback in case the copy ever regresses.
 mkdir -p "$SRCDIR/.cargo"
-if not exists -f "$SRCDIR/.cargo/config.toml"
+if [ ! -f "$SRCDIR/.cargo/config.toml" ]; then
   cp /usr/src/ripgrep/.cargo/config.toml "$SRCDIR/.cargo/config.toml"
-end
+fi
 
 cd "$SRCDIR"
 

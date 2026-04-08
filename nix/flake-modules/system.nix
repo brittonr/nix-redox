@@ -341,7 +341,7 @@ let
     inherit bootloader;
     memoryMB = 8192;
     cpus = 4;
-    defaultTimeout = 1500; # snix self-compile (168 crates) + ripgrep build need ~900s
+    defaultTimeout = 2400; # snix self-compile (168 crates) needs ~20min; ripgrep ~2min; source-rebuild ~1min
   };
 
   # Focused snix sandbox build test — skips the 42 quick tests

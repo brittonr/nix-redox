@@ -3094,19 +3094,88 @@ let
                         '
 
                         # ══════════════════════════════════════════════════════
+                        # SNIX SELF-COMPILE TEST
+                        # ══════════════════════════════════════════════════════
+                        # Must run BEFORE source-rebuild because source-rebuild's
+                        # activate() rebuilds the live profile, which can drop
+                        # ld.lld from /nix/system/profile/bin/ and break linking.
+                        echo "--- snix self-compile: snix build --file ---"
+                        /nix/system/profile/bin/bash -c '
+                          rm -f /tmp/.cc-wrapper-raw-args /tmp/.cc-wrapper-stderr /tmp/.cc-wrapper-shared-cmd /tmp/.cc-wrapper-last-err 2>/dev/null
+                          OUTPUT=$(/bin/snix build --file /usr/src/snix-redox/build.nix 2>/tmp/snix-compile-err)
+                          EXIT=$?
+                          echo "$OUTPUT" > /tmp/snix-compile-output
+                          echo "snix-compile-exit=$EXIT"
+                          echo "snix-compile-output=$OUTPUT"
+                        '
+
+                        let snix_output = $(cat /tmp/snix-compile-output)
+                        let snix_exit = $(/nix/system/profile/bin/bash -c 'cat /tmp/snix-compile-err 2>/dev/null | grep -c "build complete" || true')
+
+                        # Check if snix build produced a store path with the binary
+                        /nix/system/profile/bin/bash -c '
+                          OUTPUT=$(cat /tmp/snix-compile-output 2>/dev/null)
+                          if [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/snix" ]; then
+                            echo "FUNC_TEST:snix-compile:PASS"
+
+                            # Verify output is in /nix/store
+                            case "$OUTPUT" in
+                              /nix/store/*) echo "  output in store: $OUTPUT" ;;
+                              *) echo "  WARNING: output not in /nix/store: $OUTPUT" ;;
+                            esac
+                          else
+                            echo "FUNC_TEST:snix-compile:FAIL:exit or no binary at $OUTPUT/bin/snix"
+                            echo "=== snix build stderr ==="
+                            cat /tmp/snix-compile-err 2>/dev/null
+                            echo "=== cc-wrapper-raw-args ==="
+                            cat /tmp/.cc-wrapper-raw-args 2>/dev/null
+                            echo "=== cc-wrapper-stderr (lld errors) ==="
+                            cat /tmp/.cc-wrapper-stderr 2>/dev/null
+                            echo "=== cc-wrapper-last-err ==="
+                            cat /tmp/.cc-wrapper-last-err 2>/dev/null
+                            echo "=== end stderr ==="
+                          fi
+                        '
+
+                        # Check if binary was produced and works
+                        /nix/system/profile/bin/bash -c '
+                          OUTPUT=$(cat /tmp/snix-compile-output 2>/dev/null)
+                          SNIX_BIN="$OUTPUT/bin/snix"
+
+                          if [ -x "$SNIX_BIN" ]; then
+                            echo "FUNC_TEST:snix-binary-exists:PASS"
+                            ls -la "$SNIX_BIN"
+
+                            # Test: run the self-compiled snix
+                            "$SNIX_BIN" --version > /tmp/snix-selfbuilt-out 2>/tmp/snix-selfbuilt-err
+                            if [ $? -eq 0 ]; then
+                              echo "FUNC_TEST:snix-binary-runs:PASS"
+                              cat /tmp/snix-selfbuilt-out
+                            else
+                              echo "FUNC_TEST:snix-binary-runs:FAIL:exit $?"
+                              cat /tmp/snix-selfbuilt-err
+                            fi
+
+                            # Test: self-compiled snix can evaluate a Nix expression
+                            EVAL_RESULT=$("$SNIX_BIN" eval --expr "1 + 1" 2>/tmp/snix-selfbuilt-eval-err)
+                            if [ $? -eq 0 ] && [ "$EVAL_RESULT" = "2" ]; then
+                              echo "FUNC_TEST:snix-eval-works:PASS"
+                            else
+                              echo "FUNC_TEST:snix-eval-works:FAIL:expected 2, got $EVAL_RESULT"
+                              cat /tmp/snix-selfbuilt-eval-err
+                            fi
+                          else
+                            echo "FUNC_TEST:snix-binary-exists:FAIL:binary not produced"
+                            echo "FUNC_TEST:snix-binary-runs:FAIL:no binary"
+                            echo "FUNC_TEST:snix-eval-works:FAIL:no binary"
+                          fi
+                        '
+
+                        # ══════════════════════════════════════════════════════
                         # SOURCE-BASED REBUILD TEST
                         # ══════════════════════════════════════════════════════
-                        # Tests `snix system rebuild --source` end-to-end:
-                        #   1. Create configuration.nix with packageSources
-                        #   2. Create packages.nix with a simple derivation
-                        #   3. Run snix system rebuild --source
-                        #   4. Verify generation created with the built package
-                        echo ""
-                        echo "========================================"
-                        echo "  SOURCE-BASED REBUILD TEST"
-                        echo "========================================"
-                        echo ""
-
+                        # WARNING: This test mutates the live system profile via
+                        # activate(). Must run AFTER all tests that need linking.
                         echo "--- source-rebuild: snix system rebuild --source ---"
                         /nix/system/profile/bin/bash -c '
                           # Set up a temp configuration dir
@@ -3121,7 +3190,7 @@ let
           hello-source = derivation {
             name = "hello-source";
             builder = "/nix/system/profile/bin/bash";
-            args = ["-c" "mkdir -p $out/bin; echo hello-from-source-rebuild > $out/bin/hello-source"];
+            args = ["-c" "/bin/mkdir -p $out/bin; echo hello-from-source-rebuild > $out/bin/hello-source"];
             system = "x86_64-unknown-redox";
           };
         }
@@ -3134,18 +3203,14 @@ let
         }
   CFGNIX
 
-                          # Set up a writable gen dir and manifest for this test
+                          # Set up a writable gen dir and manifest for this test.
+                          # Seed from the live system manifest so source rebuild
+                          # preserves the current profile/boot package set instead
+                          # of activating a manifest that only contains hello-source.
                           GENDIR="$CFGDIR/generations"
                           MANIFEST="$CFGDIR/manifest.json"
                           mkdir -p "$GENDIR"
-
-                          # Create a minimal initial manifest (rebuild merges into this)
-                          cat > "$MANIFEST" << '"'"'MFJSON'"'"'
-        {
-          "generation": { "id": 0, "timestamp": "", "description": "initial" },
-          "packages": []
-        }
-  MFJSON
+                          cp /etc/redox-system/manifest.json "$MANIFEST"
 
                           echo "[source-rebuild] running snix system rebuild --source..."
                           /bin/snix system rebuild --source \
@@ -3213,73 +3278,6 @@ let
                           else
                             echo "FUNC_TEST:source-rebuild-dry:FAIL:exit=$EXIT"
                             cat /tmp/source-dry-stderr 2>/dev/null | head -10
-                          fi
-                        '
-
-                        echo ""
-                        # Build snix through a Nix derivation (the Nix way)
-                        echo "--- snix self-compile: snix build --file ---"
-                        /nix/system/profile/bin/bash -c '
-                          OUTPUT=$(/bin/snix build --file /usr/src/snix-redox/build.nix 2>/tmp/snix-compile-err)
-                          EXIT=$?
-                          echo "$OUTPUT" > /tmp/snix-compile-output
-                          echo "snix-compile-exit=$EXIT"
-                          echo "snix-compile-output=$OUTPUT"
-                        '
-
-                        let snix_output = $(cat /tmp/snix-compile-output)
-                        let snix_exit = $(/nix/system/profile/bin/bash -c 'cat /tmp/snix-compile-err 2>/dev/null | grep -c "build complete" || true')
-
-                        # Check if snix build produced a store path with the binary
-                        /nix/system/profile/bin/bash -c '
-                          OUTPUT=$(cat /tmp/snix-compile-output 2>/dev/null)
-                          if [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/snix" ]; then
-                            echo "FUNC_TEST:snix-compile:PASS"
-
-                            # Verify output is in /nix/store
-                            case "$OUTPUT" in
-                              /nix/store/*) echo "  output in store: $OUTPUT" ;;
-                              *) echo "  WARNING: output not in /nix/store: $OUTPUT" ;;
-                            esac
-                          else
-                            echo "FUNC_TEST:snix-compile:FAIL:exit or no binary at $OUTPUT/bin/snix"
-                            echo "=== snix build stderr ==="
-                            cat /tmp/snix-compile-err 2>/dev/null
-                            echo "=== end stderr ==="
-                          fi
-                        '
-
-                        # Check if binary was produced and works
-                        /nix/system/profile/bin/bash -c '
-                          OUTPUT=$(cat /tmp/snix-compile-output 2>/dev/null)
-                          SNIX_BIN="$OUTPUT/bin/snix"
-
-                          if [ -x "$SNIX_BIN" ]; then
-                            echo "FUNC_TEST:snix-binary-exists:PASS"
-                            ls -la "$SNIX_BIN"
-
-                            # Test: run the self-compiled snix
-                            "$SNIX_BIN" --version > /tmp/snix-selfbuilt-out 2>/tmp/snix-selfbuilt-err
-                            if [ $? -eq 0 ]; then
-                              echo "FUNC_TEST:snix-binary-runs:PASS"
-                              cat /tmp/snix-selfbuilt-out
-                            else
-                              echo "FUNC_TEST:snix-binary-runs:FAIL:exit $?"
-                              cat /tmp/snix-selfbuilt-err
-                            fi
-
-                            # Test: self-compiled snix can evaluate a Nix expression
-                            EVAL_RESULT=$("$SNIX_BIN" eval --expr "1 + 1" 2>/tmp/snix-selfbuilt-eval-err)
-                            if [ $? -eq 0 ] && [ "$EVAL_RESULT" = "2" ]; then
-                              echo "FUNC_TEST:snix-eval-works:PASS"
-                            else
-                              echo "FUNC_TEST:snix-eval-works:FAIL:expected 2, got $EVAL_RESULT"
-                              cat /tmp/snix-selfbuilt-eval-err
-                            fi
-                          else
-                            echo "FUNC_TEST:snix-binary-exists:FAIL:binary not produced"
-                            echo "FUNC_TEST:snix-binary-runs:FAIL:no binary"
-                            echo "FUNC_TEST:snix-eval-works:FAIL:no binary"
                           fi
                         '
 

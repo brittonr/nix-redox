@@ -148,11 +148,35 @@ HELLONIX
       mkdir -p /nix/store /nix/var/snix/pathinfo
       OUTPUT=$(/bin/snix build --file /usr/src/workspace-test/build.nix 2>/tmp/workspace-err)
       EXIT=$?
-      if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/workspace-test" ]; then
-        echo "FUNC_TEST:workspace-build:PASS"
+      if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/mybin" ]; then
+        RUN=$("$OUTPUT/bin/mybin" 2>&1)
+        if echo "$RUN" | grep -q "WORKSPACE_OK"; then
+          echo "FUNC_TEST:workspace-build:PASS"
+        else
+          echo "FUNC_TEST:workspace-build:FAIL:output=$RUN"
+        fi
       else
         echo "FUNC_TEST:workspace-build:FAIL:exit=$EXIT"
         cat /tmp/workspace-err 2>/dev/null | head -20 >&2
+      fi
+    '
+
+    # ── rg-build ──
+    echo "--- rg-build ---"
+    /nix/system/profile/bin/bash -c '
+      mkdir -p /nix/store /nix/var/snix/pathinfo
+      OUTPUT=$(/bin/snix build --file /usr/src/ripgrep/build.nix 2>/tmp/rg-build-err)
+      EXIT=$?
+      if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/rg" ]; then
+        VER=$("$OUTPUT/bin/rg" --version 2>&1 | head -1)
+        if echo "$VER" | grep -q "ripgrep"; then
+          echo "FUNC_TEST:rg-build:PASS"
+        else
+          echo "FUNC_TEST:rg-build:FAIL:version=$VER"
+        fi
+      else
+        echo "FUNC_TEST:rg-build:FAIL:exit=$EXIT"
+        cat /tmp/rg-build-err 2>/dev/null | head -20 >&2
       fi
     '
 
