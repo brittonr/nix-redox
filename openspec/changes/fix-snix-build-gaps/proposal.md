@@ -11,11 +11,17 @@ behind the snix-compile timeout that never got a chance to run.
 
 ## What Changes
 
-- Fix `cc-dep-build`: diagnose why cc-rs build script fails under scheme-only sandbox
-- Fix `snix-compile` timeout: increase test budget or restructure to skip in main suite
-- Unblock remaining tests (source-rebuild, rg-build, parallel, e2e-rebuild) that are
-  currently blocked behind the snix-compile timeout
+- Fix test fixture/bundle issues for `cc-dep-build`, `rg-build`, `workspace-build`, and `snix-compile`
+  (root causes: Ion builder scripts for derivations needing HOME, missing vendored crates,
+  wrong Cargo vendor paths from `fetchCargoVendor` layout)
+- Thread `--no-sandbox` flag through flake installables
+- Fix `source-rebuild` test: seed manifest from live system, use full paths in builders
+- Reorder `snix-compile` before `source-rebuild` (source-rebuild's activate mutates profile)
+- Increase `snix-compile` timeout from 1500s to 2400s
 - Validate ripgrep 33-crate build as the flagship end-to-end test
+
+Remaining blocker: `snix-compile` proc-macro build-script linking aborts with unwind stubs
+(`failed to initiate panic, error 0`). This is a platform-level issue, not a fixture bug.
 
 ## Capabilities
 
@@ -26,9 +32,14 @@ behind the snix-compile timeout that never got a chance to run.
 
 ## Impact
 
-- `snix-redox/src/local_build.rs` — build output verification, directory output handling
-- `snix-redox/src/flake.rs` — flake lock resolution, input fetching on Redox
-- `snix-redox/src/build_proxy/` — sandbox allow-list gaps for cc-rs, lld, cargo environment
-- `snix-redox/src/sandbox.rs` — namespace setup for complex builds
-- `snix-redox/src/rebuild.rs` — source-based rebuild flow
-- `nix/redox-system/profiles/self-hosting-test.nix` — test script adjustments if test expectations are wrong
+- `snix-redox/src/flake.rs` — `--no-sandbox` threading, GitLab tarball URL fix
+- `snix-redox/src/main.rs` — pass `no_sandbox` to `build_flake_installable`
+- `snix-redox/src/local_build.rs` — minor cleanup (unused variable rename)
+- `snix-redox/src/sandbox.rs` — doc/comment updates (no behavioral change)
+- `nix/pkgs/infrastructure/*.nix` — test fixture fixes (bash builders, vendored crates, Cargo paths)
+- `nix/pkgs/infrastructure/*.sh` — builder script rewrites (Ion → bash for HOME-needing builds)
+- `nix/redox-system/profiles/self-hosting-test.nix` — test reorder, timeout increase, expectation fixes
+- `nix/redox-system/profiles/snix-sandbox-test.nix` — workspace-build expectation fix
+
+Note: sandbox-core changes (allow_list.rs, handler.rs, lifecycle.rs) were in the
+prior change (stabilize-self-hosting-baseline), not this one.

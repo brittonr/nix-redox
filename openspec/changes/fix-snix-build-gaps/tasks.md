@@ -1,3 +1,5 @@
+**Status: OPEN** — 77/78 pass. `snix-compile` remains failing (proc-macro linking abort). Tasks 6.3 and 7.4 are incomplete.
+
 ## 1. Diagnose all 16 failures with verbose output
 
 - [x] 1.1 Run the test suite with `--verbose` and capture full stderr for each failing test into a log file
@@ -25,29 +27,37 @@
 - [x] 4.2 Read `snix-redox/src/build_proxy/allow_list.rs` — check what paths are currently allowed for builders
 - [x] 4.3 Read `snix-redox/src/local_build.rs` — check what environment variables are set for the builder process
 - [x] 4.4 Compare the sandbox environment with what a direct `cargo build` gets (the working cargo tests from the rustc fix prove cargo itself works)
-- [x] 4.5 Add missing paths to the sandbox allow-list (likely: linker, sysroot, LLVM tools, cargo home)
-- [x] 4.6 Add missing environment variables to the builder (likely: CC, AR, RUSTFLAGS, LD_LIBRARY_PATH)
+- [x] 4.5 Fix cargo-build test failures (root cause: test fixture/bundle issues, not sandbox allow-list)
+- [x] 4.6 Thread `--no-sandbox` flag through flake installables (`flake.rs` → `build_needed_with_options`)
 - [x] 4.7 Rebuild and verify `snix-build-cargo` passes
 - [x] 4.8 Verify `cc-dep-build` and `workspace-build` pass
 - [x] 4.9 Verify `rg-build` passes (and downstream `rg-version`, `rg-search`, `rg-store-path`, `rg-binary-size`)
 
-Note: Three sandbox device issues fixed:
-1. /dev/null not in allow list (daf86cc4)
-2. /dev/null needs read-WRITE not read-only (daf86cc4)
-3. /dev/* opens via File::open() deadlocks initnsmgr (6bb97e16) — fixed with pre-opened fds
+Note on sandbox-core vs fixture changes:
 
-Focused `snix-sandbox-test` rerun on 2026-04-07 now passes (6/6):
-- `snix-simple`
-- `snix-build-cargo`
-- `flake-build`
-- `cc-dep-build`
-- `workspace-build`
-- `rg-build`
+Sandbox-core changes (snix-redox/src/) that unblocked cargo builds were done
+in a prior change (stabilize-self-hosting-baseline). Three /dev/* issues fixed:
+1. /dev/null not in allow list (daf86cc4 — `allow_list.rs`)
+2. /dev/null needs read-WRITE not read-only (daf86cc4 — `handler.rs`)
+3. /dev/* opens via File::open() deadlocks initnsmgr (6bb97e16 — `lifecycle.rs`, `handler.rs`)
 
-Notes from the rerun:
-- `cc-dep-build` root causes were in the test derivation/bundle, not in `snix-redox` sandbox code: Ion rejects `let HOME = ...`, and `cc` 1.2.21 needs vendored `shlex` for offline builds.
-- `snix-sandbox-test` had its own verification bug for `workspace-build`: it checked for `$out/bin/workspace-test`, but the derivation installs `$out/bin/mybin`.
-- `rg-build` had two fixture/bundle regressions: `build-ripgrep.nix`/`build-ripgrep.sh` used Ion even though the builder needs `HOME`, and `ripgrep-source-bundle.nix` pointed Cargo at `vendor/` while `fetchCargoVendor` laid crates out under `vendor/source-registry-0/`.
+This change (fix-snix-build-gaps) fixed the *remaining* cargo-build failures, whose
+root causes were in test fixtures/bundles, NOT in snix-redox sandbox code:
+- `cc-dep-build`: Ion rejects `let HOME = ...` → switched builder to bash; `cc` 1.2.21 needs
+  vendored `shlex` → added to `cc-dep-test-bundle.nix`
+- `rg-build`: `build-ripgrep.nix`/`.sh` used Ion even though builder needs HOME → switched to
+  bash; `ripgrep-source-bundle.nix` pointed Cargo at `vendor/` while `fetchCargoVendor` lays
+  crates out under `vendor/source-registry-0/` → fixed path
+- `workspace-build`: `snix-sandbox-test` checked for `$out/bin/workspace-test` but derivation
+  installs `$out/bin/mybin` → fixed test expectation
+- `snix-compile`: `build-snix.nix`/`.sh` needed bash builder + Cargo pointed at
+  `vendor/source-registry-0` and `vendor/source-git-0`
+
+The only snix-redox source change in this change was threading `--no-sandbox` through
+flake installables (`main.rs` → `flake.rs` → `build_needed_with_options`).
+
+Focused `snix-sandbox-test` rerun on 2026-04-07 passes (6/6):
+- `snix-simple`, `snix-build-cargo`, `flake-build`, `cc-dep-build`, `workspace-build`, `rg-build`
 
 ## 5. Fix source-based rebuild (`source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`)
 

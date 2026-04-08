@@ -35,9 +35,18 @@ The 16 failures cluster into ~4 root causes. Fix each root cause to unblock a ba
 - **Source rebuild** — `source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg` (3 tests). Likely `rebuild.rs` issue with source-mode evaluation or build.
 - **snix self-compile** — `snix-compile` (1 test). May be timeout or sandbox issue with 168-crate build.
 
-### 3. Fix in snix-redox source, not patches
+### 3. Implementation split: fixture fixes + one snix-redox change
 
-Unlike the ld_so fix (which required patching relibc's upstream source), these are all in our own `snix-redox/` crate. Fix directly in source, rebuild, and test.
+The initial expectation was that most fixes would be in snix-redox sandbox code
+(allow-list, env vars). In practice, the sandbox-core changes were done in a
+prior change (stabilize-self-hosting-baseline: daf86cc4, 6bb97e16). The
+remaining failures in this change turned out to be test fixture/bundle issues:
+Ion builder scripts for derivations needing HOME, missing vendored crates
+(shlex), wrong Cargo vendor paths from `fetchCargoVendor` layout, and
+test expectation bugs.
+
+The one snix-redox source change was threading `--no-sandbox` through
+flake installables (`main.rs` → `flake.rs` → `build_needed_with_options`).
 
 ### 4. Iterate within one VM boot when possible
 
@@ -45,6 +54,8 @@ The test suite boots a VM, runs all tests sequentially, and reports. For diagnos
 
 ## Alternatives Considered
 
-**Skip sandbox for complex builds** — Could add `--no-sandbox` for cargo-based builds. Rejected — the sandbox works for simple builds, so the gap is likely a specific missing allow-list entry, not a fundamental limitation.
+**Skip sandbox for complex builds** — `--no-sandbox` was threaded through flake installables
+as a diagnostic/escape-hatch option but is not the default. The scheme-only sandbox works
+for all tested cargo builds.
 
 **Use bridge builds for complex cases** — Could delegate cargo builds to the host via virtio-fs bridge. Rejected — the whole point of self-hosting is building ON Redox. Bridge is a fallback, not the goal.
