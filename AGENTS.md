@@ -273,23 +273,23 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - `rg-build` fix was also in the test fixture/bundle: (1) ripgrep builder must use bash because it sets `HOME`; (2) `ripgrep-source-bundle.nix` must point Cargo at `vendor/source-registry-0`, matching `fetchCargoVendor` output
 - `source-rebuild` fix was in the self-hosting test fixture: seed the temp manifest from `/etc/redox-system/manifest.json` instead of an empty manifest (otherwise activation rebuilds the live profile with only the source-built package), and use full paths like `/bin/mkdir` in `packageSources` test derivations because source-rebuild builders do not get `PATH`
 - `snix-compile` fixture had the same two harness issues as ripgrep: `build-snix.nix` needed a bash builder and `build-snix.sh` needed a real bash rewrite with `set -e`; `snix-source-bundle.nix` also had to point Cargo at `vendor/source-registry-0` and `vendor/source-git-0`
-- scheme-only sandbox: 77/78 self-hosting tests pass in the latest full-suite baseline (2026-04-07; see `/home/brittonr/.local/share/pueue/task_logs/131.log`)
+- exact rerun of commit `c6a29e00` (2026-04-08) shows: focused `snix-sandbox-test` passes 6/6 in 243s, but full `self-hosting-test` times out at 2400s with only 70 tests reporting before `snix self-compile` finishes
 - `snix-compile` moved to run before `source-rebuild` (source-rebuild's activate() drops ld.lld from profile)
 
 ### What Doesn't
-- `snix-compile` (self-build): 168 crates compile but proc-macro build-script linking aborts with `failed to initiate panic, error 0` (unwind stubs); derivation exits 101 before producing `$out/bin/snix`
+- `snix-compile` (self-build): with the current committed test profile, the 168-crate self-build does not finish within the 2400s full-suite timeout; exact reruns stall inside `snix build --file` after 70 tests have reported
+- there may be a later proc-macro/build-script linking failure (`failed to initiate panic, error 0` from unwind stubs), but do not treat that as the committed baseline until it is reproduced on an exact rerun
 - `CARGO_BUILD_JOBS > 1` had two issues: (1) lld stack overflow — fixed by `lld-wrapper` (16MB stack thread + exec); (2) cargo job manager hangs on multi-crate workspace builds — fixed by `patch-relibc-fork-lock.py` (see below)
 - `env!("CARGO_PKG_*")` in proc-macro crates: works via DSO environ propagation
 
-### Self-Hosting Baseline (2026-04-07)
+### Self-Hosting Baseline (2026-04-08 exact rerun)
 - Sandbox mode: scheme-only (per-path proxy disabled due to kernel deadlock)
-- 77 pass, 1 fail out of 78 tests (all tests report results; verified `/home/brittonr/.local/share/pueue/task_logs/131.log`, total time 2241s)
+- Focused `snix-sandbox-test`: 6 pass, 0 fail out of 6 tests; exact rerun of detached worktree commit `c6a29e00`; total time 243s
+- Full `self-hosting-test`: tests do NOT complete within the 2400s timeout on detached worktree commit `c6a29e00` or on the current working tree; summary at timeout is 70 pass, 0 fail, 70 total reported
+- Last serial lines before timeout show the suite stalled in `--- snix self-compile: snix build --file ---`
 - Test order: snix-compile moved BEFORE source-rebuild (source-rebuild's activate() drops ld.lld from the live profile)
-- flake-build, flake-cached, flake-registered: all pass
-- snix-build-cargo, cc-dep-build, workspace-build, rg-build, rg-version, rg-search, rg-store-path, rg-binary-size, parallel-jobs2, source-rebuild, source-rebuild-gen, source-rebuild-pkg, source-rebuild-dry, snix-binary-exists, snix-binary-runs, snix-eval-works: pass
-- Remaining failure is: `snix-compile` only
-- `cc-dep-build`, `rg-build`, `source-rebuild`, and most of the `snix-compile` progress came from test fixtures/bundles, not `snix-redox` sandbox core: use bash for builders that need `HOME`; vendor missing crates; point Cargo at `vendor/source-registry-0` when using `fetchCargoVendor`; add `vendor/source-git-0` for git deps; seed source-rebuild tests from the real system manifest; and use full paths in source derivations when builder `PATH` is empty
-- Current real blocker after the fixture fixes: self-compile reaches proc-macro build-script compilation, then linking `quote`/`proc-macro2` build scripts via `/nix/system/profile/bin/cc` aborts with `failed to initiate panic, error 0` / exit 134 inside rustc, so the derivation exits 101 before producing `$out/bin/snix`
+- Reproduced passing tests before the timeout include cargo builds and ripgrep (`snix-build-cargo`, `cc-dep-build`, `workspace-build`, `rg-build`, `rg-version`, `rg-search`, `rg-store-path`, `rg-binary-size`, `parallel-jobs2`)
+- The fixture-side lessons still stand: use bash for builders that need `HOME`; vendor missing crates; point Cargo at `vendor/source-registry-0` when using `fetchCargoVendor`; add `vendor/source-git-0` for git deps; seed source-rebuild tests from the real system manifest; and use full paths in source derivations when builder `PATH` is empty
 - `--no-sandbox` flag now threads through flake installables (previously bypassed)
 - focused test harness note: `snix-sandbox-test` originally checked `$out/bin/workspace-test`, but `workspace-build.nix` installs `$out/bin/mybin`
 

@@ -1,4 +1,6 @@
-**Status: OPEN** — 77/78 pass. `snix-compile` remains failing (proc-macro linking abort). Tasks 6.3 and 7.4 are incomplete.
+**Status: OPEN** — focused `snix-sandbox-test` passes 6/6, but full `self-hosting-test` does not complete within the 2400s timeout. Exact reruns of detached worktree commit `c6a29e00` and the current working tree stop after 70 reported tests while `snix self-compile` is still running. Tasks 6.3 and 7.4 are incomplete.
+
+Evidence note: the checkboxes below reflect the original investigation plus targeted reruns from 2026-04-07. The exact post-change reruns captured on 2026-04-08 directly re-verify the focused sandbox subset and the current full-suite timeout behavior.
 
 ## 1. Diagnose all 16 failures with verbose output
 
@@ -21,7 +23,7 @@
 - [x] 3.4 Implement the fix in `flake.rs` or the test flake definition
 - [x] 3.5 Rebuild and verify `flake-build` passes (which should cascade to `flake-cached` and `flake-registered`)
 
-## 4. Fix sandbox gaps for cargo builds (`snix-build-cargo`, `cc-dep-build`, `workspace-build`, `rg-build`)
+## 4. Resolve cargo-build failures under the scheme-only sandbox (`snix-build-cargo`, `cc-dep-build`, `workspace-build`, `rg-build`)
 
 - [x] 4.1 Read the `snix-build-cargo` and `cc-dep-build` stderr — identify which file access the sandbox blocked or which env var is missing
 - [x] 4.2 Read `snix-redox/src/build_proxy/allow_list.rs` — check what paths are currently allowed for builders
@@ -72,40 +74,42 @@ Focused `snix-sandbox-test` rerun on 2026-04-07 passes (6/6):
 - [x] 6.2 If sandbox issue: apply same fixes as task 4. If timeout: increase test timeout or optimize build.
 - [ ] 6.3 Rebuild and verify `snix-compile` passes
 
-Note: snix-compile now proceeds past sandbox init. With 2400s timeout and test reorder
-(snix-compile before source-rebuild), the build reaches proc-macro build-script
-compilation but linking aborts with `failed to initiate panic, error 0` (unwind stubs).
+Note: exact reruns on 2026-04-08 show that the current committed/current-tree profile still
+hits the 2400s suite timeout while `snix build --file` is running. The earlier
+proc-macro/build-script abort (`failed to initiate panic, error 0`) is historical evidence,
+but it is not the reproducible committed baseline until we hit it again on an exact rerun.
 
-## 7. End-to-end validation (post-rollback baseline: 2026-04-07)
+## 7. End-to-end validation (post-rollback baseline)
 
-Full baseline after test reorder (all 78 tests report):
-  77 pass, 1 fail (out of 78 tests)
+Current reproducible baseline after exact reruns on 2026-04-08:
+- focused `snix-sandbox-test`: **6 pass, 0 fail** (all 6 tests report)
+- full `self-hosting-test`: **tests did not complete** within the 2400s timeout; summary at timeout is **70 pass, 0 fail, 70 total reported**
 
-Current failures after the 2026-04-07 full rerun (verified in task 131, 2400s timeout):
-- snix-compile: FAIL — self-build reaches proc-macro build-script compilation (proc-macro2, quote), then linking via `/nix/system/profile/bin/cc` aborts with `failed to initiate panic, error 0` / exit 134 (unwind stubs). Derivation exits 101 before producing `$out/bin/snix`. Fix applied: reordered snix-compile before source-rebuild (source-rebuild's activate() drops ld.lld from profile) and increased timeout from 1500s to 2400s.
+Current remaining blocker after the exact reruns:
+- `snix-compile`: still running when the full suite hits the 2400s timeout. The last serial lines before timeout are `--- snix self-compile: snix build --file ---` followed by repeated redoxfs `READ_BLOCK: POINTER IS NULL` diagnostics.
 
-Verification evidence (summaries from pueue task logs, captured during 2026-04-07 session):
+Verification evidence (direct reruns captured on 2026-04-08):
 
-1. **Focused sandbox rerun** (6 tests, commit range 70b70d74..c6a29e00):
-   Tests: `snix-simple`, `snix-build-cargo`, `flake-build`, `cc-dep-build`, `workspace-build`, `rg-build`.
-   Result: **Passed: 6, Failed: 0**. All cargo-build derivations succeed under scheme-only sandbox.
+1. **Post-change focused rerun against detached worktree commit `c6a29e00`**
+   Command: `cd /tmp/redox-c6a29e00 && nix run .#snix-sandbox-test -- --verbose`
+   Result summary: `Passed:  6`, `Failed:  0`, `Total:   6`, `Total time: 243.237s`
+   Tests: `snix-simple`, `snix-build-cargo`, `flake-build`, `cc-dep-build`, `workspace-build`, `rg-build`
 
-2. **Full suite after ripgrep fixes** (78 tests):
-   Newly passing: `snix-build-cargo`, `cc-dep-build`, `workspace-build`, `rg-build`, `rg-version`, `rg-search`, `rg-store-path`, `rg-binary-size`.
-   Result: **Passed: 71, Failed: 7**. Remaining failures: flake-*, source-rebuild-*, snix-compile.
+2. **Post-change full rerun against detached worktree commit `c6a29e00`**
+   Command: `cd /tmp/redox-c6a29e00 && nix run .#self-hosting-test -- --verbose`
+   Result summary at timeout: `Passed:  70`, `Failed:  0`, `Total:   70`, `Total time: 2400.063s`, `TESTS DID NOT COMPLETE`
+   Last serial lines show the suite stalled in `--- snix self-compile: snix build --file ---`
 
-3. **Full suite after source-rebuild fixes** (78 tests):
-   Newly passing: `flake-build`, `flake-cached`, `flake-registered`, `source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`, `source-rebuild-dry`.
-   Result: **Passed: 74, Failed: 4**. Remaining failures: snix-compile + 3 dependent tests.
+3. **Matching full rerun on the current working tree**
+   Command: `cd /home/brittonr/git/redox && nix run .#self-hosting-test -- --verbose`
+   Result summary at timeout: `Passed:  70`, `Failed:  0`, `Total:   70`, `Total time: 2400.052s`, `TESTS DID NOT COMPLETE`
+   This means the exact-commit rerun result is still the current reproducible baseline.
 
-4. **Full suite after snix-compile fixture fixes** (78 tests, pre-reorder):
-   Newly passing: `snix-binary-exists`, `snix-binary-runs`, `snix-eval-works`.
-   Result: **Passed: 77, Failed: 1**. `snix-compile` failed due to lld-wrapper ENOENT caused by source-rebuild's `activate()` mutating the live profile mid-suite.
-
-5. **Current baseline** (78 tests, post-reorder + 2400s timeout, commit c6a29e00):
-   All 78 tests report results. `snix-compile` runs before `source-rebuild` (no profile mutation).
-   `snix-compile` FAIL: build reaches proc-macro build-script linking, then `cc` aborts with `failed to initiate panic, error 0` / exit 134. Derivation exits 101.
-   Result: **Passed: 77, Failed: 1**. Total time: 2241s.
+Historical notes from the earlier 2026-04-07 investigation still stand for the already-fixed groups:
+- focused sandbox rerun reached 6/6 once the cargo-build fixture issues were fixed
+- `snix-build-cargo`, `cc-dep-build`, `workspace-build`, `rg-build`, and ripgrep downstream checks passed after the fixture/bundle fixes
+- `source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`, and `source-rebuild-dry` passed in the earlier targeted reruns
+- an earlier session note claimed a `77/1` post-reorder baseline, but that result is not treated as the committed baseline because the exact reruns above do not reproduce it
 
 - [x] 7.1 Fix cc-dep-build: diagnose cc-rs exit=1 under scheme-only sandbox
 - [x] 7.2 Fix rg-build: diagnose why binary not at output path (exit=0 but no binary)

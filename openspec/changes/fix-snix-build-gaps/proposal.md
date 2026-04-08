@@ -7,13 +7,16 @@ derivations needing HOME, missing vendored crates, wrong Cargo vendor
 paths) plus one snix-redox gap (`--no-sandbox` not threaded through
 flake installables).
 
-Current state (2026-04-07 baseline, task 131): **77 pass, 1 fail** out
-of 78 tests. The sole remaining failure is `snix-compile`: the
-168-crate self-build reaches proc-macro build-script compilation
-(proc-macro2, quote), then linking via `/nix/system/profile/bin/cc`
-aborts with `failed to initiate panic, error 0` / exit 134 (unwind
-stubs in the return-0 stub libraries). This is a platform-level issue
-in the unwind stub strategy, not a sandbox or fixture bug.
+Current reproducible state (exact reruns on 2026-04-08):
+- `snix-sandbox-test` passes **6/6** on detached worktree commit `c6a29e00`
+- `self-hosting-test` does **not complete** within the 2400s timeout on
+  either detached worktree commit `c6a29e00` or the current working tree;
+  only **70 tests** report before the suite stalls inside `snix self-compile`
+
+So this change is still open. The remaining blocker is `snix-compile`:
+its 168-crate self-build does not finish within the current harness budget,
+and no exact-commit rerun currently reproduces the earlier `77 pass, 1 fail`
+claim.
 
 ## What Changes
 
@@ -26,8 +29,10 @@ in the unwind stub strategy, not a sandbox or fixture bug.
 - Increase `snix-compile` timeout from 1500s to 2400s
 - Validate ripgrep 33-crate build as the flagship end-to-end test
 
-Remaining blocker: `snix-compile` proc-macro build-script linking aborts with unwind stubs
-(`failed to initiate panic, error 0`). This is a platform-level issue, not a fixture bug.
+Remaining blocker: `snix-compile` still dominates the tail of the full suite. On current
+reproducible evidence, the suite times out while `snix build --file` is still running.
+A later failure mode inside proc-macro/build-script linking (`failed to initiate panic, error 0`)
+may still exist, but it is not the committed baseline until reproduced on an exact rerun.
 
 ## Capabilities
 
