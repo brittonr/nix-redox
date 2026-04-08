@@ -7,10 +7,14 @@
 { pkgs }:
 
 let
-  # Vendor the cc crate for offline builds
+  # Vendor the cc crate and its dependency (shlex) for offline builds
   ccCrateSrc = pkgs.fetchurl {
     url = "https://crates.io/api/v1/crates/cc/1.2.21/download";
     hash = "sha256-hpF4KUVFHBw4OULEh02+Y4FPYctX73c82ilyaCt7s8A=";
+  };
+  shlexCrateSrc = pkgs.fetchurl {
+    url = "https://crates.io/api/v1/crates/shlex/1.3.0/download";
+    hash = "sha256-D9ov8NCEAZuk18bzccldj9dc41JMPLj7ZTowI/YyPmQ=";
   };
 in
 pkgs.runCommand "cc-dep-test-bundle" { } ''
@@ -60,10 +64,14 @@ pkgs.runCommand "cc-dep-test-bundle" { } ''
   cc = "1.2.21"
   TOML
 
-  # ── Vendor the cc crate ────────────────────────────────────────
+  # ── Vendor the cc crate and shlex dependency ─────────────────
   mkdir -p $out/vendor/cc/src
   tar xzf ${ccCrateSrc} -C $out/vendor/cc --strip-components=1
   echo '{"files":{}}' > $out/vendor/cc/.cargo-checksum.json
+
+  mkdir -p $out/vendor/shlex/src
+  tar xzf ${shlexCrateSrc} -C $out/vendor/shlex --strip-components=1
+  echo '{"files":{}}' > $out/vendor/shlex/.cargo-checksum.json
 
   # ── Cargo.lock ─────────────────────────────────────────────────
   cat > $out/Cargo.lock << 'LOCK'
@@ -73,6 +81,9 @@ pkgs.runCommand "cc-dep-test-bundle" { } ''
   name = "cc"
   version = "1.2.21"
   source = "registry+https://github.com/rust-lang/crates.io-index"
+  dependencies = [
+   "shlex",
+  ]
 
   [[package]]
   name = "cc-dep-test"
@@ -80,6 +91,11 @@ pkgs.runCommand "cc-dep-test-bundle" { } ''
   dependencies = [
    "cc",
   ]
+
+  [[package]]
+  name = "shlex"
+  version = "1.3.0"
+  source = "registry+https://github.com/rust-lang/crates.io-index"
   LOCK
 
   # ── .cargo/config.toml ─────────────────────────────────────────

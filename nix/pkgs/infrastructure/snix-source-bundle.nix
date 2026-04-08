@@ -42,17 +42,22 @@ pkgs.runCommand "snix-source-bundle" { } ''
   cp ${./build-snix.sh} $out/build-snix.sh
   cp ${./build-snix.nix} $out/build.nix
 
-  # Cargo config for offline vendored builds
+  # Cargo config for offline vendored builds.
+  # fetchCargoVendor lays crates out under vendor/source-registry-0/
+  # and git deps under vendor/source-git-0/.
   cat > $out/.cargo/config.toml <<'EOF'
   [source.crates-io]
-  replace-with = "vendored-sources"
+  replace-with = "vendored-source-registry-0"
+
+  [source.vendored-source-registry-0]
+  directory = "vendor/source-registry-0"
 
   [source."git+https://github.com/tvlfyi/wu-manber.git"]
   git = "https://github.com/tvlfyi/wu-manber.git"
-  replace-with = "vendored-sources"
+  replace-with = "vendored-source-git-0"
 
-  [source.vendored-sources]
-  directory = "vendor"
+  [source.vendored-source-git-0]
+  directory = "vendor/source-git-0"
 
   [build]
   jobs = 2
