@@ -7,16 +7,12 @@ derivations needing HOME, missing vendored crates, wrong Cargo vendor
 paths) plus one snix-redox gap (`--no-sandbox` not threaded through
 flake installables).
 
-Current reproducible state (exact reruns on 2026-04-08):
+Current reproducible state (exact reruns on 2026-04-08, with attached evidence excerpts under `evidence/`):
 - `snix-sandbox-test` passes **6/6** on detached worktree commit `c6a29e00`
-- `self-hosting-test` does **not complete** within the 2400s timeout on
-  either detached worktree commit `c6a29e00` or the current working tree;
-  only **70 tests** report before the suite stalls inside `snix self-compile`
+- `self-hosting-test` completes at **77 pass, 1 fail** on detached worktree commit `c6a29e00`
 
-So this change is still open. The remaining blocker is `snix-compile`:
-its 168-crate self-build does not finish within the current harness budget,
-and no exact-commit rerun currently reproduces the earlier `77 pass, 1 fail`
-claim.
+So this change is still open, but the remaining scope is narrow. The sole blocker is
+`snix-compile`.
 
 ## What Changes
 
@@ -29,10 +25,10 @@ claim.
 - Increase `snix-compile` timeout from 1500s to 2400s
 - Validate ripgrep 33-crate build as the flagship end-to-end test
 
-Remaining blocker: `snix-compile` still dominates the tail of the full suite. On current
-reproducible evidence, the suite times out while `snix build --file` is still running.
-A later failure mode inside proc-macro/build-script linking (`failed to initiate panic, error 0`)
-may still exist, but it is not the committed baseline until reproduced on an exact rerun.
+Remaining blocker: `snix-compile` still fails on the exact rerun. The attached evidence excerpt shows
+`snix-compile-exit=1`, `FUNC_TEST:snix-compile:FAIL:exit or no binary at /bin/snix`, and
+builder stderr ending at `Compiling proc-macro2 v1.0.106` / `Compiling quote v1.0.45`
+before the derivation exits 101. That is now the evidence-backed baseline for the remaining work.
 
 ## Capabilities
 

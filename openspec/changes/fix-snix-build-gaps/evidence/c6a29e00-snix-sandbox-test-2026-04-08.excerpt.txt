@@ -1,0 +1,41 @@
+Phase 2: Tests
+  ✓ [0.646s] Test suite started
+
+FUNC_TEST:snix-simple:PASS
+--- snix-build-cargo ---
+[snix-build-cargo] starting...
+    ✓ snix-simple
+[snix-build-cargo] exit=0 output=/nix/store/0akvynyf75ky167c4kj55x1qk95qx1jx-hello-cargo
+FUNC_TEST:snix-build-cargo:PASS
+--- flake-build ---
+    ✓ snix-build-cargo
+FUNC_TEST:flake-build:PASS
+--- cc-dep-build ---
+    ✓ flake-build
+netcfg-auto: no network interface found
+FUNC_TEST:cc-dep-build:PASS
+--- workspace-build ---
+    ✓ cc-dep-build
+FUNC_TEST:workspace-build:PASS
+--- rg-build ---
+    ✓ workspace-build
+[2026-04-08T17:01:03Z ERROR redoxfs::transaction] READ_BLOCK: POINTER IS NULL
+FUNC_TEST:rg-build:PASS
+
+FUNC_TESTS_COMPLETE
+    ✓ rg-build
+
+  ✓ [119.652s] Test suite complete
+
+  Results
+  ─────────────────────────────────
+    Passed:  6
+    Failed:  0
+    Skipped: 0
+    Total:   6
+
+  Total time: 119.658s
+
+  ╔══════════════════════════════════════════╗
+  ║       FUNCTIONAL TEST PASSED
+  ╚══════════════════════════════════════════╝

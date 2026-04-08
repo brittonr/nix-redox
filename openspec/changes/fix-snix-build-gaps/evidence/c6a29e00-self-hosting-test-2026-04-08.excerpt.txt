@@ -1,0 +1,79 @@
+=== snix-compile failure ===
+te in input
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+snix-compile-exit=1
+snix-compile-output=
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+FUNC_TEST:snix-compile:FAIL:exit or no binary at /bin/snix
+=== snix build stderr ===
+building 1l8vldf9v2134669b48kwnscg9f7jid4-snix-self-compiled.drv (1/1)...
+error: builder for '1l8vldf9v2134669b48kwnscg9f7jid4-snix-self-compiled' failed (exit code 101): [bash@relibc::platform::sys:722 INFO] TODO: getrlimit(7, 0xe3ad88): not implemented
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+[ld.so environ-diag] __relibc_init_environ NOT FOUND in DSO (dynsym or symtab),                          ld_so environ=0x8f1890 null=false count=47
+[ld.so environ-diag] FOUND __relibc_init_environ via .symtab fallback at 0x14ded830
+[ld.so environ-diag]   env[0] key=AR
+[ld.so environ-diag]   env[1] key=CARGO
+[ld.so environ-diag]   env[2] key=CARGO_BUILD_JOBS
+[ld.so environ-diag]   env[3] key=CARGO_CRATE_NAME
+[ld.so environ-diag]   env[4] key=CARGO_HOME
+[ld.so environ-diag] FOUND __relibc_init_environ in DSO (binding=Global),                      ld_so environ=0x8f1890 null=false count=47, writing to sym addr=0x515038
+[ld.so environ-diag] readback after write: 0x8f1890 (match=true)
+   Compiling quote v1.0.45
+[ld.so environ-diag] __relibc_init_environ NOT FOUND in DSO (dynsym or symtab),                          ld_so environ=0x8f1ca0 null=false count=47
+[ld.so environ-diag] FOUND __relibc_init_environ via .symtab fallback at 0x14ded830
+[ld.so environ-diag]   env[0] key=AR
+[ld.so environ-diag]   env[1] key=CARGO
+[ld.so environ-diag]   env[2] key=CARGO_BUILD_JOBS
+[ld.so environ-diag]   env[3] key=CARGO_CRATE_NAME
+[ld.so environ-diag]   env[4] key=CARGO_HOME
+[ld.so environ-diag] FOUND __relibc_init_environ in DSO (binding=Global),                      ld_so environ=0x8f1ca0 null=false count=47, writing to sym addr=0x515038
+[ld.so environ-diag] readback after write: 0x8f1ca0 (match=true)
+[bash@relibc::platform::sys:722 INFO] TODO: getrlimit(7, 0xe3ad88): not implemented
+[ld.so environ-diag] __relibc_init_environ NOT FOUND in DSO (dynsym or symtab),                          ld_so environ=0x8f1be0 null=false count=47
+[ld.so environ-diag] FOUND __relibc_init_environ via .symtab fallback at 0x14ded830
+[ld.so environ-diag]   env[0] key=AR
+[ld.so environ-diag]   env[1] key
+
+=== source-rebuild pass ===
+ignored null byte in input
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+[source-rebuild] exit=0
+FUNC_TEST:source-rebuild:PASS
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+    ✓ source-rebuild
+FUNC_TEST:source-rebuild-gen:PASS
+  generations: 2
+FUNC_TEST:source-rebuild-pkg:PASS
+--- source-rebuild-dry: snix system rebuild --source --dry-run ---
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+    ✓ source-rebuild-gen
+    ✓ source-rebuild-pkg
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+FUNC_TEST:source-rebuild-dry:PASS
+FUNC_TESTS_COMPLETE
+
+=== final summary ===
+10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+    ✓ source-rebuild-dry
+
+  ✓ [2313.504s] Test suite complete
+
+  Results
+  ─────────────────────────────────
+    Passed:  77
+    Failed:  1
+    Skipped: 0
+    Total:   78
+
+  Total time: 2313.524s
+
+  Failed tests:
+
+  ╔══════════════════════════════════════════╗
+  ║       FUNCTIONAL TEST FAILED
+  ╚══════════════════════════════════════════╝

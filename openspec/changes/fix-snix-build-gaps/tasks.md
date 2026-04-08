@@ -1,6 +1,7 @@
-**Status: OPEN** — focused `snix-sandbox-test` passes 6/6, but full `self-hosting-test` does not complete within the 2400s timeout. Exact reruns of detached worktree commit `c6a29e00` and the current working tree stop after 70 reported tests while `snix self-compile` is still running. Tasks 6.3 and 7.4 are incomplete.
+**Status: OPEN** — exact reruns of detached worktree commit `c6a29e00` on 2026-04-08 re-verify the focused sandbox subset (**6/6 pass**) and the full self-hosting suite (**77 pass, 1 fail, 78 total**). The sole remaining failure is `snix-compile`, so tasks 6.3 and 7.4 stay incomplete.
 
-Evidence note: the checkboxes below reflect the original investigation plus targeted reruns from 2026-04-07. The exact post-change reruns captured on 2026-04-08 directly re-verify the focused sandbox subset and the current full-suite timeout behavior.
+Evidence note: raw rerun artifacts now live under `openspec/changes/fix-snix-build-gaps/evidence/`.
+Start with `evidence/README.md`, then inspect the attached evidence excerpts directly.
 
 ## 1. Diagnose all 16 failures with verbose output
 
@@ -58,10 +59,13 @@ root causes were in test fixtures/bundles, NOT in snix-redox sandbox code:
 The only snix-redox source change in this change was threading `--no-sandbox` through
 flake installables (`main.rs` → `flake.rs` → `build_needed_with_options`).
 
-Focused `snix-sandbox-test` rerun on 2026-04-07 passes (6/6):
-- `snix-simple`, `snix-build-cargo`, `flake-build`, `cc-dep-build`, `workspace-build`, `rg-build`
+Direct re-verification for tasks 4.7-4.9:
+- `evidence/c6a29e00-snix-sandbox-test-2026-04-08.excerpt.txt` contains PASS lines for `snix-simple`, `snix-build-cargo`, `flake-build`, `cc-dep-build`, `workspace-build`, and `rg-build`, plus the final `Passed:  6` / `Failed:  0` / `Total:   6` summary.
 
 ## 5. Fix source-based rebuild (`source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`)
+
+Direct re-verification for task 5.4:
+- `evidence/c6a29e00-self-hosting-test-2026-04-08.excerpt.txt` contains `FUNC_TEST:source-rebuild:PASS`, `FUNC_TEST:source-rebuild-gen:PASS`, `FUNC_TEST:source-rebuild-pkg:PASS`, and `FUNC_TEST:source-rebuild-dry:PASS`.
 
 - [x] 5.1 Read the `source-rebuild` stderr from the verbose log
 - [x] 5.2 Read `snix-redox/src/rebuild.rs` `rebuild_from_source()` — trace the failure path
@@ -74,42 +78,35 @@ Focused `snix-sandbox-test` rerun on 2026-04-07 passes (6/6):
 - [x] 6.2 If sandbox issue: apply same fixes as task 4. If timeout: increase test timeout or optimize build.
 - [ ] 6.3 Rebuild and verify `snix-compile` passes
 
-Note: exact reruns on 2026-04-08 show that the current committed/current-tree profile still
-hits the 2400s suite timeout while `snix build --file` is running. The earlier
-proc-macro/build-script abort (`failed to initiate panic, error 0`) is historical evidence,
-but it is not the reproducible committed baseline until we hit it again on an exact rerun.
+Note: the exact rerun attached as `evidence/c6a29e00-self-hosting-test-2026-04-08.excerpt.txt`
+reproduces a full-suite `77/1` result. `snix-compile` still fails: the attached excerpt shows
+`snix-compile-exit=1`, `FUNC_TEST:snix-compile:FAIL:exit or no binary at /bin/snix`,
+and builder stderr ending at `Compiling proc-macro2 v1.0.106` / `Compiling quote v1.0.45`
+before the derivation exits 101.
 
 ## 7. End-to-end validation (post-rollback baseline)
 
 Current reproducible baseline after exact reruns on 2026-04-08:
 - focused `snix-sandbox-test`: **6 pass, 0 fail** (all 6 tests report)
-- full `self-hosting-test`: **tests did not complete** within the 2400s timeout; summary at timeout is **70 pass, 0 fail, 70 total reported**
+- full `self-hosting-test`: **77 pass, 1 fail, 78 total**
 
 Current remaining blocker after the exact reruns:
-- `snix-compile`: still running when the full suite hits the 2400s timeout. The last serial lines before timeout are `--- snix self-compile: snix build --file ---` followed by repeated redoxfs `READ_BLOCK: POINTER IS NULL` diagnostics.
+- `snix-compile`: the full-suite rerun completes, but `snix build --file` exits 1 / derivation exit 101 and no `/bin/snix` is produced for the self-compile test.
 
 Verification evidence (direct reruns captured on 2026-04-08):
 
 1. **Post-change focused rerun against detached worktree commit `c6a29e00`**
    Command: `cd /tmp/redox-c6a29e00 && nix run .#snix-sandbox-test -- --verbose`
-   Result summary: `Passed:  6`, `Failed:  0`, `Total:   6`, `Total time: 243.237s`
-   Tests: `snix-simple`, `snix-build-cargo`, `flake-build`, `cc-dep-build`, `workspace-build`, `rg-build`
+   Attached excerpt: `evidence/c6a29e00-snix-sandbox-test-2026-04-08.excerpt.txt`
+   Result summary from excerpt: `Passed:  6`, `Failed:  0`, `Total:   6`, `FUNCTIONAL TEST PASSED`
 
 2. **Post-change full rerun against detached worktree commit `c6a29e00`**
    Command: `cd /tmp/redox-c6a29e00 && nix run .#self-hosting-test -- --verbose`
-   Result summary at timeout: `Passed:  70`, `Failed:  0`, `Total:   70`, `Total time: 2400.063s`, `TESTS DID NOT COMPLETE`
-   Last serial lines show the suite stalled in `--- snix self-compile: snix build --file ---`
+   Attached excerpt: `evidence/c6a29e00-self-hosting-test-2026-04-08.excerpt.txt`
+   Result summary from excerpt: `Passed:  77`, `Failed:  1`, `Total:   78`
+   Failure lines from excerpt: `FUNC_TEST:snix-compile:FAIL:exit or no binary at /bin/snix`, `error: builder for '1l8vldf9v2134669b48kwnscg9f7jid4-snix-self-compiled' failed (exit code 101)`, `Compiling proc-macro2 v1.0.106`, `Compiling quote v1.0.45`
 
-3. **Matching full rerun on the current working tree**
-   Command: `cd /home/brittonr/git/redox && nix run .#self-hosting-test -- --verbose`
-   Result summary at timeout: `Passed:  70`, `Failed:  0`, `Total:   70`, `Total time: 2400.052s`, `TESTS DID NOT COMPLETE`
-   This means the exact-commit rerun result is still the current reproducible baseline.
-
-Historical notes from the earlier 2026-04-07 investigation still stand for the already-fixed groups:
-- focused sandbox rerun reached 6/6 once the cargo-build fixture issues were fixed
-- `snix-build-cargo`, `cc-dep-build`, `workspace-build`, `rg-build`, and ripgrep downstream checks passed after the fixture/bundle fixes
-- `source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`, and `source-rebuild-dry` passed in the earlier targeted reruns
-- an earlier session note claimed a `77/1` post-reorder baseline, but that result is not treated as the committed baseline because the exact reruns above do not reproduce it
+Historical notes from the earlier 2026-04-07 investigation still stand for the already-fixed groups, but tasks 4.7-4.9 and 5.4 now also have direct attached rerun evidence under `evidence/`.
 
 - [x] 7.1 Fix cc-dep-build: diagnose cc-rs exit=1 under scheme-only sandbox
 - [x] 7.2 Fix rg-build: diagnose why binary not at output path (exit=0 but no binary)
