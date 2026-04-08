@@ -1,3 +1,39 @@
+=== ripgrep downstream checks ===
+nctional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+rg-build-exit=0
+rg-build-output=/nix/store/5w1x97sp9vsdx9idpx0fhkab09bn2hq8-ripgrep-on-redox
+FUNC_TEST:rg-build:PASS
+FUNC_TEST:rg-version:PASS
+  version output: ripgrep 14.1.1
+FUNC_TEST:rg-search:PASS
+  search result: hello world
+hello redox
+FUNC_TEST:rg-store-path:PASS
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+    ✓ rg-build
+    ✓ rg-version
+    ✓ rg-search
+    ✓ rg-store-path
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+FUNC_TEST:rg-binary-size:PASS
+  rg binary: 41074688 bytes
+--- parallel-jobs2 ---
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+    ✓ rg-binary-size
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored n
+
+=== parallel jobs ===
+on: ignored null byte in input
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+FUNC_TEST:parallel-jobs2:PASS
+  JOBS=2 completed in 5s
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+    ✓ parallel-jobs2
+--- snix self-compile: snix build --file ---
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored
+
 === snix-compile failure ===
 te in input
 /nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
@@ -36,8 +72,28 @@ error: builder for '1l8vldf9v2134669b48kwnscg9f7jid4-snix-self-compiled' failed 
 [ld.so environ-diag]   env[0] key=AR
 [ld.so environ-diag]   env[1] key
 
-=== source-rebuild pass ===
-ignored null byte in input
+=== snix binary follow-up ===
+===
+=== cc-wrapper-last-err ===
+=== end stderr ===
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+FUNC_TEST:snix-binary-exists:PASS
+-rwxr-xr-x 1 root 0 19047760 Apr  7 23:32 /bin/snix
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+    ✓ snix-binary-exists
+FUNC_TEST:snix-binary-runs:PASS
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+    ✓ snix-binary-runs
+snix 0.4.0
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+FUNC_TEST:snix-eval-works:PASS
+--- source-rebuild: snix system rebuild --source ---
+/nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
+    ✓ snix-eval-works
+/nix/store/a10dmhjry2
+
+=== source rebuild passes ===
+mmand substitution: ignored null byte in input
 /nix/store/a10dmhjry2aywfg2fksx2k0063xzv23k-functional-test/bin/functional-test: line 313: warning: command substitution: ignored null byte in input
 [source-rebuild] exit=0
 FUNC_TEST:source-rebuild:PASS

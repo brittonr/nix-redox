@@ -1,7 +1,7 @@
 **Status: OPEN** — exact reruns of detached worktree commit `c6a29e00` on 2026-04-08 re-verify the focused sandbox subset (**6/6 pass**) and the full self-hosting suite (**77 pass, 1 fail, 78 total**). The sole remaining failure is `snix-compile`, so tasks 6.3 and 7.4 stay incomplete.
 
-Evidence note: raw rerun artifacts now live under `openspec/changes/fix-snix-build-gaps/evidence/`.
-Start with `evidence/README.md`, then inspect the attached evidence excerpts directly.
+Evidence note: attached rerun evidence excerpts now live under `openspec/changes/fix-snix-build-gaps/evidence/`.
+Start with `evidence/README.md`, then inspect the committed excerpts directly.
 
 ## 1. Diagnose all 16 failures with verbose output
 
@@ -61,6 +61,7 @@ flake installables (`main.rs` → `flake.rs` → `build_needed_with_options`).
 
 Direct re-verification for tasks 4.7-4.9:
 - `evidence/c6a29e00-snix-sandbox-test-2026-04-08.excerpt.txt` contains PASS lines for `snix-simple`, `snix-build-cargo`, `flake-build`, `cc-dep-build`, `workspace-build`, and `rg-build`, plus the final `Passed:  6` / `Failed:  0` / `Total:   6` summary.
+- `evidence/c6a29e00-self-hosting-test-2026-04-08.excerpt.txt` contains the downstream ripgrep PASS lines for `rg-version`, `rg-search`, `rg-store-path`, and `rg-binary-size`, as well as `parallel-jobs2:PASS`.
 
 ## 5. Fix source-based rebuild (`source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`)
 

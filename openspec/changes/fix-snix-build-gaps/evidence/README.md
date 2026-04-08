@@ -29,6 +29,11 @@ The checked-in files below are compact excerpts copied from the rerun output.
   - `Passed:  77`
   - `Failed:  1`
   - `Total:   78`
+- The excerpt also includes:
+  - downstream ripgrep checks: `rg-version`, `rg-search`, `rg-store-path`, `rg-binary-size`
+  - `parallel-jobs2:PASS`
+  - `snix-binary-exists:PASS`, `snix-binary-runs:PASS`, `snix-eval-works:PASS`
+  - `source-rebuild:PASS`, `source-rebuild-gen:PASS`, `source-rebuild-pkg:PASS`, `source-rebuild-dry:PASS`
 - Relevant failure lines in the excerpt:
   - `FUNC_TEST:snix-compile:FAIL:exit or no binary at /bin/snix`
   - `error: builder for '1l8vldf9v2134669b48kwnscg9f7jid4-snix-self-compiled' failed (exit code 101)`
