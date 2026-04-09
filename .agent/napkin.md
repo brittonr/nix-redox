@@ -23,6 +23,7 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ### Heredoc indentation in Nix `''` strings
 - ONE column-0 line breaks ALL heredoc terminators. Every line needs N+ spaces for N-space stripping.
+- If a Nix shell string already has a column-0 heredoc terminator (for example `PATCH`), any new heredoc terminators you add must also be column 0 in the source file. I forgot this in `snix-upstream-source.nix`, and the shell dumped later `cat` commands into `build.rs`.
 - `nix fmt` can silently re-indent and break heredocs. Verify after formatting.
 - Inline Python in Nix strings breaks too — extract to .py files instead.
 
@@ -67,6 +68,7 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - After dropping unused `mimalloc` normal deps from upstream `snix-build`, `snix-store`, and `nix-compat`, the focused rerun got past `libmimalloc-sys` and failed later in `snix-castore`'s build script instead.
 - The new failure is `Error: Custom { kind: Other, error: "protoc failed: " }` from `snix-castore` during the guest self-build.
 - This means the allocator change did its job; the next investigation should focus on guest-side `protoc` / proto path setup, not mimalloc.
+- After fixing the proto step with pregenerated descriptor sets, the next late failure was self-inflicted: plain `cargo build` in `build-snix.sh` also builds the extra `proxy_namespace_test` [[bin]] target from Cargo.toml, but the source bundle does not copy `tests/redox/proxy_namespace_test.rs`. Build only `--bin snix`, and make the host-side bundle audit check the `snix` bin path plus pregenerated `.bin` descriptor sets.
 
 ### `cp -r dir/*` drops dotfiles
 - Use `cp -r dir/.` to copy ALL contents including dotfiles.
@@ -260,6 +262,11 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Use strace-redox or custom diagnostic services instead for now
 
 ## Ion Shell Gotchas (keep forgetting)
+
+### Redox builder scripts may have no `chmod` at all
+- I added a guest-side rustc wrapper in `build-snix.sh` and first used bare `chmod`, then `/nix/system/profile/bin/chmod`; both failed at runtime in the self-hosting image.
+- Safer pattern: copy an existing executable (`cp /nix/system/profile/bin/bash $wrapper`) and then overwrite the file contents. Redirection keeps the executable mode, so no `chmod` is needed.
+- Cargo's `CARGO_TERM_PROGRESS_WHEN=always` also needs `CARGO_TERM_PROGRESS_WIDTH` in this guest environment; otherwise cargo exits early with `error: "always" progress requires a width key`.
 
 ### `$()` crashes on empty output
 - `let var = $(grep ...)` → "Variable '' does not exist" when grep returns nothing.

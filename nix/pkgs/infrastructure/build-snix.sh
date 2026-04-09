@@ -24,8 +24,11 @@ export CARGO_BUILD_JOBS=1
 # export this too; keep the self-compile builder aligned.
 export RAYON_NUM_THREADS=4
 export RUSTFLAGS="-C panic=abort"
-export RUSTC=/nix/system/profile/bin/rustc
+REAL_RUSTC=/nix/system/profile/bin/rustc
+export RUSTC="$REAL_RUSTC"
 export AR=/nix/system/profile/bin/llvm-ar
+export CARGO_TERM_PROGRESS_WHEN="${CARGO_TERM_PROGRESS_WHEN:-always}"
+export CARGO_TERM_PROGRESS_WIDTH="${CARGO_TERM_PROGRESS_WIDTH:-80}"
 
 mkdir -p "$CARGO_HOME" "$out/bin"
 
@@ -41,8 +44,71 @@ if [ ! -f "$SRCDIR/.cargo/config.toml" ]; then
 fi
 
 cd "$SRCDIR"
+export PROTO_ROOT="$SRCDIR/upstream"
+if [ -x /nix/system/profile/bin/protoc ]; then
+  export PROTOC=/nix/system/profile/bin/protoc
+fi
 
-echo "[build-snix] Starting cargo build (JOBS=1, 168 crates)..."
-cargo build --offline -j1
+export SNIX_RUSTC_LOG=/tmp/snix-rustc.log
+: > "$SNIX_RUSTC_LOG"
+RUSTC_WRAPPER_SH="$TMPDIR/rustc-wrapper.sh"
+cp /nix/system/profile/bin/bash "$RUSTC_WRAPPER_SH"
+cat > "$RUSTC_WRAPPER_SH" <<'EOF'
+#!/nix/system/profile/bin/bash
+set -u
+
+real_rustc=$1
+shift
+
+crate=""
+crate_type=""
+target=""
+input=""
+
+args=("$@")
+i=0
+while [ "$i" -lt "${#args[@]}" ]; do
+  arg="${args[$i]}"
+  case "$arg" in
+    --crate-name)
+      i=$((i + 1))
+      crate="${args[$i]:-}"
+      ;;
+    --crate-type)
+      i=$((i + 1))
+      crate_type="${args[$i]:-}"
+      ;;
+    --target)
+      i=$((i + 1))
+      target="${args[$i]:-}"
+      ;;
+    *.rs)
+      if [ -z "$input" ]; then
+        input="$arg"
+      fi
+      ;;
+  esac
+  i=$((i + 1))
+done
+
+if command -v date >/dev/null 2>&1; then
+  ts=$(date +%s 2>/dev/null || echo unknown)
+else
+  ts=unknown
+fi
+printf '[%s] pid=%s crate=%s type=%s target=%s input=%s\n' \
+  "$ts" "$$" "$crate" "$crate_type" "$target" "$input" >> "$SNIX_RUSTC_LOG"
+
+exec "$real_rustc" "$@"
+EOF
+export RUSTC_WRAPPER="$RUSTC_WRAPPER_SH"
+
+CARGO_VERBOSE_ARGS=()
+if [ "${SNIX_CARGO_VERBOSE:-0}" = "1" ]; then
+  CARGO_VERBOSE_ARGS=(-vv)
+fi
+
+echo "[build-snix] Starting cargo build for --bin snix (JOBS=1)..."
+cargo build "${CARGO_VERBOSE_ARGS[@]}" --offline -j1 --bin snix
 cp target/x86_64-unknown-redox/debug/snix "$out/bin/snix"
 echo "[build-snix] snix build complete"

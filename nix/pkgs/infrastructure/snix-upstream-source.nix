@@ -158,6 +158,281 @@ PATCH
     ln -s ../$crate $out/snix/$crate
   done
 
+  # Pre-generate descriptor sets so Redox self-hosting builds do not need a
+  # native protoc binary. The patched build.rs files load these .bin files and
+  # fall back to compile_protos only when a descriptor file is absent.
+  ${pkgs.protobuf}/bin/protoc \
+    --include_imports \
+    --include_source_info \
+    -I $out \
+    -I ${pkgs.protobuf}/include \
+    -o $out/castore/protos/snix.castore.v1.bin \
+    snix/castore/protos/castore.proto \
+    snix/castore/protos/rpc_blobstore.proto \
+    snix/castore/protos/rpc_directory.proto
+
+  ${pkgs.protobuf}/bin/protoc \
+    --include_imports \
+    --include_source_info \
+    -I $out \
+    -I ${pkgs.protobuf}/include \
+    -o $out/store/protos/snix.store.v1.bin \
+    snix/store/protos/pathinfo.proto \
+    snix/store/protos/rpc_pathinfo.proto
+
+  ${pkgs.protobuf}/bin/protoc \
+    --include_imports \
+    --include_source_info \
+    -I $out \
+    -I ${pkgs.protobuf}/include \
+    -o $out/build/protos/snix.build.v1.bin \
+    snix/build/protos/build.proto \
+    snix/build/protos/rpc_build.proto
+
+  cat > $out/castore/build.rs <<'EOF'
+  use std::{fs, io::Result, path::PathBuf};
+
+  const DESCRIPTOR_SET: &str = "snix.castore.v1.bin";
+
+  fn descriptor_output_path() -> Option<PathBuf> {
+      #[cfg(feature = "tonic-reflection")]
+      {
+          let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+          return Some(out_dir.join(DESCRIPTOR_SET));
+      }
+
+      #[cfg(not(feature = "tonic-reflection"))]
+      {
+          None
+      }
+  }
+
+  fn configured_builder() -> tonic_build::Builder {
+      tonic_build::configure()
+          .build_server(true)
+          .build_client(true)
+          .emit_rerun_if_changed(false)
+          .bytes(["."])
+          .type_attribute(".", "#[derive(Eq, Hash)]")
+  }
+
+  fn pregenerated_descriptor_path() -> PathBuf {
+      PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
+          .join("protos")
+          .join(DESCRIPTOR_SET)
+  }
+
+  fn compile_from_pregenerated() -> Result<bool> {
+      let descriptor_path = pregenerated_descriptor_path();
+      if !descriptor_path.is_file() {
+          return Ok(false);
+      }
+
+      let empty: &[&str] = &[];
+      configured_builder()
+          .file_descriptor_set_path(&descriptor_path)
+          .skip_protoc_run()
+          .compile_protos(empty, empty)?;
+
+      if let Some(output_path) = descriptor_output_path() {
+          let _ = fs::copy(&descriptor_path, output_path)?;
+      }
+
+      Ok(true)
+  }
+
+  fn proto_root() -> String {
+      match std::env::var_os("PROTO_ROOT") {
+          Some(proto_root) => proto_root.to_str().unwrap().to_owned(),
+          None => "../..".to_string(),
+      }
+  }
+
+  fn main() -> Result<()> {
+      if compile_from_pregenerated()? {
+          return Ok(());
+      }
+
+      let mut builder = configured_builder();
+      if let Some(output_path) = descriptor_output_path() {
+          builder = builder.file_descriptor_set_path(output_path);
+      }
+
+      builder.compile_protos(
+          &[
+              "snix/castore/protos/castore.proto",
+              "snix/castore/protos/rpc_blobstore.proto",
+              "snix/castore/protos/rpc_directory.proto",
+          ],
+          &[proto_root()],
+      )?;
+
+      Ok(())
+  }
+EOF
+
+  cat > $out/store/build.rs <<'EOF'
+  use std::{fs, io::Result, path::PathBuf};
+
+  const DESCRIPTOR_SET: &str = "snix.store.v1.bin";
+
+  fn descriptor_output_path() -> Option<PathBuf> {
+      #[cfg(feature = "tonic-reflection")]
+      {
+          let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+          return Some(out_dir.join(DESCRIPTOR_SET));
+      }
+
+      #[cfg(not(feature = "tonic-reflection"))]
+      {
+          None
+      }
+  }
+
+  fn configured_builder() -> tonic_build::Builder {
+      tonic_build::configure()
+          .build_server(true)
+          .build_client(true)
+          .emit_rerun_if_changed(false)
+          .bytes(["."])
+          .extern_path(".snix.castore.v1", "::snix_castore::proto")
+  }
+
+  fn pregenerated_descriptor_path() -> PathBuf {
+      PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
+          .join("protos")
+          .join(DESCRIPTOR_SET)
+  }
+
+  fn compile_from_pregenerated() -> Result<bool> {
+      let descriptor_path = pregenerated_descriptor_path();
+      if !descriptor_path.is_file() {
+          return Ok(false);
+      }
+
+      let empty: &[&str] = &[];
+      configured_builder()
+          .file_descriptor_set_path(&descriptor_path)
+          .skip_protoc_run()
+          .compile_protos(empty, empty)?;
+
+      if let Some(output_path) = descriptor_output_path() {
+          let _ = fs::copy(&descriptor_path, output_path)?;
+      }
+
+      Ok(true)
+  }
+
+  fn proto_root() -> String {
+      match std::env::var_os("PROTO_ROOT") {
+          Some(proto_root) => proto_root.to_str().unwrap().to_owned(),
+          None => "../..".to_string(),
+      }
+  }
+
+  fn main() -> Result<()> {
+      if compile_from_pregenerated()? {
+          return Ok(());
+      }
+
+      let mut builder = configured_builder();
+      if let Some(output_path) = descriptor_output_path() {
+          builder = builder.file_descriptor_set_path(output_path);
+      }
+
+      builder.compile_protos(
+          &[
+              "snix/store/protos/pathinfo.proto",
+              "snix/store/protos/rpc_pathinfo.proto",
+          ],
+          &[proto_root()],
+      )?;
+
+      Ok(())
+  }
+EOF
+
+  cat > $out/build/build.rs <<'EOF'
+  use std::{fs, io::Result, path::PathBuf};
+
+  const DESCRIPTOR_SET: &str = "snix.build.v1.bin";
+
+  fn descriptor_output_path() -> Option<PathBuf> {
+      #[cfg(feature = "tonic-reflection")]
+      {
+          let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
+          return Some(out_dir.join(DESCRIPTOR_SET));
+      }
+
+      #[cfg(not(feature = "tonic-reflection"))]
+      {
+          None
+      }
+  }
+
+  fn configured_builder() -> tonic_build::Builder {
+      tonic_build::configure()
+          .build_server(true)
+          .build_client(true)
+          .emit_rerun_if_changed(false)
+          .bytes(["."])
+          .extern_path(".snix.castore.v1", "::snix_castore::proto")
+  }
+
+  fn pregenerated_descriptor_path() -> PathBuf {
+      PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
+          .join("protos")
+          .join(DESCRIPTOR_SET)
+  }
+
+  fn compile_from_pregenerated() -> Result<bool> {
+      let descriptor_path = pregenerated_descriptor_path();
+      if !descriptor_path.is_file() {
+          return Ok(false);
+      }
+
+      let empty: &[&str] = &[];
+      configured_builder()
+          .file_descriptor_set_path(&descriptor_path)
+          .skip_protoc_run()
+          .compile_protos(empty, empty)?;
+
+      if let Some(output_path) = descriptor_output_path() {
+          let _ = fs::copy(&descriptor_path, output_path)?;
+      }
+
+      Ok(true)
+  }
+
+  fn proto_root() -> String {
+      match std::env::var_os("PROTO_ROOT") {
+          Some(proto_root) => proto_root.to_str().unwrap().to_owned(),
+          None => "../..".to_string(),
+      }
+  }
+
+  fn main() -> Result<()> {
+      if compile_from_pregenerated()? {
+          return Ok(());
+      }
+
+      let mut builder = configured_builder();
+      if let Some(output_path) = descriptor_output_path() {
+          builder = builder.file_descriptor_set_path(output_path);
+      }
+
+      builder.compile_protos(
+          &[
+              "snix/build/protos/build.proto",
+              "snix/build/protos/rpc_build.proto",
+          ],
+          &[proto_root()],
+      )?;
+
+      Ok(())
+  }
+EOF
+
   # Strip write bits to match Nix store conventions
   chmod -R a-w $out
 ''

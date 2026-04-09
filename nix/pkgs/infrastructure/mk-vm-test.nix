@@ -46,6 +46,7 @@ let
     WORK_DIR=$(mktemp -d)
     VM_PID=""
     TAIL_PID=""
+    MONITOR_PID=""
     cleanup() {
       if [ -n "''${VM_PID:-}" ] && kill -0 "$VM_PID" 2>/dev/null; then
         kill "$VM_PID" 2>/dev/null || true
@@ -54,12 +55,51 @@ let
       if [ -n "''${TAIL_PID:-}" ] && kill -0 "$TAIL_PID" 2>/dev/null; then
         kill "$TAIL_PID" 2>/dev/null || true
       fi
+      if [ -n "''${MONITOR_PID:-}" ] && kill -0 "$MONITOR_PID" 2>/dev/null; then
+        kill "$MONITOR_PID" 2>/dev/null || true
+      fi
+      if [ -n "''${REDOX_VM_MONITOR_DIR:-}" ]; then
+        mkdir -p "$REDOX_VM_MONITOR_DIR"
+        if [ -e "$SERIAL_LOG" ]; then
+          cp "$SERIAL_LOG" "$REDOX_VM_MONITOR_DIR/serial.log"
+        fi
+        if [ -e "$WORK_DIR/vmm.log" ]; then
+          cp "$WORK_DIR/vmm.log" "$REDOX_VM_MONITOR_DIR/vmm.log"
+        fi
+      fi
       rm -rf "$WORK_DIR"
     }
     trap cleanup EXIT
 
     SERIAL_LOG="$WORK_DIR/serial.log"
     touch "$SERIAL_LOG"
+
+    start_vm_monitor() {
+      if [ -z "''${REDOX_VM_MONITOR_DIR:-}" ]; then
+        return 0
+      fi
+
+      mkdir -p "$REDOX_VM_MONITOR_DIR"
+      MONITOR_LOG="$REDOX_VM_MONITOR_DIR/host-monitor.log"
+      {
+        echo "started_at=$(date --iso-8601=seconds) pid=$VM_PID serial=$SERIAL_LOG"
+        while kill -0 "$VM_PID" 2>/dev/null; do
+          ts=$(date --iso-8601=seconds)
+          echo "[$ts]"
+          ps -o pid,ppid,etime,%cpu,%mem,rss,vsz,stat,cmd -p "$VM_PID" || true
+          if [ -r "/proc/$VM_PID/io" ]; then
+            ${grep} -E "read_bytes|write_bytes|syscr|syscw" "/proc/$VM_PID/io" || true
+          fi
+          if [ -e "$SERIAL_LOG" ]; then
+            stat -c "serial_mtime=%y serial_size=%s" "$SERIAL_LOG" || true
+          fi
+          echo
+          sleep 60
+        done
+        echo "[$(date --iso-8601=seconds)] process exited"
+      } > "$MONITOR_LOG" &
+      MONITOR_PID=$!
+    }
 
     # === Boot milestone check ===
     # Call inside polling loop. Sets M_BOOTLOADER, M_KERNEL, M_BOOT.
@@ -372,7 +412,12 @@ in
       fi
 
       echo "  VM started (PID: $VM_PID)"
+      if [ -n "''${REDOX_VM_MONITOR_DIR:-}" ]; then
+        echo "  Capture: $REDOX_VM_MONITOR_DIR"
+      fi
       echo ""
+
+      start_vm_monitor
 
       if [ "$VERBOSE" = "1" ]; then
         tail -f "$SERIAL_LOG" 2>/dev/null &

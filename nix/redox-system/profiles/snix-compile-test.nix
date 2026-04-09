@@ -50,9 +50,10 @@ let
                           export CARGO_INCREMENTAL=0
                           export RAYON_NUM_THREADS=4
                           export RUST_BACKTRACE=1
-                          rm -f /tmp/.cc-wrapper-raw-args /tmp/.cc-wrapper-stderr /tmp/.cc-wrapper-shared-cmd /tmp/.cc-wrapper-last-err /tmp/snix-compile-output /tmp/snix-compile-err 2>/dev/null
+                          rm -f /tmp/.cc-wrapper-raw-args /tmp/.cc-wrapper-stderr /tmp/.cc-wrapper-shared-cmd /tmp/.cc-wrapper-last-err /tmp/snix-compile-output /tmp/snix-compile-err /tmp/snix-rustc.log 2>/dev/null
                           : > /tmp/snix-compile-output
                           : > /tmp/snix-compile-err
+                          : > /tmp/snix-rustc.log
 
                           latest_progress() {
                             local last=""
@@ -66,6 +67,20 @@ let
                             printf "%s" "$last"
                           }
 
+                          latest_rustc() {
+                            local last=""
+                            if [ ! -f /tmp/snix-rustc.log ]; then
+                              return 0
+                            fi
+                            while IFS= read -r line; do
+                              last="$line"
+                            done < /tmp/snix-rustc.log
+                            printf "%s" "$last"
+                          }
+
+                          PREV_ERR_BYTES=-1
+                          STALLED_HEARTBEATS=0
+
                           /bin/snix build --file /usr/src/snix-redox/build.nix > /tmp/snix-compile-output 2> /tmp/snix-compile-err &
                           SNIX_PID=$!
                           echo "[snix-compile] started pid=$SNIX_PID heartbeat=60s"
@@ -77,11 +92,22 @@ let
                             fi
                             OUT_BYTES=$(wc -c < /tmp/snix-compile-output 2>/dev/null)
                             ERR_BYTES=$(wc -c < /tmp/snix-compile-err 2>/dev/null)
-                            LAST=$(latest_progress 2>/dev/null)
-                            if [ -n "$LAST" ]; then
-                              echo "[snix-compile] heartbeat elapsed=''${SECONDS}s stdout=''${OUT_BYTES}B stderr=''${ERR_BYTES}B last=$LAST"
+                            if [ "$ERR_BYTES" = "$PREV_ERR_BYTES" ]; then
+                              STALLED_HEARTBEATS=$((STALLED_HEARTBEATS + 1))
                             else
-                              echo "[snix-compile] heartbeat elapsed=''${SECONDS}s stdout=''${OUT_BYTES}B stderr=''${ERR_BYTES}B"
+                              STALLED_HEARTBEATS=0
+                            fi
+                            PREV_ERR_BYTES="$ERR_BYTES"
+                            LAST=$(latest_progress 2>/dev/null)
+                            LAST_RUSTC=$(latest_rustc 2>/dev/null)
+                            if [ -n "$LAST" ] && [ -n "$LAST_RUSTC" ]; then
+                              echo "[snix-compile] heartbeat elapsed=''${SECONDS}s stdout=''${OUT_BYTES}B stderr=''${ERR_BYTES}B last=$LAST rustc=$LAST_RUSTC"
+                            elif [ -n "$LAST" ]; then
+                              echo "[snix-compile] heartbeat elapsed=''${SECONDS}s stdout=''${OUT_BYTES}B stderr=''${ERR_BYTES}B last=$LAST"
+                            elif [ -n "$LAST_RUSTC" ]; then
+                              echo "[snix-compile] heartbeat elapsed=''${SECONDS}s stdout=''${OUT_BYTES}B stderr=''${ERR_BYTES}B stalled=$STALLED_HEARTBEATS rustc=$LAST_RUSTC"
+                            else
+                              echo "[snix-compile] heartbeat elapsed=''${SECONDS}s stdout=''${OUT_BYTES}B stderr=''${ERR_BYTES}B stalled=$STALLED_HEARTBEATS"
                             fi
                           done
 
