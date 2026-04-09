@@ -58,6 +58,15 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - I tried to edit `snix-redox/upstream/build/Cargo.toml` directly and hit a dead end because `snix-redox/upstream -> ../result-snix-upstream` points into a read-only store path.
 - Fix upstream workspace manifests in `nix/pkgs/infrastructure/snix-upstream-source.nix`, then rebuild the upstream source derivation and repoint the local `snix-redox/upstream` symlink before regenerating build plans.
 
+### Self-built `snix` needs the same no-CA patch as the packaged binary
+- The focused rerun at `/var/tmp/redox-self-hosting-captures/20260409T110038-snix-compile-test/` showed `FUNC_TEST:snix-compile:PASS` and `FUNC_TEST:snix-binary-runs:PASS`, but `FUNC_TEST:snix-eval-works:FAIL` because the self-built binary panicked in `upstream/glue/src/fetchers/mod.rs` with `Client::new(): reqwest::Error { kind: Builder, source: General("No CA certificates were loaded from the system") }`.
+- `src/main.rs` setting `SSL_CERT_FILE=/dev/null` is not enough for this upstream reqwest path. The packaged host build already patches `snix-glue` via `patch-snix-fetcher-no-tls-panic.py`; the self-hosted source bundle must apply the same patch in `nix/pkgs/infrastructure/snix-upstream-source.nix` or guest-built `snix eval` will still abort.
+- After moving that patch into the upstream source bundle, the old package-level patch started double-applying and failing. `patch-snix-fetcher-no-tls-panic.py` needs to be idempotent because both the packaged build and the source bundle may run it against the same source tree.
+
+### Full self-hosting timeout was stale after the focused snix-compile fix
+- `nix run .#self-hosting-test -- --verbose` at `/var/tmp/redox-self-hosting-captures/20260409T125130-self-hosting-test/` no longer failed in `snix-compile`; it hit the suite timeout with 70 PASS lines printed while `snix-compile` was still in progress.
+- The focused passing rerun at `/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/` took 3089s by itself, so the full suite's old 2400s timeout can never finish. Keep `self-hosting-test` at 4800s or higher unless the guest self-compile gets materially faster.
+
 ### Focused self-compile tests go silent if they capture `snix build` into a shell variable
 - `OUTPUT=$(/bin/snix build --file ... 2>/tmp/snix-compile-err)` hides all progress until the build exits, so long guest compiles look hung even when Cloud Hypervisor is busy.
 - Fix: run `snix build` in the background, `wait` on its PID, and emit a periodic heartbeat that reports elapsed time plus `/tmp/snix-compile-{output,err}` sizes and the latest matching progress line.

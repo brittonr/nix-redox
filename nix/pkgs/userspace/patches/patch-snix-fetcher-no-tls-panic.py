@@ -23,14 +23,18 @@ with open(path) as f:
 struct_old = '    http_client: reqwest::Client,'
 struct_new = '    http_client: Option<reqwest::Client>,'
 
+already_patched = False
+
 if struct_old in content:
     content = content.replace(struct_old, struct_new)
+elif struct_new in content:
+    already_patched = True
 else:
     print(f'WARNING: http_client field type not found in {path}', file=sys.stderr)
     sys.exit(1)
 
-# Patch all uses of self.http_client to unwrap the Option
-# self.http_client.get(...) -> self.http_client.as_ref().expect("HTTP client not available").get(...)
+# Patch all uses of self.http_client to unwrap the Option.
+# Leave already-patched call sites alone.
 content = content.replace(
     'self.http_client.get(',
     'self.http_client.as_ref().expect("HTTP client not available (no CA certs)").get('
@@ -55,9 +59,16 @@ new = '''            http_client: reqwest::Client::builder()
 
 if old in content:
     content = content.replace(old, new)
-    with open(path, 'w') as f:
-        f.write(content)
-    print("Patched fetcher Client::new() with no-TLS fallback")
+elif new in content:
+    already_patched = True
 else:
     print(f"WARNING: Client::new() pattern not found in {path}", file=sys.stderr)
     sys.exit(1)
+
+with open(path, 'w') as f:
+    f.write(content)
+
+if already_patched:
+    print("Fetcher no-TLS patch already present")
+else:
+    print("Patched fetcher Client::new() with no-TLS fallback")

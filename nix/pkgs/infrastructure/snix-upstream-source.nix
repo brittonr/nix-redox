@@ -146,6 +146,11 @@ PATCH
   sed -i 's|pub(crate) fn fetchurl_derivation_to_fetch|pub fn fetchurl_derivation_to_fetch|' $out/glue/src/fetchurl.rs
   sed -i 's|pub(crate) enum Error|pub enum Error|' $out/glue/src/fetchurl.rs
 
+  # Match the packaged snix build: avoid aborting when reqwest tries to load
+  # native CA roots on Redox, where no system CA store exists.
+  ${pkgs.python3}/bin/python3 ${../userspace/patches/patch-snix-fetcher-no-tls-panic.py} \
+    $out/glue/src/fetchers/mod.rs
+
   chmod -R a-w $out/glue
 
   # Create proto path resolution structure.
