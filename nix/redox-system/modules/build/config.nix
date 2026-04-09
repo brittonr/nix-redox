@@ -187,6 +187,7 @@ let
     ++ (lib.optional (pkgs ? ion) pkgs.ion)
     ++ (lib.optional (pkgs ? uutils) pkgs.uutils)
     ++ (lib.optional (pkgs ? userutils && inSystemPackages pkgs.userutils) pkgs.userutils)
+    ++ (lib.optional (sshEnabled && pkgs ? openssh && inSystemPackages pkgs.openssh) pkgs.openssh)
     ++ (lib.optional (networkingEnabled && pkgs ? netutils) pkgs.netutils)
     ++ (lib.optional (networkingEnabled && pkgs ? netcfg-setup) pkgs.netcfg-setup)
     ++ (lib.optional (initDebug && pkgs ? boot-log-sink) pkgs.boot-log-sink)
@@ -239,6 +240,7 @@ let
   # no `or` fallbacks needed here.
   sshOpts = inputs.services.ssh;
   sshEnabled = sshOpts.enable;
+  sshPackageInstalled = pkgs ? openssh && inSystemPackages pkgs.openssh;
 
   svcHttpdOpts = inputs.services.httpd;
   svcHttpdEnabled = svcHttpdOpts.enable;
@@ -443,6 +445,7 @@ in
     activationScriptNames
     sshOpts
     sshEnabled
+    sshPackageInstalled
     svcHttpdOpts
     svcHttpdEnabled
     irohOpts

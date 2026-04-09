@@ -30,6 +30,18 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### Vendor hash must update in BOTH files
 - `snix.nix` AND `snix-source-bundle.nix` need the same hash when Cargo.lock changes.
 
+### OpenSSL 3 cross-build needs two Redox-specific workarounds
+- The first `openssl3-redox` attempt failed in `crypto/core_namemap.c` because relibc's `stdatomic.h` trips clang on `_Atomic(int) *`. Fix: add `-D__STDC_NO_ATOMICS__=1` so OpenSSL takes its GCC/clang `__atomic` fallback.
+- The next failure was `apps/openssl` linking against static `libzstd.a` without libc symbols resolved. We don't need the CLI tool for the package, only the libraries. Build `build_generated libcrypto.a libssl.a` and install headers/libs manually instead of running the full OpenSSL build/install.
+
+### OpenSSH 9.8p1 on Redox needs several packaging workarounds
+- `./configure` failed its libcrypto probe until I exported `LIBS="-lz -lzstd"`; the static OpenSSL 3 package does not bring those deps in automatically during OpenSSH's link test.
+- The upstream Redox patch still leaves `openbsd-compat/getrrsetbyname.c` calling `res_query()`, but relibc has no resolver API. A tiny Redox-local `res_query(...){ return -1; }` stub in the package source is enough to keep the non-goal DNS RR path compiling.
+- `UsePAM no` in `sshd_config` aborts the Redox build unless `servconf.c` stops treating `usepam` as `sUnsupported`. Rewriting that keyword entry to `sIgnore` keeps the config line harmless.
+- `make install` tries to install `ssh-keysign` with mode `4711`; Nix store outputs reject setuid bits. Patch the generated `Makefile` to install it as `0755` inside the package output.
+- OpenSSH helper binaries must stay under `/usr/libexec` in the package output. If the package flattening step moves everything to `$out/bin`, guest sshd exits with `/usr/libexec/sshd-session does not exist`.
+- The rootTree -> RedoxFS image copy path (`chmod -R u+w root/`) widens generated private key modes to `0644`. Fix them back to `0600` in `make-redoxfs-image.nix`; guest-side `chmod` is not reliable because `chmod` may be absent from the Redox test profile.
+
 ### Verify the exact commit, not a later dirty tree
 - I claimed a `77/78` full-suite baseline from earlier logs, but an exact rerun of commit `c6a29e00` in a detached worktree only reached `70/70` before the 2400s timeout.
 - When a review asks for evidence against a specific commit, rerun that exact commit in a worktree (`git worktree add --detach /tmp/... <commit>`) instead of assuming later docs-only commits or dirty-tree edits match the earlier run.

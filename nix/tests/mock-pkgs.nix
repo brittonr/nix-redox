@@ -400,13 +400,16 @@ rec {
 
   # === SSH ===
 
-  redox-ssh = mkMockPackageWithBins {
-    name = "redox-ssh";
-    pname = "redox-ssh";
+  openssh = mkMockPackageWithBins {
+    name = "openssh";
+    pname = "openssh";
     binaries = [
       "ssh"
       "sshd"
       "ssh-keygen"
+      "scp"
+      "sftp"
+      "sftp-server"
     ];
   };
 
@@ -466,7 +469,7 @@ rec {
       orbterm
       orbutils
       relibc
-      redox-ssh
+      openssh
       exampled
       ;
   };

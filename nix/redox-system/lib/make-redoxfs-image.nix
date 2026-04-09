@@ -44,6 +44,14 @@ hostPkgs.runCommand "redox-redoxfs"
     cp -r ${rootTree}/* root/
     chmod -R u+w root/
 
+    # Generated SSH host keys must be private inside the guest image.
+    # The Nix store strips write bits from rootTree files, so the recursive
+    # chmod above turns 0444 into 0644. Tighten them back here before archiving.
+    if [ -d root/etc/ssh ]; then
+      chmod 600 root/etc/ssh/ssh_host_*_key 2>/dev/null || true
+      chmod 644 root/etc/ssh/ssh_host_*.pub 2>/dev/null || true
+    fi
+
     # /tmp must be world-writable with sticky bit (like any Unix system)
     chmod 1777 root/tmp
 

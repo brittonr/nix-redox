@@ -846,13 +846,14 @@ let
     }
   );
 
-  # redox-ssh disabled: rustc-serialize dep doesn't compile on recent Rust nightly
-  # redox-ssh = import ../pkgs/userspace/redox-ssh.nix (
-  #   standaloneCommon
-  #   // {
-  #     inherit (inputs) redox-ssh-src;
-  #   }
-  # );
+  openssh = import ../pkgs/userspace/openssh-redox.nix (
+    cLibCommon
+    // {
+      inherit (inputs) openssh-src;
+      redox-openssl3 = redox-openssl3;
+      inherit redox-zlib redox-zstd;
+    }
+  );
 
   exampled = mkCrossPackage {
     pname = "exampled";
@@ -925,6 +926,14 @@ let
     cLibCommon
     // {
       inherit (inputs) openssl-redox-src;
+    }
+  );
+
+  redox-openssl3 = import ../pkgs/userspace/openssl3-redox.nix (
+    cLibCommon
+    // {
+      inherit (inputs) openssl3-src;
+      inherit redox-zlib redox-zstd;
     }
   );
 
@@ -1391,9 +1400,11 @@ in
       contain
       pkgar
       pkgutils
+      openssh
       exampled
       redox-games
       ;
+    "openssh-redox" = openssh;
 
     # Bare metal / ecosystem libraries
     inherit
@@ -1431,6 +1442,7 @@ in
       redox-zstd
       redox-expat
       redox-openssl
+      redox-openssl3
       redox-curl
       redox-ncurses
       redox-readline
@@ -1456,6 +1468,7 @@ in
       redox-fontconfig
       redox-fribidi
       ;
+    "openssl3-redox" = redox-openssl3;
 
     # Self-hosting: build tools and shells
     inherit

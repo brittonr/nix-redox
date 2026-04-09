@@ -390,12 +390,6 @@
       flake = false;
     };
 
-    # redox-ssh - SSH client/server (Redox-native)
-    redox-ssh-src = {
-      url = "gitlab:redox-os/redox-ssh/master?host=gitlab.redox-os.org";
-      flake = false;
-    };
-
     # exampled - example scheme daemon (Redox-native)
     exampled-src = {
       url = "gitlab:redox-os/exampled/master?host=gitlab.redox-os.org";
@@ -411,6 +405,18 @@
     # openssl - Redox-patched OpenSSL fork (v1 branch)
     openssl-redox-src = {
       url = "gitlab:redox-os/openssl/redox-v1?host=gitlab.redox-os.org";
+      flake = false;
+    };
+
+    # openssl3 - upstream OpenSSL 3.x release tarball
+    openssl3-src = {
+      url = "https://github.com/openssl/openssl/releases/download/openssl-3.5.3/openssl-3.5.3.tar.gz";
+      flake = false;
+    };
+
+    # openssh - upstream OpenSSH portable release tarball
+    openssh-src = {
+      url = "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.8p1.tar.gz";
       flake = false;
     };
 

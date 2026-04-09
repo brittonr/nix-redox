@@ -858,13 +858,18 @@ in
           enable = true;
           mode = "dhcp";
         };
+        "/environment" = {
+          systemPackages = [ mockPkgs.openssh ];
+        };
         "/services" = {
           ssh = {
             enable = true;
             port = 2222;
             permitRootLogin = true;
             listenAddress = "0.0.0.0";
-            hostKeyPath = "/etc/ssh/host_key";
+            hostKeyEd25519Path = "/etc/ssh/ssh_host_ed25519_key";
+            hostKeyRsaPath = "/etc/ssh/ssh_host_rsa_key";
+            hostKeyEcdsaPath = "/etc/ssh/ssh_host_ecdsa_key";
             authorizedKeysPath = "/etc/ssh/authorized_keys";
           };
         };
@@ -947,13 +952,18 @@ in
                 "/networking" = {
                   enable = false;
                 };
+                "/environment" = {
+                  systemPackages = [ mockPkgs.openssh ];
+                };
                 "/services" = {
                   ssh = {
                     enable = true;
                     port = 22;
                     permitRootLogin = false;
                     listenAddress = "0.0.0.0";
-                    hostKeyPath = "/etc/ssh/host_key";
+                    hostKeyEd25519Path = "/etc/ssh/ssh_host_ed25519_key";
+                    hostKeyRsaPath = "/etc/ssh/ssh_host_rsa_key";
+                    hostKeyEcdsaPath = "/etc/ssh/ssh_host_ecdsa_key";
                     authorizedKeysPath = "/etc/ssh/authorized_keys";
                   };
                 };
@@ -980,11 +990,11 @@ in
         touch $out
       '';
 
-  # Test: services.ssh without redox-ssh package triggers assertion
+  # Test: services.ssh without openssh package triggers assertion
   assertion-ssh-without-package =
     let
       redoxSystemFactory = import ../redox-system { inherit lib; };
-      pkgsNoSsh = builtins.removeAttrs mockPkgs.all [ "redox-ssh" ];
+      pkgsNoSsh = builtins.removeAttrs mockPkgs.all [ "openssh" ];
       result = builtins.tryEval (
         let
           system = redoxSystemFactory.redoxSystem {
@@ -993,13 +1003,18 @@ in
                 "/networking" = {
                   enable = true;
                 };
+                "/environment" = {
+                  systemPackages = [ mockPkgs.openssh ];
+                };
                 "/services" = {
                   ssh = {
                     enable = true;
                     port = 22;
                     permitRootLogin = false;
                     listenAddress = "0.0.0.0";
-                    hostKeyPath = "/etc/ssh/host_key";
+                    hostKeyEd25519Path = "/etc/ssh/ssh_host_ed25519_key";
+                    hostKeyRsaPath = "/etc/ssh/ssh_host_rsa_key";
+                    hostKeyEcdsaPath = "/etc/ssh/ssh_host_ecdsa_key";
                     authorizedKeysPath = "/etc/ssh/authorized_keys";
                   };
                 };
@@ -1019,7 +1034,7 @@ in
       }
       ''
         if [ "$succeeded" = "true" ]; then
-          echo "FAIL: Should have rejected SSH without redox-ssh package"
+          echo "FAIL: Should have rejected SSH without openssh package"
           exit 1
         fi
         echo "✓ Assertion correctly rejects SSH without package"
@@ -1038,6 +1053,7 @@ in
         };
         "/environment" = {
           systemPackages = [
+            mockPkgs.openssh
             mockPkgs.userutils
             mockPkgs.exampled
           ];
@@ -1048,7 +1064,9 @@ in
             port = 22;
             permitRootLogin = false;
             listenAddress = "0.0.0.0";
-            hostKeyPath = "/etc/ssh/host_key";
+            hostKeyEd25519Path = "/etc/ssh/ssh_host_ed25519_key";
+            hostKeyRsaPath = "/etc/ssh/ssh_host_rsa_key";
+            hostKeyEcdsaPath = "/etc/ssh/ssh_host_ecdsa_key";
             authorizedKeysPath = "/etc/ssh/authorized_keys";
           };
           httpd = {
