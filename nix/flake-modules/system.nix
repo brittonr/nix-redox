@@ -325,6 +325,131 @@ let
     inherit pkgs;
   };
 
+  auditSnixSourceBundle = pkgs.writeShellScriptBin "audit-snix-source-bundle" ''
+        set -euo pipefail
+        bundle="''${1:-}"
+        if [ -z "$bundle" ]; then
+          bundle=${snixSourceBundle}
+        fi
+        echo "[audit-snix-source-bundle] bundle=$bundle"
+        ${pkgs.python3}/bin/python3 - "$bundle" <<'PY'
+    from pathlib import Path
+    import sys
+    import tomllib
+
+    bundle = Path(sys.argv[1])
+    manifest_path = bundle / "Cargo.toml"
+    if not manifest_path.is_file():
+        print(f"[audit-snix-source-bundle] missing manifest: {manifest_path}", file=sys.stderr)
+        sys.exit(1)
+
+    missing: list[str] = []
+    checked: list[str] = []
+
+
+    def expect(rel: str, kind: str = "file") -> None:
+        path = bundle / rel
+        checked.append(rel)
+        ok = path.is_dir() if kind == "dir" else path.is_file()
+        if not ok:
+            missing.append(rel)
+
+
+    for rel in ("build.nix", "build-snix.sh", ".cargo/config.toml"):
+        expect(rel)
+    for rel in ("vendor", "vendor/source-registry-0", "vendor/source-git-0"):
+        expect(rel, "dir")
+
+    manifest = tomllib.loads(manifest_path.read_text())
+    bins = manifest.get("bin", [])
+    snix_bin = next((entry for entry in bins if entry.get("name") == "snix"), None)
+    if snix_bin is None:
+        print("[audit-snix-source-bundle] Cargo.toml has no [[bin]] named snix", file=sys.stderr)
+        sys.exit(1)
+
+    snix_bin_path = snix_bin.get("path")
+    if snix_bin_path:
+        expect(snix_bin_path)
+
+    for rel in (
+        "upstream/castore/protos/snix.castore.v1.bin",
+        "upstream/store/protos/snix.store.v1.bin",
+        "upstream/build/protos/snix.build.v1.bin",
+    ):
+        expect(rel)
+
+    if missing:
+        print("[audit-snix-source-bundle] missing paths:", file=sys.stderr)
+        for rel in missing:
+            print(f"  - {rel}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"[audit-snix-source-bundle] ok: checked {len(checked)} paths")
+    print(f"  bin snix: {snix_bin_path}")
+    for entry in bins:
+        if entry.get("name") == "snix":
+            continue
+        rel = entry.get("path")
+        if rel:
+            status = "present" if (bundle / rel).exists() else "not bundled"
+            print(f"  skipped bin {entry.get('name', '<unnamed>')}: {rel} ({status})")
+    PY
+  '';
+
+  wrapFunctionalTest =
+    {
+      base,
+      label,
+      auditBundle ? null,
+    }:
+    pkgs.writeShellScriptBin "functional-test" ''
+      set -uo pipefail
+
+      run_dir="''${REDOX_CAPTURE_DIR:-}"
+      if [ -z "$run_dir" ]; then
+        run_dir="/var/tmp/redox-self-hosting-captures/$(date +%Y%m%dT%H%M%S)-${label}"
+      fi
+      mkdir -p "$run_dir"
+      : > "$run_dir/runner.log"
+      {
+        echo "started_at=$(date --iso-8601=seconds)"
+        echo "repo=$PWD"
+        echo "run_dir=$run_dir"
+        ${lib.optionalString (auditBundle != null) ''echo "bundle=${auditBundle}"''}
+        echo
+        echo "## command"
+        printf "%q " "${base}/bin/functional-test" "$@"
+        echo
+      } > "$run_dir/meta.txt"
+
+      exec > >(${pkgs.coreutils}/bin/tee -a "$run_dir/runner.log") 2>&1
+
+      export REDOX_VM_MONITOR_DIR="$run_dir"
+      echo "[capture] run_dir=$run_dir"
+      ${lib.optionalString (auditBundle != null) ''
+        if ${auditSnixSourceBundle}/bin/audit-snix-source-bundle ${auditBundle}; then
+          :
+        else
+          status=$?
+          {
+            echo
+            echo "finished_at=$(date --iso-8601=seconds)"
+            echo "exit_code=$status"
+          } >> "$run_dir/meta.txt"
+          exit $status
+        fi
+      ''}
+
+      ${base}/bin/functional-test "$@"
+      status=$?
+      {
+        echo
+        echo "finished_at=$(date --iso-8601=seconds)"
+        echo "exit_code=$status"
+      } >> "$run_dir/meta.txt"
+      exit $status
+    '';
+
   # Self-hosting test: boots self-hosting image, tests cargo build
   selfHostingTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/self-hosting-test.nix ];
@@ -336,12 +461,17 @@ let
       workspace-test-bundle = workspaceTestBundle;
     };
   };
-  selfHostingTest = mkFunctionalTest {
+  selfHostingTestRaw = mkFunctionalTest {
     diskImage = selfHostingTestSystem.diskImage;
     inherit bootloader;
     memoryMB = 8192;
     cpus = 4;
     defaultTimeout = 2400; # snix self-compile (168 crates) needs ~20min; ripgrep ~2min; source-rebuild ~1min
+  };
+  selfHostingTest = wrapFunctionalTest {
+    base = selfHostingTestRaw;
+    label = "self-hosting-test";
+    auditBundle = snixSourceBundle;
   };
 
   # Focused snix self-compile test — skips the 70 earlier smoke tests
@@ -351,12 +481,17 @@ let
       snix-source-bundle = snixSourceBundle;
     };
   };
-  snixCompileTest = mkFunctionalTest {
+  snixCompileTestRaw = mkFunctionalTest {
     diskImage = snixCompileTestSystem.diskImage;
     inherit bootloader;
     memoryMB = 8192;
     cpus = 4;
     defaultTimeout = 3600; # focused self-compile only; leave headroom for j1 builds
+  };
+  snixCompileTest = wrapFunctionalTest {
+    base = snixCompileTestRaw;
+    label = "snix-compile-test";
+    auditBundle = snixSourceBundle;
   };
 
   # Focused snix sandbox build test — skips the 42 quick tests
@@ -370,12 +505,17 @@ let
       workspace-test-bundle = workspaceTestBundle;
     };
   };
-  snixSandboxTest = mkFunctionalTest {
+  snixSandboxTestRaw = mkFunctionalTest {
     diskImage = snixSandboxTestSystem.diskImage;
     inherit bootloader;
     memoryMB = 8192;
     cpus = 4;
     defaultTimeout = 600; # 4 sandbox builds, ~2 min each
+  };
+  snixSandboxTest = wrapFunctionalTest {
+    base = snixSandboxTestRaw;
+    label = "snix-sandbox-test";
+    auditBundle = snixSourceBundle;
   };
 
   # Parallel build test: JOBS=1 baseline + JOBS=2 validation

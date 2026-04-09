@@ -273,6 +273,7 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - `rg-build` fix was also in the test fixture/bundle: (1) ripgrep builder must use bash because it sets `HOME`; (2) `ripgrep-source-bundle.nix` must point Cargo at `vendor/source-registry-0`, matching `fetchCargoVendor` output
 - `source-rebuild` fix was in the self-hosting test fixture: seed the temp manifest from `/etc/redox-system/manifest.json` instead of an empty manifest (otherwise activation rebuilds the live profile with only the source-built package), and use full paths like `/bin/mkdir` in `packageSources` test derivations because source-rebuild builders do not get `PATH`
 - `snix-compile` fixture had the same two harness issues as ripgrep: `build-snix.nix` needed a bash builder and `build-snix.sh` needed a real bash rewrite with `set -e`; `snix-source-bundle.nix` also had to point Cargo at `vendor/source-registry-0` and `vendor/source-git-0`
+- The self-build source bundle intentionally ships only the `snix` bin target, not `tests/redox/proxy_namespace_test.rs`. `build-snix.sh` must run `cargo build --bin snix`; plain `cargo build` eventually tries to compile the extra `proxy_namespace_test` [[bin]] target from Cargo.toml and fails late.
 - exact rerun of commit `c6a29e00` (2026-04-08) is backed by committed evidence excerpts under `openspec/changes/fix-snix-build-gaps/evidence/`: focused `snix-sandbox-test` passes 6/6, and full `self-hosting-test` completes at 77/78 with `snix-compile` as the lone failure
 - `snix-compile` moved to run before `source-rebuild` (source-rebuild's activate() drops ld.lld from profile)
 
@@ -286,6 +287,8 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 ### Monitoring long `snix-compile` runs
 - A quiet serial log after `--- snix self-compile: snix build --file ---` does NOT mean the VM is hung. The old harness captured `snix build` stdout/stderr into guest temp files and printed them only after the build exited.
 - Future reruns of `.#snix-compile-test` and `.#self-hosting-test` now emit `[snix-compile] heartbeat ...` lines every 60s from the guest. The heartbeat reports elapsed time, `/tmp/snix-compile-output` size, `/tmp/snix-compile-err` size, and the latest matching progress line (`Compiling ...`, `warning:`, `error:`, `build complete`).
+- `build-snix.sh` now sets `CARGO_TERM_PROGRESS_WHEN=always`, writes rustc-wrapper trace lines to `/tmp/snix-rustc.log`, and the heartbeat prints the last rustc entry when cargo stderr goes quiet. Set `SNIX_CARGO_VERBOSE=1` in the guest builder env if you need a full `cargo build -vv` trace.
+- Host wrappers for `.#self-hosting-test`, `.#snix-compile-test`, and `.#snix-sandbox-test` now auto-create `/var/tmp/redox-self-hosting-captures/<timestamp>-.../`, run `audit-snix-source-bundle` before boot, and set `REDOX_VM_MONITOR_DIR` so `host-monitor.log`, `serial.log`, `vmm.log`, and `runner.log` are captured automatically.
 - For a currently running quiet VM, monitor the host-side Cloud Hypervisor process instead of waiting on serial output:
   - `pueue status --query 'status=running'` to find the task
   - `pgrep -af cloud-hypervisor` to find the VM PID
