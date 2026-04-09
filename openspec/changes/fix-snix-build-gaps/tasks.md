@@ -1,4 +1,4 @@
-**Status: OPEN** — exact reruns of detached worktree commit `c6a29e00` on 2026-04-08 re-verify the focused sandbox subset (**6/6 pass**) and the full self-hosting suite (**77 pass, 1 fail, 78 total**). The sole remaining failure is `snix-compile`, so tasks 6.3 and 7.4 stay incomplete.
+**Status: COMPLETE** — 2026-04-09 reruns on the current tree close the last self-hosting gap. The attached evidence now includes a focused sandbox rerun (**6/6 pass**) and a full self-hosting rerun (**78 pass, 0 fail, 78 total**), so tasks 6.3 and 7.4 are complete.
 
 Evidence note: attached rerun evidence excerpts now live under `openspec/changes/fix-snix-build-gaps/evidence/`.
 Start with `evidence/README.md`, then inspect the committed excerpts directly.
@@ -77,41 +77,38 @@ Direct re-verification for task 5.4:
 
 - [x] 6.1 Read the `snix-compile` stderr — determine if it's a timeout, sandbox issue, or build failure
 - [x] 6.2 If sandbox issue: apply same fixes as task 4. If timeout: increase test timeout or optimize build.
-- [ ] 6.3 Rebuild and verify `snix-compile` passes
+- [x] 6.3 Rebuild and verify `snix-compile` passes
 
-Note: the exact rerun attached as `evidence/c6a29e00-self-hosting-test-2026-04-08.excerpt.txt`
-reproduces a full-suite `77/1` result. `snix-compile` still fails: the attached excerpt shows
-`snix-compile-exit=1`, `FUNC_TEST:snix-compile:FAIL:exit or no binary at /bin/snix`,
-and builder stderr ending at `Compiling proc-macro2 v1.0.106` / `Compiling quote v1.0.45`
-before the derivation exits 101.
+Current verification:
+- focused rerun `nix run .#snix-compile-test -- --verbose` captured at `/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/`
+- attached excerpt `evidence/2026-04-09-self-hosting-test.excerpt.txt` plus the resolve change's focused excerpt show `snix-compile-exit=0`, `FUNC_TEST:snix-compile:PASS`, `FUNC_TEST:snix-binary-runs:PASS`, and `FUNC_TEST:snix-eval-works:PASS`
 
 ## 7. End-to-end validation (post-rollback baseline)
 
-Current reproducible baseline after exact reruns on 2026-04-08:
+Current reproducible baseline after reruns on 2026-04-09:
 - focused `snix-sandbox-test`: **6 pass, 0 fail** (all 6 tests report)
-- full `self-hosting-test`: **77 pass, 1 fail, 78 total**
+- full `self-hosting-test`: **78 pass, 0 fail, 78 total**
 
-Current remaining blocker after the exact reruns:
-- `snix-compile`: the full-suite rerun completes, but `snix build --file` exits 1 / derivation exit 101 and no `/bin/snix` is produced for the self-compile test.
+Verification evidence (direct reruns captured on 2026-04-09):
 
-Verification evidence (direct reruns captured on 2026-04-08):
-
-1. **Post-change focused rerun against detached worktree commit `c6a29e00`**
-   Command: `cd /tmp/redox-c6a29e00 && nix run .#snix-sandbox-test -- --verbose`
-   Attached excerpt: `evidence/c6a29e00-snix-sandbox-test-2026-04-08.excerpt.txt`
+1. **Post-fix focused sandbox rerun on the current tree**
+   Command: `nix run .#snix-sandbox-test -- --verbose`
+   Capture dir: `/var/tmp/redox-self-hosting-captures/20260409T124808-snix-sandbox-test/`
+   Attached excerpt: `evidence/2026-04-09-snix-sandbox-test.excerpt.txt`
    Result summary from excerpt: `Passed:  6`, `Failed:  0`, `Total:   6`, `FUNCTIONAL TEST PASSED`
 
-2. **Post-change full rerun against detached worktree commit `c6a29e00`**
-   Command: `cd /tmp/redox-c6a29e00 && nix run .#self-hosting-test -- --verbose`
-   Attached excerpt: `evidence/c6a29e00-self-hosting-test-2026-04-08.excerpt.txt`
-   Result summary from excerpt: `Passed:  77`, `Failed:  1`, `Total:   78`
-   Failure lines from excerpt: `FUNC_TEST:snix-compile:FAIL:exit or no binary at /bin/snix`, `error: builder for '1l8vldf9v2134669b48kwnscg9f7jid4-snix-self-compiled' failed (exit code 101)`, `Compiling proc-macro2 v1.0.106`, `Compiling quote v1.0.45`
+2. **Post-fix full rerun on the current tree**
+   Command: `nix run .#self-hosting-test -- --verbose`
+   Capture dir: `/var/tmp/redox-self-hosting-captures/20260409T133254-self-hosting-test/`
+   Attached excerpt: `evidence/2026-04-09-self-hosting-test.excerpt.txt`
+   Result summary from excerpt: `Passed:  78`, `Failed:  0`, `Total:   78`
+   Highlighted checks from excerpt: `FUNC_TEST:snix-compile:PASS`, `FUNC_TEST:snix-binary-runs:PASS`, `FUNC_TEST:snix-eval-works:PASS`, `FUNC_TEST:source-rebuild:PASS`, and `FUNC_TEST:source-rebuild-dry:PASS`
 
 Historical notes from the earlier 2026-04-07 investigation still stand for the already-fixed groups, but tasks 4.7-4.9 and 5.4 now also have direct attached rerun evidence under `evidence/`.
 
 - [x] 7.1 Fix cc-dep-build: diagnose cc-rs exit=1 under scheme-only sandbox
 - [x] 7.2 Fix rg-build: diagnose why binary not at output path (exit=0 but no binary)
 - [x] 7.3 Fix source-rebuild: diagnose exit=1 from snix system rebuild --source
-- [ ] 7.4 Fix snix-compile: diagnose why binary not at expected output path
+- [x] 7.4 Fix snix-compile: diagnose why binary not at expected output path
 - [x] 7.5 Document remaining failures and root causes
 - [x] 7.6 Update AGENTS.md with new snix builder knowledge

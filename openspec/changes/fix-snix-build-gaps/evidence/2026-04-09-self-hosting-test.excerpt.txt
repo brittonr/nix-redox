@@ -1,0 +1,20 @@
+# 2026-04-09 self-hosting-test excerpt
+
+tree: working-tree evidence captured after 96c4a98b, with follow-up timeout/no-CA fixes still uncommitted at capture time
+capture_dir: /var/tmp/redox-self-hosting-captures/20260409T133254-self-hosting-test/
+command: nix run .#self-hosting-test -- --verbose
+
+snix-compile-exit=0
+snix-compile-output=/nix/store/60xyyh44kdx92dfl37hc9xsf11952knk-snix-self-compiled
+FUNC_TEST:snix-compile:PASS
+FUNC_TEST:snix-binary-exists:PASS
+FUNC_TEST:snix-binary-runs:PASS
+FUNC_TEST:snix-eval-works:PASS
+FUNC_TEST:source-rebuild:PASS
+FUNC_TEST:source-rebuild-gen:PASS
+FUNC_TEST:source-rebuild-pkg:PASS
+FUNC_TEST:source-rebuild-dry:PASS
+    Passed:  78
+    Failed:  0
+    Total:   78
+  ║       FUNCTIONAL TEST PASSED

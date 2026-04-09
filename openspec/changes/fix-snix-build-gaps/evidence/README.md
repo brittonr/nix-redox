@@ -1,7 +1,45 @@
 # Evidence for `fix-snix-build-gaps`
 
-Committed evidence artifacts captured from exact reruns on 2026-04-08.
+Committed evidence artifacts captured from the historical exact reruns on 2026-04-08 and the closing reruns on 2026-04-09.
 The checked-in files below are compact excerpts copied from the rerun output.
+
+## Current post-fix reruns (2026-04-09)
+
+### 1. Focused sandbox rerun
+- Tree under test: current working tree after the no-CA source-bundle fix and before the later full-suite timeout bump
+- Command:
+  - `nix run .#snix-sandbox-test -- --verbose`
+- Capture dir:
+  - `/var/tmp/redox-self-hosting-captures/20260409T124808-snix-sandbox-test/`
+- Committed excerpt:
+  - `2026-04-09-snix-sandbox-test.excerpt.txt`
+- Summary from excerpt:
+  - `Passed:  6`
+  - `Failed:  0`
+  - `Total:   6`
+  - `FUNCTIONAL TEST PASSED`
+
+### 2. Full self-hosting rerun
+- Tree under test: current working tree after the no-CA source-bundle fix and after the later full-suite timeout bump
+- Command:
+  - `nix run .#self-hosting-test -- --verbose`
+- Capture dir:
+  - `/var/tmp/redox-self-hosting-captures/20260409T133254-self-hosting-test/`
+- Committed excerpt:
+  - `2026-04-09-self-hosting-test.excerpt.txt`
+- Summary from excerpt:
+  - `Passed:  78`
+  - `Failed:  0`
+  - `Total:   78`
+- The excerpt also includes:
+  - `snix-compile:PASS`
+  - `snix-binary-exists:PASS`
+  - `snix-binary-runs:PASS`
+  - `snix-eval-works:PASS`
+  - `source-rebuild:PASS`
+  - `source-rebuild-gen:PASS`
+  - `source-rebuild-pkg:PASS`
+  - `source-rebuild-dry:PASS`
 
 ## Exact-commit reruns (`c6a29e00`)
 

@@ -275,12 +275,13 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - `snix-compile` fixture had the same two harness issues as ripgrep: `build-snix.nix` needed a bash builder and `build-snix.sh` needed a real bash rewrite with `set -e`; `snix-source-bundle.nix` also had to point Cargo at `vendor/source-registry-0` and `vendor/source-git-0`
 - The self-build source bundle intentionally ships only the `snix` bin target, not `tests/redox/proxy_namespace_test.rs`. `build-snix.sh` must run `cargo build --bin snix`; plain `cargo build` eventually tries to compile the extra `proxy_namespace_test` [[bin]] target from Cargo.toml and fails late.
 - exact rerun of commit `c6a29e00` (2026-04-08) is backed by committed evidence excerpts under `openspec/changes/fix-snix-build-gaps/evidence/`: focused `snix-sandbox-test` passes 6/6, and full `self-hosting-test` completes at 77/78 with `snix-compile` as the lone failure
+- focused rerun on working-tree `96c4a98b` plus follow-up fixes (2026-04-09) passes 7/7 in `.#snix-compile-test`; durable capture: `/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/`
+- full rerun on the same tree (2026-04-09) passes 78/78 in `.#self-hosting-test`; durable capture: `/var/tmp/redox-self-hosting-captures/20260409T133254-self-hosting-test/`
+- the self-build source bundle must carry the same `snix-glue` no-CA patch as the packaged host build; otherwise guest-built `snix eval` aborts in `reqwest` even though the installed `/bin/snix` works
+- `patch-snix-fetcher-no-tls-panic.py` must stay idempotent because both the packaged build and the source bundle can apply it to the same upstream `snix-glue` source tree
 - `snix-compile` moved to run before `source-rebuild` (source-rebuild's activate() drops ld.lld from profile)
 
 ### What Doesn't
-- `snix-compile` (self-build): exact rerun of commit `c6a29e00` still fails in the full suite even though all 78 tests report. The attached evidence excerpt shows `snix-compile-exit=1`, `FUNC_TEST:snix-compile:FAIL:exit or no binary at /bin/snix`, and builder stderr ending at `Compiling proc-macro2 v1.0.106` / `Compiling quote v1.0.45` before the derivation exits 101
-- Focused rerun with the uncommitted `j1` experiment (2026-04-08, durable log under `/var/tmp/redox-self-hosting-captures/20260408T205802-snix-compile-focus/`) removed the full-suite timeout and exposed a new concrete blocker: `libmimalloc-sys` fails to compile `c_src/mimalloc/v2/src/static.c` on Redox with Clang/stdatomic errors such as `address argument to atomic operation must be a pointer to a trivially-copyable type ('_Atomic(mi_block_t *) *' invalid)`. That focused run still reports `FUNC_TEST:snix-binary-exists:PASS`, `FUNC_TEST:snix-binary-runs:PASS`, and `FUNC_TEST:snix-eval-works:PASS` for the profile's installed `/bin/snix`; only the self-compiled derivation fails.
-- After removing the normal `mimalloc` dependency edges from `snix-build`, `snix-store`, and `nix-compat`, the focused rerun at `/var/tmp/redox-self-hosting-captures/20260408T213428-snix-compile-focus-pass/` gets past `libmimalloc-sys` entirely and fails later in `snix-castore`'s build script with `Error: Custom { kind: Other, error: "protoc failed: " }`.
 - `CARGO_BUILD_JOBS > 1` had two issues: (1) lld stack overflow — fixed by `lld-wrapper` (16MB stack thread + exec); (2) cargo job manager hangs on multi-crate workspace builds — fixed by `patch-relibc-fork-lock.py` (see below)
 - `env!("CARGO_PKG_*")` in proc-macro crates: works via DSO environ propagation
 
@@ -323,15 +324,15 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
   ```
 - Durable run metadata belongs under `/var/tmp/redox-self-hosting-captures/<timestamp>-.../` alongside `meta.txt`, the VM log, and any sidecar monitor log. Treat pueue logs as convenience output, not the only evidence source.
 
-### Self-Hosting Baseline (2026-04-08 exact rerun)
+### Self-Hosting Baseline (2026-04-09 reruns)
 - Sandbox mode: scheme-only (per-path proxy disabled due to kernel deadlock)
-- Evidence artifacts live under `openspec/changes/fix-snix-build-gaps/evidence/`
-- Focused `snix-sandbox-test`: 6 pass, 0 fail out of 6 tests; exact rerun of detached worktree commit `c6a29e00`; attached excerpt `evidence/c6a29e00-snix-sandbox-test-2026-04-08.excerpt.txt`
-- Full `self-hosting-test`: 77 pass, 1 fail out of 78 tests; exact rerun of detached worktree commit `c6a29e00`; attached excerpt `evidence/c6a29e00-self-hosting-test-2026-04-08.excerpt.txt`
-- Remaining failure is `snix-compile` only
-- The same full evidence excerpt directly re-verifies `source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`, `source-rebuild-dry`, `snix-binary-exists`, `snix-binary-runs`, and `snix-eval-works`
+- Evidence artifacts live under `openspec/changes/fix-snix-build-gaps/evidence/` and `openspec/changes/resolve-libmimalloc-sys-redox/evidence/`
+- Focused `snix-compile-test`: 7 pass, 0 fail out of 7 tests; durable capture `/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/`; attached excerpt `resolve-libmimalloc-sys-redox/evidence/2026-04-09-snix-compile-focus-pass.excerpt.txt`
+- Focused `snix-sandbox-test`: 6 pass, 0 fail out of 6 tests; durable capture `/var/tmp/redox-self-hosting-captures/20260409T124808-snix-sandbox-test/`; attached excerpt `fix-snix-build-gaps/evidence/2026-04-09-snix-sandbox-test.excerpt.txt`
+- Full `self-hosting-test`: 78 pass, 0 fail out of 78 tests; durable capture `/var/tmp/redox-self-hosting-captures/20260409T133254-self-hosting-test/`; attached excerpt `fix-snix-build-gaps/evidence/2026-04-09-self-hosting-test.excerpt.txt`
+- The full suite now re-verifies `snix-compile`, `snix-binary-exists`, `snix-binary-runs`, `snix-eval-works`, `source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`, and `source-rebuild-dry` in one run
+- `self-hosting-test` needs `defaultTimeout = 4800`; the old 2400s timeout stops at 70 PASS lines while `snix-compile` is still running, because the cold focused self-compile now takes about 3089s by itself
 - Test order: snix-compile moved BEFORE source-rebuild (source-rebuild's activate() drops ld.lld from the live profile)
-- Reproduced passing tests include cargo builds and ripgrep (`snix-build-cargo`, `cc-dep-build`, `workspace-build`, `rg-build`, `rg-version`, `rg-search`, `rg-store-path`, `rg-binary-size`, `parallel-jobs2`)
 - The fixture-side lessons still stand: use bash for builders that need `HOME`; vendor missing crates; point Cargo at `vendor/source-registry-0` when using `fetchCargoVendor`; add `vendor/source-git-0` for git deps; seed source-rebuild tests from the real system manifest; and use full paths in source derivations when builder `PATH` is empty
 - `--no-sandbox` flag now threads through flake installables (previously bypassed)
 - focused test harness note: `snix-sandbox-test` originally checked `$out/bin/workspace-test`, but `workspace-build.nix` installs `$out/bin/mybin`

@@ -466,7 +466,9 @@ let
     inherit bootloader;
     memoryMB = 8192;
     cpus = 4;
-    defaultTimeout = 2400; # snix self-compile (168 crates) needs ~20min; ripgrep ~2min; source-rebuild ~1min
+    # The focused snix-compile rerun now takes ~3090s on a cold guest build,
+    # and the full suite still has source-rebuild checks after it.
+    defaultTimeout = 4800;
   };
   selfHostingTest = wrapFunctionalTest {
     base = selfHostingTestRaw;

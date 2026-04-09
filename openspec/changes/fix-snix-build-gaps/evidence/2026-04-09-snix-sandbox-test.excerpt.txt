@@ -1,0 +1,16 @@
+# 2026-04-09 snix-sandbox-test excerpt
+
+commit: 96c4a98b
+capture_dir: /var/tmp/redox-self-hosting-captures/20260409T124808-snix-sandbox-test/
+command: nix run .#snix-sandbox-test -- --verbose
+
+FUNC_TEST:snix-simple:PASS
+FUNC_TEST:snix-build-cargo:PASS
+FUNC_TEST:flake-build:PASS
+FUNC_TEST:cc-dep-build:PASS
+FUNC_TEST:workspace-build:PASS
+FUNC_TEST:rg-build:PASS
+    Passed:  6
+    Failed:  0
+    Total:   6
+  ║       FUNCTIONAL TEST PASSED

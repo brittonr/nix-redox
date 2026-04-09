@@ -1,7 +1,47 @@
 # Evidence for `resolve-libmimalloc-sys-redox`
 
-Committed evidence captured while isolating the remaining `snix-compile` blocker.
-The durable raw logs live outside the repo; the checked-in file below is a compact excerpt.
+Committed evidence captured while isolating and then closing the remaining `snix-compile` blocker.
+The durable raw logs live outside the repo; the checked-in files below are compact excerpts.
+
+## Final validation after the allocator-path fix (2026-04-09)
+
+### Focused `snix-compile-test` pass
+
+- Capture dir: `/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/`
+- Tree under test: current working tree after the allocator dep removal, proto workaround, source-bundle no-CA patch, and idempotent `snix-glue` patch script
+- Command:
+  - `nix run .#snix-compile-test -- --verbose`
+- Committed excerpt:
+  - `2026-04-09-snix-compile-focus-pass.excerpt.txt`
+
+### What the excerpt shows
+
+- `snix-compile-exit=0`
+- `FUNC_TEST:snix-compile:PASS`
+- `FUNC_TEST:snix-binary-exists:PASS`
+- `FUNC_TEST:snix-binary-runs:PASS`
+- `FUNC_TEST:snix-eval-works:PASS`
+- final focused verdict: `Passed:  7`, `Failed:  0`, `Total:   7`
+
+### Full `self-hosting-test` pass
+
+- First rerun with the old 2400s suite timeout stopped at 70 PASS lines while `snix-compile` was still running:
+  - capture dir: `/var/tmp/redox-self-hosting-captures/20260409T125126-self-hosting-test/`
+- After raising `self-hosting-test` to 4800s, the full rerun completed:
+  - capture dir: `/var/tmp/redox-self-hosting-captures/20260409T133254-self-hosting-test/`
+  - command: `nix run .#self-hosting-test -- --verbose`
+  - committed excerpt: `2026-04-09-self-hosting-full-pass.excerpt.txt`
+
+### What the full rerun shows
+
+- `FUNC_TEST:snix-compile:PASS`
+- `FUNC_TEST:snix-binary-runs:PASS`
+- `FUNC_TEST:snix-eval-works:PASS`
+- `FUNC_TEST:source-rebuild:PASS`
+- `FUNC_TEST:source-rebuild-dry:PASS`
+- final full-suite verdict: `Passed:  78`, `Failed:  0`, `Total:   78`
+
+## Historical baseline while narrowing the blocker
 
 ## Focused `snix-compile-test` allocator failure baseline
 

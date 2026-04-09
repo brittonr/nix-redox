@@ -26,6 +26,7 @@ As long as that allocator path fails, the self-hosting baseline cannot close cle
 
 - `snix-redox/Cargo.toml` and any allocator-related feature selection or transitive dependency wiring
 - vendored/self-hosted source bundle inputs if a Redox-specific patch must be carried into guest builds
-- `nix/pkgs/infrastructure/build-snix.sh` and `nix/pkgs/infrastructure/snix-source-bundle.nix` if the chosen fix changes the self-build environment
+- `nix/pkgs/infrastructure/build-snix.sh`, `nix/pkgs/infrastructure/snix-source-bundle.nix`, and `nix/pkgs/infrastructure/snix-upstream-source.nix` if the chosen fix changes the self-build environment or patched upstream sources
+- `nix/pkgs/userspace/patches/patch-snix-fetcher-no-tls-panic.py` if the same `snix-glue` no-CA workaround must be shared by both the packaged build and the source bundle
 - focused validation harness files such as `nix/redox-system/profiles/snix-compile-test.nix` and `nix/flake-modules/system.nix`
 - OpenSpec evidence and persistent repo guidance (`AGENTS.md`, `.agent/napkin.md`)
