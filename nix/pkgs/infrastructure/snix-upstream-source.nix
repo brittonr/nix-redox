@@ -48,7 +48,7 @@ pkgs.runCommand "snix-upstream-source" { } ''
   '') crates)}
 
   # Make crates writable for Cargo.toml patching
-  chmod -R u+w $out/build $out/store $out/castore
+  chmod -R u+w $out/build $out/store $out/castore $out/nix-compat
 
   # Remove fuse feature requirement from snix-build → snix-castore dep.
   # Upstream snix-build unconditionally enables snix-castore/fuse, which
@@ -79,6 +79,37 @@ pkgs.runCommand "snix-upstream-source" { } ''
   # Upstream dropped otlp from defaults between eee4779 and 2207a07; the new
   # default set is ["cloud", "fuse", "tonic-reflection"].
   sed -i 's|default = \["cloud", "fuse", "tonic-reflection"\]|default = []|' $out/store/Cargo.toml
+
+  # Upstream still declares mimalloc as a normal dependency in snix-build,
+  # snix-store, and nix-compat, but the production code paths do not use it.
+  # Keep mimalloc only in dev/bench contexts so Redox cargo builds do not pull
+  # libmimalloc-sys into the self-hosted workspace.
+  SNIX_UPSTREAM_OUT="$out" ${pkgs.python3}/bin/python3 - <<'PY'
+import os
+from pathlib import Path
+
+out = Path(os.environ["SNIX_UPSTREAM_OUT"])
+replacements = {
+    out / "build/Cargo.toml": (
+        "tracing.workspace = true\nurl.workspace = true\nmimalloc.workspace = true\ntonic-reflection = { workspace = true, optional = true }\n",
+        "tracing.workspace = true\nurl.workspace = true\ntonic-reflection = { workspace = true, optional = true }\n",
+    ),
+    out / "store/Cargo.toml": (
+        "redb = { workspace = true, features = [\"logging\"] }\nmimalloc.workspace = true\ntonic-reflection = { workspace = true, optional = true }\n",
+        "redb = { workspace = true, features = [\"logging\"] }\ntonic-reflection = { workspace = true, optional = true }\n",
+    ),
+    out / "nix-compat/Cargo.toml": (
+        "hashbrown = { workspace = true, optional = true }\nmimalloc.workspace = true\nnom.workspace = true\n",
+        "hashbrown = { workspace = true, optional = true }\nnom.workspace = true\n",
+    ),
+}
+
+for path, (old, new) in replacements.items():
+    text = path.read_text()
+    if old not in text:
+        raise SystemExit(f"expected snippet not found in {path}")
+    path.write_text(text.replace(old, new, 1))
+PY
 
   # NOTE: tonic tls-aws-lc → tls-ring override.
   # As of 2207a07, store/Cargo.toml uses `tonic.workspace = true` (no inline

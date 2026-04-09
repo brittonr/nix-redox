@@ -344,6 +344,21 @@ let
     defaultTimeout = 2400; # snix self-compile (168 crates) needs ~20min; ripgrep ~2min; source-rebuild ~1min
   };
 
+  # Focused snix self-compile test — skips the 70 earlier smoke tests
+  snixCompileTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/snix-compile-test.nix ];
+    extraPkgs = extraPkgs // {
+      snix-source-bundle = snixSourceBundle;
+    };
+  };
+  snixCompileTest = mkFunctionalTest {
+    diskImage = snixCompileTestSystem.diskImage;
+    inherit bootloader;
+    memoryMB = 8192;
+    cpus = 4;
+    defaultTimeout = 3600; # focused self-compile only; leave headroom for j1 builds
+  };
+
   # Focused snix sandbox build test — skips the 42 quick tests
   snixSandboxTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/snix-sandbox-test.nix ];
@@ -598,6 +613,9 @@ in
 
     redox-self-hosting-test = selfHostingTestSystem.diskImage;
     self-hosting-test = selfHostingTest;
+
+    redox-snix-compile-test = snixCompileTestSystem.diskImage;
+    snix-compile-test = snixCompileTest;
 
     snix-sandbox-test = snixSandboxTest;
 
