@@ -76,7 +76,7 @@ The durable raw logs live outside the repo; the checked-in files below are compa
 
 ## Baseline relationship to the earlier exact rerun
 
-The current allocator-focused run narrows the remaining blocker from the earlier exact `c6a29e00` full-suite baseline recorded under `../fix-snix-build-gaps/evidence/`:
+The current allocator-focused run narrows the remaining blocker from the earlier exact `c6a29e00` full-suite baseline recorded under `openspec/changes/archive/2026-04-09-fix-snix-build-gaps/evidence/`:
 
 - exact `c6a29e00` full rerun: `77/78` passed, with `snix-compile` as the lone failure
 - focused `snix-compile-test` rerun: isolates the failing self-build to `libmimalloc-sys` C compilation on Redox

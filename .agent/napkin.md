@@ -34,6 +34,10 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - I claimed a `77/78` full-suite baseline from earlier logs, but an exact rerun of commit `c6a29e00` in a detached worktree only reached `70/70` before the 2400s timeout.
 - When a review asks for evidence against a specific commit, rerun that exact commit in a worktree (`git worktree add --detach /tmp/... <commit>`) instead of assuming later docs-only commits or dirty-tree edits match the earlier run.
 
+### Archiving OpenSpec changes needs a path sweep
+- Moving a change under `openspec/changes/archive/<date>-.../` leaves stale evidence paths behind in `tasks.md`, `evidence/README.md`, and any AGENTS notes that pointed at the active change path.
+- After archiving, grep for the old `openspec/changes/<name>/` path and rewrite the surviving references before committing the archive.
+
 ### Self-hosting vs self-hosting-test images are not interchangeable
 - I tried to reproduce `snix-compile` in the plain `self-hosting` image and got `/usr/src/snix-redox/build-snix.sh: No such file or directory`.
 - That was a false lead: the source bundle only exists in the `self-hosting-test` image. Use the actual test image when reproducing fixture failures tied to `/usr/src/*` bundles.

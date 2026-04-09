@@ -26,4 +26,5 @@
   - first rerun on the old 2400s timeout stopped at 70 PASS lines while `snix-compile` was still running (`/var/tmp/redox-self-hosting-captures/20260409T125126-self-hosting-test/`)
   - after bumping `self-hosting-test` timeout to 4800s, the full rerun passed 78/78 at `/var/tmp/redox-self-hosting-captures/20260409T133254-self-hosting-test/`
 - [x] 4.2 Update `AGENTS.md`, `.agent/napkin.md`, and the active OpenSpec evidence with the final root cause and chosen fix
+  - Supporting notes live in `AGENTS.md` under the self-hosting baseline/monitoring sections and in `.agent/napkin.md` under the focused `snix-compile` and no-CA patch entries. Those repo-memory updates landed before archive; this archive keeps the matching evidence.
 - [x] 4.3 Close or narrow `fix-snix-build-gaps` tasks 6.3 / 7.4 once the new allocator-focused evidence justifies it

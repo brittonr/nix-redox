@@ -1,6 +1,6 @@
 **Status: COMPLETE** — 2026-04-09 reruns on the current tree close the last self-hosting gap. The attached evidence now includes a focused sandbox rerun (**6/6 pass**) and a full self-hosting rerun (**78 pass, 0 fail, 78 total**), so tasks 6.3 and 7.4 are complete.
 
-Evidence note: attached rerun evidence excerpts now live under `openspec/changes/fix-snix-build-gaps/evidence/`.
+Evidence note: attached rerun evidence excerpts now live under `openspec/changes/archive/2026-04-09-fix-snix-build-gaps/evidence/`.
 Start with `evidence/README.md`, then inspect the committed excerpts directly.
 
 ## 1. Diagnose all 16 failures with verbose output
@@ -112,3 +112,4 @@ Historical notes from the earlier 2026-04-07 investigation still stand for the a
 - [x] 7.4 Fix snix-compile: diagnose why binary not at expected output path
 - [x] 7.5 Document remaining failures and root causes
 - [x] 7.6 Update AGENTS.md with new snix builder knowledge
+  - Supporting repo guidance now lives in `AGENTS.md` under the self-hosting baseline and monitoring sections. Those guidance edits landed in the earlier self-hosting commits; the archive move just preserves the evidence trail here.
