@@ -1867,13 +1867,18 @@ in
           enable = true;
           mode = "dhcp";
         };
+        "/environment" = {
+          systemPackages = [ mockPkgs.openssh ];
+        };
         "/services" = {
           ssh = {
             enable = true;
             port = 2222;
             permitRootLogin = true;
             listenAddress = "0.0.0.0";
-            hostKeyPath = "/etc/ssh/host_key";
+            hostKeyEd25519Path = "/etc/ssh/ssh_host_ed25519_key";
+            hostKeyRsaPath = "/etc/ssh/ssh_host_rsa_key";
+            hostKeyEcdsaPath = "/etc/ssh/ssh_host_ecdsa_key";
             authorizedKeysPath = "/etc/ssh/authorized_keys";
           };
         };
@@ -1889,8 +1894,62 @@ in
         contains = "PermitRootLogin yes";
       }
       {
+        file = "etc/ssh/sshd_config";
+        contains = "AddressFamily inet";
+      }
+      {
+        file = "etc/ssh/sshd_config";
+        contains = "UsePAM no";
+      }
+      {
+        file = "etc/ssh/sshd_config";
+        contains = "HostKey /etc/ssh/ssh_host_ed25519_key";
+      }
+      {
+        file = "etc/ssh/sshd_config";
+        contains = "HostKey /etc/ssh/ssh_host_rsa_key";
+      }
+      {
+        file = "etc/ssh/sshd_config";
+        contains = "HostKey /etc/ssh/ssh_host_ecdsa_key";
+      }
+      {
+        file = "etc/ssh/sshd_config";
+        contains = "Subsystem sftp /bin/sftp-server";
+      }
+      {
         file = "etc/ssh/authorized_keys";
         contains = "Authorized SSH public keys";
+      }
+      {
+        file = "etc/ssh/ssh_host_ed25519_key";
+        contains = "OPENSSH PRIVATE KEY";
+        mode = "444";
+      }
+      {
+        file = "etc/ssh/ssh_host_ed25519_key.pub";
+        contains = "ssh-ed25519";
+        mode = "444";
+      }
+      {
+        file = "etc/ssh/ssh_host_rsa_key";
+        contains = "OPENSSH PRIVATE KEY";
+        mode = "444";
+      }
+      {
+        file = "etc/ssh/ssh_host_rsa_key.pub";
+        contains = "ssh-rsa";
+        mode = "444";
+      }
+      {
+        file = "etc/ssh/ssh_host_ecdsa_key";
+        contains = "OPENSSH PRIVATE KEY";
+        mode = "444";
+      }
+      {
+        file = "etc/ssh/ssh_host_ecdsa_key.pub";
+        contains = "ecdsa-sha2-nistp521";
+        mode = "444";
       }
     ];
   };

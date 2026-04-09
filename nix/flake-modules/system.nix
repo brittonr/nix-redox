@@ -104,6 +104,8 @@ let
     snix = self'.packages.snix or null;
     ca-certificates = self'.packages.ca-certificates or null;
     redox-curl = self'.packages.redox-curl or null;
+    openssh = self'.packages.openssh or null;
+    redox-openssl3 = self'.packages.redox-openssl3 or null;
     pkgutils = self'.packages.pkgutils or null;
 
     # Bare metal / ecosystem libraries
@@ -265,6 +267,17 @@ let
   networkTest = mkNetworkTest {
     diskImage = networkTestSystem.diskImage;
     inherit bootloader;
+  };
+
+  mkSshTest = modularPkgs.infrastructure.mkSshTest;
+  sshTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/ssh-test.nix ];
+    inherit extraPkgs;
+  };
+  sshTest = mkSshTest {
+    diskImage = sshTestSystem.diskImage;
+    inherit bootloader;
+    vmConfig = sshTestSystem.vmConfig;
   };
 
   # Network install test: boots with networking, serves cache via HTTP
@@ -740,6 +753,9 @@ in
 
     redox-network-test = networkTestSystem.diskImage;
     inherit networkTest;
+
+    redox-ssh-test = sshTestSystem.diskImage;
+    ssh-test = sshTest;
 
     redox-network-install-test = networkInstallTestSystem.diskImage;
     inherit networkInstallTest testBinaryCache;

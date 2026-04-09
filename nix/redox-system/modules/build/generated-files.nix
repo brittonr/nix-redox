@@ -113,6 +113,21 @@ let
     users = inputs.users.users;
   };
 
+  sshHostKeys =
+    if cfg.sshEnabled then
+      hostPkgs.runCommand "redox-ssh-host-keys"
+        {
+          nativeBuildInputs = [ hostPkgs.openssh ];
+        }
+        ''
+          mkdir -p $out
+          ssh-keygen -q -t ed25519 -f $out/ssh_host_ed25519_key -N ""
+          ssh-keygen -q -t rsa -b 4096 -f $out/ssh_host_rsa_key -N ""
+          ssh-keygen -q -t ecdsa -b 521 -f $out/ssh_host_ecdsa_key -N ""
+        ''
+    else
+      null;
+
   # Collect all generated files
   allGeneratedFiles = {
     "etc/profile" = {
@@ -434,15 +449,46 @@ let
         "# Service module: services.ssh"
         "Port ${toString cfg.sshOpts.port}"
         "ListenAddress ${cfg.sshOpts.listenAddress}"
-        "HostKey ${cfg.sshOpts.hostKeyPath}"
+        "AddressFamily inet"
+        "UsePAM no"
+        "PasswordAuthentication yes"
+        "PermitEmptyPasswords no"
+        "HostKey ${cfg.sshOpts.hostKeyEd25519Path}"
+        "HostKey ${cfg.sshOpts.hostKeyRsaPath}"
+        "HostKey ${cfg.sshOpts.hostKeyEcdsaPath}"
         "PermitRootLogin ${if cfg.sshOpts.permitRootLogin then "yes" else "no"}"
         "AuthorizedKeysFile ${cfg.sshOpts.authorizedKeysPath}"
+        "Subsystem sftp /bin/sftp-server"
       ];
       mode = "0644";
     };
     "etc/ssh/authorized_keys" = {
       text = "# Authorized SSH public keys (one per line)\n";
       mode = "0600";
+    };
+    "etc/ssh/ssh_host_ed25519_key" = {
+      source = sshHostKeys + "/ssh_host_ed25519_key";
+      mode = "0600";
+    };
+    "etc/ssh/ssh_host_ed25519_key.pub" = {
+      source = sshHostKeys + "/ssh_host_ed25519_key.pub";
+      mode = "0644";
+    };
+    "etc/ssh/ssh_host_rsa_key" = {
+      source = sshHostKeys + "/ssh_host_rsa_key";
+      mode = "0600";
+    };
+    "etc/ssh/ssh_host_rsa_key.pub" = {
+      source = sshHostKeys + "/ssh_host_rsa_key.pub";
+      mode = "0644";
+    };
+    "etc/ssh/ssh_host_ecdsa_key" = {
+      source = sshHostKeys + "/ssh_host_ecdsa_key";
+      mode = "0600";
+    };
+    "etc/ssh/ssh_host_ecdsa_key.pub" = {
+      source = sshHostKeys + "/ssh_host_ecdsa_key.pub";
+      mode = "0644";
     };
   })
 

@@ -160,6 +160,11 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 ### C Library Cross-Compilation
 - CRITICAL: C builds CANNOT build test/app binaries — `-nostdlib -static` in LDFLAGS
 - Build only `.a` targets, install manually
+- OpenSSL 3 on Redox: relibc's `stdatomic.h` trips clang on `_Atomic(int)`; add `-D__STDC_NO_ATOMICS__=1` so OpenSSL uses its `__atomic` fallback instead of the C11 stdatomic path
+- OpenSSL 3 on Redox: full `make` tries to link `apps/openssl` and fails on missing libc symbols from static deps; build `build_generated libcrypto.a libssl.a` only and install headers/libs manually
+- OpenSSH 9.8p1 on Redox: OpenSSH's static libcrypto probe needs `LIBS="-lz -lzstd"`; the upstream Redox patch still needs a local `res_query(...){ return -1; }` stub in `openbsd-compat/getrrsetbyname.c`; and `ssh-keysign` must install as `0755` because Nix store outputs reject setuid bits
+- OpenSSH 9.8p1 on Redox: preserve `/usr/libexec/*` in the package output (not just `/bin`) or sshd dies with `/usr/libexec/sshd-session does not exist`; keep convenience copies of the main binaries in `$out/bin` for package checks
+- Redox disk image assembly does `chmod -R u+w root/` after copying `rootTree`, which turns generated SSH private keys from store-readonly into mode `0644`; tighten `root/etc/ssh/ssh_host_*_key` back to `0600` in `make-redoxfs-image.nix` before `redoxfs-ar`
 - cmake: `-DCMAKE_C_FLAGS` on cmdline REPLACES `CMAKE_C_FLAGS_INIT` from toolchain — never set on cmdline
 - cmake: `CHECK_TYPE_SIZE(pid_t PID_T)` sets `HAVE_PID_T` and `PID_T` (not `SIZE_OF_PID_T`)
 - autotools: `CHOST` env var for cross-detection, `touch` timestamp ordering matters

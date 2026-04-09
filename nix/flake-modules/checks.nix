@@ -183,6 +183,7 @@ let
     rebuild-generations-test = packages.rebuild-generations-test;
     e2e-rebuild-test = packages.e2e-rebuild-test;
     network-test = packages.networkTest;
+    ssh-vm-test = packages.ssh-test;
     network-install-test = packages.networkInstallTest;
     channel-update-test = packages.channelUpdateTest;
   };

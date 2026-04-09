@@ -858,6 +858,19 @@
         "type": "gitlab"
       }
     },
+    "openssh-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1719808588,
+        "narHash": "sha256-EJZAL6sPWZNxouKzz/zWXsqh7SOfzrG431KaBKlfZgg=",
+        "type": "tarball",
+        "url": "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.8p1.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.8p1.tar.gz"
+      }
+    },
     "openssl-redox-src": {
       "flake": false,
       "locked": {
@@ -875,6 +888,19 @@
         "ref": "redox-v1",
         "repo": "openssl",
         "type": "gitlab"
+      }
+    },
+    "openssl3-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1758024333,
+        "narHash": "sha256-/c0IkPBVo/jkvI4KUznp9ojEsaJYt1FI7LRfTZJSfr0=",
+        "type": "tarball",
+        "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.3/openssl-3.5.3.tar.gz"
+      },
+      "original": {
+        "type": "tarball",
+        "url": "https://github.com/openssl/openssl/releases/download/openssl-3.5.3/openssl-3.5.3.tar.gz"
       }
     },
     "orbclient-src": {
@@ -1160,25 +1186,6 @@
         "type": "gitlab"
       }
     },
-    "redox-ssh-src": {
-      "flake": false,
-      "locked": {
-        "host": "gitlab.redox-os.org",
-        "lastModified": 1713821662,
-        "narHash": "sha256-YMmpnZEhhLsqprA9iUi0Z500a2Z5VBiOQacrUQ4EaZI=",
-        "owner": "redox-os",
-        "repo": "redox-ssh",
-        "rev": "2307ab591e7fbf5019e24ce7e50b8fadce843fa2",
-        "type": "gitlab"
-      },
-      "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
-        "ref": "master",
-        "repo": "redox-ssh",
-        "type": "gitlab"
-      }
-    },
     "redox-syscall-src": {
       "flake": false,
       "locked": {
@@ -1354,7 +1361,9 @@
         "object-src": "object-src",
         "onefetch-src": "onefetch-src",
         "openlibm-src": "openlibm-src",
+        "openssh-src": "openssh-src",
         "openssl-redox-src": "openssl-redox-src",
+        "openssl3-src": "openssl3-src",
         "orbclient-src": "orbclient-src",
         "orbdata-src": "orbdata-src",
         "orbfont-src": "orbfont-src",
@@ -1370,7 +1379,6 @@
         "redox-path-src": "redox-path-src",
         "redox-scheme-src": "redox-scheme-src",
         "redox-src": "redox-src",
-        "redox-ssh-src": "redox-ssh-src",
         "redox-syscall-src": "redox-syscall-src",
         "redoxer-src": "redoxer-src",
         "redoxfs-src": "redoxfs-src",

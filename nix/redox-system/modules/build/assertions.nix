@@ -68,8 +68,8 @@ let
     }
     # Typed service module assertions
     {
-      assertion = !cfg.sshEnabled || (pkgs ? redox-ssh);
-      message = "services.ssh.enable requires the 'redox-ssh' package in pkgs.";
+      assertion = !cfg.sshEnabled || cfg.sshPackageInstalled;
+      message = "services.ssh.enable requires the 'openssh' package in environment.systemPackages.";
     }
     {
       assertion = !cfg.sshEnabled || cfg.networkingEnabled;

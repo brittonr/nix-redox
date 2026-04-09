@@ -156,6 +156,24 @@ in
         ;
     };
 
+  # SSH test factory - boots a VM, forwards host port 2222 to guest 22,
+  # and verifies a host-side OpenSSH client can connect.
+  mkSshTest =
+    {
+      diskImage,
+      bootloader,
+      vmConfig ? { },
+    }:
+    import ./ssh-test.nix {
+      inherit
+        pkgs
+        lib
+        diskImage
+        bootloader
+        vmConfig
+        ;
+    };
+
   # Network install test factory - requires diskImage with network install test script
   # + a pre-built test binary cache. Starts HTTP server + boots QEMU with SLiRP.
   mkNetworkInstallTest =

@@ -102,7 +102,7 @@ in
 
   # ── Services ──
   "/services" = {
-    # SSH server (requires redox-ssh in systemPackages)
+    # SSH server (requires openssh in systemPackages)
     # ssh = {
     #   enable = true;
     #   port = 22;

@@ -42,8 +42,10 @@ let
     permitRootLogin = t.bool;
     # Listen address (0.0.0.0 = all interfaces).
     listenAddress = t.string;
-    # Path to host key file. Generated on first boot if missing.
-    hostKeyPath = t.string;
+    # OpenSSH host key paths.
+    hostKeyEd25519Path = t.string;
+    hostKeyRsaPath = t.string;
+    hostKeyEcdsaPath = t.string;
     # Path to authorized_keys file.
     authorizedKeysPath = t.string;
   };
@@ -162,8 +164,8 @@ in
               sshd = {
                 description = "SSH server daemon";
                 command = "/bin/sshd";
-                type = "nowait";
-                args = "-p ${toString options.ssh.port} -k ${options.ssh.hostKeyPath}";
+                type = "daemon";
+                args = "-D";
                 wantedBy = "rootfs";
                 enable = true;
                 after = [
@@ -312,10 +314,12 @@ in
         port = 22;
         permitRootLogin = false;
         listenAddress = "0.0.0.0";
-        hostKeyPath = "/etc/ssh/host_key";
+        hostKeyEd25519Path = "/etc/ssh/ssh_host_ed25519_key";
+        hostKeyRsaPath = "/etc/ssh/ssh_host_rsa_key";
+        hostKeyEcdsaPath = "/etc/ssh/ssh_host_ecdsa_key";
         authorizedKeysPath = "/etc/ssh/authorized_keys";
       };
-      description = "SSH server (sshd) — requires redox-ssh package";
+      description = "SSH server (sshd) — requires openssh package";
     };
 
     httpd = {
