@@ -1,0 +1,28 @@
+=== focused rerun metadata ===
+capture_dir=/var/tmp/redox-self-hosting-captures/20260408T213428-snix-compile-focus-pass
+command=nix run .#snix-compile-test -- --verbose
+elapsed=1618.435s
+
+=== allocator regression check ===
+libmimalloc-sys and c_src/mimalloc/v2/src/static.c no longer appear in the failing path for this rerun.
+The run gets past the old allocator failure point and reaches a later workspace build-script failure.
+
+=== new blocker excerpt ===
+error: failed to run custom build command for `snix-castore v0.1.0 (file:/tmp/snix-build-28-0/snix-src/upstream/castore)`
+
+Caused by:
+  process didn't exit successfully: `/tmp/snix-build-28-0/snix-src/target/debug/build/snix-castore-68616f3c9863bd28/build-script-build` (exit status: 1)
+  --- stderr
+  Error: Custom { kind: Other, error: "protoc failed: " }
+
+=== focused test verdicts ===
+FUNC_TEST:snix-compile:FAIL:exit or no binary at /bin/snix
+FUNC_TEST:snix-binary-exists:PASS
+FUNC_TEST:snix-binary-runs:PASS
+FUNC_TEST:snix-eval-works:PASS
+
+=== summary ===
+Passed:  6
+Failed:  1
+Total:   7
+failed_test=snix-compile

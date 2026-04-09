@@ -19,6 +19,7 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - `''` in Python code, `echo ''`, `get('key', '')` — all terminate the Nix string.
 - Use `""`, `echo ""`, `str()` respectively.
 - Comments containing `''` also break — reword to avoid consecutive single quotes.
+- Inside Nix `''` strings, bash `${var}` needs `''${var}` or Nix tries to interpolate it at evaluation time.
 
 ### Heredoc indentation in Nix `''` strings
 - ONE column-0 line breaks ALL heredoc terminators. Every line needs N+ spaces for N-space stripping.
@@ -31,6 +32,41 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### Verify the exact commit, not a later dirty tree
 - I claimed a `77/78` full-suite baseline from earlier logs, but an exact rerun of commit `c6a29e00` in a detached worktree only reached `70/70` before the 2400s timeout.
 - When a review asks for evidence against a specific commit, rerun that exact commit in a worktree (`git worktree add --detach /tmp/... <commit>`) instead of assuming later docs-only commits or dirty-tree edits match the earlier run.
+
+### Self-hosting vs self-hosting-test images are not interchangeable
+- I tried to reproduce `snix-compile` in the plain `self-hosting` image and got `/usr/src/snix-redox/build-snix.sh: No such file or directory`.
+- That was a false lead: the source bundle only exists in the `self-hosting-test` image. Use the actual test image when reproducing fixture failures tied to `/usr/src/*` bundles.
+
+### Exact `snix-compile` failure is later than proc-macro2/quote
+- Live rerun on the `self-hosting-test` image reached `tower-http` before failing, not just the initial `proc-macro2` / `quote` lines seen in the short excerpt.
+- The decisive errors were `E0463: can't find crate for tracing`, `futures_util`, and `tower` while rustc was invoked with matching `--extern ... .rmeta` paths, followed by `fatal runtime error: failed to initiate panic, error 0, aborting`.
+- Keep this in mind when debugging: the remaining bug is likely in cargo/rustc build mode, dependency metadata visibility, or panic handling during the big workspace build, not just in the source bundle plumbing.
+
+### Pueue VM test logs are not durable enough for evidence by themselves
+- I lost the final result of a `self-hosting-test` rerun because the pueue task record and `task_logs/15.log` disappeared before I extracted the tail.
+- For long Redox VM runs, tee stdout/stderr to a durable file under `/var/tmp/redox-self-hosting-captures/<timestamp>/` and keep metadata (`git status`, patch, exit code) beside the log.
+- Treat pueue output as convenience for monitoring, not as the only evidence artifact.
+
+### Focused `snix-compile` test exposed a new concrete blocker
+- Isolating `snix-compile` into a focused VM test removed the 2400s full-suite timeout and reproduced the failure in ~1169s with durable logs.
+- The current blocker is no longer the earlier `tower-http` / `E0463` symptom: the build now reaches `libmimalloc-sys` C compilation and fails in `c_src/mimalloc/v2/src/static.c` with Clang errors like `address argument to atomic operation must be a pointer to a trivially-copyable type ('_Atomic(mi_block_t *) *' invalid)`.
+- The focused run still reports `FUNC_TEST:snix-binary-exists:PASS`, `FUNC_TEST:snix-binary-runs:PASS`, and `FUNC_TEST:snix-eval-works:PASS` for the profile's installed `/bin/snix`; only the self-compiled derivation fails.
+- Durable evidence path: `/var/tmp/redox-self-hosting-captures/20260408T205802-snix-compile-focus/`.
+
+### `snix-redox/upstream` is a read-only symlink into the Nix store
+- I tried to edit `snix-redox/upstream/build/Cargo.toml` directly and hit a dead end because `snix-redox/upstream -> ../result-snix-upstream` points into a read-only store path.
+- Fix upstream workspace manifests in `nix/pkgs/infrastructure/snix-upstream-source.nix`, then rebuild the upstream source derivation and repoint the local `snix-redox/upstream` symlink before regenerating build plans.
+
+### Focused self-compile tests go silent if they capture `snix build` into a shell variable
+- `OUTPUT=$(/bin/snix build --file ... 2>/tmp/snix-compile-err)` hides all progress until the build exits, so long guest compiles look hung even when Cloud Hypervisor is busy.
+- Fix: run `snix build` in the background, `wait` on its PID, and emit a periodic heartbeat that reports elapsed time plus `/tmp/snix-compile-{output,err}` sizes and the latest matching progress line.
+- Patch both `nix/redox-system/profiles/snix-compile-test.nix` and `nix/redox-system/profiles/self-hosting-test.nix` so focused and full self-hosting runs behave the same.
+- A host-side sidecar log (`host-monitor.log`) sampling the Cloud Hypervisor PID, `/proc/<pid>/io`, and serial log `stat` once per minute is enough to tell “quiet but compiling” from “actually dead”.
+
+### Removing normal mimalloc deps exposed the next blocker
+- After dropping unused `mimalloc` normal deps from upstream `snix-build`, `snix-store`, and `nix-compat`, the focused rerun got past `libmimalloc-sys` and failed later in `snix-castore`'s build script instead.
+- The new failure is `Error: Custom { kind: Other, error: "protoc failed: " }` from `snix-castore` during the guest self-build.
+- This means the allocator change did its job; the next investigation should focus on guest-side `protoc` / proto path setup, not mimalloc.
 
 ### `cp -r dir/*` drops dotfiles
 - Use `cp -r dir/.` to copy ALL contents including dotfiles.

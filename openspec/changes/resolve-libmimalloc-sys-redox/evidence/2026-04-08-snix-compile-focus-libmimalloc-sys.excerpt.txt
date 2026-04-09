@@ -1,0 +1,32 @@
+=== focused run metadata ===
+capture_dir=/var/tmp/redox-self-hosting-captures/20260408T205802-snix-compile-focus
+command=nix run .#snix-compile-test -- --verbose
+exit_code=1
+
+=== allocator failure excerpt ===
+   Compiling libmimalloc-sys v0.1.44
+warning: libmimalloc-sys@0.1.44: In file included from c_src/mimalloc/v2/src/static.c:17:
+warning: libmimalloc-sys@0.1.44: In file included from c_src/mimalloc/v2/include/mimalloc/internal.h:16:
+warning: libmimalloc-sys@0.1.44: In file included from c_src/mimalloc/v2/include/mimalloc/types.h:28:
+warning: libmimalloc-sys@0.1.44: c_src/mimalloc/v2/include/mimalloc/atomic.h:132:10: error: address argument to atomic operation must be a pointer to integer, pointer or supported floating point type ('_Atomic(int64_t) *' invalid)
+warning: libmimalloc-sys@0.1.44: c_src/mimalloc/v2/include/mimalloc/atomic.h:135:23: error: address argument to atomic operation must be a pointer to a trivially-copyable type ('_Atomic(int64_t) *' invalid)
+warning: libmimalloc-sys@0.1.44: c_src/mimalloc/v2/include/mimalloc/atomic.h:341:7: error: address argument to atomic operation must be a pointer to a trivially-copyable type ('mi_atomic_once_t *' (aka '_Atomic(uintptr_t) *') invalid)
+warning: libmimalloc-sys@0.1.44: c_src/mimalloc/v2/src/free.c:236:27: error: address argument to atomic operation must be a pointer to a trivially-copyable type ('_Atomic(mi_block_t *) *' invalid)
+warning: libmimalloc-sys@0.1.44: fatal error: too many errors emitted, stopping now [-ferror-limit=]
+warning: libmimalloc-sys@0.1.44: 20 errors generated.
+error: failed to run custom build command for `libmimalloc-sys v0.1.44`
+
+=== cc-rs command ===
+error occurred in cc-rs: command did not execute successfully (status code exit status: 1): LC_ALL="C" "cc" "-O0" "-ffunction-sections" "-fdata-sections" "-fPIC" "-g" "-fno-omit-frame-pointer" "-m64" "--target=x86_64-unknown-redox" "-I" "c_src/mimalloc/v2/include" "-I" "c_src/mimalloc/v2/src" "-Wall" "-Wextra" "-Wno-error=date-time" "-DMI_DEBUG=0" "-o" "/tmp/snix-build-28-0/snix-src/target/x86_64-unknown-redox/debug/build/libmimalloc-sys-7a06c6e2df27dbad/out/077ae3504b1c7768-static.o" "-c" "c_src/mimalloc/v2/src/static.c"
+
+=== focused test verdicts ===
+FUNC_TEST:snix-compile:FAIL:exit or no binary at /bin/snix
+FUNC_TEST:snix-binary-exists:PASS
+FUNC_TEST:snix-binary-runs:PASS
+FUNC_TEST:snix-eval-works:PASS
+
+=== summary ===
+Passed:  6
+Failed:  1
+Total:   7
+failed_test=snix-compile

@@ -278,8 +278,47 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 
 ### What Doesn't
 - `snix-compile` (self-build): exact rerun of commit `c6a29e00` still fails in the full suite even though all 78 tests report. The attached evidence excerpt shows `snix-compile-exit=1`, `FUNC_TEST:snix-compile:FAIL:exit or no binary at /bin/snix`, and builder stderr ending at `Compiling proc-macro2 v1.0.106` / `Compiling quote v1.0.45` before the derivation exits 101
+- Focused rerun with the uncommitted `j1` experiment (2026-04-08, durable log under `/var/tmp/redox-self-hosting-captures/20260408T205802-snix-compile-focus/`) removed the full-suite timeout and exposed a new concrete blocker: `libmimalloc-sys` fails to compile `c_src/mimalloc/v2/src/static.c` on Redox with Clang/stdatomic errors such as `address argument to atomic operation must be a pointer to a trivially-copyable type ('_Atomic(mi_block_t *) *' invalid)`. That focused run still reports `FUNC_TEST:snix-binary-exists:PASS`, `FUNC_TEST:snix-binary-runs:PASS`, and `FUNC_TEST:snix-eval-works:PASS` for the profile's installed `/bin/snix`; only the self-compiled derivation fails.
+- After removing the normal `mimalloc` dependency edges from `snix-build`, `snix-store`, and `nix-compat`, the focused rerun at `/var/tmp/redox-self-hosting-captures/20260408T213428-snix-compile-focus-pass/` gets past `libmimalloc-sys` entirely and fails later in `snix-castore`'s build script with `Error: Custom { kind: Other, error: "protoc failed: " }`.
 - `CARGO_BUILD_JOBS > 1` had two issues: (1) lld stack overflow — fixed by `lld-wrapper` (16MB stack thread + exec); (2) cargo job manager hangs on multi-crate workspace builds — fixed by `patch-relibc-fork-lock.py` (see below)
 - `env!("CARGO_PKG_*")` in proc-macro crates: works via DSO environ propagation
+
+### Monitoring long `snix-compile` runs
+- A quiet serial log after `--- snix self-compile: snix build --file ---` does NOT mean the VM is hung. The old harness captured `snix build` stdout/stderr into guest temp files and printed them only after the build exited.
+- Future reruns of `.#snix-compile-test` and `.#self-hosting-test` now emit `[snix-compile] heartbeat ...` lines every 60s from the guest. The heartbeat reports elapsed time, `/tmp/snix-compile-output` size, `/tmp/snix-compile-err` size, and the latest matching progress line (`Compiling ...`, `warning:`, `error:`, `build complete`).
+- For a currently running quiet VM, monitor the host-side Cloud Hypervisor process instead of waiting on serial output:
+  - `pueue status --query 'status=running'` to find the task
+  - `pgrep -af cloud-hypervisor` to find the VM PID
+  - `ps -o pid,ppid,etime,%cpu,%mem,rss,vsz,stat,cmd -p <pid>` — if CPU stays high, the guest is usually still compiling
+  - `cat /proc/<pid>/io` — rising `syscr` / `syscw` means the VMM is still servicing guest I/O
+- Keep a host-side sidecar log in the durable capture directory when a run stays quiet. Example output file: `/var/tmp/redox-self-hosting-captures/<timestamp>-snix-compile-focus-pass/host-monitor.log`. Sample once per minute: VM `ps` line, `/proc/<pid>/io`, and `stat` for the serial log path.
+- Exact sidecar command template:
+  ```bash
+  pid=<cloud-hypervisor-pid>
+  serial=<serial-log-path>
+  run_dir=/var/tmp/redox-self-hosting-captures/<timestamp>-snix-compile-focus-pass
+  out="$run_dir/host-monitor.log"
+
+  mkdir -p "$run_dir"
+  {
+    echo "started_at=$(date --iso-8601=seconds) pid=$pid serial=$serial"
+    while kill -0 "$pid" 2>/dev/null; do
+      ts=$(date --iso-8601=seconds)
+      echo "[$ts]"
+      ps -o pid,ppid,etime,%cpu,%mem,rss,vsz,stat,cmd -p "$pid"
+      if [ -r "/proc/$pid/io" ]; then
+        grep -E "read_bytes|write_bytes|syscr|syscw" "/proc/$pid/io" || true
+      fi
+      if [ -e "$serial" ]; then
+        stat -c "serial_mtime=%y serial_size=%s" "$serial"
+      fi
+      echo
+      sleep 60
+    done
+    echo "[$(date --iso-8601=seconds)] process exited"
+  } > "$out"
+  ```
+- Durable run metadata belongs under `/var/tmp/redox-self-hosting-captures/<timestamp>-.../` alongside `meta.txt`, the VM log, and any sidecar monitor log. Treat pueue logs as convenience output, not the only evidence source.
 
 ### Self-Hosting Baseline (2026-04-08 exact rerun)
 - Sandbox mode: scheme-only (per-path proxy disabled due to kernel deadlock)

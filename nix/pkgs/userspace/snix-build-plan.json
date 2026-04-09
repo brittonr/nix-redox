@@ -7,11 +7,20 @@
     "path+file:///home/brittonr/git/redox/snix-redox#0.4.0"
   ],
   "workspaceMembers": {
-    "snix-redox": "path+file:///home/brittonr/git/redox/snix-redox#0.4.0"
+    "nix-compat": "path+file:///home/brittonr/git/redox/snix-redox/upstream/nix-compat#0.1.0",
+    "nix-compat-derive": "path+file:///home/brittonr/git/redox/snix-redox/upstream/nix-compat-derive#0.1.0",
+    "snix-build": "path+file:///home/brittonr/git/redox/snix-redox/upstream/build#snix-build@0.1.0",
+    "snix-castore": "path+file:///home/brittonr/git/redox/snix-redox/upstream/castore#snix-castore@0.1.0",
+    "snix-cli": "path+file:///home/brittonr/git/redox/snix-redox/upstream/cli/base#snix-cli@0.1.0",
+    "snix-eval": "path+file:///home/brittonr/git/redox/snix-redox/upstream/eval#snix-eval@0.1.0",
+    "snix-eval-builtin-macros": "path+file:///home/brittonr/git/redox/snix-redox/upstream/eval/builtin-macros#snix-eval-builtin-macros@0.0.1",
+    "snix-glue": "path+file:///home/brittonr/git/redox/snix-redox/upstream/glue#snix-glue@0.1.0",
+    "snix-redox": "path+file:///home/brittonr/git/redox/snix-redox#0.4.0",
+    "snix-store": "path+file:///home/brittonr/git/redox/snix-redox/upstream/store#snix-store@0.1.0",
+    "snix-tracing": "path+file:///home/brittonr/git/redox/snix-redox/upstream/tracing#snix-tracing@0.1.0"
   },
-  "target": "x86_64-unknown-redox",
-  "cargoLockHash": "fe7d1fb109df9328faa220b73159661721434219e4caeeb91ec403af4cd9aa2f",
-  "inputsHash": "250253f699af1e91de177ee0797a3dbcf7725f5cdb27e0f0e5d6e9b223009952",
+  "cargoLockHash": "07d7232f73784acc5e0363c6619a78dcbb11a64f2563947986da961a88e652bc",
+  "inputsHash": "29b0c6951cd55b7a71ff6ab4dfd8d2d8fc23d15258bab36d5276251817df65ae",
   "crates": {
     "git+https://github.com/tvlfyi/wu-manber.git#wu-manber@0.1.0": {
       "crateName": "wu-manber",
@@ -227,10 +236,6 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#itertools@0.12.1",
           "externCrateName": "itertools"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#mimalloc@0.1.48",
-          "externCrateName": "mimalloc"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#nix@0.29.0",
@@ -926,10 +931,6 @@
           "externCrateName": "hashbrown"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#mimalloc@0.1.48",
-          "externCrateName": "mimalloc"
-        },
-        {
           "packageId": "path+file:///home/brittonr/git/redox/snix-redox/upstream/nix-compat-derive#0.1.0",
           "externCrateName": "nix_compat_derive"
         },
@@ -1098,10 +1099,6 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#md-5@0.10.6",
           "externCrateName": "md5"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#mimalloc@0.1.48",
-          "externCrateName": "mimalloc"
         },
         {
           "packageId": "path+file:///home/brittonr/git/redox/snix-redox/upstream/nix-compat#0.1.0",
@@ -7079,43 +7076,6 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/portable-network-archive/liblzma-rs"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#libmimalloc-sys@0.1.44": {
-      "crateName": "libmimalloc-sys",
-      "version": "0.1.44",
-      "edition": "2018",
-      "sha256": "667f4fec20f29dfc6bc7357c582d91796c169ad7e2fce709468aefeb2c099870",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.183",
-          "externCrateName": "libc"
-        }
-      ],
-      "buildDependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.57",
-          "externCrateName": "cc"
-        }
-      ],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": "mimalloc",
-      "authors": [
-        "Octavian Oncescu <octavonce@gmail.com>"
-      ],
-      "description": "Sys crate wrapping the mimalloc allocator",
-      "license": "MIT",
-      "repository": "https://github.com/purpleprotocol/mimalloc_rust/tree/master/libmimalloc-sys"
-    },
     "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.14": {
       "crateName": "libredox",
       "version": "0.1.14",
@@ -7507,42 +7467,6 @@
       "homepage": "https://github.com/BurntSushi/memchr",
       "license": "Unlicense OR MIT",
       "repository": "https://github.com/BurntSushi/memchr"
-    },
-    "registry+https://github.com/rust-lang/crates.io-index#mimalloc@0.1.48": {
-      "crateName": "mimalloc",
-      "version": "0.1.48",
-      "edition": "2018",
-      "sha256": "e1ee66a4b64c74f4ef288bcbb9192ad9c3feaad75193129ac8509af543894fd8",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libmimalloc-sys@0.1.44",
-          "externCrateName": "libmimalloc_sys"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "Octavian Oncescu <octavonce@gmail.com>",
-        "Vincent Rouillé <vincent@speedy37.fr>",
-        "Thom Chiovoloni <chiovolonit@gmail.com>"
-      ],
-      "description": "Performance and security oriented drop-in allocator",
-      "license": "MIT",
-      "repository": "https://github.com/purpleprotocol/mimalloc_rust"
     },
     "registry+https://github.com/rust-lang/crates.io-index#mime@0.3.17": {
       "crateName": "mime",

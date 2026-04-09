@@ -3101,16 +3101,57 @@ let
                         # ld.lld from /nix/system/profile/bin/ and break linking.
                         echo "--- snix self-compile: snix build --file ---"
                         /nix/system/profile/bin/bash -c '
-                          rm -f /tmp/.cc-wrapper-raw-args /tmp/.cc-wrapper-stderr /tmp/.cc-wrapper-shared-cmd /tmp/.cc-wrapper-last-err 2>/dev/null
-                          OUTPUT=$(/bin/snix build --file /usr/src/snix-redox/build.nix 2>/tmp/snix-compile-err)
+                          export PATH=/nix/system/profile/bin:/bin:/usr/bin
+                          export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+                          export CARGO_HOME=/root/.cargo
+                          export CARGO_BUILD_JOBS=1
+                          export CARGO_INCREMENTAL=0
+                          export RAYON_NUM_THREADS=4
+                          export RUST_BACKTRACE=1
+                          rm -f /tmp/.cc-wrapper-raw-args /tmp/.cc-wrapper-stderr /tmp/.cc-wrapper-shared-cmd /tmp/.cc-wrapper-last-err /tmp/snix-compile-output /tmp/snix-compile-err 2>/dev/null
+                          : > /tmp/snix-compile-output
+                          : > /tmp/snix-compile-err
+
+                          latest_progress() {
+                            local last=""
+                            while IFS= read -r line; do
+                              case "$line" in
+                                *"Compiling "*|*"Finished "*|*"Running "*|*"warning:"*|*"error:"*|*"build complete"*)
+                                  last="$line"
+                                  ;;
+                              esac
+                            done < /tmp/snix-compile-err
+                            printf "%s" "$last"
+                          }
+
+                          /bin/snix build --file /usr/src/snix-redox/build.nix > /tmp/snix-compile-output 2> /tmp/snix-compile-err &
+                          SNIX_PID=$!
+                          echo "[snix-compile] started pid=$SNIX_PID heartbeat=60s"
+
+                          while kill -0 "$SNIX_PID" 2>/dev/null; do
+                            sleep 60
+                            if ! kill -0 "$SNIX_PID" 2>/dev/null; then
+                              break
+                            fi
+                            OUT_BYTES=$(wc -c < /tmp/snix-compile-output 2>/dev/null)
+                            ERR_BYTES=$(wc -c < /tmp/snix-compile-err 2>/dev/null)
+                            LAST=$(latest_progress 2>/dev/null)
+                            if [ -n "$LAST" ]; then
+                              echo "[snix-compile] heartbeat elapsed=''${SECONDS}s stdout=''${OUT_BYTES}B stderr=''${ERR_BYTES}B last=$LAST"
+                            else
+                              echo "[snix-compile] heartbeat elapsed=''${SECONDS}s stdout=''${OUT_BYTES}B stderr=''${ERR_BYTES}B"
+                            fi
+                          done
+
+                          wait "$SNIX_PID"
                           EXIT=$?
-                          echo "$OUTPUT" > /tmp/snix-compile-output
+                          OUTPUT=$(cat /tmp/snix-compile-output 2>/dev/null)
+                          printf "%s\n" "$OUTPUT" > /tmp/snix-compile-output
                           echo "snix-compile-exit=$EXIT"
                           echo "snix-compile-output=$OUTPUT"
                         '
 
                         let snix_output = $(cat /tmp/snix-compile-output)
-                        let snix_exit = $(/nix/system/profile/bin/bash -c 'cat /tmp/snix-compile-err 2>/dev/null | grep -c "build complete" || true')
 
                         # Check if snix build produced a store path with the binary
                         /nix/system/profile/bin/bash -c '

@@ -60,7 +60,7 @@ pkgs.runCommand "snix-source-bundle" { } ''
   directory = "vendor/source-git-0"
 
   [build]
-  jobs = 2
+  jobs = 1
   target = "x86_64-unknown-redox"
 
   [target.x86_64-unknown-redox]
