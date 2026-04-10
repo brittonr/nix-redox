@@ -48,3 +48,9 @@ Do not start remote cache, `stored`, generation management, or rebuild loop work
 - **Init scripts** (`nix/redox-system/`): `stored` service definition in init, login_schemes update for `store:` scheme.
 - **Disk image** (`nix/pkgs/infrastructure/`): Test bundles for flake/cc-dep/workspace already on image; may need a rebuild-test configuration.nix bundle.
 - **Depends on**: `fix-relibc-panic-abort` must land first — everything here requires working DSO-linked binaries on the guest.
+
+## References
+
+- [Bootstrappable Builds](https://www.bootstrappable.org/) — background on minimizing opaque bootstrap binaries and documenting source bootstrap paths.
+- [GNU Guix: "The Full-Source Bootstrap: Building from source all the way down"](https://guix.gnu.org/en/blog/2023/the-full-source-bootstrap-building-from-source-all-the-way-down/) — a concrete distribution-scale example of reducing the trusted bootstrap seed.
+- [StageX](https://codeberg.org/stagex/stagex) — a container-native, full-source-bootstrapped, reproducible toolchain and distribution effort relevant to later supply-chain and bootstrap work.

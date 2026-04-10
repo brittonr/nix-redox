@@ -80,3 +80,11 @@ Rationale: Full NixOS-style system derivations require evaluating all of nixpkgs
 **[Generation switch breaks boot]** → Switching to a generation with incompatible boot components could leave the system unbootable. Mitigation: generation switch only changes the profile symlink and etc files — boot components (kernel, initfs) require an explicit reboot. If the new generation's boot components don't match the running kernel, warn but don't force reboot.
 
 **[Remote cache adds network dependency to rebuild]** → If the cache server is unreachable, rebuild fails. Mitigation: local cache remains the default. Remote is opt-in via `--cache-url`. Source-build fallback (`--source`) works fully offline.
+
+## References
+
+These are background references for the longer-term bootstrap and supply-chain direction around self-hosting:
+
+- [Bootstrappable Builds](https://www.bootstrappable.org/) — project hub for reducing bootstrap binaries and documenting practical bootstrap paths.
+- [GNU Guix: "The Full-Source Bootstrap: Building from source all the way down"](https://guix.gnu.org/en/blog/2023/the-full-source-bootstrap-building-from-source-all-the-way-down/) — detailed write-up of Guix reaching a tiny audited bootstrap root for a full distro graph.
+- [StageX](https://codeberg.org/stagex/stagex) — a full-source-bootstrapped, reproducible distribution/toolchain effort with design goals adjacent to later Redox self-hosting work.

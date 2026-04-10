@@ -9,7 +9,7 @@
 ## 2. Verify boot-time auto-configuration
 
 - [x] 2.1 Build disk image with fixed netcfg-setup, boot on GMKtec
-- [ ] 2.2 Boot-time static config not working — init service runs but netcfg-setup can't configure IP. Root cause: smolnetd signals readiness BEFORE registering netcfg scheme (race in smolnetd main.rs: daemon.ready() at line ~before Smolnetd::new()). Manual `/bin/netcfg-setup static-auto` works perfectly after boot. Needs upstream smolnetd fix to move daemon.ready() after scheme registration.
+- [x] 2.2 Boot-time static config not working — init service runs but netcfg-setup can't configure IP. Root cause: smolnetd signals readiness BEFORE registering netcfg scheme (race in smolnetd main.rs: daemon.ready() at line ~before Smolnetd::new()). Manual `/bin/netcfg-setup static-auto` works perfectly after boot. Fixed in `nix/pkgs/system/base.nix` via `patch-smolnetd-ready-order.py`, which moves `daemon.ready()` after `Smolnetd::new()` registers `netcfg:`.
 - [ ] 2.3 Verify IP is configured: `cat /scheme/netcfg/ifaces/eth0/addr/list` shows configured address — WORKS with manual command
 - [ ] 2.4 Verify ping works immediately after login — WORKS with manual command (1ms RTT)
 

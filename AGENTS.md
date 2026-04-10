@@ -419,7 +419,7 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 - redox-log file output (`/scheme/logging/`) always 0 bytes during initfs boot
 - Driver diag path: `cat /scheme/network.*/diag` — reads registers from driver's own event loop, only reliable diagnostic
 - smolnetd netcfg scheme hardcodes interface as `eth0` — use `eth0` for configuration, not PCI-path names
-- smolnetd signals readiness (daemon.ready()) BEFORE registering netcfg scheme (race window)
+- smolnetd readiness must come AFTER `Smolnetd::new()` registers `netcfg:`; our `base.nix` applies `patch-smolnetd-ready-order.py` to move `daemon.ready()` out of the race window
 
 ### snix TLS/CA Certificate Handling
 - Redox has no system CA certificate store — `rustls-native-certs` panics with "No CA certificates were loaded"
