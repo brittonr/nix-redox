@@ -192,14 +192,11 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Commands at `/bin/` are unreachable without full path
 - Fix: preserve full path when command starts with `/`
 
-### Rootfs oneshot services fail silently — boot-time networking blocked
-- Services in `/usr/lib/init.d/` with type "oneshot" run after rootfs mount
-- Service command executes (confirmed: binary exists, service file correct) but writes to netcfg scheme don't take effect
-- Manual execution of identical command from login shell works perfectly
-- Tried: netcfg-setup binary, Ion wrapper script, direct echo to scheme — all fail at boot, all work manually
-- Root cause unknown — needs serial console or init debug logging to trace
-- Possible causes: smolnetd scheme registration race, init env_clear side effects, Ion script execution in init context
-- Workaround: run `/bin/netcfg-setup static-auto --address X --gateway Y` manually after login
+### smolnetd readiness must come after netcfg scheme registration
+- Boot-time `netcfg-setup` raced `smolnetd` because `netstack/src/main.rs` called `daemon.ready()` before `Smolnetd::new()`.
+- `Smolnetd::new()` constructs `NetCfgScheme::new()`, and that call is what registers `netcfg:` in the namespace.
+- Fix in our tree: `nix/pkgs/system/base.nix` applies `patch-smolnetd-ready-order.py`, which moves `daemon.ready()` to after `Smolnetd::new()` succeeds.
+- Manual `/bin/netcfg-setup static-auto ...` was a misleading workaround; the real failure window was only early boot, before `netcfg:` existed.
 
 ### Ion `&>` redirect doesn't work
 - `#!/bin/ion\ncommand &> /var/log/file.log` — the `&>` syntax doesn't capture output

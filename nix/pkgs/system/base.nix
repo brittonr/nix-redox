@@ -77,6 +77,9 @@ let
   # Patch for inputd daemon startup order (setup_logging after SchemeDaemon::new)
   patchInputdDaemonOrder = ../patches/patch-inputd-daemon-order.py;
 
+  # Patch for smolnetd: signal daemon readiness only after netcfg is registered
+  patchSmolnetdReadyOrder = ../patches/patch-smolnetd-ready-order.py;
+
   # virtio-fsd driver source (injected into base workspace)
   virtioFsdSrc = ./virtio-fsd;
 
@@ -111,7 +114,7 @@ let
 
   # Prepare source with patched dependencies
   patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "base-src-patched-v28"; # v28: xhcid interrupt transfer diagnostics only
+    name = "base-src-patched-v29"; # v29: smolnetd readiness after netcfg registration
     src = base-src;
 
     nativeBuildInputs = [ pkgs.gnupatch ];
@@ -156,6 +159,15 @@ let
         -e 's|redox-log = { git = "https://gitlab.redox-os.org/redox-os/redox-log.git"[^}]*}|redox-log = { path = "${redox-log-src}" }|g' \
         -e 's|fdt = { git = "https://github.com/repnop/fdt.git"[^}]*}|fdt = { path = "${fdt-src}" }|g' \
         {} +
+
+      # smolnetd must not signal readiness until NetCfgScheme::new has
+      # registered the netcfg: scheme. Otherwise init can launch netcfg-setup
+      # early and the open races with scheme registration.
+      if [ -f netstack/src/main.rs ]; then
+        echo "Patching smolnetd ready order..."
+        ${pkgs.python3}/bin/python3 ${patchSmolnetdReadyOrder} netstack/src/main.rs
+        echo "Done patching smolnetd ready order"
+      fi
 
       # Apply GraphicScreen page-aligned allocation patch
       # This fixes the "Invalid argument" error when Orbital tries to mmap the display
