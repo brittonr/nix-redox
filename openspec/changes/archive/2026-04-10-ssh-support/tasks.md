@@ -47,5 +47,5 @@
 ## 7. Cleanup and Documentation
 
 - [x] 7.1 Update AGENTS.md with OpenSSH-specific knowledge (build flags, patch provenance, known Redox limitations in the patch)
-- [ ] 7.2 Verify `nix flake check` passes with new packages and updated assertions
+- [x] 7.2 Verify `nix flake check` passes with new packages and updated assertions
 - [x] 7.3 Update napkin with any gotchas discovered during implementation

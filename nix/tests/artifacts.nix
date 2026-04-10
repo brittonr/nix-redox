@@ -303,7 +303,11 @@ in
       # check directory content rather than hardcoded filenames.
       {
         file = "usr/lib/init.d";
-        dirContains = "notify /bin/smolnetd";
+        dirContains = "cmd = \"/bin/smolnetd\"";
+      }
+      {
+        file = "usr/lib/init.d";
+        dirContains = "type = \"notify\"";
       }
       {
         file = "usr/lib/init.d";
@@ -357,19 +361,22 @@ in
       {
         file = "usr/bin/netcfg-setup";
       }
-      # Static network init script is auto-numbered in usr/lib/init.d/;
-      # check directory content rather than hardcoded filenames.
+      # Static network init is emitted as a TOML unit plus the helper script.
       {
         file = "usr/lib/init.d";
-        dirContains = "netcfg-setup static";
+        dirContains = "cmd = \"/bin/netcfg-static-quiet\"";
       }
       {
         file = "usr/lib/init.d";
-        dirContains = "10.0.0.5";
+        dirContains = "type = \"oneshot_async\"";
       }
       {
-        file = "usr/lib/init.d";
-        dirContains = "10.0.0.1";
+        file = "bin/netcfg-static-quiet";
+        contains = "10.0.0.5";
+      }
+      {
+        file = "bin/netcfg-static-quiet";
+        contains = "10.0.0.1";
       }
     ];
   };
@@ -450,9 +457,9 @@ in
   # Note: Nix store strips write bits, so chmod 755 becomes 555
   rootTree-has-startup =
     let
-      # Use packages without userutils so init.toml gets the shell service
-      # entry pointing to /startup.sh. With userutils present, getty handles
-      # the console and init.toml is empty.
+      # Use packages without userutils so the build emits 99_startup.service
+      # pointing at /startup.sh. With userutils present, getty handles the
+      # console instead.
       noUserutilsPkgs = builtins.removeAttrs mockPkgs.all [ "userutils" ];
     in
     mkArtifactTest {
@@ -476,8 +483,12 @@ in
           mode = "555";
         }
         {
-          file = "etc/init.toml";
-          contains = "/startup.sh";
+          file = "usr/lib/init.d";
+          dirContains = ''cmd = "/startup.sh"'';
+        }
+        {
+          file = "usr/lib/init.d";
+          dirContains = ''type = "oneshot_async"'';
         }
       ];
     };
@@ -596,7 +607,7 @@ in
     ];
     artifact = "toplevel";
     checks = [
-      { file = "etc/passwd"; } # Basic sanity check
+      { file = "etc/etc/passwd"; } # etcDerivation is linked at $toplevel/etc
     ];
   };
 
@@ -754,7 +765,7 @@ in
       { file = "disk-image"; }
       # Configuration access
       { file = "etc"; }
-      { file = "etc/passwd"; }
+      { file = "etc/etc/passwd"; }
       # Build info
       {
         file = "nix-support/build-info";
@@ -2060,7 +2071,7 @@ in
   # Test: sudod init script present when userutils installed
   rootTree-sudod-init-script = mkArtifactTest {
     name = "rootTree-sudod-init-script";
-    description = "Verifies sudod init script exists and starts sudo --daemon when userutils present";
+    description = "Verifies sudod service exists and starts /bin/sudo --daemon when userutils present";
     targetPkgs = mockPkgs.all // {
       userutils = mockPkgs.userutils;
     };
@@ -2074,9 +2085,13 @@ in
     checks = [
       {
         # The service name "sudod" gets a numeric prefix from topo sort.
-        # Use a glob-style check: find any init.d script containing the command.
+        # Check the TOML unit content rather than legacy shell syntax.
         file = "usr/lib/init.d";
-        dirContains = "sudo --daemon";
+        dirContains = "cmd = \"/bin/sudo\"";
+      }
+      {
+        file = "usr/lib/init.d";
+        dirContains = ''args = ["--daemon"]'';
       }
     ];
   };
@@ -2089,7 +2104,7 @@ in
     checks = [
       {
         file = "usr/lib/init.d";
-        dirNotContains = "sudo --daemon";
+        dirNotContains = "cmd = \"/bin/sudo\"";
       }
     ];
   };

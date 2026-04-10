@@ -23,7 +23,7 @@ let
     src = combinedSrc;
     # Dummy hash — replace after first build attempt reveals the real hash.
     # Run: nix build .#snix-source-bundle 2>&1 | grep "got:"
-    hash = "sha256-ZylvWRiNb25RFebh4+fkS3HUzbwGtl4t/3yDGu41/H4=";
+    hash = "sha256-p4Qdnx0mKbJGmG+1KgPRRZT4TVZticCV+rHEc5ILwIs=";
   };
 in
 pkgs.runCommand "snix-source-bundle" { } ''
