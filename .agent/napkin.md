@@ -99,6 +99,14 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Use `cp -r dir/.` to copy ALL contents including dotfiles.
 - `.cargo/config.toml` silently lost when `/*` was used.
 
+### Toplevel `/etc` checks are nested under `etc/etc/*`
+- `manifest.nix` links the standalone etc derivation at `$toplevel/etc`, and that derivation itself stores files as `etc/passwd`, `etc/profile`, etc.
+- Artifact tests for `artifact = "toplevel"` must check `etc/etc/passwd` (or similar), not `etc/passwd`.
+
+### Rootfs startup and networking service tests must match TOML unit files
+- `usr/lib/init.d/*.service` now stores `cmd = "..."` and `type = "..."` fields, not legacy shell lines like `notify /bin/smolnetd`.
+- Non-userutils startup is emitted as `99_startup.service` with `cmd = "/startup.sh"` and `type = "oneshot_async"`; `etc/init.toml` can stay empty.
+
 ### `mod build_proxy` must be in BOTH lib.rs AND main.rs
 - snix-redox has separate lib and bin crates with their own module trees.
 

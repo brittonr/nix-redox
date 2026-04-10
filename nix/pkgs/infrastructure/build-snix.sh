@@ -50,10 +50,10 @@ if [ -x /nix/system/profile/bin/protoc ]; then
 fi
 
 export SNIX_RUSTC_LOG=/tmp/snix-rustc.log
-: > "$SNIX_RUSTC_LOG"
+: >"$SNIX_RUSTC_LOG"
 RUSTC_WRAPPER_SH="$TMPDIR/rustc-wrapper.sh"
 cp /nix/system/profile/bin/bash "$RUSTC_WRAPPER_SH"
-cat > "$RUSTC_WRAPPER_SH" <<'EOF'
+cat >"$RUSTC_WRAPPER_SH" <<'EOF'
 #!/nix/system/profile/bin/bash
 set -u
 
