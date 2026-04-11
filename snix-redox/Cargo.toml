@@ -194,7 +194,10 @@ tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "fs"] 
 # === TLS crypto provider (ring, not aws-lc-rs — relibc compatibility) ===
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 
-# === Sync HTTP client for binary cache (Redox-side, not eval) ===
+# === Sync HTTP clients ===
+# CacheSource's remote cache path uses minreq (small blocking HTTP/1.1 client).
+minreq = { version = "2.14", default-features = false, features = ["https"] }
+# Other existing sync download paths still use ureq for now.
 ureq = { version = "3.0", default-features = false, features = ["rustls"] }
 
 # === Compression for NAR files (pure Rust) ===

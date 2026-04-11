@@ -31,8 +31,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::system::{
     self, BootConfig, Configuration, GraphicsConfig as SysGraphicsConfig, Group, HardwareConfig,
-    LoggingConfig as SysLoggingConfig, Manifest, NetworkingConfig, Package, PowerConfig as SysPowerConfig,
-    SecurityConfig as SysSecurityConfig, Services, SystemInfo, User,
+    LoggingConfig as SysLoggingConfig, Manifest, NetworkingConfig, Package,
+    PowerConfig as SysPowerConfig, SecurityConfig as SysSecurityConfig, Services, SystemInfo, User,
 };
 
 const DEFAULT_CONFIG_PATH: &str = "/etc/redox-system/configuration.nix";
@@ -41,10 +41,18 @@ const DEFAULT_CACHE_INDEX: &str = "/nix/cache/packages.json";
 
 /// Boot-essential package names that are always preserved in /bin/.
 const BOOT_ESSENTIAL: &[&str] = &[
-    "ion", "ion-shell",
-    "base", "redox-base",
-    "init", "logd", "ramfs", "zerod", "nulld", "randd",
-    "snix", "snix-redox",
+    "ion",
+    "ion-shell",
+    "base",
+    "redox-base",
+    "init",
+    "logd",
+    "ramfs",
+    "zerod",
+    "nulld",
+    "randd",
+    "snix",
+    "snix-redox",
     "uutils",
 ];
 
@@ -154,7 +162,12 @@ pub fn has_package_changes(config: &RebuildConfig) -> bool {
 pub fn has_service_changes(config: &RebuildConfig, current_manifest: Option<&Manifest>) -> bool {
     if let Some(ref svc_names) = config.services {
         if let Some(manifest) = current_manifest {
-            let mut current_names: Vec<&str> = manifest.services.declared.keys().map(|s| s.as_str()).collect();
+            let mut current_names: Vec<&str> = manifest
+                .services
+                .declared
+                .keys()
+                .map(|s| s.as_str())
+                .collect();
             current_names.sort();
             let mut new_names: Vec<&str> = svc_names.iter().map(|s| s.as_str()).collect();
             new_names.sort();
@@ -174,7 +187,10 @@ pub fn has_service_changes(config: &RebuildConfig, current_manifest: Option<&Man
 ///
 /// When `current_manifest` is provided, service names are compared against the manifest's
 /// declared services. When `None`, only hardware fields are checked.
-pub fn has_boot_affecting_changes(config: &RebuildConfig, current_manifest: Option<&Manifest>) -> bool {
+pub fn has_boot_affecting_changes(
+    config: &RebuildConfig,
+    current_manifest: Option<&Manifest>,
+) -> bool {
     let hw_changed = if let Some(ref hw) = config.hardware {
         hw.storage_drivers.is_some()
             || hw.network_drivers.is_some()
@@ -187,7 +203,12 @@ pub fn has_boot_affecting_changes(config: &RebuildConfig, current_manifest: Opti
 
     let services_changed = if let Some(ref svc_names) = config.services {
         if let Some(manifest) = current_manifest {
-            let mut current_names: Vec<&str> = manifest.services.declared.keys().map(|s| s.as_str()).collect();
+            let mut current_names: Vec<&str> = manifest
+                .services
+                .declared
+                .keys()
+                .map(|s| s.as_str())
+                .collect();
             current_names.sort();
             let mut new_names: Vec<&str> = svc_names.iter().map(|s| s.as_str()).collect();
             new_names.sort();
@@ -230,6 +251,7 @@ pub fn auto_rebuild(
     manifest_path: Option<&str>,
     gen_dir: Option<&str>,
     cache_index_path: Option<&str>,
+    cache_url: Option<&str>,
     shared_dir: Option<&str>,
     timeout: Option<u64>,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -291,11 +313,19 @@ pub fn auto_rebuild(
                  \n\
                  To force local resolution (may produce incomplete results):\n\
                    snix system rebuild --local"
-            ).into())
+            )
+            .into())
         }
     } else {
         // Config-only — use local path (fast, no bridge needed)
-        rebuild(config_path, dry_run, manifest_path, gen_dir, cache_index_path)
+        rebuild(
+            config_path,
+            dry_run,
+            manifest_path,
+            gen_dir,
+            cache_index_path,
+            cache_url,
+        )
     }
 }
 
@@ -305,10 +335,12 @@ pub fn rebuild(
     manifest_path: Option<&str>,
     gen_dir: Option<&str>,
     cache_index_path: Option<&str>,
+    cache_url: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cfg_path = config_path.unwrap_or(DEFAULT_CONFIG_PATH);
     let mpath = manifest_path.unwrap_or(DEFAULT_MANIFEST_PATH);
     let cache_path = cache_index_path.unwrap_or(DEFAULT_CACHE_INDEX);
+    let cache_source = cache_source_for_rebuild(cache_path, cache_url);
 
     // Step 1: Evaluate configuration.nix
     println!("Evaluating {cfg_path}...");
@@ -324,7 +356,7 @@ pub fn rebuild(
     let current = system::load_manifest_from(mpath)?;
 
     // Step 3: Resolve package names → store paths
-    let resolved_packages = resolve_packages(&config.packages, cache_path)?;
+    let resolved_packages = resolve_packages_with_source(&config.packages, &cache_source)?;
 
     // Step 4: Merge config into manifest
     let merged = merge_config(&current, &config, &resolved_packages)?;
@@ -346,19 +378,15 @@ pub fn rebuild(
         return Ok(());
     }
 
-    // Step 5b: Extract newly-added packages from the binary cache.
-    // The resolve step gives us store paths, but they may not be extracted
-    // to /nix/store/ yet (only exist as NARs in /nix/cache/).
+    // Step 5b: Extract newly-added packages from the selected cache source.
     if !resolved_packages.is_empty() {
-        let cache_dir = Path::new(cache_path).parent().unwrap_or(Path::new("/nix/cache"));
-        let source = crate::cache_source::CacheSource::Local(cache_dir.to_path_buf());
         for pkg in &resolved_packages {
             if pkg.store_path.is_empty() {
                 continue;
             }
             if !Path::new(&pkg.store_path).exists() {
                 println!("Extracting {}...", pkg.name);
-                if let Err(e) = crate::install::fetch_and_extract(&pkg.store_path, &source) {
+                if let Err(e) = crate::install::fetch_and_extract(&pkg.store_path, &cache_source) {
                     eprintln!("warning: failed to extract {}: {e}", pkg.name);
                 }
             }
@@ -476,7 +504,10 @@ pub fn show_config(config_path: Option<&str>) -> Result<(), Box<dyn std::error::
     if let Some(ref users) = config.users {
         println!("  users:");
         for (name, u) in users {
-            println!("    {name}: uid={} gid={} home={} shell={}", u.uid, u.gid, u.home, u.shell);
+            println!(
+                "    {name}: uid={} gid={} home={} shell={}",
+                u.uid, u.gid, u.home, u.shell
+            );
         }
     }
 
@@ -524,11 +555,7 @@ fn evaluate_config(path: &str) -> Result<RebuildConfig, Box<dyn std::error::Erro
 
     if !result.errors.is_empty() {
         let errors: Vec<String> = result.errors.iter().map(|e| format!("{e}")).collect();
-        return Err(format!(
-            "error evaluating {path}:\n{}",
-            errors.join("\n")
-        )
-        .into());
+        return Err(format!("error evaluating {path}:\n{}", errors.join("\n")).into());
     }
 
     let value = result
@@ -560,25 +587,55 @@ pub(crate) fn parse_config_json(json: &str) -> Result<RebuildConfig, Box<dyn std
     Ok(config)
 }
 
-/// Resolve package names to store paths using the binary cache index.
-fn resolve_packages(
-    names: &Option<Vec<String>>,
+/// Select the cache source used by rebuild.
+fn cache_source_for_rebuild(
     cache_index_path: &str,
+    cache_url: Option<&str>,
+) -> crate::cache_source::CacheSource {
+    if let Some(url) = cache_url {
+        crate::cache_source::CacheSource::Remote(url.trim_end_matches('/').to_string())
+    } else {
+        let cache_dir = Path::new(cache_index_path)
+            .parent()
+            .unwrap_or(Path::new(crate::cache_source::DEFAULT_CACHE_PATH));
+        crate::cache_source::CacheSource::Local(cache_dir.to_path_buf())
+    }
+}
+
+/// Resolve package names to store paths using the selected cache source.
+fn resolve_packages_with_source(
+    names: &Option<Vec<String>>,
+    source: &crate::cache_source::CacheSource,
 ) -> Result<Vec<Package>, Box<dyn std::error::Error>> {
     let names = match names {
         Some(n) if !n.is_empty() => n,
         _ => return Ok(Vec::new()),
     };
 
-    let index_json = if Path::new(cache_index_path).exists() {
-        fs::read_to_string(cache_index_path)?
-    } else {
-        eprintln!("warning: package index not found at {cache_index_path}");
-        eprintln!("         package names will not be resolved to store paths");
-        String::from("{}")
-    };
+    let index = source.read_index()?;
+    let mut packages = Vec::new();
 
-    resolve_packages_from_json(names, &index_json)
+    for name in names {
+        if let Some(entry) = index.packages.get(name.as_str()) {
+            packages.push(Package {
+                name: name.clone(),
+                version: entry.version.clone(),
+                store_path: entry.store_path.clone(),
+            });
+        } else {
+            eprintln!(
+                "warning: package '{name}' not found in {}",
+                source.display_name()
+            );
+            packages.push(Package {
+                name: name.clone(),
+                version: String::new(),
+                store_path: String::new(),
+            });
+        }
+    }
+
+    Ok(packages)
 }
 
 /// Resolve package names from a JSON index string (testable).
@@ -784,39 +841,71 @@ fn is_boot_essential(name: &str) -> bool {
 /// services, files, boot components, drivers, security, logging, power).
 fn has_manifest_changes(current: &Manifest, merged: &Manifest) -> bool {
     // System-level fields
-    if current.system.hostname != merged.system.hostname { return true; }
-    if current.system.timezone != merged.system.timezone { return true; }
+    if current.system.hostname != merged.system.hostname {
+        return true;
+    }
+    if current.system.timezone != merged.system.timezone {
+        return true;
+    }
 
     // Networking
-    if current.configuration.networking != merged.configuration.networking { return true; }
+    if current.configuration.networking != merged.configuration.networking {
+        return true;
+    }
 
     // Security, logging, power
-    if current.configuration.security != merged.configuration.security { return true; }
-    if current.configuration.logging != merged.configuration.logging { return true; }
-    if current.configuration.power != merged.configuration.power { return true; }
-    if current.configuration.hardware != merged.configuration.hardware { return true; }
+    if current.configuration.security != merged.configuration.security {
+        return true;
+    }
+    if current.configuration.logging != merged.configuration.logging {
+        return true;
+    }
+    if current.configuration.power != merged.configuration.power {
+        return true;
+    }
+    if current.configuration.hardware != merged.configuration.hardware {
+        return true;
+    }
 
     // Packages (compare by name + store_path)
-    let cur_pkgs: Vec<(&str, &str)> = current.packages.iter()
-        .map(|p| (p.name.as_str(), p.store_path.as_str())).collect();
-    let new_pkgs: Vec<(&str, &str)> = merged.packages.iter()
-        .map(|p| (p.name.as_str(), p.store_path.as_str())).collect();
-    if cur_pkgs != new_pkgs { return true; }
+    let cur_pkgs: Vec<(&str, &str)> = current
+        .packages
+        .iter()
+        .map(|p| (p.name.as_str(), p.store_path.as_str()))
+        .collect();
+    let new_pkgs: Vec<(&str, &str)> = merged
+        .packages
+        .iter()
+        .map(|p| (p.name.as_str(), p.store_path.as_str()))
+        .collect();
+    if cur_pkgs != new_pkgs {
+        return true;
+    }
 
     // Users
-    if current.users != merged.users { return true; }
+    if current.users != merged.users {
+        return true;
+    }
 
     // Services
-    if current.services != merged.services { return true; }
+    if current.services != merged.services {
+        return true;
+    }
 
     // Files (environment.etc)
-    if current.files != merged.files { return true; }
+    if current.files != merged.files {
+        return true;
+    }
 
     // Boot components
-    if current.boot != merged.boot { return true; }
+    if current.boot != merged.boot {
+        return true;
+    }
 
     // Drivers
-    if current.drivers != merged.drivers { return true; }
+    if current.drivers != merged.drivers {
+        return true;
+    }
 
     false
 }
@@ -842,15 +931,13 @@ fn print_changes(current: &Manifest, merged: &Manifest, config: &RebuildConfig) 
     if current.configuration.networking.enabled != merged.configuration.networking.enabled {
         changes.push(format!(
             "  networking.enabled: {} → {}",
-            current.configuration.networking.enabled,
-            merged.configuration.networking.enabled
+            current.configuration.networking.enabled, merged.configuration.networking.enabled
         ));
     }
     if current.configuration.networking.mode != merged.configuration.networking.mode {
         changes.push(format!(
             "  networking.mode: {} → {}",
-            current.configuration.networking.mode,
-            merged.configuration.networking.mode
+            current.configuration.networking.mode, merged.configuration.networking.mode
         ));
     }
 
@@ -858,8 +945,7 @@ fn print_changes(current: &Manifest, merged: &Manifest, config: &RebuildConfig) 
     if current.configuration.graphics.enabled != merged.configuration.graphics.enabled {
         changes.push(format!(
             "  graphics.enabled: {} → {}",
-            current.configuration.graphics.enabled,
-            merged.configuration.graphics.enabled
+            current.configuration.graphics.enabled, merged.configuration.graphics.enabled
         ));
     }
 
@@ -885,7 +971,11 @@ fn print_changes(current: &Manifest, merged: &Manifest, config: &RebuildConfig) 
     if !added.is_empty() {
         changes.push(format!(
             "  packages added: {}",
-            added.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+            added
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
         ));
     }
     if !removed.is_empty() {
@@ -1049,10 +1139,12 @@ pub fn rebuild_from_source(
     manifest_path: Option<&str>,
     gen_dir: Option<&str>,
     cache_index_path: Option<&str>,
+    cache_url: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cfg_path = config_path.unwrap_or(DEFAULT_CONFIG_PATH);
     let mpath = manifest_path.unwrap_or(DEFAULT_MANIFEST_PATH);
     let cache_path = cache_index_path.unwrap_or(DEFAULT_CACHE_INDEX);
+    let cache_source = cache_source_for_rebuild(cache_path, cache_url);
 
     // Step 1: Evaluate configuration.nix
     println!("Evaluating {cfg_path}...");
@@ -1062,13 +1154,11 @@ pub fn rebuild_from_source(
     let sources_path = config.package_sources.as_deref().ok_or(
         "configuration.nix has no 'packageSources' attribute.\n\
          Add: packageSources = \"/etc/redox-system/packages.nix\";\n\
-         Or use 'snix system rebuild' (without --source) for binary cache mode."
+         Or use 'snix system rebuild' (without --source) for binary cache mode.",
     )?;
 
     if !Path::new(sources_path).exists() {
-        return Err(format!(
-            "packageSources file not found: {sources_path}"
-        ).into());
+        return Err(format!("packageSources file not found: {sources_path}").into());
     }
 
     // Step 3: Evaluate the package sources file
@@ -1087,7 +1177,10 @@ pub fn rebuild_from_source(
 
     if dry_run {
         println!();
-        println!("Dry run complete. {} derivation(s) would be built.", source_packages.len());
+        println!(
+            "Dry run complete. {} derivation(s) would be built.",
+            source_packages.len()
+        );
         return Ok(());
     }
 
@@ -1100,7 +1193,7 @@ pub fn rebuild_from_source(
 
     // Resolve any binary-cache packages too
     let cache_packages = if has_package_changes(&config) {
-        resolve_packages(&config.packages, cache_path).unwrap_or_default()
+        resolve_packages_with_source(&config.packages, &cache_source).unwrap_or_default()
     } else {
         vec![]
     };
@@ -1125,13 +1218,17 @@ pub fn rebuild_from_source(
 
     // Ensure boot essentials are preserved
     for essential in BOOT_ESSENTIAL {
-        if !merged.packages.iter().any(|p| {
-            p.name == *essential || p.name.ends_with(essential)
-        }) {
+        if !merged
+            .packages
+            .iter()
+            .any(|p| p.name == *essential || p.name.ends_with(essential))
+        {
             // Keep from current manifest
-            if let Some(pkg) = current.packages.iter().find(|p| {
-                p.name == *essential || p.name.ends_with(essential)
-            }) {
+            if let Some(pkg) = current
+                .packages
+                .iter()
+                .find(|p| p.name == *essential || p.name.ends_with(essential))
+            {
                 merged.packages.push(pkg.clone());
             }
         }
@@ -1142,14 +1239,12 @@ pub fn rebuild_from_source(
     let json = serde_json::to_string_pretty(&merged)?;
     fs::write(&tmp_path, &json)?;
 
-    let desc = format!("source rebuild ({} packages from {})", built_packages.len(), sources_path);
-    let result = system::switch(
-        &tmp_path,
-        Some(&desc),
-        false,
-        gen_dir,
-        manifest_path,
+    let desc = format!(
+        "source rebuild ({} packages from {})",
+        built_packages.len(),
+        sources_path
     );
+    let result = system::switch(&tmp_path, Some(&desc), false, gen_dir, manifest_path);
 
     let _ = fs::remove_file(&tmp_path);
     result?;
@@ -1173,12 +1268,10 @@ fn evaluate_package_sources(
     // Parse the list of names
     let names_str = names_str.trim();
     if !names_str.starts_with('[') || !names_str.ends_with(']') {
-        return Err(format!(
-            "packageSources must return an attrset, got: {names_str}"
-        ).into());
+        return Err(format!("packageSources must return an attrset, got: {names_str}").into());
     }
 
-    let inner = &names_str[1..names_str.len()-1].trim();
+    let inner = &names_str[1..names_str.len() - 1].trim();
     let names: Vec<String> = inner
         .split_whitespace()
         .map(|s| s.trim_matches('"').to_string())
@@ -1188,10 +1281,7 @@ fn evaluate_package_sources(
     // For each name, evaluate the drvPath
     let mut result = Vec::new();
     for name in &names {
-        let drv_expr = format!(
-            "(import {}).{}.drvPath",
-            sources_path, name
-        );
+        let drv_expr = format!("(import {}).{}.drvPath", sources_path, name);
         let (drv_path, _) = crate::eval::evaluate_with_state(&drv_expr)?;
         let drv_path = drv_path.trim_matches('"').to_string();
         result.push((name.clone(), drv_path));
@@ -1214,17 +1304,15 @@ fn build_source_packages(
         println!("Building {name}...");
 
         // Evaluate the package from the sources file to populate KnownPaths
-        let drv_path_expr = format!(
-            "(import {}).{}.drvPath",
-            sources_path, name
-        );
+        let drv_path_expr = format!("(import {}).{}.drvPath", sources_path, name);
         let (drv_path_str, state) = crate::eval::evaluate_with_state(&drv_path_expr)
             .map_err(|e| format!("evaluating drvPath for '{name}': {e}"))?;
         let drv_path_str = drv_path_str.trim_matches('"').to_string();
 
         let store_path = nix_compat::store_path::StorePath::<String>::from_absolute_path(
             drv_path_str.as_bytes(),
-        ).map_err(|e| format!("invalid drv path '{drv_path_str}': {e}"))?;
+        )
+        .map_err(|e| format!("invalid drv path '{drv_path_str}': {e}"))?;
 
         let known_paths_ref = state.known_paths.borrow();
 
@@ -1234,18 +1322,18 @@ fn build_source_packages(
                     println!("  {name}: built at {out}");
                     results.push((name.clone(), out.clone()));
                 } else {
-                    return Err(format!(
-                        "build of {name} succeeded but produced no 'out' output"
-                    ).into());
+                    return Err(
+                        format!("build of {name} succeeded but produced no 'out' output").into(),
+                    );
                 }
             }
             Err(e) => {
                 eprintln!("\nBuild FAILED for package '{name}':");
                 eprintln!("  derivation: {drv_path_str}");
                 eprintln!("  error: {e}");
-                return Err(format!(
-                    "source rebuild aborted: package '{name}' failed to build"
-                ).into());
+                return Err(
+                    format!("source rebuild aborted: package '{name}' failed to build").into(),
+                );
             }
         }
     }
@@ -1358,24 +1446,30 @@ mod tests {
             )]),
             services: Services {
                 declared: BTreeMap::from([
-                    ("ptyd".to_string(), system::ServiceInfo {
-                        description: "PTY daemon".to_string(),
-                        command: "/bin/ptyd".to_string(),
-                        svc_type: "scheme".to_string(),
-                        args: String::new(),
-                        wanted_by: "initfs".to_string(),
-                        environment: BTreeMap::new(),
-                        after: vec![],
-                    }),
-                    ("smolnetd".to_string(), system::ServiceInfo {
-                        description: "Network daemon".to_string(),
-                        command: "/bin/smolnetd".to_string(),
-                        svc_type: "daemon".to_string(),
-                        args: String::new(),
-                        wanted_by: "rootfs".to_string(),
-                        environment: BTreeMap::new(),
-                        after: vec!["ptyd".to_string()],
-                    }),
+                    (
+                        "ptyd".to_string(),
+                        system::ServiceInfo {
+                            description: "PTY daemon".to_string(),
+                            command: "/bin/ptyd".to_string(),
+                            svc_type: "scheme".to_string(),
+                            args: String::new(),
+                            wanted_by: "initfs".to_string(),
+                            environment: BTreeMap::new(),
+                            after: vec![],
+                        },
+                    ),
+                    (
+                        "smolnetd".to_string(),
+                        system::ServiceInfo {
+                            description: "Network daemon".to_string(),
+                            command: "/bin/smolnetd".to_string(),
+                            svc_type: "daemon".to_string(),
+                            args: String::new(),
+                            wanted_by: "rootfs".to_string(),
+                            environment: BTreeMap::new(),
+                            after: vec!["ptyd".to_string()],
+                        },
+                    ),
                 ]),
                 init_scripts: vec!["10_net".to_string()],
                 startup_script: "/startup.sh".to_string(),
@@ -1418,7 +1512,10 @@ mod tests {
         let config = parse_config_json(json).unwrap();
         assert_eq!(config.hostname, Some("my-redox".to_string()));
         assert_eq!(config.timezone, Some("America/New_York".to_string()));
-        assert_eq!(config.packages, Some(vec!["ripgrep".into(), "fd".into(), "helix".into()]));
+        assert_eq!(
+            config.packages,
+            Some(vec!["ripgrep".into(), "fd".into(), "helix".into()])
+        );
 
         let net = config.networking.unwrap();
         assert_eq!(net.enable, Some(true));
@@ -1521,7 +1618,7 @@ mod tests {
         assert!(names.contains(&"ion")); // boot-essential
         assert!(names.contains(&"base")); // boot-essential
         assert!(names.contains(&"uutils")); // boot-essential
-        // New managed packages added
+                                            // New managed packages added
         assert!(names.contains(&"fd"));
         assert!(names.contains(&"helix"));
         // Old managed package (ripgrep) removed
@@ -1714,6 +1811,29 @@ mod tests {
         assert!(packages[0].store_path.is_empty());
     }
 
+    #[test]
+    fn test_cache_source_for_rebuild_prefers_remote_url() {
+        let source =
+            cache_source_for_rebuild("/tmp/custom/packages.json", Some("http://10.0.2.2:8080/"));
+        match source {
+            crate::cache_source::CacheSource::Remote(url) => {
+                assert_eq!(url, "http://10.0.2.2:8080");
+            }
+            other => panic!("expected remote cache source, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_cache_source_for_rebuild_uses_index_parent_for_local_cache() {
+        let source = cache_source_for_rebuild("/tmp/custom-cache/packages.json", None);
+        match source {
+            crate::cache_source::CacheSource::Local(path) => {
+                assert_eq!(path, Path::new("/tmp/custom-cache"));
+            }
+            other => panic!("expected local cache source, got {other:?}"),
+        }
+    }
+
     // ===== Boot Essential =====
 
     #[test]
@@ -1902,10 +2022,7 @@ mod tests {
         let manifest = sample_manifest();
         // Same services as manifest (order shouldn't matter)
         let config = RebuildConfig {
-            services: Some(vec![
-                "smolnetd".to_string(),
-                "ptyd".to_string(),
-            ]),
+            services: Some(vec!["smolnetd".to_string(), "ptyd".to_string()]),
             ..Default::default()
         };
         assert!(!has_boot_affecting_changes(&config, Some(&manifest)));
@@ -1947,10 +2064,7 @@ mod tests {
     fn test_has_service_changes_matching() {
         let manifest = sample_manifest();
         let config = RebuildConfig {
-            services: Some(vec![
-                "ptyd".to_string(),
-                "smolnetd".to_string(),
-            ]),
+            services: Some(vec!["ptyd".to_string(), "smolnetd".to_string()]),
             ..Default::default()
         };
         assert!(!has_service_changes(&config, Some(&manifest)));
@@ -1990,7 +2104,11 @@ mod tests {
     fn test_needs_bridge_services_only() {
         let manifest = sample_manifest();
         let config = RebuildConfig {
-            services: Some(vec!["ptyd".to_string(), "smolnetd".to_string(), "new_svc".to_string()]),
+            services: Some(vec![
+                "ptyd".to_string(),
+                "smolnetd".to_string(),
+                "new_svc".to_string(),
+            ]),
             package_sources: None,
             ..Default::default()
         };
@@ -2029,7 +2147,10 @@ mod tests {
 
         // Capture stdout
         let output = capture_print_changes(&current, &merged);
-        assert!(output.contains("boot.initfs:"), "should show initfs diff, got: {output}");
+        assert!(
+            output.contains("boot.initfs:"),
+            "should show initfs diff, got: {output}"
+        );
         assert!(output.contains("bbb-initfs"), "should show old path");
         assert!(output.contains("ddd-initfs"), "should show new path");
         assert!(!output.contains("boot.kernel:"), "kernel unchanged");
@@ -2050,7 +2171,10 @@ mod tests {
         let merged = current.clone();
 
         let output = capture_print_changes(&current, &merged);
-        assert!(!output.contains("boot."), "no boot lines when identical, got: {output}");
+        assert!(
+            !output.contains("boot."),
+            "no boot lines when identical, got: {output}"
+        );
     }
 
     #[test]
@@ -2067,7 +2191,10 @@ mod tests {
 
         // Should not panic — one side is None, skip comparison
         let output = capture_print_changes(&current, &merged);
-        assert!(!output.contains("boot."), "no boot lines when one side is None");
+        assert!(
+            !output.contains("boot."),
+            "no boot lines when one side is None"
+        );
     }
 
     #[test]
@@ -2121,7 +2248,10 @@ mod tests {
     fn test_parse_config_with_services() {
         let json = r#"{ "services": ["ptyd", "smolnetd", "audiod"] }"#;
         let config = parse_config_json(json).unwrap();
-        assert_eq!(config.services, Some(vec!["ptyd".into(), "smolnetd".into(), "audiod".into()]));
+        assert_eq!(
+            config.services,
+            Some(vec!["ptyd".into(), "smolnetd".into(), "audiod".into()])
+        );
     }
 
     #[test]
@@ -2155,8 +2285,15 @@ mod tests {
         assert!(names.contains(&"ion"), "boot-essential ion preserved");
         assert!(names.contains(&"base"), "boot-essential base preserved");
         // Unresolved package is still in the list (with empty store_path)
-        assert!(names.contains(&"nonexistent"), "unresolved package included");
-        let unresolved = merged.packages.iter().find(|p| p.name == "nonexistent").unwrap();
+        assert!(
+            names.contains(&"nonexistent"),
+            "unresolved package included"
+        );
+        let unresolved = merged
+            .packages
+            .iter()
+            .find(|p| p.name == "nonexistent")
+            .unwrap();
         assert!(unresolved.store_path.is_empty(), "store_path stays empty");
     }
 
@@ -2170,8 +2307,16 @@ mod tests {
 
         // All packages unresolved
         let resolved = vec![
-            Package { name: "pkg1".to_string(), version: String::new(), store_path: String::new() },
-            Package { name: "pkg2".to_string(), version: String::new(), store_path: String::new() },
+            Package {
+                name: "pkg1".to_string(),
+                version: String::new(),
+                store_path: String::new(),
+            },
+            Package {
+                name: "pkg2".to_string(),
+                version: String::new(),
+                store_path: String::new(),
+            },
         ];
 
         let merged = merge_config(&current, &config, &resolved).unwrap();

@@ -16,6 +16,7 @@
 { pkgs, lib }:
 
 let
+  cfg = import ../../lib/network-install-test-config.nix;
   opt = name: if pkgs ? ${name} then [ pkgs.${name} ] else [ ];
 
   # ==========================================================================
@@ -39,34 +40,14 @@ let
     echo "FUNC_TESTS_START"
     echo ""
 
-    let CACHE_URL = "http://10.0.2.2:18080"
+    let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
+    export PATH
 
-    # ── Discover first interface + wait for DHCP ─────────────────
-    # Redox uses PCI-path interface names (e.g. pci-0000-00-04.0_e1000).
-    let iface = ""
-    let disc_attempts = 0
-    while test $disc_attempts -lt 600
-        let candidates = $(ls /scheme/netcfg/ifaces/ ^> /dev/null)
-        if not test $candidates = ""
-            for name in @split(candidates)
-                if not test $name = "lo"
-                    let iface = $name
-                    break
-                end
-            end
-            if not test $iface = ""
-                break
-            end
-        end
-        /nix/system/profile/bin/bash -c 'read -t 1 < /dev/null' 2>/dev/null
-        let disc_attempts += 1
-    end
+    let CACHE_URL = "${cfg.cacheUrl}"
 
-    if test $iface = ""
-        echo "FUNC_TEST:net-dhcp:FAIL:no-interface-found"
-        echo "FUNC_TESTS_COMPLETE"
-        exit 0
-    end
+    # ── Wait for DHCP on eth0 ────────────────────────────────────
+    # netcfg exposes the guest interface as eth0.
+    let iface = "eth0"
 
     let dhcp_ok = 0
     let attempts = 0
@@ -78,7 +59,7 @@ let
                 break
             end
         end
-        /nix/system/profile/bin/bash -c 'read -t 1 < /dev/null' 2>/dev/null
+        sleep 1
         let attempts += 1
     end
 

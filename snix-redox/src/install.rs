@@ -196,10 +196,7 @@ impl ProfileManifest {
 }
 
 /// Install a package by name from a binary cache (local or remote).
-pub fn install(
-    name: &str,
-    source: &CacheSource,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn install(name: &str, source: &CacheSource) -> Result<(), Box<dyn std::error::Error>> {
     install_with_options(name, source, false)
 }
 
@@ -217,10 +214,12 @@ pub fn install_with_options(
 ) -> Result<(), Box<dyn std::error::Error>> {
     // 1. Look up package in index
     let index = source.read_index()?;
-    let entry = index
-        .packages
-        .get(name)
-        .ok_or_else(|| format!("package '{name}' not found in {}. Run `snix search` to list available packages.", source.display_name()))?;
+    let entry = index.packages.get(name).ok_or_else(|| {
+        format!(
+            "package '{name}' not found in {}. Run `snix search` to list available packages.",
+            source.display_name()
+        )
+    })?;
 
     // 2. Check if already installed in profile
     let mut manifest = ProfileManifest::load();
@@ -236,7 +235,10 @@ pub fn install_with_options(
         // Lazy install: register in PathInfoDb without extracting.
         // The stored daemon will extract on first access via the store: scheme.
         if !Path::new(&entry.store_path).exists() {
-            eprintln!("lazy-installing {name} {} (stored will extract on demand)...", entry.version);
+            eprintln!(
+                "lazy-installing {name} {} (stored will extract on demand)...",
+                entry.version
+            );
             register_without_extract(&entry.store_path, source)?;
         } else {
             eprintln!("'{name}' already in store...");
@@ -277,8 +279,7 @@ pub fn install_with_options(
             Ok(()) => {
                 eprintln!("  registered via profiled daemon");
                 // Discover binaries for manifest metadata (informational only).
-                list_binaries(&PathBuf::from(&entry.store_path).join("bin"))
-                    .unwrap_or_default()
+                list_binaries(&PathBuf::from(&entry.store_path).join("bin")).unwrap_or_default()
             }
             Err(e) => {
                 eprintln!("  warning: profiled command failed ({e}), falling back to symlinks");
@@ -329,10 +330,9 @@ pub fn install_with_options(
 pub fn remove(name: &str) -> Result<(), Box<dyn std::error::Error>> {
     let mut manifest = ProfileManifest::load();
 
-    let pkg = manifest
-        .packages
-        .remove(name)
-        .ok_or_else(|| format!("'{name}' is not installed. Run `snix profile list` to see installed packages."))?;
+    let pkg = manifest.packages.remove(name).ok_or_else(|| {
+        format!("'{name}' is not installed. Run `snix profile list` to see installed packages.")
+    })?;
 
     // Remove from profile — prefer profiled daemon, fall back to symlinks
     if profiled_is_running() {
@@ -341,7 +341,9 @@ pub fn remove(name: &str) -> Result<(), Box<dyn std::error::Error>> {
                 eprintln!("  removed via profiled daemon");
             }
             Err(e) => {
-                eprintln!("  warning: profiled command failed ({e}), falling back to symlink removal");
+                eprintln!(
+                    "  warning: profiled command failed ({e}), falling back to symlink removal"
+                );
                 for bin in &pkg.binaries {
                     let link_path = PathBuf::from(PROFILE_BIN).join(bin);
                     if link_path.is_symlink() {
@@ -393,7 +395,12 @@ pub fn list_profile() -> Result<(), Box<dyn std::error::Error>> {
     }
     println!();
     for (name, pkg) in &manifest.packages {
-        println!("  {:<16} {:<12} ({} binaries)", name, pkg.version, pkg.binaries.len());
+        println!(
+            "  {:<16} {:<12} ({} binaries)",
+            name,
+            pkg.version,
+            pkg.binaries.len()
+        );
         for bin in &pkg.binaries {
             if using_profiled {
                 println!("    → profile:default/bin/{bin}");
@@ -414,10 +421,7 @@ pub fn list_profile() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// Show detailed info about a package in the cache (local or remote).
-pub fn show(
-    name: &str,
-    source: &CacheSource,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn show(name: &str, source: &CacheSource) -> Result<(), Box<dyn std::error::Error>> {
     // Delegate to the CacheSource's show_package which handles both variants
     source.show_package(name)
 }
@@ -564,7 +568,14 @@ fn register_without_extract(
         .collect();
     let signatures: Vec<String> = narinfo.signatures.iter().map(|s| s.to_string()).collect();
 
-    store::register_path(&db, store_path_str, &nar_hash_hex, narinfo.nar_size, references, signatures)?;
+    store::register_path(
+        &db,
+        store_path_str,
+        &nar_hash_hex,
+        narinfo.nar_size,
+        references,
+        signatures,
+    )?;
 
     eprintln!("✓ registered (lazy): {store_path_str}");
     Ok(())
@@ -605,14 +616,9 @@ pub fn fetch_and_extract(
 
     // Verify hash
     let actual_hash = hashing.finalize();
-    if actual_hash != narinfo.nar_hash {
+    if let Err(e) = verify_nar_hash(&narinfo.nar_hash, &actual_hash) {
         let _ = std::fs::remove_dir_all(&dest);
-        return Err(format!(
-            "NAR hash mismatch!\n  expected: {}\n  got:      {}",
-            data_encoding::HEXLOWER.encode(&narinfo.nar_hash),
-            data_encoding::HEXLOWER.encode(&actual_hash),
-        )
-        .into());
+        return Err(e);
     }
 
     // Register in PathInfoDb
@@ -626,8 +632,13 @@ pub fn fetch_and_extract(
     let signatures: Vec<String> = narinfo.signatures.iter().map(|s| s.to_string()).collect();
 
     store::register_path_with_files(
-        &db, &dest, &nar_hash_hex, narinfo.nar_size,
-        references, signatures, manifest,
+        &db,
+        &dest,
+        &nar_hash_hex,
+        narinfo.nar_size,
+        references,
+        signatures,
+        manifest,
     )?;
 
     eprintln!("✓ verified and installed: {dest}");
@@ -661,6 +672,22 @@ impl<R: Read> Read for HashingReader<R> {
         }
         Ok(n)
     }
+}
+
+fn verify_nar_hash(
+    expected: &[u8; 32],
+    actual: &[u8; 32],
+) -> Result<(), Box<dyn std::error::Error>> {
+    if actual == expected {
+        return Ok(());
+    }
+
+    Err(format!(
+        "NAR hash mismatch!\n  expected: {}\n  got:      {}",
+        data_encoding::HEXLOWER.encode(expected),
+        data_encoding::HEXLOWER.encode(actual),
+    )
+    .into())
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -830,12 +857,32 @@ mod tests {
     }
 
     #[test]
+    fn verify_nar_hash_accepts_match() {
+        let hash = Sha256::digest(b"nar");
+        let mut expected = [0_u8; 32];
+        expected.copy_from_slice(&hash);
+        assert!(verify_nar_hash(&expected, &expected).is_ok());
+    }
+
+    #[test]
+    fn verify_nar_hash_rejects_mismatch() {
+        let expected_digest = Sha256::digest(b"expected");
+        let actual_digest = Sha256::digest(b"actual");
+        let mut expected = [0_u8; 32];
+        let mut actual = [0_u8; 32];
+        expected.copy_from_slice(&expected_digest);
+        actual.copy_from_slice(&actual_digest);
+
+        let err = verify_nar_hash(&expected, &actual).unwrap_err().to_string();
+        assert!(err.contains("NAR hash mismatch"));
+        assert!(err.contains(&data_encoding::HEXLOWER.encode(&expected)));
+        assert!(err.contains(&data_encoding::HEXLOWER.encode(&actual)));
+    }
+
+    #[test]
     fn cache_source_from_args_url_priority() {
         // cache_url takes priority over cache_path
-        let src = CacheSource::from_args(
-            Some("http://10.0.2.2:8080"),
-            Some("/nix/cache"),
-        );
+        let src = CacheSource::from_args(Some("http://10.0.2.2:8080"), Some("/nix/cache"));
         assert!(src.is_remote());
     }
 
