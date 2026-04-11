@@ -19,8 +19,8 @@
     "snix-store": "path+file:///home/brittonr/git/redox/snix-redox/upstream/store#snix-store@0.1.0",
     "snix-tracing": "path+file:///home/brittonr/git/redox/snix-redox/upstream/tracing#snix-tracing@0.1.0"
   },
-  "cargoLockHash": "07d7232f73784acc5e0363c6619a78dcbb11a64f2563947986da961a88e652bc",
-  "inputsHash": "315f622b7af9aa18ff2fb3db8f96f4bc5e49fe23885c950eab0a290c08e0e464",
+  "cargoLockHash": "a5b502c92d83c66b5c9dcff5a0060b05809fbc0fc9fa1b5a160e2ebff2e00446",
+  "inputsHash": "118dae5c527539162f0259af23758d7e2cc8387a841f3a20a6917a841d2176cf",
   "crates": {
     "git+https://github.com/tvlfyi/wu-manber.git#wu-manber@0.1.0": {
       "crateName": "wu-manber",
@@ -95,6 +95,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#lzma-rs@0.3.0",
           "externCrateName": "lzma_rs"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#minreq@2.14.1",
+          "externCrateName": "minreq"
         },
         {
           "packageId": "path+file:///home/brittonr/git/redox/snix-redox/upstream/nix-compat#0.1.0",
@@ -217,6 +221,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#itertools@0.12.1",
           "externCrateName": "itertools"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#mimalloc@0.1.48",
+          "externCrateName": "mimalloc"
         },
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#nix@0.29.0",
@@ -912,6 +920,10 @@
           "externCrateName": "hashbrown"
         },
         {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#mimalloc@0.1.48",
+          "externCrateName": "mimalloc"
+        },
+        {
           "packageId": "path+file:///home/brittonr/git/redox/snix-redox/upstream/nix-compat-derive#0.1.0",
           "externCrateName": "nix_compat_derive"
         },
@@ -1080,6 +1092,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#md-5@0.10.6",
           "externCrateName": "md5"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#mimalloc@0.1.48",
+          "externCrateName": "mimalloc"
         },
         {
           "packageId": "path+file:///home/brittonr/git/redox/snix-redox/upstream/nix-compat#0.1.0",
@@ -7014,6 +7030,43 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/portable-network-archive/liblzma-rs"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#libmimalloc-sys@0.1.44": {
+      "crateName": "libmimalloc-sys",
+      "version": "0.1.44",
+      "edition": "2018",
+      "sha256": "667f4fec20f29dfc6bc7357c582d91796c169ad7e2fce709468aefeb2c099870",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.183",
+          "externCrateName": "libc"
+        }
+      ],
+      "buildDependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cc@1.2.57",
+          "externCrateName": "cc"
+        }
+      ],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": "mimalloc",
+      "authors": [
+        "Octavian Oncescu <octavonce@gmail.com>"
+      ],
+      "description": "Sys crate wrapping the mimalloc allocator",
+      "license": "MIT",
+      "repository": "https://github.com/purpleprotocol/mimalloc_rust/tree/master/libmimalloc-sys"
+    },
     "registry+https://github.com/rust-lang/crates.io-index#linux-raw-sys@0.12.1": {
       "crateName": "linux-raw-sys",
       "version": "0.12.1",
@@ -7346,6 +7399,42 @@
       "license": "Unlicense OR MIT",
       "repository": "https://github.com/BurntSushi/memchr"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#mimalloc@0.1.48": {
+      "crateName": "mimalloc",
+      "version": "0.1.48",
+      "edition": "2018",
+      "sha256": "e1ee66a4b64c74f4ef288bcbb9192ad9c3feaad75193129ac8509af543894fd8",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libmimalloc-sys@0.1.44",
+          "externCrateName": "libmimalloc_sys"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Octavian Oncescu <octavonce@gmail.com>",
+        "Vincent Rouillé <vincent@speedy37.fr>",
+        "Thom Chiovoloni <chiovolonit@gmail.com>"
+      ],
+      "description": "Performance and security oriented drop-in allocator",
+      "license": "MIT",
+      "repository": "https://github.com/purpleprotocol/mimalloc_rust"
+    },
     "registry+https://github.com/rust-lang/crates.io-index#mime@0.3.17": {
       "crateName": "mime",
       "version": "0.3.17",
@@ -7415,6 +7504,53 @@
       "homepage": "https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide",
       "license": "MIT OR Zlib OR Apache-2.0",
       "repository": "https://github.com/Frommi/miniz_oxide/tree/master/miniz_oxide"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#minreq@2.14.1": {
+      "crateName": "minreq",
+      "version": "2.14.1",
+      "edition": "2018",
+      "sha256": "05015102dad0f7d61691ca347e9d9d9006685a64aefb3d79eecf62665de2153d",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "https",
+        "https-rustls",
+        "rustls",
+        "rustls-webpki",
+        "webpki-roots"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls@0.21.12",
+          "externCrateName": "rustls"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.101.7",
+          "externCrateName": "webpki"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@0.25.4",
+          "externCrateName": "webpki_roots"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Jens Pitkanen <jens@neon.moe>"
+      ],
+      "description": "Simple, minimal-dependency HTTP client",
+      "homepage": "https://github.com/neonmoe/minreq",
+      "license": "ISC",
+      "repository": "https://github.com/neonmoe/minreq"
     },
     "registry+https://github.com/rust-lang/crates.io-index#mio@1.1.1": {
       "crateName": "mio",
@@ -10244,6 +10380,43 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/rustls/rustls-platform-verifier"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.101.7": {
+      "crateName": "rustls-webpki",
+      "version": "0.101.7",
+      "edition": "2021",
+      "sha256": "8b6275d1ee7a1cd780b64aca7726599a1dbc893b1e64144529e55c3c2f745765",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ring@0.17.14",
+          "externCrateName": "ring"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#untrusted@0.9.0",
+          "externCrateName": "untrusted"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": "webpki",
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Web PKI X.509 Certificate Verification.",
+      "license": "ISC",
+      "repository": "https://github.com/rustls/webpki"
+    },
     "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.103.10": {
       "crateName": "rustls-webpki",
       "version": "0.103.10",
@@ -10284,6 +10457,54 @@
       "description": "Web PKI X.509 Certificate Verification.",
       "license": "ISC",
       "repository": "https://github.com/rustls/webpki"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#rustls@0.21.12": {
+      "crateName": "rustls",
+      "version": "0.21.12",
+      "edition": "2021",
+      "sha256": "3f56a14d1f48b391359b22f731fd4bd7e43c97f3c50eee276f3aa09c94784d3e",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "log",
+        "logging",
+        "tls12"
+      ],
+      "hostFeatures": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#log@0.4.29",
+          "externCrateName": "log"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ring@0.17.14",
+          "externCrateName": "ring"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#rustls-webpki@0.101.7",
+          "externCrateName": "webpki"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#sct@0.7.1",
+          "externCrateName": "sct"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Rustls is a modern TLS library written in Rust.",
+      "homepage": "https://github.com/rustls/rustls",
+      "license": "Apache-2.0 OR ISC OR MIT",
+      "repository": "https://github.com/rustls/rustls"
     },
     "registry+https://github.com/rust-lang/crates.io-index#rustls@0.23.37": {
       "crateName": "rustls",
@@ -10491,6 +10712,43 @@
       "description": "A RAII scope guard that will run a given closure when it goes out of scope, even if the code between panics (assuming unwinding panic).  Defines the macros `defer!`, `defer_on_unwind!`, `defer_on_success!` as shorthands for guards with one of the implemented strategies. ",
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/bluss/scopeguard"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#sct@0.7.1": {
+      "crateName": "sct",
+      "version": "0.7.1",
+      "edition": "2021",
+      "sha256": "da046153aa2352493d6cb7da4b6e5c0c057d8a1d0a9aa8560baffdd945acd414",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ring@0.17.14",
+          "externCrateName": "ring"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#untrusted@0.9.0",
+          "externCrateName": "untrusted"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Joseph Birr-Pixton <jpixton@gmail.com>"
+      ],
+      "description": "Certificate transparency SCT verification library",
+      "homepage": "https://github.com/rustls/sct.rs",
+      "license": "Apache-2.0 OR ISC OR MIT",
+      "repository": "https://github.com/rustls/sct.rs"
     },
     "registry+https://github.com/rust-lang/crates.io-index#semver@1.0.27": {
       "crateName": "semver",
@@ -14443,6 +14701,31 @@
       "description": "Detect when another Future wants a result.",
       "license": "MIT",
       "repository": "https://github.com/seanmonstar/want"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@0.25.4": {
+      "crateName": "webpki-roots",
+      "version": "0.25.4",
+      "edition": "2018",
+      "sha256": "5f20c57d8d7db6d3b86154206ae5d8fba62dd39573114de97c2cb0578251f8e1",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "description": "Mozilla's CA root certificates for use with webpki",
+      "homepage": "https://github.com/rustls/webpki-roots",
+      "license": "MPL-2.0",
+      "repository": "https://github.com/rustls/webpki-roots"
     },
     "registry+https://github.com/rust-lang/crates.io-index#webpki-roots@1.0.6": {
       "crateName": "webpki-roots",

@@ -1,31 +1,31 @@
 ## 0. Prerequisites (blocked on stabilize-self-hosting-baseline)
 
 All tasks below are blocked until the stabilization baseline is complete:
-- [ ] 0.1 `stabilize-self-hosting-baseline` exit criteria met (full test run, failures classified, flake parity, forge URL tests)
-- [ ] 0.2 `fix-snix-build-gaps` remaining tasks updated to reflect post-rollback failure set
+- [x] 0.1 `stabilize-self-hosting-baseline` exit criteria met (full test run, failures classified, flake parity, forge URL tests)
+- [x] 0.2 `fix-snix-build-gaps` remaining tasks updated to reflect post-rollback failure set
 
 ## 1. VM-validate remaining gaps (after stabilization)
 
-- [ ] 1.1 Build self-hosting-test disk image with stabilized snix
-- [ ] 1.2 Boot VM and run full self-hosting test suite, capture serial output
-- [ ] 1.3 Triage failures: classify as sandbox gap, env var missing, Ion/bash script issue, or snix bug
-- [ ] 1.4 Fix fetchGit test phase — ensure local bare repo + builtins.fetchGit works on guest
-- [ ] 1.5 Fix flake installable test — ensure `snix build /usr/src/test-flake#hello` works on guest
-- [ ] 1.6 Fix cc-dep test — ensure cc-rs build script invokes CC wrapper through sandbox
-- [ ] 1.7 Fix workspace test — ensure multi-crate workspace builds through snix on guest
-- [ ] 1.8 Fix source-rebuild dry-run test — ensure `snix system rebuild --source --dry-run` works
-- [ ] 1.9 All five remaining FUNC_TESTs pass: fetchgit, flake-build, cc-dep-build, workspace-build, source-rebuild-dryrun
+- [x] 1.1 Build self-hosting-test disk image with stabilized snix
+- [x] 1.2 Boot VM and run full self-hosting test suite, capture serial output
+- [x] 1.3 Triage failures: classify as sandbox gap, env var missing, Ion/bash script issue, or snix bug
+- [x] 1.4 Fix fetchGit test phase — ensure local bare repo + builtins.fetchGit works on guest
+- [x] 1.5 Fix flake installable test — ensure `snix build /usr/src/test-flake#hello` works on guest
+- [x] 1.6 Fix cc-dep test — ensure cc-rs build script invokes CC wrapper through sandbox
+- [x] 1.7 Fix workspace test — ensure multi-crate workspace builds through snix on guest
+- [x] 1.8 Fix source-rebuild dry-run test — ensure `snix system rebuild --source --dry-run` works
+- [x] 1.9 All five remaining FUNC_TESTs pass: fetchgit, flake-build, cc-dep-build, workspace-build, source-rebuild-dryrun
 
 ## 2. Remote binary cache client (blocked on section 0-1)
 
-- [ ] 2.1 Add minreq to snix-redox Cargo.toml and vendor for cross-compilation
-- [ ] 2.2 Implement `CacheSource::Remote` HTTP methods: fetch_package_index, fetch_narinfo, fetch_nar
-- [ ] 2.3 Add connection error and HTTP status code handling with user-facing messages
-- [ ] 2.4 Implement NAR hash verification after download (SHA-256 from narinfo NarHash)
-- [ ] 2.5 Wire `--cache-url` flag into `snix install` command
-- [ ] 2.6 Wire `--cache-url` flag into `snix system rebuild` package resolution
-- [ ] 2.7 Host-side unit tests for remote cache source (mock HTTP or test fixtures)
-- [ ] 2.8 VM test: boot guest, serve cache from host on port 8080, run `snix install ripgrep --cache-url http://10.0.2.2:8080`
+- [x] 2.1 Add minreq to snix-redox Cargo.toml and vendor for cross-compilation
+- [x] 2.2 Implement `CacheSource::Remote` HTTP methods: fetch_package_index, fetch_narinfo, fetch_nar
+- [x] 2.3 Add connection error and HTTP status code handling with user-facing messages
+- [x] 2.4 Implement NAR hash verification after download (SHA-256 from narinfo NarHash)
+- [x] 2.5 Wire `--cache-url` flag into `snix install` command
+- [x] 2.6 Wire `--cache-url` flag into `snix system rebuild` package resolution
+- [x] 2.7 Host-side unit tests for remote cache source (mock HTTP or test fixtures)
+- [x] 2.8 VM test: boot guest, serve cache from host on port 8080, run `snix install ripgrep --cache-url http://10.0.2.2:8080`
 
 ## 3. Store scheme daemon (stored) (blocked on section 0-1)
 

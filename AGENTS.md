@@ -202,6 +202,10 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - `adios.lib.importModules` auto-discovers .nix files in modules/ — but only tracked ones
 - New source files (`.rs`) in flake-referenced paths also need `git add`
 
+### snix unit2nix build plans
+- Changing `snix-redox/Cargo.toml` or `Cargo.lock` is NOT enough for `nix build` / VM image builds — the cross build uses `nix/pkgs/userspace/snix-build-plan.json`, and host-side unit2nix checks use `snix-redox/build-plan.json`
+- After snix dependency changes, run `snix-redox/regenerate-build-plan.sh` to refresh BOTH plan files; otherwise mkCrossPackage can omit new `--extern` deps (for example `minreq`) even when plain host `cargo test` passes
+
 ### Dotfiles in Copy Operations
 - `cp -r dir/*` does NOT match dotfiles (`.cargo/`, `.config/`, etc.) — bash glob skips them
 - Use `cp -r dir/.` to copy ALL contents including dotfiles
@@ -285,6 +289,8 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - the self-build source bundle must carry the same `snix-glue` no-CA patch as the packaged host build; otherwise guest-built `snix eval` aborts in `reqwest` even though the installed `/bin/snix` works
 - `patch-snix-fetcher-no-tls-panic.py` must stay idempotent because both the packaged build and the source bundle can apply it to the same upstream `snix-glue` source tree
 - `snix-compile` moved to run before `source-rebuild` (source-rebuild's activate() drops ld.lld from profile)
+- local host-side validation for `snix-redox/` needs host-target cargo plus proto env vars: `PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc || nix shell nixpkgs#protobuf --command which protoc) cargo test --lib --target x86_64-unknown-linux-gnu` and the same env for `cargo check --bins`; plain `cargo test` inherits the Redox target and fails in `zstd-sys`
+- repo helper: `scripts/validate-snix-redox-host.sh` wraps that host-side validation sequence
 
 ### What Doesn't
 - `CARGO_BUILD_JOBS > 1` had two issues: (1) lld stack overflow — fixed by `lld-wrapper` (16MB stack thread + exec); (2) cargo job manager hangs on multi-crate workspace builds — fixed by `patch-relibc-fork-lock.py` (see below)

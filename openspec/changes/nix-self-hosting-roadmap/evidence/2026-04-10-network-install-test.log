@@ -1,0 +1,111 @@
+
+  Redox OS Network Install Test
+  ====================================
+  Timeout: 180s
+  Image:   765M
+  Cache:   /nix/store/fn476db84lymgbpjmw9riylb38a2i9dm-test-binary-cache
+
+  Starting HTTP server on port 8080...
+  HTTP server started (PID: 752399)
+  Cache verified: packages.json accessible
+  VM started (PID: 752444)
+
+[2J[001;001H[=3h[2J[001;001H[2J[001;001H[8;056;240t[2J[001;001H[2J[001;001HWARN - Failed to locate Outputs: Status(0x800000000000000E) "not found"
+Redox OS Bootloader 1.0.0 on x86_64/UEFI
+Hardware descriptor: Acpi(7f936000, 24)
+Looking for RedoxFS:
+RedoxFS 4d4711a7-4c3f-494a-9191-936192640017: 564 MiB
+
+usr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 1/1 MiBusr/lib/boot/kernel: 1/1 MiB
+usr/lib/boot/initfs: 0/43 MiBusr/lib/boot/initfs: 0/43 MiBusr/lib/boot/initfs: 1/43 MiBusr/lib/boot/initfs: 2/43 MiBusr/lib/boot/initfs: 3/43 MiBusr/lib/boot/initfs: 4/43 MiBusr/lib/boot/initfs: 5/43 MiBusr/lib/boot/initfs: 6/43 MiBusr/lib/boot/initfs: 7/43 MiBusr/lib/boot/initfs: 8/43 MiBusr/lib/boot/initfs: 9/43 MiBusr/lib/boot/initfs: 10/43 MiBusr/lib/boot/initfs: 11/43 MiBusr/lib/boot/initfs: 12/43 MiBusr/lib/boot/initfs: 13/43 MiBusr/lib/boot/initfs: 14/43 MiBusr/lib/boot/initfs: 15/43 MiBusr/lib/boot/initfs: 16/43 MiBusr/lib/boot/initfs: 17/43 MiBusr/lib/boot/initfs: 18/43 MiBusr/lib/boot/initfs: 19/43 MiBusr/lib/boot/initfs: 20/43 MiBusr/lib/boot/initfs: 21/43 MiBusr/lib/boot/initfs: 22/43 MiBusr/lib/boot/initfs: 23/43 MiBusr/lib/boot/initfs: 24/43 MiBusr/lib/boot/initfs: 25/43 MiBusr/lib/boot/initfs: 26/43 MiBusr/lib/boot/initfs: 27/43 MiBusr/lib/boot/initfs: 28/43 MiBusr/lib/boot/initfs: 29/43 MiBusr/lib/boot/initfs: 30/43 MiBusr/lib/boot/initfs: 31/43 MiBusr/lib/boot/initfs: 32/43 MiBusr/lib/boot/initfs: 33/43 MiBusr/lib/boot/initfs: 34/43 MiBusr/lib/boot/initfs: 35/43 MiBusr/lib/boot/initfs: 36/43 MiBusr/lib/boot/initfs: 37/43 MiBusr/lib/boot/initfs: 38/43 MiBusr/lib/boot/initfs: 39/43 MiBusr/lib/boot/initfs: 40/43 MiBusr/lib/boot/initfs: 41/43 MiBusr/lib/boot/initfs: 42/43 MiBusr/lib/boot/initfs: 43/43 MiBusr/lib/boot/initfs: 43/43 MiB
+Starting graphical debug
+Framebuffer not found
+kernel::arch::x86_shared::start:INFO -- Redox OS starting...
+kernel::startup::memory:INFO -- Memory: 1955 MB
+kernel::startup::memory:INFO -- Permanently used: 4040 KB
+kernel::arch::x86_shared::device::local_apic:INFO -- LAPIC timer: 250033 ticks/period (~4ms), estimated 1000MHz bus freq
+init: switchroot to /scheme/initfs /scheme/initfs/etc
+[3m[38;5;15m2026-04-11T04-47-52.732[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid::cfg_access[39m:241 [1m[38;5;11mWARN[m[39m] [1m[38;5;15mCouldn't retrieve PCIe info, perhaps the kernel is not compiled with acpi or device tree support? Using the PCI 3.0 configuration space instead. ACPI error: Custom { kind: NotFound, error: "couldn't find mcfg table" } FDT error: Os { code: 19, kind: Uncategorized, message: "No such device" }[m[39m
+init: switchroot to /usr /etc
+
+==========================================
+  Redox OS Boot Complete!
+==========================================
+
+netcfg-auto: found interface 'eth0'
+netcfg-auto: Waiting for DHCP...
+netcfg-auto: addr/list = 'Not configured' (attempt 0)
+  ✓ [1.142s] Boot complete
+
+========================================
+  RedoxOS Network Install Test Suite
+========================================
+
+FUNC_TESTS_START
+
+netcfg-auto: DHCP configured on eth0: 10.0.2.15/24
+FUNC_TEST:net-dhcp:PASS
+  Interface: eth0 — DHCP complete after 1 polls
+FUNC_TEST:net-connectivity:PASS
+  Cache reachable at http://10.0.2.2:8080
+FUNC_TEST:net-search:PASS
+Added GC root: profile-mock-hello → /nix/store/c2qpbn8s9a5crjfjif38q3sk8hcasigq-mock-hello-1.0
+FUNC_TEST:net-install:PASS
+  mock-hello installed to profile
+FUNC_TEST:net-install-runs:PASS
+  Output: Hello from network-installed mock-hello!
+FUNC_TEST:net-store-path:PASS
+  Store paths: 12
+FUNC_TEST:net-install-idempotent:PASS
+  Second install: 'mock-hello' is already installed in the current profile.
+  store path: /nix/store/c2qpbn8s9a5crjfjif38q3sk8hcasigq-mock-hello-1.0
+FUNC_TEST:net-show:PASS
+Added GC root: profile-ripgrep → /nix/store/6prw08z5dqcrc9hl6b50y8l72nk3hgw6-rust_ripgrep-14.1.1
+FUNC_TEST:net-install-ripgrep:PASS
+  ripgrep installed to profile
+FUNC_TEST:net-ripgrep-runs:PASS
+  Output: ripgrep 14.1.1
+
+features:-pcre2
+simd(compile):+SSE2,-SSSE3,-AVX2
+simd(runtime):+SSE2,+SSSE3,+AVX2
+
+PCRE2 is not available in this build of ripgrep.
+
+FUNC_TESTS_COMPLETE
+
+  Results:
+  ✓ net-dhcp
+  ✓ net-connectivity
+  ✓ net-search
+  ✓ net-install
+  ✓ net-install-runs
+  ✓ net-store-path
+  ✓ net-install-idempotent
+  ✓ net-show
+  ✓ net-install-ripgrep
+  ✓ net-ripgrep-runs
+
+
+  Total: 10  |  Pass: 10  |  Fail: 0  |  Skip: 0
+  Time:  3.705s
+
+  HTTP server: 10 GET requests served
+
+  HTTP log (last 20 lines):
+  ────────────────────────────────────────
+  127.0.0.1 - - [11/Apr/2026 00:47:52] "GET /packages.json HTTP/1.1" 200 -
+  127.0.0.1 - - [11/Apr/2026 00:47:55] "GET /packages.json HTTP/1.1" 200 -
+  127.0.0.1 - - [11/Apr/2026 00:47:55] "GET /packages.json HTTP/1.1" 200 -
+  127.0.0.1 - - [11/Apr/2026 00:47:55] "GET /c2qpbn8s9a5crjfjif38q3sk8hcasigq.narinfo HTTP/1.1" 200 -
+  127.0.0.1 - - [11/Apr/2026 00:47:55] "GET /7ef8c0813babc41f854fefbead61945ad144513973abebc10041fa0e19751dab.nar.zst HTTP/1.1" 200 -
+  127.0.0.1 - - [11/Apr/2026 00:47:55] "GET /packages.json HTTP/1.1" 200 -
+  127.0.0.1 - - [11/Apr/2026 00:47:55] "GET /packages.json HTTP/1.1" 200 -
+  127.0.0.1 - - [11/Apr/2026 00:47:55] "GET /packages.json HTTP/1.1" 200 -
+  127.0.0.1 - - [11/Apr/2026 00:47:55] "GET /6prw08z5dqcrc9hl6b50y8l72nk3hgw6.narinfo HTTP/1.1" 200 -
+  127.0.0.1 - - [11/Apr/2026 00:47:55] "GET /d28624739e195863da0ef9c23a594c8f92753324381f4bd6721af81d10c08fda.nar.zst HTTP/1.1" 200 -
+  ────────────────────────────────────────
+
+  ╔══════════════════════════════════════════╗
+  ║     NETWORK INSTALL TEST PASSED          ║
+  ╚══════════════════════════════════════════╝

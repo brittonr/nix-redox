@@ -23,6 +23,7 @@
 }:
 
 let
+  cfg = import ../../lib/network-install-test-config.nix;
   cloudhvFirmware = pkgs.OVMF-cloud-hypervisor.fd;
 in
 pkgs.writeShellScriptBin "network-install-test" ''
@@ -31,9 +32,9 @@ pkgs.writeShellScriptBin "network-install-test" ''
   # === Configuration ===
   TIMEOUT="''${NETWORK_INSTALL_TEST_TIMEOUT:-180}"
   VERBOSE=0
-  # Use a port less likely to conflict. QEMU SLiRP makes the host reachable
-  # at 10.0.2.2 from the guest. The guest connects to 10.0.2.2:$HTTP_PORT.
-  HTTP_PORT=''${NETWORK_INSTALL_TEST_PORT:-18080}
+  # QEMU SLiRP makes the host reachable at 10.0.2.2 from the guest.
+  # Use the shared network-install-test config so host and guest stay aligned.
+  HTTP_PORT=${toString cfg.cachePort}
 
   usage() {
     echo "Usage: network-install-test [OPTIONS]"

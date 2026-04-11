@@ -74,6 +74,17 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - I tried to edit `snix-redox/upstream/build/Cargo.toml` directly and hit a dead end because `snix-redox/upstream -> ../result-snix-upstream` points into a read-only store path.
 - Fix upstream workspace manifests in `nix/pkgs/infrastructure/snix-upstream-source.nix`, then rebuild the upstream source derivation and repoint the local `snix-redox/upstream` symlink before regenerating build plans.
 
+### Local host-side `cargo test` for `snix-redox` has two easy validation traps
+- Running `cargo test` in `snix-redox/` inherited the Redox target config and immediately fell into `zstd-sys` cross-build failures (`clang --target=x86_64-unknown-redox` against host glibc headers).
+- Even with `--target x86_64-unknown-linux-gnu` and `PROTOC` set, upstream build scripts still expect proto paths under `snix/.../protos/*`, so host-side validation can fail before reaching our Rust edits.
+- Practical fallback: use `rustfmt --config skip_children=true` on the touched Rust files for a fast syntax check, and treat full cargo validation as needing the repo's intended Nix/snix build environment.
+- The reliable host-side path is now `./scripts/validate-snix-redox-host.sh`, which sets `PROTO_ROOT=$PWD/upstream`, finds `protoc`, and forces `--target x86_64-unknown-linux-gnu`.
+
+### Remote cache VM test wants `eth0`, not interface discovery
+- `network-install-test.nix` originally tried to discover the first netcfg interface with `ls /scheme/netcfg/ifaces`, but under Ion startup that loop was flaky and could burn the whole timeout without emitting FUNC_TEST lines.
+- Hardcode `eth0` and wait on `/scheme/netcfg/ifaces/eth0/addr/list`; `netcfg-auto` reports the guest interface as `eth0` in the successful run.
+- Startup scripts still need `let PATH = "/nix/system/profile/bin:/bin:/usr/bin"` + `export PATH` at the top before using helper commands like `sleep`.
+
 ### Self-built `snix` needs the same no-CA patch as the packaged binary
 - The focused rerun at `/var/tmp/redox-self-hosting-captures/20260409T110038-snix-compile-test/` showed `FUNC_TEST:snix-compile:PASS` and `FUNC_TEST:snix-binary-runs:PASS`, but `FUNC_TEST:snix-eval-works:FAIL` because the self-built binary panicked in `upstream/glue/src/fetchers/mod.rs` with `Client::new(): reqwest::Error { kind: Builder, source: General("No CA certificates were loaded from the system") }`.
 - `src/main.rs` setting `SSL_CERT_FILE=/dev/null` is not enough for this upstream reqwest path. The packaged host build already patches `snix-glue` via `patch-snix-fetcher-no-tls-panic.py`; the self-hosted source bundle must apply the same patch in `nix/pkgs/infrastructure/snix-upstream-source.nix` or guest-built `snix eval` will still abort.

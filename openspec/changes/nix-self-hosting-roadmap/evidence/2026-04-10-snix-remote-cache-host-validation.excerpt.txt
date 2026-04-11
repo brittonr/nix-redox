@@ -1,0 +1,6 @@
+test result: ok. 587 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+cargo test --lib --target x86_64-unknown-linux-gnu: PASS
+
+== cargo check --bins ==
+cargo check --bins --target x86_64-unknown-linux-gnu: PASS

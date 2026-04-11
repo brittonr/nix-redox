@@ -1,7 +1,7 @@
 //! snix — Nix evaluator, binary cache client, and store manager for Redox OS
 //!
 //! Built on snix-eval (bytecode VM) and nix-compat (sync NAR/store path handling).
-//! Uses ureq for sync HTTP — no tokio runtime needed.
+//! Uses blocking HTTP clients for cache and fetch operations — no tokio runtime needed.
 //!
 //! Store layout:
 //!   /nix/store/              — store paths (the data)
@@ -24,9 +24,9 @@ mod local_build;
 mod profiled;
 mod sandbox;
 // mod snix_io; // Replaced by upstream snix_glue::snix_store_io
+mod install;
 mod stored;
 mod vendor;
-mod install;
 // mod known_paths; // Replaced by upstream snix-glue::known_paths
 mod local_cache;
 mod nar;
@@ -519,6 +519,10 @@ enum SystemCommand {
         #[arg(long)]
         cache_index: Option<String>,
 
+        /// Remote binary cache URL for package resolution (local/source paths only)
+        #[arg(long)]
+        cache_url: Option<String>,
+
         /// Rebuild via bridge: send config to host, host builds, guest activates
         #[arg(long, conflicts_with = "local")]
         bridge: bool,
@@ -707,10 +711,8 @@ fn main() {
             recursive,
             lazy,
         } => {
-            let source = cache_source::CacheSource::from_args(
-                cache_url.as_deref(),
-                Some(&cache_path),
-            );
+            let source =
+                cache_source::CacheSource::from_args(cache_url.as_deref(), Some(&cache_path));
             if recursive {
                 install::install_recursive(&name, &source)
             } else {
@@ -723,10 +725,8 @@ fn main() {
             cache_url,
             cache_path,
         } => {
-            let source = cache_source::CacheSource::from_args(
-                cache_url.as_deref(),
-                Some(&cache_path),
-            );
+            let source =
+                cache_source::CacheSource::from_args(cache_url.as_deref(), Some(&cache_path));
             source.search(pattern.as_deref())
         }
         Command::Show {
@@ -734,10 +734,8 @@ fn main() {
             cache_url,
             cache_path,
         } => {
-            let source = cache_source::CacheSource::from_args(
-                cache_url.as_deref(),
-                Some(&cache_path),
-            );
+            let source =
+                cache_source::CacheSource::from_args(cache_url.as_deref(), Some(&cache_path));
             install::show(&name, &source)
         }
         Command::Profile { command } => match command {
@@ -748,10 +746,8 @@ fn main() {
                 cache_path,
                 recursive,
             } => {
-                let source = cache_source::CacheSource::from_args(
-                    cache_url.as_deref(),
-                    Some(&cache_path),
-                );
+                let source =
+                    cache_source::CacheSource::from_args(cache_url.as_deref(), Some(&cache_path));
                 if recursive {
                     install::install_recursive(&name, &source)
                 } else {
@@ -764,10 +760,8 @@ fn main() {
                 cache_url,
                 cache_path,
             } => {
-                let source = cache_source::CacheSource::from_args(
-                    cache_url.as_deref(),
-                    Some(&cache_path),
-                );
+                let source =
+                    cache_source::CacheSource::from_args(cache_url.as_deref(), Some(&cache_path));
                 install::show(&name, &source)
             }
         },
@@ -805,8 +799,9 @@ fn main() {
                 let resolved_path: Result<String, Box<dyn std::error::Error>> =
                     match (&path, &channel_name) {
                         (Some(p), _) => Ok(p.clone()),
-                        (None, Some(ch)) => channel::get_manifest_path(ch)
-                            .map(|p| p.to_string_lossy().to_string()),
+                        (None, Some(ch)) => {
+                            channel::get_manifest_path(ch).map(|p| p.to_string_lossy().to_string())
+                        }
                         (None, None) => {
                             Err("either a manifest path or --channel is required".into())
                         }
@@ -860,7 +855,9 @@ fn main() {
                 match gen_id {
                     Some(id) => {
                         // At boot time, log warning on failure but don't halt
-                        if let Err(e) = system::activate_boot(id, dir.as_deref(), manifest.as_deref()) {
+                        if let Err(e) =
+                            system::activate_boot(id, dir.as_deref(), manifest.as_deref())
+                        {
                             eprintln!("boot: warning: generation activation failed: {e}");
                         }
                         Ok(())
@@ -880,6 +877,7 @@ fn main() {
                 manifest,
                 gen_dir,
                 cache_index,
+                cache_url,
                 bridge,
                 local,
                 source,
@@ -896,6 +894,7 @@ fn main() {
                         manifest.as_deref(),
                         gen_dir.as_deref(),
                         cache_index.as_deref(),
+                        cache_url.as_deref(),
                     )
                 } else if bridge {
                     // Explicit --bridge: always use bridge path
@@ -915,6 +914,7 @@ fn main() {
                         manifest.as_deref(),
                         gen_dir.as_deref(),
                         cache_index.as_deref(),
+                        cache_url.as_deref(),
                     )
                 } else {
                     // Auto-route: bridge for package changes, local for config-only
@@ -924,14 +924,13 @@ fn main() {
                         manifest.as_deref(),
                         gen_dir.as_deref(),
                         cache_index.as_deref(),
+                        cache_url.as_deref(),
                         shared_dir.as_deref(),
                         timeout,
                     )
                 }
             }
-            SystemCommand::ShowConfig { config } => {
-                rebuild::show_config(config.as_deref())
-            }
+            SystemCommand::ShowConfig { config } => rebuild::show_config(config.as_deref()),
             SystemCommand::DeleteGenerations {
                 selector,
                 dry_run,
@@ -959,15 +958,13 @@ fn main() {
                 dir,
                 manifest,
                 boot_default,
-            } => {
-                system::system_gc(
-                    keep,
-                    dry_run,
-                    dir.as_deref(),
-                    manifest.as_deref(),
-                    boot_default.as_deref(),
-                )
-            }
+            } => system::system_gc(
+                keep,
+                dry_run,
+                dir.as_deref(),
+                manifest.as_deref(),
+                boot_default.as_deref(),
+            ),
         },
         Command::Stored {
             cache_path,
