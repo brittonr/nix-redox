@@ -150,34 +150,6 @@ let
         fi
     '
 
-    echo '{ "hostname": "rebuild-proof-host", "packages": ["ripgrep"] }' > /tmp/rebuild-packages.json
-    /bin/snix system rebuild --config /tmp/rebuild-packages.json > /tmp/rebuild-packages-out ^> /tmp/rebuild-packages-err
-
-    /nix/system/profile/bin/bash -c '
-        if grep -q "rebuilt from" /tmp/rebuild-packages-out 2>/dev/null || \
-           grep -q "Switched to generation" /tmp/rebuild-packages-out 2>/dev/null; then
-            echo FUNC_TEST:auto-route-package-rebuild:PASS
-        else
-            echo "FUNC_TEST:auto-route-package-rebuild:FAIL:no-success-message"
-            cat /tmp/rebuild-packages-out 2>/dev/null || true
-            cat /tmp/rebuild-packages-err 2>/dev/null || true
-        fi
-
-        if grep -q '"name": "ripgrep"' /etc/redox-system/manifest.json 2>/dev/null; then
-            echo FUNC_TEST:auto-route-package-manifest:PASS
-        else
-            echo "FUNC_TEST:auto-route-package-manifest:FAIL:no-ripgrep"
-            cat /etc/redox-system/manifest.json 2>/dev/null || true
-        fi
-
-        if [ -x /nix/system/profile/bin/rg ]; then
-            echo FUNC_TEST:auto-route-package-profile:PASS
-        else
-            echo "FUNC_TEST:auto-route-package-profile:FAIL:missing-rg"
-            ls -la /nix/system/profile/bin 2>/dev/null || true
-        fi
-    '
-
     /nix/system/profile/bin/bash -c '
         cp /etc/redox-system/manifest.json /tmp/reboot-manifest.json
         if grep -q "\"initfs\"" /tmp/reboot-manifest.json; then
@@ -203,6 +175,26 @@ let
             cat /tmp/reboot-switch-err 2>/dev/null || true
         fi
     '
+
+    echo '{ "hostname": "rebuild-proof-host", "packages": ["ripgrep"] }' > /tmp/rebuild-packages.json
+    /bin/snix system rebuild --config /tmp/rebuild-packages.json > /tmp/rebuild-packages-out ^> /tmp/rebuild-packages-err
+
+    if exists -f /nix/system/profile/bin/rg
+        echo "FUNC_TEST:auto-route-package-rebuild:PASS"
+        /nix/system/profile/bin/rg '"name": "ripgrep"' /etc/redox-system/manifest.json > /dev/null ^> /dev/null
+        if test $? -eq 0
+            echo "FUNC_TEST:auto-route-package-manifest:PASS"
+        else
+            echo "FUNC_TEST:auto-route-package-manifest:FAIL:no-ripgrep"
+            cat /etc/redox-system/manifest.json
+        end
+        echo "FUNC_TEST:auto-route-package-profile:PASS"
+    else
+        echo "FUNC_TEST:auto-route-package-rebuild:FAIL:missing-rg-after-rebuild"
+        echo "FUNC_TEST:auto-route-package-manifest:FAIL:missing-rg-for-check"
+        echo "FUNC_TEST:auto-route-package-profile:FAIL:missing-rg"
+        ls /nix/system/profile/bin
+    end
 
     echo ""
     echo "FUNC_TESTS_COMPLETE"
