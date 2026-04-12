@@ -51,13 +51,13 @@ All tasks below are blocked until the stabilization baseline is complete:
 
 ## 5. Generation management and rollback (blocked on section 0-4)
 
-- [ ] 5.1 Implement `snix system generations` — list generations with ID, timestamp, current marker
+- [x] 5.1 Implement `snix system generations` — list generations with ID, timestamp, current marker
 - [x] 5.2 Implement `snix system switch-generation N` — activate generation N, update symlink and etc files
-- [ ] 5.3 Implement `snix system rollback` — switch to generation N-1
-- [ ] 5.4 Implement `snix system delete-generations` — remove specified generations, refuse current
-- [ ] 5.5 Implement `--older-than` flag for age-based deletion
+- [x] 5.3 Implement `snix system rollback` — switch to generation N-1
+- [x] 5.4 Implement `snix system delete-generations` — remove selected generations and protect current/boot-default
+- [x] 5.5 Implement age-based deletion selector (`Nd`) for `snix system delete-generations`
 - [ ] 5.6 Add reboot-recommended warning when switching to generation with different boot components
-- [ ] 5.7 VM test: rebuild twice, list generations, rollback, verify previous config restored
+- [x] 5.7 VM test: rebuild twice, list generations, rollback, verify previous config restored
 
 ## 6. End-to-end rebuild validation (blocked on section 0-5)
 

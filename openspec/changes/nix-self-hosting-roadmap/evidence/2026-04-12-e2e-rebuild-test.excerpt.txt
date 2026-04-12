@@ -1,0 +1,120 @@
+building '/nix/store/29kllcrqvqif18jgzg9z0y90dhgq7ayx-redox-disk-image-unstable.drv'...
+building '/nix/store/6y4k0g1f83ailnr0c2zdrpys3yhl0cp8-functional-test.drv'...
+
+  Redox OS Functional Test Suite
+  ==================================
+  VMM:     ch
+  Timeout: 300s
+  Image:   893M
+
+  VM started (PID: 1483804)
+
+  Phase 1: Boot
+[2J[001;001H[=3h[2J[001;001HBdsDxe: loading Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x1,0x0)
+BdsDxe: starting Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x1,0x0)
+[2J[001;001H[8;056;240t[2J[001;001HWARN - Failed to locate Outputs: Status(0x800000000000000E) "not found"
+Redox OS Bootloader 1.0.0 on x86_64/UEFI
+Hardware descriptor: Acpi(3f13a000, 24)
+Looking for RedoxFS:
+RedoxFS 5dd4d4f5-678e-424a-9d04-053a2329c4c8: 692 MiB
+
+usr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 1/1 MiBusr/lib/boot/kernel: 1/1 MiB
+usr/lib/boot/initfs: 0/43 MiBusr/lib/boot/initfs: 0/43 MiBusr/lib/boot/initfs: 1/43 MiBusr/lib/boot/initfs: 2/43 MiBusr/lib/boot/initfs: 3/43 MiBusr/lib/boot/initfs: 4/43 MiB  ✓ [0.316s] Bootloader started
+usr/lib/boot/initfs: 5/43 MiBusr/lib/boot/initfs: 6/43 MiBusr/lib/boot/initfs: 7/43 MiBusr/lib/boot/initfs: 8/43 MiBusr/lib/boot/initfs: 9/43 MiBusr/lib/boot/initfs: 10/43 MiBusr/lib/boot/initfs: 11/43 MiBusr/lib/boot/initfs: 12/43 MiBusr/lib/boot/initfs: 13/43 MiBusr/lib/boot/initfs: 14/43 MiBusr/lib/boot/initfs: 15/43 MiBusr/lib/boot/initfs: 16/43 MiBusr/lib/boot/initfs: 17/43 MiBusr/lib/boot/initfs: 18/43 MiBusr/lib/boot/initfs: 19/43 MiBusr/lib/boot/initfs: 20/43 MiBusr/lib/boot/initfs: 21/43 MiBusr/lib/boot/initfs: 22/43 MiBusr/lib/boot/initfs: 23/43 MiBusr/lib/boot/initfs: 24/43 MiBusr/lib/boot/initfs: 25/43 MiBusr/lib/boot/initfs: 26/43 MiBusr/lib/boot/initfs: 27/43 MiBusr/lib/boot/initfs: 28/43 MiBusr/lib/boot/initfs: 29/43 MiBusr/lib/boot/initfs: 30/43 MiBusr/lib/boot/initfs: 31/43 MiBusr/lib/boot/initfs: 32/43 MiBusr/lib/boot/initfs: 33/43 MiBusr/lib/boot/initfs: 34/43 MiBusr/lib/boot/initfs: 35/43 MiBusr/lib/boot/initfs: 36/43 MiBusr/lib/boot/initfs: 37/43 MiBusr/lib/boot/initfs: 38/43 MiBusr/lib/boot/initfs: 39/43 MiBusr/lib/boot/initfs: 40/43 MiBusr/lib/boot/initfs: 41/43 MiBusr/lib/boot/initfs: 42/43 MiBusr/lib/boot/initfs: 43/43 MiBusr/lib/boot/initfs: 43/43 MiB
+Starting graphical debug
+Framebuffer not found
+kernel::arch::x86_shared::start:INFO -- Redox OS starting...
+kernel::startup::memory:INFO -- Memory: 932 MB
+kernel::startup::memory:INFO -- Permanently used: 1992 KB
+Unable to find HPET
+kernel::arch::x86_shared::device::local_apic:INFO -- LAPIC timer: 650 ticks/period (~4ms), estimated 2MHz bus freq
+  ✓ [0.429s] Kernel running
+init: switchroot to /scheme/initfs /scheme/initfs/etc
+init: switchroot to /usr /etc
+[3m[38;5;15m2026-04-12T06-35-01.677[m[39m[3m[38;5;7mZ[m[39m [[38;5;7msmolnetd@smolnetd[39m:194 [1m[38;5;9mERROR[m[39m] [1m[38;5;15msmoltcpd: no network adapter found[m[39m
+daemon: env -i CARGO_BUILD_JOBS="4" CARGO_HOME="/root/.cargo" HOME="/home/user" INIT_NOTIFY="5" LD_LIBRARY_PATH="/lib:/usr/lib/rustc:/nix/system/profile/lib" PATH="/nix/system/profile/bin:/bin:/usr/bin" RUST_BACKTRACE="1" TERM="xterm-256color" USER="user" XDG_CONFIG_HOME="/etc" "/bin/smolnetd" exited without notifying readiness
+
+==========================================
+  Redox OS Boot Complete!
+==========================================
+
+
+========================================
+  RedoxOS E2E Rebuild Test
+========================================
+
+FUNC_TESTS_START
+
+--- Phase 1: initial state ---
+FUNC_TEST:snix-exists:PASS
+FUNC_TEST:manifest-exists:PASS
+  ✓ [0.761s] Boot complete
+
+  Phase 2: Tests
+  ✓ [0.761s] Test suite started
+
+FUNC_TEST:etc-motd-exists:PASS
+FUNC_TEST:etc-appconfig-exists:PASS
+FUNC_TEST:activation-scripts-present:PASS
+FUNC_TEST:original-hostname-saved:PASS
+    ✓ snix-exists
+    ✓ manifest-exists
+    ✓ etc-motd-exists
+    ✓ etc-appconfig-exists
+    ✓ activation-scripts-present
+    ✓ original-hostname-saved
+FUNC_TEST:pre-gen-count:PASS
+
+--- Phase 2: rebuild with changes ---
+    ✓ pre-gen-count
+FUNC_TEST:config-modified:PASS
+DEBUG: starting snix system rebuild
+    ✓ config-modified
+FUNC_TEST:rebuild-succeeds:PASS
+FUNC_TEST:rebuild-hostname:PASS
+FUNC_TEST:rebuild-manifest-hostname:PASS
+    ✓ rebuild-succeeds
+    ✓ rebuild-hostname
+    ✓ rebuild-manifest-hostname
+FUNC_TEST:rebuild-new-generation:PASS
+FUNC_TEST:rebuild-generation-dir-exists:PASS
+FUNC_TEST:rebuild-generation-artifacts:PASS
+FUNC_TEST:rebuild-generation-metadata:PASS
+    ✓ rebuild-new-generation
+    ✓ rebuild-generation-dir-exists
+    ✓ rebuild-generation-artifacts
+    ✓ rebuild-generation-metadata
+FUNC_TEST:rebuild-current-link:PASS
+
+--- Phase 3: no-op rebuild ---
+    ✓ rebuild-current-link
+FUNC_TEST:noop-no-new-gen:PASS
+FUNC_TEST:noop-detected:PASS
+
+--- Phase 4: rollback ---
+    ✓ noop-no-new-gen
+    ✓ noop-detected
+FUNC_TEST:rollback-succeeds:PASS
+FUNC_TEST:rollback-hostname-restored:PASS
+    ✓ rollback-succeeds
+    ✓ rollback-hostname-restored
+FUNC_TEST:rollback-new-generation:PASS
+
+FUNC_TESTS_COMPLETE
+
+    ✓ rollback-new-generation
+
+  ✓ [2.301s] Test suite complete
+
+  Results
+  ─────────────────────────────────
+    Passed:  21
+    Failed:  0
+    Skipped: 0
+    Total:   21
+
+  Total time: 2.310s
+
+  ╔══════════════════════════════════════════╗
+  ║       FUNCTIONAL TEST PASSED
+  ╚══════════════════════════════════════════╝

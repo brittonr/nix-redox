@@ -331,3 +331,8 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### Cargo build pipe exit codes lost
 - `cargo build 2>&1 | while read` always exits 0 (pipe breaks).
 - Use file redirection + `wait $PID` to get real exit code.
+
+### Rebuild tests need mutable `configuration.nix`
+- `system::switch` updates `/etc/static`, which can re-symlink `/etc/redox-system/configuration.nix` back to the store copy.
+- If rebuild does not rewrite the evaluated config back as a regular file after activation, the next "no-op" rebuild re-reads stale config and undoes the prior hostname change.
+- `e2e-rebuild-test` caught this immediately: second rebuild created a bogus new generation and rollback landed on the wrong hostname.

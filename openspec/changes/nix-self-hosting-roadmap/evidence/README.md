@@ -73,6 +73,27 @@ The HTTP server section of the same log shows the guest fetched the remote cache
 
 ## 5. Generation management follow-up
 
+### 5.1 generations host validation
+Validation log:
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-generations-host-validation.log`
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-generations-host-validation.excerpt.txt`
+
+Command:
+- `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu generations_`
+
+Key result from the log:
+- `test system::tests::scan_generations_empty_dir ... ok`
+- `test system::tests::scan_generations_nonexistent_dir ... ok`
+- `test system::tests::scan_generations_finds_numbered_dirs ... ok`
+- `test system::tests::scan_generations_skips_non_numeric_dirs ... ok`
+- `test system::tests::scan_generations_sorted ... ok`
+- `test system::tests::generations_with_stored_gens ... ok`
+- overall summary: `14 passed; 0 failed`
+
+Related guest-side coverage:
+- `nix/redox-system/test-scripts/07-manifest.ion` checks `snix system generations` runs, prints the header, and reports stored-generation count
+- `nix/redox-system/profiles/rebuild-generations-test.nix` checks generation listing after rebuild and verifies generation `2` appears in the output
+
 ### 5.2 switch-generation host validation
 Validation log:
 - `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-host-validation.log`
@@ -86,3 +107,83 @@ Key result from the log:
 - `test system::tests::switch_generation_updates_target_etc_files_via_activation ... ok`
 - `test system::tests::switch_generation_activates_existing_generation ... ok`
 - overall summary: `3 passed; 0 failed`
+
+### 5.3 rollback host validation
+Validation log:
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-rollback-host-validation.log`
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-rollback-host-validation.excerpt.txt`
+
+Command:
+- `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu rollback_`
+
+Key result from the log:
+- `test system::tests::rollback_same_id_noop ... ok`
+- `test system::tests::rollback_no_generations_errors ... ok`
+- `test system::tests::rollback_with_gc_roots_resilient ... ok`
+- `test system::tests::rollback_restores_previous ... ok`
+- `test system::tests::rollback_increments_id ... ok`
+- overall summary: `5 passed; 0 failed`
+
+Related guest-side coverage:
+- `nix/redox-system/profiles/rebuild-generations-test.nix` exercises rollback success, hostname restoration, new-generation creation, and rollback manifest matching
+- `nix/redox-system/test-scripts/21-e2e-rebuild.ion` exercises rollback success, hostname restoration, and rollback generation growth in the live rebuild cycle
+
+### 5.4 delete-generations host validation
+Validation log:
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-delete-generations-host-validation.log`
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-delete-generations-host-validation.excerpt.txt`
+
+Command:
+- `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu delete_generations_`
+
+Key result from the log:
+- `test system::tests::delete_generations_by_id ... ok`
+- `test system::tests::delete_generations_keep_last_n ... ok`
+- `test system::tests::delete_generations_old ... ok`
+- `test system::tests::delete_generations_protects_current ... ok`
+- `test system::tests::delete_generations_protects_boot_default ... ok`
+- `test system::tests::delete_generations_dry_run ... ok`
+- `test system::tests::delete_generations_nothing_to_delete ... ok`
+- `test system::tests::delete_generations_older_than_days ... ok`
+- overall summary: `8 passed; 0 failed`
+
+Related guest-side coverage:
+- `nix/redox-system/test-scripts/09-generations.ion` exercises dry-run reporting, current-generation protection, by-ID deletion, `+N` pruning, `old` pruning, and GC-root cleanup after deletion
+
+### 5.5 age-pruning host validation
+Validation log:
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-age-pruning-host-validation.log`
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-age-pruning-host-validation.excerpt.txt`
+
+Commands:
+- `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu delete_generations_older_than_days`
+- `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu parse_selector_older_than_days`
+
+Key result from the log:
+- `test system::tests::delete_generations_older_than_days ... ok`
+- `test system::tests::parse_selector_older_than_days ... ok`
+- each focused run summary: `1 passed; 0 failed`
+
+### 5.7 focused VM rebuild/rollback validation
+Validation log:
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-e2e-rebuild-test.log`
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-e2e-rebuild-test.excerpt.txt`
+
+Command:
+- `nix run .#e2e-rebuild-test -- --verbose`
+
+Key result from the log:
+- `FUNC_TEST:rebuild-hostname:PASS`
+- `FUNC_TEST:rebuild-new-generation:PASS`
+- `FUNC_TEST:noop-no-new-gen:PASS`
+- `FUNC_TEST:rollback-succeeds:PASS`
+- `FUNC_TEST:rollback-hostname-restored:PASS`
+- `FUNC_TEST:rollback-new-generation:PASS`
+- overall summary: `Passed: 21`, `Failed: 0`
+
+Support files wired into the flake:
+- `nix/redox-system/profiles/e2e-rebuild-test.nix`
+- `nix/redox-system/test-scripts/21-e2e-rebuild.ion`
+- `nix/flake-modules/system.nix`
+- `nix/flake-modules/apps.nix`
+- `nix/flake-modules/checks.nix`

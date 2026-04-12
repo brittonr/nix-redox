@@ -4063,6 +4063,44 @@ mod tests {
     }
 
     #[test]
+    fn delete_generations_older_than_days() {
+        let tmp = tempfile::tempdir().unwrap();
+        let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 3, 3);
+
+        let mut gen1 = load_manifest_from(gen_dir.join("1").join("manifest.json").to_str().unwrap()).unwrap();
+        gen1.generation.timestamp = "2000-01-01T00:00:00Z".into();
+        fs::write(
+            gen_dir.join("1").join("manifest.json"),
+            serde_json::to_string(&gen1).unwrap(),
+        ).unwrap();
+
+        let mut gen2 = load_manifest_from(gen_dir.join("2").join("manifest.json").to_str().unwrap()).unwrap();
+        gen2.generation.timestamp = "2999-01-01T00:00:00Z".into();
+        fs::write(
+            gen_dir.join("2").join("manifest.json"),
+            serde_json::to_string(&gen2).unwrap(),
+        ).unwrap();
+
+        let stats = delete_generations_with(
+            &gc_roots, "14d", false,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+            Some(boot_default.to_str().unwrap()),
+        ).unwrap();
+
+        assert_eq!(stats.generations_deleted, 1);
+        assert_eq!(stats.deleted_ids, vec![1]);
+        assert!(!gen_dir.join("1").exists(), "old generation should be deleted");
+        assert!(gen_dir.join("2").exists(), "fresh generation should be kept");
+        assert!(gen_dir.join("3").exists(), "current generation should be protected");
+
+        let names = root_names(&gc_roots);
+        assert!(!names.iter().any(|n| n.starts_with("gen-1-")));
+        assert!(names.iter().any(|n| n.starts_with("gen-2-")));
+        assert!(names.iter().any(|n| n.starts_with("gen-3-")));
+    }
+
+    #[test]
     fn delete_generations_old() {
         let tmp = tempfile::tempdir().unwrap();
         let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 4, 4);

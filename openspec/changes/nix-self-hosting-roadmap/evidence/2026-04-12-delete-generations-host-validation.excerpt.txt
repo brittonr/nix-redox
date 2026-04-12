@@ -1,0 +1,19 @@
+267 -                     drop(fh);
+267 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 27 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.33s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 8 tests
+test system::tests::delete_generations_nothing_to_delete ... ok
+test system::tests::delete_generations_protects_current ... ok
+test system::tests::delete_generations_dry_run ... ok
+test system::tests::delete_generations_by_id ... ok
+test system::tests::delete_generations_protects_boot_default ... ok
+test system::tests::delete_generations_old ... ok
+test system::tests::delete_generations_older_than_days ... ok
+test system::tests::delete_generations_keep_last_n ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 595 filtered out; finished in 0.00s

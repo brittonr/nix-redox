@@ -73,6 +73,11 @@ pub fn rebuild_via_bridge(
     let mpath = manifest_path.unwrap_or(DEFAULT_MANIFEST_PATH);
     let timeout = timeout_s.unwrap_or(DEFAULT_TIMEOUT_S);
     let cfg_path = config_path.unwrap_or("/etc/redox-system/configuration.nix");
+    let preserved_config = if cfg_path == "/etc/redox-system/configuration.nix" {
+        Some(fs::read_to_string(cfg_path)?)
+    } else {
+        None
+    };
 
     eprintln!("bridge: starting rebuild (shared={shared}, config={cfg_path})");
 
@@ -166,6 +171,10 @@ pub fn rebuild_via_bridge(
             let _ = fs::remove_file(&resp_path);
 
             result?;
+
+            if let Some(config_text) = preserved_config.as_deref() {
+                crate::rebuild::preserve_active_config_pub(cfg_path, config_text)?;
+            }
 
             println!();
             println!("✓ System rebuilt via bridge from {cfg_path}");

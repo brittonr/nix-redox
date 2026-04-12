@@ -1,0 +1,19 @@
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 14 tests
+test system::tests::scan_generations_empty_dir ... ok
+test system::tests::scan_generations_nonexistent_dir ... ok
+test system::tests::rollback_no_generations_errors ... ok
+test system::tests::scan_generations_skips_non_numeric_dirs ... ok
+test system::tests::scan_generations_finds_numbered_dirs ... ok
+test system::tests::generations_with_stored_gens ... ok
+test system::tests::delete_generations_nothing_to_delete ... ok
+test system::tests::delete_generations_protects_current ... ok
+test system::tests::scan_generations_sorted ... ok
+test system::tests::delete_generations_old ... ok
+test system::tests::delete_generations_dry_run ... ok
+test system::tests::delete_generations_protects_boot_default ... ok
+test system::tests::delete_generations_by_id ... ok
+test system::tests::delete_generations_keep_last_n ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 588 filtered out; finished in 0.00s

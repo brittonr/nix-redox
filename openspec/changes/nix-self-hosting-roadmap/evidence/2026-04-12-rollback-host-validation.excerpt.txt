@@ -1,0 +1,19 @@
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+267 -                     drop(fh);
+267 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 27 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.67s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 5 tests
+test system::tests::rollback_same_id_noop ... ok
+test system::tests::rollback_no_generations_errors ... ok
+test system::tests::rollback_with_gc_roots_resilient ... ok
+test system::tests::rollback_restores_previous ... ok
+test system::tests::rollback_increments_id ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 597 filtered out; finished in 0.00s

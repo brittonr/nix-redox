@@ -1,0 +1,29 @@
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+201 -                     drop(fh);
+201 +                     let _ = fh;
+    |
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/stored/handles.rs:267:21
+    |
+267 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut stored::handles::FileHandle`
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+267 -                     drop(fh);
+267 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 27 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 1 test
+test system::tests::parse_selector_older_than_days ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 602 filtered out; finished in 0.00s
