@@ -909,18 +909,7 @@ pub fn activate_cmd(
     let result = crate::activate::activate(&current, &target, dry_run)?;
 
     if !dry_run {
-        // Show summary
-        if !result.warnings.is_empty() {
-            println!();
-            println!("Warnings:");
-            for w in &result.warnings {
-                println!("  ⚠ {w}");
-            }
-        }
-        if result.reboot_recommended {
-            println!();
-            println!("⚠ Reboot recommended: service or boot configuration changed.");
-        }
+        print_activation_notices(&result);
     }
 
     Ok(())
@@ -1027,6 +1016,35 @@ fn update_current_generation_link(
     }
     std::os::unix::fs::symlink(Path::new(gen_dir).join(generation_id.to_string()), &current_link)?;
     Ok(())
+}
+
+fn activation_notice_lines(activation: &crate::activate::ActivationResult) -> Vec<String> {
+    let mut lines = Vec::new();
+
+    if !activation.warnings.is_empty() {
+        lines.push("Warnings:".to_string());
+        for warning in &activation.warnings {
+            lines.push(format!("  ⚠ {warning}"));
+        }
+    }
+
+    if activation.reboot_recommended {
+        lines.push("⚠ Reboot recommended: service or boot configuration changed.".to_string());
+    }
+
+    lines
+}
+
+fn print_activation_notices(activation: &crate::activate::ActivationResult) {
+    let lines = activation_notice_lines(activation);
+    if lines.is_empty() {
+        return;
+    }
+
+    println!();
+    for line in lines {
+        println!("{line}");
+    }
 }
 
 /// List all system generations
@@ -1183,19 +1201,7 @@ pub fn switch(
         println!("Version: {} -> {}", current.system.redox_system_version, new_manifest.system.redox_system_version);
     }
 
-    // Show activation warnings
-    if !activation.warnings.is_empty() {
-        println!();
-        println!("Warnings:");
-        for w in &activation.warnings {
-            println!("  ⚠ {w}");
-        }
-    }
-
-    if activation.reboot_recommended {
-        println!();
-        println!("⚠ Reboot recommended: service or boot configuration changed.");
-    }
+    print_activation_notices(&activation);
 
     Ok(())
 }
@@ -1240,18 +1246,7 @@ where
 
     println!("Switched to generation {}", target.id);
 
-    if !activation.warnings.is_empty() {
-        println!();
-        println!("Warnings:");
-        for w in &activation.warnings {
-            println!("  ⚠ {w}");
-        }
-    }
-
-    if activation.reboot_recommended {
-        println!();
-        println!("⚠ Reboot recommended: service or boot configuration changed.");
-    }
+    print_activation_notices(&activation);
 
     Ok(())
 }
@@ -1374,19 +1369,7 @@ pub fn rollback(
         println!("Profile rebuilt: {} binaries linked", activation.binaries_linked);
     }
 
-    // Show activation warnings
-    if !activation.warnings.is_empty() {
-        println!();
-        println!("Warnings:");
-        for w in &activation.warnings {
-            println!("  ⚠ {w}");
-        }
-    }
-
-    if activation.reboot_recommended {
-        println!();
-        println!("⚠ Reboot recommended: service or boot configuration changed.");
-    }
+    print_activation_notices(&activation);
 
     println!();
     println!("Note: Boot-essential binaries in /bin/ are unchanged.");
@@ -2755,6 +2738,40 @@ mod tests {
         assert_eq!(active.system.hostname, "switched-host");
         assert_eq!(std::fs::read_to_string(root.join("etc/hostname")).unwrap(), "switched-host");
         assert_eq!(std::fs::read_link(current_generation_link_path(gen_dir.to_str().unwrap())).unwrap(), gen_dir.join("2"));
+    }
+
+    #[test]
+    fn activation_notice_lines_include_reboot_warning() {
+        let lines = activation_notice_lines(&crate::activate::ActivationResult {
+            binaries_linked: 0,
+            config_files_updated: 0,
+            warnings: Vec::new(),
+            reboot_recommended: true,
+        });
+
+        assert_eq!(
+            lines,
+            vec!["⚠ Reboot recommended: service or boot configuration changed.".to_string()]
+        );
+    }
+
+    #[test]
+    fn activation_notice_lines_keep_warnings_before_reboot_warning() {
+        let lines = activation_notice_lines(&crate::activate::ActivationResult {
+            binaries_linked: 0,
+            config_files_updated: 0,
+            warnings: vec!["copied /boot/initfs".to_string()],
+            reboot_recommended: true,
+        });
+
+        assert_eq!(
+            lines,
+            vec![
+                "Warnings:".to_string(),
+                "  ⚠ copied /boot/initfs".to_string(),
+                "⚠ Reboot recommended: service or boot configuration changed.".to_string(),
+            ]
+        );
     }
 
     #[test]

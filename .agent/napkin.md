@@ -336,3 +336,4 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - `system::switch` updates `/etc/static`, which can re-symlink `/etc/redox-system/configuration.nix` back to the store copy.
 - If rebuild does not rewrite the evaluated config back as a regular file after activation, the next "no-op" rebuild re-reads stale config and undoes the prior hostname change.
 - `e2e-rebuild-test` caught this immediately: second rebuild created a bogus new generation and rollback landed on the wrong hostname.
+- `rebuild-artifacts-test` also taught same lesson on tool availability: after a package-only rebuild, profile-only helpers like `/nix/system/profile/bin/bash` can disappear, so late test phases must use boot-essential tools or run before package replacement.

@@ -14,7 +14,7 @@
 - **THEN** output shows generation 1 marked as `(current)`
 
 ### Requirement: Switch to a previous generation
-`snix system switch-generation N` SHALL activate generation N by updating the `/nix/system/current` symlink and writing that generation's etc files. Live service restarts and switch-time reboot-warning behavior are deferred. The switch SHALL NOT delete any other generations.
+`snix system switch-generation N` SHALL activate generation N by updating the `/nix/system/current` symlink and writing that generation's etc files. Live service restarts remain deferred, but switch-generation SHALL surface the reboot recommendation when activation reports boot-component or service changes. The switch SHALL NOT delete any other generations.
 
 #### Scenario: Switch to older generation
 - **WHEN** generations 1, 2, 3 exist and generation 3 is current
@@ -28,11 +28,11 @@
 - **AND** generation 99 does not exist
 - **THEN** snix reports an error listing available generations
 
-#### Scenario: Switch defers reboot-warning behavior on boot differences
-- **WHEN** generation 2 has different boot components than the running kernel
+#### Scenario: Switch reports reboot recommendation on boot differences
+- **WHEN** generation 2 has different boot components than the running system
 - **AND** user switches to generation 2
 - **THEN** the switch succeeds
-- **AND** reboot-warning behavior remains deferred to a later task
+- **AND** the output warns that reboot is recommended
 
 ### Requirement: Rollback to previous generation
 `snix system rollback` SHALL switch to generation N-1 where N is the current generation number. This is a convenience wrapper around `switch-generation`.

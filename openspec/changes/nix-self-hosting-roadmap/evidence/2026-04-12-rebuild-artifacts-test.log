@@ -1,0 +1,123 @@
+trace: unit2nix: WARNING — crate 'libmimalloc-sys' has links="mimalloc" but no override found. It may need native libraries.
+  Add to your flake.nix:
+    extraCrateOverrides = {
+      libmimalloc-sys = attrs: {
+        nativeBuildInputs = [ pkgs.pkg-config ];
+        buildInputs = [ pkgs.<library> ];
+      };
+    };
+  See docs/sys-crate-overrides.md for details.
+these 6 derivations will be built:
+  /nix/store/k252k1r47y9v57vlvx0v1k5pqn8mlank-startup.sh.drv
+  /nix/store/a5rrdzixqrj50l3prq8sjp1wf1q6cj50-redox-etc.drv
+  /nix/store/9bdbxcd6xlcljdrxd5adfrav5rjnm796-redox-root-tree.drv
+  /nix/store/waqyflri49i43zv9363v5vqf6fvbyfyh-redox-redoxfs.drv
+  /nix/store/8k0cagfbr847y611gjnh7sz5isp6fhc5-redox-disk-image-unstable.drv
+  /nix/store/aqmzn9wfzml9mqh0lghg5s77ifzajz0f-functional-test.drv
+building '/nix/store/k252k1r47y9v57vlvx0v1k5pqn8mlank-startup.sh.drv'...
+cannot build on 'ssh-ng://root@10.10.10.1': error: failed to start SSH connection to '10.10.10.1'
+building '/nix/store/a5rrdzixqrj50l3prq8sjp1wf1q6cj50-redox-etc.drv'...
+building '/nix/store/9bdbxcd6xlcljdrxd5adfrav5rjnm796-redox-root-tree.drv'...
+building '/nix/store/waqyflri49i43zv9363v5vqf6fvbyfyh-redox-redoxfs.drv'...
+building '/nix/store/8k0cagfbr847y611gjnh7sz5isp6fhc5-redox-disk-image-unstable.drv'...
+building '/nix/store/aqmzn9wfzml9mqh0lghg5s77ifzajz0f-functional-test.drv'...
+
+  Redox OS Functional Test Suite
+  ==================================
+  VMM:     ch
+  Timeout: 180s
+  Image:   893M
+
+  VM started (PID: 1603462)
+
+  Phase 1: Boot
+[2J[001;001H[=3h[2J[001;001HBdsDxe: loading Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x1,0x0)
+BdsDxe: starting Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x1,0x0)
+[2J[001;001H[8;056;240t[2J[001;001HWARN - Failed to locate Outputs: Status(0x800000000000000E) "not found"
+Redox OS Bootloader 1.0.0 on x86_64/UEFI
+Hardware descriptor: Acpi(3f13a000, 24)
+Looking for RedoxFS:
+RedoxFS 9f0ed514-31b1-4eb1-8f88-07e4a81b5a26: 692 MiB
+
+usr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 1/1 MiBusr/lib/boot/kernel: 1/1 MiB
+usr/lib/boot/initfs: 0/41 MiBusr/lib/boot/initfs: 0/41 MiBusr/lib/boot/initfs: 1/41 MiBusr/lib/boot/initfs: 2/41 MiBusr/lib/boot/initfs: 3/41 MiB  ✓ [0.315s] Bootloader started
+usr/lib/boot/initfs: 4/41 MiBusr/lib/boot/initfs: 5/41 MiBusr/lib/boot/initfs: 6/41 MiBusr/lib/boot/initfs: 7/41 MiBusr/lib/boot/initfs: 8/41 MiBusr/lib/boot/initfs: 9/41 MiBusr/lib/boot/initfs: 10/41 MiBusr/lib/boot/initfs: 11/41 MiBusr/lib/boot/initfs: 12/41 MiBusr/lib/boot/initfs: 13/41 MiBusr/lib/boot/initfs: 14/41 MiBusr/lib/boot/initfs: 15/41 MiBusr/lib/boot/initfs: 16/41 MiBusr/lib/boot/initfs: 17/41 MiBusr/lib/boot/initfs: 18/41 MiBusr/lib/boot/initfs: 19/41 MiBusr/lib/boot/initfs: 20/41 MiBusr/lib/boot/initfs: 21/41 MiBusr/lib/boot/initfs: 22/41 MiBusr/lib/boot/initfs: 23/41 MiBusr/lib/boot/initfs: 24/41 MiBusr/lib/boot/initfs: 25/41 MiBusr/lib/boot/initfs: 26/41 MiBusr/lib/boot/initfs: 27/41 MiBusr/lib/boot/initfs: 28/41 MiBusr/lib/boot/initfs: 29/41 MiBusr/lib/boot/initfs: 30/41 MiBusr/lib/boot/initfs: 31/41 MiBusr/lib/boot/initfs: 32/41 MiBusr/lib/boot/initfs: 33/41 MiBusr/lib/boot/initfs: 34/41 MiBusr/lib/boot/initfs: 35/41 MiBusr/lib/boot/initfs: 36/41 MiBusr/lib/boot/initfs: 37/41 MiBusr/lib/boot/initfs: 38/41 MiBusr/lib/boot/initfs: 39/41 MiBusr/lib/boot/initfs: 40/41 MiBusr/lib/boot/initfs: 41/41 MiBusr/lib/boot/initfs: 41/41 MiB
+Starting graphical debug
+Framebuffer not found
+kernel::arch::x86_shared::start:INFO -- Redox OS starting...
+kernel::startup::memory:INFO -- Memory: 935 MB
+kernel::startup::memory:INFO -- Permanently used: 1992 KB
+Unable to find HPET
+kernel::arch::x86_shared::device::local_apic:INFO -- LAPIC timer: 372 ticks/period (~4ms), estimated 1MHz bus freq
+  ✓ [0.429s] Kernel running
+init: switchroot to /scheme/initfs /scheme/initfs/etc
+init: switchroot to /usr /etc
+
+==========================================
+  Redox OS Boot Complete!
+==========================================
+
+
+========================================
+  RedoxOS Rebuild Flow Test
+========================================
+
+FUNC_TESTS_START
+
+FUNC_TEST:snix-exists:PASS
+FUNC_TEST:manifest-exists:PASS
+  ✓ [0.541s] Boot complete
+
+  Phase 2: Tests
+  ✓ [0.541s] Test suite started
+
+    ✓ snix-exists
+    ✓ manifest-exists
+FUNC_TEST:config-modified:PASS
+    ✓ config-modified
+FUNC_TEST:rebuild-succeeds:PASS
+FUNC_TEST:hostname-file-updated:PASS
+FUNC_TEST:manifest-hostname-updated:PASS
+    ✓ rebuild-succeeds
+    ✓ hostname-file-updated
+FUNC_TEST:generation-count-advanced:PASS
+FUNC_TEST:generation-dir-exists:PASS
+FUNC_TEST:generation-artifacts-exist:PASS
+FUNC_TEST:generation-metadata-valid:PASS
+FUNC_TEST:current-link-updated:PASS
+FUNC_TEST:generations-list-shows-new-gen:PASS
+    ✓ manifest-hostname-updated
+    ✓ generation-count-advanced
+    ✓ generation-dir-exists
+    ✓ generation-artifacts-exist
+    ✓ generation-metadata-valid
+    ✓ current-link-updated
+    ✓ generations-list-shows-new-gen
+FUNC_TEST:boot-manifest-modified:PASS
+    ✓ boot-manifest-modified
+FUNC_TEST:reboot-warning-reported:PASS
+    ✓ reboot-warning-reported
+FUNC_TEST:auto-route-package-rebuild:PASS
+FUNC_TEST:auto-route-package-manifest:PASS
+FUNC_TEST:auto-route-package-profile:PASS
+
+FUNC_TESTS_COMPLETE
+
+    ✓ auto-route-package-rebuild
+    ✓ auto-route-package-manifest
+    ✓ auto-route-package-profile
+
+  ✓ [2.501s] Test suite complete
+
+  Results
+  ─────────────────────────────────
+    Passed:  17
+    Failed:  0
+    Skipped: 0
+    Total:   17
+
+  Total time: 2.508s
+
+  ╔══════════════════════════════════════════╗
+  ║       FUNCTIONAL TEST PASSED
+  ╚══════════════════════════════════════════╝

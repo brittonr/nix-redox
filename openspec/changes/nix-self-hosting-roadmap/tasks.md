@@ -44,8 +44,8 @@ All tasks below are blocked until the stabilization baseline is complete:
 - [x] 4.2 Implement generation creation in rebuild: mkdir /nix/system/generations/N, write manifest.json + metadata.json
 - [x] 4.3 Update /nix/system/current symlink on successful activation
 - [x] 4.4 Implement rebuild-auto-routing: detect bridge vs remote vs local vs source
-- [ ] 4.5 Add reboot-recommended detection when boot components change
-- [ ] 4.6 Ship a test configuration.nix on the self-hosting image for rebuild testing
+- [x] 4.5 Add reboot-recommended detection when boot components change
+- [x] 4.6 Ship a test configuration.nix on the self-hosting image for rebuild testing
 - [x] 4.7 VM test: modify configuration.nix hostname, run rebuild, verify /etc/hostname changed
 - [x] 4.8 VM test: run rebuild, verify new generation in `snix system generations`
 
@@ -56,7 +56,7 @@ All tasks below are blocked until the stabilization baseline is complete:
 - [x] 5.3 Implement `snix system rollback` — switch to generation N-1
 - [x] 5.4 Implement `snix system delete-generations` — remove selected generations and protect current/boot-default
 - [x] 5.5 Implement age-based deletion selector (`Nd`) for `snix system delete-generations`
-- [ ] 5.6 Add reboot-recommended warning when switching to generation with different boot components
+- [x] 5.6 Add reboot-recommended warning when switching to generation with different boot components
 - [x] 5.7 VM test: rebuild twice, list generations, rollback, verify previous config restored
 
 ## 6. End-to-end rebuild validation (blocked on section 0-5)

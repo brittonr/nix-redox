@@ -1,0 +1,79 @@
+316 | fn cleanup_failed_extraction(abs_store_path: &str, manifest: &[ManifestEntry], root_fd: Option<usize>) {
+    |                                                    ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manifest`
+
+warning: constant `POLL_INTERVAL_MS` is never used
+  --> src/bridge.rs:32:7
+   |
+32 | const POLL_INTERVAL_MS: u64 = 500;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `format_size` is never used
+   --> src/install.rs:750:4
+    |
+750 | fn format_size(bytes: u64) -> String {
+    |    ^^^^^^^^^^^
+
+warning: constant `VALID_HASH` is never used
+   --> src/stored/resolve.rs:202:11
+    |
+202 |     const VALID_HASH: &str = "1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r";
+    |           ^^^^^^^^^^
+
+warning: function `ensure_dir_exists` is never used
+   --> src/stored/lazy.rs:304:4
+    |
+304 | fn ensure_dir_exists(path: &Path, root_fd: Option<usize>) -> std::io::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: constant `SYSTEM_PROFILE_BIN` is never used
+  --> src/system.rs:80:7
+   |
+80 | const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: function `rebuild_system_profile` is never used
+    --> src/system.rs:1524:4
+     |
+1524 | fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/profiled/handles.rs:201:21
+    |
+201 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut profiled::handles::FileHandle`
+    |
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+201 -                     drop(fh);
+201 +                     let _ = fh;
+    |
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/stored/handles.rs:267:21
+    |
+267 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut stored::handles::FileHandle`
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+267 -                     drop(fh);
+267 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 27 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 2 tests
+test system::tests::activation_notice_lines_include_reboot_warning ... ok
+test system::tests::activation_notice_lines_keep_warnings_before_reboot_warning ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 0.00s

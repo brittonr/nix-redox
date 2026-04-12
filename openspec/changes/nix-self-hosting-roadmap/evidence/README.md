@@ -71,6 +71,42 @@ Key result from the log:
 
 The HTTP server section of the same log shows the guest fetched the remote cache index plus the corresponding `.narinfo` and `.nar.zst` artifacts over port 8080.
 
+## 4. Full guest rebuild flow
+
+### 4.5 reboot-recommended warning on boot-component change
+Validation log:
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-rebuild-artifacts-test.log`
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-rebuild-artifacts-test.excerpt.txt`
+
+Command:
+- `nix run .#rebuild-artifacts-test -- --verbose`
+
+Key result from the log:
+- `FUNC_TEST:boot-manifest-modified:PASS`
+- `FUNC_TEST:reboot-warning-reported:PASS`
+- overall summary: `Passed: 17`, `Failed: 0`
+
+Support files wired into the flake:
+- `nix/redox-system/profiles/rebuild-artifacts-test.nix`
+- `nix/flake-modules/system.nix`
+- `nix/flake-modules/apps.nix`
+- `nix/flake-modules/checks.nix`
+
+### 4.6 generated test configuration.nix on self-hosting images
+Implementation files:
+- `nix/redox-system/modules/build/generated-files.nix`
+
+Key implementation point:
+- `generated-files.nix` always emits `etc/redox-system/configuration.nix` into the generated `/etc` tree, so every image built through the shared Redox system pipeline — including self-hosting profiles — gets an editable default rebuild config on disk.
+
+Runtime smoke from rebuild test images:
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-e2e-rebuild-test.log`
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-rebuild-artifacts-test.log`
+
+Key result from those logs:
+- `FUNC_TEST:config-modified:PASS`
+- both focused rebuild VMs successfully edit `/etc/redox-system/configuration.nix` before invoking `snix system rebuild`
+
 ## 5. Generation management follow-up
 
 ### 5.1 generations host validation
@@ -163,6 +199,26 @@ Key result from the log:
 - `test system::tests::delete_generations_older_than_days ... ok`
 - `test system::tests::parse_selector_older_than_days ... ok`
 - each focused run summary: `1 passed; 0 failed`
+
+### 5.6 switch-generation reboot-warning surfacing
+Validation log:
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-reboot-warning-host-validation.log`
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-reboot-warning-host-validation.excerpt.txt`
+
+Commands:
+- `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu switch_generation_`
+- `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu activation_notice_lines`
+
+Key result from the log:
+- `test system::tests::switch_generation_missing_generation_errors ... ok`
+- `test system::tests::switch_generation_updates_target_etc_files_via_activation ... ok`
+- `test system::tests::switch_generation_activates_existing_generation ... ok`
+- `test system::tests::activation_notice_lines_include_reboot_warning ... ok`
+- `test system::tests::activation_notice_lines_keep_warnings_before_reboot_warning ... ok`
+- focused run summaries: `3 passed; 0 failed` and `2 passed; 0 failed`
+
+Implementation note:
+- `snix-redox/src/system.rs` now routes `switch`, `switch-generation`, `rollback`, and `activate_cmd` through the same activation-notice helper, so the reboot warning string is surfaced consistently when activation reports boot or service changes.
 
 ### 5.7 focused VM rebuild/rollback validation
 Validation log:
