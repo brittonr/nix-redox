@@ -415,6 +415,7 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 - `renderServiceToml` uses `baseNameOf` on command — strips `/bin/` prefix by default
 - Fix: check `hasPrefix "/"` and preserve full path; or ensure binary is in `/usr/bin/`
 - During live rebuild activation, `/etc/static` symlink-farm setup can overwrite manifest-derived files like `/etc/hostname` and `/etc/timezone`; set up `/etc/static` first, then rewrite derived files while replacing stale symlinks with regular files
+- Package-only rebuilds can remove profile-provided helpers mid-test; even an already-running `bash -c` loses later `PATH` lookups for tools like `grep` after the profile swap. For post-rebuild assertions, prefer shell builtins/pattern matching or capture absolute tool paths before the rebuild.
 - The same `/etc/static` step also re-symlinks `/etc/redox-system/configuration.nix` back to the store copy unless rebuild preserves the evaluated config as a regular file after `system::switch`; otherwise the next "no-op" rebuild re-reads stale config and reverts the prior hostname change
 - Rootfs oneshot services may fail silently — no error output visible without serial console
 - Numbered: 00_base, 12_stored, 13_profiled, 20_orbital, 30_console, 90_exit_initfs

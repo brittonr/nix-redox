@@ -1035,16 +1035,23 @@ fn activation_notice_lines(activation: &crate::activate::ActivationResult) -> Ve
     lines
 }
 
-fn print_activation_notices(activation: &crate::activate::ActivationResult) {
+fn emit_activation_notices<F>(activation: &crate::activate::ActivationResult, mut emit: F)
+where
+    F: FnMut(&str),
+{
     let lines = activation_notice_lines(activation);
     if lines.is_empty() {
         return;
     }
 
-    println!();
-    for line in lines {
-        println!("{line}");
+    emit("");
+    for line in &lines {
+        emit(line);
     }
+}
+
+fn print_activation_notices(activation: &crate::activate::ActivationResult) {
+    emit_activation_notices(activation, |line| println!("{line}"));
 }
 
 /// List all system generations
@@ -1206,14 +1213,16 @@ pub fn switch(
     Ok(())
 }
 
-fn switch_generation_with<F>(
+fn switch_generation_with_reporter<F, E>(
     target_id: u32,
     gen_dir: Option<&str>,
     manifest_path: Option<&str>,
     activate: F,
+    mut emit: E,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
     F: FnOnce(&Manifest, &Manifest) -> Result<crate::activate::ActivationResult, Box<dyn std::error::Error>>,
+    E: FnMut(&str),
 {
     let dir = gen_dir.unwrap_or(GENERATIONS_DIR);
     let mpath = manifest_path.unwrap_or(MANIFEST_PATH);
@@ -1229,14 +1238,14 @@ where
     })?;
 
     if target.id == current.generation.id {
-        println!("Already at generation {}. Nothing to do.", target.id);
+        emit(&format!("Already at generation {}. Nothing to do.", target.id));
         return Ok(());
     }
 
-    println!(
+    emit(&format!(
         "Switching from generation {} to generation {}...",
         current.generation.id, target.id
-    );
+    ));
 
     let activation = activate(&current, &target.manifest)?;
 
@@ -1244,11 +1253,25 @@ where
     fs::write(mpath, &json)?;
     update_current_generation_link(dir, target.id)?;
 
-    println!("Switched to generation {}", target.id);
+    emit(&format!("Switched to generation {}", target.id));
 
-    print_activation_notices(&activation);
+    emit_activation_notices(&activation, |line| emit(line));
 
     Ok(())
+}
+
+fn switch_generation_with<F>(
+    target_id: u32,
+    gen_dir: Option<&str>,
+    manifest_path: Option<&str>,
+    activate: F,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    F: FnOnce(&Manifest, &Manifest) -> Result<crate::activate::ActivationResult, Box<dyn std::error::Error>>,
+{
+    switch_generation_with_reporter(target_id, gen_dir, manifest_path, activate, |line| {
+        println!("{line}");
+    })
 }
 
 /// Switch to an existing saved generation without creating a new generation.
@@ -2772,6 +2795,57 @@ mod tests {
                 "⚠ Reboot recommended: service or boot configuration changed.".to_string(),
             ]
         );
+    }
+
+    #[test]
+    fn switch_generation_reports_reboot_recommended_when_activation_requests_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+
+        let gen1_dir = gen_dir.join("1");
+        std::fs::create_dir_all(&gen1_dir).unwrap();
+        let mut gen1 = sample_manifest();
+        gen1.generation.id = 1;
+        std::fs::write(gen1_dir.join("manifest.json"), serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+
+        let gen2_dir = gen_dir.join("2");
+        std::fs::create_dir_all(&gen2_dir).unwrap();
+        let mut gen2 = sample_manifest();
+        gen2.generation.id = 2;
+        gen2.generation.description = "boot change".to_string();
+        std::fs::write(gen2_dir.join("manifest.json"), serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+
+        let mut output = Vec::new();
+        switch_generation_with_reporter(
+            2,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+            |_current, _target| {
+                Ok(crate::activate::ActivationResult {
+                    binaries_linked: 0,
+                    config_files_updated: 0,
+                    warnings: Vec::new(),
+                    reboot_recommended: true,
+                })
+            },
+            |line| output.push(line.to_string()),
+        ).unwrap();
+
+        assert_eq!(
+            output,
+            vec![
+                "Switching from generation 1 to generation 2...".to_string(),
+                "Switched to generation 2".to_string(),
+                "".to_string(),
+                "⚠ Reboot recommended: service or boot configuration changed.".to_string(),
+            ]
+        );
+
+        let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
+        assert_eq!(active.generation.id, 2);
+        assert_eq!(std::fs::read_link(current_generation_link_path(gen_dir.to_str().unwrap())).unwrap(), gen_dir.join("2"));
     }
 
     #[test]

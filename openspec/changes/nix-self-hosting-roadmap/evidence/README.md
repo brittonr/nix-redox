@@ -84,6 +84,9 @@ Command:
 Key result from the log:
 - `FUNC_TEST:boot-manifest-modified:PASS`
 - `FUNC_TEST:reboot-warning-reported:PASS`
+- `FUNC_TEST:auto-route-package-rebuild:PASS`
+- `FUNC_TEST:auto-route-package-profile:PASS`
+- `FUNC_TEST:auto-route-package-manifest:PASS`
 - overall summary: `Passed: 17`, `Failed: 0`
 
 Support files wired into the flake:
@@ -93,19 +96,19 @@ Support files wired into the flake:
 - `nix/flake-modules/checks.nix`
 
 ### 4.6 generated test configuration.nix on self-hosting images
-Implementation files:
+Implementation file:
 - `nix/redox-system/modules/build/generated-files.nix`
 
 Key implementation point:
-- `generated-files.nix` always emits `etc/redox-system/configuration.nix` into the generated `/etc` tree, so every image built through the shared Redox system pipeline — including self-hosting profiles — gets an editable default rebuild config on disk.
+- `generated-files.nix` emits `etc/redox-system/configuration.nix` from the shared `mkSystem` image-generation path, so self-hosting profiles inherit the same editable rebuild config on disk.
 
-Runtime smoke from rebuild test images:
+Corroborating runtime smoke from rebuild test images:
 - `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-e2e-rebuild-test.log`
 - `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-rebuild-artifacts-test.log`
 
 Key result from those logs:
 - `FUNC_TEST:config-modified:PASS`
-- both focused rebuild VMs successfully edit `/etc/redox-system/configuration.nix` before invoking `snix system rebuild`
+- focused rebuild VMs successfully edit `/etc/redox-system/configuration.nix` before invoking `snix system rebuild`
 
 ## 5. Generation management follow-up
 
@@ -205,20 +208,18 @@ Validation log:
 - `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-reboot-warning-host-validation.log`
 - `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-reboot-warning-host-validation.excerpt.txt`
 
-Commands:
+Command:
 - `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu switch_generation_`
-- `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu activation_notice_lines`
 
 Key result from the log:
 - `test system::tests::switch_generation_missing_generation_errors ... ok`
 - `test system::tests::switch_generation_updates_target_etc_files_via_activation ... ok`
 - `test system::tests::switch_generation_activates_existing_generation ... ok`
-- `test system::tests::activation_notice_lines_include_reboot_warning ... ok`
-- `test system::tests::activation_notice_lines_keep_warnings_before_reboot_warning ... ok`
-- focused run summaries: `3 passed; 0 failed` and `2 passed; 0 failed`
+- `test system::tests::switch_generation_reports_reboot_recommended_when_activation_requests_it ... ok`
+- focused run summary: `4 passed; 0 failed`
 
 Implementation note:
-- `snix-redox/src/system.rs` now routes `switch`, `switch-generation`, `rollback`, and `activate_cmd` through the same activation-notice helper, so the reboot warning string is surfaced consistently when activation reports boot or service changes.
+- `snix-redox/src/system.rs` now routes `switch-generation` through a reporter-backed helper, so the exact path that updates the manifest and current-generation symlink is also the path that emits the reboot recommendation when activation requests it.
 
 ### 5.7 focused VM rebuild/rollback validation
 Validation log:

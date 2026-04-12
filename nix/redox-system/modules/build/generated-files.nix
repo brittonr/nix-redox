@@ -567,6 +567,9 @@ let
   }
 
   # Default configuration.nix for `snix system rebuild`
+  # This comes from the shared image-generation pipeline, so every image
+  # built through mkSystem — including self-hosting profiles — gets the
+  # same editable /etc/redox-system/configuration.nix on disk.
   # Users can edit this file on the running system, then run
   # `snix system rebuild` to apply changes declaratively.
   // {

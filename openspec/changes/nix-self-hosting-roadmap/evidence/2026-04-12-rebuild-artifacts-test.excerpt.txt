@@ -5,19 +5,19 @@
     };
   See docs/sys-crate-overrides.md for details.
 these 6 derivations will be built:
-  /nix/store/k252k1r47y9v57vlvx0v1k5pqn8mlank-startup.sh.drv
-  /nix/store/a5rrdzixqrj50l3prq8sjp1wf1q6cj50-redox-etc.drv
-  /nix/store/9bdbxcd6xlcljdrxd5adfrav5rjnm796-redox-root-tree.drv
-  /nix/store/waqyflri49i43zv9363v5vqf6fvbyfyh-redox-redoxfs.drv
-  /nix/store/8k0cagfbr847y611gjnh7sz5isp6fhc5-redox-disk-image-unstable.drv
-  /nix/store/aqmzn9wfzml9mqh0lghg5s77ifzajz0f-functional-test.drv
-building '/nix/store/k252k1r47y9v57vlvx0v1k5pqn8mlank-startup.sh.drv'...
+  /nix/store/jsizklc7ms3nf7rkn5razzxy0rwb4qwd-startup.sh.drv
+  /nix/store/1ydxzaaibr9bqa7dpxzcmii3yp22rykg-redox-etc.drv
+  /nix/store/gxwb5cc497ml63jz0qw54g58xx3zkicr-redox-root-tree.drv
+  /nix/store/q27kk1yshs8dljw5kxl46jfwyj5hsk8x-redox-redoxfs.drv
+  /nix/store/5szfm5hg8h662sjc8nn85xxh9jc51lyq-redox-disk-image-unstable.drv
+  /nix/store/q82gh8js8r8clm20qx4bkkpy0axp98ii-functional-test.drv
+building '/nix/store/jsizklc7ms3nf7rkn5razzxy0rwb4qwd-startup.sh.drv'...
 cannot build on 'ssh-ng://root@10.10.10.1': error: failed to start SSH connection to '10.10.10.1'
-building '/nix/store/a5rrdzixqrj50l3prq8sjp1wf1q6cj50-redox-etc.drv'...
-building '/nix/store/9bdbxcd6xlcljdrxd5adfrav5rjnm796-redox-root-tree.drv'...
-building '/nix/store/waqyflri49i43zv9363v5vqf6fvbyfyh-redox-redoxfs.drv'...
-building '/nix/store/8k0cagfbr847y611gjnh7sz5isp6fhc5-redox-disk-image-unstable.drv'...
-building '/nix/store/aqmzn9wfzml9mqh0lghg5s77ifzajz0f-functional-test.drv'...
+building '/nix/store/1ydxzaaibr9bqa7dpxzcmii3yp22rykg-redox-etc.drv'...
+building '/nix/store/gxwb5cc497ml63jz0qw54g58xx3zkicr-redox-root-tree.drv'...
+building '/nix/store/q27kk1yshs8dljw5kxl46jfwyj5hsk8x-redox-redoxfs.drv'...
+building '/nix/store/5szfm5hg8h662sjc8nn85xxh9jc51lyq-redox-disk-image-unstable.drv'...
+building '/nix/store/q82gh8js8r8clm20qx4bkkpy0axp98ii-functional-test.drv'...
 
   Redox OS Functional Test Suite
   ==================================
@@ -25,7 +25,7 @@ building '/nix/store/aqmzn9wfzml9mqh0lghg5s77ifzajz0f-functional-test.drv'...
   Timeout: 180s
   Image:   893M
 
-  VM started (PID: 1603462)
+  VM started (PID: 1751184)
 
   Phase 1: Boot
 [2J[001;001H[=3h[2J[001;001HBdsDxe: loading Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x1,0x0)
@@ -34,20 +34,20 @@ BdsDxe: starting Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x1,0x0)
 Redox OS Bootloader 1.0.0 on x86_64/UEFI
 Hardware descriptor: Acpi(3f13a000, 24)
 Looking for RedoxFS:
-RedoxFS 9f0ed514-31b1-4eb1-8f88-07e4a81b5a26: 692 MiB
+RedoxFS 42aef880-9d4b-4df4-96e1-312ad7f397ef: 692 MiB
 
 usr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 1/1 MiBusr/lib/boot/kernel: 1/1 MiB
-usr/lib/boot/initfs: 0/41 MiBusr/lib/boot/initfs: 0/41 MiBusr/lib/boot/initfs: 1/41 MiBusr/lib/boot/initfs: 2/41 MiBusr/lib/boot/initfs: 3/41 MiB  ✓ [0.315s] Bootloader started
-usr/lib/boot/initfs: 4/41 MiBusr/lib/boot/initfs: 5/41 MiBusr/lib/boot/initfs: 6/41 MiBusr/lib/boot/initfs: 7/41 MiBusr/lib/boot/initfs: 8/41 MiBusr/lib/boot/initfs: 9/41 MiBusr/lib/boot/initfs: 10/41 MiBusr/lib/boot/initfs: 11/41 MiBusr/lib/boot/initfs: 12/41 MiBusr/lib/boot/initfs: 13/41 MiBusr/lib/boot/initfs: 14/41 MiBusr/lib/boot/initfs: 15/41 MiBusr/lib/boot/initfs: 16/41 MiBusr/lib/boot/initfs: 17/41 MiBusr/lib/boot/initfs: 18/41 MiBusr/lib/boot/initfs: 19/41 MiBusr/lib/boot/initfs: 20/41 MiBusr/lib/boot/initfs: 21/41 MiBusr/lib/boot/initfs: 22/41 MiBusr/lib/boot/initfs: 23/41 MiBusr/lib/boot/initfs: 24/41 MiBusr/lib/boot/initfs: 25/41 MiBusr/lib/boot/initfs: 26/41 MiBusr/lib/boot/initfs: 27/41 MiBusr/lib/boot/initfs: 28/41 MiBusr/lib/boot/initfs: 29/41 MiBusr/lib/boot/initfs: 30/41 MiBusr/lib/boot/initfs: 31/41 MiBusr/lib/boot/initfs: 32/41 MiBusr/lib/boot/initfs: 33/41 MiBusr/lib/boot/initfs: 34/41 MiBusr/lib/boot/initfs: 35/41 MiBusr/lib/boot/initfs: 36/41 MiBusr/lib/boot/initfs: 37/41 MiBusr/lib/boot/initfs: 38/41 MiBusr/lib/boot/initfs: 39/41 MiBusr/lib/boot/initfs: 40/41 MiBusr/lib/boot/initfs: 41/41 MiBusr/lib/boot/initfs: 41/41 MiB
+usr/lib/boot/initfs: 0/41 MiBusr/lib/boot/initfs: 0/41 MiBusr/lib/boot/initfs: 1/41 MiBusr/lib/boot/initfs: 2/41 MiBusr/lib/boot/initfs: 3/41 MiBusr/lib/boot/initfs: 4/41 MiBusr/lib/boot/initfs: 5/41 MiBusr/lib/boot/initfs: 6/41 MiBusr/lib/boot/initfs: 7/41 MiBusr/lib/boot/initfs: 8/41 MiBusr/lib/boot/initfs: 9/41 MiBusr/lib/boot/initfs: 10/41 MiBusr/lib/boot/initfs: 11/41 MiBusr/lib/boot/initfs: 12/41 MiBusr/lib/boot/initfs: 13/41 MiBusr/lib/boot/initfs: 14/41 MiBusr/lib/boot/initfs: 15/41 MiBusr/lib/boot/initfs  ✓ [0.313s] Bootloader started
+: 16/41 MiBusr/lib/boot/initfs: 17/41 MiBusr/lib/boot/initfs: 18/41 MiBusr/lib/boot/initfs: 19/41 MiBusr/lib/boot/initfs: 20/41 MiBusr/lib/boot/initfs: 21/41 MiBusr/lib/boot/initfs: 22/41 MiBusr/lib/boot/initfs: 23/41 MiBusr/lib/boot/initfs: 24/41 MiBusr/lib/boot/initfs: 25/41 MiBusr/lib/boot/initfs: 26/41 MiBusr/lib/boot/initfs: 27/41 MiBusr/lib/boot/initfs: 28/41 MiBusr/lib/boot/initfs: 29/41 MiBusr/lib/boot/initfs: 30/41 MiBusr/lib/boot/initfs: 31/41 MiBusr/lib/boot/initfs: 32/41 MiBusr/lib/boot/initfs: 33/41 MiBusr/lib/boot/initfs: 34/41 MiBusr/lib/boot/initfs: 35/41 MiBusr/lib/boot/initfs: 36/41 MiBusr/lib/boot/initfs: 37/41 MiBusr/lib/boot/initfs: 38/41 MiBusr/lib/boot/initfs: 39/41 MiBusr/lib/boot/initfs: 40/41 MiBusr/lib/boot/initfs: 41/41 MiBusr/lib/boot/initfs: 41/41 MiB
 Starting graphical debug
 Framebuffer not found
 kernel::arch::x86_shared::start:INFO -- Redox OS starting...
 kernel::startup::memory:INFO -- Memory: 935 MB
 kernel::startup::memory:INFO -- Permanently used: 1992 KB
 Unable to find HPET
-kernel::arch::x86_shared::device::local_apic:INFO -- LAPIC timer: 372 ticks/period (~4ms), estimated 1MHz bus freq
-  ✓ [0.429s] Kernel running
+kernel::arch::x86_shared::device::local_apic:INFO -- LAPIC timer: 277 ticks/period (~4ms), estimated 1MHz bus freq
 init: switchroot to /scheme/initfs /scheme/initfs/etc
+  ✓ [0.423s] Kernel running
 init: switchroot to /usr /etc
 
 ==========================================
@@ -63,10 +63,10 @@ FUNC_TESTS_START
 
 FUNC_TEST:snix-exists:PASS
 FUNC_TEST:manifest-exists:PASS
-  ✓ [0.541s] Boot complete
+  ✓ [0.533s] Boot complete
 
   Phase 2: Tests
-  ✓ [0.541s] Test suite started
+  ✓ [0.533s] Test suite started
 
     ✓ snix-exists
     ✓ manifest-exists
@@ -77,13 +77,13 @@ FUNC_TEST:hostname-file-updated:PASS
 FUNC_TEST:manifest-hostname-updated:PASS
     ✓ rebuild-succeeds
     ✓ hostname-file-updated
+    ✓ manifest-hostname-updated
 FUNC_TEST:generation-count-advanced:PASS
 FUNC_TEST:generation-dir-exists:PASS
 FUNC_TEST:generation-artifacts-exist:PASS
 FUNC_TEST:generation-metadata-valid:PASS
 FUNC_TEST:current-link-updated:PASS
 FUNC_TEST:generations-list-shows-new-gen:PASS
-    ✓ manifest-hostname-updated
     ✓ generation-count-advanced
     ✓ generation-dir-exists
     ✓ generation-artifacts-exist
@@ -95,16 +95,16 @@ FUNC_TEST:boot-manifest-modified:PASS
 FUNC_TEST:reboot-warning-reported:PASS
     ✓ reboot-warning-reported
 FUNC_TEST:auto-route-package-rebuild:PASS
-FUNC_TEST:auto-route-package-manifest:PASS
 FUNC_TEST:auto-route-package-profile:PASS
+FUNC_TEST:auto-route-package-manifest:PASS
 
 FUNC_TESTS_COMPLETE
 
     ✓ auto-route-package-rebuild
-    ✓ auto-route-package-manifest
     ✓ auto-route-package-profile
+    ✓ auto-route-package-manifest
 
-  ✓ [2.501s] Test suite complete
+  ✓ [2.484s] Test suite complete
 
   Results
   ─────────────────────────────────
@@ -113,7 +113,7 @@ FUNC_TESTS_COMPLETE
     Skipped: 0
     Total:   17
 
-  Total time: 2.508s
+  Total time: 2.491s
 
   ╔══════════════════════════════════════════╗
   ║       FUNCTIONAL TEST PASSED

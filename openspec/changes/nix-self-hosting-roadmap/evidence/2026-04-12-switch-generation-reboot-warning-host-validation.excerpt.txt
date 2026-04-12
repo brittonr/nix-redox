@@ -1,5 +1,3 @@
-316 | fn cleanup_failed_extraction(abs_store_path: &str, manifest: &[ManifestEntry], root_fd: Option<usize>) {
-    |                                                    ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manifest`
 
 warning: constant `POLL_INTERVAL_MS` is never used
   --> src/bridge.rs:32:7
@@ -34,9 +32,9 @@ warning: constant `SYSTEM_PROFILE_BIN` is never used
    |       ^^^^^^^^^^^^^^^^^^
 
 warning: function `rebuild_system_profile` is never used
-    --> src/system.rs:1524:4
+    --> src/system.rs:1547:4
      |
-1524 | fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+1547 | fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
      |    ^^^^^^^^^^^^^^^^^^^^^^
 
 warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
@@ -69,11 +67,13 @@ help: use `let _ = ...` to ignore the expression or result
     |
 
 warning: `snix-redox` (lib test) generated 27 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
-    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 2.32s
      Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
 
-running 2 tests
-test system::tests::activation_notice_lines_include_reboot_warning ... ok
-test system::tests::activation_notice_lines_keep_warnings_before_reboot_warning ... ok
+running 4 tests
+test system::tests::switch_generation_missing_generation_errors ... ok
+test system::tests::switch_generation_reports_reboot_recommended_when_activation_requests_it ... ok
+test system::tests::switch_generation_updates_target_etc_files_via_activation ... ok
+test system::tests::switch_generation_activates_existing_generation ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 604 filtered out; finished in 0.00s
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 603 filtered out; finished in 0.00s
