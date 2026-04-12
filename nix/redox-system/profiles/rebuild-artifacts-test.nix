@@ -177,24 +177,42 @@ let
     '
 
     echo '{ "hostname": "rebuild-proof-host", "packages": ["ripgrep"] }' > /tmp/rebuild-packages.json
-    /bin/snix system rebuild --config /tmp/rebuild-packages.json > /tmp/rebuild-packages-out ^> /tmp/rebuild-packages-err
 
-    if exists -f /nix/system/profile/bin/rg
-        echo "FUNC_TEST:auto-route-package-rebuild:PASS"
-        /nix/system/profile/bin/rg '"name": "ripgrep"' /etc/redox-system/manifest.json > /dev/null ^> /dev/null
-        if test $? -eq 0
-            echo "FUNC_TEST:auto-route-package-manifest:PASS"
+    /nix/system/profile/bin/bash -c '
+        /bin/snix system rebuild --config /tmp/rebuild-packages.json \
+            > /tmp/rebuild-packages-out 2> /tmp/rebuild-packages-err
+        rc=$?
+
+        rebuild_out=$(cat /tmp/rebuild-packages-out 2>/dev/null || true)
+        if [ "$rc" -eq 0 ] && \
+           { case "$rebuild_out" in
+               *"System rebuilt from"*|*"Switched to generation"*) true ;;
+               *) false ;;
+             esac; }; then
+            echo FUNC_TEST:auto-route-package-rebuild:PASS
+        else
+            echo "FUNC_TEST:auto-route-package-rebuild:FAIL:rc=$rc"
+            echo "DEBUG package rebuild stdout:"
+            printf "%s\n" "$rebuild_out"
+            echo "DEBUG package rebuild stderr:"
+            cat /tmp/rebuild-packages-err 2>/dev/null || true
+        fi
+
+        if [ -x /nix/system/profile/bin/rg ]; then
+            echo FUNC_TEST:auto-route-package-profile:PASS
+        else
+            echo "FUNC_TEST:auto-route-package-profile:FAIL:missing-rg"
+            ls /nix/system/profile/bin 2>/dev/null || true
+        fi
+
+        manifest=$(cat /etc/redox-system/manifest.json 2>/dev/null || true)
+        if [[ "$manifest" == *\"name\":\ \"ripgrep\"* ]]; then
+            echo FUNC_TEST:auto-route-package-manifest:PASS
         else
             echo "FUNC_TEST:auto-route-package-manifest:FAIL:no-ripgrep"
-            cat /etc/redox-system/manifest.json
-        end
-        echo "FUNC_TEST:auto-route-package-profile:PASS"
-    else
-        echo "FUNC_TEST:auto-route-package-rebuild:FAIL:missing-rg-after-rebuild"
-        echo "FUNC_TEST:auto-route-package-manifest:FAIL:missing-rg-for-check"
-        echo "FUNC_TEST:auto-route-package-profile:FAIL:missing-rg"
-        ls /nix/system/profile/bin
-    end
+            printf "%s\n" "$manifest"
+        fi
+    '
 
     echo ""
     echo "FUNC_TESTS_COMPLETE"

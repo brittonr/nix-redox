@@ -118,6 +118,10 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ### Rootfs startup and networking service tests must match TOML unit files
 - `usr/lib/init.d/*.service` now stores `cmd = "..."` and `type = "..."` fields, not legacy shell lines like `notify /bin/smolnetd`.
+
+### Package-only rebuilds can break later tool lookups inside the same bash block
+- I assumed a pre-started `/nix/system/profile/bin/bash -c '...'` would keep later `grep` checks safe after a package-only rebuild. Wrong: once the profile symlink flips, later PATH lookups inside that same shell can still fail because the helper binary vanished.
+- For post-rebuild assertions, prefer shell builtins/pattern matching (`case`, `[[ ... == *...* ]]`) or resolve absolute tool paths before the rebuild.
 - Non-userutils startup is emitted as `99_startup.service` with `cmd = "/startup.sh"` and `type = "oneshot_async"`; `etc/init.toml` can stay empty.
 
 ### Rebuild VM test traps I hit this pass
