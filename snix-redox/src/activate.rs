@@ -1051,20 +1051,26 @@ fn hash_file_if_exists(path: &Path) -> Option<String> {
 /// activate runs against the running filesystem. Config files like
 /// /etc/hostname have content that comes from manifest.system.hostname,
 /// not from hash-tracked rootTree entries. This function writes them.
-fn write_manifest_derived_file(path: &str, contents: &[u8]) -> std::io::Result<()> {
-    let path = Path::new(path);
-    if let Some(parent) = path.parent() {
+fn write_manifest_derived_file_at(
+    root: &Path,
+    path: &str,
+    contents: &[u8],
+) -> std::io::Result<()> {
+    let relative = path.strip_prefix('/').unwrap_or(path);
+    let full_path = root.join(relative);
+    if let Some(parent) = full_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    if let Ok(meta) = std::fs::symlink_metadata(path) {
+    if let Ok(meta) = std::fs::symlink_metadata(&full_path) {
         if meta.file_type().is_symlink() {
-            std::fs::remove_file(path)?;
+            std::fs::remove_file(&full_path)?;
         }
     }
-    std::fs::write(path, contents)
+    std::fs::write(full_path, contents)
 }
 
-fn write_manifest_derived_files(
+pub(crate) fn write_manifest_derived_files_at(
+    root: &Path,
     old: &Manifest,
     new: &Manifest,
     warnings: &mut Vec<String>,
@@ -1073,7 +1079,7 @@ fn write_manifest_derived_files(
 
     // /etc/hostname
     if old.system.hostname != new.system.hostname {
-        match write_manifest_derived_file("/etc/hostname", new.system.hostname.as_bytes()) {
+        match write_manifest_derived_file_at(root, "/etc/hostname", new.system.hostname.as_bytes()) {
             Ok(()) => {
                 println!("  updated /etc/hostname -> {}", new.system.hostname);
                 count += 1;
@@ -1084,7 +1090,7 @@ fn write_manifest_derived_files(
 
     // /etc/timezone (if timezone changed)
     if old.system.timezone != new.system.timezone {
-        match write_manifest_derived_file("/etc/timezone", new.system.timezone.as_bytes()) {
+        match write_manifest_derived_file_at(root, "/etc/timezone", new.system.timezone.as_bytes()) {
             Ok(()) => {
                 println!("  updated /etc/timezone -> {}", new.system.timezone);
                 count += 1;
@@ -1096,7 +1102,7 @@ fn write_manifest_derived_files(
     // /etc/net/dns (if DNS servers changed)
     if old.configuration.networking.dns != new.configuration.networking.dns {
         let dns_content = new.configuration.networking.dns.join("\n");
-        match write_manifest_derived_file("/etc/net/dns", dns_content.as_bytes()) {
+        match write_manifest_derived_file_at(root, "/etc/net/dns", dns_content.as_bytes()) {
             Ok(()) => {
                 println!("  updated /etc/net/dns");
                 count += 1;
@@ -1110,6 +1116,14 @@ fn write_manifest_derived_files(
     }
 
     count
+}
+
+fn write_manifest_derived_files(
+    old: &Manifest,
+    new: &Manifest,
+    warnings: &mut Vec<String>,
+) -> u32 {
+    write_manifest_derived_files_at(Path::new("/"), old, new, warnings)
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1564,12 +1578,13 @@ mod tests {
     #[test]
     fn write_manifest_derived_file_replaces_symlink_with_regular_file() {
         let dir = tempfile::tempdir().unwrap();
-        let target = dir.path().join("hostname");
+        let target = dir.path().join("etc/hostname");
         let store_target = dir.path().join("store-hostname");
+        std::fs::create_dir_all(target.parent().unwrap()).unwrap();
         std::fs::write(&store_target, "old-host").unwrap();
         std::os::unix::fs::symlink(&store_target, &target).unwrap();
 
-        write_manifest_derived_file(target.to_str().unwrap(), b"new-host").unwrap();
+        write_manifest_derived_file_at(dir.path(), "/etc/hostname", b"new-host").unwrap();
 
         let meta = std::fs::symlink_metadata(&target).unwrap();
         assert!(!meta.file_type().is_symlink());
@@ -2687,6 +2702,30 @@ mod tests {
         // services_added is non-empty → activate would set reboot_recommended = true
         assert!(!p.services_added.is_empty(),
             "service addition should trigger reboot recommendation");
+    }
+
+    #[test]
+    fn write_manifest_derived_files_at_updates_temp_root() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut old = sample_manifest();
+        let mut new = sample_manifest();
+
+        old.system.hostname = "old-host".to_string();
+        old.system.timezone = "UTC".to_string();
+        old.configuration.networking.dns = vec!["1.1.1.1".to_string()];
+
+        new.system.hostname = "new-host".to_string();
+        new.system.timezone = "America/New_York".to_string();
+        new.configuration.networking.dns = vec!["9.9.9.9".to_string(), "8.8.8.8".to_string()];
+
+        let mut warnings = Vec::new();
+        let updated = write_manifest_derived_files_at(dir.path(), &old, &new, &mut warnings);
+
+        assert_eq!(updated, 3);
+        assert!(warnings.is_empty());
+        assert_eq!(std::fs::read_to_string(dir.path().join("etc/hostname")).unwrap(), "new-host");
+        assert_eq!(std::fs::read_to_string(dir.path().join("etc/timezone")).unwrap(), "America/New_York");
+        assert_eq!(std::fs::read_to_string(dir.path().join("etc/net/dns")).unwrap(), "9.9.9.9\n8.8.8.8");
     }
 
     // ── Boot path change → reboot_recommended ──
