@@ -445,6 +445,20 @@ enum SystemCommand {
         gen_dir: Option<String>,
     },
 
+    /// Switch to an existing saved generation without creating a new one
+    SwitchGeneration {
+        /// Generation number to activate
+        generation: u32,
+
+        /// Path to generations directory
+        #[arg(short, long)]
+        dir: Option<String>,
+
+        /// Path to current manifest file
+        #[arg(short, long)]
+        manifest: Option<String>,
+    },
+
     /// Rollback to a previous generation
     Rollback {
         /// Generation number to roll back to (default: previous)
@@ -830,6 +844,11 @@ fn main() {
                 manifest.as_deref(),
                 gen_dir.as_deref(),
             ),
+            SystemCommand::SwitchGeneration {
+                generation,
+                dir,
+                manifest,
+            } => system::switch_generation(generation, dir.as_deref(), manifest.as_deref()),
             SystemCommand::Rollback {
                 generation,
                 dir,

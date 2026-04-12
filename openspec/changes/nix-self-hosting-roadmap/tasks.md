@@ -52,7 +52,7 @@ All tasks below are blocked until the stabilization baseline is complete:
 ## 5. Generation management and rollback (blocked on section 0-4)
 
 - [ ] 5.1 Implement `snix system generations` — list generations with ID, timestamp, current marker
-- [ ] 5.2 Implement `snix system switch-generation N` — activate generation N, update symlink and etc files
+- [x] 5.2 Implement `snix system switch-generation N` — activate generation N, update symlink and etc files
 - [ ] 5.3 Implement `snix system rollback` — switch to generation N-1
 - [ ] 5.4 Implement `snix system delete-generations` — remove specified generations, refuse current
 - [ ] 5.5 Implement `--older-than` flag for age-based deletion

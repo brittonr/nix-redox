@@ -1200,6 +1200,63 @@ pub fn switch(
     Ok(())
 }
 
+/// Switch to an existing saved generation without creating a new generation.
+///
+/// This activates the target generation's manifest, updates the current
+/// manifest on disk, and repoints `/nix/system/current` at the selected
+/// generation directory. Existing generations are left untouched.
+pub fn switch_generation(
+    target_id: u32,
+    gen_dir: Option<&str>,
+    manifest_path: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = gen_dir.unwrap_or(GENERATIONS_DIR);
+    let mpath = manifest_path.unwrap_or(MANIFEST_PATH);
+
+    let current = load_manifest_from(mpath)?;
+    let gens = scan_generations(dir)?;
+
+    let target = gens.iter().find(|g| g.id == target_id).ok_or_else(|| {
+        format!(
+            "Generation {target_id} not found. Available: {}",
+            gens.iter().map(|g| g.id.to_string()).collect::<Vec<_>>().join(", ")
+        )
+    })?;
+
+    if target.id == current.generation.id {
+        println!("Already at generation {}. Nothing to do.", target.id);
+        return Ok(());
+    }
+
+    println!(
+        "Switching from generation {} to generation {}...",
+        current.generation.id, target.id
+    );
+
+    let activation = crate::activate::activate(&current, &target.manifest, false)?;
+
+    let json = serde_json::to_string_pretty(&target.manifest)?;
+    fs::write(mpath, &json)?;
+    update_current_generation_link(dir, target.id)?;
+
+    println!("Switched to generation {}", target.id);
+
+    if !activation.warnings.is_empty() {
+        println!();
+        println!("Warnings:");
+        for w in &activation.warnings {
+            println!("  ⚠ {w}");
+        }
+    }
+
+    if activation.reboot_recommended {
+        println!();
+        println!("⚠ Reboot recommended: service or boot configuration changed.");
+    }
+
+    Ok(())
+}
+
 /// Rollback to the previous generation (or a specific one)
 pub fn rollback(
     target_id: Option<u32>,
@@ -2574,6 +2631,63 @@ mod tests {
         // Verify /nix/system/current-style link points to generation 2
         let current_link = current_generation_link_path(gen_dir.to_str().unwrap());
         assert_eq!(std::fs::read_link(current_link).unwrap(), gen_dir.join("2"));
+    }
+
+    #[test]
+    fn switch_generation_activates_existing_generation() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+
+        // Create generation 1 (current)
+        let gen1_dir = gen_dir.join("1");
+        std::fs::create_dir_all(&gen1_dir).unwrap();
+        let mut gen1 = sample_manifest();
+        gen1.generation.id = 1;
+        gen1.generation.description = "first".to_string();
+        std::fs::write(gen1_dir.join("manifest.json"), serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+
+        // Create generation 2 (stored target)
+        let gen2_dir = gen_dir.join("2");
+        std::fs::create_dir_all(&gen2_dir).unwrap();
+        let mut gen2 = sample_manifest();
+        gen2.generation.id = 2;
+        gen2.generation.description = "second".to_string();
+        gen2.packages.push(Package { name: "ripgrep".to_string(), version: "14.0".to_string(), store_path: String::new() });
+        std::fs::write(gen2_dir.join("manifest.json"), serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+
+        switch_generation(
+            2,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        ).unwrap();
+
+        let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
+        assert_eq!(active.generation.id, 2);
+        assert_eq!(active.generation.description, "second");
+        assert!(active.packages.iter().any(|p| p.name == "ripgrep"));
+        assert_eq!(std::fs::read_link(current_generation_link_path(gen_dir.to_str().unwrap())).unwrap(), gen_dir.join("2"));
+        assert!(!gen_dir.join("3").exists());
+    }
+
+    #[test]
+    fn switch_generation_missing_generation_errors() {
+        let dir = tempfile::tempdir().unwrap();
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+
+        let current = sample_manifest();
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+        std::fs::create_dir_all(&gen_dir).unwrap();
+
+        let result = switch_generation(
+            99,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Generation 99 not found"));
     }
 
     #[test]
