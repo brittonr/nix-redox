@@ -29,25 +29,25 @@ All tasks below are blocked until the stabilization baseline is complete:
 
 ## 3. Store scheme daemon (stored) (blocked on section 0-1)
 
-- [ ] 3.1 Implement stored binary entry point: pre-open root fd, register `store:` scheme, enter event loop
-- [ ] 3.2 Implement open handler: parse store path from scheme-relative path, resolve to /nix/store/ via root fd
-- [ ] 3.3 Implement lazy extraction: on first access to unextracted path, decompress NAR from /nix/cache/, verify hash, extract
-- [ ] 3.4 Implement read/stat/readdir/close handlers for extracted paths
-- [ ] 3.5 Add stored to Nix package set (new cross-compiled binary package)
-- [ ] 3.6 Add stored init service definition (daemon type, started before dependent services)
-- [ ] 3.7 Add `store` to login_schemes.toml for user session access
-- [ ] 3.8 VM test: boot with stored, verify `cat store:hash-name/bin/rg` returns binary content
+- [x] 3.1 Implement stored binary entry point: pre-open root fd, register `store:` scheme, enter event loop
+- [x] 3.2 Implement open handler: parse store path from scheme-relative path, resolve to /nix/store/ via root fd
+- [x] 3.3 Implement lazy extraction: on first access to unextracted path, decompress NAR from /nix/cache/, verify hash, extract
+- [x] 3.4 Implement read/stat/readdir/close handlers for extracted paths
+- [x] 3.5 Add stored to Nix package set (new cross-compiled binary package)
+- [x] 3.6 Add stored init service definition (daemon type, started before dependent services)
+- [x] 3.7 Add `store` to login_schemes.toml for user session access
+- [x] 3.8 VM test: boot with stored, verify `cat store:hash-name/bin/rg` returns binary content
 
 ## 4. Full guest rebuild flow (blocked on section 0-3)
 
-- [ ] 4.1 Wire remote cache resolution into rebuild.rs: try remote → local → source fallback chain
-- [ ] 4.2 Implement generation creation in rebuild: mkdir /nix/system/generations/N, write manifest.json + metadata.json
-- [ ] 4.3 Update /nix/system/current symlink on successful activation
-- [ ] 4.4 Implement rebuild-auto-routing: detect bridge vs remote vs local vs source
+- [x] 4.1 Wire remote cache resolution into rebuild.rs: try remote → local → source fallback chain
+- [x] 4.2 Implement generation creation in rebuild: mkdir /nix/system/generations/N, write manifest.json + metadata.json
+- [x] 4.3 Update /nix/system/current symlink on successful activation
+- [x] 4.4 Implement rebuild-auto-routing: detect bridge vs remote vs local vs source
 - [ ] 4.5 Add reboot-recommended detection when boot components change
 - [ ] 4.6 Ship a test configuration.nix on the self-hosting image for rebuild testing
-- [ ] 4.7 VM test: modify configuration.nix hostname, run rebuild, verify /etc/hostname changed
-- [ ] 4.8 VM test: run rebuild, verify new generation in `snix system generations`
+- [x] 4.7 VM test: modify configuration.nix hostname, run rebuild, verify /etc/hostname changed
+- [x] 4.8 VM test: run rebuild, verify new generation in `snix system generations`
 
 ## 5. Generation management and rollback (blocked on section 0-4)
 

@@ -89,6 +89,16 @@ let
       message = "services.exampled.enable requires the 'exampled' package in pkgs.";
     }
     {
+      assertion = !inputs.snix.stored.enable || (pkgs ? stored);
+      message = "snix.stored.enable requires the 'stored' package in pkgs.";
+    }
+    {
+      assertion =
+        !inputs.snix.stored.enable
+        || builtins.any (p: toString p == toString pkgs.stored) (inputs.environment.systemPackages or [ ]);
+      message = "snix.stored.enable requires the 'stored' package in environment.systemPackages.";
+    }
+    {
       assertion = !(inputs.audio.enable or false) || cfg.audioEnabled;
       message = "audio.enable requires hardware.audioEnable = true for audio drivers (ihdad, ac97d, sb16d).";
     }

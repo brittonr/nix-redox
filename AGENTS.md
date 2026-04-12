@@ -36,6 +36,7 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 - No heredoc (`<< EOF`) support
 - Single quotes prevent all expansion — safe for Nix expressions with `{}[]()`
 - Apostrophes in `bash -c '...'` blocks break Ion's quote parser
+- For symlink assertions in guest tests, `bash` `pwd -P` can report the symlink path itself on Redox; `ls -ld /path | grep target` was reliable for `/nix/system/current`
 - `$?` unreliable between external commands — emit PASS/FAIL directly from bash blocks
 - `let HOME = ...` fails — HOME is a protected variable in Ion; use bash for scripts that need to set HOME
 - `echo $var | grep` pipes fail silently — use Ion-native `test` or `is` for comparisons
@@ -55,7 +56,8 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 - FIX: Pre-open `/` before starting the proxy to get a direct redoxfs fd. Use `SYS_OPENAT(root_fd, path, ...)` for real file I/O — this bypasses initnsmgr entirely, routing directly to redoxfs through the kernel
 - initnsmgr source: `base-src/bootstrap/src/initnsmgr.rs` — the event loop calls `handle_sync()` then `write_response()` sequentially, no concurrency
 - Use `.control` write interface for notifications (write+close = mutation cycle)
-- `FileIoWorker` background thread doesn't help for file: schemes — use the pre-opened root fd pattern instead
+- `FileIoWorker` background thread doesn't help by itself for file: schemes — the worker must use a pre-opened root fd and `SYS_OPENAT(root_fd, ...)` after `setrens(0, 0)`
+- Scheme daemons like `stored` must not scan PathInfoDb or other file-backed metadata from the event loop; preload registries/manifests before scheme registration (or via `.control` updates) and keep lookups in memory
 - `std::fs::canonicalize()` returns `file:/path` on Redox — strip prefix defensively
 - `debug:` scheme supports reads via EVENT_READ, but simple blocking reads from Ion's `read` don't work
 - `getty` works on `debug:` because it uses event-driven non-blocking I/O with event queues
@@ -290,6 +292,8 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - `patch-snix-fetcher-no-tls-panic.py` must stay idempotent because both the packaged build and the source bundle can apply it to the same upstream `snix-glue` source tree
 - `snix-compile` moved to run before `source-rebuild` (source-rebuild's activate() drops ld.lld from profile)
 - local host-side validation for `snix-redox/` needs host-target cargo plus proto env vars: `PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc || nix shell nixpkgs#protobuf --command which protoc) cargo test --lib --target x86_64-unknown-linux-gnu` and the same env for `cargo check --bins`; plain `cargo test` inherits the Redox target and fails in `zstd-sys`
+- Linux-target host tests do NOT compile `#[cfg(target_os = "redox")]` modules like `stored/scheme.rs`; treat them as logic coverage only, not proof that Redox scheme daemons compile
+- Adding a new `[[bin]]` target to `snix-redox/Cargo.toml` also requires `snix-redox/regenerate-build-plan.sh`; otherwise `self.packages.snix` keeps omitting the new binary even though plain `cargo check --bins` passes
 - repo helper: `scripts/validate-snix-redox-host.sh` wraps that host-side validation sequence
 
 ### What Doesn't
@@ -379,6 +383,7 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 
 ### Binary Cache
 - Flat layout: NARs in cache root (not `nar/` subdirectory)
+- Do NOT guess the NAR filename from the store-path hash. `stored` lazy extraction must read `<hash>.narinfo` and follow its `URL:` field; some guest caches use paths like `/nix/cache/nar/<sha>.nar.zst`
 - narinfo `URL:` field rewritten from `nar/hash.nar.zst` to `hash.nar.zst`
 - FileHash in nix-compat narinfo parser ONLY accepts nixbase32 (not hex)
 - NarHash accepts both hex (64 chars) and nixbase32 (52 chars)
@@ -409,9 +414,11 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 - Rootfs service binaries at `/bin/` or `/nix/system/profile/bin/` are NOT in init's PATH
 - `renderServiceToml` uses `baseNameOf` on command — strips `/bin/` prefix by default
 - Fix: check `hasPrefix "/"` and preserve full path; or ensure binary is in `/usr/bin/`
+- During live rebuild activation, `/etc/static` symlink-farm setup can overwrite manifest-derived files like `/etc/hostname` and `/etc/timezone`; set up `/etc/static` first, then rewrite derived files while replacing stale symlinks with regular files
 - Rootfs oneshot services may fail silently — no error output visible without serial console
 - Numbered: 00_base, 12_stored, 13_profiled, 20_orbital, 30_console, 90_exit_initfs
 - `notify` blocks until daemon signals readiness; `nowait` fires and forgets
+- Redox init `notify` readiness is just a single zero byte to the `INIT_NOTIFY` pipe. `stored` can integrate without the `daemon` crate by writing that byte after registration/root-fd setup
 - Our init (base fc162ac) does NOT support inline `KEY=VALUE cmd` syntax — use `export` on separate line
 - `ptyd` must be started (notify) in 00_base — getty needs pty: scheme
 - `acpid` is spawned by pcid-spawner — do NOT notify directly

@@ -14,6 +14,10 @@ let
 in
 dev
 // {
+  "/environment" = {
+    systemPackages = (dev."/environment".systemPackages or [ ]) ++ lib.optional (pkgs ? stored) pkgs.stored;
+  };
+
   "/snix" = {
     stored = {
       enable = true;

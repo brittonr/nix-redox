@@ -39,6 +39,9 @@ let
     echo "FUNC_TESTS_START"
     echo ""
 
+    let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
+    export PATH
+
     # ── Wait for daemons to start via init scripts ─────────────
     # The init system starts stored (12_stored) and profiled (13_profiled)
     # before the startup script runs. Wait for them to register.
@@ -97,8 +100,8 @@ let
     # LIVE INSTALL — daemons are running, install a package
     # ════════════════════════════════════════════════════════════
 
-    # ── Test: snix install ripgrep ─────────────────────────────
-    /bin/snix install ripgrep > /tmp/install-rg-out ^> /tmp/install-rg-err
+    # ── Test: snix lazy-install ripgrep ────────────────────────
+    /bin/snix install --lazy ripgrep > /tmp/install-rg-out ^> /tmp/install-rg-err
     let install_rc = $?
     if test $install_rc = 0
         echo "FUNC_TEST:live-install-ripgrep:PASS"
@@ -411,7 +414,7 @@ in
 {
   "/environment" = {
     # Do NOT include "userutils" — it causes a login loop.
-    systemPackages = opt "ion" ++ opt "uutils" ++ opt "extrautils" ++ opt "snix";
+    systemPackages = opt "ion" ++ opt "uutils" ++ opt "extrautils" ++ opt "snix" ++ opt "stored";
 
     # Include ripgrep and fd in the local binary cache so snix install
     # can find them without network access.

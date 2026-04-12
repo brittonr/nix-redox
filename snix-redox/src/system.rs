@@ -30,6 +30,9 @@ const GENERATIONS_DIR: &str = "/etc/redox-system/generations";
 /// which may be read-only on initfs-based systems).
 const BOOT_DEFAULT_PATH: &str = "/etc/redox-system/boot-default";
 
+/// Symlink pointing to the currently active generation directory.
+const CURRENT_GENERATION_LINK: &str = "/nix/system/current";
+
 // ===== Manifest Schema =====
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
@@ -101,6 +104,14 @@ impl Default for GenerationInfo {
             timestamp: String::new(),
         }
     }
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct GenerationMetadata {
+    id: u32,
+    description: String,
+    timestamp: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, PartialEq, Default)]
@@ -975,6 +986,49 @@ fn next_generation_id(gen_dir: &str, current: &Manifest) -> u32 {
     max_id + 1
 }
 
+fn current_generation_link_path(gen_dir: &str) -> std::path::PathBuf {
+    if Path::new(gen_dir) == Path::new(GENERATIONS_DIR) {
+        return Path::new(CURRENT_GENERATION_LINK).to_path_buf();
+    }
+
+    Path::new(gen_dir)
+        .parent()
+        .unwrap_or(Path::new(CURRENT_GENERATION_LINK).parent().unwrap_or(Path::new("/nix/system")))
+        .join("current")
+}
+
+fn write_generation_metadata(
+    gen_dir: &Path,
+    info: &GenerationInfo,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let metadata = GenerationMetadata {
+        id: info.id,
+        description: info.description.clone(),
+        timestamp: info.timestamp.clone(),
+    };
+    fs::write(
+        gen_dir.join("metadata.json"),
+        serde_json::to_string_pretty(&metadata)?,
+    )?;
+    Ok(())
+}
+
+fn update_current_generation_link(
+    gen_dir: &str,
+    generation_id: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let current_link = current_generation_link_path(gen_dir);
+    if let Some(parent) = current_link.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    if current_link.exists() || current_link.symlink_metadata().is_ok() {
+        let _ = fs::remove_file(&current_link);
+        let _ = fs::remove_dir(&current_link);
+    }
+    std::os::unix::fs::symlink(Path::new(gen_dir).join(generation_id.to_string()), &current_link)?;
+    Ok(())
+}
+
 /// List all system generations
 pub fn generations(gen_dir: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
     let dir = gen_dir.unwrap_or(GENERATIONS_DIR);
@@ -1082,20 +1136,23 @@ pub fn switch(
         fs::create_dir_all(&current_gen_dir)?;
         let current_json = serde_json::to_string_pretty(&current)?;
         fs::write(current_gen_dir.join("manifest.json"), current_json)?;
+        write_generation_metadata(&current_gen_dir, &current.generation)?;
         println!("Saved current system as generation {}", current.generation.id);
     }
 
-    // Save new manifest as a generation
+    // Save new manifest as a generation before activation.
     let new_gen_dir = Path::new(dir).join(next_id.to_string());
     fs::create_dir_all(&new_gen_dir)?;
     let new_json = serde_json::to_string_pretty(&new_manifest)?;
     fs::write(new_gen_dir.join("manifest.json"), &new_json)?;
-
-    // Install as current manifest
-    fs::write(mpath, &new_json)?;
+    write_generation_metadata(&new_gen_dir, &new_manifest.generation)?;
 
     // ── Activate: atomic profile swap + config file updates ──
     let activation = crate::activate::activate(&current, &new_manifest, false)?;
+
+    // Publish the new generation only after activation succeeds.
+    fs::write(mpath, &new_json)?;
+    update_current_generation_link(dir, next_id)?;
 
     // Update boot default so this generation is activated on next reboot
     if let Err(e) = write_boot_default(next_id, None) {
@@ -1210,6 +1267,7 @@ pub fn rollback(
         fs::create_dir_all(&current_gen_dir)?;
         let current_json = serde_json::to_string_pretty(&current)?;
         fs::write(current_gen_dir.join("manifest.json"), current_json)?;
+        write_generation_metadata(&current_gen_dir, &current.generation)?;
     }
 
     // Write the target manifest as current (update generation metadata)
@@ -1224,12 +1282,14 @@ pub fn rollback(
     fs::create_dir_all(&new_gen_dir)?;
     let new_json = serde_json::to_string_pretty(&rolled_back)?;
     fs::write(new_gen_dir.join("manifest.json"), &new_json)?;
-
-    // Install as current
-    fs::write(mpath, &new_json)?;
+    write_generation_metadata(&new_gen_dir, &rolled_back.generation)?;
 
     // ── Activate: atomic profile swap + config file updates ──
     let activation = crate::activate::activate(&current, &rolled_back, false)?;
+
+    // Publish the new generation only after activation succeeds.
+    fs::write(mpath, &new_json)?;
+    update_current_generation_link(dir, next_id)?;
 
     // Update boot default so this generation is activated on next reboot
     if let Err(e) = write_boot_default(next_id, None) {
@@ -2463,6 +2523,14 @@ mod tests {
     }
 
     #[test]
+    fn default_current_generation_link_path_is_nix_system_current() {
+        assert_eq!(
+            current_generation_link_path(GENERATIONS_DIR),
+            std::path::PathBuf::from(CURRENT_GENERATION_LINK)
+        );
+    }
+
+    #[test]
     fn switch_creates_generations() {
         let dir = tempfile::tempdir().unwrap();
         let gen_dir = dir.path().join("generations");
@@ -2490,9 +2558,11 @@ mod tests {
 
         // Verify generation 1 was saved
         assert!(gen_dir.join("1/manifest.json").exists());
+        assert!(gen_dir.join("1/metadata.json").exists());
 
         // Verify generation 2 was created
         assert!(gen_dir.join("2/manifest.json").exists());
+        assert!(gen_dir.join("2/metadata.json").exists());
 
         // Verify current manifest was updated
         let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
@@ -2500,6 +2570,10 @@ mod tests {
         assert_eq!(active.generation.description, "added ripgrep");
         assert_eq!(active.packages.len(), 3); // ion + uutils + ripgrep
         assert!(!active.generation.timestamp.is_empty());
+
+        // Verify /nix/system/current-style link points to generation 2
+        let current_link = current_generation_link_path(gen_dir.to_str().unwrap());
+        assert_eq!(std::fs::read_link(current_link).unwrap(), gen_dir.join("2"));
     }
 
     #[test]

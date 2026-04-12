@@ -621,26 +621,27 @@ pub fn activate(
         &mut warnings,
     );
 
-    // ── Step 3b: Write manifest-derived config files ──
+    // ── Step 3b: Set up /etc/static symlink farm ──
+    if let Some(ref etc_source) = new.etc_source {
+        if let Err(e) = setup_etc_static(etc_source) {
+            warnings.push(format!("/etc/static setup failed: {e}"));
+        }
+    }
+
+    // ── Step 3c: Write manifest-derived config files ──
     // These files have content derived directly from manifest fields,
     // not tracked via rootTree hashes. During live rebuild (no rootTree
     // redeploy), the activate must write them from manifest data.
+    // This runs AFTER /etc/static so derived files can replace stale symlinks.
     let derived_updated = write_manifest_derived_files(old, new, &mut warnings);
     let config_files_updated = config_files_updated + derived_updated;
 
-    // ── Step 3c: Update boot components ──
+    // ── Step 3d: Update boot components ──
     let boot_updated = update_boot_components(old, new, &mut warnings);
 
     // ── Step 4: Update GC roots (always, for idempotency) ──
     if let Err(e) = crate::system::update_system_gc_roots_pub(new, None) {
         warnings.push(format!("GC root update failed: {e}"));
-    }
-
-    // ── Step 3d: Set up /etc/static symlink farm ──
-    if let Some(ref etc_source) = new.etc_source {
-        if let Err(e) = setup_etc_static(etc_source) {
-            warnings.push(format!("/etc/static setup failed: {e}"));
-        }
     }
 
     // ── Step 4b: Update /run/current-system ──
@@ -1050,6 +1051,19 @@ fn hash_file_if_exists(path: &Path) -> Option<String> {
 /// activate runs against the running filesystem. Config files like
 /// /etc/hostname have content that comes from manifest.system.hostname,
 /// not from hash-tracked rootTree entries. This function writes them.
+fn write_manifest_derived_file(path: &str, contents: &[u8]) -> std::io::Result<()> {
+    let path = Path::new(path);
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    if let Ok(meta) = std::fs::symlink_metadata(path) {
+        if meta.file_type().is_symlink() {
+            std::fs::remove_file(path)?;
+        }
+    }
+    std::fs::write(path, contents)
+}
+
 fn write_manifest_derived_files(
     old: &Manifest,
     new: &Manifest,
@@ -1059,7 +1073,7 @@ fn write_manifest_derived_files(
 
     // /etc/hostname
     if old.system.hostname != new.system.hostname {
-        match std::fs::write("/etc/hostname", &new.system.hostname) {
+        match write_manifest_derived_file("/etc/hostname", new.system.hostname.as_bytes()) {
             Ok(()) => {
                 println!("  updated /etc/hostname -> {}", new.system.hostname);
                 count += 1;
@@ -1070,7 +1084,7 @@ fn write_manifest_derived_files(
 
     // /etc/timezone (if timezone changed)
     if old.system.timezone != new.system.timezone {
-        match std::fs::write("/etc/timezone", &new.system.timezone) {
+        match write_manifest_derived_file("/etc/timezone", new.system.timezone.as_bytes()) {
             Ok(()) => {
                 println!("  updated /etc/timezone -> {}", new.system.timezone);
                 count += 1;
@@ -1082,10 +1096,7 @@ fn write_manifest_derived_files(
     // /etc/net/dns (if DNS servers changed)
     if old.configuration.networking.dns != new.configuration.networking.dns {
         let dns_content = new.configuration.networking.dns.join("\n");
-        if let Err(e) = std::fs::create_dir_all("/etc/net") {
-            warnings.push(format!("failed to create /etc/net: {e}"));
-        }
-        match std::fs::write("/etc/net/dns", &dns_content) {
+        match write_manifest_derived_file("/etc/net/dns", dns_content.as_bytes()) {
             Ok(()) => {
                 println!("  updated /etc/net/dns");
                 count += 1;
@@ -1548,6 +1559,22 @@ mod tests {
             p.packages_changed[0].old_store_path,
             p.packages_changed[0].new_store_path
         );
+    }
+
+    #[test]
+    fn write_manifest_derived_file_replaces_symlink_with_regular_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let target = dir.path().join("hostname");
+        let store_target = dir.path().join("store-hostname");
+        std::fs::write(&store_target, "old-host").unwrap();
+        std::os::unix::fs::symlink(&store_target, &target).unwrap();
+
+        write_manifest_derived_file(target.to_str().unwrap(), b"new-host").unwrap();
+
+        let meta = std::fs::symlink_metadata(&target).unwrap();
+        assert!(!meta.file_type().is_symlink());
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "new-host");
+        assert_eq!(std::fs::read_to_string(&store_target).unwrap(), "old-host");
     }
 
     #[test]

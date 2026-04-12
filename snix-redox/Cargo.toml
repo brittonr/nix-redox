@@ -170,6 +170,11 @@ path = "src/main.rs"
 test = false
 
 [[bin]]
+name = "stored"
+path = "src/bin/stored.rs"
+test = false
+
+[[bin]]
 name = "proxy_namespace_test"
 path = "tests/redox/proxy_namespace_test.rs"
 test = false

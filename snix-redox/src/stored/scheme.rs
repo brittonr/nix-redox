@@ -8,6 +8,8 @@
 
 use redox_scheme::scheme::{SchemeState, SchemeSync};
 use redox_scheme::{CallerCtx, OpenResult, RequestKind, SignalBehavior, Socket};
+use std::io::Write;
+use std::os::unix::io::FromRawFd;
 use syscall::data::Stat;
 use syscall::dirent::{DirEntry as RedoxDirEntry, DirentBuf, DirentKind};
 use syscall::error::{Error, Result, EACCES, EBADF, EIO, ENOENT, ENOTDIR};
@@ -29,6 +31,21 @@ impl StoreSchemeHandler {
     fn new(daemon: StoreDaemon) -> Self {
         Self { daemon }
     }
+}
+
+fn notify_init_ready() -> Result<(), Box<dyn std::error::Error>> {
+    let Some(fd_raw) = std::env::var_os("INIT_NOTIFY") else {
+        return Ok(());
+    };
+
+    let fd: i32 = fd_raw
+        .to_string_lossy()
+        .parse()
+        .map_err(|e| format!("stored: invalid INIT_NOTIFY fd: {e}"))?;
+    let mut pipe = unsafe { std::fs::File::from_raw_fd(fd) };
+    pipe.write_all(&[0])?;
+    eprintln!("stored: signaled readiness to init");
+    Ok(())
 }
 
 impl SchemeSync for StoreSchemeHandler {
@@ -99,11 +116,56 @@ impl SchemeSync for StoreSchemeHandler {
             | ResolvedPath::SubPath {
                 store_path_name, ..
             } => {
-                // Resolve to filesystem path. Skip existence checks —
-                // filesystem I/O from within the scheme handler blocks
-                // the event loop and can cause hangs on Redox. Instead,
-                // create handles optimistically and let errors surface
-                // when the caller actually reads/lists.
+                if !self.daemon.is_registered_path(store_path_name) {
+                    eprintln!("stored: unregistered path: {store_path_name}");
+                    return Err(Error::new(ENOENT));
+                }
+
+                if let Some(expected_nar_hash) = self.daemon.expected_nar_hash(store_path_name).map(str::to_string) {
+                    match super::lazy::ensure_extracted(
+                        store_path_name,
+                        &self.daemon.config.store_dir,
+                        &self.daemon.config.cache_path,
+                        &expected_nar_hash,
+                        &self.daemon.extracting,
+                        self.daemon.root_fd,
+                    ) {
+                        Ok(outcome) => {
+                            if let Some(manifest) = outcome.manifest {
+                                self.daemon.manifests.insert(
+                                    store_path_name.to_string(),
+                                    manifest,
+                                );
+                            }
+                        }
+                        Err(super::lazy::ExtractError::NotRegistered(_)) => {
+                            return Err(Error::new(ENOENT));
+                        }
+                        Err(e) => {
+                            eprintln!("stored: lazy extraction failed for {store_path_name}: {e}");
+                            return Err(Error::new(EIO));
+                        }
+                    }
+                }
+
+                // Lazy-load the manifest once for paths registered after startup.
+                if !self.daemon.manifests.contains_key(store_path_name) {
+                    self.daemon.load_manifest_via_worker(store_path_name);
+                }
+
+                if let ResolvedPath::SubPath { store_path_name, subpath } = &resolved {
+                    if matches!(
+                        self.daemon.manifest_contains_path(store_path_name, subpath),
+                        Some(false)
+                    ) {
+                        eprintln!("stored: missing manifest path: {store_path_name}/{subpath}");
+                        return Err(Error::new(ENOENT));
+                    }
+                }
+
+                // Resolve to filesystem path. Skip filesystem existence checks —
+                // scheme handlers must stay off file: I/O paths and rely on
+                // cached metadata plus lazy reads through the I/O worker.
                 let fs_path = resolve::to_filesystem_path(
                     &resolved,
                     &self.daemon.config.store_dir,
@@ -115,21 +177,10 @@ impl SchemeSync for StoreSchemeHandler {
                 // StorePathRoot is always a directory. SubPath might be
                 // either a file or directory. Use O_DIRECTORY flag,
                 // the resolved path variant, OR the manifest to decide.
-                //
-                // CRITICAL: Do NOT call is_dir() or fs::File::open() on
-                // directories inside the event loop — on Redox, opening
-                // a directory path as a file can hang the daemon because
-                // the file: scheme request blocks the single-threaded
-                // event loop indefinitely. Instead, consult the manifest
-                // (pre-loaded in memory, no I/O) to determine the type.
                 let open_as_dir = match &resolved {
                     ResolvedPath::StorePathRoot { .. } => true,
                     _ if flags & O_DIRECTORY != 0 => true,
                     ResolvedPath::SubPath { store_path_name, subpath } => {
-                        // Check manifest: if the subpath matches a "dir"
-                        // entry or is a prefix of deeper entries, it's a
-                        // directory. Only fall through to file open for
-                        // paths that the manifest says are files.
                         self.daemon.is_directory_in_manifest(
                             store_path_name, subpath,
                         )
@@ -288,23 +339,16 @@ impl SchemeSync for StoreSchemeHandler {
             .to_string();
 
         if scheme_path.is_empty() {
-            // Root listing: show all registered store paths.
-            let paths = resolve::list_store_paths(
-                &self.daemon.db,
-                &self.daemon.config.store_dir,
-            )
-            .map_err(|e| {
-                eprintln!("stored: list_store_paths: {e}");
-                Error::new(EIO)
-            })?;
+            // Root listing: show all registered store paths from in-memory state.
+            let paths = self.daemon.list_registered_path_names();
 
             let start = opaque_offset as usize;
-            for (i, sp) in paths.iter().enumerate().skip(start) {
+            for (i, name) in paths.iter().enumerate().skip(start) {
                 if buf
                     .entry(RedoxDirEntry {
                         inode: 0,
                         next_opaque_id: (i + 1) as u64,
-                        name: &sp.name,
+                        name,
                         kind: DirentKind::Directory,
                     })
                     .is_err()
@@ -382,6 +426,12 @@ impl SchemeSync for StoreSchemeHandler {
                         let store_path_name = store_path
                             .strip_prefix(&format!("{}/", self.daemon.config.store_dir))
                             .unwrap_or(store_path);
+
+                        if let Some(nar_hash) = val.get("narHash").and_then(|v| v.as_str()) {
+                            self.daemon.remember_nar_hash(store_path_name, nar_hash);
+                        } else {
+                            self.daemon.remember_store_path(store_path_name);
+                        }
 
                         if let Some(files_val) = val.get("files") {
                             match serde_json::from_value::<Vec<crate::nar::ManifestEntry>>(
@@ -474,6 +524,7 @@ pub fn run_daemon(config: StoredConfig) -> Result<(), Box<dyn std::error::Error>
     // the namespace after setrens. The worker was spawned with
     // root_fd=None during daemon construction — now that we have
     // the fd, restart the worker with it.
+    handler.daemon.root_fd = Some(root_fd);
     handler.daemon.handles.io_worker = Some(
         crate::file_io_worker::FileIoWorker::spawn(Some(root_fd))
     );
@@ -485,6 +536,8 @@ pub fn run_daemon(config: StoredConfig) -> Result<(), Box<dyn std::error::Error>
     libredox::call::setrens(0, 0).map_err(|e| {
         format!("stored: setrens(0, 0) failed: {e}")
     })?;
+
+    notify_init_ready()?;
 
     // Keep root_file alive for the lifetime of the event loop — it
     // owns the fd that the FileIoWorker uses.

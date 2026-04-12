@@ -636,6 +636,11 @@ let
       };
     };
 
+  stored = hostPkgs.runCommand "stored-redox" { } ''
+    mkdir -p $out/bin
+    cp ${snix}/bin/stored $out/bin/
+  '';
+
   irohd = mkCrossPackage {
     pname = "irohd";
     src = ../../irohd;
@@ -1390,6 +1395,7 @@ in
       zoxide
       dust
       snix
+      stored
       irohd
       tokei
       lsd

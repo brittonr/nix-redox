@@ -6,7 +6,7 @@
 use std::fs;
 use std::io::{self, BufRead, Write};
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use nix_compat::nar::reader;
 
@@ -26,11 +26,88 @@ pub struct ManifestEntry {
     pub executable: bool,
 }
 
+trait ExtractSink {
+    fn create_dir_all(&mut self, path: &Path) -> io::Result<()>;
+    fn write_file<R: io::Read>(
+        &mut self,
+        path: &Path,
+        executable: bool,
+        reader: &mut R,
+    ) -> io::Result<u64>;
+    fn create_symlink(&mut self, path: &Path, target: &str) -> io::Result<()>;
+}
+
+struct StdFsSink;
+
+impl ExtractSink for StdFsSink {
+    fn create_dir_all(&mut self, path: &Path) -> io::Result<()> {
+        fs::create_dir_all(path)
+    }
+
+    fn write_file<R: io::Read>(
+        &mut self,
+        path: &Path,
+        executable: bool,
+        reader: &mut R,
+    ) -> io::Result<u64> {
+        let mut file = fs::File::create(path)?;
+        let size = io::copy(reader, &mut file)?;
+        let mode = if executable { 0o555 } else { 0o444 };
+        fs::set_permissions(path, fs::Permissions::from_mode(mode))?;
+        Ok(size)
+    }
+
+    fn create_symlink(&mut self, path: &Path, target: &str) -> io::Result<()> {
+        std::os::unix::fs::symlink(target, path)
+    }
+}
+
+#[cfg(target_os = "redox")]
+struct RootFdSink {
+    root_fd: usize,
+}
+
+#[cfg(target_os = "redox")]
+impl ExtractSink for RootFdSink {
+    fn create_dir_all(&mut self, path: &Path) -> io::Result<()> {
+        raw_mkdir_p(self.root_fd, path)
+    }
+
+    fn write_file<R: io::Read>(
+        &mut self,
+        path: &Path,
+        executable: bool,
+        reader: &mut R,
+    ) -> io::Result<u64> {
+        use std::os::unix::io::{AsRawFd, FromRawFd};
+
+        let flags = syscall::O_CREAT | syscall::O_WRONLY | syscall::O_TRUNC;
+        let fd = raw_openat(self.root_fd, path, flags)?;
+        let mut file = unsafe { fs::File::from_raw_fd(fd as i32) };
+        let size = io::copy(reader, &mut file)?;
+        let mode = if executable { 0o555 } else { 0o444 };
+        raw_fchmod(file.as_raw_fd() as usize, mode)?;
+        Ok(size)
+    }
+
+    fn create_symlink(&mut self, path: &Path, target: &str) -> io::Result<()> {
+        use std::os::unix::io::FromRawFd;
+
+        let flags = syscall::O_CREAT | syscall::O_SYMLINK | syscall::O_WRONLY;
+        let fd = raw_openat(self.root_fd, path, flags)?;
+        let mut file = unsafe { fs::File::from_raw_fd(fd as i32) };
+        file.write_all(target.as_bytes())
+    }
+}
+
 /// Extract a NAR from a reader to a destination path.
 /// The reader must implement BufRead + Send (nix-compat requirement).
 pub fn extract(r: &mut (dyn BufRead + Send), dest: &str) -> io::Result<()> {
     let node = reader::open(r)?;
-    extract_node(node, Path::new(dest))
+    let mut sink = StdFsSink;
+    let mut manifest = Vec::new();
+    extract_node_with_sink(node, Path::new(dest), "", &mut manifest, &mut sink)?;
+    Ok(())
 }
 
 /// Extract a NAR and collect a manifest of all entries.
@@ -42,27 +119,36 @@ pub fn extract_with_manifest(
     dest: &str,
 ) -> io::Result<Vec<ManifestEntry>> {
     let node = reader::open(r)?;
+    let mut sink = StdFsSink;
     let mut manifest = Vec::new();
-    extract_node_manifest(node, Path::new(dest), "", &mut manifest)?;
+    extract_node_with_sink(node, Path::new(dest), "", &mut manifest, &mut sink)?;
     Ok(manifest)
 }
 
-fn extract_node_manifest(
+/// Extract a NAR through a pre-opened Redox root fd.
+#[cfg(target_os = "redox")]
+pub fn extract_with_manifest_via_root_fd(
+    r: &mut (dyn BufRead + Send),
+    dest: &str,
+    root_fd: usize,
+) -> io::Result<Vec<ManifestEntry>> {
+    let node = reader::open(r)?;
+    let mut sink = RootFdSink { root_fd };
+    let mut manifest = Vec::new();
+    extract_node_with_sink(node, Path::new(dest), "", &mut manifest, &mut sink)?;
+    Ok(manifest)
+}
+
+fn extract_node_with_sink<S: ExtractSink>(
     node: reader::Node<'_, '_>,
     path: &Path,
     rel_path: &str,
     manifest: &mut Vec<ManifestEntry>,
+    sink: &mut S,
 ) -> io::Result<()> {
     match node {
         reader::Node::File { executable, mut reader } => {
-            let mut file = fs::File::create(path)?;
-            reader.copy(&mut file)?;
-
-            let mode = if executable { 0o555 } else { 0o444 };
-            fs::set_permissions(path, fs::Permissions::from_mode(mode))?;
-
-            let size = file.metadata().map(|m| m.len()).unwrap_or(0);
-
+            let size = sink.write_file(path, executable, &mut reader)?;
             manifest.push(ManifestEntry {
                 path: rel_path.to_string(),
                 entry_type: "file".to_string(),
@@ -73,7 +159,7 @@ fn extract_node_manifest(
         reader::Node::Symlink { target } => {
             let target_str = std::str::from_utf8(&target)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            std::os::unix::fs::symlink(target_str, path)?;
+            sink.create_symlink(path, target_str)?;
 
             manifest.push(ManifestEntry {
                 path: rel_path.to_string(),
@@ -83,7 +169,7 @@ fn extract_node_manifest(
             });
         }
         reader::Node::Directory(mut dir_reader) => {
-            fs::create_dir_all(path)?;
+            sink.create_dir_all(path)?;
 
             if !rel_path.is_empty() {
                 manifest.push(ManifestEntry {
@@ -111,49 +197,78 @@ fn extract_node_manifest(
                 } else {
                     format!("{rel_path}/{name}")
                 };
-                extract_node_manifest(entry.node, &entry_path, &child_rel, manifest)?;
+                extract_node_with_sink(entry.node, &entry_path, &child_rel, manifest, sink)?;
             }
         }
     }
     Ok(())
 }
 
-fn extract_node(node: reader::Node<'_, '_>, path: &Path) -> io::Result<()> {
-    match node {
-        reader::Node::File { executable, mut reader } => {
-            // Use FileReader's copy method to write directly to a file
-            let mut file = fs::File::create(path)?;
-            reader.copy(&mut file)?;
+#[cfg(target_os = "redox")]
+fn raw_openat(root_fd: usize, path: &Path, flags: usize) -> io::Result<usize> {
+    let clean = path_to_relative_string(path)?;
+    let fcntl_flags = flags & syscall::O_FCNTL_MASK;
+    unsafe {
+        syscall::syscall5(
+            syscall::SYS_OPENAT,
+            root_fd,
+            clean.as_ptr() as usize,
+            clean.len(),
+            flags,
+            fcntl_flags,
+        )
+    }
+    .map_err(|e| io::Error::new(io::ErrorKind::NotFound, format!("SYS_OPENAT: {e}")))
+}
 
-            // Set permissions
-            let mode = if executable { 0o555 } else { 0o444 };
-            fs::set_permissions(path, fs::Permissions::from_mode(mode))?;
+#[cfg(target_os = "redox")]
+fn raw_fchmod(fd: usize, mode: u16) -> io::Result<()> {
+    unsafe {
+        syscall::syscall2(syscall::SYS_FCHMOD, fd, mode as usize)
+    }
+    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SYS_FCHMOD: {e}")))?;
+    Ok(())
+}
+
+#[cfg(target_os = "redox")]
+fn raw_mkdir_p(root_fd: usize, path: &Path) -> io::Result<()> {
+    let clean = path_to_relative_string(path)?;
+    let mut built = String::new();
+    for component in clean.split('/') {
+        if component.is_empty() {
+            continue;
         }
-        reader::Node::Symlink { target } => {
-            let target_str = std::str::from_utf8(&target)
-                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-            std::os::unix::fs::symlink(target_str, path)?;
+        if !built.is_empty() {
+            built.push('/');
         }
-        reader::Node::Directory(mut dir_reader) => {
-            fs::create_dir_all(path)?;
-
-            while let Some(entry) = dir_reader.next()? {
-                let name = std::str::from_utf8(entry.name)
-                    .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-                if name.contains('/') || name == "." || name == ".." {
-                    return Err(io::Error::new(
-                        io::ErrorKind::InvalidData,
-                        format!("invalid NAR entry name: {name}"),
-                    ));
-                }
-
-                let entry_path = path.join(name);
-                extract_node(entry.node, &entry_path)?;
-            }
+        built.push_str(component);
+        let flags = syscall::O_CREAT | syscall::O_DIRECTORY;
+        let fd = unsafe {
+            syscall::syscall5(
+                syscall::SYS_OPENAT,
+                root_fd,
+                built.as_ptr() as usize,
+                built.len(),
+                flags,
+                flags & syscall::O_FCNTL_MASK,
+            )
         }
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("mkdir {built}: {e}")))?;
+        let _ = syscall::close(fd);
     }
     Ok(())
+}
+
+#[cfg(target_os = "redox")]
+fn path_to_relative_string(path: &Path) -> io::Result<String> {
+    let clean = path.to_string_lossy().trim_start_matches('/').to_string();
+    if clean.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "path must not resolve to root",
+        ));
+    }
+    Ok(clean)
 }
 
 /// List the contents of a NAR without extracting

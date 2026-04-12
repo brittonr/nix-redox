@@ -102,6 +102,7 @@ let
     wasmtime-redox = self'.packages.wasmtime-redox or null;
     irohd = self'.packages.irohd or null;
     snix = self'.packages.snix or null;
+    stored = self'.packages.stored or null;
     ca-certificates = self'.packages.ca-certificates or null;
     redox-curl = self'.packages.redox-curl or null;
     openssh = self'.packages.openssh or null;
@@ -586,6 +587,16 @@ let
     inherit bootloader;
   };
 
+  # Stored lazy extraction test: lazy install, first store: read extracts on demand
+  storedLazyTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/stored-lazy-test.nix ];
+    inherit extraPkgs;
+  };
+  storedLazyTest = mkFunctionalTest {
+    diskImage = storedLazyTestSystem.diskImage;
+    inherit bootloader;
+  };
+
   # Rebuild & generations test: snix system rebuild, generations, rollback
   rebuildGenerationsTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/rebuild-generations-test.nix ];
@@ -616,6 +627,17 @@ let
     diskImage = e2eRebuildTestSystem.diskImage;
     inherit bootloader;
     defaultTimeout = 300;
+  };
+
+  # Focused rebuild artifact test: generation dir + metadata + /nix/system/current
+  rebuildArtifactsTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/rebuild-artifacts-test.nix ];
+    inherit extraPkgs;
+  };
+  rebuildArtifactsTest = mkFunctionalTest {
+    diskImage = rebuildArtifactsTestSystem.diskImage;
+    inherit bootloader;
+    defaultTimeout = 180;
   };
 
   # Activate toplevel test: /etc/static, /run/current-system, GC roots
@@ -790,6 +812,8 @@ in
 
     redox-scheme-native-test = schemeNativeTestSystem.diskImage;
     scheme-native-test = schemeNativeTest;
+    redox-stored-lazy-test = storedLazyTestSystem.diskImage;
+    stored-lazy-test = storedLazyTest;
 
     redox-rebuild-generations-test = rebuildGenerationsTestSystem.diskImage;
     rebuild-generations-test = rebuildGenerationsTest;
@@ -799,6 +823,9 @@ in
 
     redox-e2e-rebuild-test = e2eRebuildTestSystem.diskImage;
     e2e-rebuild-test = e2eRebuildTest;
+
+    redox-rebuild-artifacts-test = rebuildArtifactsTestSystem.diskImage;
+    rebuild-artifacts-test = rebuildArtifactsTest;
 
     redox-activate-toplevel-test = activateToplevelTestSystem.diskImage;
     activate-toplevel-test = activateToplevelTest;

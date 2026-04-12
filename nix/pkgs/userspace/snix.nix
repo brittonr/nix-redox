@@ -48,7 +48,7 @@ mkUserspace.mkBinary {
   version = "0.4.0";
   src = snix-redox-src;
   binaryName = "snix";
-  cargoBuildFlags = "--bin snix --bin proxy_namespace_test";
+  cargoBuildFlags = "--bin snix --bin stored --bin proxy_namespace_test";
 
   # Patch upstream fetcher to not panic when no CA certificates exist.
   # Redox has no system cert store; reqwest::Client::new() calls
@@ -68,6 +68,9 @@ mkUserspace.mkBinary {
     runHook preInstall
     mkdir -p $out/bin
     cp target/${redoxTarget}/release/snix $out/bin/
+    if [ -f target/${redoxTarget}/release/stored ]; then
+      cp target/${redoxTarget}/release/stored $out/bin/
+    fi
     if [ -f target/${redoxTarget}/release/proxy_namespace_test ]; then
       cp target/${redoxTarget}/release/proxy_namespace_test $out/bin/
     fi
