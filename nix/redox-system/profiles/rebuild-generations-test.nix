@@ -35,6 +35,9 @@ let
     echo "FUNC_TESTS_START"
     echo ""
 
+    let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
+    export PATH
+
     # ── Phase 1: Pre-flight checks ─────────────────────────────
     echo "--- Phase 1: Pre-flight checks ---"
 

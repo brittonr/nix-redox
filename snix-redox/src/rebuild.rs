@@ -357,6 +357,11 @@ pub fn rebuild(
     } else {
         None
     };
+    let preserved_config = if cfg_path == DEFAULT_CONFIG_PATH {
+        Some(fs::read_to_string(cfg_path)?)
+    } else {
+        None
+    };
 
     // Step 1: Evaluate configuration.nix
     println!("Evaluating {cfg_path}...");
@@ -444,10 +449,38 @@ pub fn rebuild(
 
     result?;
 
+    if let Some(config_text) = preserved_config.as_deref() {
+        preserve_active_config(DEFAULT_CONFIG_PATH, config_text)?;
+    }
+
     println!();
     println!("✓ System rebuilt from {cfg_path}");
 
     Ok(())
+}
+
+fn preserve_active_config(
+    path: &str,
+    content: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let cfg_path = Path::new(path);
+    if let Some(parent) = cfg_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    if cfg_path.symlink_metadata().is_ok() {
+        fs::remove_file(cfg_path).or_else(|_| fs::remove_dir_all(cfg_path))?;
+    }
+
+    fs::write(cfg_path, content)?;
+    Ok(())
+}
+
+pub(crate) fn preserve_active_config_pub(
+    path: &str,
+    content: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    preserve_active_config(path, content)
 }
 
 /// Show the parsed configuration without applying it.
@@ -2184,6 +2217,28 @@ mod tests {
 
         let result = init_config(Some(path.to_str().unwrap()));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_preserve_active_config_replaces_symlink() {
+        let dir = tempfile::tempdir().unwrap();
+        let store_dir = dir.path().join("store");
+        let live_dir = dir.path().join("etc/redox-system");
+        fs::create_dir_all(&store_dir).unwrap();
+        fs::create_dir_all(&live_dir).unwrap();
+
+        let store_cfg = store_dir.join("configuration.nix");
+        fs::write(&store_cfg, "{ hostname = \"redox\"; }\n").unwrap();
+
+        let live_cfg = live_dir.join("configuration.nix");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&store_cfg, &live_cfg).unwrap();
+
+        preserve_active_config(live_cfg.to_str().unwrap(), "{ hostname = \"persisted\"; }\n").unwrap();
+
+        let meta = fs::symlink_metadata(&live_cfg).unwrap();
+        assert!(!meta.file_type().is_symlink());
+        assert_eq!(fs::read_to_string(&live_cfg).unwrap(), "{ hostname = \"persisted\"; }\n");
     }
 
     // ===== Boot-Affecting Detection: Hardware Fields =====
