@@ -10,6 +10,9 @@ echo ""
 echo "FUNC_TESTS_START"
 echo ""
 
+let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
+export PATH
+
 # ── Phase 1: Verify initial state ─────────────────────────
 echo "--- Phase 1: initial state ---"
 
@@ -178,6 +181,47 @@ end
         fi
     else
         echo "FUNC_TEST:rebuild-new-generation:FAIL:no-gen-list"
+    fi
+'
+
+# Verify generation artifacts and /nix/system/current link
+/nix/system/profile/bin/bash -c '
+    manifest=/etc/redox-system/manifest.json
+    gen_id=$(grep -m1 "\"id\"" "$manifest" | sed -E "s/[^0-9]*([0-9]+).*/\\1/")
+    gen_dir="/etc/redox-system/generations/$gen_id"
+
+    if [ -n "$gen_id" ] && [ -d "$gen_dir" ]; then
+        echo FUNC_TEST:rebuild-generation-dir-exists:PASS
+    else
+        echo "FUNC_TEST:rebuild-generation-dir-exists:FAIL:gen_id=$gen_id"
+    fi
+
+    if [ -f "$gen_dir/manifest.json" ] && [ -f "$gen_dir/metadata.json" ]; then
+        echo FUNC_TEST:rebuild-generation-artifacts:PASS
+    else
+        echo "FUNC_TEST:rebuild-generation-artifacts:FAIL:missing-files"
+        ls -la "$gen_dir" 2>/dev/null || true
+    fi
+
+    if [ -f "$gen_dir/metadata.json" ] && \
+       grep -q "\"id\"" "$gen_dir/metadata.json" && \
+       grep -q "\"description\"" "$gen_dir/metadata.json" && \
+       grep -q "\"timestamp\"" "$gen_dir/metadata.json"; then
+        echo FUNC_TEST:rebuild-generation-metadata:PASS
+    else
+        echo "FUNC_TEST:rebuild-generation-metadata:FAIL:bad-metadata"
+        cat "$gen_dir/metadata.json" 2>/dev/null || true
+    fi
+
+    if [ -L /nix/system/current ]; then
+        if ls -ld /nix/system/current 2>/dev/null | grep -q "$gen_dir"; then
+            echo FUNC_TEST:rebuild-current-link:PASS
+        else
+            echo "FUNC_TEST:rebuild-current-link:FAIL:bad-target"
+            ls -ld /nix/system/current 2>/dev/null || true
+        fi
+    else
+        echo "FUNC_TEST:rebuild-current-link:FAIL:not-a-symlink"
     fi
 '
 

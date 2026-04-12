@@ -68,7 +68,7 @@ in
         # IPC schemes
         "shm" "chan" "uds_stream" "uds_dgram"
         # File schemes
-        "file"
+        "file" "store"
         # Display schemes
         "display.vesa" "display*"
         # Other schemes
@@ -85,7 +85,7 @@ in
         "rand" "null" "zero" "log"
         "ip" "icmp" "tcp" "udp"
         "shm" "chan" "uds_stream" "uds_dgram"
-        "file"
+        "file" "store"
         "display.vesa" "display*"
         "pty" "sudo" "audio"
       ];

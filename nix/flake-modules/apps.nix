@@ -267,6 +267,12 @@ in
       meta.description = "E2E test: environment.etc, activation scripts, rebuild, no-op, rollback";
     };
 
+    rebuild-artifacts-test = {
+      type = "app";
+      program = "${self'.packages.rebuild-artifacts-test}/bin/functional-test";
+      meta.description = "Focused rebuild artifact test: generation dir, metadata.json, /nix/system/current";
+    };
+
     https-cache-test = {
       type = "app";
       program = "${self'.packages.httpsCacheTest}/bin/https-cache-test";

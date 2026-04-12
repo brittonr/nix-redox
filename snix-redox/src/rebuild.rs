@@ -239,12 +239,48 @@ pub fn bridge_available(shared_dir: Option<&str>) -> bool {
     Path::new(dir).join("requests").is_dir()
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AutoRebuildRoute {
+    Bridge,
+    Local,
+}
+
+fn select_auto_rebuild_route(
+    config: &RebuildConfig,
+    current_manifest: Option<&Manifest>,
+    bridge_is_available: bool,
+) -> Result<AutoRebuildRoute, Box<dyn std::error::Error>> {
+    if has_boot_affecting_changes(config, current_manifest) {
+        if bridge_is_available {
+            return Ok(AutoRebuildRoute::Bridge);
+        }
+
+        return Err(
+            "changes require the build bridge\n\
+             \n\
+             Your configuration.nix modifies hardware/drivers or services, which\n\
+             requires the host to rebuild the initfs. Start the VM with shared filesystem:\n\
+             \n\
+               nix run .#run-redox-shared     (in one terminal)\n\
+               nix run .#build-bridge         (in another terminal)\n"
+                .into(),
+        );
+    }
+
+    if has_package_changes(config) && bridge_is_available {
+        Ok(AutoRebuildRoute::Bridge)
+    } else {
+        Ok(AutoRebuildRoute::Local)
+    }
+}
+
 /// Auto-routing rebuild entry point.
 ///
 /// Parses configuration.nix, then decides which path to use:
-///   - Config-only changes (no packages) → local rebuild
+///   - Boot-affecting changes + bridge available → bridge rebuild
 ///   - Package changes + bridge available → bridge rebuild
-///   - Package changes + no bridge → error with instructions
+///   - Package changes + no bridge → guest-local rebuild (remote/local cache fallback)
+///   - Config-only changes → local rebuild
 pub fn auto_rebuild(
     config_path: Option<&str>,
     dry_run: bool,
@@ -266,9 +302,10 @@ pub fn auto_rebuild(
     let current_manifest = system::load_manifest_from(mpath).ok();
     let manifest_ref = current_manifest.as_ref();
 
-    if needs_bridge(&config, manifest_ref) {
-        // Package or boot-component changes — need the bridge
-        if bridge_available(shared_dir) {
+    let route = select_auto_rebuild_route(&config, manifest_ref, bridge_available(shared_dir))?;
+
+    match route {
+        AutoRebuildRoute::Bridge => {
             let has_svc = has_service_changes(&config, manifest_ref);
             let has_hw = has_boot_affecting_changes(&config, manifest_ref);
             let has_pkg = has_package_changes(&config);
@@ -290,42 +327,15 @@ pub fn auto_rebuild(
                 manifest_path,
                 gen_dir,
             )
-        } else {
-            let detail = if has_boot_affecting_changes(&config, manifest_ref) {
-                "Your configuration.nix modifies hardware/drivers or services, which\n\
-                 requires the host to rebuild the initfs."
-            } else {
-                "Your configuration.nix modifies `packages`, which requires the host\n\
-                 to build the new package set."
-            };
-            Err(format!(
-                "changes require the build bridge\n\
-                 \n\
-                 {detail} Start the VM with shared filesystem:\n\
-                 \n\
-                   nix run .#run-redox-shared     (in one terminal)\n\
-                   nix run .#build-bridge         (in another terminal)\n\
-                 \n\
-                 Then re-run: snix system rebuild\n\
-                 \n\
-                 To apply config-only changes without the bridge: remove the\n\
-                 `packages` / `hardware` section from configuration.nix and re-run.\n\
-                 \n\
-                 To force local resolution (may produce incomplete results):\n\
-                   snix system rebuild --local"
-            )
-            .into())
         }
-    } else {
-        // Config-only — use local path (fast, no bridge needed)
-        rebuild(
+        AutoRebuildRoute::Local => rebuild(
             config_path,
             dry_run,
             manifest_path,
             gen_dir,
             cache_index_path,
             cache_url,
-        )
+        ),
     }
 }
 
@@ -340,7 +350,13 @@ pub fn rebuild(
     let cfg_path = config_path.unwrap_or(DEFAULT_CONFIG_PATH);
     let mpath = manifest_path.unwrap_or(DEFAULT_MANIFEST_PATH);
     let cache_path = cache_index_path.unwrap_or(DEFAULT_CACHE_INDEX);
-    let cache_source = cache_source_for_rebuild(cache_path, cache_url);
+    let primary_cache = cache_source_for_rebuild(cache_path, cache_url);
+    let local_cache = local_cache_source_for_rebuild(cache_path);
+    let fallback_cache = if primary_cache.is_remote() {
+        Some(&local_cache)
+    } else {
+        None
+    };
 
     // Step 1: Evaluate configuration.nix
     println!("Evaluating {cfg_path}...");
@@ -348,18 +364,32 @@ pub fn rebuild(
 
     // Warn if using local path with package changes (--local or legacy behavior)
     if has_package_changes(&config) {
-        eprintln!("warning: resolving packages locally from binary cache index");
-        eprintln!("         results may be incomplete — use bridge for full builds");
+        if primary_cache.is_remote() {
+            eprintln!(
+                "warning: resolving packages from remote cache first, then local cache fallback"
+            );
+        } else {
+            eprintln!("warning: resolving packages locally from binary cache index");
+            eprintln!("         results may be incomplete — use bridge for full builds");
+        }
     }
 
     // Step 2: Load current manifest
     let current = system::load_manifest_from(mpath)?;
 
     // Step 3: Resolve package names → store paths
-    let resolved_packages = resolve_packages_with_source(&config.packages, &cache_source)?;
+    let resolved_packages = resolve_packages_with_fallback(
+        &config.packages,
+        &primary_cache,
+        fallback_cache,
+    )?;
 
     // Step 4: Merge config into manifest
-    let merged = merge_config(&current, &config, &resolved_packages)?;
+    let merged_packages: Vec<Package> = resolved_packages
+        .iter()
+        .map(|resolved| resolved.package.clone())
+        .collect();
+    let merged = merge_config(&current, &config, &merged_packages)?;
 
     // Step 5: Show what would change
     let has_changes = has_manifest_changes(&current, &merged);
@@ -380,14 +410,17 @@ pub fn rebuild(
 
     // Step 5b: Extract newly-added packages from the selected cache source.
     if !resolved_packages.is_empty() {
-        for pkg in &resolved_packages {
+        for resolved in &resolved_packages {
+            let pkg = &resolved.package;
             if pkg.store_path.is_empty() {
                 continue;
             }
             if !Path::new(&pkg.store_path).exists() {
                 println!("Extracting {}...", pkg.name);
-                if let Err(e) = crate::install::fetch_and_extract(&pkg.store_path, &cache_source) {
-                    eprintln!("warning: failed to extract {}: {e}", pkg.name);
+                if let Some(source) = resolved.source.as_ref() {
+                    if let Err(e) = crate::install::fetch_and_extract(&pkg.store_path, source) {
+                        eprintln!("warning: failed to extract {}: {e}", pkg.name);
+                    }
                 }
             }
         }
@@ -587,7 +620,7 @@ pub(crate) fn parse_config_json(json: &str) -> Result<RebuildConfig, Box<dyn std
     Ok(config)
 }
 
-/// Select the cache source used by rebuild.
+/// Select the primary cache source used by rebuild.
 fn cache_source_for_rebuild(
     cache_index_path: &str,
     cache_url: Option<&str>,
@@ -595,43 +628,141 @@ fn cache_source_for_rebuild(
     if let Some(url) = cache_url {
         crate::cache_source::CacheSource::Remote(url.trim_end_matches('/').to_string())
     } else {
-        let cache_dir = Path::new(cache_index_path)
-            .parent()
-            .unwrap_or(Path::new(crate::cache_source::DEFAULT_CACHE_PATH));
-        crate::cache_source::CacheSource::Local(cache_dir.to_path_buf())
+        local_cache_source_for_rebuild(cache_index_path)
     }
 }
 
-/// Resolve package names to store paths using the selected cache source.
-fn resolve_packages_with_source(
+fn local_cache_source_for_rebuild(cache_index_path: &str) -> crate::cache_source::CacheSource {
+    let cache_dir = Path::new(cache_index_path)
+        .parent()
+        .unwrap_or(Path::new(crate::cache_source::DEFAULT_CACHE_PATH));
+    crate::cache_source::CacheSource::Local(cache_dir.to_path_buf())
+}
+
+#[derive(Debug, Clone)]
+struct ResolvedPackage {
+    package: Package,
+    source: Option<crate::cache_source::CacheSource>,
+}
+
+fn resolve_packages_from_indexes(
+    names: &[String],
+    primary_index: Option<&crate::local_cache::PackageIndex>,
+    primary_source: Option<&crate::cache_source::CacheSource>,
+    fallback_index: Option<&crate::local_cache::PackageIndex>,
+    fallback_source: Option<&crate::cache_source::CacheSource>,
+) -> Vec<ResolvedPackage> {
+    let mut packages = Vec::new();
+
+    for name in names {
+        if let (Some(index), Some(source)) = (primary_index, primary_source) {
+            if let Some(entry) = index.packages.get(name.as_str()) {
+                packages.push(ResolvedPackage {
+                    package: Package {
+                        name: name.clone(),
+                        version: entry.version.clone(),
+                        store_path: entry.store_path.clone(),
+                    },
+                    source: Some(source.clone()),
+                });
+                continue;
+            }
+        }
+
+        if let (Some(index), Some(source)) = (fallback_index, fallback_source) {
+            if let Some(entry) = index.packages.get(name.as_str()) {
+                packages.push(ResolvedPackage {
+                    package: Package {
+                        name: name.clone(),
+                        version: entry.version.clone(),
+                        store_path: entry.store_path.clone(),
+                    },
+                    source: Some(source.clone()),
+                });
+                continue;
+            }
+        }
+
+        packages.push(ResolvedPackage {
+            package: Package {
+                name: name.clone(),
+                version: String::new(),
+                store_path: String::new(),
+            },
+            source: None,
+        });
+    }
+
+    packages
+}
+
+/// Resolve package names to store paths using remote → local fallback.
+fn resolve_packages_with_fallback(
     names: &Option<Vec<String>>,
-    source: &crate::cache_source::CacheSource,
-) -> Result<Vec<Package>, Box<dyn std::error::Error>> {
+    primary_source: &crate::cache_source::CacheSource,
+    fallback_source: Option<&crate::cache_source::CacheSource>,
+) -> Result<Vec<ResolvedPackage>, Box<dyn std::error::Error>> {
     let names = match names {
         Some(n) if !n.is_empty() => n,
         _ => return Ok(Vec::new()),
     };
 
-    let index = source.read_index()?;
-    let mut packages = Vec::new();
+    let primary_index = match primary_source.read_index() {
+        Ok(index) => Some(index),
+        Err(e) => {
+            if fallback_source.is_some() {
+                eprintln!(
+                    "warning: failed to read {}: {e}; falling back",
+                    primary_source.display_name()
+                );
+                None
+            } else {
+                return Err(e);
+            }
+        }
+    };
 
-    for name in names {
-        if let Some(entry) = index.packages.get(name.as_str()) {
-            packages.push(Package {
-                name: name.clone(),
-                version: entry.version.clone(),
-                store_path: entry.store_path.clone(),
-            });
-        } else {
-            eprintln!(
-                "warning: package '{name}' not found in {}",
-                source.display_name()
-            );
-            packages.push(Package {
-                name: name.clone(),
-                version: String::new(),
-                store_path: String::new(),
-            });
+    let fallback_index = match fallback_source {
+        Some(source) => match source.read_index() {
+            Ok(index) => Some(index),
+            Err(e) => {
+                if primary_index.is_some() {
+                    eprintln!(
+                        "warning: failed to read {}: {e}",
+                        source.display_name()
+                    );
+                    None
+                } else {
+                    return Err(e);
+                }
+            }
+        },
+        None => None,
+    };
+
+    let packages = resolve_packages_from_indexes(
+        names,
+        primary_index.as_ref(),
+        Some(primary_source),
+        fallback_index.as_ref(),
+        fallback_source,
+    );
+
+    for resolved in &packages {
+        if resolved.package.store_path.is_empty() {
+            let name = &resolved.package.name;
+            if let Some(source) = fallback_source {
+                eprintln!(
+                    "warning: package '{name}' not found in {} or {}",
+                    primary_source.display_name(),
+                    source.display_name()
+                );
+            } else {
+                eprintln!(
+                    "warning: package '{name}' not found in {}",
+                    primary_source.display_name()
+                );
+            }
         }
     }
 
@@ -1144,7 +1275,13 @@ pub fn rebuild_from_source(
     let cfg_path = config_path.unwrap_or(DEFAULT_CONFIG_PATH);
     let mpath = manifest_path.unwrap_or(DEFAULT_MANIFEST_PATH);
     let cache_path = cache_index_path.unwrap_or(DEFAULT_CACHE_INDEX);
-    let cache_source = cache_source_for_rebuild(cache_path, cache_url);
+    let primary_cache = cache_source_for_rebuild(cache_path, cache_url);
+    let local_cache = local_cache_source_for_rebuild(cache_path);
+    let fallback_cache = if primary_cache.is_remote() {
+        Some(&local_cache)
+    } else {
+        None
+    };
 
     // Step 1: Evaluate configuration.nix
     println!("Evaluating {cfg_path}...");
@@ -1193,13 +1330,33 @@ pub fn rebuild_from_source(
 
     // Resolve any binary-cache packages too
     let cache_packages = if has_package_changes(&config) {
-        resolve_packages_with_source(&config.packages, &cache_source).unwrap_or_default()
+        resolve_packages_with_fallback(&config.packages, &primary_cache, fallback_cache)
+            .unwrap_or_default()
     } else {
         vec![]
     };
 
+    for resolved in &cache_packages {
+        let pkg = &resolved.package;
+        if pkg.store_path.is_empty() {
+            continue;
+        }
+        if !Path::new(&pkg.store_path).exists() {
+            println!("Extracting {}...", pkg.name);
+            if let Some(source) = resolved.source.as_ref() {
+                if let Err(e) = crate::install::fetch_and_extract(&pkg.store_path, source) {
+                    eprintln!("warning: failed to extract {}: {e}", pkg.name);
+                }
+            }
+        }
+    }
+
     // Merge: source-built packages + cache packages + boot essentials
-    let mut merged = merge_config(&current, &config, &cache_packages)?;
+    let cache_manifest_packages: Vec<Package> = cache_packages
+        .iter()
+        .map(|resolved| resolved.package.clone())
+        .collect();
+    let mut merged = merge_config(&current, &config, &cache_manifest_packages)?;
 
     // Add source-built packages to the manifest
     for (name, store_path) in &built_packages {
@@ -1834,6 +1991,118 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_resolve_packages_from_indexes_prefers_primary_cache() {
+        let names = vec!["ripgrep".to_string()];
+        let primary: crate::local_cache::PackageIndex = serde_json::from_str(
+            r#"{
+                "version": 1,
+                "packages": {
+                    "ripgrep": { "storePath": "/nix/store/remote-rg", "pname": "ripgrep", "version": "14.1" }
+                }
+            }"#,
+        )
+        .unwrap();
+        let fallback: crate::local_cache::PackageIndex = serde_json::from_str(
+            r#"{
+                "version": 1,
+                "packages": {
+                    "ripgrep": { "storePath": "/nix/store/local-rg", "pname": "ripgrep", "version": "14.0" }
+                }
+            }"#,
+        )
+        .unwrap();
+        let primary_source = crate::cache_source::CacheSource::Remote("http://10.0.2.2:8080".to_string());
+        let fallback_source = crate::cache_source::CacheSource::Local(Path::new("/nix/cache").to_path_buf());
+
+        let resolved = resolve_packages_from_indexes(
+            &names,
+            Some(&primary),
+            Some(&primary_source),
+            Some(&fallback),
+            Some(&fallback_source),
+        );
+
+        assert_eq!(resolved.len(), 1);
+        assert_eq!(resolved[0].package.store_path, "/nix/store/remote-rg");
+        match resolved[0].source.as_ref() {
+            Some(crate::cache_source::CacheSource::Remote(url)) => {
+                assert_eq!(url, "http://10.0.2.2:8080");
+            }
+            other => panic!("expected remote source, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_resolve_packages_from_indexes_falls_back_to_local_cache() {
+        let names = vec!["ripgrep".to_string(), "fd".to_string()];
+        let primary: crate::local_cache::PackageIndex = serde_json::from_str(
+            r#"{
+                "version": 1,
+                "packages": {
+                    "ripgrep": { "storePath": "/nix/store/remote-rg", "pname": "ripgrep", "version": "14.1" }
+                }
+            }"#,
+        )
+        .unwrap();
+        let fallback: crate::local_cache::PackageIndex = serde_json::from_str(
+            r#"{
+                "version": 1,
+                "packages": {
+                    "fd": { "storePath": "/nix/store/local-fd", "pname": "fd", "version": "9.0" }
+                }
+            }"#,
+        )
+        .unwrap();
+        let primary_source = crate::cache_source::CacheSource::Remote("http://10.0.2.2:8080".to_string());
+        let fallback_source = crate::cache_source::CacheSource::Local(Path::new("/nix/cache").to_path_buf());
+
+        let resolved = resolve_packages_from_indexes(
+            &names,
+            Some(&primary),
+            Some(&primary_source),
+            Some(&fallback),
+            Some(&fallback_source),
+        );
+
+        assert_eq!(resolved.len(), 2);
+        assert_eq!(resolved[0].package.store_path, "/nix/store/remote-rg");
+        assert_eq!(resolved[1].package.store_path, "/nix/store/local-fd");
+        match resolved[1].source.as_ref() {
+            Some(crate::cache_source::CacheSource::Local(path)) => {
+                assert_eq!(path, Path::new("/nix/cache"));
+            }
+            other => panic!("expected local source, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_resolve_packages_from_indexes_marks_unresolved_when_missing_everywhere() {
+        let names = vec!["missing".to_string()];
+        let primary: crate::local_cache::PackageIndex = serde_json::from_str(
+            r#"{ "version": 1, "packages": {} }"#,
+        )
+        .unwrap();
+        let fallback: crate::local_cache::PackageIndex = serde_json::from_str(
+            r#"{ "version": 1, "packages": {} }"#,
+        )
+        .unwrap();
+        let primary_source = crate::cache_source::CacheSource::Remote("http://10.0.2.2:8080".to_string());
+        let fallback_source = crate::cache_source::CacheSource::Local(Path::new("/nix/cache").to_path_buf());
+
+        let resolved = resolve_packages_from_indexes(
+            &names,
+            Some(&primary),
+            Some(&primary_source),
+            Some(&fallback),
+            Some(&fallback_source),
+        );
+
+        assert_eq!(resolved.len(), 1);
+        assert!(resolved[0].package.store_path.is_empty());
+        assert!(resolved[0].source.is_none());
+    }
+
     // ===== Boot Essential =====
 
     #[test]
@@ -2123,6 +2392,62 @@ mod tests {
             ..Default::default()
         };
         assert!(!needs_bridge(&config, Some(&manifest)));
+    }
+
+    #[test]
+    fn test_select_auto_rebuild_route_uses_bridge_for_package_changes_when_available() {
+        let config = RebuildConfig {
+            packages: Some(vec!["ripgrep".to_string()]),
+            ..Default::default()
+        };
+        let manifest = sample_manifest();
+        assert_eq!(
+            select_auto_rebuild_route(&config, Some(&manifest), true).unwrap(),
+            AutoRebuildRoute::Bridge
+        );
+    }
+
+    #[test]
+    fn test_select_auto_rebuild_route_uses_local_for_package_changes_without_bridge() {
+        let config = RebuildConfig {
+            packages: Some(vec!["ripgrep".to_string()]),
+            ..Default::default()
+        };
+        let manifest = sample_manifest();
+        assert_eq!(
+            select_auto_rebuild_route(&config, Some(&manifest), false).unwrap(),
+            AutoRebuildRoute::Local
+        );
+    }
+
+    #[test]
+    fn test_select_auto_rebuild_route_rejects_boot_changes_without_bridge() {
+        let config = RebuildConfig {
+            hardware: Some(HardwareConfigInput {
+                usb_enabled: Some(true),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let manifest = sample_manifest();
+        let err = select_auto_rebuild_route(&config, Some(&manifest), false)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("build bridge"));
+        assert!(err.contains("hardware/drivers or services"));
+    }
+
+    #[test]
+    fn test_select_auto_rebuild_route_uses_local_for_config_only_changes() {
+        let config = RebuildConfig {
+            hostname: Some("new-host".to_string()),
+            ..Default::default()
+        };
+        let manifest = sample_manifest();
+        assert_eq!(
+            select_auto_rebuild_route(&config, Some(&manifest), false).unwrap(),
+            AutoRebuildRoute::Local
+        );
     }
 
     // ===== Boot Path Diffing =====

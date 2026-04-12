@@ -1,10 +1,9 @@
 //! Lazy NAR extraction for the store scheme daemon.
 //!
-//! When a store path is registered in PathInfoDb but not yet extracted
-//! to the filesystem, this module handles the decompression and extraction
-//! on first access. The extraction is atomic from the perspective of
-//! concurrent accessors: a mutex tracks which store paths are currently
-//! being extracted, and concurrent openers block until extraction completes.
+//! When a store path is registered but not yet extracted to the filesystem,
+//! this module decompresses the cached NAR on first access. On Redox, all
+//! filesystem operations use the pre-opened root fd pattern so extraction can
+//! proceed after `setrens(0, 0)` without routing through initnsmgr.
 
 use std::collections::HashSet;
 use std::fs;
@@ -16,13 +15,12 @@ use nix_compat::nixbase32;
 use nix_compat::store_path::StorePath;
 use sha2::{Digest, Sha256};
 
-use crate::nar;
-use crate::pathinfo::PathInfoDb;
+use crate::nar::{self, ManifestEntry};
 
 /// Errors from lazy extraction.
 #[derive(Debug)]
 pub enum ExtractError {
-    /// Store path not found in PathInfoDb.
+    /// Store path not found in PathInfoDb / daemon metadata.
     NotRegistered(String),
     /// NAR file not found in cache.
     NarNotFound(String),
@@ -56,51 +54,57 @@ impl std::fmt::Display for ExtractError {
 
 impl std::error::Error for ExtractError {}
 
+/// Result of an extraction attempt.
+#[derive(Debug, Clone, Default)]
+pub struct ExtractionOutcome {
+    /// True when this call performed the extraction work.
+    pub extracted_now: bool,
+    /// Manifest returned for a freshly extracted store path.
+    pub manifest: Option<Vec<ManifestEntry>>,
+}
+
 /// Ensure a store path is extracted to the filesystem.
 ///
-/// If the store path directory already exists, returns immediately.
-/// If not, finds the NAR in the cache, decompresses, extracts, and verifies.
-///
-/// The `extracting` mutex tracks in-progress extractions to prevent
-/// concurrent extraction of the same store path. Callers blocked on an
-/// in-progress extraction will find the directory exists when the mutex
-/// is released, and return immediately.
+/// If the store path already exists, returns immediately. If not, finds the
+/// NAR in the cache, decompresses, extracts, verifies the hash, and returns
+/// the manifest collected during extraction.
 pub fn ensure_extracted(
     store_path_name: &str,
     store_dir: &str,
     cache_path: &str,
-    db: &PathInfoDb,
+    expected_nar_hash: &str,
     extracting: &Mutex<HashSet<String>>,
-) -> Result<(), ExtractError> {
+    root_fd: Option<usize>,
+) -> Result<ExtractionOutcome, ExtractError> {
     let dest = PathBuf::from(store_dir).join(store_path_name);
 
     // Fast path: already extracted.
-    if dest.exists() {
-        return Ok(());
+    if path_exists(&dest, root_fd)? {
+        return Ok(ExtractionOutcome::default());
     }
 
-    // Acquire extraction lock for this specific store path.
-    // This ensures only one thread extracts a given path at a time.
     {
         let mut set = extracting
             .lock()
             .map_err(|e| ExtractError::Io(format!("lock poisoned: {e}")))?;
 
         if set.contains(store_path_name) {
-            // Another thread is already extracting this path.
-            // Drop the lock and spin-wait for it to finish.
             drop(set);
-            wait_for_extraction(&dest)?;
-            return Ok(());
+            wait_for_extraction(&dest, root_fd)?;
+            return Ok(ExtractionOutcome::default());
         }
 
         set.insert(store_path_name.to_string());
     }
 
-    // We hold the extraction claim. Do the work, then release.
-    let result = do_extraction(store_path_name, store_dir, cache_path, db);
+    let result = do_extraction(
+        store_path_name,
+        store_dir,
+        cache_path,
+        expected_nar_hash,
+        root_fd,
+    );
 
-    // Always release the extraction claim.
     {
         let mut set = extracting
             .lock()
@@ -108,15 +112,15 @@ pub fn ensure_extracted(
         set.remove(store_path_name);
     }
 
-    result
+    result.map(|manifest| ExtractionOutcome {
+        extracted_now: true,
+        manifest: Some(manifest),
+    })
 }
 
-/// Spin-wait for another thread's extraction to complete.
-fn wait_for_extraction(dest: &Path) -> Result<(), ExtractError> {
-    // Simple poll: check if the directory exists.
-    // In practice, extractions are fast (< 1s for most packages).
+fn wait_for_extraction(dest: &Path, root_fd: Option<usize>) -> Result<(), ExtractError> {
     for _ in 0..6000 {
-        if dest.exists() {
+        if path_exists(dest, root_fd)? {
             return Ok(());
         }
         std::thread::sleep(std::time::Duration::from_millis(10));
@@ -127,30 +131,20 @@ fn wait_for_extraction(dest: &Path) -> Result<(), ExtractError> {
     )))
 }
 
-/// Actually extract a NAR from the cache to the store.
 fn do_extraction(
     store_path_name: &str,
     store_dir: &str,
     cache_path: &str,
-    db: &PathInfoDb,
-) -> Result<(), ExtractError> {
+    expected_nar_hash: &str,
+    root_fd: Option<usize>,
+) -> Result<Vec<ManifestEntry>, ExtractError> {
     let abs_store_path = format!("{store_dir}/{store_path_name}");
 
-    // Look up the store path in PathInfoDb.
-    let info = db
-        .get(&abs_store_path)
-        .map_err(|e| ExtractError::Io(format!("pathinfo lookup: {e}")))?
-        .ok_or_else(|| ExtractError::NotRegistered(abs_store_path.clone()))?;
-
-    // Compute the nixbase32 hash for narinfo/NAR file lookup.
     let sp = StorePath::<String>::from_absolute_path(abs_store_path.as_bytes())
-        .map_err(|e| ExtractError::Io(format!("invalid store path: {e}")))?;
-    let hash = nixbase32::encode(sp.digest());
+        .map_err(|e| ExtractError::NotRegistered(format!("invalid store path: {e}")))?;
+    let cache_key = nixbase32::encode(sp.digest());
 
-    // Try to find the NAR in the cache.
-    // Check for: {hash}.nar.zst, {hash}.nar.xz, {hash}.nar.bz2, {hash}.nar
-    let nar_path = find_nar_file(cache_path, &hash)
-        .ok_or_else(|| ExtractError::NarNotFound(format!("{cache_path}/{hash}.nar*")))?;
+    let (nar_path, file) = open_cached_nar(cache_path, &cache_key, root_fd)?;
 
     eprintln!(
         "stored: extracting {} from {}",
@@ -158,11 +152,7 @@ fn do_extraction(
         nar_path.display()
     );
 
-    // Open and decompress.
-    let file = fs::File::open(&nar_path)
-        .map_err(|e| ExtractError::Io(format!("opening {}: {e}", nar_path.display())))?;
     let reader = BufReader::new(file);
-
     let decompressed: Box<dyn std::io::Read + Send> =
         match nar_path.extension().and_then(|e| e.to_str()) {
             Some("zst") => Box::new(
@@ -177,28 +167,39 @@ fn do_extraction(
                 Box::new(std::io::Cursor::new(output))
             }
             Some("bz2") => Box::new(bzip2_rs::DecoderReader::new(reader)),
-            _ => Box::new(reader), // Assume uncompressed .nar
+            _ => Box::new(reader),
         };
 
-    // Hash while reading for verification.
     let mut hashing = HashingExtractReader::new(decompressed);
     let mut buf_reader = BufReader::new(&mut hashing);
 
-    // Ensure store directory exists.
-    fs::create_dir_all(store_dir)
-        .map_err(|e| ExtractError::Io(format!("creating {store_dir}: {e}")))?;
+    #[cfg(target_os = "redox")]
+    let manifest = if let Some(rfd) = root_fd {
+        ensure_dir_exists(Path::new(store_dir), Some(rfd))
+            .map_err(|e| ExtractError::Io(format!("creating {store_dir}: {e}")))?;
+        nar::extract_with_manifest_via_root_fd(&mut buf_reader, &abs_store_path, rfd)
+            .map_err(|e| ExtractError::Io(format!("NAR extraction: {e}")))?
+    } else {
+        fs::create_dir_all(store_dir)
+            .map_err(|e| ExtractError::Io(format!("creating {store_dir}: {e}")))?;
+        nar::extract_with_manifest(&mut buf_reader, &abs_store_path)
+            .map_err(|e| ExtractError::Io(format!("NAR extraction: {e}")))?
+    };
 
-    // Extract.
-    nar::extract(&mut buf_reader, &abs_store_path)
-        .map_err(|e| ExtractError::Io(format!("NAR extraction: {e}")))?;
+    #[cfg(not(target_os = "redox"))]
+    let manifest = {
+        let _ = root_fd;
+        fs::create_dir_all(store_dir)
+            .map_err(|e| ExtractError::Io(format!("creating {store_dir}: {e}")))?;
+        nar::extract_with_manifest(&mut buf_reader, &abs_store_path)
+            .map_err(|e| ExtractError::Io(format!("NAR extraction: {e}")))?
+    };
 
-    // Verify hash.
     let actual_hash = hashing.finalize_hex();
-    let expected_hash = normalize_hash(&info.nar_hash);
+    let expected_hash = normalize_hash(expected_nar_hash);
 
     if actual_hash != expected_hash {
-        // Clean up failed extraction.
-        let _ = fs::remove_dir_all(&abs_store_path);
+        cleanup_failed_extraction(&abs_store_path, &manifest, root_fd);
         return Err(ExtractError::HashMismatch {
             store_path: abs_store_path,
             expected: expected_hash,
@@ -207,13 +208,125 @@ fn do_extraction(
     }
 
     eprintln!("stored: extracted {} (hash verified)", store_path_name);
-    Ok(())
+    Ok(manifest)
+}
+
+fn open_cached_nar(
+    cache_path: &str,
+    hash: &str,
+    root_fd: Option<usize>,
+) -> Result<(PathBuf, fs::File), ExtractError> {
+    let narinfo = read_cached_narinfo(cache_path, hash, root_fd)?;
+
+    #[cfg(target_os = "redox")]
+    if let Some(rfd) = root_fd {
+        return open_cached_nar_via_root_fd(cache_path, &narinfo.url, rfd);
+    }
+
+    #[cfg(not(target_os = "redox"))]
+    let _ = root_fd;
+
+    let nar_path = PathBuf::from(cache_path).join(&*narinfo.url);
+    let file = fs::File::open(&nar_path)
+        .map_err(|e| ExtractError::Io(format!("opening {}: {e}", nar_path.display())))?;
+    Ok((nar_path, file))
+}
+
+fn read_cached_narinfo(
+    cache_path: &str,
+    hash: &str,
+    root_fd: Option<usize>,
+) -> Result<nix_compat::narinfo::NarInfo<'static>, ExtractError> {
+    let narinfo_path = PathBuf::from(cache_path).join(format!("{hash}.narinfo"));
+
+    #[cfg(target_os = "redox")]
+    let body = if let Some(rfd) = root_fd {
+        use std::io::Read;
+        use std::os::unix::io::FromRawFd;
+
+        let fd = raw_openat(&narinfo_path, rfd, syscall::O_RDONLY)
+            .map_err(|_| ExtractError::NarNotFound(narinfo_path.display().to_string()))?;
+        let mut file = unsafe { fs::File::from_raw_fd(fd as i32) };
+        let mut body = String::new();
+        file.read_to_string(&mut body)
+            .map_err(|e| ExtractError::Io(format!("reading {}: {e}", narinfo_path.display())))?;
+        body
+    } else {
+        fs::read_to_string(&narinfo_path)
+            .map_err(|e| ExtractError::NarNotFound(format!("{}: {e}", narinfo_path.display())))?
+    };
+
+    #[cfg(not(target_os = "redox"))]
+    let body = {
+        let _ = root_fd;
+        fs::read_to_string(&narinfo_path)
+            .map_err(|e| ExtractError::NarNotFound(format!("{}: {e}", narinfo_path.display())))?
+    };
+
+    let body_static: &'static str = Box::leak(body.into_boxed_str());
+    nix_compat::narinfo::NarInfo::parse(body_static)
+        .map_err(|e| ExtractError::Io(format!("parsing {}: {e}", narinfo_path.display())))
+}
+
+#[cfg(target_os = "redox")]
+fn open_cached_nar_via_root_fd(
+    cache_path: &str,
+    nar_relative_url: &str,
+    root_fd: usize,
+) -> Result<(PathBuf, fs::File), ExtractError> {
+    use std::os::unix::io::FromRawFd;
+
+    let path = PathBuf::from(cache_path).join(nar_relative_url);
+    let fd = raw_openat(&path, root_fd, syscall::O_RDONLY)
+        .map_err(|_| ExtractError::NarNotFound(path.display().to_string()))?;
+    let file = unsafe { fs::File::from_raw_fd(fd as i32) };
+    Ok((path, file))
+}
+
+fn path_exists(path: &Path, root_fd: Option<usize>) -> Result<bool, ExtractError> {
+    #[cfg(target_os = "redox")]
+    if let Some(rfd) = root_fd {
+        return match raw_openat(path, rfd, syscall::O_STAT) {
+            Ok(fd) => {
+                let _ = syscall::close(fd);
+                Ok(true)
+            }
+            Err(_) => Ok(false),
+        };
+    }
+
+    #[cfg(not(target_os = "redox"))]
+    let _ = root_fd;
+
+    Ok(path.exists())
+}
+
+fn ensure_dir_exists(path: &Path, root_fd: Option<usize>) -> std::io::Result<()> {
+    #[cfg(target_os = "redox")]
+    if let Some(rfd) = root_fd {
+        return raw_mkdir_p(path, rfd);
+    }
+
+    #[cfg(not(target_os = "redox"))]
+    let _ = root_fd;
+
+    fs::create_dir_all(path)
+}
+
+fn cleanup_failed_extraction(abs_store_path: &str, manifest: &[ManifestEntry], root_fd: Option<usize>) {
+    #[cfg(target_os = "redox")]
+    if let Some(rfd) = root_fd {
+        let _ = remove_tree_via_manifest(abs_store_path, manifest, rfd);
+        return;
+    }
+
+    #[cfg(not(target_os = "redox"))]
+    let _ = root_fd;
+
+    let _ = fs::remove_dir_all(abs_store_path);
 }
 
 /// Find a NAR file in the cache directory.
-///
-/// Checks for compressed variants in priority order:
-/// `.nar.zst`, `.nar.xz`, `.nar.bz2`, `.nar`
 fn find_nar_file(cache_path: &str, hash: &str) -> Option<PathBuf> {
     let base = PathBuf::from(cache_path);
 
@@ -227,10 +340,6 @@ fn find_nar_file(cache_path: &str, hash: &str) -> Option<PathBuf> {
     None
 }
 
-/// Normalize a hash string for comparison.
-///
-/// PathInfoDb may store hashes as `sha256:abcdef...` (hex) or just hex.
-/// Strip the algorithm prefix for comparison.
 fn normalize_hash(hash: &str) -> String {
     if let Some(hex) = hash.strip_prefix("sha256:") {
         hex.to_string()
@@ -239,7 +348,6 @@ fn normalize_hash(hash: &str) -> String {
     }
 }
 
-/// Reader that SHA-256 hashes content as it's read.
 struct HashingExtractReader<R> {
     inner: R,
     hasher: Sha256,
@@ -268,6 +376,80 @@ impl<R: std::io::Read> std::io::Read for HashingExtractReader<R> {
     }
 }
 
+#[cfg(target_os = "redox")]
+fn raw_openat(path: &Path, root_fd: usize, flags: usize) -> std::io::Result<usize> {
+    let clean = path
+        .to_string_lossy()
+        .trim_start_matches('/')
+        .to_string();
+    let fcntl_flags = flags & syscall::O_FCNTL_MASK;
+    unsafe {
+        syscall::syscall5(
+            syscall::SYS_OPENAT,
+            root_fd,
+            clean.as_ptr() as usize,
+            clean.len(),
+            flags,
+            fcntl_flags,
+        )
+    }
+    .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, format!("SYS_OPENAT: {e}")))
+}
+
+#[cfg(target_os = "redox")]
+fn raw_mkdir_p(path: &Path, root_fd: usize) -> std::io::Result<()> {
+    let clean = path
+        .to_string_lossy()
+        .trim_start_matches('/')
+        .to_string();
+    let mut built = String::new();
+    for component in clean.split('/') {
+        if component.is_empty() {
+            continue;
+        }
+        if !built.is_empty() {
+            built.push('/');
+        }
+        built.push_str(component);
+        let flags = syscall::O_CREAT | syscall::O_DIRECTORY;
+        let fd = unsafe {
+            syscall::syscall5(
+                syscall::SYS_OPENAT,
+                root_fd,
+                built.as_ptr() as usize,
+                built.len(),
+                flags,
+                flags & syscall::O_FCNTL_MASK,
+            )
+        }
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("mkdir {built}: {e}")))?;
+        let _ = syscall::close(fd);
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "redox")]
+fn remove_tree_via_manifest(
+    abs_store_path: &str,
+    manifest: &[ManifestEntry],
+    root_fd: usize,
+) -> std::io::Result<()> {
+    for entry in manifest.iter().rev() {
+        let path = PathBuf::from(abs_store_path).join(&entry.path);
+        let clean = path.to_string_lossy().trim_start_matches('/').to_string();
+        let flags = if entry.entry_type == "dir" {
+            syscall::AT_REMOVEDIR
+        } else {
+            0
+        };
+        let _ = syscall::unlinkat(root_fd, &clean, flags);
+    }
+
+    let clean_root = abs_store_path.trim_start_matches('/');
+    let _ = syscall::unlinkat(root_fd, clean_root, syscall::AT_REMOVEDIR);
+    Ok(())
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -279,7 +461,6 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let hash = "1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r";
 
-        // Create multiple formats.
         fs::write(tmp.path().join(format!("{hash}.nar")), "raw").unwrap();
         fs::write(tmp.path().join(format!("{hash}.nar.zst")), "zst").unwrap();
 
@@ -309,10 +490,7 @@ mod tests {
 
     #[test]
     fn normalize_hash_strips_prefix() {
-        assert_eq!(
-            normalize_hash("sha256:abcdef1234"),
-            "abcdef1234"
-        );
+        assert_eq!(normalize_hash("sha256:abcdef1234"), "abcdef1234");
     }
 
     #[test]

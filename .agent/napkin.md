@@ -78,6 +78,7 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Running `cargo test` in `snix-redox/` inherited the Redox target config and immediately fell into `zstd-sys` cross-build failures (`clang --target=x86_64-unknown-redox` against host glibc headers).
 - Even with `--target x86_64-unknown-linux-gnu` and `PROTOC` set, upstream build scripts still expect proto paths under `snix/.../protos/*`, so host-side validation can fail before reaching our Rust edits.
 - Practical fallback: use `rustfmt --config skip_children=true` on the touched Rust files for a fast syntax check, and treat full cargo validation as needing the repo's intended Nix/snix build environment.
+- Redox-only modules behind `#[cfg(target_os = "redox")]` are invisible to the Linux-target host tests. Do not mark Redox scheme tasks done until `x86_64-unknown-redox` code path is compiled or exercised.
 - The reliable host-side path is now `./scripts/validate-snix-redox-host.sh`, which sets `PROTO_ROOT=$PWD/upstream`, finds `protoc`, and forces `--target x86_64-unknown-linux-gnu`.
 
 ### Remote cache VM test wants `eth0`, not interface discovery
@@ -117,6 +118,16 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 ### Rootfs startup and networking service tests must match TOML unit files
 - `usr/lib/init.d/*.service` now stores `cmd = "..."` and `type = "..."` fields, not legacy shell lines like `notify /bin/smolnetd`.
 - Non-userutils startup is emitted as `99_startup.service` with `cmd = "/startup.sh"` and `type = "oneshot_async"`; `etc/init.toml` can stay empty.
+
+### Rebuild VM test traps I hit this pass
+- I forgot `let PATH = "/nix/system/profile/bin:/bin:/usr/bin"; export PATH` at the top of a startup-script test, then blamed bash when `grep`/`sed` were just missing from PATH.
+- I put single quotes inside an Ion `bash -c '...'` block (`grep '"id"' ...`) and got an Ion parse error instead of a bash error. Use double quotes inside the bash snippet.
+- `pwd -P` on Redox did not prove `/nix/system/current` target reliably in the VM; `ls -ld /nix/system/current | grep ...` did.
+- I initially blamed rebuild when `/etc/hostname` stayed old, but activation order was wrong: `/etc/static` symlink-farm setup ran after manifest-derived writes and replaced the freshly-written file with the stale symlink target. Fix: setup `/etc/static` first, then replace derived-file symlinks with regular files.
+- Rootfs startup scripts still need `let PATH = "/nix/system/profile/bin:/bin:/usr/bin"` + `export PATH` at the top. I forgot this in `stored-lazy-test.nix`, and `grep` failed even though extrautils was installed.
+- `stored` lazy extraction must read `<store-hash>.narinfo` and follow its `URL:` field; local guest caches can store NARs under paths like `/nix/cache/nar/<sha>.nar.zst`, not `<store-hash>.nar.*`.
+- When I added a new `snix-redox` bin target (`stored`), `cargo check --bins` passed but `self.packages.snix` still omitted it until I reran `snix-redox/regenerate-build-plan.sh`.
+- For init `type = "daemon"` services on Redox, readiness is only one zero byte on `INIT_NOTIFY`; no full daemon crate needed if the binary can write that byte directly.
 
 ### `mod build_proxy` must be in BOTH lib.rs AND main.rs
 - snix-redox has separate lib and bin crates with their own module trees.

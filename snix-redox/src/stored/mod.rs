@@ -30,7 +30,7 @@ pub mod lazy;
 #[cfg(target_os = "redox")]
 pub mod scheme;
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::sync::Mutex;
 
 use crate::pathinfo::PathInfoDb;
@@ -78,6 +78,14 @@ pub struct StoreDaemon {
     pub extracting: Mutex<std::collections::HashSet<String>>,
     /// Daemon configuration.
     pub config: StoredConfig,
+    /// Pre-opened root fd used for direct redoxfs access after `setrens`.
+    pub root_fd: Option<usize>,
+    /// Registered store path names known at daemon startup or via `.control`.
+    /// Kept in memory so the scheme event loop never needs to scan PathInfoDb.
+    pub registered_paths: BTreeSet<String>,
+    /// Expected NAR hash per store path (hex or `sha256:hex`).
+    /// Needed for lazy extraction without re-reading PathInfoDb in the event loop.
+    pub nar_hashes: BTreeMap<String, String>,
     /// Cached file manifests (store_path_name → manifest entries).
     /// Loaded from PathInfoDb on first access. Enables getdents
     /// without filesystem I/O (which hangs on Redox scheme daemons).
@@ -89,17 +97,22 @@ impl StoreDaemon {
     pub fn new(config: StoredConfig) -> Result<Self, Box<dyn std::error::Error>> {
         let db = PathInfoDb::open()?;
 
-        // Pre-load file manifests from PathInfo entries.
-        // These are embedded in the PathInfo JSON `files` field.
+        // Pre-load registered path names and file manifests from PathInfo.
+        // This keeps PathInfoDb reads out of the scheme event loop.
+        let mut registered_paths = BTreeSet::new();
+        let mut nar_hashes = BTreeMap::new();
         let mut manifests = BTreeMap::new();
         if let Ok(paths) = db.list_paths() {
             for path in &paths {
+                let name = path
+                    .strip_prefix(&format!("{}/", config.store_dir))
+                    .unwrap_or(path)
+                    .to_string();
+                registered_paths.insert(name.clone());
+
                 if let Ok(Some(info)) = db.get(path) {
+                    nar_hashes.insert(name.clone(), info.nar_hash.clone());
                     if !info.files.is_empty() {
-                        let name = path
-                            .strip_prefix(&format!("{}/", config.store_dir))
-                            .unwrap_or(path)
-                            .to_string();
                         manifests.insert(name, info.files);
                     }
                 }
@@ -120,6 +133,9 @@ impl StoreDaemon {
             handles: handles::HandleTable::with_io_worker(None),
             extracting: Mutex::new(std::collections::HashSet::new()),
             config,
+            root_fd: None,
+            registered_paths,
+            nar_hashes,
             manifests,
         })
     }
@@ -131,12 +147,33 @@ impl StoreDaemon {
         config: StoredConfig,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let db = PathInfoDb::open_at(pathinfo_dir)?;
+        let mut registered_paths = BTreeSet::new();
+        let mut nar_hashes = BTreeMap::new();
+        let mut manifests = BTreeMap::new();
+        if let Ok(paths) = db.list_paths() {
+            for path in &paths {
+                let name = path
+                    .strip_prefix(&format!("{}/", config.store_dir))
+                    .unwrap_or(path)
+                    .to_string();
+                registered_paths.insert(name.clone());
+                if let Ok(Some(info)) = db.get(path) {
+                    nar_hashes.insert(name.clone(), info.nar_hash.clone());
+                    if !info.files.is_empty() {
+                        manifests.insert(name, info.files);
+                    }
+                }
+            }
+        }
         Ok(Self {
             db,
             handles: handles::HandleTable::new(),
             extracting: Mutex::new(std::collections::HashSet::new()),
             config,
-            manifests: BTreeMap::new(),
+            root_fd: None,
+            registered_paths,
+            nar_hashes,
+            manifests,
         })
     }
 
@@ -146,6 +183,7 @@ impl StoreDaemon {
     /// ⚠️ Does filesystem I/O via `db.get()` — NOT safe from within
     /// Redox scheme event loops. Use `load_manifest_via_worker()` instead.
     pub fn load_manifest(&mut self, store_path_name: &str) {
+        self.remember_store_path(store_path_name);
         let full_path = format!("{}/{}", self.config.store_dir, store_path_name);
         if let Ok(Some(info)) = self.db.get(&full_path) {
             if !info.files.is_empty() {
@@ -162,6 +200,8 @@ impl StoreDaemon {
     ///
     /// Returns `true` if the manifest was loaded (or was already cached).
     pub fn load_manifest_via_worker(&mut self, store_path_name: &str) -> bool {
+        self.remember_store_path(store_path_name);
+
         // Already loaded?
         if self.manifests.contains_key(store_path_name) {
             return true;
@@ -229,6 +269,66 @@ impl StoreDaemon {
             eprintln!("stored: pathinfo for {store_path_name} has no file manifest");
             false
         }
+    }
+
+    /// Check if a store path is registered.
+    pub fn is_registered_path(&self, store_path_name: &str) -> bool {
+        self.registered_paths.contains(store_path_name)
+    }
+
+    /// Return the expected NAR hash for a store path.
+    pub fn expected_nar_hash(&self, store_path_name: &str) -> Option<&str> {
+        self.nar_hashes.get(store_path_name).map(String::as_str)
+    }
+
+    /// Remember a store path as registered.
+    pub fn remember_store_path(&mut self, store_path_name: &str) {
+        self.registered_paths.insert(store_path_name.to_string());
+    }
+
+    /// Remember or update the expected NAR hash for a store path.
+    pub fn remember_nar_hash(&mut self, store_path_name: &str, nar_hash: &str) {
+        self.remember_store_path(store_path_name);
+        self.nar_hashes.insert(store_path_name.to_string(), nar_hash.to_string());
+    }
+
+    /// Return registered store path names in sorted order.
+    pub fn list_registered_path_names(&self) -> Vec<String> {
+        self.registered_paths.iter().cloned().collect()
+    }
+
+    /// Check whether a path exists according to the manifest.
+    ///
+    /// Returns:
+    /// - `Some(true)` if the manifest contains the exact path or an implied dir
+    /// - `Some(false)` if the manifest is loaded and the path is absent
+    /// - `None` if no manifest is loaded for this store path
+    pub fn manifest_contains_path(
+        &self,
+        store_path_name: &str,
+        subpath: &str,
+    ) -> Option<bool> {
+        let manifest = self.manifests.get(store_path_name)?;
+        let subpath = subpath.trim_matches('/');
+
+        if subpath.is_empty() {
+            return Some(true);
+        }
+
+        for entry in manifest {
+            if entry.path == subpath {
+                return Some(true);
+            }
+        }
+
+        let prefix = format!("{subpath}/");
+        for entry in manifest {
+            if entry.path.starts_with(&prefix) {
+                return Some(true);
+            }
+        }
+
+        Some(false)
     }
 
     /// Check if a subpath is a directory according to the manifest.
@@ -400,6 +500,9 @@ mod tests {
             handles: handles::HandleTable::new(),
             extracting: Mutex::new(std::collections::HashSet::new()),
             config: StoredConfig::default(),
+            root_fd: None,
+            registered_paths: BTreeSet::from([store_path_name.to_string()]),
+            nar_hashes: BTreeMap::new(),
             manifests,
         }
     }
@@ -504,6 +607,9 @@ mod tests {
             handles: handles::HandleTable::new(),
             extracting: Mutex::new(std::collections::HashSet::new()),
             config: StoredConfig::default(),
+            root_fd: None,
+            registered_paths: BTreeSet::new(),
+            nar_hashes: BTreeMap::new(),
             manifests: BTreeMap::new(),
         };
         // Store path not registered → returns false.
@@ -543,6 +649,9 @@ mod tests {
             handles: handles::HandleTable::new(), // No worker → falls back to direct read
             extracting: Mutex::new(std::collections::HashSet::new()),
             config: StoredConfig::default(),
+            root_fd: None,
+            registered_paths: BTreeSet::new(),
+            nar_hashes: BTreeMap::new(),
             manifests: BTreeMap::new(),
         };
 
@@ -554,9 +663,35 @@ mod tests {
 
         // Now the manifest should be cached.
         assert!(d.manifests.contains_key("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg"));
+        assert!(d.is_registered_path("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg"));
         let manifest = d.manifests.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg").unwrap();
         assert_eq!(manifest.len(), 2);
         assert_eq!(manifest[0].path, "bin");
         assert_eq!(manifest[1].path, "bin/hello");
+    }
+
+    #[test]
+    fn manifest_contains_path_reports_present_and_missing() {
+        let d = daemon_with_manifest("abc-pkg", vec![
+            make_entry("bin", "dir"),
+            make_entry("bin/rg", "file"),
+        ]);
+
+        assert_eq!(d.manifest_contains_path("abc-pkg", "bin"), Some(true));
+        assert_eq!(d.manifest_contains_path("abc-pkg", "bin/rg"), Some(true));
+        assert_eq!(d.manifest_contains_path("abc-pkg", "share"), Some(false));
+        assert_eq!(d.manifest_contains_path("missing", "bin"), None);
+    }
+
+    #[test]
+    fn registered_path_names_are_sorted() {
+        let mut d = daemon_with_manifest("zzz-pkg", vec![]);
+        d.remember_store_path("aaa-pkg");
+        d.remember_store_path("mmm-pkg");
+
+        assert_eq!(
+            d.list_registered_path_names(),
+            vec!["aaa-pkg", "mmm-pkg", "zzz-pkg"]
+        );
     }
 }

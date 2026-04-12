@@ -4,6 +4,7 @@
   "roots": [
     "path+file:///home/brittonr/git/redox/snix-redox#0.4.0",
     "path+file:///home/brittonr/git/redox/snix-redox#0.4.0",
+    "path+file:///home/brittonr/git/redox/snix-redox#0.4.0",
     "path+file:///home/brittonr/git/redox/snix-redox#0.4.0"
   ],
   "workspaceMembers": {
@@ -20,7 +21,7 @@
     "snix-tracing": "path+file:///home/brittonr/git/redox/snix-redox/upstream/tracing#snix-tracing@0.1.0"
   },
   "cargoLockHash": "a5b502c92d83c66b5c9dcff5a0060b05809fbc0fc9fa1b5a160e2ebff2e00446",
-  "inputsHash": "118dae5c527539162f0259af23758d7e2cc8387a841f3a20a6917a841d2176cf",
+  "inputsHash": "8fda7caa838cd8d40f38049ac3dc5326cfaeaf19502d3321f259533292884405",
   "crates": {
     "git+https://github.com/tvlfyi/wu-manber.git#wu-manber@0.1.0": {
       "crateName": "wu-manber",

@@ -63,14 +63,14 @@ in
             {
               stored = {
                 description = "snix store scheme daemon (lazy NAR extraction)";
-                command = "/bin/snix";
-                type = "nowait";
-                args = "stored --cache-path ${options.stored.cachePath} --store-dir ${options.stored.storeDir}";
+                command = "/bin/stored";
+                type = "daemon";
+                args = "--cache-path ${options.stored.cachePath} --store-dir ${options.stored.storeDir}";
                 wantedBy = "rootfs";
                 enable = true;
-                after = [ ];
+                after = [ "ptyd" ];
                 environment = { };
-                priority = 50;
+                priority = 12;
               };
             }
           else
@@ -86,9 +86,9 @@ in
                 args = "profiled --profiles-dir ${options.profiled.profilesDir} --store-dir ${options.profiled.storeDir}";
                 wantedBy = "rootfs";
                 enable = true;
-                after = [ ];
+                after = [ "stored" ];
                 environment = { };
-                priority = 50;
+                priority = 13;
               };
             }
           else
