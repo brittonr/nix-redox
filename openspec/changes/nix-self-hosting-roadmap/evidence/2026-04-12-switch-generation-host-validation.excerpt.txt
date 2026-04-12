@@ -1,0 +1,19 @@
+    |                          |
+    |                          argument has type `&mut stored::handles::FileHandle`
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+267 -                     drop(fh);
+267 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 27 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 3 tests
+test system::tests::switch_generation_missing_generation_errors ... ok
+test system::tests::switch_generation_updates_target_etc_files_via_activation ... ok
+test system::tests::switch_generation_activates_existing_generation ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 599 filtered out; finished in 0.00s

@@ -70,3 +70,19 @@ Key result from the log:
 - overall summary: `Total: 10 | Pass: 10 | Fail: 0 | Skip: 0`
 
 The HTTP server section of the same log shows the guest fetched the remote cache index plus the corresponding `.narinfo` and `.nar.zst` artifacts over port 8080.
+
+## 5. Generation management follow-up
+
+### 5.2 switch-generation host validation
+Validation log:
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-host-validation.log`
+- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-host-validation.excerpt.txt`
+
+Command:
+- `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu switch_generation_`
+
+Key result from the log:
+- `test system::tests::switch_generation_missing_generation_errors ... ok`
+- `test system::tests::switch_generation_updates_target_etc_files_via_activation ... ok`
+- `test system::tests::switch_generation_activates_existing_generation ... ok`
+- overall summary: `3 passed; 0 failed`

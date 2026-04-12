@@ -1200,16 +1200,15 @@ pub fn switch(
     Ok(())
 }
 
-/// Switch to an existing saved generation without creating a new generation.
-///
-/// This activates the target generation's manifest, updates the current
-/// manifest on disk, and repoints `/nix/system/current` at the selected
-/// generation directory. Existing generations are left untouched.
-pub fn switch_generation(
+fn switch_generation_with<F>(
     target_id: u32,
     gen_dir: Option<&str>,
     manifest_path: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
+    activate: F,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    F: FnOnce(&Manifest, &Manifest) -> Result<crate::activate::ActivationResult, Box<dyn std::error::Error>>,
+{
     let dir = gen_dir.unwrap_or(GENERATIONS_DIR);
     let mpath = manifest_path.unwrap_or(MANIFEST_PATH);
 
@@ -1233,7 +1232,7 @@ pub fn switch_generation(
         current.generation.id, target.id
     );
 
-    let activation = crate::activate::activate(&current, &target.manifest, false)?;
+    let activation = activate(&current, &target.manifest)?;
 
     let json = serde_json::to_string_pretty(&target.manifest)?;
     fs::write(mpath, &json)?;
@@ -1255,6 +1254,21 @@ pub fn switch_generation(
     }
 
     Ok(())
+}
+
+/// Switch to an existing saved generation without creating a new generation.
+///
+/// This activates the target generation's manifest, updates the current
+/// manifest on disk, and repoints `/nix/system/current` at the selected
+/// generation directory. Existing generations are left untouched.
+pub fn switch_generation(
+    target_id: u32,
+    gen_dir: Option<&str>,
+    manifest_path: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    switch_generation_with(target_id, gen_dir, manifest_path, |current, target| {
+        crate::activate::activate(current, target, false)
+    })
 }
 
 /// Rollback to the previous generation (or a specific one)
@@ -2688,6 +2702,59 @@ mod tests {
         );
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Generation 99 not found"));
+    }
+
+    #[test]
+    fn switch_generation_updates_target_etc_files_via_activation() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("root");
+        let gen_dir = dir.path().join("generations");
+        let manifest_file = dir.path().join("current.json");
+
+        std::fs::create_dir_all(&root).unwrap();
+
+        let gen1_dir = gen_dir.join("1");
+        std::fs::create_dir_all(&gen1_dir).unwrap();
+        let mut gen1 = sample_manifest();
+        gen1.generation.id = 1;
+        gen1.system.hostname = "old-host".to_string();
+        std::fs::write(gen1_dir.join("manifest.json"), serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+        std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+
+        let gen2_dir = gen_dir.join("2");
+        std::fs::create_dir_all(&gen2_dir).unwrap();
+        let mut gen2 = sample_manifest();
+        gen2.generation.id = 2;
+        gen2.system.hostname = "switched-host".to_string();
+        gen2.generation.description = "hostname switch".to_string();
+        std::fs::write(gen2_dir.join("manifest.json"), serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+
+        switch_generation_with(
+            2,
+            Some(gen_dir.to_str().unwrap()),
+            Some(manifest_file.to_str().unwrap()),
+            |current, target| {
+                let mut warnings = Vec::new();
+                let updated = crate::activate::write_manifest_derived_files_at(
+                    &root,
+                    current,
+                    target,
+                    &mut warnings,
+                );
+                Ok(crate::activate::ActivationResult {
+                    binaries_linked: 0,
+                    config_files_updated: updated,
+                    warnings,
+                    reboot_recommended: false,
+                })
+            },
+        ).unwrap();
+
+        let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
+        assert_eq!(active.generation.id, 2);
+        assert_eq!(active.system.hostname, "switched-host");
+        assert_eq!(std::fs::read_to_string(root.join("etc/hostname")).unwrap(), "switched-host");
+        assert_eq!(std::fs::read_link(current_generation_link_path(gen_dir.to_str().unwrap())).unwrap(), gen_dir.join("2"));
     }
 
     #[test]
