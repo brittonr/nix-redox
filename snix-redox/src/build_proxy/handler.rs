@@ -399,6 +399,12 @@ impl SchemeSync for BuildFsHandler {
             "buildfs: openat {:?} flags={:?} perm={:?}",
             abs_path, oflags, effective_perm
         );
+        if abs_path == Path::new("/dev/null") {
+            eprintln!(
+                "buildfs: debug openat /dev/null scheme_path={} dirfd={}",
+                scheme_path, dirfd
+            );
+        }
         if effective_perm == Permission::Denied {
             return Err(Error::new(EACCES));
         }
@@ -468,6 +474,12 @@ impl SchemeSync for BuildFsHandler {
                 }),
             );
         } else {
+            if scheme_path == "dev/null" {
+                eprintln!(
+                    "buildfs: debug file handle scheme_path={} real_path={:?}",
+                    scheme_path, resolved_path
+                );
+            }
             self.handles.insert(
                 id,
                 ProxyHandle::File(FileHandle {
@@ -518,6 +530,21 @@ impl SchemeSync for BuildFsHandler {
                 }
                 let n = data.len().min(buf.len());
                 buf[..n].copy_from_slice(&data[..n]);
+                if fh.scheme_path.contains("dev/null") {
+                    let hex: Vec<String> = data
+                        .iter()
+                        .take(16)
+                        .map(|byte| format!("{:02x}", byte))
+                        .collect();
+                    eprintln!(
+                        "buildfs: read result id={} path={:?} real_path={:?} returned={} preview={:?}",
+                        id,
+                        fh.scheme_path,
+                        fh.real_path,
+                        n,
+                        hex
+                    );
+                }
                 Ok(n)
             }
             Some(ProxyHandle::Dir(_)) => Err(Error::new(EISDIR)),

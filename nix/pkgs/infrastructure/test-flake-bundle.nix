@@ -47,11 +47,8 @@ export PATH=/nix/system/profile/bin:/bin:/usr/bin
 export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
 export HOME="$TMPDIR"
 export CARGO_HOME="$TMPDIR/cargo-home"
-RUSTC_LINK=$(ls -ld /nix/system/profile/bin/rustc)
-set -- $RUSTC_LINK
-RUSTC_TARGET=''${!#}
-SYSROOT=''${RUSTC_TARGET%/bin/rustc}
-export RUSTC="$RUSTC_TARGET"
+export RUSTC=/nix/system/profile/bin/rustc
+SYSROOT=$($RUSTC --print=sysroot)
 export RUSTFLAGS="--sysroot $SYSROOT"
 export CARGO_BUILD_TARGET=x86_64-unknown-redox
 export CARGO_TARGET_X86_64_UNKNOWN_REDOX_LINKER=/nix/system/profile/bin/cc
