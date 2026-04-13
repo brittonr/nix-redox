@@ -11,6 +11,7 @@
 //! 5. Create dir + 3 files, getdents returns all 3.
 //! 6. Write 1KB, read back, byte-for-byte match.
 //! 7. Latency: 1000 open+read+close, print mean and p99.
+//! 8. Repeated write+read cycles stay live through the worker-backed proxy path.
 //!
 //! Run inside Redox:
 //!   /nix/system/profile/bin/proxy_namespace_test
@@ -31,6 +32,7 @@ fn main() {
             "test5" => child_test_5(),
             "test6" => child_test_6(),
             "test7" => child_test_7(),
+            "test8" => child_test_8(),
             other => {
                 eprintln!("unknown child test: {}", other);
                 std::process::exit(99);
@@ -182,6 +184,7 @@ fn test_proxy_io() {
             println!("TEST 5: SKIP");
             println!("TEST 6: SKIP");
             println!("TEST 7: SKIP");
+            println!("TEST 8: SKIP");
             return;
         }
     };
@@ -228,6 +231,14 @@ fn test_proxy_io() {
         socket_fd,
         "proxy-roundtrip",
         Some(verify_test_7),
+    );
+    run_child_test(
+        "TEST 8: repeated write+read cycles stay live",
+        "test8",
+        child_ns_fd,
+        socket_fd,
+        "proxy-worker-cycles",
+        Some(verify_test_8),
     );
 
     // Shut down the proxy.
@@ -588,5 +599,42 @@ fn verify_test_7() -> Result<(), String> {
             // Latency file is optional — the test passed if the child exited 0.
             Ok(())
         }
+    }
+}
+
+#[cfg(target_os = "redox")]
+fn child_test_8() {
+    use std::io::{Read, Write};
+
+    let path = "/tmp/proxy-test-out/worker-cycles.txt";
+
+    for round in 0..32u32 {
+        {
+            let mut f = std::fs::File::create(path).expect("create through proxy");
+            writeln!(f, "round={round}").expect("write through proxy");
+        }
+
+        let mut data = String::new();
+        std::fs::File::open(path)
+            .expect("open through proxy")
+            .read_to_string(&mut data)
+            .expect("read through proxy");
+
+        let expected = format!("round={round}\n");
+        if data != expected {
+            eprintln!("round {round} mismatch: {:?} != {:?}", data, expected);
+            std::process::exit(1);
+        }
+    }
+}
+
+#[cfg(target_os = "redox")]
+fn verify_test_8() -> Result<(), String> {
+    let content = std::fs::read_to_string("/tmp/proxy-test-out/worker-cycles.txt")
+        .map_err(|e| format!("read real file: {e}"))?;
+    if content == "round=31\n" {
+        Ok(())
+    } else {
+        Err(format!("unexpected final content: {content:?}"))
     }
 }

@@ -260,17 +260,14 @@ fn build_derivation_inner(
     }
 
     // ── 5a. Set up build sandbox ───────────────────────────────────
-    // On Redox, restrict the builder's scheme namespace to limit which
-    // schemes the builder can access (file, memory, pipe, rand, etc.).
-    // This is the scheme-level sandbox — it includes real file: so the
-    // builder gets full filesystem access, but blocks display:, disk:,
-    // irq:, audio:, and other sensitive schemes.
+    // On Redox, prefer the per-path proxy sandbox. The builder sees the
+    // proxy as `file:` in a child namespace and is restricted to its
+    // declared inputs plus writable outputs/temp paths.
     //
-    // The per-path proxy (build_proxy module) is disabled due to a
-    // deadlock: the proxy thread's raw_openat blocks when the owning
-    // process holds a scheme socket. See AGENTS.md "Sandbox Proxy
-    // exec Issue" for details. The proxy code is preserved for future
-    // re-enablement once the kernel allows cross-scheme I/O.
+    // If proxy setup fails, fall back to the scheme-level sandbox with
+    // the real `file:` scheme still visible. That fallback keeps scheme
+    // isolation (`display:`, `disk:`, `irq:`, `audio:`, etc. blocked)
+    // but grants full filesystem access.
     //
     // Pre-open "/" for direct redoxfs access — used by post-build
     // output verification to bypass initnsmgr.
@@ -282,6 +279,11 @@ fn build_derivation_inner(
             Err(_) => None,
         }
     };
+
+    #[cfg(target_os = "redox")]
+    let mut build_proxy: Option<crate::build_proxy::BuildFsProxy> = None;
+    #[cfg(target_os = "redox")]
+    let mut child_ns_fd_to_close: Option<usize> = None;
 
     if !no_sandbox && !sandbox_disabled_by_config() {
         let primary_out_path = drv
@@ -328,33 +330,44 @@ fn build_derivation_inner(
         {
             use std::os::unix::process::CommandExt;
 
-            // Per-path proxy sandbox is disabled: it deadlocks on Redox
-            // because the proxy thread's raw_openat (to redoxfs) blocks
-            // when the owning process holds a scheme socket. The kernel
-            // blocks all file: I/O from a scheme-socket-owning process,
-            // even via pre-opened root_fd that bypasses initnsmgr.
-            //
-            // Use scheme-level sandbox instead: mkns with file: included
-            // grants full filesystem access but restricts scheme visibility.
-            // Re-enable the proxy once the kernel allows cross-scheme I/O
-            // from scheme daemon processes.
-            //
-            // The proxy code is preserved (build_proxy module, allow_list,
-            // setup_proxy_namespace) for future re-enablement.
-            let _allow_list = allow_list;
-
-            // Scheme-level sandbox: file: included, full fs access.
-            unsafe {
-                cmd.pre_exec(
-                    move || match sandbox::setup_build_namespace(&sandbox_config) {
-                        Ok(()) => Ok(()),
-                        Err(sandbox::SandboxError::Unavailable) => Ok(()),
-                        Err(e) => {
-                            eprintln!("warning: sandbox setup failed: {e}");
+            match sandbox::setup_proxy_namespace(&sandbox_config, allow_list) {
+                Ok((child_ns_fd, proxy)) => {
+                    let socket_fd = proxy.socket_fd();
+                    eprintln!("buildfs: proxy mode active");
+                    child_ns_fd_to_close = Some(child_ns_fd);
+                    build_proxy = Some(proxy);
+                    unsafe {
+                        cmd.pre_exec(move || {
+                            if let Some(fd) = socket_fd {
+                                let _ = syscall::close(fd);
+                            }
+                            libredox::call::setns(child_ns_fd).map_err(|e| {
+                                std::io::Error::new(
+                                    std::io::ErrorKind::Other,
+                                    format!("setns(proxy): {e}"),
+                                )
+                            })?;
                             Ok(())
-                        }
-                    },
-                );
+                        });
+                    }
+                }
+                Err(e) => {
+                    eprintln!(
+                        "warning: per-path proxy failed ({e}), falling back to scheme-level sandbox"
+                    );
+                    unsafe {
+                        cmd.pre_exec(move || {
+                            match sandbox::setup_build_namespace(&sandbox_config) {
+                                Ok(()) => Ok(()),
+                                Err(sandbox::SandboxError::Unavailable) => Ok(()),
+                                Err(e) => {
+                                    eprintln!("warning: sandbox setup failed: {e}");
+                                    Ok(())
+                                }
+                            }
+                        });
+                    }
+                }
             }
         }
 
@@ -378,11 +391,13 @@ fn build_derivation_inner(
         let mut child = cmd
             .spawn()
             .map_err(|e| BuildError::Io(format!("executing builder '{}': {e}", drv.builder)))?;
+        #[cfg(target_os = "redox")]
+        eprintln!("buildfs: child spawned pid={:?}", child.id());
 
-        // (No proxy namespace fd to close — proxy is disabled.
-        // When the proxy is re-enabled, the child_ns_fd must be
-        // closed here after fork so the namespace can be cleaned
-        // up when the child exits.)
+        #[cfg(target_os = "redox")]
+        if let Some(fd) = child_ns_fd_to_close.take() {
+            let _ = syscall::close(fd);
+        }
 
         // Take ownership of the pipe read-ends. The child holds the
         // write-ends (fd 1, fd 2). When the child exits, write-ends
@@ -426,9 +441,13 @@ fn build_derivation_inner(
         // Previously used try_wait()+sched_yield() poll loop, but
         // that was a workaround for pre-LAPIC scheduler starvation
         // and burns CPU spinning. Blocking wait is correct now.
+        #[cfg(target_os = "redox")]
+        eprintln!("buildfs: waiting for builder pid={:?}", child.id());
         let status = child
             .wait()
             .map_err(|e| BuildError::Io(format!("waiting for builder '{}': {e}", drv.builder)))?;
+        #[cfg(target_os = "redox")]
+        eprintln!("buildfs: builder exited status={status}");
 
         // Join reader threads (they should have gotten EOF by now).
         let _stdout_data = stdout_thread
@@ -444,8 +463,12 @@ fn build_derivation_inner(
     };
 
     // ── 5b. Shut down the filesystem proxy ───────────────────────────
-    // (Proxy shutdown disabled — proxy is not started.
-    // Re-enable when per-path proxy deadlock is resolved.)
+    #[cfg(target_os = "redox")]
+    if let Some(proxy) = build_proxy.take() {
+        eprintln!("buildfs: proxy shutdown begin");
+        proxy.shutdown();
+        eprintln!("buildfs: proxy shutdown done");
+    }
 
     if !status.success() {
         return Err(BuildError::BuildFailed {

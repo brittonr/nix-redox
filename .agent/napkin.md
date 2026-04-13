@@ -245,6 +245,12 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 
 ## Active Workarounds (still needed)
 
+### Proxy deadlock theory was too broad
+- I had recorded that "the kernel blocks all file: I/O from a process owning a scheme socket". That is wrong.
+- `stored`/`profiled` already proved root-fd filesystem I/O works from a separate worker thread inside a scheme-owning process.
+- Real deadlock shape: the scheme EVENT-LOOP thread cannot block inside nested redoxfs calls while servicing another userspace-scheme request.
+- Fix direction: move real filesystem calls onto a worker thread; do not blame process-wide scheme ownership.
+
 ### Proxy scheme socket close doesn't unblock next_request() (kernel bug)
 - Closing scheme socket fd from another thread does NOT unblock blocked `next_request()`.
 - Workaround: event loop checks `handler.handles.is_empty()` and exits when builder exits.

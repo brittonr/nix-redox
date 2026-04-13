@@ -328,7 +328,7 @@ let
 
   # test flake bundle for `snix build .#hello` VM test
   testFlakeBundle = import ../pkgs/infrastructure/test-flake-bundle.nix {
-    inherit pkgs;
+    inherit pkgs rustToolchain;
   };
 
   # cc-dep and workspace test bundles for complex build VM tests
