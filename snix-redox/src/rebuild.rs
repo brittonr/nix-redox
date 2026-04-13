@@ -25,7 +25,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -72,6 +72,8 @@ pub struct RebuildConfig {
     pub power: Option<PowerConfig>,
     pub users: Option<BTreeMap<String, UserConfig>>,
     pub programs: Option<ProgramsConfig>,
+    /// Inline managed files written during activation, keyed by root-relative path.
+    pub files: Option<BTreeMap<String, ManagedFileInput>>,
     /// Hardware/driver configuration — changes require bridge for initfs rebuild.
     pub hardware: Option<HardwareConfigInput>,
     /// Declared service names — additions/removals require initfs rebuild via bridge.
@@ -130,6 +132,12 @@ pub struct UserConfig {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct ProgramsConfig {
     pub editor: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct ManagedFileInput {
+    pub text: String,
+    pub mode: Option<String>,
 }
 
 /// Hardware configuration that affects boot components (drivers → initfs).
@@ -255,16 +263,14 @@ fn select_auto_rebuild_route(
             return Ok(AutoRebuildRoute::Bridge);
         }
 
-        return Err(
-            "changes require the build bridge\n\
+        return Err("changes require the build bridge\n\
              \n\
              Your configuration.nix modifies hardware/drivers or services, which\n\
              requires the host to rebuild the initfs. Start the VM with shared filesystem:\n\
              \n\
                nix run .#run-redox-shared     (in one terminal)\n\
                nix run .#build-bridge         (in another terminal)\n"
-                .into(),
-        );
+            .into());
     }
 
     if has_package_changes(config) && bridge_is_available {
@@ -383,11 +389,8 @@ pub fn rebuild(
     let current = system::load_manifest_from(mpath)?;
 
     // Step 3: Resolve package names → store paths
-    let resolved_packages = resolve_packages_with_fallback(
-        &config.packages,
-        &primary_cache,
-        fallback_cache,
-    )?;
+    let resolved_packages =
+        resolve_packages_with_fallback(&config.packages, &primary_cache, fallback_cache)?;
 
     // Step 4: Merge config into manifest
     let merged_packages: Vec<Package> = resolved_packages
@@ -459,10 +462,7 @@ pub fn rebuild(
     Ok(())
 }
 
-fn preserve_active_config(
-    path: &str,
-    content: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn preserve_active_config(path: &str, content: &str) -> Result<(), Box<dyn std::error::Error>> {
     let cfg_path = Path::new(path);
     if let Some(parent) = cfg_path.parent() {
         fs::create_dir_all(parent)?;
@@ -629,28 +629,86 @@ fn evaluate_config(path: &str) -> Result<RebuildConfig, Box<dyn std::error::Erro
         .ok_or_else(|| format!("no value produced from {path}"))?;
 
     // The value is a Nix string containing JSON.
-    // Its Display representation is a quoted string: "{ \"hostname\": ... }"
+    // Its Display representation is a quoted JSON string, so decode it with
+    // serde_json instead of manual backslash replacement. Manual `\\n -> \n`
+    // breaks inline file contents like `text = "hello\\n"`.
     let repr = format!("{value}");
-
-    // Strip surrounding quotes and unescape
-    let json_str = if repr.starts_with('"') && repr.ends_with('"') && repr.len() >= 2 {
-        let inner = &repr[1..repr.len() - 1];
-        inner
-            .replace("\\\"", "\"")
-            .replace("\\\\", "\\")
-            .replace("\\n", "\n")
-            .replace("\\t", "\t")
-    } else {
-        repr
-    };
+    let json_str = decode_eval_json_string(&repr)?;
 
     parse_config_json(&json_str)
 }
 
+fn decode_eval_json_string(repr: &str) -> Result<String, Box<dyn std::error::Error>> {
+    if repr.starts_with('"') && repr.ends_with('"') {
+        Ok(serde_json::from_str::<String>(repr)?)
+    } else {
+        Ok(repr.to_string())
+    }
+}
+
 /// Parse a JSON string into a RebuildConfig.
 pub(crate) fn parse_config_json(json: &str) -> Result<RebuildConfig, Box<dyn std::error::Error>> {
-    let config: RebuildConfig = serde_json::from_str(json)?;
+    let mut config: RebuildConfig = serde_json::from_str(json)?;
+    validate_managed_files(&mut config)?;
     Ok(config)
+}
+
+fn validate_managed_file_path(path: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let mut normalized = PathBuf::new();
+    for component in Path::new(path).components() {
+        match component {
+            Component::Normal(part) => normalized.push(part),
+            _ => {
+                return Err(format!(
+                    "managed file path '{path}' must be root-relative without '.', '..', or a leading '/'"
+                )
+                .into())
+            }
+        }
+    }
+
+    if normalized.as_os_str().is_empty() {
+        return Err("managed file path must not be empty".into());
+    }
+
+    Ok(normalized.to_string_lossy().into_owned())
+}
+
+fn normalize_managed_file_mode(mode: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let trimmed = mode.trim();
+    let trimmed = trimmed.strip_prefix("0o").unwrap_or(trimmed);
+    let trimmed = trimmed
+        .strip_prefix('0')
+        .filter(|rest| !rest.is_empty())
+        .unwrap_or(trimmed);
+
+    if trimmed.is_empty() || trimmed.len() > 4 || !trimmed.chars().all(|c| matches!(c, '0'..='7')) {
+        return Err(format!("invalid file mode '{mode}' (expected octal like 0644)").into());
+    }
+
+    let parsed = u32::from_str_radix(trimmed, 8)?;
+    if parsed > 0o7777 {
+        return Err(format!("invalid file mode '{mode}' (must be <= 07777)").into());
+    }
+
+    Ok(format!("{parsed:04o}"))
+}
+
+fn validate_managed_files(config: &mut RebuildConfig) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(files) = config.files.take() else {
+        return Ok(());
+    };
+
+    let mut normalized = BTreeMap::new();
+    for (path, mut file) in files {
+        let normalized_path = validate_managed_file_path(&path)?;
+        let normalized_mode = normalize_managed_file_mode(file.mode.as_deref().unwrap_or("0644"))?;
+        file.mode = Some(normalized_mode);
+        normalized.insert(normalized_path, file);
+    }
+
+    config.files = Some(normalized);
+    Ok(())
 }
 
 /// Select the primary cache source used by rebuild.
@@ -760,10 +818,7 @@ fn resolve_packages_with_fallback(
             Ok(index) => Some(index),
             Err(e) => {
                 if primary_index.is_some() {
-                    eprintln!(
-                        "warning: failed to read {}: {e}",
-                        source.display_name()
-                    );
+                    eprintln!("warning: failed to read {}: {e}", source.display_name());
                     None
                 } else {
                     return Err(e);
@@ -962,6 +1017,27 @@ pub(crate) fn merge_config(
                 )
             })
             .collect();
+    }
+
+    // Inline managed files — replace the prior inline set while preserving
+    // rootTree-tracked files (which have text = None).
+    if let Some(ref files) = config.files {
+        m.files.retain(|_, info| info.text.is_none());
+        for (path, file) in files {
+            let normalized_path = validate_managed_file_path(path)?;
+            let normalized_mode =
+                normalize_managed_file_mode(file.mode.as_deref().unwrap_or("0644"))?;
+            let contents = file.text.as_bytes();
+            m.files.insert(
+                normalized_path,
+                crate::system::FileInfo {
+                    blake3: blake3::hash(contents).to_hex().to_string(),
+                    size: contents.len() as u64,
+                    mode: normalized_mode,
+                    text: Some(file.text.clone()),
+                },
+            );
+        }
     }
 
     // Packages — if specified, merge with boot-essential set
@@ -1696,7 +1772,10 @@ mod tests {
             "logging": { "level": "debug", "kernelLevel": "info", "logToFile": false },
             "power": { "acpiEnabled": true, "powerAction": "reboot", "rebootOnPanic": true },
             "users": { "admin": { "uid": 1001, "gid": 1001, "home": "/home/admin", "shell": "/bin/ion" } },
-            "programs": { "editor": "helix" }
+            "programs": { "editor": "helix" },
+            "files": {
+                "etc/test/rebuild-proof.txt": { "text": "hello from rebuild\n", "mode": "0o640" }
+            }
         }"#;
 
         let config = parse_config_json(json).unwrap();
@@ -1720,6 +1799,167 @@ mod tests {
 
         let prg = config.programs.unwrap();
         assert_eq!(prg.editor, Some("helix".to_string()));
+
+        let files = config.files.unwrap();
+        let rebuild_file = &files["etc/test/rebuild-proof.txt"];
+        assert_eq!(rebuild_file.text, "hello from rebuild\n");
+        assert_eq!(rebuild_file.mode.as_deref(), Some("0640"));
+    }
+
+    #[test]
+    fn test_parse_config_rejects_traversal_paths() {
+        let err = parse_config_json(
+            r#"{
+                "files": {
+                    "../etc/passwd": { "text": "bad\n", "mode": "0644" }
+                }
+            }"#,
+        )
+        .unwrap_err();
+
+        assert!(err
+            .to_string()
+            .contains("must be root-relative without '.', '..', or a leading '/'"));
+    }
+
+    #[test]
+    fn test_parse_config_rejects_absolute_paths() {
+        let err = parse_config_json(
+            r#"{
+                "files": {
+                    "/etc/passwd": { "text": "bad\n", "mode": "0644" }
+                }
+            }"#,
+        )
+        .unwrap_err();
+
+        assert!(err
+            .to_string()
+            .contains("must be root-relative without '.', '..', or a leading '/'"));
+    }
+
+    #[test]
+    fn test_parse_config_rejects_invalid_file_modes() {
+        let err = parse_config_json(
+            r#"{
+                "files": {
+                    "etc/test/rebuild-proof.txt": { "text": "bad\n", "mode": "09ab" }
+                }
+            }"#,
+        )
+        .unwrap_err();
+
+        assert!(err.to_string().contains("invalid file mode '09ab'"));
+    }
+
+    #[test]
+    fn test_merge_config_adds_inline_files() {
+        let current = sample_manifest();
+        let config = parse_config_json(
+            r#"{
+                "files": {
+                    "etc/test/rebuild-proof.txt": {
+                        "text": "rebuild cycle ok\n",
+                        "mode": "0600"
+                    }
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let merged = merge_config(&current, &config, &[]).unwrap();
+        let file = merged.files.get("etc/test/rebuild-proof.txt").unwrap();
+
+        assert_eq!(file.mode, "0600");
+        assert_eq!(file.size, "rebuild cycle ok\n".len() as u64);
+        assert_eq!(file.text.as_deref(), Some("rebuild cycle ok\n"));
+        assert_eq!(
+            file.blake3,
+            blake3::hash("rebuild cycle ok\n".as_bytes())
+                .to_hex()
+                .to_string()
+        );
+    }
+
+    #[test]
+    fn test_merge_config_replaces_prior_inline_files() {
+        let mut current = sample_manifest();
+        current.files.insert(
+            "etc/old-inline.txt".to_string(),
+            crate::system::FileInfo {
+                blake3: "oldhash".to_string(),
+                size: 4,
+                mode: "0644".to_string(),
+                text: Some("old\n".to_string()),
+            },
+        );
+        current.files.insert(
+            "etc/root-tree.txt".to_string(),
+            crate::system::FileInfo {
+                blake3: "keephash".to_string(),
+                size: 5,
+                mode: "0644".to_string(),
+                text: None,
+            },
+        );
+
+        let config = parse_config_json(
+            r#"{
+                "files": {
+                    "etc/new-inline.txt": {
+                        "text": "new\n",
+                        "mode": "0600"
+                    }
+                }
+            }"#,
+        )
+        .unwrap();
+
+        let merged = merge_config(&current, &config, &[]).unwrap();
+        assert!(!merged.files.contains_key("etc/old-inline.txt"));
+        assert!(merged.files.contains_key("etc/root-tree.txt"));
+        assert_eq!(
+            merged.files["etc/new-inline.txt"].text.as_deref(),
+            Some("new\n")
+        );
+    }
+
+    #[test]
+    fn test_merge_config_rejects_manual_invalid_inline_path() {
+        let current = sample_manifest();
+        let config = RebuildConfig {
+            files: Some(BTreeMap::from([(
+                "../etc/passwd".to_string(),
+                ManagedFileInput {
+                    text: "bad\n".to_string(),
+                    mode: Some("0644".to_string()),
+                },
+            )])),
+            ..Default::default()
+        };
+
+        let err = merge_config(&current, &config, &[]).unwrap_err();
+        assert!(err
+            .to_string()
+            .contains("must be root-relative without '.', '..', or a leading '/'"));
+    }
+
+    #[test]
+    fn test_merge_config_rejects_manual_invalid_inline_mode() {
+        let current = sample_manifest();
+        let config = RebuildConfig {
+            files: Some(BTreeMap::from([(
+                "etc/test/rebuild-proof.txt".to_string(),
+                ManagedFileInput {
+                    text: "bad\n".to_string(),
+                    mode: Some("0999".to_string()),
+                },
+            )])),
+            ..Default::default()
+        };
+
+        let err = merge_config(&current, &config, &[]).unwrap_err();
+        assert!(err.to_string().contains("invalid file mode '0999'"));
     }
 
     #[test]
@@ -1904,6 +2144,7 @@ mod tests {
             packages: None,
             users: None,
             programs: None,
+            files: None,
             hardware: None,
             services: None,
             package_sources: None,
@@ -2045,8 +2286,10 @@ mod tests {
             }"#,
         )
         .unwrap();
-        let primary_source = crate::cache_source::CacheSource::Remote("http://10.0.2.2:8080".to_string());
-        let fallback_source = crate::cache_source::CacheSource::Local(Path::new("/nix/cache").to_path_buf());
+        let primary_source =
+            crate::cache_source::CacheSource::Remote("http://10.0.2.2:8080".to_string());
+        let fallback_source =
+            crate::cache_source::CacheSource::Local(Path::new("/nix/cache").to_path_buf());
 
         let resolved = resolve_packages_from_indexes(
             &names,
@@ -2087,8 +2330,10 @@ mod tests {
             }"#,
         )
         .unwrap();
-        let primary_source = crate::cache_source::CacheSource::Remote("http://10.0.2.2:8080".to_string());
-        let fallback_source = crate::cache_source::CacheSource::Local(Path::new("/nix/cache").to_path_buf());
+        let primary_source =
+            crate::cache_source::CacheSource::Remote("http://10.0.2.2:8080".to_string());
+        let fallback_source =
+            crate::cache_source::CacheSource::Local(Path::new("/nix/cache").to_path_buf());
 
         let resolved = resolve_packages_from_indexes(
             &names,
@@ -2112,16 +2357,14 @@ mod tests {
     #[test]
     fn test_resolve_packages_from_indexes_marks_unresolved_when_missing_everywhere() {
         let names = vec!["missing".to_string()];
-        let primary: crate::local_cache::PackageIndex = serde_json::from_str(
-            r#"{ "version": 1, "packages": {} }"#,
-        )
-        .unwrap();
-        let fallback: crate::local_cache::PackageIndex = serde_json::from_str(
-            r#"{ "version": 1, "packages": {} }"#,
-        )
-        .unwrap();
-        let primary_source = crate::cache_source::CacheSource::Remote("http://10.0.2.2:8080".to_string());
-        let fallback_source = crate::cache_source::CacheSource::Local(Path::new("/nix/cache").to_path_buf());
+        let primary: crate::local_cache::PackageIndex =
+            serde_json::from_str(r#"{ "version": 1, "packages": {} }"#).unwrap();
+        let fallback: crate::local_cache::PackageIndex =
+            serde_json::from_str(r#"{ "version": 1, "packages": {} }"#).unwrap();
+        let primary_source =
+            crate::cache_source::CacheSource::Remote("http://10.0.2.2:8080".to_string());
+        let fallback_source =
+            crate::cache_source::CacheSource::Local(Path::new("/nix/cache").to_path_buf());
 
         let resolved = resolve_packages_from_indexes(
             &names,
@@ -2194,6 +2437,17 @@ mod tests {
         assert_eq!(config.hostname, Some("json-host".to_string()));
     }
 
+    #[test]
+    fn test_decode_eval_json_string_preserves_escaped_newlines() {
+        let repr = r#""{\"files\":{\"etc/test.txt\":{\"text\":\"hello\\n\",\"mode\":\"0644\"}}}""#;
+        let decoded = decode_eval_json_string(repr).unwrap();
+        let config = parse_config_json(&decoded).unwrap();
+        let file = &config.files.unwrap()["etc/test.txt"];
+
+        assert_eq!(file.text, "hello\n");
+        assert_eq!(file.mode.as_deref(), Some("0644"));
+    }
+
     // ===== Init Config =====
 
     #[test]
@@ -2234,11 +2488,18 @@ mod tests {
         #[cfg(unix)]
         std::os::unix::fs::symlink(&store_cfg, &live_cfg).unwrap();
 
-        preserve_active_config(live_cfg.to_str().unwrap(), "{ hostname = \"persisted\"; }\n").unwrap();
+        preserve_active_config(
+            live_cfg.to_str().unwrap(),
+            "{ hostname = \"persisted\"; }\n",
+        )
+        .unwrap();
 
         let meta = fs::symlink_metadata(&live_cfg).unwrap();
         assert!(!meta.file_type().is_symlink());
-        assert_eq!(fs::read_to_string(&live_cfg).unwrap(), "{ hostname = \"persisted\"; }\n");
+        assert_eq!(
+            fs::read_to_string(&live_cfg).unwrap(),
+            "{ hostname = \"persisted\"; }\n"
+        );
     }
 
     // ===== Boot-Affecting Detection: Hardware Fields =====

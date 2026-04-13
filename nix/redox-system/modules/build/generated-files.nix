@@ -594,7 +594,7 @@ let
         #   snix system rebuild          (auto-detects bridge)
         #
         # Available options:
-        #   hostname, timezone, packages,
+        #   hostname, timezone, packages, files,
         #   networking.{enable, mode, dns, defaultRouter, remoteShellEnable},
         #   graphics.{enable, resolution, virtualTerminal, loginCommand},
         #   security.{protectKernelSchemes, requirePasswords, allowRemoteRoot},
@@ -646,6 +646,15 @@ let
           #   port = 8080;
           #   rootDir = "/var/www";
           # };
+          #
+          # files = {
+          #   "etc/my-app/config.txt" = {
+          #     text = "hello from rebuild\n";
+          #     mode = "0644"; # octal string, applied during live rebuild
+          #   };
+          # };
+          # Keys must be root-relative (no leading slash) and must not contain
+          # '.' or '..' path segments.
         }
       '';
       mode = "0644";

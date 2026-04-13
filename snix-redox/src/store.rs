@@ -38,10 +38,7 @@ pub struct Closure {
 /// Compute the transitive closure of a store path via BFS over references.
 ///
 /// Returns an error if the path (or any of its references) is not registered.
-pub fn compute_closure(
-    db: &PathInfoDb,
-    root: &str,
-) -> Result<Closure, Box<dyn std::error::Error>> {
+pub fn compute_closure(db: &PathInfoDb, root: &str) -> Result<Closure, Box<dyn std::error::Error>> {
     let mut visited = BTreeSet::new();
     let mut queue = VecDeque::new();
     let mut total_nar_size: u64 = 0;
@@ -102,11 +99,7 @@ impl GcRoots {
     }
 
     /// Add a GC root.  Creates a symlink `name → store_path`.
-    pub fn add_root(
-        &self,
-        name: &str,
-        store_path: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn add_root(&self, name: &str, store_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         // Validate the store path format
         StorePath::<String>::from_absolute_path(store_path.as_bytes())
             .map_err(|e| format!("invalid store path: {e}"))?;
@@ -274,7 +267,15 @@ pub fn register_path(
     references: Vec<String>,
     signatures: Vec<String>,
 ) -> Result<(), PathInfoError> {
-    register_path_with_files(db, store_path, nar_hash, nar_size, references, signatures, Vec::new())
+    register_path_with_files(
+        db,
+        store_path,
+        nar_hash,
+        nar_size,
+        references,
+        signatures,
+        Vec::new(),
+    )
 }
 
 /// Register a store path with a file manifest.
@@ -301,10 +302,7 @@ pub fn register_path_with_files(
 }
 
 /// Register a store path from a PathInfo struct directly.
-pub fn register_path_from_info(
-    db: &PathInfoDb,
-    info: &PathInfo,
-) -> Result<(), PathInfoError> {
+pub fn register_path_from_info(db: &PathInfoDb, info: &PathInfo) -> Result<(), PathInfoError> {
     db.register(info)
 }
 
@@ -358,19 +356,13 @@ pub fn list_registered() -> Result<(), Box<dyn std::error::Error>> {
     let mut total_disk: u64 = 0;
 
     for path in &paths {
-        let nar_size = db
-            .get(path)?
-            .map(|i| i.nar_size)
-            .unwrap_or(0);
+        let nar_size = db.get(path)?.map(|i| i.nar_size).unwrap_or(0);
         let disk_size = path_size(Path::new(path)).unwrap_or(0);
 
         total_nar += nar_size;
         total_disk += disk_size;
 
-        let refs = db
-            .get(path)?
-            .map(|i| i.references.len())
-            .unwrap_or(0);
+        let refs = db.get(path)?.map(|i| i.references.len()).unwrap_or(0);
 
         println!(
             "{path}  (NAR {}, disk {}, {} refs)",
@@ -400,7 +392,11 @@ pub fn show_info(store_path: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     println!("StorePath:    {}", info.store_path);
     println!("NarHash:      {}", info.nar_hash);
-    println!("NarSize:      {} ({})", info.nar_size, human_size(info.nar_size));
+    println!(
+        "NarSize:      {} ({})",
+        info.nar_size,
+        human_size(info.nar_size)
+    );
     println!("Registered:   {}", info.registration_time);
     if let Some(ref drv) = info.deriver {
         println!("Deriver:      {drv}");
@@ -856,7 +852,7 @@ mod tests {
 
         let stats = garbage_collect(&db, &roots, false).unwrap();
         assert_eq!(stats.paths_deleted, 1); // only orphan
-        assert_eq!(stats.paths_kept, 2);    // a + b
+        assert_eq!(stats.paths_kept, 2); // a + b
 
         assert!(db.is_registered(P_A));
         assert!(db.is_registered(P_B));

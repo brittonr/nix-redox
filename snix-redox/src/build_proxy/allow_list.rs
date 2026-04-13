@@ -188,7 +188,6 @@ const SYSTEM_READ_ONLY_PATHS: &[&str] = &[
     "/etc",
     "/bin",
     "/usr/bin",
-
 ];
 
 /// Build an `AllowList` from a derivation's declared inputs.
@@ -276,7 +275,8 @@ pub fn build_allow_list(
 
     // Read-only: input sources.
     for src in &drv.input_sources {
-        list.read_only.insert(normalize_path(&src.to_absolute_path()));
+        list.read_only
+            .insert(normalize_path(&src.to_absolute_path()));
     }
 
     // Read-only: resolved outputs of input derivations.
@@ -285,7 +285,8 @@ pub fn build_allow_list(
             for output_name in output_names {
                 if let Some(output) = input_drv.outputs.get(output_name) {
                     if let Some(ref sp) = output.path {
-                        list.read_only.insert(normalize_path(&sp.to_absolute_path()));
+                        list.read_only
+                            .insert(normalize_path(&sp.to_absolute_path()));
                     }
                 }
             }
@@ -304,10 +305,14 @@ mod tests {
 
     fn make_list() -> AllowList {
         let mut list = AllowList::new();
-        list.read_only.insert(PathBuf::from("/nix/store/abc-dep-1.0"));
-        list.read_only.insert(PathBuf::from("/nix/store/def-dep-2.0"));
-        list.read_write.insert(PathBuf::from("/nix/store/ghi-output-1.0"));
-        list.read_write.insert(PathBuf::from("/tmp/snix-build-42-0"));
+        list.read_only
+            .insert(PathBuf::from("/nix/store/abc-dep-1.0"));
+        list.read_only
+            .insert(PathBuf::from("/nix/store/def-dep-2.0"));
+        list.read_write
+            .insert(PathBuf::from("/nix/store/ghi-output-1.0"));
+        list.read_write
+            .insert(PathBuf::from("/tmp/snix-build-42-0"));
         list
     }
 
@@ -379,10 +384,7 @@ mod tests {
     #[test]
     fn denied_etc_passwd() {
         let list = make_list();
-        assert_eq!(
-            list.check(Path::new("/etc/passwd")),
-            Permission::Denied,
-        );
+        assert_eq!(list.check(Path::new("/etc/passwd")), Permission::Denied,);
     }
 
     // ── Prefix boundary enforcement ────────────────────────────────────
@@ -456,7 +458,10 @@ mod tests {
     #[test]
     fn empty_list_denies_everything() {
         let list = AllowList::new();
-        assert_eq!(list.check(Path::new("/nix/store/anything")), Permission::Denied);
+        assert_eq!(
+            list.check(Path::new("/nix/store/anything")),
+            Permission::Denied
+        );
         assert_eq!(list.check(Path::new("/")), Permission::Denied);
         assert_eq!(list.check(Path::new("/tmp/foo")), Permission::Denied);
     }
@@ -465,7 +470,10 @@ mod tests {
 
     #[test]
     fn normalize_strips_trailing_slash() {
-        assert_eq!(normalize_path("/nix/store/abc/"), PathBuf::from("/nix/store/abc"));
+        assert_eq!(
+            normalize_path("/nix/store/abc/"),
+            PathBuf::from("/nix/store/abc")
+        );
     }
 
     #[test]
@@ -475,7 +483,10 @@ mod tests {
 
     #[test]
     fn normalize_no_trailing_slash() {
-        assert_eq!(normalize_path("/nix/store/abc"), PathBuf::from("/nix/store/abc"));
+        assert_eq!(
+            normalize_path("/nix/store/abc"),
+            PathBuf::from("/nix/store/abc")
+        );
     }
 
     // ── build_allow_list ───────────────────────────────────────────────
@@ -537,9 +548,7 @@ mod tests {
         // Builder args that are absolute paths should be read-only.
         let mut drv = Derivation::default();
         drv.builder = "/nix/system/profile/bin/bash".to_string();
-        drv.arguments = vec![
-            "/tmp/build-hello-cargo.sh".to_string(),
-        ];
+        drv.arguments = vec!["/tmp/build-hello-cargo.sh".to_string()];
 
         let kp = KnownPaths::default();
         let list = build_allow_list(&drv, &kp, "/nix/store/out", "/tmp/build");
@@ -555,10 +564,7 @@ mod tests {
         // Args like "-c" or inline scripts should NOT be added.
         let mut drv = Derivation::default();
         drv.builder = "/nix/system/profile/bin/bash".to_string();
-        drv.arguments = vec![
-            "-c".to_string(),
-            "echo hello > $out".to_string(),
-        ];
+        drv.arguments = vec!["-c".to_string(), "echo hello > $out".to_string()];
 
         let kp = KnownPaths::default();
         let list = build_allow_list(&drv, &kp, "/nix/store/out", "/tmp/build");
@@ -575,14 +581,10 @@ mod tests {
         // Environment values that are absolute paths should be read-only.
         use bstr::BString;
         let mut drv = Derivation::default();
-        drv.environment.insert(
-            "src".to_string(),
-            BString::from("/usr/src/myproject"),
-        );
-        drv.environment.insert(
-            "CFLAGS".to_string(),
-            BString::from("-O2 -Wall"),
-        );
+        drv.environment
+            .insert("src".to_string(), BString::from("/usr/src/myproject"));
+        drv.environment
+            .insert("CFLAGS".to_string(), BString::from("-O2 -Wall"));
 
         let kp = KnownPaths::default();
         let list = build_allow_list(&drv, &kp, "/nix/store/out", "/tmp/build");
@@ -599,10 +601,8 @@ mod tests {
         // downgrade it to read-only.
         use bstr::BString;
         let mut drv = Derivation::default();
-        drv.environment.insert(
-            "out".to_string(),
-            BString::from("/nix/store/abc-output"),
-        );
+        drv.environment
+            .insert("out".to_string(), BString::from("/nix/store/abc-output"));
 
         let kp = KnownPaths::default();
         let list = build_allow_list(&drv, &kp, "/nix/store/abc-output", "/tmp/build");
@@ -618,9 +618,7 @@ mod tests {
         //   args = ["/usr/src/snix-redox/build-snix.sh"]
         let mut drv = Derivation::default();
         drv.builder = "/nix/system/profile/bin/bash".to_string();
-        drv.arguments = vec![
-            "/usr/src/snix-redox/build-snix.sh".to_string(),
-        ];
+        drv.arguments = vec!["/usr/src/snix-redox/build-snix.sh".to_string()];
 
         let kp = KnownPaths::default();
         let list = build_allow_list(&drv, &kp, "/nix/store/out", "/tmp/build");

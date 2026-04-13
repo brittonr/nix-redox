@@ -54,11 +54,9 @@ impl ProfileSchemeHandler {
 impl SchemeSync for ProfileSchemeHandler {
     fn scheme_root(&mut self) -> Result<usize> {
         // Open the scheme root (listing of all profiles).
-        let id = self.handles.open_dir(
-            String::new(),
-            String::new(),
-            String::new(),
-        );
+        let id = self
+            .handles
+            .open_dir(String::new(), String::new(), String::new());
         Ok(id)
     }
 
@@ -76,11 +74,9 @@ impl SchemeSync for ProfileSchemeHandler {
         match profile_name {
             None => {
                 // Scheme root: list all profiles.
-                let id = self.handles.open_dir(
-                    String::new(),
-                    String::new(),
-                    String::new(),
-                );
+                let id = self
+                    .handles
+                    .open_dir(String::new(), String::new(), String::new());
                 Ok(OpenResult::ThisScheme {
                     number: id,
                     flags: NewFdFlags::POSITIONED,
@@ -90,10 +86,9 @@ impl SchemeSync for ProfileSchemeHandler {
             Some(name) => {
                 // Check if this is the .control interface.
                 if subpath == ".control" {
-                    let id = self.handles.open_control(
-                        name.to_string(),
-                        path.to_string(),
-                    );
+                    let id = self
+                        .handles
+                        .open_control(name.to_string(), path.to_string());
                     Ok(OpenResult::ThisScheme {
                         number: id,
                         flags: NewFdFlags::POSITIONED,
@@ -118,10 +113,8 @@ impl SchemeSync for ProfileSchemeHandler {
                         .get(name)
                         .ok_or_else(|| Error::new(ENOENT))?;
 
-                    let entries = mapping.list_union_from_manifests(
-                        subpath,
-                        &self.daemon.manifests,
-                    );
+                    let entries =
+                        mapping.list_union_from_manifests(subpath, &self.daemon.manifests);
                     if !entries.is_empty() {
                         // It's a directory — open as dir handle.
                         let id = self.handles.open_dir(
@@ -146,7 +139,10 @@ impl SchemeSync for ProfileSchemeHandler {
                         let mut found = None;
                         for pkg in mapping.packages.iter().rev() {
                             if let Some(manifest) = self.daemon.manifests.get(&pkg.store_path) {
-                                if let Some(entry) = manifest.iter().find(|e| e.path == subpath && e.entry_type == "file") {
+                                if let Some(entry) = manifest
+                                    .iter()
+                                    .find(|e| e.path == subpath && e.entry_type == "file")
+                                {
                                     found = Some((
                                         std::path::PathBuf::from(&pkg.store_path).join(subpath),
                                         entry.size,
@@ -160,12 +156,9 @@ impl SchemeSync for ProfileSchemeHandler {
                     };
 
                     // Lazy file handle — no filesystem I/O during openat.
-                    let id = self.handles.open_file_lazy(
-                        full_path,
-                        path.to_string(),
-                        size,
-                        executable,
-                    );
+                    let id =
+                        self.handles
+                            .open_file_lazy(full_path, path.to_string(), size, executable);
 
                     Ok(OpenResult::ThisScheme {
                         number: id,
@@ -226,14 +219,17 @@ impl SchemeSync for ProfileSchemeHandler {
         Ok(len)
     }
 
-    fn fevent(&mut self, id: usize, _flags: syscall::flag::EventFlags, _ctx: &CallerCtx) -> Result<syscall::flag::EventFlags> {
+    fn fevent(
+        &mut self,
+        id: usize,
+        _flags: syscall::flag::EventFlags,
+        _ctx: &CallerCtx,
+    ) -> Result<syscall::flag::EventFlags> {
         match self.handles.get(id) {
             Some(Handle::File(_)) | Some(Handle::Dir(_)) => {
                 Ok(syscall::flag::EventFlags::EVENT_READ)
             }
-            Some(Handle::Control(_)) => {
-                Ok(syscall::flag::EventFlags::EVENT_WRITE)
-            }
+            Some(Handle::Control(_)) => Ok(syscall::flag::EventFlags::EVENT_WRITE),
             None => Err(Error::new(EBADF)),
         }
     }
@@ -299,10 +295,7 @@ impl SchemeSync for ProfileSchemeHandler {
 
             // Collect all top-level entries across all packages.
             // Use manifests to avoid filesystem I/O.
-            let entries = mapping.list_union_from_manifests(
-                "",
-                &self.daemon.manifests,
-            );
+            let entries = mapping.list_union_from_manifests("", &self.daemon.manifests);
             // Also add .control as a synthetic entry.
             let mut all_entries: Vec<(&str, DirentKind)> = entries
                 .iter()
@@ -348,10 +341,7 @@ impl SchemeSync for ProfileSchemeHandler {
                 None => return Ok(buf),
             };
 
-            let entries = mapping.list_union_from_manifests(
-                &subpath,
-                &self.daemon.manifests,
-            );
+            let entries = mapping.list_union_from_manifests(&subpath, &self.daemon.manifests);
             for (i, entry) in entries.iter().enumerate().skip(start) {
                 let kind = if entry.is_dir {
                     DirentKind::Directory
@@ -446,9 +436,8 @@ pub fn run_daemon(config: ProfiledConfig) -> Result<(), Box<dyn std::error::Erro
     // setrens(0, 0). The root_fd allows the FileIoWorker to continue
     // reading files via SYS_OPENAT after the namespace is null.
     eprintln!("profiled: pre-opening /");
-    let root_file = std::fs::File::open("/").map_err(|e| {
-        format!("profiled: failed to open /: {e}")
-    })?;
+    let root_file =
+        std::fs::File::open("/").map_err(|e| format!("profiled: failed to open /: {e}"))?;
     let root_fd = {
         use std::os::unix::io::AsRawFd;
         root_file.as_raw_fd() as usize
@@ -456,15 +445,11 @@ pub fn run_daemon(config: ProfiledConfig) -> Result<(), Box<dyn std::error::Erro
     eprintln!("profiled: root_fd={root_fd}");
 
     // Restart the FileIoWorker with the root_fd.
-    handler.handles.io_worker = Some(
-        crate::file_io_worker::FileIoWorker::spawn(Some(root_fd))
-    );
+    handler.handles.io_worker = Some(crate::file_io_worker::FileIoWorker::spawn(Some(root_fd)));
 
     // Drop into null namespace.
     eprintln!("profiled: entering null namespace");
-    libredox::call::setrens(0, 0).map_err(|e| {
-        format!("profiled: setrens(0, 0) failed: {e}")
-    })?;
+    libredox::call::setrens(0, 0).map_err(|e| format!("profiled: setrens(0, 0) failed: {e}"))?;
 
     let _root_file = root_file;
 
@@ -481,7 +466,6 @@ pub fn run_daemon(config: ProfiledConfig) -> Result<(), Box<dyn std::error::Erro
 
         match req.kind() {
             RequestKind::Call(call_req) => {
-
                 let response = call_req.handle_sync(&mut handler, &mut state);
 
                 if !socket.write_response(response, SignalBehavior::Restart)? {
@@ -490,11 +474,9 @@ pub fn run_daemon(config: ProfiledConfig) -> Result<(), Box<dyn std::error::Erro
                 }
             }
             RequestKind::OnClose { id } => {
-
                 handler.on_close(id);
             }
             _ => {
-
                 continue;
             }
         }

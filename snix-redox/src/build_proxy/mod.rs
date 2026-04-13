@@ -44,7 +44,7 @@ pub mod handler;
 pub mod lifecycle;
 
 // Re-export core types used by local_build.rs.
-pub use allow_list::{AllowList, Permission, build_allow_list};
+pub use allow_list::{build_allow_list, AllowList, Permission};
 
 #[cfg(target_os = "redox")]
 pub use lifecycle::BuildFsProxy;
@@ -56,10 +56,7 @@ pub struct BuildFsProxy;
 #[cfg(not(target_os = "redox"))]
 impl BuildFsProxy {
     /// No-op on non-Redox. Returns Ok immediately.
-    pub fn start(
-        _child_ns_fd: usize,
-        _allow_list: AllowList,
-    ) -> Result<Self, BuildFsProxyError> {
+    pub fn start(_child_ns_fd: usize, _allow_list: AllowList) -> Result<Self, BuildFsProxyError> {
         Ok(Self)
     }
 

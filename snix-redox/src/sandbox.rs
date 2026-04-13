@@ -106,11 +106,7 @@ pub fn collect_allowed_inputs(drv: &Derivation) -> HashSet<String> {
 }
 
 /// Build a SandboxConfig from a derivation.
-pub fn config_from_derivation(
-    drv: &Derivation,
-    output_dir: &str,
-    tmp_dir: &str,
-) -> SandboxConfig {
+pub fn config_from_derivation(drv: &Derivation, output_dir: &str, tmp_dir: &str) -> SandboxConfig {
     SandboxConfig {
         allowed_input_hashes: collect_allowed_inputs(drv),
         needs_network: is_fixed_output(drv),
@@ -135,8 +131,7 @@ pub fn config_from_derivation(
 /// - `debug` — serial console (stderr output)
 /// - `shm` — shared memory (needed by some allocators)
 const REQUIRED_SCHEMES: &[&str] = &[
-    "file", "memory", "pipe", "rand", "null", "zero",
-    "proc", "sys", "time", "debug", "shm",
+    "file", "memory", "pipe", "rand", "null", "zero", "proc", "sys", "time", "debug", "shm",
 ];
 
 /// Schemes for proxy-based sandbox (NO `file` — proxy registers as `file`).
@@ -150,11 +145,11 @@ const PROXY_REQUIRED_SCHEMES: &[&str] = &[
     "memory", "pipe", "rand", "null", "zero",
     // relibc init needs these — without them, exec'd binaries crash
     // during relibc_start_v1 before reaching main().
-    "proc",   // process fd (proc_fd) — needed by relibc for PID, etc.
-    "sys",    // system info (uname, cpu count)
-    "time",   // clock_gettime
-    "debug",  // serial console (stderr output)
-    "shm",    // shared memory (needed by some allocators)
+    "proc",  // process fd (proc_fd) — needed by relibc for PID, etc.
+    "sys",   // system info (uname, cpu count)
+    "time",  // clock_gettime
+    "debug", // serial console (stderr output)
+    "shm",   // shared memory (needed by some allocators)
 ];
 
 /// Additional schemes granted to fixed-output derivations.
@@ -194,10 +189,7 @@ fn setup_build_namespace_redox(config: &SandboxConfig) -> Result<(), SandboxErro
     use ioslice::IoSlice;
 
     // Build the list of schemes for this build's namespace.
-    let mut scheme_names: Vec<&[u8]> = REQUIRED_SCHEMES
-        .iter()
-        .map(|s| s.as_bytes())
-        .collect();
+    let mut scheme_names: Vec<&[u8]> = REQUIRED_SCHEMES.iter().map(|s| s.as_bytes()).collect();
 
     if config.needs_network {
         for s in FOD_SCHEMES {
@@ -205,10 +197,7 @@ fn setup_build_namespace_redox(config: &SandboxConfig) -> Result<(), SandboxErro
         }
     }
 
-    let io_slices: Vec<IoSlice> = scheme_names
-        .iter()
-        .map(|name| IoSlice::new(name))
-        .collect();
+    let io_slices: Vec<IoSlice> = scheme_names.iter().map(|name| IoSlice::new(name)).collect();
 
     // Create a new namespace containing only the listed schemes.
     // This forks the current namespace fd, keeping only the specified
@@ -224,9 +213,7 @@ fn setup_build_namespace_redox(config: &SandboxConfig) -> Result<(), SandboxErro
     // Switch the current process to the restricted namespace.
     // After this, any open() to a scheme not in the namespace will fail
     // with ENOENT. Already-open fds are unaffected.
-    libredox::call::setns(ns_fd).map_err(|e| {
-        SandboxError::SyscallFailed(format!("setns: {e}"))
-    })?;
+    libredox::call::setns(ns_fd).map_err(|e| SandboxError::SyscallFailed(format!("setns: {e}")))?;
 
     Ok(())
 }
@@ -265,10 +252,7 @@ pub fn setup_proxy_namespace(
         }
     }
 
-    let io_slices: Vec<IoSlice> = scheme_names
-        .iter()
-        .map(|name| IoSlice::new(name))
-        .collect();
+    let io_slices: Vec<IoSlice> = scheme_names.iter().map(|name| IoSlice::new(name)).collect();
 
     // Create the child namespace (no file: scheme).
     let child_ns_fd = libredox::call::mkns(&io_slices).map_err(|e| {
@@ -457,6 +441,9 @@ mod tests {
         assert!(diff.contains("file"));
 
         let extra: HashSet<&str> = proxy.difference(&required).copied().collect();
-        assert!(extra.is_empty(), "proxy has schemes not in required: {extra:?}");
+        assert!(
+            extra.is_empty(),
+            "proxy has schemes not in required: {extra:?}"
+        );
     }
 }

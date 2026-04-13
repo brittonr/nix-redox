@@ -130,14 +130,13 @@ pub fn evaluate_with_state(
         }
     }
 
-    let runtime = tokio::runtime::Runtime::new()
-        .map_err(|e| format!("tokio runtime: {e}"))?;
+    let runtime = tokio::runtime::Runtime::new().map_err(|e| format!("tokio runtime: {e}"))?;
 
-    let (blob_service, directory_service, path_info_service, nar_calculation_service) =
-        runtime.block_on(async {
-            construct_services(
-                <ServiceUrlsMemory as clap::Parser>::parse_from(std::iter::empty::<&str>()),
-            )
+    let (blob_service, directory_service, path_info_service, nar_calculation_service) = runtime
+        .block_on(async {
+            construct_services(<ServiceUrlsMemory as clap::Parser>::parse_from(
+                std::iter::empty::<&str>(),
+            ))
             .await
         })
         .map_err(|e| format!("store services: {e}"))?;
@@ -152,8 +151,7 @@ pub fn evaluate_with_state(
         Vec::new(),
     ));
 
-    let mut eval_builder =
-        Evaluation::builder(io.clone() as Rc<dyn EvalIO>).enable_import();
+    let mut eval_builder = Evaluation::builder(io.clone() as Rc<dyn EvalIO>).enable_import();
     eval_builder = add_derivation_builtins(eval_builder, Rc::clone(&io));
     eval_builder = add_fetcher_builtins(eval_builder, Rc::clone(&io));
     eval_builder = add_import_builtins(eval_builder, Rc::clone(&io));
@@ -186,116 +184,134 @@ pub fn evaluate_with_state(
 ///
 /// Accepts `{ url, rev?, ref?, narHash?, name? }` or a URL string.
 /// Returns a store path string with Nix context.
-fn make_fetchgit_builtin(
-    io: Rc<SnixStoreIO>,
-) -> Vec<(&'static str, snix_eval::Value)> {
-    use snix_eval::{Builtin, Value, ErrorKind, NixContext, NixContextElement, NixString};
+fn make_fetchgit_builtin(io: Rc<SnixStoreIO>) -> Vec<(&'static str, snix_eval::Value)> {
     use snix_eval::generators::Gen;
+    use snix_eval::{Builtin, ErrorKind, NixContext, NixContextElement, NixString, Value};
 
     let builtin = Builtin::new("fetchGit", None, 1, move |args| {
         let _io = io.clone();
         Gen::new(|_co| {
-            let fut: std::pin::Pin<Box<dyn std::future::Future<Output = Result<Value, ErrorKind>>>> = Box::pin(async move {
-            let arg = args.into_iter().next().unwrap();
+            let fut: std::pin::Pin<
+                Box<dyn std::future::Future<Output = Result<Value, ErrorKind>>>,
+            > = Box::pin(async move {
+                let arg = args.into_iter().next().unwrap();
 
-            // Parse args — either a string URL or an attrset
-            let (url, rev, ref_, nar_hash, name) = if let Ok(s) = arg.to_str() {
-                let url_str = String::from_utf8(s.as_bytes().to_vec())
-                    .map_err(|_| ErrorKind::Utf8)?;
-                (url_str, None::<String>, None::<String>, None::<String>, "source".to_string())
-            } else {
-                let attrs = arg.to_attrs().map_err(|_| ErrorKind::TypeError {
-                    expected: "attribute set or string",
-                    actual: "other",
-                })?;
-
-                let url = attrs.select("url")
-                    .ok_or_else(|| ErrorKind::AttributeNotFound { name: "url".into() })?
-                    .to_str()
-                    .map_err(|_| ErrorKind::TypeError {
-                        expected: "string",
+                // Parse args — either a string URL or an attrset
+                let (url, rev, ref_, nar_hash, name) = if let Ok(s) = arg.to_str() {
+                    let url_str =
+                        String::from_utf8(s.as_bytes().to_vec()).map_err(|_| ErrorKind::Utf8)?;
+                    (
+                        url_str,
+                        None::<String>,
+                        None::<String>,
+                        None::<String>,
+                        "source".to_string(),
+                    )
+                } else {
+                    let attrs = arg.to_attrs().map_err(|_| ErrorKind::TypeError {
+                        expected: "attribute set or string",
                         actual: "other",
                     })?;
-                let url = String::from_utf8(url.as_bytes().to_vec())
-                    .map_err(|_| ErrorKind::Utf8)?;
 
-                let rev = attrs.select("rev")
-                    .and_then(|v| v.to_str().ok())
-                    .map(|s| String::from_utf8(s.as_bytes().to_vec()).unwrap_or_default());
+                    let url = attrs
+                        .select("url")
+                        .ok_or_else(|| ErrorKind::AttributeNotFound { name: "url".into() })?
+                        .to_str()
+                        .map_err(|_| ErrorKind::TypeError {
+                            expected: "string",
+                            actual: "other",
+                        })?;
+                    let url =
+                        String::from_utf8(url.as_bytes().to_vec()).map_err(|_| ErrorKind::Utf8)?;
 
-                let ref_ = attrs.select("ref")
-                    .and_then(|v| v.to_str().ok())
-                    .map(|s| String::from_utf8(s.as_bytes().to_vec()).unwrap_or_default());
+                    let rev = attrs
+                        .select("rev")
+                        .and_then(|v| v.to_str().ok())
+                        .map(|s| String::from_utf8(s.as_bytes().to_vec()).unwrap_or_default());
 
-                let nar_hash = attrs.select("narHash")
-                    .and_then(|v| v.to_str().ok())
-                    .map(|s| String::from_utf8(s.as_bytes().to_vec()).unwrap_or_default());
+                    let ref_ = attrs
+                        .select("ref")
+                        .and_then(|v| v.to_str().ok())
+                        .map(|s| String::from_utf8(s.as_bytes().to_vec()).unwrap_or_default());
 
-                let name = attrs.select("name")
-                    .and_then(|v| v.to_str().ok())
-                    .map(|s| String::from_utf8(s.as_bytes().to_vec()).unwrap_or_default())
-                    .unwrap_or_else(|| "source".to_string());
+                    let nar_hash = attrs
+                        .select("narHash")
+                        .and_then(|v| v.to_str().ok())
+                        .map(|s| String::from_utf8(s.as_bytes().to_vec()).unwrap_or_default());
 
-                (url, rev, ref_, nar_hash, name)
-            };
+                    let name = attrs
+                        .select("name")
+                        .and_then(|v| v.to_str().ok())
+                        .map(|s| String::from_utf8(s.as_bytes().to_vec()).unwrap_or_default())
+                        .unwrap_or_else(|| "source".to_string());
 
-            // Resolve ref to rev if needed
-            let resolved_rev = match (rev.as_deref(), ref_.as_deref()) {
-                (Some(r), _) => r.to_string(),
-                (None, Some(ref_name)) => {
-                    crate::fetchers::resolve_git_ref(&url, ref_name)
-                        .map_err(|e| ErrorKind::SnixError(
-                            std::sync::Arc::new(std::io::Error::other(format!("fetchGit: {e}")))
-                        ))?
-                }
-                (None, None) => {
-                    // Default to HEAD
-                    crate::fetchers::resolve_git_ref(&url, "HEAD")
-                        .map_err(|e| ErrorKind::SnixError(
-                            std::sync::Arc::new(std::io::Error::other(format!("fetchGit: {e}")))
-                        ))?
-                }
-            };
+                    (url, rev, ref_, nar_hash, name)
+                };
 
-            // Compute store path from narHash if available
-            let store_path = if let Some(ref nar_hash_sri) = nar_hash {
-                use nix_compat::nixhash::{CAHash, HashAlgo, NixHash};
-                use nix_compat::store_path::build_ca_path;
+                // Resolve ref to rev if needed
+                let resolved_rev = match (rev.as_deref(), ref_.as_deref()) {
+                    (Some(r), _) => r.to_string(),
+                    (None, Some(ref_name)) => crate::fetchers::resolve_git_ref(&url, ref_name)
+                        .map_err(|e| {
+                            ErrorKind::SnixError(std::sync::Arc::new(std::io::Error::other(
+                                format!("fetchGit: {e}"),
+                            )))
+                        })?,
+                    (None, None) => {
+                        // Default to HEAD
+                        crate::fetchers::resolve_git_ref(&url, "HEAD").map_err(|e| {
+                            ErrorKind::SnixError(std::sync::Arc::new(std::io::Error::other(
+                                format!("fetchGit: {e}"),
+                            )))
+                        })?
+                    }
+                };
 
-                let nix_hash = NixHash::from_str(nar_hash_sri, Some(HashAlgo::Sha256))
-                    .map_err(|e| ErrorKind::SnixError(
-                        std::sync::Arc::new(std::io::Error::other(format!("fetchGit: invalid narHash: {e}")))
-                    ))?;
-                let ca_hash = CAHash::Nar(nix_hash);
-                let sp: nix_compat::store_path::StorePath<String> = build_ca_path(&name, &ca_hash, std::iter::empty::<&str>(), false)
-                    .map_err(|e| ErrorKind::SnixError(
-                        std::sync::Arc::new(std::io::Error::other(format!("fetchGit: store path: {e}")))
-                    ))?;
-                sp.to_absolute_path()
-            } else {
-                // Without narHash, use a hash of url+rev for the path name
-                use sha2::{Sha256, Digest};
-                let hash_input = format!("git-{}-{}", url, resolved_rev);
-                let h = Sha256::digest(hash_input.as_bytes());
-                let hex = data_encoding::HEXLOWER.encode(&h);
-                format!("/nix/store/{}-{}", &hex[..32], name)
-            };
+                // Compute store path from narHash if available
+                let store_path = if let Some(ref nar_hash_sri) = nar_hash {
+                    use nix_compat::nixhash::{CAHash, HashAlgo, NixHash};
+                    use nix_compat::store_path::build_ca_path;
 
-            // Fetch if not cached
-            crate::fetchers::fetch_git(
-                &url,
-                &resolved_rev,
-                &store_path,
-                nar_hash.as_deref(),
-            ).map_err(|e| ErrorKind::SnixError(
-                std::sync::Arc::new(std::io::Error::other(format!("fetchGit: {e}")))
-            ))?;
+                    let nix_hash = NixHash::from_str(nar_hash_sri, Some(HashAlgo::Sha256))
+                        .map_err(|e| {
+                            ErrorKind::SnixError(std::sync::Arc::new(std::io::Error::other(
+                                format!("fetchGit: invalid narHash: {e}"),
+                            )))
+                        })?;
+                    let ca_hash = CAHash::Nar(nix_hash);
+                    let sp: nix_compat::store_path::StorePath<String> =
+                        build_ca_path(&name, &ca_hash, std::iter::empty::<&str>(), false).map_err(
+                            |e| {
+                                ErrorKind::SnixError(std::sync::Arc::new(std::io::Error::other(
+                                    format!("fetchGit: store path: {e}"),
+                                )))
+                            },
+                        )?;
+                    sp.to_absolute_path()
+                } else {
+                    // Without narHash, use a hash of url+rev for the path name
+                    use sha2::{Digest, Sha256};
+                    let hash_input = format!("git-{}-{}", url, resolved_rev);
+                    let h = Sha256::digest(hash_input.as_bytes());
+                    let hex = data_encoding::HEXLOWER.encode(&h);
+                    format!("/nix/store/{}-{}", &hex[..32], name)
+                };
 
-            // Return store path with context
-            let context = NixContext::new()
-                .append(NixContextElement::Plain(store_path.clone()));
-            Ok(Value::String(NixString::new_context_from(context, store_path)))
-        });
+                // Fetch if not cached
+                crate::fetchers::fetch_git(&url, &resolved_rev, &store_path, nar_hash.as_deref())
+                    .map_err(|e| {
+                    ErrorKind::SnixError(std::sync::Arc::new(std::io::Error::other(format!(
+                        "fetchGit: {e}"
+                    ))))
+                })?;
+
+                // Return store path with context
+                let context =
+                    NixContext::new().append(NixContextElement::Plain(store_path.clone()));
+                Ok(Value::String(NixString::new_context_from(
+                    context, store_path,
+                )))
+            });
             fut
         })
     });
@@ -511,7 +527,10 @@ mod tests {
         let result = evaluate(
             r#"(derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; }).outPath"#,
         ).unwrap();
-        assert_eq!(result, r#""/nix/store/xpcvxsx5sw4rbq666blz6sxqlmsqphmr-foo""#);
+        assert_eq!(
+            result,
+            r#""/nix/store/xpcvxsx5sw4rbq666blz6sxqlmsqphmr-foo""#
+        );
     }
 
     #[test]
@@ -536,7 +555,10 @@ mod tests {
         let result = evaluate(
             r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; outputHashMode = "recursive"; outputHashAlgo = "sha256"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath"#,
         ).unwrap();
-        assert_eq!(result, r#""/nix/store/17wgs52s7kcamcyin4ja58njkf91ipq8-foo""#);
+        assert_eq!(
+            result,
+            r#""/nix/store/17wgs52s7kcamcyin4ja58njkf91ipq8-foo""#
+        );
     }
 
     #[test]
@@ -544,7 +566,10 @@ mod tests {
         let result = evaluate(
             r#"(builtins.derivation { name = "foo2"; builder = "/bin/sh"; system = "x86_64-linux"; outputHashMode = "recursive"; outputHashAlgo = "sha256"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath"#,
         ).unwrap();
-        assert_eq!(result, r#""/nix/store/gi0p8vd635vpk1nq029cz3aa3jkhar5k-foo2""#);
+        assert_eq!(
+            result,
+            r#""/nix/store/gi0p8vd635vpk1nq029cz3aa3jkhar5k-foo2""#
+        );
     }
 
     #[test]
@@ -552,7 +577,10 @@ mod tests {
         let result = evaluate(
             r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; outputHashMode = "flat"; outputHashAlgo = "sha256"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath"#,
         ).unwrap();
-        assert_eq!(result, r#""/nix/store/q4pkwkxdib797fhk22p0k3g1q32jmxvf-foo""#);
+        assert_eq!(
+            result,
+            r#""/nix/store/q4pkwkxdib797fhk22p0k3g1q32jmxvf-foo""#
+        );
     }
 
     #[test]
@@ -560,7 +588,10 @@ mod tests {
         let result = evaluate(
             r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; outputHashMode = "recursive"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath"#,
         ).unwrap();
-        assert_eq!(result, r#""/nix/store/17wgs52s7kcamcyin4ja58njkf91ipq8-foo""#);
+        assert_eq!(
+            result,
+            r#""/nix/store/17wgs52s7kcamcyin4ja58njkf91ipq8-foo""#
+        );
     }
 
     #[test]
@@ -568,7 +599,10 @@ mod tests {
         let result = evaluate(
             r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; outputHash = "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA="; }).outPath"#,
         ).unwrap();
-        assert_eq!(result, r#""/nix/store/q4pkwkxdib797fhk22p0k3g1q32jmxvf-foo""#);
+        assert_eq!(
+            result,
+            r#""/nix/store/q4pkwkxdib797fhk22p0k3g1q32jmxvf-foo""#
+        );
     }
 
     #[test]
@@ -576,7 +610,10 @@ mod tests {
         let result = evaluate(
             r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; }).outPath"#,
         ).unwrap();
-        assert_eq!(result, r#""/nix/store/xpcvxsx5sw4rbq666blz6sxqlmsqphmr-foo""#);
+        assert_eq!(
+            result,
+            r#""/nix/store/xpcvxsx5sw4rbq666blz6sxqlmsqphmr-foo""#
+        );
     }
 
     #[test]
@@ -584,7 +621,10 @@ mod tests {
         let result = evaluate(
             r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; outputs = ["foo" "bar"]; system = "x86_64-linux"; }).outPath"#,
         ).unwrap();
-        assert_eq!(result, r#""/nix/store/hkwdinvz2jpzgnjy9lv34d2zxvclj4s3-foo-foo""#);
+        assert_eq!(
+            result,
+            r#""/nix/store/hkwdinvz2jpzgnjy9lv34d2zxvclj4s3-foo-foo""#
+        );
     }
 
     #[test]
@@ -592,12 +632,16 @@ mod tests {
         let result = evaluate(
             r#"(builtins.derivation { name = "foo"; builder = "/bin/sh"; args = ["--foo" "42" "--bar"]; system = "x86_64-linux"; }).outPath"#,
         ).unwrap();
-        assert_eq!(result, r#""/nix/store/365gi78n2z7vwc1bvgb98k0a9cqfp6as-foo""#);
+        assert_eq!(
+            result,
+            r#""/nix/store/365gi78n2z7vwc1bvgb98k0a9cqfp6as-foo""#
+        );
     }
 
     #[test]
     fn test_derivation_with_dep() {
-        let result = evaluate(r#"
+        let result = evaluate(
+            r#"
             let
               bar = builtins.derivation {
                 name = "bar";
@@ -614,8 +658,13 @@ mod tests {
               system = ":";
               inherit bar;
             }).outPath
-        "#).unwrap();
-        assert_eq!(result, r#""/nix/store/5vyvcwah9l9kf07d52rcgdk70g2f4y13-foo""#);
+        "#,
+        )
+        .unwrap();
+        assert_eq!(
+            result,
+            r#""/nix/store/5vyvcwah9l9kf07d52rcgdk70g2f4y13-foo""#
+        );
     }
 
     #[test]
@@ -651,7 +700,8 @@ mod tests {
     fn test_derivation_type_attr() {
         let result = evaluate(
             r#"(derivation { name = "foo"; builder = "/bin/sh"; system = "x86_64-linux"; }).type"#,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(result, r#""derivation""#);
     }
 

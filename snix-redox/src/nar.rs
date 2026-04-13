@@ -147,7 +147,10 @@ fn extract_node_with_sink<S: ExtractSink>(
     sink: &mut S,
 ) -> io::Result<()> {
     match node {
-        reader::Node::File { executable, mut reader } => {
+        reader::Node::File {
+            executable,
+            mut reader,
+        } => {
             let size = sink.write_file(path, executable, &mut reader)?;
             manifest.push(ManifestEntry {
                 path: rel_path.to_string(),
@@ -223,10 +226,8 @@ fn raw_openat(root_fd: usize, path: &Path, flags: usize) -> io::Result<usize> {
 
 #[cfg(target_os = "redox")]
 fn raw_fchmod(fd: usize, mode: u16) -> io::Result<()> {
-    unsafe {
-        syscall::syscall2(syscall::SYS_FCHMOD, fd, mode as usize)
-    }
-    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SYS_FCHMOD: {e}")))?;
+    unsafe { syscall::syscall2(syscall::SYS_FCHMOD, fd, mode as usize) }
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SYS_FCHMOD: {e}")))?;
     Ok(())
 }
 
@@ -283,11 +284,18 @@ fn list_node(node: reader::Node<'_, '_>, prefix: &str) -> io::Result<()> {
     let mut out = stdout.lock();
 
     match node {
-        reader::Node::File { executable, mut reader } => {
+        reader::Node::File {
+            executable,
+            mut reader,
+        } => {
             let size = reader.len();
             // Consume the reader fully (NAR protocol requires this)
             reader.copy(&mut io::sink())?;
-            let mode = if executable { "-r-xr-xr-x" } else { "-r--r--r--" };
+            let mode = if executable {
+                "-r-xr-xr-x"
+            } else {
+                "-r--r--r--"
+            };
             writeln!(out, "{mode} {size:>10}  {prefix}")?;
         }
         reader::Node::Symlink { target } => {
@@ -521,7 +529,7 @@ mod tests {
         assert!(dest_path.join("keep").is_dir());
 
         // NAR is deterministic - same input bytes always produce same output
-        use sha2::{Sha256, Digest};
+        use sha2::{Digest, Sha256};
         let hash = Sha256::digest(nar_data);
         let hash_hex = format!("{:x}", hash);
 

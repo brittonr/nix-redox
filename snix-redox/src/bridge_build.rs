@@ -264,10 +264,7 @@ fn handle_response(
             Ok(())
         }
         "error" => {
-            let err = response
-                .error
-                .as_deref()
-                .unwrap_or("unknown build error");
+            let err = response.error.as_deref().unwrap_or("unknown build error");
             Err(format!("bridge build failed: {err}").into())
         }
         other => Err(format!("unexpected bridge response status: {other}").into()),
@@ -291,7 +288,13 @@ fn generate_build_id(name: &str) -> String {
     // Sanitize name for use in filename
     let safe_name: String = name
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '-' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
     let pid = std::process::id();
     format!("build-{safe_name}-{pid}")
@@ -392,10 +395,7 @@ mod tests {
     #[test]
     fn request_build_drv_serializes() {
         let mut outputs = BTreeMap::new();
-        outputs.insert(
-            "out".to_string(),
-            "/nix/store/abc123-hello".to_string(),
-        );
+        outputs.insert("out".to_string(), "/nix/store/abc123-hello".to_string());
 
         let req = DrvBuildRequest {
             request_type: "build-drv".to_string(),
@@ -444,10 +444,7 @@ mod tests {
         let resp: DrvBuildResponse = serde_json::from_str(json).unwrap();
         assert_eq!(resp.status, "error");
         assert!(resp.outputs.is_empty());
-        assert_eq!(
-            resp.error.unwrap(),
-            "attribute 'nope' not found"
-        );
+        assert_eq!(resp.error.unwrap(), "attribute 'nope' not found");
     }
 
     #[test]
@@ -534,7 +531,9 @@ mod tests {
             .outputs
             .iter()
             .filter_map(|(name, out)| {
-                out.path.as_ref().map(|p| (name.clone(), p.to_absolute_path()))
+                out.path
+                    .as_ref()
+                    .map(|p| (name.clone(), p.to_absolute_path()))
             })
             .collect();
 

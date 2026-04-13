@@ -129,11 +129,7 @@ impl HandleTable {
     /// Open a file eagerly (does filesystem I/O).
     ///
     /// ⚠️ NOT safe from within Redox scheme handlers. Use `open_file_lazy`.
-    pub fn open_file(
-        &mut self,
-        real_path: PathBuf,
-        scheme_path: String,
-    ) -> io::Result<usize> {
+    pub fn open_file(&mut self, real_path: PathBuf, scheme_path: String) -> io::Result<usize> {
         let data = std::fs::read(&real_path)?;
         let size = data.len() as u64;
 
@@ -188,12 +184,7 @@ impl HandleTable {
     ///
     /// On first read, loads file content via the I/O worker thread
     /// (or direct I/O as fallback). Subsequent reads are from cache.
-    pub fn read(
-        &mut self,
-        id: usize,
-        buf: &mut [u8],
-        offset: u64,
-    ) -> io::Result<usize> {
+    pub fn read(&mut self, id: usize, buf: &mut [u8], offset: u64) -> io::Result<usize> {
         match self.handles.get_mut(&id) {
             Some(Handle::File(fh)) => {
                 if fh.content.is_none() {

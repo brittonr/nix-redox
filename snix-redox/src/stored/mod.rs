@@ -24,8 +24,8 @@
 //! filesystem operations at `/nix/store/`.
 
 pub mod handles;
-pub mod resolve;
 pub mod lazy;
+pub mod resolve;
 
 #[cfg(target_os = "redox")]
 pub mod scheme;
@@ -187,7 +187,8 @@ impl StoreDaemon {
         let full_path = format!("{}/{}", self.config.store_dir, store_path_name);
         if let Ok(Some(info)) = self.db.get(&full_path) {
             if !info.files.is_empty() {
-                self.manifests.insert(store_path_name.to_string(), info.files);
+                self.manifests
+                    .insert(store_path_name.to_string(), info.files);
             }
         }
     }
@@ -263,7 +264,8 @@ impl StoreDaemon {
                 "stored: dynamically loaded manifest for {store_path_name} ({} entries)",
                 info.files.len()
             );
-            self.manifests.insert(store_path_name.to_string(), info.files);
+            self.manifests
+                .insert(store_path_name.to_string(), info.files);
             true
         } else {
             eprintln!("stored: pathinfo for {store_path_name} has no file manifest");
@@ -289,7 +291,8 @@ impl StoreDaemon {
     /// Remember or update the expected NAR hash for a store path.
     pub fn remember_nar_hash(&mut self, store_path_name: &str, nar_hash: &str) {
         self.remember_store_path(store_path_name);
-        self.nar_hashes.insert(store_path_name.to_string(), nar_hash.to_string());
+        self.nar_hashes
+            .insert(store_path_name.to_string(), nar_hash.to_string());
     }
 
     /// Return registered store path names in sorted order.
@@ -303,11 +306,7 @@ impl StoreDaemon {
     /// - `Some(true)` if the manifest contains the exact path or an implied dir
     /// - `Some(false)` if the manifest is loaded and the path is absent
     /// - `None` if no manifest is loaded for this store path
-    pub fn manifest_contains_path(
-        &self,
-        store_path_name: &str,
-        subpath: &str,
-    ) -> Option<bool> {
+    pub fn manifest_contains_path(&self, store_path_name: &str, subpath: &str) -> Option<bool> {
         let manifest = self.manifests.get(store_path_name)?;
         let subpath = subpath.trim_matches('/');
 
@@ -338,11 +337,7 @@ impl StoreDaemon {
     /// (meaning files exist inside it). Returns `true` as fallback if
     /// no manifest is available (safer to treat as dir than to attempt
     /// a filesystem open that could hang the event loop).
-    pub fn is_directory_in_manifest(
-        &self,
-        store_path_name: &str,
-        subpath: &str,
-    ) -> bool {
+    pub fn is_directory_in_manifest(&self, store_path_name: &str, subpath: &str) -> bool {
         let manifest = match self.manifests.get(store_path_name) {
             Some(m) => m,
             // No manifest → assume directory (safe default: open_dir_unchecked
@@ -376,11 +371,7 @@ impl StoreDaemon {
     /// Returns `(size, executable)`. Falls back to `(0, false)` if the
     /// entry isn't in the manifest (the lazy file handle will get real
     /// metadata on first read).
-    pub fn file_metadata_from_manifest(
-        &self,
-        store_path_name: &str,
-        subpath: &str,
-    ) -> (u64, bool) {
+    pub fn file_metadata_from_manifest(&self, store_path_name: &str, subpath: &str) -> (u64, bool) {
         let manifest = match self.manifests.get(store_path_name) {
             Some(m) => m,
             None => return (0, false),
@@ -424,21 +415,26 @@ impl StoreDaemon {
             if let Some(slash_pos) = rel.find('/') {
                 // This is a nested entry — the directory itself is a child.
                 let dir_name = &rel[..slash_pos];
-                entries.entry(dir_name.to_string()).or_insert(ManifestDirEntry {
-                    name: dir_name.to_string(),
-                    is_dir: true,
-                    is_symlink: false,
-                    size: 0,
-                    executable: false,
-                });
+                entries
+                    .entry(dir_name.to_string())
+                    .or_insert(ManifestDirEntry {
+                        name: dir_name.to_string(),
+                        is_dir: true,
+                        is_symlink: false,
+                        size: 0,
+                        executable: false,
+                    });
             } else if !rel.is_empty() {
-                entries.insert(rel.to_string(), ManifestDirEntry {
-                    name: rel.to_string(),
-                    is_dir: entry.entry_type == "dir",
-                    is_symlink: entry.entry_type == "symlink",
-                    size: entry.size,
-                    executable: entry.executable,
-                });
+                entries.insert(
+                    rel.to_string(),
+                    ManifestDirEntry {
+                        name: rel.to_string(),
+                        is_dir: entry.entry_type == "dir",
+                        is_symlink: entry.entry_type == "symlink",
+                        size: entry.size,
+                        executable: entry.executable,
+                    },
+                );
             }
         }
 
@@ -480,23 +476,16 @@ mod tests {
     }
 
     /// Helper: create a StoreDaemon with pre-loaded manifests (no PathInfoDb).
-    fn daemon_with_manifest(
-        store_path_name: &str,
-        entries: Vec<ManifestEntry>,
-    ) -> StoreDaemon {
+    fn daemon_with_manifest(store_path_name: &str, entries: Vec<ManifestEntry>) -> StoreDaemon {
         let mut manifests = BTreeMap::new();
         manifests.insert(store_path_name.to_string(), entries);
         StoreDaemon {
-            db: PathInfoDb::open_at(
-                std::path::PathBuf::from("/tmp/snix-test-nonexistent"),
-            )
-            .unwrap_or_else(|_| {
-                std::fs::create_dir_all("/tmp/snix-test-stored-db").ok();
-                PathInfoDb::open_at(
-                    std::path::PathBuf::from("/tmp/snix-test-stored-db"),
-                )
-                .unwrap()
-            }),
+            db: PathInfoDb::open_at(std::path::PathBuf::from("/tmp/snix-test-nonexistent"))
+                .unwrap_or_else(|_| {
+                    std::fs::create_dir_all("/tmp/snix-test-stored-db").ok();
+                    PathInfoDb::open_at(std::path::PathBuf::from("/tmp/snix-test-stored-db"))
+                        .unwrap()
+                }),
             handles: handles::HandleTable::new(),
             extracting: Mutex::new(std::collections::HashSet::new()),
             config: StoredConfig::default(),
@@ -509,28 +498,26 @@ mod tests {
 
     #[test]
     fn is_directory_explicit_dir_entry() {
-        let d = daemon_with_manifest("abc-pkg", vec![
-            make_entry("bin", "dir"),
-            make_entry("bin/rg", "file"),
-        ]);
+        let d = daemon_with_manifest(
+            "abc-pkg",
+            vec![make_entry("bin", "dir"), make_entry("bin/rg", "file")],
+        );
         assert!(d.is_directory_in_manifest("abc-pkg", "bin"));
     }
 
     #[test]
     fn is_directory_implicit_from_children() {
         // No explicit "bin" dir entry, but "bin/rg" implies "bin" is a directory.
-        let d = daemon_with_manifest("abc-pkg", vec![
-            make_entry("bin/rg", "file"),
-        ]);
+        let d = daemon_with_manifest("abc-pkg", vec![make_entry("bin/rg", "file")]);
         assert!(d.is_directory_in_manifest("abc-pkg", "bin"));
     }
 
     #[test]
     fn is_not_directory_for_file() {
-        let d = daemon_with_manifest("abc-pkg", vec![
-            make_entry("bin", "dir"),
-            make_entry("bin/rg", "file"),
-        ]);
+        let d = daemon_with_manifest(
+            "abc-pkg",
+            vec![make_entry("bin", "dir"), make_entry("bin/rg", "file")],
+        );
         assert!(!d.is_directory_in_manifest("abc-pkg", "bin/rg"));
     }
 
@@ -543,9 +530,7 @@ mod tests {
 
     #[test]
     fn is_directory_nested_subpath() {
-        let d = daemon_with_manifest("abc-pkg", vec![
-            make_entry("share/man/man1/rg.1", "file"),
-        ]);
+        let d = daemon_with_manifest("abc-pkg", vec![make_entry("share/man/man1/rg.1", "file")]);
         assert!(d.is_directory_in_manifest("abc-pkg", "share"));
         assert!(d.is_directory_in_manifest("abc-pkg", "share/man"));
         assert!(d.is_directory_in_manifest("abc-pkg", "share/man/man1"));
@@ -554,9 +539,7 @@ mod tests {
 
     #[test]
     fn is_directory_trims_slashes() {
-        let d = daemon_with_manifest("abc-pkg", vec![
-            make_entry("bin/rg", "file"),
-        ]);
+        let d = daemon_with_manifest("abc-pkg", vec![make_entry("bin/rg", "file")]);
         assert!(d.is_directory_in_manifest("abc-pkg", "bin/"));
         assert!(d.is_directory_in_manifest("abc-pkg", "/bin/"));
         assert!(d.is_directory_in_manifest("abc-pkg", "/bin"));
@@ -564,12 +547,15 @@ mod tests {
 
     #[test]
     fn list_from_manifest_root() {
-        let d = daemon_with_manifest("abc-pkg", vec![
-            make_entry("bin", "dir"),
-            make_entry("bin/rg", "file"),
-            make_entry("share", "dir"),
-            make_entry("share/man/man1/rg.1", "file"),
-        ]);
+        let d = daemon_with_manifest(
+            "abc-pkg",
+            vec![
+                make_entry("bin", "dir"),
+                make_entry("bin/rg", "file"),
+                make_entry("share", "dir"),
+                make_entry("share/man/man1/rg.1", "file"),
+            ],
+        );
         let entries = d.list_from_manifest("abc-pkg", "").unwrap();
         let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, vec!["bin", "share"]);
@@ -577,11 +563,14 @@ mod tests {
 
     #[test]
     fn list_from_manifest_subdir() {
-        let d = daemon_with_manifest("abc-pkg", vec![
-            make_entry("bin", "dir"),
-            make_entry("bin/rg", "file"),
-            make_entry("bin/rg-readme", "file"),
-        ]);
+        let d = daemon_with_manifest(
+            "abc-pkg",
+            vec![
+                make_entry("bin", "dir"),
+                make_entry("bin/rg", "file"),
+                make_entry("bin/rg-readme", "file"),
+            ],
+        );
         let entries = d.list_from_manifest("abc-pkg", "bin").unwrap();
         let names: Vec<&str> = entries.iter().map(|e| e.name.as_str()).collect();
         assert_eq!(names, vec!["rg", "rg-readme"]);
@@ -589,9 +578,7 @@ mod tests {
 
     #[test]
     fn load_manifest_via_worker_already_cached() {
-        let mut d = daemon_with_manifest("abc-pkg", vec![
-            make_entry("bin/rg", "file"),
-        ]);
+        let mut d = daemon_with_manifest("abc-pkg", vec![make_entry("bin/rg", "file")]);
         // Already cached → returns true without I/O.
         assert!(d.load_manifest_via_worker("abc-pkg"));
         assert!(d.manifests.contains_key("abc-pkg"));
@@ -629,16 +616,14 @@ mod tests {
         let store_path = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg";
         let info = crate::pathinfo::PathInfo {
             store_path: store_path.to_string(),
-            nar_hash: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            nar_hash: "0000000000000000000000000000000000000000000000000000000000000000"
+                .to_string(),
             nar_size: 100,
             references: vec![],
             deriver: None,
             registration_time: "2026-01-01T00:00:00Z".to_string(),
             signatures: vec![],
-            files: vec![
-                make_entry("bin", "dir"),
-                make_entry("bin/hello", "file"),
-            ],
+            files: vec![make_entry("bin", "dir"), make_entry("bin/hello", "file")],
         };
         // register() writes the full PathInfo JSON including the files field.
         db.register(&info).unwrap();
@@ -656,15 +641,22 @@ mod tests {
         };
 
         // Manifest not loaded yet.
-        assert!(!d.manifests.contains_key("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg"));
+        assert!(!d
+            .manifests
+            .contains_key("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg"));
 
         // Dynamic load via worker (falls back to direct read since no worker).
         assert!(d.load_manifest_via_worker("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg"));
 
         // Now the manifest should be cached.
-        assert!(d.manifests.contains_key("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg"));
+        assert!(d
+            .manifests
+            .contains_key("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg"));
         assert!(d.is_registered_path("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg"));
-        let manifest = d.manifests.get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg").unwrap();
+        let manifest = d
+            .manifests
+            .get("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-test-pkg")
+            .unwrap();
         assert_eq!(manifest.len(), 2);
         assert_eq!(manifest[0].path, "bin");
         assert_eq!(manifest[1].path, "bin/hello");
@@ -672,10 +664,10 @@ mod tests {
 
     #[test]
     fn manifest_contains_path_reports_present_and_missing() {
-        let d = daemon_with_manifest("abc-pkg", vec![
-            make_entry("bin", "dir"),
-            make_entry("bin/rg", "file"),
-        ]);
+        let d = daemon_with_manifest(
+            "abc-pkg",
+            vec![make_entry("bin", "dir"), make_entry("bin/rg", "file")],
+        );
 
         assert_eq!(d.manifest_contains_path("abc-pkg", "bin"), Some(true));
         assert_eq!(d.manifest_contains_path("abc-pkg", "bin/rg"), Some(true));

@@ -141,9 +141,7 @@ pub fn rebuild_via_bridge(
             }
             println!();
 
-            let manifest_value = response
-                .manifest
-                .ok_or("response missing manifest field")?;
+            let manifest_value = response.manifest.ok_or("response missing manifest field")?;
             let new_manifest: Manifest = serde_json::from_value(manifest_value)?;
 
             // Install packages from shared cache

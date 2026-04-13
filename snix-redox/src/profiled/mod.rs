@@ -78,15 +78,16 @@ impl ProfileDaemon {
             }
         }
 
-        Ok(Self { profiles, config, manifests })
+        Ok(Self {
+            profiles,
+            config,
+            manifests,
+        })
     }
 
     /// Create a profile daemon for testing with a custom profiles directory.
     #[cfg(test)]
-    pub fn new_at(
-        profiles_dir: &str,
-        store_dir: &str,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new_at(profiles_dir: &str, store_dir: &str) -> Result<Self, Box<dyn std::error::Error>> {
         let config = ProfiledConfig {
             profiles_dir: profiles_dir.to_string(),
             store_dir: store_dir.to_string(),

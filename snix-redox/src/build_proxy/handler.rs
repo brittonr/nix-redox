@@ -31,7 +31,9 @@ use redox_scheme::{CallerCtx, OpenResult};
 use syscall::data::Stat;
 use syscall::dirent::{DirEntry as RedoxDirEntry, DirentBuf, DirentKind};
 use syscall::error::{Error, Result, EACCES, EBADF, EIO, EISDIR, ENOENT, ENOTDIR};
-use syscall::flag::{O_ACCMODE, O_APPEND, O_CREAT, O_DIRECTORY, O_EXCL, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY};
+use syscall::flag::{
+    O_ACCMODE, O_APPEND, O_CREAT, O_DIRECTORY, O_EXCL, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY,
+};
 use syscall::schemev2::NewFdFlags;
 
 use super::allow_list::{AllowList, Permission};
@@ -93,11 +95,7 @@ impl OpenFlags {
 
     /// Build redoxfs-compatible flags for the real open via root_fd.
     pub fn to_real_flags(&self) -> usize {
-        let mut f = if self.write {
-            O_RDWR
-        } else {
-            O_RDONLY
-        };
+        let mut f = if self.write { O_RDWR } else { O_RDONLY };
         if self.create {
             f |= O_CREAT;
         }
@@ -189,12 +187,7 @@ fn raw_fstat(fd: usize) -> Result<Stat> {
     let stat_ptr = &mut stat as *mut Stat as usize;
     let stat_size = core::mem::size_of::<Stat>();
     unsafe {
-        syscall::syscall3(
-            syscall::SYS_FSTAT,
-            fd,
-            stat_ptr,
-            stat_size,
-        )?;
+        syscall::syscall3(syscall::SYS_FSTAT, fd, stat_ptr, stat_size)?;
     }
     Ok(stat)
 }
@@ -403,7 +396,10 @@ impl SchemeSync for BuildFsHandler {
             perm
         };
 
-        eprintln!("buildfs: openat {:?} flags={:?} perm={:?}", abs_path, oflags, effective_perm);
+        eprintln!(
+            "buildfs: openat {:?} flags={:?} perm={:?}",
+            abs_path, oflags, effective_perm
+        );
         if effective_perm == Permission::Denied {
             return Err(Error::new(EACCES));
         }
@@ -504,7 +500,13 @@ impl SchemeSync for BuildFsHandler {
     ) -> Result<usize> {
         match self.handles.get_mut(&id) {
             Some(ProxyHandle::File(fh)) => {
-                eprintln!("buildfs: read id={} len={} offset={} path={:?}", id, buf.len(), offset, fh.scheme_path);
+                eprintln!(
+                    "buildfs: read id={} len={} offset={} path={:?}",
+                    id,
+                    buf.len(),
+                    offset,
+                    fh.scheme_path
+                );
                 let start = std::time::Instant::now();
                 fh.real_file
                     .seek(SeekFrom::Start(offset))
@@ -514,7 +516,10 @@ impl SchemeSync for BuildFsHandler {
                 if elapsed.as_secs() >= IO_TIMEOUT_SECS {
                     eprintln!(
                         "buildfs: WARNING: read took {:.1}s on {:?} (id={} len={})",
-                        elapsed.as_secs_f64(), fh.real_path, id, buf.len()
+                        elapsed.as_secs_f64(),
+                        fh.real_path,
+                        id,
+                        buf.len()
                     );
                 }
                 Ok(n)
@@ -558,7 +563,10 @@ impl SchemeSync for BuildFsHandler {
                 if elapsed.as_secs() >= IO_TIMEOUT_SECS {
                     eprintln!(
                         "buildfs: WARNING: write took {:.1}s on {:?} (id={} len={})",
-                        elapsed.as_secs_f64(), fh.real_path, id, buf.len()
+                        elapsed.as_secs_f64(),
+                        fh.real_path,
+                        id,
+                        buf.len()
                     );
                 }
                 Ok(n)
@@ -678,7 +686,10 @@ impl SchemeSync for BuildFsHandler {
             None => return Err(Error::new(EBADF)),
         };
 
-        eprintln!("buildfs: getdents {:?} offset={} under_allowed={}", dir_path, opaque_offset, is_under_allowed);
+        eprintln!(
+            "buildfs: getdents {:?} offset={} under_allowed={}",
+            dir_path, opaque_offset, is_under_allowed
+        );
 
         // Collect visible entries.
         // For directories under an allowed prefix: read real entries unfiltered.
@@ -718,11 +729,7 @@ impl SchemeSync for BuildFsHandler {
                 use std::os::unix::io::AsRawFd;
                 let raw_fd = fh.real_file.as_raw_fd() as usize;
                 unsafe {
-                    syscall::syscall2(
-                        syscall::SYS_FCHMOD,
-                        raw_fd,
-                        new_mode as usize,
-                    )?;
+                    syscall::syscall2(syscall::SYS_FCHMOD, raw_fd, new_mode as usize)?;
                 }
                 Ok(())
             }
@@ -733,11 +740,7 @@ impl SchemeSync for BuildFsHandler {
                 let open_path = if clean.is_empty() { "." } else { clean };
                 if let Ok(dir_fd) = raw_openat(self.root_fd, open_path, O_RDONLY | O_DIRECTORY) {
                     let result = unsafe {
-                        syscall::syscall2(
-                            syscall::SYS_FCHMOD,
-                            dir_fd,
-                            new_mode as usize,
-                        )
+                        syscall::syscall2(syscall::SYS_FCHMOD, dir_fd, new_mode as usize)
                     };
                     raw_close(dir_fd);
                     result?;
@@ -770,7 +773,12 @@ impl SchemeSync for BuildFsHandler {
         }
     }
 
-    fn fevent(&mut self, id: usize, _flags: syscall::flag::EventFlags, _ctx: &CallerCtx) -> Result<syscall::flag::EventFlags> {
+    fn fevent(
+        &mut self,
+        id: usize,
+        _flags: syscall::flag::EventFlags,
+        _ctx: &CallerCtx,
+    ) -> Result<syscall::flag::EventFlags> {
         match self.handles.get(&id) {
             Some(ProxyHandle::File(fh)) => {
                 let mut events = syscall::flag::EventFlags::EVENT_READ;
@@ -779,9 +787,7 @@ impl SchemeSync for BuildFsHandler {
                 }
                 Ok(events)
             }
-            Some(ProxyHandle::Dir(_)) => {
-                Ok(syscall::flag::EventFlags::EVENT_READ)
-            }
+            Some(ProxyHandle::Dir(_)) => Ok(syscall::flag::EventFlags::EVENT_READ),
             None => Err(Error::new(EBADF)),
         }
     }
@@ -836,10 +842,8 @@ impl BuildFsHandler {
     fn list_visible_children(&self, dir_path: &Path) -> Vec<(String, DirentKind)> {
         // Read real entries once, build a kind map for later.
         let real = read_real_dir_entries(self.root_fd, dir_path);
-        let real_map: HashMap<&str, DirentKind> = real
-            .iter()
-            .map(|(n, k)| (n.as_str(), *k))
-            .collect();
+        let real_map: HashMap<&str, DirentKind> =
+            real.iter().map(|(n, k)| (n.as_str(), *k)).collect();
 
         // Collect visible names. Start with allow-list children
         // (handles paths that don't exist on disk yet, like $out).
@@ -935,15 +939,10 @@ fn parse_raw_dirents(buf: &[u8], entries: &mut Vec<(String, DirentKind)>) {
     let mut pos = 0;
     while pos + HEADER_SIZE <= buf.len() {
         // Read fields manually to avoid alignment issues with packed structs.
-        let _inode = u64::from_ne_bytes(
-            buf[pos..pos + 8].try_into().unwrap_or([0; 8]),
-        );
-        let _next_opaque_id = u64::from_ne_bytes(
-            buf[pos + 8..pos + 16].try_into().unwrap_or([0; 8]),
-        );
-        let record_len = u16::from_ne_bytes(
-            buf[pos + 16..pos + 18].try_into().unwrap_or([0; 2]),
-        );
+        let _inode = u64::from_ne_bytes(buf[pos..pos + 8].try_into().unwrap_or([0; 8]));
+        let _next_opaque_id =
+            u64::from_ne_bytes(buf[pos + 8..pos + 16].try_into().unwrap_or([0; 8]));
+        let record_len = u16::from_ne_bytes(buf[pos + 16..pos + 18].try_into().unwrap_or([0; 2]));
         let kind_byte = buf[pos + 18];
 
         if record_len == 0 || pos + record_len as usize > buf.len() {
@@ -963,8 +962,7 @@ fn parse_raw_dirents(buf: &[u8], entries: &mut Vec<(String, DirentKind)>) {
             };
             if let Ok(name) = core::str::from_utf8(name_trimmed) {
                 if !name.is_empty() && name != "." && name != ".." {
-                    let kind = DirentKind::try_from_raw(kind_byte)
-                        .unwrap_or(DirentKind::Regular);
+                    let kind = DirentKind::try_from_raw(kind_byte).unwrap_or(DirentKind::Regular);
                     entries.push((name.to_string(), kind));
                 }
             }

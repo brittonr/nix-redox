@@ -162,10 +162,7 @@ pub fn check(vendor_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
 /// Source bundles (from `snix-source-bundle.nix`) are in the Nix store
 /// and read-only. This creates a writable working copy with the vendor
 /// directory and cargo config ready to go.
-pub fn link(
-    store_path: &str,
-    dest: Option<&str>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn link(store_path: &str, dest: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
     let src = Path::new(store_path);
     if !src.is_dir() {
         return Err(format!("source bundle not found: {store_path}").into());
@@ -233,9 +230,7 @@ pub fn run(command: &VendorCommand) -> Result<(), Box<dyn std::error::Error>> {
         } => setup(vendor_dir, project_dir.as_deref(), target.as_deref()),
         VendorCommand::Info { vendor_dir } => info(vendor_dir),
         VendorCommand::Check { vendor_dir } => check(vendor_dir),
-        VendorCommand::Link { store_path, dest } => {
-            link(store_path, dest.as_deref())
-        }
+        VendorCommand::Link { store_path, dest } => link(store_path, dest.as_deref()),
     }
 }
 

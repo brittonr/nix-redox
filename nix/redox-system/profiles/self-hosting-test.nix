@@ -3348,6 +3348,99 @@ let
                           fi
                         '
 
+                        # ── Live rebuild cycle test ──
+                        # Runs last because it mutates the live system state.
+                        echo "--- rebuild-cycle: hostname + inline etc file ---"
+                        /nix/system/profile/bin/bash -c '
+                          CFG=/etc/redox-system/configuration.nix
+                          GENDIR=/etc/redox-system/generations
+                          BEFORE=$(ls "$GENDIR" 2>/dev/null | wc -l)
+                          echo "$BEFORE" > /tmp/rebuild-cycle-gen-before
+
+                          if [ ! -f "$CFG" ]; then
+                            echo 97 > /tmp/rebuild-cycle-exit
+                            echo "missing $CFG" > /tmp/rebuild-cycle-err
+                            exit 0
+                          fi
+
+                          printf "%s\n" \
+                            "{" \
+                            "  hostname = \"self-hosting-rebuild\";" \
+                            "  files = {" \
+                            "    \"etc/self-hosting/rebuild-proof.txt\" = {" \
+                            "      text = \"self-hosting-rebuild-ok\\n\";" \
+                            "      mode = \"0600\";" \
+                            "    };" \
+                            "  };" \
+                            "}" > "$CFG"
+
+                          if ! grep -q "self-hosting-rebuild" "$CFG" || ! grep -q "rebuild-proof.txt" "$CFG"; then
+                            echo 98 > /tmp/rebuild-cycle-exit
+                            echo "configuration edit failed" > /tmp/rebuild-cycle-err
+                            cat "$CFG" > /tmp/rebuild-cycle-out
+                            exit 0
+                          fi
+
+                          /bin/snix system rebuild > /tmp/rebuild-cycle-out 2>/tmp/rebuild-cycle-err
+                          echo $? > /tmp/rebuild-cycle-exit
+                        '
+
+                        /nix/system/profile/bin/bash -c '
+                          EXIT=$(cat /tmp/rebuild-cycle-exit 2>/dev/null || echo 99)
+                          if [ "$EXIT" -ne 0 ]; then
+                            echo "FUNC_TEST:rebuild-hostname:FAIL:rebuild exit=$EXIT"
+                            echo "FUNC_TEST:rebuild-etc-file:FAIL:rebuild exit=$EXIT"
+                            echo "FUNC_TEST:rebuild-generation:FAIL:rebuild exit=$EXIT"
+                            echo "=== rebuild-cycle stdout ==="
+                            cat /tmp/rebuild-cycle-out 2>/dev/null || true
+                            echo "=== rebuild-cycle stderr ==="
+                            cat /tmp/rebuild-cycle-err 2>/dev/null || true
+                            exit 0
+                          fi
+
+                          INFO_OUT=$(/bin/snix system info 2>/tmp/rebuild-cycle-info-err)
+                          HOSTNAME_OK=0
+                          if [ -f /etc/hostname ] && [ "$(cat /etc/hostname)" = "self-hosting-rebuild" ]; then
+                            if printf "%s\n" "$INFO_OUT" | grep -q "self-hosting-rebuild"; then
+                              HOSTNAME_OK=1
+                            fi
+                          fi
+                          if [ "$HOSTNAME_OK" -eq 1 ]; then
+                            echo "FUNC_TEST:rebuild-hostname:PASS"
+                          else
+                            echo "FUNC_TEST:rebuild-hostname:FAIL:hostname not applied"
+                            cat /etc/hostname 2>/dev/null || true
+                            printf "%s\n" "$INFO_OUT"
+                            cat /tmp/rebuild-cycle-info-err 2>/dev/null || true
+                          fi
+
+                          FILE=/etc/self-hosting/rebuild-proof.txt
+                          FILE_MODE=$(ls -l "$FILE" 2>/dev/null || true)
+                          if [ -f "$FILE" ] && [ "$(cat "$FILE")" = "self-hosting-rebuild-ok" ] && \
+                             [[ "$FILE_MODE" == -rw-------* ]]; then
+                            echo "FUNC_TEST:rebuild-etc-file:PASS"
+                          else
+                            echo "FUNC_TEST:rebuild-etc-file:FAIL:file missing, wrong contents, or wrong mode"
+                            cat "$FILE" 2>/dev/null || true
+                            printf "%s\n" "$FILE_MODE"
+                          fi
+
+                          AFTER=$(ls /etc/redox-system/generations 2>/dev/null | wc -l)
+                          BEFORE=$(cat /tmp/rebuild-cycle-gen-before 2>/dev/null || echo 0)
+                          /bin/snix system generations > /tmp/rebuild-cycle-gens 2>/tmp/rebuild-cycle-gens-err
+                          CURRENT=$(sed -n "s/.*\"id\": *\([0-9][0-9]*\).*/\1/p" /etc/redox-system/manifest.json | head -1)
+                          GENS=$(cat /tmp/rebuild-cycle-gens 2>/dev/null || true)
+                          if [ "$AFTER" -ge 2 ] && [ "$AFTER" -gt "$BEFORE" ] && [ -n "$CURRENT" ] && \
+                             [[ "$GENS" == *"Current generation: $CURRENT"* ]] && \
+                             [[ "$GENS" == *"$CURRENT *"* ]]; then
+                            echo "FUNC_TEST:rebuild-generation:PASS"
+                          else
+                            echo "FUNC_TEST:rebuild-generation:FAIL:before=$BEFORE after=$AFTER current=$CURRENT"
+                            cat /tmp/rebuild-cycle-gens 2>/dev/null || true
+                            cat /tmp/rebuild-cycle-gens-err 2>/dev/null || true
+                          fi
+                        '
+
                         echo "FUNC_TESTS_COMPLETE"
   '';
 

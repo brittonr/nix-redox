@@ -52,15 +52,11 @@ impl BuildFsProxy {
     ///
     /// After this returns, the proxy is running and ready to handle
     /// requests from a child that calls `setns(child_ns_fd)`.
-    pub fn start(
-        child_ns_fd: usize,
-        allow_list: AllowList,
-    ) -> Result<Self, BuildFsProxyError> {
+    pub fn start(child_ns_fd: usize, allow_list: AllowList) -> Result<Self, BuildFsProxyError> {
         // Create a scheme socket.
         eprintln!("buildfs: creating socket");
-        let socket = Socket::create().map_err(|e| {
-            BuildFsProxyError::SetupFailed(format!("Socket::create: {e}"))
-        })?;
+        let socket = Socket::create()
+            .map_err(|e| BuildFsProxyError::SetupFailed(format!("Socket::create: {e}")))?;
         eprintln!("buildfs: socket created");
 
         // Get the raw fd before moving the socket into the thread.
@@ -71,25 +67,20 @@ impl BuildFsProxy {
         let mut state = SchemeState::new();
 
         // Get the root handle ID from the scheme handler.
-        let cap_id = handler.scheme_root().map_err(|e| {
-            BuildFsProxyError::SetupFailed(format!("scheme_root: {e}"))
-        })?;
+        let cap_id = handler
+            .scheme_root()
+            .map_err(|e| BuildFsProxyError::SetupFailed(format!("scheme_root: {e}")))?;
 
         // Register as "file" in the CHILD namespace.
         eprintln!("buildfs: creating cap fd");
-        let cap_fd = socket.create_this_scheme_fd(0, cap_id, 0, 0).map_err(|e| {
-            BuildFsProxyError::SetupFailed(
-                format!("create_this_scheme_fd: {e}"),
-            )
-        })?;
+        let cap_fd = socket
+            .create_this_scheme_fd(0, cap_id, 0, 0)
+            .map_err(|e| BuildFsProxyError::SetupFailed(format!("create_this_scheme_fd: {e}")))?;
 
         eprintln!("buildfs: registering in ns_fd={}", child_ns_fd);
-        libredox::call::register_scheme_to_ns(child_ns_fd, "file", cap_fd)
-            .map_err(|e| {
-                BuildFsProxyError::SetupFailed(
-                    format!("register_scheme_to_ns('file'): {e}"),
-                )
-            })?;
+        libredox::call::register_scheme_to_ns(child_ns_fd, "file", cap_fd).map_err(|e| {
+            BuildFsProxyError::SetupFailed(format!("register_scheme_to_ns('file'): {e}"))
+        })?;
         eprintln!("buildfs: registered");
 
         // Close cap_fd now that registration is complete. The kernel
@@ -105,9 +96,8 @@ impl BuildFsProxy {
         // Must be done AFTER socket creation but BEFORE starting the event loop.
         // This fd bypasses initnsmgr for file I/O in the handler.
         eprintln!("buildfs: pre-opening /");
-        let root_file = File::open("/").map_err(|e| {
-            BuildFsProxyError::SetupFailed(format!("open /: {e}"))
-        })?;
+        let root_file =
+            File::open("/").map_err(|e| BuildFsProxyError::SetupFailed(format!("open /: {e}")))?;
         let root_fd = root_file.as_raw_fd() as usize;
         eprintln!("buildfs: root_fd={}", root_fd);
         handler.root_fd = root_fd;
@@ -140,9 +130,7 @@ impl BuildFsProxy {
                     eprintln!("buildfs: proxy thread panicked: {e:?}");
                 }
             })
-            .map_err(|e| {
-                BuildFsProxyError::SetupFailed(format!("thread spawn: {e}"))
-            })?;
+            .map_err(|e| BuildFsProxyError::SetupFailed(format!("thread spawn: {e}")))?;
 
         Ok(Self {
             thread: Some(thread),
@@ -195,11 +183,7 @@ impl Drop for BuildFsProxy {
 }
 
 /// The proxy event loop — processes scheme requests until the socket closes.
-fn run_event_loop(
-    socket: Socket,
-    mut handler: BuildFsHandler,
-    mut state: SchemeState,
-) {
+fn run_event_loop(socket: Socket, mut handler: BuildFsHandler, mut state: SchemeState) {
     eprintln!("buildfs: event loop started");
     loop {
         let req = match socket.next_request(SignalBehavior::Restart) {

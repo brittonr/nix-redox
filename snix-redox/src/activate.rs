@@ -199,9 +199,7 @@ pub fn plan(old: &Manifest, new: &Manifest) -> ActivationPlan {
         match old_pkgs.get(name) {
             None => packages_added.push(name.to_string()),
             Some(old_pkg) => {
-                if old_pkg.version != new_pkg.version
-                    || old_pkg.store_path != new_pkg.store_path
-                {
+                if old_pkg.version != new_pkg.version || old_pkg.store_path != new_pkg.store_path {
                     packages_changed.push(PackageChange {
                         name: name.to_string(),
                         old_version: old_pkg.version.clone(),
@@ -647,10 +645,7 @@ pub fn activate(
     // ── Step 4b: Update /run/current-system ──
     // Use the toplevel path from the manifest, or fall back to the
     // manifest's own generation directory as the system identity.
-    let current_system_target = new
-        .toplevel
-        .as_deref()
-        .unwrap_or("/etc/redox-system");
+    let current_system_target = new.toplevel.as_deref().unwrap_or("/etc/redox-system");
     if let Err(e) = update_current_system_link(current_system_target) {
         warnings.push(format!("/run/current-system update failed: {e}"));
     }
@@ -718,11 +713,7 @@ const BOOT_DIR: &str = "/boot";
 ///   - Store path file is missing (warns, continues)
 ///
 /// Returns true if any boot files were updated (reboot recommended).
-fn update_boot_components(
-    old: &Manifest,
-    new: &Manifest,
-    warnings: &mut Vec<String>,
-) -> bool {
+fn update_boot_components(old: &Manifest, new: &Manifest, warnings: &mut Vec<String>) -> bool {
     update_boot_components_at(old, new, BOOT_DIR, warnings)
 }
 
@@ -879,7 +870,10 @@ fn atomic_profile_swap(packages: &[Package]) -> Result<u32, Box<dyn std::error::
 
 /// Populate a profile directory with symlinks to package binaries.
 /// Returns the number of binaries linked.
-fn populate_profile_dir(bin_dir: &Path, packages: &[Package]) -> Result<u32, Box<dyn std::error::Error>> {
+fn populate_profile_dir(
+    bin_dir: &Path,
+    packages: &[Package],
+) -> Result<u32, Box<dyn std::error::Error>> {
     let mut count = 0u32;
 
     for pkg in packages {
@@ -961,17 +955,147 @@ fn update_config_files(
     new_files: &BTreeMap<String, FileInfo>,
     warnings: &mut Vec<String>,
 ) -> u32 {
+    update_config_files_at(Path::new("/"), added, removed, changed, new_files, warnings)
+}
+
+fn parse_mode_string(mode: &str) -> std::io::Result<u32> {
+    use std::io::{Error, ErrorKind};
+
+    let trimmed = mode.trim();
+    let trimmed = trimmed.strip_prefix("0o").unwrap_or(trimmed);
+    let trimmed = trimmed
+        .strip_prefix('0')
+        .filter(|rest| !rest.is_empty())
+        .unwrap_or(trimmed);
+
+    if trimmed.is_empty() || trimmed.len() > 4 || !trimmed.chars().all(|c| matches!(c, '0'..='7')) {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            format!("invalid file mode '{mode}' (expected octal like 0644)"),
+        ));
+    }
+
+    let parsed = u32::from_str_radix(trimmed, 8).map_err(|e| {
+        Error::new(
+            ErrorKind::InvalidInput,
+            format!("invalid file mode '{mode}': {e}"),
+        )
+    })?;
+    if parsed > 0o7777 {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            format!("invalid file mode '{mode}' (must be <= 07777)"),
+        ));
+    }
+
+    Ok(parsed)
+}
+
+fn validate_managed_relative_path(path: &str) -> std::io::Result<PathBuf> {
+    use std::io::{Error, ErrorKind};
+    use std::path::Component;
+
+    let mut relative = PathBuf::new();
+    for component in Path::new(path).components() {
+        match component {
+            Component::Normal(part) => relative.push(part),
+            _ => {
+                return Err(Error::new(
+                    ErrorKind::InvalidInput,
+                    format!(
+                        "managed file path '{path}' must be root-relative without '.', '..', or a leading '/'"
+                    ),
+                ))
+            }
+        }
+    }
+
+    if relative.as_os_str().is_empty() {
+        return Err(Error::new(
+            ErrorKind::InvalidInput,
+            "managed file path must not be empty",
+        ));
+    }
+
+    Ok(relative)
+}
+
+fn managed_file_path_at(root: &Path, path: &str) -> std::io::Result<PathBuf> {
+    Ok(root.join(validate_managed_relative_path(path)?))
+}
+
+#[cfg(test)]
+thread_local! {
+    static FORCE_SET_PERMISSIONS_FAILURE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+fn set_inline_file_permissions(path: &Path, mode: u32) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+
+    #[cfg(test)]
+    {
+        if FORCE_SET_PERMISSIONS_FAILURE.get() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "injected set_permissions failure",
+            ));
+        }
+    }
+
+    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
+}
+
+fn write_inline_config_file_at(root: &Path, path: &str, info: &FileInfo) -> std::io::Result<()> {
+    let full_path = managed_file_path_at(root, path)?;
+
+    if let Some(parent) = full_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    if let Ok(meta) = std::fs::symlink_metadata(&full_path) {
+        if meta.file_type().is_symlink() {
+            std::fs::remove_file(&full_path)?;
+        }
+    }
+
+    std::fs::write(&full_path, info.text.as_deref().unwrap_or(""))?;
+    let mode = parse_mode_string(&info.mode)?;
+    set_inline_file_permissions(&full_path, mode)?;
+
+    Ok(())
+}
+
+fn update_config_files_at(
+    root: &Path,
+    added: &[String],
+    removed: &[String],
+    changed: &[ConfigChange],
+    new_files: &BTreeMap<String, FileInfo>,
+    warnings: &mut Vec<String>,
+) -> u32 {
     let mut updated = 0u32;
 
     // Handle added config files
-    // Note: we can't create files from thin air — the manifest only has hashes.
-    // Added files are only relevant if they exist in the rootTree (which was
-    // already written to disk by the build process). For live activation,
-    // new config files come from the new rootTree's store path.
     for path in added {
-        // The file should already exist if the rootTree was properly deployed.
-        // Just verify it's there.
-        let full_path = PathBuf::from("/").join(path);
+        let full_path = match managed_file_path_at(root, path) {
+            Ok(path_buf) => path_buf,
+            Err(e) => {
+                warnings.push(format!("invalid config file path '{path}': {e}"));
+                continue;
+            }
+        };
+        if let Some(info) = new_files.get(path) {
+            if info.text.is_some() {
+                match write_inline_config_file_at(root, path, info) {
+                    Ok(()) => {
+                        updated += 1;
+                        eprintln!("  wrote /{path}");
+                    }
+                    Err(e) => warnings.push(format!("failed to write /{path}: {e}")),
+                }
+                continue;
+            }
+        }
+
         if !full_path.exists() {
             warnings.push(format!(
                 "new config file /{path} not found on disk (expected from rootTree)"
@@ -981,7 +1105,13 @@ fn update_config_files(
 
     // Handle removed config files
     for path in removed {
-        let full_path = PathBuf::from("/").join(path);
+        let full_path = match managed_file_path_at(root, path) {
+            Ok(path_buf) => path_buf,
+            Err(e) => {
+                warnings.push(format!("invalid config file path '{path}': {e}"));
+                continue;
+            }
+        };
         if full_path.exists() {
             match std::fs::remove_file(&full_path) {
                 Ok(()) => {
@@ -996,22 +1126,33 @@ fn update_config_files(
     }
 
     // Handle changed config files
-    // For live systems, changed config files need their content from the new
-    // rootTree. Since we track the hash but not the content in the manifest,
-    // we check if the on-disk file already has the new hash (rootTree deployed
-    // it) or if it needs updating from the new store path.
     for change in changed {
-        let full_path = PathBuf::from("/").join(&change.path);
+        let full_path = match managed_file_path_at(root, &change.path) {
+            Ok(path_buf) => path_buf,
+            Err(e) => {
+                warnings.push(format!("invalid config file path '{}': {e}", change.path));
+                continue;
+            }
+        };
+        if let Some(info) = new_files.get(&change.path) {
+            if info.text.is_some() {
+                match write_inline_config_file_at(root, &change.path, info) {
+                    Ok(()) => {
+                        updated += 1;
+                        eprintln!("  updated /{}", change.path);
+                    }
+                    Err(e) => warnings.push(format!("failed to update /{}: {e}", change.path)),
+                }
+                continue;
+            }
+        }
+
         if full_path.exists() {
-            // Check if file already has the new content (rootTree was deployed)
             match hash_file_if_exists(&full_path) {
                 Some(hash) if hash == change.new_hash => {
                     // Already up to date (rootTree deployed this file)
                 }
                 _ => {
-                    // File exists but has different content.
-                    // We can't update it without the new content bytes.
-                    // Flag it for the user.
                     warnings.push(format!(
                         "config file /{} needs update (hash mismatch) — redeploy rootTree or reboot",
                         change.path
@@ -1051,11 +1192,7 @@ fn hash_file_if_exists(path: &Path) -> Option<String> {
 /// activate runs against the running filesystem. Config files like
 /// /etc/hostname have content that comes from manifest.system.hostname,
 /// not from hash-tracked rootTree entries. This function writes them.
-fn write_manifest_derived_file_at(
-    root: &Path,
-    path: &str,
-    contents: &[u8],
-) -> std::io::Result<()> {
+fn write_manifest_derived_file_at(root: &Path, path: &str, contents: &[u8]) -> std::io::Result<()> {
     let relative = path.strip_prefix('/').unwrap_or(path);
     let full_path = root.join(relative);
     if let Some(parent) = full_path.parent() {
@@ -1079,7 +1216,8 @@ pub(crate) fn write_manifest_derived_files_at(
 
     // /etc/hostname
     if old.system.hostname != new.system.hostname {
-        match write_manifest_derived_file_at(root, "/etc/hostname", new.system.hostname.as_bytes()) {
+        match write_manifest_derived_file_at(root, "/etc/hostname", new.system.hostname.as_bytes())
+        {
             Ok(()) => {
                 println!("  updated /etc/hostname -> {}", new.system.hostname);
                 count += 1;
@@ -1090,7 +1228,8 @@ pub(crate) fn write_manifest_derived_files_at(
 
     // /etc/timezone (if timezone changed)
     if old.system.timezone != new.system.timezone {
-        match write_manifest_derived_file_at(root, "/etc/timezone", new.system.timezone.as_bytes()) {
+        match write_manifest_derived_file_at(root, "/etc/timezone", new.system.timezone.as_bytes())
+        {
             Ok(()) => {
                 println!("  updated /etc/timezone -> {}", new.system.timezone);
                 count += 1;
@@ -1118,11 +1257,7 @@ pub(crate) fn write_manifest_derived_files_at(
     count
 }
 
-fn write_manifest_derived_files(
-    old: &Manifest,
-    new: &Manifest,
-    warnings: &mut Vec<String>,
-) -> u32 {
+fn write_manifest_derived_files(old: &Manifest, new: &Manifest, warnings: &mut Vec<String>) -> u32 {
     write_manifest_derived_files_at(Path::new("/"), old, new, warnings)
 }
 
@@ -1136,10 +1271,7 @@ const ACTIVATION_SCRIPTS_DIR: &str = "/etc/redox-system/activation.d";
 /// Execute activation scripts in dependency order.
 /// Returns the number of scripts successfully executed.
 /// Failures are logged as warnings but do not abort activation.
-fn run_activation_scripts(
-    scripts: &[ActivationScript],
-    warnings: &mut Vec<String>,
-) -> u32 {
+fn run_activation_scripts(scripts: &[ActivationScript], warnings: &mut Vec<String>) -> u32 {
     run_activation_scripts_at(scripts, ACTIVATION_SCRIPTS_DIR, warnings)
 }
 
@@ -1230,8 +1362,7 @@ pub fn setup_etc_static(etc_source: &str) -> Result<(), Box<dyn std::error::Erro
     let etc_static = Path::new("/etc/static");
     // Remove old symlink/file if it exists
     if etc_static.symlink_metadata().is_ok() {
-        std::fs::remove_file(etc_static)
-            .or_else(|_| std::fs::remove_dir_all(etc_static))?;
+        std::fs::remove_file(etc_static).or_else(|_| std::fs::remove_dir_all(etc_static))?;
     }
     #[cfg(unix)]
     std::os::unix::fs::symlink(etc_source, etc_static)?;
@@ -1485,6 +1616,7 @@ mod tests {
                         blake3: "aaa111".to_string(),
                         size: 42,
                         mode: "644".to_string(),
+                        text: None,
                     },
                 ),
                 (
@@ -1493,6 +1625,7 @@ mod tests {
                         blake3: "bbb222".to_string(),
                         size: 100,
                         mode: "644".to_string(),
+                        text: None,
                     },
                 ),
             ]),
@@ -1602,6 +1735,7 @@ mod tests {
                 blake3: "ccc333".to_string(),
                 size: 10,
                 mode: "644".to_string(),
+                text: None,
             },
         );
 
@@ -1699,11 +1833,15 @@ mod tests {
             after: vec![],
         };
         let mut old = sample_manifest();
-        old.services.declared.insert("smolnetd".to_string(), svc.clone());
+        old.services
+            .declared
+            .insert("smolnetd".to_string(), svc.clone());
         let mut new = sample_manifest();
         let mut new_svc = svc;
         new_svc.svc_type = "nowait".to_string();
-        new.services.declared.insert("smolnetd".to_string(), new_svc);
+        new.services
+            .declared
+            .insert("smolnetd".to_string(), new_svc);
 
         let p = plan(&old, &new);
         assert!(p.services_added.is_empty());
@@ -1725,7 +1863,9 @@ mod tests {
             after: vec![],
         };
         let mut old = sample_manifest();
-        old.services.declared.insert("orbital".to_string(), svc.clone());
+        old.services
+            .declared
+            .insert("orbital".to_string(), svc.clone());
         let mut new = sample_manifest();
         let mut new_svc = svc;
         new_svc.environment = BTreeMap::from([("VT".to_string(), "4".to_string())]);
@@ -1750,11 +1890,15 @@ mod tests {
             after: vec![],
         };
         let mut old = sample_manifest();
-        old.services.declared.insert("smolnetd".to_string(), svc.clone());
+        old.services
+            .declared
+            .insert("smolnetd".to_string(), svc.clone());
         let mut new = sample_manifest();
         let mut new_svc = svc;
         new_svc.command = "/bin/smolnetd2".to_string();
-        new.services.declared.insert("smolnetd".to_string(), new_svc);
+        new.services
+            .declared
+            .insert("smolnetd".to_string(), new_svc);
 
         let p = plan(&old, &new);
         assert_eq!(p.services_changed.len(), 1);
@@ -1773,7 +1917,9 @@ mod tests {
             after: vec![],
         };
         let mut old = sample_manifest();
-        old.services.declared.insert("smolnetd".to_string(), svc.clone());
+        old.services
+            .declared
+            .insert("smolnetd".to_string(), svc.clone());
         let mut new = sample_manifest();
         new.services.declared.insert("smolnetd".to_string(), svc);
 
@@ -1861,6 +2007,7 @@ mod tests {
                 blake3: "new".to_string(),
                 size: 5,
                 mode: "644".to_string(),
+                text: None,
             },
         );
         new.services.declared.insert(
@@ -1932,7 +2079,10 @@ mod tests {
     fn plan_boot_config_network_driver_change() {
         let old = sample_manifest();
         let mut new = sample_manifest();
-        new.configuration.hardware.network_drivers.push("e1000d".to_string());
+        new.configuration
+            .hardware
+            .network_drivers
+            .push("e1000d".to_string());
 
         assert!(has_boot_config_changed(&old, &new));
     }
@@ -2063,6 +2213,7 @@ mod tests {
                 blake3: "abc".to_string(),
                 size: 10,
                 mode: "644".to_string(),
+                text: None,
             },
         )]);
 
@@ -2081,6 +2232,7 @@ mod tests {
                     blake3: "aaa".to_string(),
                     size: 10,
                     mode: "644".to_string(),
+                    text: None,
                 },
             ),
             (
@@ -2089,6 +2241,7 @@ mod tests {
                     blake3: "bbb".to_string(),
                     size: 5,
                     mode: "644".to_string(),
+                    text: None,
                 },
             ),
         ]);
@@ -2100,6 +2253,7 @@ mod tests {
                     blake3: "xxx".to_string(),
                     size: 10,
                     mode: "644".to_string(),
+                    text: None,
                 },
             ),
             (
@@ -2108,6 +2262,7 @@ mod tests {
                     blake3: "yyy".to_string(),
                     size: 15,
                     mode: "644".to_string(),
+                    text: None,
                 },
             ),
         ]);
@@ -2117,6 +2272,136 @@ mod tests {
         assert_eq!(removed, vec!["etc/old-file"]);
         assert_eq!(changed.len(), 1);
         assert_eq!(changed[0].path, "etc/passwd");
+    }
+
+    #[test]
+    fn update_config_files_writes_inline_file_contents_and_modes() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let dir = tempfile::tempdir().unwrap();
+        let mut warnings = Vec::new();
+
+        let added = vec!["etc/new-inline.txt".to_string()];
+        let removed = Vec::new();
+        let changed = vec![ConfigChange {
+            path: "etc/changed-inline.txt".to_string(),
+            old_hash: "old".to_string(),
+            new_hash: "new".to_string(),
+        }];
+
+        let changed_path = dir.path().join("etc/changed-inline.txt");
+        std::fs::create_dir_all(changed_path.parent().unwrap()).unwrap();
+        std::fs::write(&changed_path, "old contents\n").unwrap();
+
+        let new_files = BTreeMap::from([
+            (
+                "etc/new-inline.txt".to_string(),
+                FileInfo {
+                    blake3: blake3::hash(b"new inline\n").to_hex().to_string(),
+                    size: 11,
+                    mode: "0640".to_string(),
+                    text: Some("new inline\n".to_string()),
+                },
+            ),
+            (
+                "etc/changed-inline.txt".to_string(),
+                FileInfo {
+                    blake3: blake3::hash(b"changed inline\n").to_hex().to_string(),
+                    size: 15,
+                    mode: "0600".to_string(),
+                    text: Some("changed inline\n".to_string()),
+                },
+            ),
+        ]);
+
+        let updated = update_config_files_at(
+            dir.path(),
+            &added,
+            &removed,
+            &changed,
+            &new_files,
+            &mut warnings,
+        );
+
+        assert_eq!(updated, 2);
+        assert!(warnings.is_empty());
+        let added_path = dir.path().join("etc/new-inline.txt");
+        let changed_path = dir.path().join("etc/changed-inline.txt");
+        assert_eq!(
+            std::fs::read_to_string(&added_path).unwrap(),
+            "new inline\n"
+        );
+        assert_eq!(
+            std::fs::metadata(&added_path).unwrap().permissions().mode() & 0o7777,
+            0o640
+        );
+        assert_eq!(
+            std::fs::read_to_string(&changed_path).unwrap(),
+            "changed inline\n"
+        );
+        assert_eq!(
+            std::fs::metadata(&changed_path)
+                .unwrap()
+                .permissions()
+                .mode()
+                & 0o7777,
+            0o600
+        );
+    }
+
+    #[test]
+    fn update_config_files_warns_on_invalid_inline_mode() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut warnings = Vec::new();
+        let added = vec!["etc/bad-mode.txt".to_string()];
+        let new_files = BTreeMap::from([(
+            "etc/bad-mode.txt".to_string(),
+            FileInfo {
+                blake3: blake3::hash(b"bad mode\n").to_hex().to_string(),
+                size: 9,
+                mode: "09ab".to_string(),
+                text: Some("bad mode\n".to_string()),
+            },
+        )]);
+
+        let updated =
+            update_config_files_at(dir.path(), &added, &[], &[], &new_files, &mut warnings);
+
+        assert_eq!(updated, 0);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("invalid file mode '09ab'"));
+    }
+
+    #[test]
+    fn update_config_files_warns_when_set_permissions_fails() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut warnings = Vec::new();
+        let added = vec!["etc/perm-fail.txt".to_string()];
+        let new_files = BTreeMap::from([(
+            "etc/perm-fail.txt".to_string(),
+            FileInfo {
+                blake3: blake3::hash(b"perm fail\n").to_hex().to_string(),
+                size: 10,
+                mode: "0600".to_string(),
+                text: Some("perm fail\n".to_string()),
+            },
+        )]);
+
+        let updated = FORCE_SET_PERMISSIONS_FAILURE.with(|flag| {
+            flag.set(true);
+            let result =
+                update_config_files_at(dir.path(), &added, &[], &[], &new_files, &mut warnings);
+            flag.set(false);
+            result
+        });
+
+        assert_eq!(updated, 0);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("injected set_permissions failure"));
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("etc/perm-fail.txt")).unwrap(),
+            "perm fail\n"
+        );
     }
 
     // ── User diff tests ──
@@ -2261,15 +2546,20 @@ mod tests {
         });
 
         let mut warnings = Vec::new();
-        let updated = update_boot_components_at(
-            &old, &new, &boot_dir.to_string_lossy(), &mut warnings,
-        );
+        let updated =
+            update_boot_components_at(&old, &new, &boot_dir.to_string_lossy(), &mut warnings);
         assert!(updated);
         assert!(warnings.is_empty());
 
         // Verify files were actually copied
-        assert_eq!(std::fs::read(boot_dir.join("kernel")).unwrap(), b"KERNEL_V2");
-        assert_eq!(std::fs::read(boot_dir.join("initfs")).unwrap(), b"INITFS_V2");
+        assert_eq!(
+            std::fs::read(boot_dir.join("kernel")).unwrap(),
+            b"KERNEL_V2"
+        );
+        assert_eq!(
+            std::fs::read(boot_dir.join("initfs")).unwrap(),
+            b"INITFS_V2"
+        );
     }
 
     #[test]
@@ -2292,9 +2582,8 @@ mod tests {
         new.boot = boot;
 
         let mut warnings = Vec::new();
-        let updated = update_boot_components_at(
-            &old, &new, &boot_dir.to_string_lossy(), &mut warnings,
-        );
+        let updated =
+            update_boot_components_at(&old, &new, &boot_dir.to_string_lossy(), &mut warnings);
         assert!(!updated);
         assert!(warnings.is_empty());
     }
@@ -2305,9 +2594,7 @@ mod tests {
         let new = sample_manifest(); // boot: None
 
         let mut warnings = Vec::new();
-        let updated = update_boot_components_at(
-            &old, &new, "/tmp/nonexistent-boot", &mut warnings,
-        );
+        let updated = update_boot_components_at(&old, &new, "/tmp/nonexistent-boot", &mut warnings);
         assert!(!updated);
         assert!(warnings.is_empty());
     }
@@ -2327,9 +2614,8 @@ mod tests {
         });
 
         let mut warnings = Vec::new();
-        let updated = update_boot_components_at(
-            &old, &new, &boot_dir.to_string_lossy(), &mut warnings,
-        );
+        let updated =
+            update_boot_components_at(&old, &new, &boot_dir.to_string_lossy(), &mut warnings);
         assert!(!updated); // couldn't copy, so not "updated"
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("missing or unreadable"));
@@ -2436,7 +2722,7 @@ mod tests {
         ];
         let order = topo_sort(&scripts).unwrap();
         assert_eq!(order[0], "a"); // a first (no deps)
-        // b and c next (both depend on a), deterministic sorted order
+                                   // b and c next (both depend on a), deterministic sorted order
         assert_eq!(order[1], "b");
         assert_eq!(order[2], "c");
         assert_eq!(order[3], "d"); // d last (depends on b and c)
@@ -2700,8 +2986,10 @@ mod tests {
 
         let p = plan(&old, &new);
         // services_added is non-empty → activate would set reboot_recommended = true
-        assert!(!p.services_added.is_empty(),
-            "service addition should trigger reboot recommendation");
+        assert!(
+            !p.services_added.is_empty(),
+            "service addition should trigger reboot recommendation"
+        );
     }
 
     #[test]
@@ -2723,9 +3011,18 @@ mod tests {
 
         assert_eq!(updated, 3);
         assert!(warnings.is_empty());
-        assert_eq!(std::fs::read_to_string(dir.path().join("etc/hostname")).unwrap(), "new-host");
-        assert_eq!(std::fs::read_to_string(dir.path().join("etc/timezone")).unwrap(), "America/New_York");
-        assert_eq!(std::fs::read_to_string(dir.path().join("etc/net/dns")).unwrap(), "9.9.9.9\n8.8.8.8");
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("etc/hostname")).unwrap(),
+            "new-host"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("etc/timezone")).unwrap(),
+            "America/New_York"
+        );
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("etc/net/dns")).unwrap(),
+            "9.9.9.9\n8.8.8.8"
+        );
     }
 
     // ── Boot path change → reboot_recommended ──
@@ -2746,8 +3043,10 @@ mod tests {
             bootloader: Some("/nix/store/ccc-boot/boot/BOOTX64.EFI".to_string()),
         });
 
-        assert!(has_boot_config_changed(&old, &new),
-            "differing initfs path should be detected as boot config change");
+        assert!(
+            has_boot_config_changed(&old, &new),
+            "differing initfs path should be detected as boot config change"
+        );
     }
 
     #[test]
@@ -2763,7 +3062,9 @@ mod tests {
         old.boot = Some(boot.clone());
         new.boot = Some(boot);
 
-        assert!(!has_boot_config_changed(&old, &new),
-            "identical boot paths should not trigger boot config change");
+        assert!(
+            !has_boot_config_changed(&old, &new),
+            "identical boot paths should not trigger boot config change"
+        );
     }
 }

@@ -168,11 +168,7 @@ impl HandleTable {
     ///
     /// ⚠️ Does filesystem I/O — NOT safe from within Redox scheme handlers.
     /// Use `open_file_lazy` instead for scheme daemon code.
-    pub fn open_file(
-        &mut self,
-        real_path: PathBuf,
-        scheme_path: String,
-    ) -> io::Result<usize> {
+    pub fn open_file(&mut self, real_path: PathBuf, scheme_path: String) -> io::Result<usize> {
         let data = std::fs::read(&real_path)?;
         let meta = std::fs::metadata(&real_path)?;
 
@@ -200,11 +196,7 @@ impl HandleTable {
     }
 
     /// Open a directory and return a handle ID.
-    pub fn open_dir(
-        &mut self,
-        real_path: PathBuf,
-        scheme_path: String,
-    ) -> io::Result<usize> {
+    pub fn open_dir(&mut self, real_path: PathBuf, scheme_path: String) -> io::Result<usize> {
         // Verify it's a directory.
         if !real_path.is_dir() {
             return Err(io::Error::new(
@@ -246,12 +238,7 @@ impl HandleTable {
     /// scheme without blocking the scheme event loop.
     ///
     /// Subsequent reads are served from the cached content buffer.
-    pub fn read(
-        &mut self,
-        id: usize,
-        buf: &mut [u8],
-        offset: u64,
-    ) -> io::Result<usize> {
+    pub fn read(&mut self, id: usize, buf: &mut [u8], offset: u64) -> io::Result<usize> {
         match self.handles.get_mut(&id) {
             Some(Handle::File(fh)) => {
                 // Load content on first read.
@@ -546,9 +533,7 @@ mod tests {
         std::fs::create_dir(dir.join("sub")).unwrap();
 
         let mut table = HandleTable::new();
-        let id = table
-            .open_dir(dir, "abc-pkg".to_string())
-            .unwrap();
+        let id = table.open_dir(dir, "abc-pkg".to_string()).unwrap();
 
         assert_eq!(table.is_dir(id), Some(true));
 
@@ -569,9 +554,7 @@ mod tests {
         std::fs::write(&file_path, "data").unwrap();
 
         let mut table = HandleTable::new();
-        let id = table
-            .open_file(file_path, "test".to_string())
-            .unwrap();
+        let id = table.open_file(file_path, "test".to_string()).unwrap();
 
         assert_eq!(table.len(), 1);
         assert!(table.close(id).is_some());
@@ -619,10 +602,7 @@ mod tests {
     #[test]
     fn open_nonexistent_file() {
         let mut table = HandleTable::new();
-        let result = table.open_file(
-            PathBuf::from("/nonexistent/path"),
-            "bad".to_string(),
-        );
+        let result = table.open_file(PathBuf::from("/nonexistent/path"), "bad".to_string());
         assert!(result.is_err());
     }
 
