@@ -60,19 +60,27 @@ impl PathInfo {
     /// The `node` field uses a dummy placeholder (empty file) because we
     /// don't have castore content addressing yet. Code that needs a real
     /// node must handle this case.
-    pub fn to_upstream(&self) -> Result<snix_store::path_info::PathInfo, Box<dyn std::error::Error>> {
+    pub fn to_upstream(
+        &self,
+    ) -> Result<snix_store::path_info::PathInfo, Box<dyn std::error::Error>> {
         let store_path = StorePath::<String>::from_absolute_path(self.store_path.as_bytes())
             .map_err(|e| format!("invalid store_path '{}': {e}", self.store_path))?;
 
         let nar_sha256 = parse_nar_hash(&self.nar_hash)?;
 
-        let references: Result<Vec<_>, _> = self.references.iter()
-            .map(|r| StorePath::<String>::from_absolute_path(r.as_bytes())
-                .map_err(|e| format!("invalid reference '{r}': {e}")))
+        let references: Result<Vec<_>, _> = self
+            .references
+            .iter()
+            .map(|r| {
+                StorePath::<String>::from_absolute_path(r.as_bytes())
+                    .map_err(|e| format!("invalid reference '{r}': {e}"))
+            })
             .collect();
         let references = references?;
 
-        let deriver = self.deriver.as_ref()
+        let deriver = self
+            .deriver
+            .as_ref()
             .map(|d| {
                 // Upstream deriver StorePath omits the .drv suffix in the name field,
                 // but from_absolute_path handles the full path including .drv.
@@ -81,9 +89,13 @@ impl PathInfo {
             })
             .transpose()?;
 
-        let signatures: Result<Vec<_>, _> = self.signatures.iter()
-            .map(|s| nix_compat::narinfo::Signature::<String>::parse(s)
-                .map_err(|e| format!("invalid signature '{s}': {e}")))
+        let signatures: Result<Vec<_>, _> = self
+            .signatures
+            .iter()
+            .map(|s| {
+                nix_compat::narinfo::Signature::<String>::parse(s)
+                    .map_err(|e| format!("invalid signature '{s}': {e}"))
+            })
             .collect();
         let signatures = signatures?;
 
@@ -105,15 +117,17 @@ impl PathInfo {
 
     /// Construct from upstream `snix_store::path_info::PathInfo`.
     pub fn from_upstream(upstream: &snix_store::path_info::PathInfo) -> Self {
-        let nar_hash = format!("sha256:{}", data_encoding::HEXLOWER.encode(&upstream.nar_sha256));
-        let references: Vec<String> = upstream.references.iter()
+        let nar_hash = format!(
+            "sha256:{}",
+            data_encoding::HEXLOWER.encode(&upstream.nar_sha256)
+        );
+        let references: Vec<String> = upstream
+            .references
+            .iter()
             .map(|r| r.to_absolute_path())
             .collect();
-        let deriver = upstream.deriver.as_ref()
-            .map(|d| d.to_absolute_path());
-        let signatures: Vec<String> = upstream.signatures.iter()
-            .map(|s| s.to_string())
-            .collect();
+        let deriver = upstream.deriver.as_ref().map(|d| d.to_absolute_path());
+        let signatures: Vec<String> = upstream.signatures.iter().map(|s| s.to_string()).collect();
 
         PathInfo {
             store_path: upstream.store_path.to_absolute_path(),
@@ -132,15 +146,17 @@ impl PathInfo {
     /// Used when fetching from binary caches — replaces manual field
     /// extraction scattered across cache.rs.
     pub fn from_narinfo(narinfo: &nix_compat::narinfo::NarInfo<'_>, store_path: &str) -> Self {
-        let nar_hash = format!("sha256:{}", data_encoding::HEXLOWER.encode(&narinfo.nar_hash));
-        let references: Vec<String> = narinfo.references.iter()
+        let nar_hash = format!(
+            "sha256:{}",
+            data_encoding::HEXLOWER.encode(&narinfo.nar_hash)
+        );
+        let references: Vec<String> = narinfo
+            .references
+            .iter()
             .map(|r| r.to_absolute_path())
             .collect();
-        let deriver = narinfo.deriver.as_ref()
-            .map(|d| d.to_absolute_path());
-        let signatures: Vec<String> = narinfo.signatures.iter()
-            .map(|s| s.to_string())
-            .collect();
+        let deriver = narinfo.deriver.as_ref().map(|d| d.to_absolute_path());
+        let signatures: Vec<String> = narinfo.signatures.iter().map(|s| s.to_string()).collect();
 
         PathInfo {
             store_path: store_path.to_string(),
@@ -157,9 +173,11 @@ impl PathInfo {
 
 /// Parse our `"sha256:{hex}"` nar_hash format into `[u8; 32]`.
 fn parse_nar_hash(nar_hash: &str) -> Result<[u8; 32], Box<dyn std::error::Error>> {
-    let hex = nar_hash.strip_prefix("sha256:")
+    let hex = nar_hash
+        .strip_prefix("sha256:")
         .ok_or_else(|| format!("nar_hash missing 'sha256:' prefix: {nar_hash}"))?;
-    let bytes = data_encoding::HEXLOWER.decode(hex.as_bytes())
+    let bytes = data_encoding::HEXLOWER
+        .decode(hex.as_bytes())
         .map_err(|e| format!("invalid hex in nar_hash: {e}"))?;
     if bytes.len() != 32 {
         return Err(format!("nar_hash is {} bytes, expected 32", bytes.len()).into());
@@ -227,7 +245,9 @@ impl PathInfoDb {
         store_path: &str,
         manifest: &[crate::nar::ManifestEntry],
     ) -> Result<(), PathInfoError> {
-        let manifest_dir = self.pathinfo_dir.parent()
+        let manifest_dir = self
+            .pathinfo_dir
+            .parent()
             .unwrap_or(Path::new("/nix/var/snix"))
             .join("manifests");
         fs::create_dir_all(&manifest_dir)
@@ -247,7 +267,9 @@ impl PathInfoDb {
         &self,
         store_path: &str,
     ) -> Result<Option<Vec<crate::nar::ManifestEntry>>, PathInfoError> {
-        let manifest_dir = self.pathinfo_dir.parent()
+        let manifest_dir = self
+            .pathinfo_dir
+            .parent()
             .unwrap_or(Path::new("/nix/var/snix"))
             .join("manifests");
         let hash = store_path_hash(store_path)?;
@@ -285,8 +307,7 @@ impl PathInfoDb {
         for entry in fs::read_dir(&self.pathinfo_dir)
             .map_err(|e| PathInfoError::Io(format!("reading dir: {e}")))?
         {
-            let entry =
-                entry.map_err(|e| PathInfoError::Io(format!("reading entry: {e}")))?;
+            let entry = entry.map_err(|e| PathInfoError::Io(format!("reading entry: {e}")))?;
             let name = entry.file_name();
             let name_str = name.to_string_lossy();
             if !name_str.ends_with(".json") {
@@ -398,10 +419,7 @@ mod tests {
             store_path: P_HELLO.to_string(),
             nar_hash: "abc123def456".to_string(),
             nar_size: 12345,
-            references: vec![
-                P_HELLO.to_string(),
-                P_GLIBC.to_string(),
-            ],
+            references: vec![P_HELLO.to_string(), P_GLIBC.to_string()],
             deriver: Some("/nix/store/5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r-hello-1.0.drv".to_string()),
             registration_time: "2026-02-20T12:00:00Z".to_string(),
             signatures: vec!["cache.nixos.org-1:abc...".to_string()],
@@ -499,7 +517,9 @@ mod tests {
         let tmp = TempDir::new().unwrap();
         let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
 
-        let result = db.get("/nix/store/cn8r5krrhrr7rrqz3q7nr8r7n5s2sp5s-missing-1.0").unwrap();
+        let result = db
+            .get("/nix/store/cn8r5krrhrr7rrqz3q7nr8r7n5s2sp5s-missing-1.0")
+            .unwrap();
         assert!(result.is_none());
     }
 
@@ -534,7 +554,8 @@ mod tests {
         let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
 
         // Deleting something not registered should succeed
-        db.delete("/nix/store/cn8r5krrhrr7rrqz3q7nr8r7n5s2sp5s-nope-1.0").unwrap();
+        db.delete("/nix/store/cn8r5krrhrr7rrqz3q7nr8r7n5s2sp5s-nope-1.0")
+            .unwrap();
     }
 
     #[test]
@@ -635,7 +656,8 @@ mod tests {
                 registration_time: "t".to_string(),
                 signatures: vec![],
                 files: vec![],
-            }).unwrap();
+            })
+            .unwrap();
         }
 
         let set = db.all_paths_set().unwrap();
@@ -652,7 +674,11 @@ mod tests {
         fs::create_dir_all(&db_dir).unwrap();
 
         // Write garbage to a JSON file keyed by P_HELLO's hash
-        fs::write(db_dir.join("5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r.json"), "not json").unwrap();
+        fs::write(
+            db_dir.join("5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r.json"),
+            "not json",
+        )
+        .unwrap();
 
         let db = PathInfoDb::open_at(db_dir).unwrap();
         let result = db.get(P_HELLO);
@@ -675,7 +701,8 @@ mod tests {
     fn convertible_info() -> PathInfo {
         PathInfo {
             store_path: P_HELLO.to_string(),
-            nar_hash: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string(),
+            nar_hash: "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                .to_string(),
             nar_size: 12345,
             references: vec![P_HELLO.to_string(), P_GLIBC.to_string()],
             deriver: Some("/nix/store/5g5nzcsmcmk0mnqz6i0gr1m0g8r5rq8r-hello-1.0.drv".to_string()),
@@ -698,7 +725,9 @@ mod tests {
         let upstream = info.to_upstream().unwrap();
         // sha256 of empty string
         let expected_hex = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
-        let expected = data_encoding::HEXLOWER.decode(expected_hex.as_bytes()).unwrap();
+        let expected = data_encoding::HEXLOWER
+            .decode(expected_hex.as_bytes())
+            .unwrap();
         assert_eq!(upstream.nar_sha256.as_slice(), expected.as_slice());
     }
 

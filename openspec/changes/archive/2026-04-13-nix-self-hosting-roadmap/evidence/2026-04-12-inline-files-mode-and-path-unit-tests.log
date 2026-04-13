@@ -1,0 +1,2980 @@
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:4:32
+  |
+4 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:6:32
+  |
+6 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/mod.rs:9:32
+  |
+9 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/mod.rs:12:32
+   |
+12 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:2:7
+  |
+2 | #[cfg(feature = "linux-sandbox")] use crate::buildservice::bwrap::BubblewrapBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:9:7
+  |
+9 | #[cfg(feature = "linux-sandbox")] use super::oci::OCIBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:42:15
+   |
+42 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:58:15
+   |
+58 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused variable: `blob_service`
+  --> upstream/build/src/buildservice/from_addr.rs:28:5
+   |
+28 |     blob_service: BS,
+   |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_blob_service`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `directory_service`
+  --> upstream/build/src/buildservice/from_addr.rs:29:5
+   |
+29 |     directory_service: DS,
+   |     ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_directory_service`
+
+warning: `snix-build` (lib) generated 10 warnings
+   Compiling snix-redox v0.4.0 (/home/brittonr/git/redox/snix-redox)
+warning: unused import: `BTreeSet`
+  --> src/activate.rs:14:34
+   |
+14 | use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+   |                                  ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::pathinfo::PathInfoDb`
+  --> src/bridge_build.rs:34:5
+   |
+34 | use crate::pathinfo::PathInfoDb;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::local_cache`
+  --> src/install.rs:24:5
+   |
+24 | use crate::local_cache;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BuildConstraints`
+  --> src/local_build.rs:41:32
+   |
+41 | use snix_build::buildservice::{BuildConstraints, BuildRequest};
+   |                                ^^^^^^^^^^^^^^^^
+
+warning: unused import: `nix_compat::nixhash::CAHash`
+    --> src/local_build.rs:1091:9
+     |
+1091 |     use nix_compat::nixhash::CAHash;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::BTreeSet`
+    --> src/local_build.rs:1092:9
+     |
+1092 |     use std::collections::BTreeSet;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+ --> src/nar.rs:9:23
+  |
+9 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+
+warning: unused import: `std::io`
+  --> src/profiled/mapping.rs:18:5
+   |
+18 | use std::io;
+   |     ^^^^^^^
+
+warning: unreachable expression
+  --> src/install.rs:74:5
+   |
+72 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+73 |     }
+74 |     Ok(())
+   |     ^^^^^^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable expression
+  --> src/install.rs:92:5
+   |
+90 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+91 |     }
+92 |     Ok(())
+   |     ^^^^^^ unreachable expression
+
+warning: unused import: `Read`
+   --> src/cache_source.rs:404:19
+    |
+404 |     use std::io::{Read as _, Write};
+    |                   ^^^^
+
+warning: variable does not need to be mutable
+    --> src/activate.rs:2600:13
+     |
+2600 |         let mut old = sample_manifest();
+     |             ----^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `db`
+    --> src/local_build.rs:1572:13
+     |
+1572 |         let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_db`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1573:13
+     |
+1573 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1764:13
+     |
+1764 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: variable does not need to be mutable
+   --> src/profiled/mapping.rs:297:13
+    |
+297 |         let mut store = Self {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `state`
+    --> src/rebuild.rs:1532:21
+     |
+1532 |     let (names_str, state) = crate::eval::evaluate_with_state(&expr)?;
+     |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `manifest`
+   --> src/stored/lazy.rs:318:5
+    |
+318 |     manifest: &[ManifestEntry],
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manifest`
+
+warning: constant `POLL_INTERVAL_MS` is never used
+  --> src/bridge.rs:32:7
+   |
+32 | const POLL_INTERVAL_MS: u64 = 500;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `format_size` is never used
+   --> src/install.rs:746:4
+    |
+746 | fn format_size(bytes: u64) -> String {
+    |    ^^^^^^^^^^^
+
+warning: function `ensure_dir_exists` is never used
+   --> src/stored/lazy.rs:304:4
+    |
+304 | fn ensure_dir_exists(path: &Path, root_fd: Option<usize>) -> std::io::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: constant `VALID_HASH` is never used
+   --> src/stored/resolve.rs:188:11
+    |
+188 |     const VALID_HASH: &str = "1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r";
+    |           ^^^^^^^^^^
+
+warning: constant `SYSTEM_PROFILE_BIN` is never used
+  --> src/system.rs:80:7
+   |
+80 | const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: function `rebuild_system_profile` is never used
+    --> src/system.rs:1693:4
+     |
+1693 | fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/profiled/handles.rs:192:21
+    |
+192 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut profiled::handles::FileHandle`
+    |
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+192 -                     drop(fh);
+192 +                     let _ = fh;
+    |
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/stored/handles.rs:254:21
+    |
+254 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut stored::handles::FileHandle`
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+254 -                     drop(fh);
+254 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 26 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 7.39s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 1 test
+test activate::tests::update_config_files_writes_inline_file_contents_and_modes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.00s
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:4:32
+  |
+4 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:6:32
+  |
+6 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/mod.rs:9:32
+  |
+9 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/mod.rs:12:32
+   |
+12 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:2:7
+  |
+2 | #[cfg(feature = "linux-sandbox")] use crate::buildservice::bwrap::BubblewrapBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:9:7
+  |
+9 | #[cfg(feature = "linux-sandbox")] use super::oci::OCIBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:42:15
+   |
+42 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:58:15
+   |
+58 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused variable: `blob_service`
+  --> upstream/build/src/buildservice/from_addr.rs:28:5
+   |
+28 |     blob_service: BS,
+   |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_blob_service`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `directory_service`
+  --> upstream/build/src/buildservice/from_addr.rs:29:5
+   |
+29 |     directory_service: DS,
+   |     ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_directory_service`
+
+warning: `snix-build` (lib) generated 10 warnings
+warning: unused import: `BTreeSet`
+  --> src/activate.rs:14:34
+   |
+14 | use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+   |                                  ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::pathinfo::PathInfoDb`
+  --> src/bridge_build.rs:34:5
+   |
+34 | use crate::pathinfo::PathInfoDb;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::local_cache`
+  --> src/install.rs:24:5
+   |
+24 | use crate::local_cache;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BuildConstraints`
+  --> src/local_build.rs:41:32
+   |
+41 | use snix_build::buildservice::{BuildConstraints, BuildRequest};
+   |                                ^^^^^^^^^^^^^^^^
+
+warning: unused import: `nix_compat::nixhash::CAHash`
+    --> src/local_build.rs:1091:9
+     |
+1091 |     use nix_compat::nixhash::CAHash;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::BTreeSet`
+    --> src/local_build.rs:1092:9
+     |
+1092 |     use std::collections::BTreeSet;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+ --> src/nar.rs:9:23
+  |
+9 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+
+warning: unused import: `std::io`
+  --> src/profiled/mapping.rs:18:5
+   |
+18 | use std::io;
+   |     ^^^^^^^
+
+warning: unreachable expression
+  --> src/install.rs:74:5
+   |
+72 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+73 |     }
+74 |     Ok(())
+   |     ^^^^^^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable expression
+  --> src/install.rs:92:5
+   |
+90 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+91 |     }
+92 |     Ok(())
+   |     ^^^^^^ unreachable expression
+
+warning: unused import: `Read`
+   --> src/cache_source.rs:404:19
+    |
+404 |     use std::io::{Read as _, Write};
+    |                   ^^^^
+
+warning: variable does not need to be mutable
+    --> src/activate.rs:2600:13
+     |
+2600 |         let mut old = sample_manifest();
+     |             ----^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `db`
+    --> src/local_build.rs:1572:13
+     |
+1572 |         let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_db`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1573:13
+     |
+1573 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1764:13
+     |
+1764 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: variable does not need to be mutable
+   --> src/profiled/mapping.rs:297:13
+    |
+297 |         let mut store = Self {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `state`
+    --> src/rebuild.rs:1532:21
+     |
+1532 |     let (names_str, state) = crate::eval::evaluate_with_state(&expr)?;
+     |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `manifest`
+   --> src/stored/lazy.rs:318:5
+    |
+318 |     manifest: &[ManifestEntry],
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manifest`
+
+warning: constant `POLL_INTERVAL_MS` is never used
+  --> src/bridge.rs:32:7
+   |
+32 | const POLL_INTERVAL_MS: u64 = 500;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `format_size` is never used
+   --> src/install.rs:746:4
+    |
+746 | fn format_size(bytes: u64) -> String {
+    |    ^^^^^^^^^^^
+
+warning: function `ensure_dir_exists` is never used
+   --> src/stored/lazy.rs:304:4
+    |
+304 | fn ensure_dir_exists(path: &Path, root_fd: Option<usize>) -> std::io::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: constant `VALID_HASH` is never used
+   --> src/stored/resolve.rs:188:11
+    |
+188 |     const VALID_HASH: &str = "1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r";
+    |           ^^^^^^^^^^
+
+warning: constant `SYSTEM_PROFILE_BIN` is never used
+  --> src/system.rs:80:7
+   |
+80 | const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: function `rebuild_system_profile` is never used
+    --> src/system.rs:1693:4
+     |
+1693 | fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/profiled/handles.rs:192:21
+    |
+192 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut profiled::handles::FileHandle`
+    |
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+192 -                     drop(fh);
+192 +                     let _ = fh;
+    |
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/stored/handles.rs:254:21
+    |
+254 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut stored::handles::FileHandle`
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+254 -                     drop(fh);
+254 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 26 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.15s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 1 test
+test activate::tests::update_config_files_warns_on_invalid_inline_mode ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.00s
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:4:32
+  |
+4 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:6:32
+  |
+6 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/mod.rs:9:32
+  |
+9 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/mod.rs:12:32
+   |
+12 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:2:7
+  |
+2 | #[cfg(feature = "linux-sandbox")] use crate::buildservice::bwrap::BubblewrapBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:9:7
+  |
+9 | #[cfg(feature = "linux-sandbox")] use super::oci::OCIBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:42:15
+   |
+42 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:58:15
+   |
+58 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused variable: `blob_service`
+  --> upstream/build/src/buildservice/from_addr.rs:28:5
+   |
+28 |     blob_service: BS,
+   |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_blob_service`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `directory_service`
+  --> upstream/build/src/buildservice/from_addr.rs:29:5
+   |
+29 |     directory_service: DS,
+   |     ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_directory_service`
+
+warning: `snix-build` (lib) generated 10 warnings
+warning: unused import: `BTreeSet`
+  --> src/activate.rs:14:34
+   |
+14 | use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+   |                                  ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::pathinfo::PathInfoDb`
+  --> src/bridge_build.rs:34:5
+   |
+34 | use crate::pathinfo::PathInfoDb;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::local_cache`
+  --> src/install.rs:24:5
+   |
+24 | use crate::local_cache;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BuildConstraints`
+  --> src/local_build.rs:41:32
+   |
+41 | use snix_build::buildservice::{BuildConstraints, BuildRequest};
+   |                                ^^^^^^^^^^^^^^^^
+
+warning: unused import: `nix_compat::nixhash::CAHash`
+    --> src/local_build.rs:1091:9
+     |
+1091 |     use nix_compat::nixhash::CAHash;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::BTreeSet`
+    --> src/local_build.rs:1092:9
+     |
+1092 |     use std::collections::BTreeSet;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+ --> src/nar.rs:9:23
+  |
+9 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+
+warning: unused import: `std::io`
+  --> src/profiled/mapping.rs:18:5
+   |
+18 | use std::io;
+   |     ^^^^^^^
+
+warning: unreachable expression
+  --> src/install.rs:74:5
+   |
+72 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+73 |     }
+74 |     Ok(())
+   |     ^^^^^^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable expression
+  --> src/install.rs:92:5
+   |
+90 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+91 |     }
+92 |     Ok(())
+   |     ^^^^^^ unreachable expression
+
+warning: unused import: `Read`
+   --> src/cache_source.rs:404:19
+    |
+404 |     use std::io::{Read as _, Write};
+    |                   ^^^^
+
+warning: variable does not need to be mutable
+    --> src/activate.rs:2600:13
+     |
+2600 |         let mut old = sample_manifest();
+     |             ----^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `db`
+    --> src/local_build.rs:1572:13
+     |
+1572 |         let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_db`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1573:13
+     |
+1573 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1764:13
+     |
+1764 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: variable does not need to be mutable
+   --> src/profiled/mapping.rs:297:13
+    |
+297 |         let mut store = Self {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `state`
+    --> src/rebuild.rs:1532:21
+     |
+1532 |     let (names_str, state) = crate::eval::evaluate_with_state(&expr)?;
+     |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `manifest`
+   --> src/stored/lazy.rs:318:5
+    |
+318 |     manifest: &[ManifestEntry],
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manifest`
+
+warning: constant `POLL_INTERVAL_MS` is never used
+  --> src/bridge.rs:32:7
+   |
+32 | const POLL_INTERVAL_MS: u64 = 500;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `format_size` is never used
+   --> src/install.rs:746:4
+    |
+746 | fn format_size(bytes: u64) -> String {
+    |    ^^^^^^^^^^^
+
+warning: function `ensure_dir_exists` is never used
+   --> src/stored/lazy.rs:304:4
+    |
+304 | fn ensure_dir_exists(path: &Path, root_fd: Option<usize>) -> std::io::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: constant `VALID_HASH` is never used
+   --> src/stored/resolve.rs:188:11
+    |
+188 |     const VALID_HASH: &str = "1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r";
+    |           ^^^^^^^^^^
+
+warning: constant `SYSTEM_PROFILE_BIN` is never used
+  --> src/system.rs:80:7
+   |
+80 | const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: function `rebuild_system_profile` is never used
+    --> src/system.rs:1693:4
+     |
+1693 | fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/profiled/handles.rs:192:21
+    |
+192 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut profiled::handles::FileHandle`
+    |
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+192 -                     drop(fh);
+192 +                     let _ = fh;
+    |
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/stored/handles.rs:254:21
+    |
+254 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut stored::handles::FileHandle`
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+254 -                     drop(fh);
+254 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 26 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 1 test
+test rebuild::tests::test_parse_config_rejects_traversal_paths ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.00s
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:4:32
+  |
+4 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:6:32
+  |
+6 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/mod.rs:9:32
+  |
+9 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/mod.rs:12:32
+   |
+12 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:2:7
+  |
+2 | #[cfg(feature = "linux-sandbox")] use crate::buildservice::bwrap::BubblewrapBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:9:7
+  |
+9 | #[cfg(feature = "linux-sandbox")] use super::oci::OCIBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:42:15
+   |
+42 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:58:15
+   |
+58 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused variable: `blob_service`
+  --> upstream/build/src/buildservice/from_addr.rs:28:5
+   |
+28 |     blob_service: BS,
+   |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_blob_service`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `directory_service`
+  --> upstream/build/src/buildservice/from_addr.rs:29:5
+   |
+29 |     directory_service: DS,
+   |     ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_directory_service`
+
+warning: `snix-build` (lib) generated 10 warnings
+warning: unused import: `BTreeSet`
+  --> src/activate.rs:14:34
+   |
+14 | use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+   |                                  ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::pathinfo::PathInfoDb`
+  --> src/bridge_build.rs:34:5
+   |
+34 | use crate::pathinfo::PathInfoDb;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::local_cache`
+  --> src/install.rs:24:5
+   |
+24 | use crate::local_cache;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BuildConstraints`
+  --> src/local_build.rs:41:32
+   |
+41 | use snix_build::buildservice::{BuildConstraints, BuildRequest};
+   |                                ^^^^^^^^^^^^^^^^
+
+warning: unused import: `nix_compat::nixhash::CAHash`
+    --> src/local_build.rs:1091:9
+     |
+1091 |     use nix_compat::nixhash::CAHash;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::BTreeSet`
+    --> src/local_build.rs:1092:9
+     |
+1092 |     use std::collections::BTreeSet;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+ --> src/nar.rs:9:23
+  |
+9 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+
+warning: unused import: `std::io`
+  --> src/profiled/mapping.rs:18:5
+   |
+18 | use std::io;
+   |     ^^^^^^^
+
+warning: unreachable expression
+  --> src/install.rs:74:5
+   |
+72 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+73 |     }
+74 |     Ok(())
+   |     ^^^^^^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable expression
+  --> src/install.rs:92:5
+   |
+90 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+91 |     }
+92 |     Ok(())
+   |     ^^^^^^ unreachable expression
+
+warning: unused import: `Read`
+   --> src/cache_source.rs:404:19
+    |
+404 |     use std::io::{Read as _, Write};
+    |                   ^^^^
+
+warning: variable does not need to be mutable
+    --> src/activate.rs:2600:13
+     |
+2600 |         let mut old = sample_manifest();
+     |             ----^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `db`
+    --> src/local_build.rs:1572:13
+     |
+1572 |         let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_db`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1573:13
+     |
+1573 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1764:13
+     |
+1764 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: variable does not need to be mutable
+   --> src/profiled/mapping.rs:297:13
+    |
+297 |         let mut store = Self {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `state`
+    --> src/rebuild.rs:1532:21
+     |
+1532 |     let (names_str, state) = crate::eval::evaluate_with_state(&expr)?;
+     |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `manifest`
+   --> src/stored/lazy.rs:318:5
+    |
+318 |     manifest: &[ManifestEntry],
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manifest`
+
+warning: constant `POLL_INTERVAL_MS` is never used
+  --> src/bridge.rs:32:7
+   |
+32 | const POLL_INTERVAL_MS: u64 = 500;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `format_size` is never used
+   --> src/install.rs:746:4
+    |
+746 | fn format_size(bytes: u64) -> String {
+    |    ^^^^^^^^^^^
+
+warning: function `ensure_dir_exists` is never used
+   --> src/stored/lazy.rs:304:4
+    |
+304 | fn ensure_dir_exists(path: &Path, root_fd: Option<usize>) -> std::io::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: constant `VALID_HASH` is never used
+   --> src/stored/resolve.rs:188:11
+    |
+188 |     const VALID_HASH: &str = "1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r";
+    |           ^^^^^^^^^^
+
+warning: constant `SYSTEM_PROFILE_BIN` is never used
+  --> src/system.rs:80:7
+   |
+80 | const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: function `rebuild_system_profile` is never used
+    --> src/system.rs:1693:4
+     |
+1693 | fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/profiled/handles.rs:192:21
+    |
+192 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut profiled::handles::FileHandle`
+    |
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+192 -                     drop(fh);
+192 +                     let _ = fh;
+    |
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/stored/handles.rs:254:21
+    |
+254 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut stored::handles::FileHandle`
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+254 -                     drop(fh);
+254 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 26 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.16s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 1 test
+test rebuild::tests::test_parse_config_rejects_absolute_paths ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.00s
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:4:32
+  |
+4 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:6:32
+  |
+6 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/mod.rs:9:32
+  |
+9 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/mod.rs:12:32
+   |
+12 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:2:7
+  |
+2 | #[cfg(feature = "linux-sandbox")] use crate::buildservice::bwrap::BubblewrapBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:9:7
+  |
+9 | #[cfg(feature = "linux-sandbox")] use super::oci::OCIBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:42:15
+   |
+42 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:58:15
+   |
+58 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused variable: `blob_service`
+  --> upstream/build/src/buildservice/from_addr.rs:28:5
+   |
+28 |     blob_service: BS,
+   |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_blob_service`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `directory_service`
+  --> upstream/build/src/buildservice/from_addr.rs:29:5
+   |
+29 |     directory_service: DS,
+   |     ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_directory_service`
+
+warning: `snix-build` (lib) generated 10 warnings
+warning: unused import: `BTreeSet`
+  --> src/activate.rs:14:34
+   |
+14 | use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+   |                                  ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::pathinfo::PathInfoDb`
+  --> src/bridge_build.rs:34:5
+   |
+34 | use crate::pathinfo::PathInfoDb;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::local_cache`
+  --> src/install.rs:24:5
+   |
+24 | use crate::local_cache;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BuildConstraints`
+  --> src/local_build.rs:41:32
+   |
+41 | use snix_build::buildservice::{BuildConstraints, BuildRequest};
+   |                                ^^^^^^^^^^^^^^^^
+
+warning: unused import: `nix_compat::nixhash::CAHash`
+    --> src/local_build.rs:1091:9
+     |
+1091 |     use nix_compat::nixhash::CAHash;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::BTreeSet`
+    --> src/local_build.rs:1092:9
+     |
+1092 |     use std::collections::BTreeSet;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+ --> src/nar.rs:9:23
+  |
+9 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+
+warning: unused import: `std::io`
+  --> src/profiled/mapping.rs:18:5
+   |
+18 | use std::io;
+   |     ^^^^^^^
+
+warning: unreachable expression
+  --> src/install.rs:74:5
+   |
+72 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+73 |     }
+74 |     Ok(())
+   |     ^^^^^^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable expression
+  --> src/install.rs:92:5
+   |
+90 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+91 |     }
+92 |     Ok(())
+   |     ^^^^^^ unreachable expression
+
+warning: unused import: `Read`
+   --> src/cache_source.rs:404:19
+    |
+404 |     use std::io::{Read as _, Write};
+    |                   ^^^^
+
+warning: variable does not need to be mutable
+    --> src/activate.rs:2600:13
+     |
+2600 |         let mut old = sample_manifest();
+     |             ----^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `db`
+    --> src/local_build.rs:1572:13
+     |
+1572 |         let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_db`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1573:13
+     |
+1573 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1764:13
+     |
+1764 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: variable does not need to be mutable
+   --> src/profiled/mapping.rs:297:13
+    |
+297 |         let mut store = Self {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `state`
+    --> src/rebuild.rs:1532:21
+     |
+1532 |     let (names_str, state) = crate::eval::evaluate_with_state(&expr)?;
+     |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `manifest`
+   --> src/stored/lazy.rs:318:5
+    |
+318 |     manifest: &[ManifestEntry],
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manifest`
+
+warning: constant `POLL_INTERVAL_MS` is never used
+  --> src/bridge.rs:32:7
+   |
+32 | const POLL_INTERVAL_MS: u64 = 500;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `format_size` is never used
+   --> src/install.rs:746:4
+    |
+746 | fn format_size(bytes: u64) -> String {
+    |    ^^^^^^^^^^^
+
+warning: function `ensure_dir_exists` is never used
+   --> src/stored/lazy.rs:304:4
+    |
+304 | fn ensure_dir_exists(path: &Path, root_fd: Option<usize>) -> std::io::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: constant `VALID_HASH` is never used
+   --> src/stored/resolve.rs:188:11
+    |
+188 |     const VALID_HASH: &str = "1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r";
+    |           ^^^^^^^^^^
+
+warning: constant `SYSTEM_PROFILE_BIN` is never used
+  --> src/system.rs:80:7
+   |
+80 | const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: function `rebuild_system_profile` is never used
+    --> src/system.rs:1693:4
+     |
+1693 | fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/profiled/handles.rs:192:21
+    |
+192 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut profiled::handles::FileHandle`
+    |
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+192 -                     drop(fh);
+192 +                     let _ = fh;
+    |
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/stored/handles.rs:254:21
+    |
+254 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut stored::handles::FileHandle`
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+254 -                     drop(fh);
+254 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 26 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 1 test
+test rebuild::tests::test_parse_config_rejects_invalid_file_modes ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.00s
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:4:32
+  |
+4 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:6:32
+  |
+6 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/mod.rs:9:32
+  |
+9 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/mod.rs:12:32
+   |
+12 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:2:7
+  |
+2 | #[cfg(feature = "linux-sandbox")] use crate::buildservice::bwrap::BubblewrapBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:9:7
+  |
+9 | #[cfg(feature = "linux-sandbox")] use super::oci::OCIBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:42:15
+   |
+42 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:58:15
+   |
+58 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused variable: `blob_service`
+  --> upstream/build/src/buildservice/from_addr.rs:28:5
+   |
+28 |     blob_service: BS,
+   |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_blob_service`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `directory_service`
+  --> upstream/build/src/buildservice/from_addr.rs:29:5
+   |
+29 |     directory_service: DS,
+   |     ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_directory_service`
+
+warning: `snix-build` (lib) generated 10 warnings
+warning: unused import: `BTreeSet`
+  --> src/activate.rs:14:34
+   |
+14 | use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+   |                                  ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::pathinfo::PathInfoDb`
+  --> src/bridge_build.rs:34:5
+   |
+34 | use crate::pathinfo::PathInfoDb;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::local_cache`
+  --> src/install.rs:24:5
+   |
+24 | use crate::local_cache;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BuildConstraints`
+  --> src/local_build.rs:41:32
+   |
+41 | use snix_build::buildservice::{BuildConstraints, BuildRequest};
+   |                                ^^^^^^^^^^^^^^^^
+
+warning: unused import: `nix_compat::nixhash::CAHash`
+    --> src/local_build.rs:1091:9
+     |
+1091 |     use nix_compat::nixhash::CAHash;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::BTreeSet`
+    --> src/local_build.rs:1092:9
+     |
+1092 |     use std::collections::BTreeSet;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+ --> src/nar.rs:9:23
+  |
+9 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+
+warning: unused import: `std::io`
+  --> src/profiled/mapping.rs:18:5
+   |
+18 | use std::io;
+   |     ^^^^^^^
+
+warning: unreachable expression
+  --> src/install.rs:74:5
+   |
+72 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+73 |     }
+74 |     Ok(())
+   |     ^^^^^^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable expression
+  --> src/install.rs:92:5
+   |
+90 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+91 |     }
+92 |     Ok(())
+   |     ^^^^^^ unreachable expression
+
+warning: unused import: `Read`
+   --> src/cache_source.rs:404:19
+    |
+404 |     use std::io::{Read as _, Write};
+    |                   ^^^^
+
+warning: variable does not need to be mutable
+    --> src/activate.rs:2600:13
+     |
+2600 |         let mut old = sample_manifest();
+     |             ----^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `db`
+    --> src/local_build.rs:1572:13
+     |
+1572 |         let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_db`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1573:13
+     |
+1573 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1764:13
+     |
+1764 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: variable does not need to be mutable
+   --> src/profiled/mapping.rs:297:13
+    |
+297 |         let mut store = Self {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `state`
+    --> src/rebuild.rs:1532:21
+     |
+1532 |     let (names_str, state) = crate::eval::evaluate_with_state(&expr)?;
+     |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `manifest`
+   --> src/stored/lazy.rs:318:5
+    |
+318 |     manifest: &[ManifestEntry],
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manifest`
+
+warning: constant `POLL_INTERVAL_MS` is never used
+  --> src/bridge.rs:32:7
+   |
+32 | const POLL_INTERVAL_MS: u64 = 500;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `format_size` is never used
+   --> src/install.rs:746:4
+    |
+746 | fn format_size(bytes: u64) -> String {
+    |    ^^^^^^^^^^^
+
+warning: function `ensure_dir_exists` is never used
+   --> src/stored/lazy.rs:304:4
+    |
+304 | fn ensure_dir_exists(path: &Path, root_fd: Option<usize>) -> std::io::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: constant `VALID_HASH` is never used
+   --> src/stored/resolve.rs:188:11
+    |
+188 |     const VALID_HASH: &str = "1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r";
+    |           ^^^^^^^^^^
+
+warning: constant `SYSTEM_PROFILE_BIN` is never used
+  --> src/system.rs:80:7
+   |
+80 | const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: function `rebuild_system_profile` is never used
+    --> src/system.rs:1693:4
+     |
+1693 | fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/profiled/handles.rs:192:21
+    |
+192 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut profiled::handles::FileHandle`
+    |
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+192 -                     drop(fh);
+192 +                     let _ = fh;
+    |
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/stored/handles.rs:254:21
+    |
+254 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut stored::handles::FileHandle`
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+254 -                     drop(fh);
+254 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 26 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 1 test
+test rebuild::tests::test_merge_config_rejects_manual_invalid_inline_path ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.00s
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:4:32
+  |
+4 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:6:32
+  |
+6 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/mod.rs:9:32
+  |
+9 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/mod.rs:12:32
+   |
+12 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:2:7
+  |
+2 | #[cfg(feature = "linux-sandbox")] use crate::buildservice::bwrap::BubblewrapBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:9:7
+  |
+9 | #[cfg(feature = "linux-sandbox")] use super::oci::OCIBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:42:15
+   |
+42 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:58:15
+   |
+58 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused variable: `blob_service`
+  --> upstream/build/src/buildservice/from_addr.rs:28:5
+   |
+28 |     blob_service: BS,
+   |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_blob_service`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `directory_service`
+  --> upstream/build/src/buildservice/from_addr.rs:29:5
+   |
+29 |     directory_service: DS,
+   |     ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_directory_service`
+
+warning: `snix-build` (lib) generated 10 warnings
+warning: unused import: `BTreeSet`
+  --> src/activate.rs:14:34
+   |
+14 | use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+   |                                  ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::pathinfo::PathInfoDb`
+  --> src/bridge_build.rs:34:5
+   |
+34 | use crate::pathinfo::PathInfoDb;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::local_cache`
+  --> src/install.rs:24:5
+   |
+24 | use crate::local_cache;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BuildConstraints`
+  --> src/local_build.rs:41:32
+   |
+41 | use snix_build::buildservice::{BuildConstraints, BuildRequest};
+   |                                ^^^^^^^^^^^^^^^^
+
+warning: unused import: `nix_compat::nixhash::CAHash`
+    --> src/local_build.rs:1091:9
+     |
+1091 |     use nix_compat::nixhash::CAHash;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::BTreeSet`
+    --> src/local_build.rs:1092:9
+     |
+1092 |     use std::collections::BTreeSet;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+ --> src/nar.rs:9:23
+  |
+9 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+
+warning: unused import: `std::io`
+  --> src/profiled/mapping.rs:18:5
+   |
+18 | use std::io;
+   |     ^^^^^^^
+
+warning: unreachable expression
+  --> src/install.rs:74:5
+   |
+72 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+73 |     }
+74 |     Ok(())
+   |     ^^^^^^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable expression
+  --> src/install.rs:92:5
+   |
+90 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+91 |     }
+92 |     Ok(())
+   |     ^^^^^^ unreachable expression
+
+warning: unused import: `Read`
+   --> src/cache_source.rs:404:19
+    |
+404 |     use std::io::{Read as _, Write};
+    |                   ^^^^
+
+warning: variable does not need to be mutable
+    --> src/activate.rs:2600:13
+     |
+2600 |         let mut old = sample_manifest();
+     |             ----^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `db`
+    --> src/local_build.rs:1572:13
+     |
+1572 |         let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_db`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1573:13
+     |
+1573 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1764:13
+     |
+1764 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: variable does not need to be mutable
+   --> src/profiled/mapping.rs:297:13
+    |
+297 |         let mut store = Self {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `state`
+    --> src/rebuild.rs:1532:21
+     |
+1532 |     let (names_str, state) = crate::eval::evaluate_with_state(&expr)?;
+     |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `manifest`
+   --> src/stored/lazy.rs:318:5
+    |
+318 |     manifest: &[ManifestEntry],
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manifest`
+
+warning: constant `POLL_INTERVAL_MS` is never used
+  --> src/bridge.rs:32:7
+   |
+32 | const POLL_INTERVAL_MS: u64 = 500;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `format_size` is never used
+   --> src/install.rs:746:4
+    |
+746 | fn format_size(bytes: u64) -> String {
+    |    ^^^^^^^^^^^
+
+warning: function `ensure_dir_exists` is never used
+   --> src/stored/lazy.rs:304:4
+    |
+304 | fn ensure_dir_exists(path: &Path, root_fd: Option<usize>) -> std::io::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: constant `VALID_HASH` is never used
+   --> src/stored/resolve.rs:188:11
+    |
+188 |     const VALID_HASH: &str = "1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r";
+    |           ^^^^^^^^^^
+
+warning: constant `SYSTEM_PROFILE_BIN` is never used
+  --> src/system.rs:80:7
+   |
+80 | const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: function `rebuild_system_profile` is never used
+    --> src/system.rs:1693:4
+     |
+1693 | fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/profiled/handles.rs:192:21
+    |
+192 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut profiled::handles::FileHandle`
+    |
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+192 -                     drop(fh);
+192 +                     let _ = fh;
+    |
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/stored/handles.rs:254:21
+    |
+254 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut stored::handles::FileHandle`
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+254 -                     drop(fh);
+254 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 26 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.13s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 1 test
+test rebuild::tests::test_merge_config_rejects_manual_invalid_inline_mode ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.00s
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:4:32
+  |
+4 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:6:32
+  |
+6 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/mod.rs:9:32
+  |
+9 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/mod.rs:12:32
+   |
+12 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:2:7
+  |
+2 | #[cfg(feature = "linux-sandbox")] use crate::buildservice::bwrap::BubblewrapBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:9:7
+  |
+9 | #[cfg(feature = "linux-sandbox")] use super::oci::OCIBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:42:15
+   |
+42 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:58:15
+   |
+58 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused variable: `blob_service`
+  --> upstream/build/src/buildservice/from_addr.rs:28:5
+   |
+28 |     blob_service: BS,
+   |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_blob_service`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `directory_service`
+  --> upstream/build/src/buildservice/from_addr.rs:29:5
+   |
+29 |     directory_service: DS,
+   |     ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_directory_service`
+
+warning: `snix-build` (lib) generated 10 warnings
+warning: unused import: `BTreeSet`
+  --> src/activate.rs:14:34
+   |
+14 | use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+   |                                  ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::pathinfo::PathInfoDb`
+  --> src/bridge_build.rs:34:5
+   |
+34 | use crate::pathinfo::PathInfoDb;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::local_cache`
+  --> src/install.rs:24:5
+   |
+24 | use crate::local_cache;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BuildConstraints`
+  --> src/local_build.rs:41:32
+   |
+41 | use snix_build::buildservice::{BuildConstraints, BuildRequest};
+   |                                ^^^^^^^^^^^^^^^^
+
+warning: unused import: `nix_compat::nixhash::CAHash`
+    --> src/local_build.rs:1091:9
+     |
+1091 |     use nix_compat::nixhash::CAHash;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::BTreeSet`
+    --> src/local_build.rs:1092:9
+     |
+1092 |     use std::collections::BTreeSet;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+ --> src/nar.rs:9:23
+  |
+9 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+
+warning: unused import: `std::io`
+  --> src/profiled/mapping.rs:18:5
+   |
+18 | use std::io;
+   |     ^^^^^^^
+
+warning: unreachable expression
+  --> src/install.rs:74:5
+   |
+72 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+73 |     }
+74 |     Ok(())
+   |     ^^^^^^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable expression
+  --> src/install.rs:92:5
+   |
+90 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+91 |     }
+92 |     Ok(())
+   |     ^^^^^^ unreachable expression
+
+warning: unused import: `Read`
+   --> src/cache_source.rs:404:19
+    |
+404 |     use std::io::{Read as _, Write};
+    |                   ^^^^
+
+warning: variable does not need to be mutable
+    --> src/activate.rs:2600:13
+     |
+2600 |         let mut old = sample_manifest();
+     |             ----^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `db`
+    --> src/local_build.rs:1572:13
+     |
+1572 |         let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_db`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1573:13
+     |
+1573 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1764:13
+     |
+1764 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: variable does not need to be mutable
+   --> src/profiled/mapping.rs:297:13
+    |
+297 |         let mut store = Self {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `state`
+    --> src/rebuild.rs:1532:21
+     |
+1532 |     let (names_str, state) = crate::eval::evaluate_with_state(&expr)?;
+     |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `manifest`
+   --> src/stored/lazy.rs:318:5
+    |
+318 |     manifest: &[ManifestEntry],
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manifest`
+
+warning: constant `POLL_INTERVAL_MS` is never used
+  --> src/bridge.rs:32:7
+   |
+32 | const POLL_INTERVAL_MS: u64 = 500;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `format_size` is never used
+   --> src/install.rs:746:4
+    |
+746 | fn format_size(bytes: u64) -> String {
+    |    ^^^^^^^^^^^
+
+warning: function `ensure_dir_exists` is never used
+   --> src/stored/lazy.rs:304:4
+    |
+304 | fn ensure_dir_exists(path: &Path, root_fd: Option<usize>) -> std::io::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: constant `VALID_HASH` is never used
+   --> src/stored/resolve.rs:188:11
+    |
+188 |     const VALID_HASH: &str = "1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r";
+    |           ^^^^^^^^^^
+
+warning: constant `SYSTEM_PROFILE_BIN` is never used
+  --> src/system.rs:80:7
+   |
+80 | const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: function `rebuild_system_profile` is never used
+    --> src/system.rs:1693:4
+     |
+1693 | fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/profiled/handles.rs:192:21
+    |
+192 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut profiled::handles::FileHandle`
+    |
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+192 -                     drop(fh);
+192 +                     let _ = fh;
+    |
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/stored/handles.rs:254:21
+    |
+254 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut stored::handles::FileHandle`
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+254 -                     drop(fh);
+254 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 26 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 1 test
+test rebuild::tests::test_parse_full_config ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.00s
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:4:32
+  |
+4 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:6:32
+  |
+6 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/mod.rs:9:32
+  |
+9 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/mod.rs:12:32
+   |
+12 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:2:7
+  |
+2 | #[cfg(feature = "linux-sandbox")] use crate::buildservice::bwrap::BubblewrapBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:9:7
+  |
+9 | #[cfg(feature = "linux-sandbox")] use super::oci::OCIBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:42:15
+   |
+42 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:58:15
+   |
+58 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused variable: `blob_service`
+  --> upstream/build/src/buildservice/from_addr.rs:28:5
+   |
+28 |     blob_service: BS,
+   |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_blob_service`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `directory_service`
+  --> upstream/build/src/buildservice/from_addr.rs:29:5
+   |
+29 |     directory_service: DS,
+   |     ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_directory_service`
+
+warning: `snix-build` (lib) generated 10 warnings
+warning: unused import: `BTreeSet`
+  --> src/activate.rs:14:34
+   |
+14 | use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+   |                                  ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::pathinfo::PathInfoDb`
+  --> src/bridge_build.rs:34:5
+   |
+34 | use crate::pathinfo::PathInfoDb;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::local_cache`
+  --> src/install.rs:24:5
+   |
+24 | use crate::local_cache;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BuildConstraints`
+  --> src/local_build.rs:41:32
+   |
+41 | use snix_build::buildservice::{BuildConstraints, BuildRequest};
+   |                                ^^^^^^^^^^^^^^^^
+
+warning: unused import: `nix_compat::nixhash::CAHash`
+    --> src/local_build.rs:1091:9
+     |
+1091 |     use nix_compat::nixhash::CAHash;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::BTreeSet`
+    --> src/local_build.rs:1092:9
+     |
+1092 |     use std::collections::BTreeSet;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+ --> src/nar.rs:9:23
+  |
+9 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+
+warning: unused import: `std::io`
+  --> src/profiled/mapping.rs:18:5
+   |
+18 | use std::io;
+   |     ^^^^^^^
+
+warning: unreachable expression
+  --> src/install.rs:74:5
+   |
+72 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+73 |     }
+74 |     Ok(())
+   |     ^^^^^^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable expression
+  --> src/install.rs:92:5
+   |
+90 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+91 |     }
+92 |     Ok(())
+   |     ^^^^^^ unreachable expression
+
+warning: unused import: `Read`
+   --> src/cache_source.rs:404:19
+    |
+404 |     use std::io::{Read as _, Write};
+    |                   ^^^^
+
+warning: variable does not need to be mutable
+    --> src/activate.rs:2600:13
+     |
+2600 |         let mut old = sample_manifest();
+     |             ----^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `db`
+    --> src/local_build.rs:1572:13
+     |
+1572 |         let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_db`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1573:13
+     |
+1573 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1764:13
+     |
+1764 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: variable does not need to be mutable
+   --> src/profiled/mapping.rs:297:13
+    |
+297 |         let mut store = Self {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `state`
+    --> src/rebuild.rs:1532:21
+     |
+1532 |     let (names_str, state) = crate::eval::evaluate_with_state(&expr)?;
+     |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `manifest`
+   --> src/stored/lazy.rs:318:5
+    |
+318 |     manifest: &[ManifestEntry],
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manifest`
+
+warning: constant `POLL_INTERVAL_MS` is never used
+  --> src/bridge.rs:32:7
+   |
+32 | const POLL_INTERVAL_MS: u64 = 500;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `format_size` is never used
+   --> src/install.rs:746:4
+    |
+746 | fn format_size(bytes: u64) -> String {
+    |    ^^^^^^^^^^^
+
+warning: function `ensure_dir_exists` is never used
+   --> src/stored/lazy.rs:304:4
+    |
+304 | fn ensure_dir_exists(path: &Path, root_fd: Option<usize>) -> std::io::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: constant `VALID_HASH` is never used
+   --> src/stored/resolve.rs:188:11
+    |
+188 |     const VALID_HASH: &str = "1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r";
+    |           ^^^^^^^^^^
+
+warning: constant `SYSTEM_PROFILE_BIN` is never used
+  --> src/system.rs:80:7
+   |
+80 | const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: function `rebuild_system_profile` is never used
+    --> src/system.rs:1693:4
+     |
+1693 | fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/profiled/handles.rs:192:21
+    |
+192 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut profiled::handles::FileHandle`
+    |
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+192 -                     drop(fh);
+192 +                     let _ = fh;
+    |
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/stored/handles.rs:254:21
+    |
+254 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut stored::handles::FileHandle`
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+254 -                     drop(fh);
+254 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 26 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.17s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 1 test
+test rebuild::tests::test_merge_config_adds_inline_files ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.00s
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:4:32
+  |
+4 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+  = note: `#[warn(unexpected_cfgs)]` on by default
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/lib.rs:6:32
+  |
+6 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/mod.rs:9:32
+  |
+9 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+  |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/mod.rs:12:32
+   |
+12 | #[cfg(all(target_os = "linux", feature = "linux-sandbox"))]
+   |                                ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:2:7
+  |
+2 | #[cfg(feature = "linux-sandbox")] use crate::buildservice::bwrap::BubblewrapBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+ --> upstream/build/src/buildservice/from_addr.rs:9:7
+  |
+9 | #[cfg(feature = "linux-sandbox")] use super::oci::OCIBuildService;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: expected values for `feature` are: `default` and `tonic-reflection`
+  = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+  = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:42:15
+   |
+42 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unexpected `cfg` condition value: `linux-sandbox`
+  --> upstream/build/src/buildservice/from_addr.rs:58:15
+   |
+58 |         #[cfg(feature = "linux-sandbox")]
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^^
+   |
+   = note: expected values for `feature` are: `default` and `tonic-reflection`
+   = help: consider adding `linux-sandbox` as a feature in `Cargo.toml`
+   = note: see <https://doc.rust-lang.org/nightly/rustc/check-cfg/cargo-specifics.html> for more information about checking conditional configuration
+
+warning: unused variable: `blob_service`
+  --> upstream/build/src/buildservice/from_addr.rs:28:5
+   |
+28 |     blob_service: BS,
+   |     ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_blob_service`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `directory_service`
+  --> upstream/build/src/buildservice/from_addr.rs:29:5
+   |
+29 |     directory_service: DS,
+   |     ^^^^^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_directory_service`
+
+warning: `snix-build` (lib) generated 10 warnings
+warning: unused import: `BTreeSet`
+  --> src/activate.rs:14:34
+   |
+14 | use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
+   |                                  ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `crate::pathinfo::PathInfoDb`
+  --> src/bridge_build.rs:34:5
+   |
+34 | use crate::pathinfo::PathInfoDb;
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::local_cache`
+  --> src/install.rs:24:5
+   |
+24 | use crate::local_cache;
+   |     ^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `BuildConstraints`
+  --> src/local_build.rs:41:32
+   |
+41 | use snix_build::buildservice::{BuildConstraints, BuildRequest};
+   |                                ^^^^^^^^^^^^^^^^
+
+warning: unused import: `nix_compat::nixhash::CAHash`
+    --> src/local_build.rs:1091:9
+     |
+1091 |     use nix_compat::nixhash::CAHash;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `std::collections::BTreeSet`
+    --> src/local_build.rs:1092:9
+     |
+1092 |     use std::collections::BTreeSet;
+     |         ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `PathBuf`
+ --> src/nar.rs:9:23
+  |
+9 | use std::path::{Path, PathBuf};
+  |                       ^^^^^^^
+
+warning: unused import: `std::io`
+  --> src/profiled/mapping.rs:18:5
+   |
+18 | use std::io;
+   |     ^^^^^^^
+
+warning: unreachable expression
+  --> src/install.rs:74:5
+   |
+72 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+73 |     }
+74 |     Ok(())
+   |     ^^^^^^ unreachable expression
+   |
+   = note: `#[warn(unreachable_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: unreachable expression
+  --> src/install.rs:92:5
+   |
+90 |         return Err("profiled not available on this platform".into());
+   |         ------------------------------------------------------------ any code following this expression is unreachable
+91 |     }
+92 |     Ok(())
+   |     ^^^^^^ unreachable expression
+
+warning: unused import: `Read`
+   --> src/cache_source.rs:404:19
+    |
+404 |     use std::io::{Read as _, Write};
+    |                   ^^^^
+
+warning: variable does not need to be mutable
+    --> src/activate.rs:2600:13
+     |
+2600 |         let mut old = sample_manifest();
+     |             ----^^^
+     |             |
+     |             help: remove this `mut`
+     |
+     = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `db`
+    --> src/local_build.rs:1572:13
+     |
+1572 |         let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_db`
+     |
+     = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1573:13
+     |
+1573 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: unused variable: `kp`
+    --> src/local_build.rs:1764:13
+     |
+1764 |         let kp = KnownPaths::default();
+     |             ^^ help: if this is intentional, prefix it with an underscore: `_kp`
+
+warning: variable does not need to be mutable
+   --> src/profiled/mapping.rs:297:13
+    |
+297 |         let mut store = Self {
+    |             ----^^^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `state`
+    --> src/rebuild.rs:1532:21
+     |
+1532 |     let (names_str, state) = crate::eval::evaluate_with_state(&expr)?;
+     |                     ^^^^^ help: if this is intentional, prefix it with an underscore: `_state`
+
+warning: unused variable: `manifest`
+   --> src/stored/lazy.rs:318:5
+    |
+318 |     manifest: &[ManifestEntry],
+    |     ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_manifest`
+
+warning: constant `POLL_INTERVAL_MS` is never used
+  --> src/bridge.rs:32:7
+   |
+32 | const POLL_INTERVAL_MS: u64 = 500;
+   |       ^^^^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: function `format_size` is never used
+   --> src/install.rs:746:4
+    |
+746 | fn format_size(bytes: u64) -> String {
+    |    ^^^^^^^^^^^
+
+warning: function `ensure_dir_exists` is never used
+   --> src/stored/lazy.rs:304:4
+    |
+304 | fn ensure_dir_exists(path: &Path, root_fd: Option<usize>) -> std::io::Result<()> {
+    |    ^^^^^^^^^^^^^^^^^
+
+warning: constant `VALID_HASH` is never used
+   --> src/stored/resolve.rs:188:11
+    |
+188 |     const VALID_HASH: &str = "1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r";
+    |           ^^^^^^^^^^
+
+warning: constant `SYSTEM_PROFILE_BIN` is never used
+  --> src/system.rs:80:7
+   |
+80 | const SYSTEM_PROFILE_BIN: &str = "/nix/system/profile/bin";
+   |       ^^^^^^^^^^^^^^^^^^
+
+warning: function `rebuild_system_profile` is never used
+    --> src/system.rs:1693:4
+     |
+1693 | fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error::Error>> {
+     |    ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/profiled/handles.rs:192:21
+    |
+192 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut profiled::handles::FileHandle`
+    |
+    = note: `#[warn(dropping_references)]` on by default
+help: use `let _ = ...` to ignore the expression or result
+    |
+192 -                     drop(fh);
+192 +                     let _ = fh;
+    |
+
+warning: calls to `std::mem::drop` with a reference instead of an owned value does nothing
+   --> src/stored/handles.rs:254:21
+    |
+254 |                     drop(fh);
+    |                     ^^^^^--^
+    |                          |
+    |                          argument has type `&mut stored::handles::FileHandle`
+    |
+help: use `let _ = ...` to ignore the expression or result
+    |
+254 -                     drop(fh);
+254 +                     let _ = fh;
+    |
+
+warning: `snix-redox` (lib test) generated 26 warnings (run `cargo fix --lib -p snix-redox --tests` to apply 10 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.14s
+     Running unittests src/lib.rs (/home/brittonr/.cargo-target/x86_64-unknown-linux-gnu/debug/deps/snix_redox-04c53a78600c7172)
+
+running 1 test
+test rebuild::tests::test_merge_config_replaces_prior_inline_files ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.00s

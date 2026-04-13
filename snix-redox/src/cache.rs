@@ -22,10 +22,7 @@ use crate::pathinfo::{PathInfo, PathInfoDb};
 use crate::store;
 
 /// Fetch and display narinfo for a store path.
-pub fn path_info(
-    store_path_str: &str,
-    cache_url: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn path_info(store_path_str: &str, cache_url: &str) -> Result<(), Box<dyn std::error::Error>> {
     let sp = StorePath::<String>::from_absolute_path(store_path_str.as_bytes())?;
     let narinfo = fetch_narinfo(&sp, cache_url)?;
 
@@ -40,10 +37,7 @@ pub fn path_info(
         println!("Compression: {comp}");
     }
     if let Some(fh) = narinfo.file_hash {
-        println!(
-            "FileHash:  sha256:{}",
-            data_encoding::HEXLOWER.encode(&fh)
-        );
+        println!("FileHash:  sha256:{}", data_encoding::HEXLOWER.encode(&fh));
     }
     if let Some(fs) = narinfo.file_size {
         println!("FileSize:  {fs}");
@@ -66,10 +60,7 @@ pub fn path_info(
 ///
 /// Downloads the NAR, decompresses it, extracts to /nix/store/,
 /// verifies the hash, and optionally registers the path.
-pub fn fetch(
-    store_path_str: &str,
-    cache_url: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn fetch(store_path_str: &str, cache_url: &str) -> Result<(), Box<dyn std::error::Error>> {
     fetch_inner(store_path_str, cache_url, None)
 }
 
@@ -121,9 +112,7 @@ pub fn fetch_recursive(
         let narinfo = match fetch_narinfo(&sp, cache_url) {
             Ok(ni) => ni,
             Err(e) => {
-                return Err(
-                    format!("failed to fetch narinfo for {path}: {e}").into()
-                );
+                return Err(format!("failed to fetch narinfo for {path}: {e}").into());
             }
         };
 
@@ -440,8 +429,7 @@ mod tests {
             assert!(StorePath::<String>::from_absolute_path(path.as_bytes()).is_err());
         }
 
-        let toolong =
-            "/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-".to_string() + &"x".repeat(300);
+        let toolong = "/nix/store/00bgd045z0d4icpbc2yyz4gx48ak44la-".to_string() + &"x".repeat(300);
         assert!(StorePath::<String>::from_absolute_path(toolong.as_bytes()).is_err());
     }
 

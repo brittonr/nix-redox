@@ -1,57 +1,25 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Auto-route to bridge when packages changed and bridge available
-`snix system rebuild` SHALL automatically use the bridge path when the parsed configuration contains package changes and `/scheme/shared/requests` is a directory.
+`snix system rebuild` SHALL automatically use the bridge path when the parsed configuration contains package changes and `/scheme/shared/requests` is a directory. When the bridge is not available and the configuration contains package changes, the rebuild SHALL attempt to resolve packages from the remote cache (if `--cache-url` provided) or the local cache, rather than failing immediately.
 
-#### Scenario: Package change with bridge available
-- **WHEN** configuration.nix contains `packages = [ "ripgrep" ]`
-- **AND** `/scheme/shared/requests` exists as a directory
-- **AND** neither `--bridge` nor `--local` flags are passed
-- **THEN** the rebuild uses the bridge path (sends request to host, polls for response)
+#### Scenario: Bridge available with package changes
+- **WHEN** configuration.nix adds a new package
+- **AND** `/scheme/shared/requests` exists (bridge is connected)
+- **THEN** the rebuild routes through the bridge for package resolution
 
-#### Scenario: Config-only change with bridge available
-- **WHEN** configuration.nix changes only `hostname`
-- **AND** `/scheme/shared/requests` exists as a directory
-- **AND** neither `--bridge` nor `--local` flags are passed
-- **THEN** the rebuild uses the local path (no bridge round-trip)
+#### Scenario: No bridge, remote cache available
+- **WHEN** configuration.nix adds a new package
+- **AND** the bridge is not available
+- **AND** `--cache-url` is provided
+- **THEN** the rebuild fetches the package from the remote cache
 
-#### Scenario: Config-only change without bridge
-- **WHEN** configuration.nix changes only `hostname`
-- **AND** `/scheme/shared/requests` does NOT exist
-- **THEN** the rebuild uses the local path and succeeds
+#### Scenario: No bridge, no remote cache, package in local cache
+- **WHEN** configuration.nix adds a package that exists in `/nix/cache`
+- **AND** neither bridge nor `--cache-url` is available
+- **THEN** the rebuild resolves from the local cache
 
-### Requirement: Error on package changes without bridge
-`snix system rebuild` SHALL report a clear error when package changes are detected but no bridge is available.
-
-#### Scenario: Package change without bridge
-- **WHEN** configuration.nix contains `packages = [ "ripgrep" ]`
-- **AND** `/scheme/shared/requests` does NOT exist
-- **AND** `--local` flag is NOT passed
-- **THEN** the command exits with an error
-- **AND** the error message explains that package changes require the bridge
-- **AND** the error message includes instructions for starting the VM with shared filesystem
-
-### Requirement: Explicit --bridge flag overrides auto-detection
-The `--bridge` flag SHALL force the bridge path regardless of config content.
-
-#### Scenario: Force bridge for config-only change
-- **WHEN** configuration.nix changes only `hostname`
-- **AND** `--bridge` flag is passed
-- **THEN** the rebuild uses the bridge path
-
-### Requirement: Explicit --local flag forces local path
-The `--local` flag SHALL force the local rebuild path, including local package resolution.
-
-#### Scenario: Force local for package change
-- **WHEN** configuration.nix contains `packages = [ "ripgrep" ]`
-- **AND** `--local` flag is passed
-- **THEN** the rebuild uses the local path with JSON index resolution
-- **AND** no error about missing bridge is shown
-
-### Requirement: Empty package list treated as no package change
-An empty `packages = []` in configuration.nix SHALL be treated as "no package change" (same as omitting the packages field).
-
-#### Scenario: Empty packages list
-- **WHEN** configuration.nix contains `packages = []`
-- **AND** no bridge is available
-- **THEN** the rebuild uses the local path and succeeds (no package error)
+#### Scenario: No bridge, no cache, source available
+- **WHEN** configuration.nix specifies `packageSources` and `--source` is given
+- **AND** neither bridge nor cache has the package
+- **THEN** the rebuild builds the package from source

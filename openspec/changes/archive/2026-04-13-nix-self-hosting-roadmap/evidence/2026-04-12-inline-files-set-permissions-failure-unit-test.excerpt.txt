@@ -1,0 +1,1 @@
+test activate::tests::update_config_files_warns_when_set_permissions_fails ... ok

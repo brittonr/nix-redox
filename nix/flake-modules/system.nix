@@ -481,8 +481,9 @@ let
     memoryMB = 8192;
     cpus = 4;
     # The focused snix-compile rerun now takes ~3090s on a cold guest build,
-    # and the full suite still has source-rebuild checks after it.
-    defaultTimeout = 4800;
+    # the full suite still has source-rebuild checks after it, and the
+    # rebuild-cycle proof now runs at the end of self-hosting-test.
+    defaultTimeout = 6000;
   };
   selfHostingTest = wrapFunctionalTest {
     base = selfHostingTestRaw;

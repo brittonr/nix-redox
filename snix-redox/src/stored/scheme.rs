@@ -16,7 +16,7 @@ use syscall::error::{Error, Result, EACCES, EBADF, EIO, ENOENT, ENOTDIR};
 use syscall::flag::O_DIRECTORY;
 use syscall::schemev2::NewFdFlags;
 
-use super::handles::{Handle};
+use super::handles::Handle;
 use super::resolve::{self, ResolvedPath};
 use super::{StoreDaemon, StoredConfig};
 
@@ -74,7 +74,6 @@ impl SchemeSync for StoreSchemeHandler {
         _fcntl_flags: u32,
         _ctx: &CallerCtx,
     ) -> Result<OpenResult> {
-
         let path = path.trim_matches('/');
 
         // Handle .control path for manifest notifications.
@@ -94,7 +93,6 @@ impl SchemeSync for StoreSchemeHandler {
 
         match &resolved {
             ResolvedPath::Root => {
-
                 // Use unchecked — avoid filesystem I/O that could deadlock
                 // if /nix/store/ resolution routes through this scheme.
                 let fs_path = std::path::PathBuf::from(&self.daemon.config.store_dir);
@@ -121,7 +119,11 @@ impl SchemeSync for StoreSchemeHandler {
                     return Err(Error::new(ENOENT));
                 }
 
-                if let Some(expected_nar_hash) = self.daemon.expected_nar_hash(store_path_name).map(str::to_string) {
+                if let Some(expected_nar_hash) = self
+                    .daemon
+                    .expected_nar_hash(store_path_name)
+                    .map(str::to_string)
+                {
                     match super::lazy::ensure_extracted(
                         store_path_name,
                         &self.daemon.config.store_dir,
@@ -132,10 +134,9 @@ impl SchemeSync for StoreSchemeHandler {
                     ) {
                         Ok(outcome) => {
                             if let Some(manifest) = outcome.manifest {
-                                self.daemon.manifests.insert(
-                                    store_path_name.to_string(),
-                                    manifest,
-                                );
+                                self.daemon
+                                    .manifests
+                                    .insert(store_path_name.to_string(), manifest);
                             }
                         }
                         Err(super::lazy::ExtractError::NotRegistered(_)) => {
@@ -153,7 +154,11 @@ impl SchemeSync for StoreSchemeHandler {
                     self.daemon.load_manifest_via_worker(store_path_name);
                 }
 
-                if let ResolvedPath::SubPath { store_path_name, subpath } = &resolved {
+                if let ResolvedPath::SubPath {
+                    store_path_name,
+                    subpath,
+                } = &resolved
+                {
                     if matches!(
                         self.daemon.manifest_contains_path(store_path_name, subpath),
                         Some(false)
@@ -166,11 +171,8 @@ impl SchemeSync for StoreSchemeHandler {
                 // Resolve to filesystem path. Skip filesystem existence checks —
                 // scheme handlers must stay off file: I/O paths and rely on
                 // cached metadata plus lazy reads through the I/O worker.
-                let fs_path = resolve::to_filesystem_path(
-                    &resolved,
-                    &self.daemon.config.store_dir,
-                )
-                .ok_or_else(|| Error::new(ENOENT))?;
+                let fs_path = resolve::to_filesystem_path(&resolved, &self.daemon.config.store_dir)
+                    .ok_or_else(|| Error::new(ENOENT))?;
 
                 let scheme_path = path.to_string();
 
@@ -180,11 +182,12 @@ impl SchemeSync for StoreSchemeHandler {
                 let open_as_dir = match &resolved {
                     ResolvedPath::StorePathRoot { .. } => true,
                     _ if flags & O_DIRECTORY != 0 => true,
-                    ResolvedPath::SubPath { store_path_name, subpath } => {
-                        self.daemon.is_directory_in_manifest(
-                            store_path_name, subpath,
-                        )
-                    }
+                    ResolvedPath::SubPath {
+                        store_path_name,
+                        subpath,
+                    } => self
+                        .daemon
+                        .is_directory_in_manifest(store_path_name, subpath),
                     _ => false,
                 };
 
@@ -206,19 +209,18 @@ impl SchemeSync for StoreSchemeHandler {
                     // The actual open is deferred until the first read().
                     // Metadata comes from the manifest (if available).
                     let (size, executable) = match &resolved {
-                        ResolvedPath::SubPath { store_path_name, subpath } => {
-                            self.daemon.file_metadata_from_manifest(
-                                store_path_name, subpath,
-                            )
-                        }
+                        ResolvedPath::SubPath {
+                            store_path_name,
+                            subpath,
+                        } => self
+                            .daemon
+                            .file_metadata_from_manifest(store_path_name, subpath),
                         _ => (0, false),
                     };
-                    let id = self.daemon.handles.open_file_lazy(
-                        fs_path,
-                        scheme_path,
-                        size,
-                        executable,
-                    );
+                    let id =
+                        self.daemon
+                            .handles
+                            .open_file_lazy(fs_path, scheme_path, size, executable);
                     Ok(OpenResult::ThisScheme {
                         number: id,
                         flags: NewFdFlags::POSITIONED,
@@ -236,7 +238,6 @@ impl SchemeSync for StoreSchemeHandler {
         _fcntl_flags: u32,
         _ctx: &CallerCtx,
     ) -> Result<usize> {
-
         self.daemon.handles.read(id, buf, offset).map_err(|e| {
             eprintln!("stored: read({id}): {e}");
             Error::new(EBADF)
@@ -259,7 +260,10 @@ impl SchemeSync for StoreSchemeHandler {
     }
 
     fn fsize(&mut self, id: usize, _ctx: &CallerCtx) -> Result<u64> {
-        self.daemon.handles.file_size(id).map_err(|_| Error::new(EBADF))
+        self.daemon
+            .handles
+            .file_size(id)
+            .map_err(|_| Error::new(EBADF))
     }
 
     fn fpath(&mut self, id: usize, buf: &mut [u8], _ctx: &CallerCtx) -> Result<usize> {
@@ -281,14 +285,17 @@ impl SchemeSync for StoreSchemeHandler {
         Ok(len)
     }
 
-    fn fevent(&mut self, id: usize, _flags: syscall::flag::EventFlags, _ctx: &CallerCtx) -> Result<syscall::flag::EventFlags> {
+    fn fevent(
+        &mut self,
+        id: usize,
+        _flags: syscall::flag::EventFlags,
+        _ctx: &CallerCtx,
+    ) -> Result<syscall::flag::EventFlags> {
         match self.daemon.handles.handles.get(&id) {
             Some(Handle::File(_)) | Some(Handle::Dir(_)) => {
                 Ok(syscall::flag::EventFlags::EVENT_READ)
             }
-            Some(Handle::Control(_)) => {
-                Ok(syscall::flag::EventFlags::EVENT_WRITE)
-            }
+            Some(Handle::Control(_)) => Ok(syscall::flag::EventFlags::EVENT_WRITE),
             None => Err(Error::new(EBADF)),
         }
     }
@@ -325,7 +332,6 @@ impl SchemeSync for StoreSchemeHandler {
         mut buf: DirentBuf<&'buf mut [u8]>,
         opaque_offset: u64,
     ) -> Result<DirentBuf<&'buf mut [u8]>> {
-
         let is_dir = self.daemon.handles.is_dir(id).ok_or(Error::new(EBADF))?;
         if !is_dir {
             return Err(Error::new(ENOTDIR));
@@ -360,26 +366,25 @@ impl SchemeSync for StoreSchemeHandler {
             // Directory within a store path. Use manifest to avoid
             // filesystem I/O (which hangs in Redox scheme daemons).
             // Parse the scheme path to get store_path_name and subpath.
-            let resolved = resolve::parse_scheme_path(&scheme_path)
-                .map_err(|e| {
-                    eprintln!("stored: getdents parse error: {e}");
-                    Error::new(ENOENT)
-                })?;
+            let resolved = resolve::parse_scheme_path(&scheme_path).map_err(|e| {
+                eprintln!("stored: getdents parse error: {e}");
+                Error::new(ENOENT)
+            })?;
 
             let (store_path_name, subpath) = match &resolved {
-                resolve::ResolvedPath::StorePathRoot { store_path_name } =>
-                    (store_path_name.as_str(), ""),
-                resolve::ResolvedPath::SubPath { store_path_name, subpath } =>
-                    (store_path_name.as_str(), subpath.as_str()),
+                resolve::ResolvedPath::StorePathRoot { store_path_name } => {
+                    (store_path_name.as_str(), "")
+                }
+                resolve::ResolvedPath::SubPath {
+                    store_path_name,
+                    subpath,
+                } => (store_path_name.as_str(), subpath.as_str()),
                 _ => return Ok(buf),
             };
 
             // Manifests are provided via .control notifications from
             // snix install (same pattern as profiled). No on-demand I/O.
-            let entries = self.daemon.list_from_manifest(
-                store_path_name,
-                subpath,
-            );
+            let entries = self.daemon.list_from_manifest(store_path_name, subpath);
 
             if let Some(entries) = entries {
                 let start = opaque_offset as usize;
@@ -420,9 +425,8 @@ impl SchemeSync for StoreSchemeHandler {
                 // Parse JSON: { "storePath": "/nix/store/...", "files": [...] }
                 match serde_json::from_str::<serde_json::Value>(&command) {
                     Ok(val) => {
-                        let store_path = val.get("storePath")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("");
+                        let store_path =
+                            val.get("storePath").and_then(|v| v.as_str()).unwrap_or("");
                         let store_path_name = store_path
                             .strip_prefix(&format!("{}/", self.daemon.config.store_dir))
                             .unwrap_or(store_path);
@@ -435,7 +439,7 @@ impl SchemeSync for StoreSchemeHandler {
 
                         if let Some(files_val) = val.get("files") {
                             match serde_json::from_value::<Vec<crate::nar::ManifestEntry>>(
-                                files_val.clone()
+                                files_val.clone(),
                             ) {
                                 Ok(files) if !files.is_empty() => {
                                     eprintln!(
@@ -443,13 +447,14 @@ impl SchemeSync for StoreSchemeHandler {
                                         store_path_name,
                                         files.len()
                                     );
-                                    self.daemon.manifests.insert(
-                                        store_path_name.to_string(),
-                                        files,
-                                    );
+                                    self.daemon
+                                        .manifests
+                                        .insert(store_path_name.to_string(), files);
                                 }
                                 Ok(_) => {
-                                    eprintln!("stored: received empty manifest for {store_path_name}");
+                                    eprintln!(
+                                        "stored: received empty manifest for {store_path_name}"
+                                    );
                                 }
                                 Err(e) => {
                                     eprintln!("stored: failed to parse manifest: {e}");
@@ -511,9 +516,8 @@ pub fn run_daemon(config: StoredConfig) -> Result<(), Box<dyn std::error::Error>
     // setrens(0, 0) — after that, std::fs operations fail. The root_fd
     // allows the FileIoWorker to continue reading files via SYS_OPENAT.
     eprintln!("stored: pre-opening /");
-    let root_file = std::fs::File::open("/").map_err(|e| {
-        format!("stored: failed to open /: {e}")
-    })?;
+    let root_file =
+        std::fs::File::open("/").map_err(|e| format!("stored: failed to open /: {e}"))?;
     let root_fd = {
         use std::os::unix::io::AsRawFd;
         root_file.as_raw_fd() as usize
@@ -525,17 +529,14 @@ pub fn run_daemon(config: StoredConfig) -> Result<(), Box<dyn std::error::Error>
     // root_fd=None during daemon construction — now that we have
     // the fd, restart the worker with it.
     handler.daemon.root_fd = Some(root_fd);
-    handler.daemon.handles.io_worker = Some(
-        crate::file_io_worker::FileIoWorker::spawn(Some(root_fd))
-    );
+    handler.daemon.handles.io_worker =
+        Some(crate::file_io_worker::FileIoWorker::spawn(Some(root_fd)));
 
     // Drop into null namespace. After this, no new scheme connections
     // can be opened. The already-open scheme socket and root_fd still
     // work (open fds survive setrens).
     eprintln!("stored: entering null namespace");
-    libredox::call::setrens(0, 0).map_err(|e| {
-        format!("stored: setrens(0, 0) failed: {e}")
-    })?;
+    libredox::call::setrens(0, 0).map_err(|e| format!("stored: setrens(0, 0) failed: {e}"))?;
 
     notify_init_ready()?;
 
@@ -556,7 +557,6 @@ pub fn run_daemon(config: StoredConfig) -> Result<(), Box<dyn std::error::Error>
 
         match req.kind() {
             RequestKind::Call(call_req) => {
-
                 let response = call_req.handle_sync(&mut handler, &mut state);
 
                 if !socket.write_response(response, SignalBehavior::Restart)? {
@@ -565,11 +565,9 @@ pub fn run_daemon(config: StoredConfig) -> Result<(), Box<dyn std::error::Error>
                 }
             }
             RequestKind::OnClose { id } => {
-
                 handler.on_close(id);
             }
             _ => {
-
                 continue;
             }
         }

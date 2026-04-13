@@ -41,7 +41,7 @@ All tasks below are blocked until the stabilization baseline is complete:
 ## 4. Full guest rebuild flow (blocked on section 0-3)
 
 - [x] 4.1 Wire remote cache resolution into rebuild.rs: try remote → local → source fallback chain
-- [x] 4.2 Implement generation creation in rebuild: mkdir /nix/system/generations/N, write manifest.json + metadata.json
+- [x] 4.2 Implement generation creation in rebuild: mkdir /etc/redox-system/generations/N, write manifest.json + metadata.json
 - [x] 4.3 Update /nix/system/current symlink on successful activation
 - [x] 4.4 Implement rebuild-auto-routing: detect bridge vs remote vs local vs source
 - [x] 4.5 Add reboot-recommended detection when boot components change
@@ -61,7 +61,7 @@ All tasks below are blocked until the stabilization baseline is complete:
 
 ## 6. End-to-end rebuild validation (blocked on section 0-5)
 
-- [ ] 6.1 Add rebuild cycle test to self-hosting-test profile: change hostname via rebuild, verify
-- [ ] 6.2 Add rebuild cycle test: add etc file via rebuild, verify file exists
-- [ ] 6.3 Add rebuild cycle test: verify generation count after rebuild
-- [ ] 6.4 All rebuild FUNC_TESTs pass: rebuild-hostname, rebuild-etc-file, rebuild-generation
+- [x] 6.1 Add rebuild cycle test to self-hosting-test profile: change hostname via rebuild, verify
+- [x] 6.2 Add rebuild cycle test: add etc file via rebuild, verify file exists
+- [x] 6.3 Add rebuild cycle test: verify generation count after rebuild
+- [x] 6.4 All rebuild FUNC_TESTs pass: rebuild-hostname, rebuild-etc-file, rebuild-generation

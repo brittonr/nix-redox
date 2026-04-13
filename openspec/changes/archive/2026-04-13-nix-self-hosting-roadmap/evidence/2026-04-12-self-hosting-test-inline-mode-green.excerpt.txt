@@ -1,0 +1,6 @@
+FUNC_TEST:rebuild-hostname:PASS
+FUNC_TEST:rebuild-etc-file:PASS
+FUNC_TEST:rebuild-generation:PASS
+    Passed:  81
+    Failed:  0
+  ║       FUNCTIONAL TEST PASSED

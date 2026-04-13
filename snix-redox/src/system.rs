@@ -312,6 +312,9 @@ pub struct FileInfo {
     pub blake3: String,
     pub size: u64,
     pub mode: String,
+    /// Optional inline file contents for live rebuild-managed files.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
 
 // ===== Manifest Loading =====
@@ -319,7 +322,10 @@ pub struct FileInfo {
 pub fn load_manifest_from(path: &str) -> Result<Manifest, Box<dyn std::error::Error>> {
     let p = Path::new(path);
     if !p.exists() {
-        return Err(format!("manifest not found: {path}\nIs this a Redox system built with the module system?").into());
+        return Err(format!(
+            "manifest not found: {path}\nIs this a Redox system built with the module system?"
+        )
+        .into());
     }
     let content = fs::read_to_string(p)?;
     let manifest: Manifest = serde_json::from_str(&content)?;
@@ -348,9 +354,15 @@ pub fn info(manifest_path: Option<&str>) -> Result<(), Box<dyn std::error::Error
     println!("  Profile:    {}", manifest.system.profile);
     println!("  Hostname:   {}", manifest.system.hostname);
     println!("  Timezone:   {}", manifest.system.timezone);
-    println!("  Generation: {} {}", manifest.generation.id,
-        if manifest.generation.description.is_empty() { "" }
-        else { &manifest.generation.description });
+    println!(
+        "  Generation: {} {}",
+        manifest.generation.id,
+        if manifest.generation.description.is_empty() {
+            ""
+        } else {
+            &manifest.generation.description
+        }
+    );
     if !manifest.generation.timestamp.is_empty() {
         println!("  Built:      {}", manifest.generation.timestamp);
     }
@@ -358,27 +370,44 @@ pub fn info(manifest_path: Option<&str>) -> Result<(), Box<dyn std::error::Error
 
     let cfg = &manifest.configuration;
     println!("Configuration:");
-    println!("  Disk:       {} MB (ESP {} MB)", cfg.boot.disk_size_mb, cfg.boot.esp_size_mb);
-    println!("  Networking: {} ({})",
-        if cfg.networking.enabled { "enabled" } else { "disabled" },
-        cfg.networking.mode);
+    println!(
+        "  Disk:       {} MB (ESP {} MB)",
+        cfg.boot.disk_size_mb, cfg.boot.esp_size_mb
+    );
+    println!(
+        "  Networking: {} ({})",
+        if cfg.networking.enabled {
+            "enabled"
+        } else {
+            "disabled"
+        },
+        cfg.networking.mode
+    );
     if !cfg.networking.dns.is_empty() {
         println!("  DNS:        {}", cfg.networking.dns.join(", "));
     }
-    println!("  Graphics:   {}",
+    println!(
+        "  Graphics:   {}",
         if cfg.graphics.enabled {
             format!("enabled ({})", cfg.graphics.resolution)
         } else {
             "disabled".to_string()
-        });
-    println!("  Security:   kernel-protect={} require-pw={} remote-root={}",
+        }
+    );
+    println!(
+        "  Security:   kernel-protect={} require-pw={} remote-root={}",
         cfg.security.protect_kernel_schemes,
         cfg.security.require_passwords,
-        cfg.security.allow_remote_root);
-    println!("  Logging:    level={} kernel={} file={}",
-        cfg.logging.log_level, cfg.logging.kernel_log_level, cfg.logging.log_to_file);
-    println!("  Power:      acpi={} action={} reboot-on-panic={}",
-        cfg.power.acpi_enabled, cfg.power.power_action, cfg.power.reboot_on_panic);
+        cfg.security.allow_remote_root
+    );
+    println!(
+        "  Logging:    level={} kernel={} file={}",
+        cfg.logging.log_level, cfg.logging.kernel_log_level, cfg.logging.log_to_file
+    );
+    println!(
+        "  Power:      acpi={} action={} reboot-on-panic={}",
+        cfg.power.acpi_enabled, cfg.power.power_action, cfg.power.reboot_on_panic
+    );
     println!();
 
     println!("Packages:     {} installed", manifest.packages.len());
@@ -399,11 +428,17 @@ pub fn info(manifest_path: Option<&str>) -> Result<(), Box<dyn std::error::Error
 
     println!("Users:        {}", manifest.users.len());
     for (name, user) in &manifest.users {
-        println!("  - {name} (uid={} gid={} home={})", user.uid, user.gid, user.home);
+        println!(
+            "  - {name} (uid={} gid={} home={})",
+            user.uid, user.gid, user.home
+        );
     }
     println!();
 
-    println!("Services:     {} init scripts", manifest.services.init_scripts.len());
+    println!(
+        "Services:     {} init scripts",
+        manifest.services.init_scripts.len()
+    );
     for svc in &manifest.services.init_scripts {
         println!("  - {svc}");
     }
@@ -508,36 +543,58 @@ pub fn diff(other_path: &str) -> Result<(), Box<dyn std::error::Error>> {
 
     // Generation metadata
     if current.generation.id != other.generation.id {
-        println!("Generation: {} -> {}", other.generation.id, current.generation.id);
+        println!(
+            "Generation: {} -> {}",
+            other.generation.id, current.generation.id
+        );
         has_diff = true;
     }
     if current.generation.build_hash != other.generation.build_hash
         && !current.generation.build_hash.is_empty()
         && !other.generation.build_hash.is_empty()
     {
-        println!("Build hash: {}… -> {}…",
+        println!(
+            "Build hash: {}… -> {}…",
             &other.generation.build_hash[..12.min(other.generation.build_hash.len())],
-            &current.generation.build_hash[..12.min(current.generation.build_hash.len())]);
+            &current.generation.build_hash[..12.min(current.generation.build_hash.len())]
+        );
         has_diff = true;
     }
 
     // System metadata
     if current.system.redox_system_version != other.system.redox_system_version {
-        println!("Version: {} -> {}", other.system.redox_system_version, current.system.redox_system_version);
+        println!(
+            "Version: {} -> {}",
+            other.system.redox_system_version, current.system.redox_system_version
+        );
         has_diff = true;
     }
     if current.system.profile != other.system.profile {
-        println!("Profile: {} -> {}", other.system.profile, current.system.profile);
+        println!(
+            "Profile: {} -> {}",
+            other.system.profile, current.system.profile
+        );
         has_diff = true;
     }
     if current.system.hostname != other.system.hostname {
-        println!("Hostname: {} -> {}", other.system.hostname, current.system.hostname);
+        println!(
+            "Hostname: {} -> {}",
+            other.system.hostname, current.system.hostname
+        );
         has_diff = true;
     }
 
     // Package diff
-    let cur_pkgs: BTreeMap<_, _> = current.packages.iter().map(|p| (&p.name, &p.version)).collect();
-    let oth_pkgs: BTreeMap<_, _> = other.packages.iter().map(|p| (&p.name, &p.version)).collect();
+    let cur_pkgs: BTreeMap<_, _> = current
+        .packages
+        .iter()
+        .map(|p| (&p.name, &p.version))
+        .collect();
+    let oth_pkgs: BTreeMap<_, _> = other
+        .packages
+        .iter()
+        .map(|p| (&p.name, &p.version))
+        .collect();
 
     let mut pkg_changes = Vec::new();
     for (name, ver) in &cur_pkgs {
@@ -668,8 +725,12 @@ pub fn diff(other_path: &str) -> Result<(), Box<dyn std::error::Error>> {
         if has_diff {
             println!();
         }
-        println!("Files ({} added, {} removed, {} changed):",
-            added_files.len(), removed_files.len(), changed_files.len());
+        println!(
+            "Files ({} added, {} removed, {} changed):",
+            added_files.len(),
+            removed_files.len(),
+            changed_files.len()
+        );
         for f in added_files.iter().take(20) {
             println!("  + {f}");
         }
@@ -730,7 +791,8 @@ pub fn upgrade(
         if cached.is_err() {
             return Err(format!(
                 "cannot fetch channel '{name}' and no cached manifest exists: {e}"
-            ).into());
+            )
+            .into());
         }
         eprintln!("warning: could not update channel '{name}': {e}");
         eprintln!("         using cached manifest");
@@ -747,12 +809,15 @@ pub fn upgrade(
     // Step 3: Compare manifests — are they different?
     let plan = crate::activate::plan(&current, &new_manifest);
 
-    if plan.is_empty() && current.generation.build_hash == new_manifest.generation.build_hash
+    if plan.is_empty()
+        && current.generation.build_hash == new_manifest.generation.build_hash
         && !current.generation.build_hash.is_empty()
     {
-        println!("System is already up to date (generation {}, build {}…).",
+        println!(
+            "System is already up to date (generation {}, build {}…).",
             current.generation.id,
-            &current.generation.build_hash[..12.min(current.generation.build_hash.len())]);
+            &current.generation.build_hash[..12.min(current.generation.build_hash.len())]
+        );
         return Ok(());
     }
 
@@ -764,7 +829,10 @@ pub fn upgrade(
 
     // Version info
     if current.system.redox_system_version != new_manifest.system.redox_system_version {
-        println!("Version: {} → {}", current.system.redox_system_version, new_manifest.system.redox_system_version);
+        println!(
+            "Version: {} → {}",
+            current.system.redox_system_version, new_manifest.system.redox_system_version
+        );
         println!();
     }
 
@@ -796,13 +864,7 @@ pub fn upgrade(
 
     let desc = format!("upgrade from channel '{name}'");
 
-    let result = switch(
-        &tmp_path,
-        Some(&desc),
-        false,
-        gen_dir,
-        manifest_path,
-    );
+    let result = switch(&tmp_path, Some(&desc), false, gen_dir, manifest_path);
 
     // Clean up temp file
     let _ = fs::remove_file(&tmp_path);
@@ -867,7 +929,10 @@ fn fetch_upgrade_packages(
         // Strategy 1: Local binary cache (e.g., /nix/cache/ or channel-local)
         if let Some(ref idx_path) = packages_index_path {
             let cache_dir = idx_path.parent().unwrap_or(Path::new("/nix/cache"));
-            if let Ok(()) = crate::local_cache::fetch_local(&pkg.store_path, cache_dir.to_str().unwrap_or("/nix/cache")) {
+            if let Ok(()) = crate::local_cache::fetch_local(
+                &pkg.store_path,
+                cache_dir.to_str().unwrap_or("/nix/cache"),
+            ) {
                 fetched += 1;
                 continue;
             }
@@ -887,7 +952,10 @@ fn fetch_upgrade_packages(
             }
         }
 
-        eprintln!("  warning: could not fetch {} — store path not available", pkg.name);
+        eprintln!(
+            "  warning: could not fetch {} — store path not available",
+            pkg.name
+        );
     }
 
     Ok(fetched)
@@ -982,7 +1050,11 @@ fn current_generation_link_path(gen_dir: &str) -> std::path::PathBuf {
 
     Path::new(gen_dir)
         .parent()
-        .unwrap_or(Path::new(CURRENT_GENERATION_LINK).parent().unwrap_or(Path::new("/nix/system")))
+        .unwrap_or(
+            Path::new(CURRENT_GENERATION_LINK)
+                .parent()
+                .unwrap_or(Path::new("/nix/system")),
+        )
         .join("current")
 }
 
@@ -1014,7 +1086,10 @@ fn update_current_generation_link(
         let _ = fs::remove_file(&current_link);
         let _ = fs::remove_dir(&current_link);
     }
-    std::os::unix::fs::symlink(Path::new(gen_dir).join(generation_id.to_string()), &current_link)?;
+    std::os::unix::fs::symlink(
+        Path::new(gen_dir).join(generation_id.to_string()),
+        &current_link,
+    )?;
     Ok(())
 }
 
@@ -1071,24 +1146,32 @@ pub fn generations(gen_dir: Option<&str>) -> Result<(), Box<dyn std::error::Erro
     println!("System Generations");
     println!("==================");
     println!();
-    println!("{:>4}  {:>6}  {:>4}  {:>4}  {:20}  {}",
-        "Gen", "Ver", "Pkgs", "Drvs", "Timestamp", "Description");
+    println!(
+        "{:>4}  {:>6}  {:>4}  {:>4}  {:20}  {}",
+        "Gen", "Ver", "Pkgs", "Drvs", "Timestamp", "Description"
+    );
     println!("{}", "-".repeat(72));
 
     for gen in &gens {
         let m = &gen.manifest;
-        let is_current = current.as_ref()
+        let is_current = current
+            .as_ref()
             .map(|c| c.generation.id == gen.id)
             .unwrap_or(false);
         let marker = if is_current { " *" } else { "" };
 
-        println!("{:>4}{:2}  {:>6}  {:>4}  {:>4}  {:20}  {}",
+        println!(
+            "{:>4}{:2}  {:>6}  {:>4}  {:>4}  {:20}  {}",
             gen.id,
             marker,
             m.system.redox_system_version,
             m.packages.len(),
             m.drivers.all.len(),
-            if m.generation.timestamp.is_empty() { "-" } else { &m.generation.timestamp },
+            if m.generation.timestamp.is_empty() {
+                "-"
+            } else {
+                &m.generation.timestamp
+            },
             m.generation.description,
         );
     }
@@ -1097,12 +1180,17 @@ pub fn generations(gen_dir: Option<&str>) -> Result<(), Box<dyn std::error::Erro
     if let Some(ref cur) = current {
         let cur_in_gens = gens.iter().any(|g| g.id == cur.generation.id);
         if !cur_in_gens {
-            println!("{:>4} *  {:>6}  {:>4}  {:>4}  {:20}  {} (current, not yet saved)",
+            println!(
+                "{:>4} *  {:>6}  {:>4}  {:>4}  {:20}  {} (current, not yet saved)",
                 cur.generation.id,
                 cur.system.redox_system_version,
                 cur.packages.len(),
                 cur.drivers.all.len(),
-                if cur.generation.timestamp.is_empty() { "-" } else { &cur.generation.timestamp },
+                if cur.generation.timestamp.is_empty() {
+                    "-"
+                } else {
+                    &cur.generation.timestamp
+                },
                 cur.generation.description,
             );
         }
@@ -1162,7 +1250,10 @@ pub fn switch(
         let current_json = serde_json::to_string_pretty(&current)?;
         fs::write(current_gen_dir.join("manifest.json"), current_json)?;
         write_generation_metadata(&current_gen_dir, &current.generation)?;
-        println!("Saved current system as generation {}", current.generation.id);
+        println!(
+            "Saved current system as generation {}",
+            current.generation.id
+        );
     }
 
     // Save new manifest as a generation before activation.
@@ -1187,25 +1278,42 @@ pub fn switch(
     println!("Switched to generation {next_id}");
 
     // Show brief package diff
-    let cur_pkgs: std::collections::BTreeSet<_> = current.packages.iter()
-        .map(|p| &p.name).collect();
-    let new_pkgs: std::collections::BTreeSet<_> = new_manifest.packages.iter()
-        .map(|p| &p.name).collect();
+    let cur_pkgs: std::collections::BTreeSet<_> =
+        current.packages.iter().map(|p| &p.name).collect();
+    let new_pkgs: std::collections::BTreeSet<_> =
+        new_manifest.packages.iter().map(|p| &p.name).collect();
     let added: Vec<_> = new_pkgs.difference(&cur_pkgs).collect();
     let removed: Vec<_> = cur_pkgs.difference(&new_pkgs).collect();
 
     if !added.is_empty() || !removed.is_empty() {
         println!();
         if !added.is_empty() {
-            println!("Packages added:   {}", added.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+            println!(
+                "Packages added:   {}",
+                added
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
         }
         if !removed.is_empty() {
-            println!("Packages removed: {}", removed.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+            println!(
+                "Packages removed: {}",
+                removed
+                    .iter()
+                    .map(|s| s.as_str())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
         }
     }
 
     if current.system.redox_system_version != new_manifest.system.redox_system_version {
-        println!("Version: {} -> {}", current.system.redox_system_version, new_manifest.system.redox_system_version);
+        println!(
+            "Version: {} -> {}",
+            current.system.redox_system_version, new_manifest.system.redox_system_version
+        );
     }
 
     print_activation_notices(&activation);
@@ -1221,7 +1329,10 @@ fn switch_generation_with_reporter<F, E>(
     mut emit: E,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
-    F: FnOnce(&Manifest, &Manifest) -> Result<crate::activate::ActivationResult, Box<dyn std::error::Error>>,
+    F: FnOnce(
+        &Manifest,
+        &Manifest,
+    ) -> Result<crate::activate::ActivationResult, Box<dyn std::error::Error>>,
     E: FnMut(&str),
 {
     let dir = gen_dir.unwrap_or(GENERATIONS_DIR);
@@ -1233,12 +1344,18 @@ where
     let target = gens.iter().find(|g| g.id == target_id).ok_or_else(|| {
         format!(
             "Generation {target_id} not found. Available: {}",
-            gens.iter().map(|g| g.id.to_string()).collect::<Vec<_>>().join(", ")
+            gens.iter()
+                .map(|g| g.id.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
         )
     })?;
 
     if target.id == current.generation.id {
-        emit(&format!("Already at generation {}. Nothing to do.", target.id));
+        emit(&format!(
+            "Already at generation {}. Nothing to do.",
+            target.id
+        ));
         return Ok(());
     }
 
@@ -1267,7 +1384,10 @@ fn switch_generation_with<F>(
     activate: F,
 ) -> Result<(), Box<dyn std::error::Error>>
 where
-    F: FnOnce(&Manifest, &Manifest) -> Result<crate::activate::ActivationResult, Box<dyn std::error::Error>>,
+    F: FnOnce(
+        &Manifest,
+        &Manifest,
+    ) -> Result<crate::activate::ActivationResult, Box<dyn std::error::Error>>,
 {
     switch_generation_with_reporter(target_id, gen_dir, manifest_path, activate, |line| {
         println!("{line}");
@@ -1307,11 +1427,15 @@ pub fn rollback(
 
     // Find target generation
     let target = match target_id {
-        Some(id) => {
-            gens.iter().find(|g| g.id == id)
-                .ok_or_else(|| format!("Generation {id} not found. Available: {}",
-                    gens.iter().map(|g| g.id.to_string()).collect::<Vec<_>>().join(", ")))?
-        }
+        Some(id) => gens.iter().find(|g| g.id == id).ok_or_else(|| {
+            format!(
+                "Generation {id} not found. Available: {}",
+                gens.iter()
+                    .map(|g| g.id.to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        })?,
         None => {
             // Find the most recent generation BEFORE the current one
             gens.iter()
@@ -1327,27 +1451,46 @@ pub fn rollback(
         return Ok(());
     }
 
-    println!("Rolling back from generation {} to generation {}...",
-        current.generation.id, target.id);
+    println!(
+        "Rolling back from generation {} to generation {}...",
+        current.generation.id, target.id
+    );
     println!();
 
     // Show what changes
-    let cur_pkgs: std::collections::BTreeSet<_> = current.packages.iter()
-        .map(|p| &p.name).collect();
-    let tgt_pkgs: std::collections::BTreeSet<_> = target.manifest.packages.iter()
-        .map(|p| &p.name).collect();
+    let cur_pkgs: std::collections::BTreeSet<_> =
+        current.packages.iter().map(|p| &p.name).collect();
+    let tgt_pkgs: std::collections::BTreeSet<_> =
+        target.manifest.packages.iter().map(|p| &p.name).collect();
     let added: Vec<_> = tgt_pkgs.difference(&cur_pkgs).collect();
     let removed: Vec<_> = cur_pkgs.difference(&tgt_pkgs).collect();
 
     if !added.is_empty() {
-        println!("Packages restored: {}", added.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+        println!(
+            "Packages restored: {}",
+            added
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
     if !removed.is_empty() {
-        println!("Packages removed:  {}", removed.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", "));
+        println!(
+            "Packages removed:  {}",
+            removed
+                .iter()
+                .map(|s| s.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
     }
 
     if current.system.redox_system_version != target.manifest.system.redox_system_version {
-        println!("Version: {} -> {}", current.system.redox_system_version, target.manifest.system.redox_system_version);
+        println!(
+            "Version: {} -> {}",
+            current.system.redox_system_version, target.manifest.system.redox_system_version
+        );
     }
 
     // Save current as a generation if not already saved
@@ -1386,10 +1529,16 @@ pub fn rollback(
     }
 
     println!();
-    println!("Rolled back to generation {} (saved as generation {next_id})", target.id);
+    println!(
+        "Rolled back to generation {} (saved as generation {next_id})",
+        target.id
+    );
 
     if activation.binaries_linked > 0 {
-        println!("Profile rebuilt: {} binaries linked", activation.binaries_linked);
+        println!(
+            "Profile rebuilt: {} binaries linked",
+            activation.binaries_linked
+        );
     }
 
     print_activation_notices(&activation);
@@ -1426,18 +1575,15 @@ pub fn activate_boot(
     }
 
     let gens = scan_generations(dir)?;
-    let target = gens
-        .iter()
-        .find(|g| g.id == generation_id)
-        .ok_or_else(|| {
-            format!(
-                "generation {generation_id} not found (available: {})",
-                gens.iter()
-                    .map(|g| g.id.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            )
-        })?;
+    let target = gens.iter().find(|g| g.id == generation_id).ok_or_else(|| {
+        format!(
+            "generation {generation_id} not found (available: {})",
+            gens.iter()
+                .map(|g| g.id.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
+    })?;
 
     eprintln!(
         "boot: activating generation {} ({})",
@@ -1575,7 +1721,10 @@ fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error:
         }
         let bin_dir = Path::new(&pkg.store_path).join("bin");
         if !bin_dir.exists() {
-            eprintln!("warning: store path missing for {}: {}", pkg.name, pkg.store_path);
+            eprintln!(
+                "warning: store path missing for {}: {}",
+                pkg.name, pkg.store_path
+            );
             continue;
         }
         for entry in fs::read_dir(&bin_dir)? {
@@ -1613,7 +1762,10 @@ fn rebuild_system_profile(manifest: &Manifest) -> Result<(), Box<dyn std::error:
 ///
 /// On first call after upgrade from the old `system-*` naming, migrates all
 /// existing generations to the new naming scheme.
-fn update_system_gc_roots(manifest: &Manifest, gen_dir: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+fn update_system_gc_roots(
+    manifest: &Manifest,
+    gen_dir: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let gc_roots = crate::store::GcRoots::open()?;
     update_system_gc_roots_with(&gc_roots, manifest, gen_dir)
 }
@@ -1656,7 +1808,10 @@ fn add_generation_gc_roots(
         if !pkg.store_path.is_empty() {
             let root_name = format!("gen-{}-{}", gen_id, pkg.name);
             if let Err(e) = gc_roots.add_root(&root_name, &pkg.store_path) {
-                eprintln!("warning: could not add GC root for gen-{}-{}: {e}", gen_id, pkg.name);
+                eprintln!(
+                    "warning: could not add GC root for gen-{}-{}: {e}",
+                    gen_id, pkg.name
+                );
             } else {
                 added += 1;
             }
@@ -1734,7 +1889,8 @@ fn migrate_gc_roots_if_needed(
     gen_dir: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let roots = gc_roots.list_roots()?;
-    let old_roots: Vec<_> = roots.iter()
+    let old_roots: Vec<_> = roots
+        .iter()
         .filter(|r| r.name.starts_with("system-"))
         .collect();
 
@@ -1742,7 +1898,10 @@ fn migrate_gc_roots_if_needed(
         return Ok(());
     }
 
-    eprintln!("Migrating {} old system-* GC roots to per-generation naming...", old_roots.len());
+    eprintln!(
+        "Migrating {} old system-* GC roots to per-generation naming...",
+        old_roots.len()
+    );
 
     // Root all existing generations
     let gens = scan_generations(gen_dir)?;
@@ -1757,8 +1916,11 @@ fn migrate_gc_roots_if_needed(
         let _ = gc_roots.remove_root(&root.name);
     }
 
-    eprintln!("Migration complete: {total_added} roots created for {} generations, {} old roots removed",
-        gens.len(), old_roots.len());
+    eprintln!(
+        "Migration complete: {total_added} roots created for {} generations, {} old roots removed",
+        gens.len(),
+        old_roots.len()
+    );
 
     Ok(())
 }
@@ -1785,7 +1947,9 @@ enum GenerationSelector {
 /// - `+N` — keep last N
 /// - `Nd` — older than N days
 /// - `1 3 5` — specific IDs
-fn parse_generation_selector(input: &str) -> Result<GenerationSelector, Box<dyn std::error::Error>> {
+fn parse_generation_selector(
+    input: &str,
+) -> Result<GenerationSelector, Box<dyn std::error::Error>> {
     let trimmed = input.trim();
 
     if trimmed == "old" {
@@ -1793,8 +1957,7 @@ fn parse_generation_selector(input: &str) -> Result<GenerationSelector, Box<dyn 
     }
 
     if let Some(n) = trimmed.strip_prefix('+') {
-        let count: u32 = n.parse()
-            .map_err(|_| format!("invalid keep count: +{n}"))?;
+        let count: u32 = n.parse().map_err(|_| format!("invalid keep count: +{n}"))?;
         if count == 0 {
             return Err("keep count must be at least 1".into());
         }
@@ -1802,18 +1965,21 @@ fn parse_generation_selector(input: &str) -> Result<GenerationSelector, Box<dyn 
     }
 
     if let Some(n) = trimmed.strip_suffix('d') {
-        let days: u32 = n.parse()
-            .map_err(|_| format!("invalid day count: {n}d"))?;
+        let days: u32 = n.parse().map_err(|_| format!("invalid day count: {n}d"))?;
         return Ok(GenerationSelector::OlderThanDays(days));
     }
 
     // Try parsing as space-separated IDs
-    let ids: Result<Vec<u32>, _> = trimmed.split_whitespace()
+    let ids: Result<Vec<u32>, _> = trimmed
+        .split_whitespace()
         .map(|s| s.parse::<u32>())
         .collect();
     match ids {
         Ok(ids) if !ids.is_empty() => Ok(GenerationSelector::Ids(ids)),
-        _ => Err(format!("invalid selector: {trimmed}. Use 'old', '+N', 'Nd', or space-separated IDs.").into()),
+        _ => Err(format!(
+            "invalid selector: {trimmed}. Use 'old', '+N', 'Nd', or space-separated IDs."
+        )
+        .into()),
     }
 }
 
@@ -1844,7 +2010,12 @@ pub fn delete_generations(
 ) -> Result<DeleteGenerationsStats, Box<dyn std::error::Error>> {
     let gc_roots = crate::store::GcRoots::open()?;
     delete_generations_with(
-        &gc_roots, selector, dry_run, gen_dir, manifest_path, boot_default_path,
+        &gc_roots,
+        selector,
+        dry_run,
+        gen_dir,
+        manifest_path,
+        boot_default_path,
     )
 }
 
@@ -1877,9 +2048,11 @@ fn delete_generations_with(
 
     // Determine which generations to delete
     let to_delete: Vec<u32> = match parsed {
-        GenerationSelector::Ids(ref ids) => {
-            ids.iter().filter(|id| !protected.contains(id)).copied().collect()
-        }
+        GenerationSelector::Ids(ref ids) => ids
+            .iter()
+            .filter(|id| !protected.contains(id))
+            .copied()
+            .collect(),
         GenerationSelector::KeepLast(n) => {
             // Keep the N most recent (by ID), delete the rest
             let mut sorted_ids: Vec<u32> = gens.iter().map(|g| g.id).collect();
@@ -1887,7 +2060,8 @@ fn delete_generations_with(
             let keep_count = n as usize;
             if sorted_ids.len() > keep_count {
                 let delete_count = sorted_ids.len() - keep_count;
-                sorted_ids[..delete_count].iter()
+                sorted_ids[..delete_count]
+                    .iter()
                     .filter(|id| !protected.contains(id))
                     .copied()
                     .collect()
@@ -1914,12 +2088,11 @@ fn delete_generations_with(
                 .map(|g| g.id)
                 .collect()
         }
-        GenerationSelector::Old => {
-            gens.iter()
-                .map(|g| g.id)
-                .filter(|id| !protected.contains(id))
-                .collect()
-        }
+        GenerationSelector::Old => gens
+            .iter()
+            .map(|g| g.id)
+            .filter(|id| !protected.contains(id))
+            .collect(),
     };
 
     // Check if user tried to delete a protected generation
@@ -1966,8 +2139,10 @@ fn delete_generations_with(
         println!();
         println!("Would delete {} generations.", stats.generations_deleted);
     } else {
-        println!("Deleted {} generations ({} GC roots removed).",
-            stats.generations_deleted, stats.roots_removed);
+        println!(
+            "Deleted {} generations ({} GC roots removed).",
+            stats.generations_deleted, stats.roots_removed
+        );
     }
 
     Ok(stats)
@@ -2040,7 +2215,13 @@ pub fn system_gc(
     };
 
     println!("── Pruning generations ──");
-    let stats = delete_generations(&selector, dry_run, gen_dir, manifest_path, boot_default_path)?;
+    let stats = delete_generations(
+        &selector,
+        dry_run,
+        gen_dir,
+        manifest_path,
+        boot_default_path,
+    )?;
 
     // Step 2: Store GC
     println!();
@@ -2049,8 +2230,10 @@ pub fn system_gc(
 
     if !dry_run && stats.generations_deleted > 0 {
         println!();
-        println!("Summary: {} generations pruned, store swept.",
-            stats.generations_deleted);
+        println!(
+            "Summary: {} generations pruned, store swept.",
+            stats.generations_deleted
+        );
     }
 
     Ok(())
@@ -2062,7 +2245,10 @@ pub fn current_timestamp_pub() -> String {
 }
 
 /// Public accessor for update_system_gc_roots (used by activate module).
-pub fn update_system_gc_roots_pub(manifest: &Manifest, gen_dir: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
+pub fn update_system_gc_roots_pub(
+    manifest: &Manifest,
+    gen_dir: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
     update_system_gc_roots(manifest, gen_dir)
 }
 
@@ -2265,6 +2451,7 @@ mod tests {
                 blake3: "abc123".to_string(),
                 size: 42,
                 mode: "644".to_string(),
+                text: None,
             },
         );
         assert_eq!(manifest.files.len(), 1);
@@ -2411,6 +2598,7 @@ mod tests {
                 blake3: hash,
                 size: 6,
                 mode: "644".to_string(),
+                text: None,
             },
         );
 
@@ -2570,7 +2758,11 @@ mod tests {
         let gen1 = dir.path().join("1");
         std::fs::create_dir_all(&gen1).unwrap();
         let m = sample_manifest();
-        std::fs::write(gen1.join("manifest.json"), serde_json::to_string(&m).unwrap()).unwrap();
+        std::fs::write(
+            gen1.join("manifest.json"),
+            serde_json::to_string(&m).unwrap(),
+        )
+        .unwrap();
 
         // Non-numeric dir — should be skipped
         let invalid = dir.path().join("latest");
@@ -2594,7 +2786,11 @@ mod tests {
         std::fs::create_dir_all(&gen5).unwrap();
         let mut m5 = sample_manifest();
         m5.generation.id = 5;
-        std::fs::write(gen5.join("manifest.json"), serde_json::to_string(&m5).unwrap()).unwrap();
+        std::fs::write(
+            gen5.join("manifest.json"),
+            serde_json::to_string(&m5).unwrap(),
+        )
+        .unwrap();
 
         assert_eq!(next_generation_id(dir.path().to_str().unwrap(), &m), 6);
     }
@@ -2617,12 +2813,24 @@ mod tests {
         // Write current manifest
         let mut current = sample_manifest();
         current.generation.id = 1;
-        std::fs::write(&manifest_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+        std::fs::write(
+            &manifest_file,
+            serde_json::to_string_pretty(&current).unwrap(),
+        )
+        .unwrap();
 
         // Write new manifest (with different packages)
         let mut new_m = sample_manifest();
-        new_m.packages.push(Package { name: "ripgrep".to_string(), version: "14.0".to_string(), store_path: String::new() });
-        std::fs::write(&new_manifest_file, serde_json::to_string_pretty(&new_m).unwrap()).unwrap();
+        new_m.packages.push(Package {
+            name: "ripgrep".to_string(),
+            version: "14.0".to_string(),
+            store_path: String::new(),
+        });
+        std::fs::write(
+            &new_manifest_file,
+            serde_json::to_string_pretty(&new_m).unwrap(),
+        )
+        .unwrap();
 
         // Switch
         switch(
@@ -2631,7 +2839,8 @@ mod tests {
             false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Verify generation 1 was saved
         assert!(gen_dir.join("1/manifest.json").exists());
@@ -2665,7 +2874,11 @@ mod tests {
         let mut gen1 = sample_manifest();
         gen1.generation.id = 1;
         gen1.generation.description = "first".to_string();
-        std::fs::write(gen1_dir.join("manifest.json"), serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+        std::fs::write(
+            gen1_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen1).unwrap(),
+        )
+        .unwrap();
         std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
 
         // Create generation 2 (stored target)
@@ -2674,20 +2887,32 @@ mod tests {
         let mut gen2 = sample_manifest();
         gen2.generation.id = 2;
         gen2.generation.description = "second".to_string();
-        gen2.packages.push(Package { name: "ripgrep".to_string(), version: "14.0".to_string(), store_path: String::new() });
-        std::fs::write(gen2_dir.join("manifest.json"), serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+        gen2.packages.push(Package {
+            name: "ripgrep".to_string(),
+            version: "14.0".to_string(),
+            store_path: String::new(),
+        });
+        std::fs::write(
+            gen2_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen2).unwrap(),
+        )
+        .unwrap();
 
         switch_generation(
             2,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
         assert_eq!(active.generation.id, 2);
         assert_eq!(active.generation.description, "second");
         assert!(active.packages.iter().any(|p| p.name == "ripgrep"));
-        assert_eq!(std::fs::read_link(current_generation_link_path(gen_dir.to_str().unwrap())).unwrap(), gen_dir.join("2"));
+        assert_eq!(
+            std::fs::read_link(current_generation_link_path(gen_dir.to_str().unwrap())).unwrap(),
+            gen_dir.join("2")
+        );
         assert!(!gen_dir.join("3").exists());
     }
 
@@ -2698,7 +2923,11 @@ mod tests {
         let manifest_file = dir.path().join("current.json");
 
         let current = sample_manifest();
-        std::fs::write(&manifest_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+        std::fs::write(
+            &manifest_file,
+            serde_json::to_string_pretty(&current).unwrap(),
+        )
+        .unwrap();
         std::fs::create_dir_all(&gen_dir).unwrap();
 
         let result = switch_generation(
@@ -2707,7 +2936,10 @@ mod tests {
             Some(manifest_file.to_str().unwrap()),
         );
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Generation 99 not found"));
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Generation 99 not found"));
     }
 
     #[test]
@@ -2724,7 +2956,11 @@ mod tests {
         let mut gen1 = sample_manifest();
         gen1.generation.id = 1;
         gen1.system.hostname = "old-host".to_string();
-        std::fs::write(gen1_dir.join("manifest.json"), serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+        std::fs::write(
+            gen1_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen1).unwrap(),
+        )
+        .unwrap();
         std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
 
         let gen2_dir = gen_dir.join("2");
@@ -2733,7 +2969,11 @@ mod tests {
         gen2.generation.id = 2;
         gen2.system.hostname = "switched-host".to_string();
         gen2.generation.description = "hostname switch".to_string();
-        std::fs::write(gen2_dir.join("manifest.json"), serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+        std::fs::write(
+            gen2_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen2).unwrap(),
+        )
+        .unwrap();
 
         switch_generation_with(
             2,
@@ -2754,13 +2994,20 @@ mod tests {
                     reboot_recommended: false,
                 })
             },
-        ).unwrap();
+        )
+        .unwrap();
 
         let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
         assert_eq!(active.generation.id, 2);
         assert_eq!(active.system.hostname, "switched-host");
-        assert_eq!(std::fs::read_to_string(root.join("etc/hostname")).unwrap(), "switched-host");
-        assert_eq!(std::fs::read_link(current_generation_link_path(gen_dir.to_str().unwrap())).unwrap(), gen_dir.join("2"));
+        assert_eq!(
+            std::fs::read_to_string(root.join("etc/hostname")).unwrap(),
+            "switched-host"
+        );
+        assert_eq!(
+            std::fs::read_link(current_generation_link_path(gen_dir.to_str().unwrap())).unwrap(),
+            gen_dir.join("2")
+        );
     }
 
     #[test]
@@ -2807,7 +3054,11 @@ mod tests {
         std::fs::create_dir_all(&gen1_dir).unwrap();
         let mut gen1 = sample_manifest();
         gen1.generation.id = 1;
-        std::fs::write(gen1_dir.join("manifest.json"), serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+        std::fs::write(
+            gen1_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen1).unwrap(),
+        )
+        .unwrap();
         std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
 
         let gen2_dir = gen_dir.join("2");
@@ -2815,7 +3066,11 @@ mod tests {
         let mut gen2 = sample_manifest();
         gen2.generation.id = 2;
         gen2.generation.description = "boot change".to_string();
-        std::fs::write(gen2_dir.join("manifest.json"), serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+        std::fs::write(
+            gen2_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen2).unwrap(),
+        )
+        .unwrap();
 
         let mut output = Vec::new();
         switch_generation_with_reporter(
@@ -2831,7 +3086,8 @@ mod tests {
                 })
             },
             |line| output.push(line.to_string()),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(
             output,
@@ -2845,7 +3101,10 @@ mod tests {
 
         let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
         assert_eq!(active.generation.id, 2);
-        assert_eq!(std::fs::read_link(current_generation_link_path(gen_dir.to_str().unwrap())).unwrap(), gen_dir.join("2"));
+        assert_eq!(
+            std::fs::read_link(current_generation_link_path(gen_dir.to_str().unwrap())).unwrap(),
+            gen_dir.join("2")
+        );
     }
 
     #[test]
@@ -2860,7 +3119,11 @@ mod tests {
         let mut gen1 = sample_manifest();
         gen1.generation.id = 1;
         gen1.generation.description = "first".to_string();
-        std::fs::write(gen1_dir.join("manifest.json"), serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+        std::fs::write(
+            gen1_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen1).unwrap(),
+        )
+        .unwrap();
 
         // Create generation 2 (current)
         let gen2_dir = gen_dir.join("2");
@@ -2868,8 +3131,16 @@ mod tests {
         let mut gen2 = sample_manifest();
         gen2.generation.id = 2;
         gen2.generation.description = "added extra package".to_string();
-        gen2.packages.push(Package { name: "ripgrep".to_string(), version: "14.0".to_string(), store_path: String::new() });
-        std::fs::write(gen2_dir.join("manifest.json"), serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+        gen2.packages.push(Package {
+            name: "ripgrep".to_string(),
+            version: "14.0".to_string(),
+            store_path: String::new(),
+        });
+        std::fs::write(
+            gen2_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen2).unwrap(),
+        )
+        .unwrap();
         std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
 
         // Rollback to generation 1
@@ -2877,13 +3148,17 @@ mod tests {
             Some(1),
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Verify current manifest has gen1's packages but new generation ID
         let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
         assert_eq!(active.packages.len(), 2); // Back to ion + uutils only
         assert_eq!(active.generation.id, 3); // New generation (3 = rollback)
-        assert!(active.generation.description.contains("rollback to generation 1"));
+        assert!(active
+            .generation
+            .description
+            .contains("rollback to generation 1"));
     }
 
     #[test]
@@ -3033,7 +3308,11 @@ mod tests {
         std::fs::create_dir_all(&gen1_dir).unwrap();
         let mut gen1 = sample_manifest();
         gen1.generation.id = 1;
-        std::fs::write(gen1_dir.join("manifest.json"), serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+        std::fs::write(
+            gen1_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen1).unwrap(),
+        )
+        .unwrap();
 
         // Current manifest is gen 1
         std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
@@ -3045,7 +3324,11 @@ mod tests {
             version: "1.0".to_string(),
             store_path: String::new(),
         });
-        std::fs::write(&new_manifest_file, serde_json::to_string_pretty(&new_m).unwrap()).unwrap();
+        std::fs::write(
+            &new_manifest_file,
+            serde_json::to_string_pretty(&new_m).unwrap(),
+        )
+        .unwrap();
 
         // Switch
         switch(
@@ -3054,7 +3337,8 @@ mod tests {
             false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Verify current manifest has gen id 2
         let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
@@ -3072,11 +3356,19 @@ mod tests {
         let mut current = sample_manifest();
         current.generation.id = 1;
         current.generation.description = "original".to_string();
-        std::fs::write(&manifest_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+        std::fs::write(
+            &manifest_file,
+            serde_json::to_string_pretty(&current).unwrap(),
+        )
+        .unwrap();
 
         // New manifest
         let new_m = sample_manifest();
-        std::fs::write(&new_manifest_file, serde_json::to_string_pretty(&new_m).unwrap()).unwrap();
+        std::fs::write(
+            &new_manifest_file,
+            serde_json::to_string_pretty(&new_m).unwrap(),
+        )
+        .unwrap();
 
         // Switch
         switch(
@@ -3085,7 +3377,8 @@ mod tests {
             false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Verify generations/1/manifest.json exists with old content
         let saved_path = gen_dir.join("1/manifest.json");
@@ -3105,7 +3398,11 @@ mod tests {
 
         // Current manifest
         let current = sample_manifest();
-        std::fs::write(&manifest_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+        std::fs::write(
+            &manifest_file,
+            serde_json::to_string_pretty(&current).unwrap(),
+        )
+        .unwrap();
 
         // New manifest with store_path
         let mut new_m = sample_manifest();
@@ -3114,7 +3411,11 @@ mod tests {
             version: "24.07".to_string(),
             store_path: "/nix/store/abc123-helix-24.07".to_string(),
         });
-        std::fs::write(&new_manifest_file, serde_json::to_string_pretty(&new_m).unwrap()).unwrap();
+        std::fs::write(
+            &new_manifest_file,
+            serde_json::to_string_pretty(&new_m).unwrap(),
+        )
+        .unwrap();
 
         // Switch
         switch(
@@ -3123,7 +3424,8 @@ mod tests {
             false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Verify the switched manifest preserves store_path
         let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
@@ -3143,7 +3445,11 @@ mod tests {
         let mut gen1 = sample_manifest();
         gen1.generation.id = 1;
         gen1.generation.description = "first".to_string();
-        std::fs::write(gen1_dir.join("manifest.json"), serde_json::to_string_pretty(&gen1).unwrap()).unwrap();
+        std::fs::write(
+            gen1_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen1).unwrap(),
+        )
+        .unwrap();
 
         // Create generation 2 (current)
         let gen2_dir = gen_dir.join("2");
@@ -3151,7 +3457,11 @@ mod tests {
         let mut gen2 = sample_manifest();
         gen2.generation.id = 2;
         gen2.generation.description = "second".to_string();
-        std::fs::write(gen2_dir.join("manifest.json"), serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+        std::fs::write(
+            gen2_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen2).unwrap(),
+        )
+        .unwrap();
         std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
 
         // Rollback to gen 1
@@ -3159,7 +3469,8 @@ mod tests {
             Some(1),
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Verify current manifest has gen id 3 (new gen, not reuse of 1)
         let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
@@ -3179,7 +3490,11 @@ mod tests {
         std::fs::create_dir_all(&gen2_dir).unwrap();
         let mut gen2 = sample_manifest();
         gen2.generation.id = 2;
-        std::fs::write(gen2_dir.join("manifest.json"), serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
+        std::fs::write(
+            gen2_dir.join("manifest.json"),
+            serde_json::to_string_pretty(&gen2).unwrap(),
+        )
+        .unwrap();
         std::fs::write(&manifest_file, serde_json::to_string_pretty(&gen2).unwrap()).unwrap();
 
         // Try to rollback to the same generation
@@ -3210,7 +3525,11 @@ mod tests {
             std::fs::create_dir_all(&gen_dir).unwrap();
             let mut m = sample_manifest();
             m.generation.id = id;
-            std::fs::write(gen_dir.join("manifest.json"), serde_json::to_string(&m).unwrap()).unwrap();
+            std::fs::write(
+                gen_dir.join("manifest.json"),
+                serde_json::to_string(&m).unwrap(),
+            )
+            .unwrap();
         }
 
         let gens = scan_generations(dir.path().to_str().unwrap()).unwrap();
@@ -3232,7 +3551,11 @@ mod tests {
             std::fs::create_dir_all(&gen_dir).unwrap();
             let mut m = sample_manifest();
             m.generation.id = id;
-            std::fs::write(gen_dir.join("manifest.json"), serde_json::to_string(&m).unwrap()).unwrap();
+            std::fs::write(
+                gen_dir.join("manifest.json"),
+                serde_json::to_string(&m).unwrap(),
+            )
+            .unwrap();
         }
 
         // Current manifest has gen id 5
@@ -3295,7 +3618,11 @@ mod tests {
         let new_manifest_file = dir.path().join("new.json");
 
         let current = sample_manifest();
-        std::fs::write(&manifest_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+        std::fs::write(
+            &manifest_file,
+            serde_json::to_string_pretty(&current).unwrap(),
+        )
+        .unwrap();
 
         let mut new_m = sample_manifest();
         new_m.packages[0].store_path =
@@ -3319,7 +3646,10 @@ mod tests {
 
         // Verify manifest was still updated
         let active = load_manifest_from(manifest_file.to_str().unwrap()).unwrap();
-        assert_eq!(active.packages[0].store_path, "/nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-ion-1.0");
+        assert_eq!(
+            active.packages[0].store_path,
+            "/nix/store/1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-ion-1.0"
+        );
     }
 
     #[test]
@@ -3374,7 +3704,11 @@ mod tests {
         // Current manifest
         let mut current = sample_manifest();
         current.generation.id = 1;
-        std::fs::write(&manifest_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+        std::fs::write(
+            &manifest_file,
+            serde_json::to_string_pretty(&current).unwrap(),
+        )
+        .unwrap();
 
         // New manifest with extra package
         let mut new_m = sample_manifest();
@@ -3383,7 +3717,11 @@ mod tests {
             version: "14.0".to_string(),
             store_path: String::new(),
         });
-        std::fs::write(&new_manifest_file, serde_json::to_string_pretty(&new_m).unwrap()).unwrap();
+        std::fs::write(
+            &new_manifest_file,
+            serde_json::to_string_pretty(&new_m).unwrap(),
+        )
+        .unwrap();
 
         // Dry-run switch
         switch(
@@ -3392,7 +3730,8 @@ mod tests {
             true, // dry_run = true
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Verify NOTHING was modified:
         // - No generations directory created
@@ -3492,9 +3831,15 @@ mod tests {
     #[test]
     fn upgrade_detects_config_and_service_changes() {
         let mut current = sample_manifest();
-        current.files.insert("etc/passwd".to_string(), FileInfo {
-            blake3: "aaa111".to_string(), size: 42, mode: "644".to_string(),
-        });
+        current.files.insert(
+            "etc/passwd".to_string(),
+            FileInfo {
+                blake3: "aaa111".to_string(),
+                size: 42,
+                mode: "644".to_string(),
+                text: None,
+            },
+        );
         let mut new_m = current.clone();
         // Add a declared service
         new_m.services.declared.insert(
@@ -3512,11 +3857,15 @@ mod tests {
         // Change a config file hash
         new_m.files.get_mut("etc/passwd").unwrap().blake3 = "changed123".to_string();
         // Add a new config file
-        new_m.files.insert("etc/httpd.conf".to_string(), FileInfo {
-            blake3: "newfile".to_string(),
-            size: 50,
-            mode: "644".to_string(),
-        });
+        new_m.files.insert(
+            "etc/httpd.conf".to_string(),
+            FileInfo {
+                blake3: "newfile".to_string(),
+                size: 50,
+                mode: "644".to_string(),
+                text: None,
+            },
+        );
 
         let plan = crate::activate::plan(&current, &new_m);
         assert_eq!(plan.services_added.len(), 1);
@@ -3540,7 +3889,11 @@ mod tests {
             store_path: String::new(),
         });
 
-        std::fs::write(&current_file, serde_json::to_string_pretty(&current).unwrap()).unwrap();
+        std::fs::write(
+            &current_file,
+            serde_json::to_string_pretty(&current).unwrap(),
+        )
+        .unwrap();
         std::fs::write(&target_file, serde_json::to_string_pretty(&target).unwrap()).unwrap();
 
         // Should succeed (dry-run, just displays plan)
@@ -3663,13 +4016,19 @@ mod tests {
         let marker = dir.path().join("default-generation");
 
         // No file yet
-        assert_eq!(read_boot_default(Some(marker.to_str().unwrap())).unwrap(), None);
+        assert_eq!(
+            read_boot_default(Some(marker.to_str().unwrap())).unwrap(),
+            None
+        );
 
         // Write
         write_boot_default(5, Some(marker.to_str().unwrap())).unwrap();
 
         // Read back
-        assert_eq!(read_boot_default(Some(marker.to_str().unwrap())).unwrap(), Some(5));
+        assert_eq!(
+            read_boot_default(Some(marker.to_str().unwrap())).unwrap(),
+            Some(5)
+        );
     }
 
     #[test]
@@ -3678,7 +4037,10 @@ mod tests {
         let marker = dir.path().join("default-generation");
         fs::write(&marker, "").unwrap();
 
-        assert_eq!(read_boot_default(Some(marker.to_str().unwrap())).unwrap(), None);
+        assert_eq!(
+            read_boot_default(Some(marker.to_str().unwrap())).unwrap(),
+            None
+        );
     }
 
     #[test]
@@ -3711,7 +4073,10 @@ mod tests {
             Some(marker.to_str().unwrap()),
         );
         assert!(result.is_ok());
-        assert_eq!(read_boot_default(Some(marker.to_str().unwrap())).unwrap(), Some(3));
+        assert_eq!(
+            read_boot_default(Some(marker.to_str().unwrap())).unwrap(),
+            Some(3)
+        );
 
         // Show boot default (no generation arg)
         let result = boot_cmd(
@@ -3744,7 +4109,12 @@ mod tests {
     }
 
     fn root_names(gc_roots: &crate::store::GcRoots) -> Vec<String> {
-        gc_roots.list_roots().unwrap().into_iter().map(|r| r.name).collect()
+        gc_roots
+            .list_roots()
+            .unwrap()
+            .into_iter()
+            .map(|r| r.name)
+            .collect()
     }
 
     // Valid nixbase32 store paths for GC root tests
@@ -3759,8 +4129,16 @@ mod tests {
         let gc_roots = make_gc_roots(&tmp);
 
         let pkgs = vec![
-            Package { name: "ion".into(), version: "1.0".into(), store_path: SP_ION_V1.into() },
-            Package { name: "uutils".into(), version: "1.0".into(), store_path: SP_UUTILS.into() },
+            Package {
+                name: "ion".into(),
+                version: "1.0".into(),
+                store_path: SP_ION_V1.into(),
+            },
+            Package {
+                name: "uutils".into(),
+                version: "1.0".into(),
+                store_path: SP_UUTILS.into(),
+            },
         ];
 
         let added = add_generation_gc_roots(&gc_roots, 3, &pkgs).unwrap();
@@ -3777,8 +4155,16 @@ mod tests {
         let gc_roots = make_gc_roots(&tmp);
 
         let pkgs = vec![
-            Package { name: "ion".into(), version: "1.0".into(), store_path: SP_ION_V1.into() },
-            Package { name: "empty".into(), version: "1.0".into(), store_path: String::new() },
+            Package {
+                name: "ion".into(),
+                version: "1.0".into(),
+                store_path: SP_ION_V1.into(),
+            },
+            Package {
+                name: "empty".into(),
+                version: "1.0".into(),
+                store_path: String::new(),
+            },
         ];
 
         let added = add_generation_gc_roots(&gc_roots, 1, &pkgs).unwrap();
@@ -3838,7 +4224,11 @@ mod tests {
         m2.generation.id = 2;
         m2.packages[0].store_path = SP_ION_V2.into();
         m2.packages[1].store_path = SP_UUTILS.into();
-        m2.packages.push(Package { name: "ripgrep".into(), version: "14.0".into(), store_path: SP_RIPGREP.into() });
+        m2.packages.push(Package {
+            name: "ripgrep".into(),
+            version: "14.0".into(),
+            store_path: SP_RIPGREP.into(),
+        });
 
         // update_system_gc_roots should NOT remove gen-1 roots
         update_system_gc_roots_with(&gc_roots, &m2, Some(gen_dir.to_str().unwrap())).unwrap();
@@ -3866,7 +4256,11 @@ mod tests {
             fs::create_dir_all(&gd).unwrap();
             let mut m = sample_manifest();
             m.generation.id = id;
-            m.packages[0].store_path = if id == 1 { SP_ION_V1.into() } else { SP_ION_V2.into() };
+            m.packages[0].store_path = if id == 1 {
+                SP_ION_V1.into()
+            } else {
+                SP_ION_V2.into()
+            };
             m.packages[1].store_path = SP_UUTILS.into();
             fs::write(gd.join("manifest.json"), serde_json::to_string(&m).unwrap()).unwrap();
         }
@@ -3880,7 +4274,11 @@ mod tests {
         m3.generation.id = 3;
         m3.packages[0].store_path = SP_ION_V2.into();
         m3.packages[1].store_path = SP_UUTILS.into();
-        m3.packages.push(Package { name: "ripgrep".into(), version: "14.0".into(), store_path: SP_RIPGREP.into() });
+        m3.packages.push(Package {
+            name: "ripgrep".into(),
+            version: "14.0".into(),
+            store_path: SP_RIPGREP.into(),
+        });
 
         update_system_gc_roots_with(&gc_roots, &m3, Some(gen_dir.to_str().unwrap())).unwrap();
 
@@ -4015,8 +4413,16 @@ mod tests {
         m.generation.id = 1;
         // Use valid nixbase32 store paths for packages
         m.packages = vec![
-            Package { name: "ion".into(), version: "1.0".into(), store_path: SP_ION_V1.into() },
-            Package { name: "uutils".into(), version: "1.0".into(), store_path: SP_UUTILS.into() },
+            Package {
+                name: "ion".into(),
+                version: "1.0".into(),
+                store_path: SP_ION_V1.into(),
+            },
+            Package {
+                name: "uutils".into(),
+                version: "1.0".into(),
+                store_path: SP_UUTILS.into(),
+            },
         ];
         m.boot = Some(BootComponents {
             kernel: Some(format!("{SP_KERNEL}/boot/kernel")),
@@ -4043,7 +4449,12 @@ mod tests {
         tmp: &tempfile::TempDir,
         count: u32,
         current_id: u32,
-    ) -> (std::path::PathBuf, std::path::PathBuf, crate::store::GcRoots, std::path::PathBuf) {
+    ) -> (
+        std::path::PathBuf,
+        std::path::PathBuf,
+        crate::store::GcRoots,
+        std::path::PathBuf,
+    ) {
         let gen_dir = tmp.path().join("generations");
         let manifest_file = tmp.path().join("manifest.json");
         let boot_default_path = tmp.path().join("boot-default");
@@ -4076,22 +4487,34 @@ mod tests {
 
     #[test]
     fn parse_selector_old() {
-        assert_eq!(parse_generation_selector("old").unwrap(), GenerationSelector::Old);
+        assert_eq!(
+            parse_generation_selector("old").unwrap(),
+            GenerationSelector::Old
+        );
     }
 
     #[test]
     fn parse_selector_keep_last() {
-        assert_eq!(parse_generation_selector("+3").unwrap(), GenerationSelector::KeepLast(3));
+        assert_eq!(
+            parse_generation_selector("+3").unwrap(),
+            GenerationSelector::KeepLast(3)
+        );
     }
 
     #[test]
     fn parse_selector_older_than_days() {
-        assert_eq!(parse_generation_selector("14d").unwrap(), GenerationSelector::OlderThanDays(14));
+        assert_eq!(
+            parse_generation_selector("14d").unwrap(),
+            GenerationSelector::OlderThanDays(14)
+        );
     }
 
     #[test]
     fn parse_selector_ids() {
-        assert_eq!(parse_generation_selector("1 3 5").unwrap(), GenerationSelector::Ids(vec![1, 3, 5]));
+        assert_eq!(
+            parse_generation_selector("1 3 5").unwrap(),
+            GenerationSelector::Ids(vec![1, 3, 5])
+        );
     }
 
     #[test]
@@ -4107,11 +4530,14 @@ mod tests {
         let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 5, 5);
 
         let stats = delete_generations_with(
-            &gc_roots, "1 3", false,
+            &gc_roots,
+            "1 3",
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
             Some(boot_default.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(stats.generations_deleted, 2);
         assert!(stats.deleted_ids.contains(&1));
@@ -4138,18 +4564,27 @@ mod tests {
         let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 8, 8);
 
         let stats = delete_generations_with(
-            &gc_roots, "+3", false,
+            &gc_roots,
+            "+3",
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
             Some(boot_default.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(stats.generations_deleted, 5); // 1-5 deleted, 6-8 kept
         for id in 1..=5 {
-            assert!(!gen_dir.join(id.to_string()).exists(), "gen {id} should be deleted");
+            assert!(
+                !gen_dir.join(id.to_string()).exists(),
+                "gen {id} should be deleted"
+            );
         }
         for id in 6..=8 {
-            assert!(gen_dir.join(id.to_string()).exists(), "gen {id} should be kept");
+            assert!(
+                gen_dir.join(id.to_string()).exists(),
+                "gen {id} should be kept"
+            );
         }
     }
 
@@ -4158,32 +4593,48 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 3, 3);
 
-        let mut gen1 = load_manifest_from(gen_dir.join("1").join("manifest.json").to_str().unwrap()).unwrap();
+        let mut gen1 =
+            load_manifest_from(gen_dir.join("1").join("manifest.json").to_str().unwrap()).unwrap();
         gen1.generation.timestamp = "2000-01-01T00:00:00Z".into();
         fs::write(
             gen_dir.join("1").join("manifest.json"),
             serde_json::to_string(&gen1).unwrap(),
-        ).unwrap();
+        )
+        .unwrap();
 
-        let mut gen2 = load_manifest_from(gen_dir.join("2").join("manifest.json").to_str().unwrap()).unwrap();
+        let mut gen2 =
+            load_manifest_from(gen_dir.join("2").join("manifest.json").to_str().unwrap()).unwrap();
         gen2.generation.timestamp = "2999-01-01T00:00:00Z".into();
         fs::write(
             gen_dir.join("2").join("manifest.json"),
             serde_json::to_string(&gen2).unwrap(),
-        ).unwrap();
+        )
+        .unwrap();
 
         let stats = delete_generations_with(
-            &gc_roots, "14d", false,
+            &gc_roots,
+            "14d",
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
             Some(boot_default.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(stats.generations_deleted, 1);
         assert_eq!(stats.deleted_ids, vec![1]);
-        assert!(!gen_dir.join("1").exists(), "old generation should be deleted");
-        assert!(gen_dir.join("2").exists(), "fresh generation should be kept");
-        assert!(gen_dir.join("3").exists(), "current generation should be protected");
+        assert!(
+            !gen_dir.join("1").exists(),
+            "old generation should be deleted"
+        );
+        assert!(
+            gen_dir.join("2").exists(),
+            "fresh generation should be kept"
+        );
+        assert!(
+            gen_dir.join("3").exists(),
+            "current generation should be protected"
+        );
 
         let names = root_names(&gc_roots);
         assert!(!names.iter().any(|n| n.starts_with("gen-1-")));
@@ -4197,11 +4648,14 @@ mod tests {
         let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 4, 4);
 
         let stats = delete_generations_with(
-            &gc_roots, "old", false,
+            &gc_roots,
+            "old",
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
             Some(boot_default.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(stats.generations_deleted, 3); // 1, 2, 3 deleted
         assert!(!gen_dir.join("1").exists());
@@ -4216,11 +4670,14 @@ mod tests {
         let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 3, 3);
 
         let stats = delete_generations_with(
-            &gc_roots, "3", false,
+            &gc_roots,
+            "3",
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
             Some(boot_default.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Current generation protected
         assert_eq!(stats.generations_deleted, 0);
@@ -4237,11 +4694,14 @@ mod tests {
         fs::write(&boot_default, "3\n").unwrap();
 
         let stats = delete_generations_with(
-            &gc_roots, "old", false,
+            &gc_roots,
+            "old",
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
             Some(boot_default.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Gen 3 (boot-default) and 5 (current) protected
         assert_eq!(stats.generations_deleted, 3); // 1, 2, 4 deleted
@@ -4258,14 +4718,17 @@ mod tests {
         let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 3, 3);
 
         let stats = delete_generations_with(
-            &gc_roots, "old", true, // dry_run
+            &gc_roots,
+            "old",
+            true, // dry_run
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
             Some(boot_default.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(stats.generations_deleted, 2); // would delete 1, 2
-        // But nothing actually deleted
+                                                  // But nothing actually deleted
         assert!(gen_dir.join("1").exists());
         assert!(gen_dir.join("2").exists());
         // GC roots still intact
@@ -4280,11 +4743,14 @@ mod tests {
         let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 1, 1);
 
         let stats = delete_generations_with(
-            &gc_roots, "old", false,
+            &gc_roots,
+            "old",
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
             Some(boot_default.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(stats.generations_deleted, 0);
         assert!(gen_dir.join("1").exists());
@@ -4322,17 +4788,21 @@ mod tests {
                 "/nix/store/{}b9jydsiygi6jhlz2dxbrxi6b4m1rn4r-ion-{}.0",
                 id, id
             );
-            crate::store::register_path(&db, &store_path, "deadbeef", 1000, vec![], vec![]).unwrap();
+            crate::store::register_path(&db, &store_path, "deadbeef", 1000, vec![], vec![])
+                .unwrap();
         }
         crate::store::register_path(&db, SP_UUTILS, "deadbeef", 500, vec![], vec![]).unwrap();
 
         // Step 1: Prune (keep last 1 = only gen 4)
         let stats = delete_generations_with(
-            &gc_roots, "+1", false,
+            &gc_roots,
+            "+1",
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
             Some(boot_default.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(stats.generations_deleted, 3);
 
@@ -4358,11 +4828,14 @@ mod tests {
         let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 3, 3);
 
         let stats = delete_generations_with(
-            &gc_roots, "old", true,
+            &gc_roots,
+            "old",
+            true,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
             Some(boot_default.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         // Reports what would happen
         assert_eq!(stats.generations_deleted, 2);
@@ -4383,11 +4856,14 @@ mod tests {
         let (gen_dir, manifest_file, gc_roots, boot_default) = setup_generations(&tmp, 5, 5);
 
         let stats = delete_generations_with(
-            &gc_roots, "old", false,
+            &gc_roots,
+            "old",
+            false,
             Some(gen_dir.to_str().unwrap()),
             Some(manifest_file.to_str().unwrap()),
             Some(boot_default.to_str().unwrap()),
-        ).unwrap();
+        )
+        .unwrap();
 
         assert_eq!(stats.generations_deleted, 4);
         for id in 1..=4 {
@@ -4433,7 +4909,10 @@ mod tests {
         let boot = parsed.boot.unwrap();
         assert_eq!(boot.kernel.unwrap(), "/nix/store/abc-kernel/boot/kernel");
         assert_eq!(boot.initfs.unwrap(), "/nix/store/def-initfs/boot/initfs");
-        assert_eq!(boot.bootloader.unwrap(), "/nix/store/ghi-bootloader/boot/EFI/BOOT/BOOTX64.EFI");
+        assert_eq!(
+            boot.bootloader.unwrap(),
+            "/nix/store/ghi-bootloader/boot/EFI/BOOT/BOOTX64.EFI"
+        );
     }
 
     #[test]
@@ -4471,5 +4950,4 @@ mod tests {
         assert_eq!(parsed.manifest_version, 2);
         assert!(parsed.boot.is_some());
     }
-
 }

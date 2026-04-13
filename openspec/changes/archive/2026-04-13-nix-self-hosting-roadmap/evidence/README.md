@@ -41,8 +41,8 @@ Implementation files:
 - `nix/pkgs/userspace/snix-build-plan.json`
 
 Validation log:
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-10-snix-remote-cache-host-validation.log`
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-10-snix-remote-cache-host-validation.excerpt.txt`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-10-snix-remote-cache-host-validation.log`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-10-snix-remote-cache-host-validation.excerpt.txt`
 
 Command:
 - `./scripts/validate-snix-redox-host.sh`
@@ -56,7 +56,7 @@ This log records the host-side validation command after regenerating both unit2n
 
 ### 2.8 VM test: install from remote cache over HTTP
 Validation log:
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-10-network-install-test.log`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-10-network-install-test.log`
 
 Command:
 - `nix run .#network-install-test -- --verbose`
@@ -75,8 +75,8 @@ The HTTP server section of the same log shows the guest fetched the remote cache
 
 ### 4.5 reboot-recommended warning on boot-component change
 Validation log:
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-rebuild-artifacts-test.log`
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-rebuild-artifacts-test.excerpt.txt`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-rebuild-artifacts-test.log`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-rebuild-artifacts-test.excerpt.txt`
 
 Command:
 - `nix run .#rebuild-artifacts-test -- --verbose`
@@ -103,8 +103,8 @@ Key implementation point:
 - `generated-files.nix` emits `etc/redox-system/configuration.nix` from the shared `mkSystem` image-generation path, so self-hosting profiles inherit the same editable rebuild config on disk.
 
 Corroborating runtime smoke from rebuild test images:
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-e2e-rebuild-test.log`
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-rebuild-artifacts-test.log`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-e2e-rebuild-test.log`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-rebuild-artifacts-test.log`
 
 Key result from those logs:
 - `FUNC_TEST:config-modified:PASS`
@@ -114,8 +114,8 @@ Key result from those logs:
 
 ### 5.1 generations host validation
 Validation log:
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-generations-host-validation.log`
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-generations-host-validation.excerpt.txt`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-generations-host-validation.log`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-generations-host-validation.excerpt.txt`
 
 Command:
 - `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu generations_`
@@ -135,8 +135,8 @@ Related guest-side coverage:
 
 ### 5.2 switch-generation host validation
 Validation log:
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-host-validation.log`
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-host-validation.excerpt.txt`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-host-validation.log`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-host-validation.excerpt.txt`
 
 Command:
 - `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu switch_generation_`
@@ -149,8 +149,8 @@ Key result from the log:
 
 ### 5.3 rollback host validation
 Validation log:
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-rollback-host-validation.log`
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-rollback-host-validation.excerpt.txt`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-rollback-host-validation.log`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-rollback-host-validation.excerpt.txt`
 
 Command:
 - `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu rollback_`
@@ -169,8 +169,8 @@ Related guest-side coverage:
 
 ### 5.4 delete-generations host validation
 Validation log:
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-delete-generations-host-validation.log`
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-delete-generations-host-validation.excerpt.txt`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-delete-generations-host-validation.log`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-delete-generations-host-validation.excerpt.txt`
 
 Command:
 - `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu delete_generations_`
@@ -191,8 +191,8 @@ Related guest-side coverage:
 
 ### 5.5 age-pruning host validation
 Validation log:
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-age-pruning-host-validation.log`
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-age-pruning-host-validation.excerpt.txt`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-age-pruning-host-validation.log`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-age-pruning-host-validation.excerpt.txt`
 
 Commands:
 - `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu delete_generations_older_than_days`
@@ -205,8 +205,8 @@ Key result from the log:
 
 ### 5.6 switch-generation reboot-warning surfacing
 Validation log:
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-reboot-warning-host-validation.log`
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-reboot-warning-host-validation.excerpt.txt`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-reboot-warning-host-validation.log`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-switch-generation-reboot-warning-host-validation.excerpt.txt`
 
 Command:
 - `cd snix-redox && PROTO_ROOT=$PWD/upstream PROTOC=$(command -v protoc) cargo test --lib --target x86_64-unknown-linux-gnu switch_generation_`
@@ -223,8 +223,8 @@ Implementation note:
 
 ### 5.7 focused VM rebuild/rollback validation
 Validation log:
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-e2e-rebuild-test.log`
-- `openspec/changes/nix-self-hosting-roadmap/evidence/2026-04-12-e2e-rebuild-test.excerpt.txt`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-e2e-rebuild-test.log`
+- `openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/evidence/2026-04-12-e2e-rebuild-test.excerpt.txt`
 
 Command:
 - `nix run .#e2e-rebuild-test -- --verbose`

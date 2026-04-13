@@ -173,35 +173,62 @@ fn test_proxy_io() {
         tmp_dir: writable_dir.to_string_lossy().to_string(),
     };
 
-    let (child_ns_fd, proxy) =
-        match snix_redox::sandbox::setup_proxy_namespace(&config, allow_list) {
-            Ok(v) => v,
-            Err(e) => {
-                println!("TEST 3: SKIP (proxy setup failed: {})", e);
-                println!("TEST 4: SKIP");
-                println!("TEST 5: SKIP");
-                println!("TEST 6: SKIP");
-                println!("TEST 7: SKIP");
-                return;
-            }
-        };
+    let (child_ns_fd, proxy) = match snix_redox::sandbox::setup_proxy_namespace(&config, allow_list)
+    {
+        Ok(v) => v,
+        Err(e) => {
+            println!("TEST 3: SKIP (proxy setup failed: {})", e);
+            println!("TEST 4: SKIP");
+            println!("TEST 5: SKIP");
+            println!("TEST 6: SKIP");
+            println!("TEST 7: SKIP");
+            return;
+        }
+    };
 
     let socket_fd = proxy.socket_fd();
 
     // Run each test as a child process in the proxy namespace.
-    run_child_test("TEST 3: fork+setns write through proxy", "test3",
-        child_ns_fd, socket_fd, "proxy-write-roundtrip",
-        Some(verify_test_3));
-    run_child_test("TEST 4: proxy denies /etc/passwd", "test4",
-        child_ns_fd, socket_fd, "proxy-denies-passwd", None);
-    run_child_test("TEST 5: create dir + 3 files, getdents verifies", "test5",
-        child_ns_fd, socket_fd, "proxy-getdents",
-        Some(verify_test_5));
-    run_child_test("TEST 6: write 1KB, read back, verify", "test6",
-        child_ns_fd, socket_fd, "proxy-readback", None);
-    run_child_test("TEST 7: latency (1000 open+read+close)", "test7",
-        child_ns_fd, socket_fd, "proxy-roundtrip",
-        Some(verify_test_7));
+    run_child_test(
+        "TEST 3: fork+setns write through proxy",
+        "test3",
+        child_ns_fd,
+        socket_fd,
+        "proxy-write-roundtrip",
+        Some(verify_test_3),
+    );
+    run_child_test(
+        "TEST 4: proxy denies /etc/passwd",
+        "test4",
+        child_ns_fd,
+        socket_fd,
+        "proxy-denies-passwd",
+        None,
+    );
+    run_child_test(
+        "TEST 5: create dir + 3 files, getdents verifies",
+        "test5",
+        child_ns_fd,
+        socket_fd,
+        "proxy-getdents",
+        Some(verify_test_5),
+    );
+    run_child_test(
+        "TEST 6: write 1KB, read back, verify",
+        "test6",
+        child_ns_fd,
+        socket_fd,
+        "proxy-readback",
+        None,
+    );
+    run_child_test(
+        "TEST 7: latency (1000 open+read+close)",
+        "test7",
+        child_ns_fd,
+        socket_fd,
+        "proxy-roundtrip",
+        Some(verify_test_7),
+    );
 
     // Shut down the proxy.
     proxy.shutdown();
@@ -224,8 +251,8 @@ fn run_child_test(
     func_test_name: &str,
     verify_fn: Option<fn() -> Result<(), String>>,
 ) {
-    use std::process::Command;
     use std::os::unix::process::CommandExt;
+    use std::process::Command;
 
     print!("{}... ", label);
 
@@ -259,10 +286,7 @@ fn run_child_test(
                 let _ = syscall::close(fd);
             }
             libredox::call::setns(child_ns_fd).map_err(|e| {
-                std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    format!("setns: {e}"),
-                )
+                std::io::Error::new(std::io::ErrorKind::Other, format!("setns: {e}"))
             })?;
             Ok(())
         });
@@ -459,10 +483,7 @@ fn child_test_6() {
         if readback != data {
             for (i, (a, b)) in data.iter().zip(readback.iter()).enumerate() {
                 if a != b {
-                    eprintln!(
-                        "mismatch at byte {}: wrote 0x{:02x} read 0x{:02x}",
-                        i, a, b
-                    );
+                    eprintln!("mismatch at byte {}: wrote 0x{:02x} read 0x{:02x}", i, a, b);
                     break;
                 }
             }

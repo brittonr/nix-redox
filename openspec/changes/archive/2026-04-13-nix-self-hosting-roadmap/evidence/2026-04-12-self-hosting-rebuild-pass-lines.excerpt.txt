@@ -1,0 +1,28 @@
+source=/home/brittonr/.local/share/pueue/task_logs/110.log
+
+-- lines 45652-45663 --
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+FUNC_TEST:rebuild-hostname:PASS
+FUNC_TEST:rebuild-etc-file:PASS
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+    ✓ rebuild-hostname
+    ✓ rebuild-etc-file
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+
+-- lines 45690-45700 --
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+FUNC_TEST:rebuild-generation:PASS
+FUNC_TESTS_COMPLETE
+/nix/store/7a4i5zyb4775cqrwg54phfd1v9f9n8p5-functional-test/bin/functional-test: line 358: warning: command substitution: ignored null byte in input
+    ✓ rebuild-generation
+
+  ✓ [5060.843s] Test suite complete

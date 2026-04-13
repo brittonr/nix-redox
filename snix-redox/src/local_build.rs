@@ -36,11 +36,11 @@ use nix_compat::nixbase32;
 use nix_compat::store_path::{StorePath, STORE_DIR};
 use sha2::{Digest, Sha256};
 
+use crate::pathinfo::{self, PathInfo, PathInfoDb};
+use crate::sandbox;
 use snix_build::buildservice::{BuildConstraints, BuildRequest};
 use snix_glue::builder::derivation_into_build_request;
 use snix_glue::known_paths::KnownPaths;
-use crate::pathinfo::{self, PathInfo, PathInfoDb};
-use crate::sandbox;
 
 // ── Temp Build Directory ───────────────────────────────────────────────────
 
@@ -87,10 +87,7 @@ pub enum BuildError {
         stderr: String,
     },
     /// Output path was not created by the builder
-    MissingOutput {
-        output: String,
-        path: String,
-    },
+    MissingOutput { output: String, path: String },
     /// I/O error during build setup or teardown
     Io(String),
     /// Derivation not found in KnownPaths
@@ -198,8 +195,8 @@ fn build_derivation_inner(
     }
 
     // ── 2. Create temp build directory ─────────────────────────────────
-    let build_dir = make_build_dir()
-        .map_err(|e| BuildError::Io(format!("creating temp build dir: {e}")))?;
+    let build_dir =
+        make_build_dir().map_err(|e| BuildError::Io(format!("creating temp build dir: {e}")))?;
 
     // ── 3. Convert Derivation → BuildRequest ───────────────────────────
     // Use upstream snix-glue to produce environment variables, command
@@ -227,15 +224,20 @@ fn build_derivation_inner(
 
     // ── 3a. Write additional files (passAsFile / structuredAttrs) ──────
     for af in &build_request.additional_files {
-        let file_path = build_dir.path().join(
-            af.path.strip_prefix("/").unwrap_or(&af.path)
-        );
+        let file_path = build_dir
+            .path()
+            .join(af.path.strip_prefix("/").unwrap_or(&af.path));
         if let Some(parent) = file_path.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| BuildError::Io(format!("creating dir for {}: {e}", af.path.display())))?;
+            fs::create_dir_all(parent).map_err(|e| {
+                BuildError::Io(format!("creating dir for {}: {e}", af.path.display()))
+            })?;
         }
-        fs::write(&file_path, &af.contents)
-            .map_err(|e| BuildError::Io(format!("writing additional file {}: {e}", af.path.display())))?;
+        fs::write(&file_path, &af.contents).map_err(|e| {
+            BuildError::Io(format!(
+                "writing additional file {}: {e}",
+                af.path.display()
+            ))
+        })?;
     }
 
     // ── 4. Ensure /nix/store exists ────────────────────────────────────
@@ -343,16 +345,16 @@ fn build_derivation_inner(
 
             // Scheme-level sandbox: file: included, full fs access.
             unsafe {
-                cmd.pre_exec(move || {
-                    match sandbox::setup_build_namespace(&sandbox_config) {
+                cmd.pre_exec(
+                    move || match sandbox::setup_build_namespace(&sandbox_config) {
                         Ok(()) => Ok(()),
                         Err(sandbox::SandboxError::Unavailable) => Ok(()),
                         Err(e) => {
                             eprintln!("warning: sandbox setup failed: {e}");
                             Ok(())
                         }
-                    }
-                });
+                    },
+                );
             }
         }
 
@@ -373,9 +375,9 @@ fn build_derivation_inner(
     cmd.stderr(std::process::Stdio::piped());
 
     let (status, captured_stderr) = {
-        let mut child = cmd.spawn().map_err(|e| {
-            BuildError::Io(format!("executing builder '{}': {e}", drv.builder))
-        })?;
+        let mut child = cmd
+            .spawn()
+            .map_err(|e| BuildError::Io(format!("executing builder '{}': {e}", drv.builder)))?;
 
         // (No proxy namespace fd to close — proxy is disabled.
         // When the proxy is re-enabled, the child_ns_fd must be
@@ -424,9 +426,9 @@ fn build_derivation_inner(
         // Previously used try_wait()+sched_yield() poll loop, but
         // that was a workaround for pre-LAPIC scheduler starvation
         // and burns CPU spinning. Blocking wait is correct now.
-        let status = child.wait().map_err(|e| {
-            BuildError::Io(format!("waiting for builder '{}': {e}", drv.builder))
-        })?;
+        let status = child
+            .wait()
+            .map_err(|e| BuildError::Io(format!("waiting for builder '{}': {e}", drv.builder)))?;
 
         // Join reader threads (they should have gotten EOF by now).
         let _stdout_data = stdout_thread
@@ -466,8 +468,8 @@ fn build_derivation_inner(
             #[cfg(target_os = "redox")]
             let output_exists = if let Some(rfd) = verify_root_fd {
                 let clean = abs.trim_start_matches('/');
-                let fcntl_flags = (syscall::flag::O_RDONLY | syscall::flag::O_STAT)
-                    & syscall::O_FCNTL_MASK;
+                let fcntl_flags =
+                    (syscall::flag::O_RDONLY | syscall::flag::O_STAT) & syscall::O_FCNTL_MASK;
                 match unsafe {
                     syscall::syscall5(
                         syscall::SYS_OPENAT,
@@ -482,9 +484,7 @@ fn build_derivation_inner(
                         let _ = syscall::close(fd);
                         true
                     }
-                    Err(e) => {
-                        false
-                    }
+                    Err(e) => false,
                 }
             } else {
                 Path::new(&abs).exists()
@@ -664,12 +664,7 @@ pub fn build_needed_with_options(
         if all_exist {
             if drv_path == target_drv_path {
                 // Target is cached — return its result
-                last_result = Some(build_result_from_existing(
-                    drv,
-                    drv_path,
-                    known_paths,
-                    db,
-                )?);
+                last_result = Some(build_result_from_existing(drv, drv_path, known_paths, db)?);
             }
             continue;
         }
@@ -682,27 +677,23 @@ pub fn build_needed_with_options(
         );
 
         let result =
-            build_derivation_inner(drv, drv_path, known_paths, db, no_sandbox).map_err(
-                |e| {
-                    if drv_path != target_drv_path {
-                        BuildError::DependencyFailed {
-                            drv_path: drv_path.to_absolute_path(),
-                            cause: Box::new(e),
-                        }
-                    } else {
-                        e
+            build_derivation_inner(drv, drv_path, known_paths, db, no_sandbox).map_err(|e| {
+                if drv_path != target_drv_path {
+                    BuildError::DependencyFailed {
+                        drv_path: drv_path.to_absolute_path(),
+                        cause: Box::new(e),
                     }
-                },
-            )?;
+                } else {
+                    e
+                }
+            })?;
 
         if drv_path == target_drv_path {
             last_result = Some(result);
         }
     }
 
-    last_result.ok_or_else(|| {
-        BuildError::UnknownDerivation(target_drv_path.to_absolute_path())
-    })
+    last_result.ok_or_else(|| BuildError::UnknownDerivation(target_drv_path.to_absolute_path()))
 }
 
 /// Topological sort of derivation dependency graph (dependencies first).
@@ -787,8 +778,7 @@ fn write_path_to_nar<W: io::Write>(
         let mut reader = BufReader::new(file);
         node.file(executable, size, &mut reader)?;
     } else if meta.is_dir() {
-        let mut entries: Vec<fs::DirEntry> = fs::read_dir(path)?
-            .collect::<Result<Vec<_>, _>>()?;
+        let mut entries: Vec<fs::DirEntry> = fs::read_dir(path)?.collect::<Result<Vec<_>, _>>()?;
         entries.sort_by(|a, b| a.file_name().cmp(&b.file_name()));
 
         let mut dir = node.directory()?;
@@ -834,19 +824,13 @@ fn needles_to_candidates(
     // Output paths (self-references)
     for output in drv.outputs.values() {
         if let Some(ref sp) = output.path {
-            candidates.insert(
-                nixbase32::encode(sp.digest()),
-                sp.to_absolute_path(),
-            );
+            candidates.insert(nixbase32::encode(sp.digest()), sp.to_absolute_path());
         }
     }
 
     // Input sources
     for src in &drv.input_sources {
-        candidates.insert(
-            nixbase32::encode(src.digest()),
-            src.to_absolute_path(),
-        );
+        candidates.insert(nixbase32::encode(src.digest()), src.to_absolute_path());
     }
 
     // Resolved outputs of input derivations
@@ -855,10 +839,7 @@ fn needles_to_candidates(
             for output_name in output_names {
                 if let Some(output) = input_drv.outputs.get(output_name) {
                     if let Some(ref sp) = output.path {
-                        candidates.insert(
-                            nixbase32::encode(sp.digest()),
-                            sp.to_absolute_path(),
-                        );
+                        candidates.insert(nixbase32::encode(sp.digest()), sp.to_absolute_path());
                     }
                 }
             }
@@ -889,9 +870,7 @@ pub fn scan_references(
     // Build the list of hash patterns for the Wu-Manber scanner.
     let hashes: Vec<String> = candidates.keys().cloned().collect();
 
-    let scanner = snix_castore::refscan::ReferenceScanner::new(
-        hashes,
-    );
+    let scanner = snix_castore::refscan::ReferenceScanner::new(hashes);
 
     scan_path_with_scanner(path, &scanner)?;
 
@@ -1029,10 +1008,7 @@ fn build_builtin_fetcher(
 // ── CLI Entry Point ────────────────────────────────────────────────────────
 
 /// `snix build --expr '...'` — evaluate and build a derivation.
-pub fn run(
-    expr: Option<String>,
-    file: Option<String>,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run(expr: Option<String>, file: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
     run_with_options(expr, file, false)
 }
 
@@ -1077,16 +1053,13 @@ pub fn run_with_options(
     let (drv_path_str, state) = crate::eval::evaluate_with_state(&drv_path_expr)?;
 
     // Strip surrounding quotes from the evaluated string
-    let drv_path_str = drv_path_str
-        .trim_matches('"')
-        .to_string();
+    let drv_path_str = drv_path_str.trim_matches('"').to_string();
 
     let drv_path = StorePath::<String>::from_absolute_path(drv_path_str.as_bytes())
         .map_err(|e| format!("invalid derivation path '{drv_path_str}': {e}"))?;
 
     let known_paths_ref = state.known_paths.borrow();
-    let db = PathInfoDb::open()
-        .map_err(|e| format!("opening pathinfo db: {e}"))?;
+    let db = PathInfoDb::open().map_err(|e| format!("opening pathinfo db: {e}"))?;
 
     let result = build_needed_with_options(&drv_path, &*known_paths_ref, &db, no_sandbox)?;
 
@@ -1310,11 +1283,7 @@ mod tests {
 
         // Put the reference in a nested file
         fs::create_dir(dir.join("lib")).unwrap();
-        fs::write(
-            dir.join("lib/config"),
-            format!("prefix={store_path}\n"),
-        )
-        .unwrap();
+        fs::write(dir.join("lib/config"), format!("prefix={store_path}\n")).unwrap();
         // Unrelated file
         fs::write(dir.join("README"), "no references here").unwrap();
 
@@ -1364,11 +1333,7 @@ mod tests {
         let path1 = format!("/nix/store/{hash1}-a-1.0");
         let path2 = format!("/nix/store/{hash2}-b-2.0");
 
-        fs::write(
-            &file,
-            format!("PATH={path1}/bin:{path2}/bin\n"),
-        )
-        .unwrap();
+        fs::write(&file, format!("PATH={path1}/bin:{path2}/bin\n")).unwrap();
 
         let mut candidates = HashMap::new();
         candidates.insert(hash1.to_string(), path1.clone());
@@ -1405,9 +1370,7 @@ mod tests {
         }
 
         // Calculate paths (need hash derivation modulo)
-        let drv_path = drv
-            .calculate_derivation_path(name)
-            .unwrap();
+        let drv_path = drv.calculate_derivation_path(name).unwrap();
 
         (drv_path, drv)
     }
@@ -1439,16 +1402,14 @@ mod tests {
         kp.add_derivation(c_path.clone(), c_drv);
 
         let (b_path, mut b_drv) = make_test_drv("b", vec![c_path.clone()]);
-        let b_hdm = b_drv.hash_derivation_modulo(|p| {
-            *kp.get_hash_derivation_modulo(&p.to_owned()).unwrap()
-        });
+        let b_hdm = b_drv
+            .hash_derivation_modulo(|p| *kp.get_hash_derivation_modulo(&p.to_owned()).unwrap());
         b_drv.calculate_output_paths("b", &b_hdm).unwrap();
         kp.add_derivation(b_path.clone(), b_drv);
 
         let (a_path, mut a_drv) = make_test_drv("a", vec![b_path.clone()]);
-        let a_hdm = a_drv.hash_derivation_modulo(|p| {
-            *kp.get_hash_derivation_modulo(&p.to_owned()).unwrap()
-        });
+        let a_hdm = a_drv
+            .hash_derivation_modulo(|p| *kp.get_hash_derivation_modulo(&p.to_owned()).unwrap());
         a_drv.calculate_output_paths("a", &a_hdm).unwrap();
         kp.add_derivation(a_path.clone(), a_drv);
 
@@ -1475,24 +1436,20 @@ mod tests {
         kp.add_derivation(d_path.clone(), d_drv);
 
         let (b_path, mut b_drv) = make_test_drv("b", vec![d_path.clone()]);
-        let b_hdm = b_drv.hash_derivation_modulo(|p| {
-            *kp.get_hash_derivation_modulo(&p.to_owned()).unwrap()
-        });
+        let b_hdm = b_drv
+            .hash_derivation_modulo(|p| *kp.get_hash_derivation_modulo(&p.to_owned()).unwrap());
         b_drv.calculate_output_paths("b", &b_hdm).unwrap();
         kp.add_derivation(b_path.clone(), b_drv);
 
         let (c_path, mut c_drv) = make_test_drv("c-dep", vec![d_path.clone()]);
-        let c_hdm = c_drv.hash_derivation_modulo(|p| {
-            *kp.get_hash_derivation_modulo(&p.to_owned()).unwrap()
-        });
+        let c_hdm = c_drv
+            .hash_derivation_modulo(|p| *kp.get_hash_derivation_modulo(&p.to_owned()).unwrap());
         c_drv.calculate_output_paths("c-dep", &c_hdm).unwrap();
         kp.add_derivation(c_path.clone(), c_drv);
 
-        let (a_path, mut a_drv) =
-            make_test_drv("a", vec![b_path.clone(), c_path.clone()]);
-        let a_hdm = a_drv.hash_derivation_modulo(|p| {
-            *kp.get_hash_derivation_modulo(&p.to_owned()).unwrap()
-        });
+        let (a_path, mut a_drv) = make_test_drv("a", vec![b_path.clone(), c_path.clone()]);
+        let a_hdm = a_drv
+            .hash_derivation_modulo(|p| *kp.get_hash_derivation_modulo(&p.to_owned()).unwrap());
         a_drv.calculate_output_paths("a", &a_hdm).unwrap();
         kp.add_derivation(a_path.clone(), a_drv);
 
@@ -1516,11 +1473,10 @@ mod tests {
         let kp = KnownPaths::default();
 
         // Reference a drv path that doesn't exist in known_paths
-        let fake_path =
-            StorePath::<String>::from_absolute_path(
-                b"/nix/store/4wvvbi4jwn0prsdxb7vs673qa5h9gr7x-fake.drv",
-            )
-            .unwrap();
+        let fake_path = StorePath::<String>::from_absolute_path(
+            b"/nix/store/4wvvbi4jwn0prsdxb7vs673qa5h9gr7x-fake.drv",
+        )
+        .unwrap();
 
         let result = topological_sort(&fake_path, &kp);
         assert!(result.is_err());
@@ -1628,8 +1584,7 @@ mod tests {
             format!("echo 'hello from builder' > {out_str}"),
         ];
         drv.system = "x86_64-linux".to_string();
-        drv.environment
-            .insert("out".to_string(), out_str.into());
+        drv.environment.insert("out".to_string(), out_str.into());
         drv.outputs.insert(
             "out".to_string(),
             Output {
@@ -1711,7 +1666,10 @@ mod tests {
 
         let drv_path = result.trim_matches('"');
         assert!(drv_path.starts_with("/nix/store/"), "drv_path: {drv_path}");
-        assert!(drv_path.ends_with("-test-build.drv"), "drv_path: {drv_path}");
+        assert!(
+            drv_path.ends_with("-test-build.drv"),
+            "drv_path: {drv_path}"
+        );
 
         // The derivation should be registered in KnownPaths
         let kp = state.known_paths.borrow();
@@ -1780,7 +1738,9 @@ mod tests {
         let config = sandbox::config_from_derivation(&drv, "/nix/store/out", "/tmp/build");
 
         assert!(!config.needs_network);
-        assert!(config.allowed_input_hashes.contains("1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r"));
+        assert!(config
+            .allowed_input_hashes
+            .contains("1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r"));
         assert_eq!(config.output_dir, "/nix/store/out");
     }
 

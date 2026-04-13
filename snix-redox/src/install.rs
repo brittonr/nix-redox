@@ -96,11 +96,7 @@ fn profiled_remove(name: &str) -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// Sends enough metadata for `stored` to remember the path even when the
 /// package was lazy-installed and has no file manifest yet.
-fn stored_notify(
-    store_path: &str,
-    nar_hash: &str,
-    files: &[crate::nar::ManifestEntry],
-) {
+fn stored_notify(store_path: &str, nar_hash: &str, files: &[crate::nar::ManifestEntry]) {
     let cmd = serde_json::json!({
         "storePath": store_path,
         "narHash": nar_hash,

@@ -125,10 +125,7 @@ fn is_nixbase32(c: char) -> bool {
 /// Returns the absolute path under `store_dir` (typically `/nix/store/`).
 /// Does NOT check if the path exists — that's the caller's job
 /// (to decide whether to trigger lazy extraction).
-pub fn to_filesystem_path(
-    resolved: &ResolvedPath,
-    store_dir: &str,
-) -> Option<PathBuf> {
+pub fn to_filesystem_path(resolved: &ResolvedPath, store_dir: &str) -> Option<PathBuf> {
     match resolved {
         ResolvedPath::Root => Some(PathBuf::from(store_dir)),
         ResolvedPath::StorePathRoot { store_path_name } => {
@@ -137,20 +134,12 @@ pub fn to_filesystem_path(
         ResolvedPath::SubPath {
             store_path_name,
             subpath,
-        } => Some(
-            PathBuf::from(store_dir)
-                .join(store_path_name)
-                .join(subpath),
-        ),
+        } => Some(PathBuf::from(store_dir).join(store_path_name).join(subpath)),
     }
 }
 
 /// Check if a store path is registered in PathInfoDb.
-pub fn is_registered(
-    db: &PathInfoDb,
-    store_path_name: &str,
-    store_dir: &str,
-) -> bool {
+pub fn is_registered(db: &PathInfoDb, store_path_name: &str, store_dir: &str) -> bool {
     let abs_path = format!("{store_dir}/{store_path_name}");
     db.is_registered(&abs_path)
 }
@@ -171,10 +160,7 @@ pub fn list_store_paths(
 
     let mut result = Vec::new();
     for path in paths {
-        let name = path
-            .strip_prefix(&prefix)
-            .unwrap_or(&path)
-            .to_string();
+        let name = path.strip_prefix(&prefix).unwrap_or(&path).to_string();
         let extracted = Path::new(&path).exists();
         result.push(StorePathStatus { name, extracted });
     }
@@ -312,10 +298,7 @@ mod tests {
             },
             "/nix/store",
         );
-        assert_eq!(
-            p,
-            Some(PathBuf::from(format!("/nix/store/{VALID_NAME}")))
-        );
+        assert_eq!(p, Some(PathBuf::from(format!("/nix/store/{VALID_NAME}"))));
     }
 
     #[test]

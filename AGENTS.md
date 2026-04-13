@@ -217,6 +217,7 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 ### Vendor Hash Workflow
 - crates.io `fetchurl` hashes go stale — crates.io regenerates tarballs periodically, changing the hash even for the same version
 - Dummy hash `sha256-0000...` triggers mismatch error revealing the real hash
+- `fetchCargoVendor` hashes can also change after source-tree edits even when `Cargo.lock` stays the same. Example: `nix/pkgs/infrastructure/snix-source-bundle.nix` needed a new hash after `snix-redox` source changes; `.#self-hosting-test` failed in `snix-redox-vendor-vendor-staging.drv` until that hash was updated.
 - Nix 2.31 FOD reference check: test fixture files with `/nix/store/` paths → `fixed-output derivations must not reference store paths`
 - The check only fires on hash MISMATCH — correct hash skips it
 - Workaround: vendor locally instead of git dependencies, or compute hash outside FOD
@@ -346,7 +347,7 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - Focused `snix-sandbox-test`: 6 pass, 0 fail out of 6 tests; durable capture `/var/tmp/redox-self-hosting-captures/20260409T124808-snix-sandbox-test/`; attached excerpt `openspec/changes/archive/2026-04-09-fix-snix-build-gaps/evidence/2026-04-09-snix-sandbox-test.excerpt.txt`
 - Full `self-hosting-test`: 78 pass, 0 fail out of 78 tests; durable capture `/var/tmp/redox-self-hosting-captures/20260409T133254-self-hosting-test/`; attached excerpt `openspec/changes/archive/2026-04-09-fix-snix-build-gaps/evidence/2026-04-09-self-hosting-test.excerpt.txt`
 - The full suite now re-verifies `snix-compile`, `snix-binary-exists`, `snix-binary-runs`, `snix-eval-works`, `source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`, and `source-rebuild-dry` in one run
-- `self-hosting-test` needs `defaultTimeout = 4800`; the old 2400s timeout stops at 70 PASS lines while `snix-compile` is still running, because the cold focused self-compile now takes about 3089s by itself
+- `self-hosting-test` now needs `defaultTimeout = 6000`; 4800s was enough for the older suite, but adding the rebuild-cycle proof at the end pushed the cold run past that limit even after `snix-compile` finished
 - Test order: snix-compile moved BEFORE source-rebuild (source-rebuild's activate() drops ld.lld from the live profile)
 - The fixture-side lessons still stand: use bash for builders that need `HOME`; vendor missing crates; point Cargo at `vendor/source-registry-0` when using `fetchCargoVendor`; add `vendor/source-git-0` for git deps; seed source-rebuild tests from the real system manifest; and use full paths in source derivations when builder `PATH` is empty
 - `--no-sandbox` flag now threads through flake installables (previously bypassed)
@@ -415,6 +416,7 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 - `renderServiceToml` uses `baseNameOf` on command — strips `/bin/` prefix by default
 - Fix: check `hasPrefix "/"` and preserve full path; or ensure binary is in `/usr/bin/`
 - During live rebuild activation, `/etc/static` symlink-farm setup can overwrite manifest-derived files like `/etc/hostname` and `/etc/timezone`; set up `/etc/static` first, then rewrite derived files while replacing stale symlinks with regular files
+- Rebuild-managed inline files now go through `RebuildConfig.files` (`files = { "etc/..." = { text = "..."; mode = "0644"; }; };`). `merge_config()` stores the content in `manifest.files[*].text`, and `activate::update_config_files_at()` writes added/changed files directly from that inline text. This is how live `snix system rebuild` can create new `/etc/...` files without a fresh rootTree deployment.
 - Package-only rebuilds can remove profile-provided helpers mid-test; even an already-running `bash -c` loses later `PATH` lookups for tools like `grep` after the profile swap. For post-rebuild assertions, prefer shell builtins/pattern matching or capture absolute tool paths before the rebuild.
 - The same `/etc/static` step also re-symlinks `/etc/redox-system/configuration.nix` back to the store copy unless rebuild preserves the evaluated config as a regular file after `system::switch`; otherwise the next "no-op" rebuild re-reads stale config and reverts the prior hostname change
 - Rootfs oneshot services may fail silently — no error output visible without serial console

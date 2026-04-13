@@ -1,46 +1,65 @@
 ## MODIFIED Requirements
 
 ### Requirement: Rebuild applies configuration changes to the running system
-`snix system rebuild` SHALL evaluate `configuration.nix`, determine the appropriate rebuild path (local or bridge), and activate the result. When the configuration contains only non-package, non-boot changes (hostname, timezone, DNS, users, etc.), the local path SHALL be used. When the configuration contains package or boot component changes, the bridge path SHALL be used if available, otherwise an error is reported.
+`snix system rebuild` SHALL evaluate `configuration.nix`, resolve packages from the binary cache (local or remote), build any source-specified packages locally, and activate the result. The rebuild flow SHALL:
 
-The activation plan SHALL display service changes at the semantic level — showing the service name, type, and description rather than raw init script filenames. When a service is added, the plan SHALL show `+ serviceName (type)`. When removed, `- serviceName (type)`.
+1. Evaluate `/etc/redox-system/configuration.nix` into a `RebuildConfig` attrset
+2. Merge the config with the current manifest, preserving boot-essential packages
+3. Resolve package names to store paths — trying remote cache first (if `--cache-url` provided), then local cache, then source build (if `--source` and `packageSources` specified)
+4. Download and extract any remote NARs to `/nix/store/`
+5. Build any source-specified packages via the local builder
+6. Generate etc files and init scripts from the merged manifest
+7. Create a new generation before activation
+8. Activate: update profile symlink, write etc files, restart changed services
+9. Report whether reboot is recommended (boot component changes)
 
-#### Scenario: Activation plan shows service-level diffs
-- **WHEN** the old manifest has services `smolnetd` and `dhcpd`
-- **AND** the new manifest has services `smolnetd` and `orbital`
-- **THEN** the activation plan's `services_removed` contains `dhcpd` with its type
-- **AND** the activation plan's `services_added` contains `orbital` with its type
-- **AND** `smolnetd` is in neither added nor removed
+#### Scenario: Rebuild with package addition from remote cache
+- **WHEN** configuration.nix adds `"helix"` to `packages`
+- **AND** `--cache-url http://10.0.2.2:8080` is provided
+- **AND** the remote cache has helix
+- **THEN** helix is downloaded, extracted, and linked into the profile
+- **AND** a new generation is created
+- **AND** `hx --help` works after rebuild
 
-#### Scenario: Reboot recommended after boot path change
-- **WHEN** the old manifest has `boot.initfs = "/nix/store/old-initfs/boot/initfs"`
-- **AND** the new manifest has `boot.initfs = "/nix/store/new-initfs/boot/initfs"`
-- **AND** activation runs
-- **THEN** `reboot_recommended` is true in the activation result
+#### Scenario: Rebuild with source package
+- **WHEN** configuration.nix specifies `packageSources = "/etc/redox-system/packages.nix"`
+- **AND** `--source` flag is provided
+- **AND** packages.nix returns a derivation for `my-tool`
+- **THEN** `my-tool` is built from source via the local builder
+- **AND** the output appears in the profile
 
-#### Scenario: Rebuild with nonexistent package via local
-- **WHEN** `configuration.nix` lists a package name not in the binary cache index
-- **AND** the package resolves with an empty store path
-- **AND** `merge_config` is called with the unresolved package
-- **THEN** only boot-essential packages from the current manifest are preserved
-- **AND** the unresolved package (empty store path) is included in the merged manifest's package list
+#### Scenario: Rebuild with mixed cache and source packages
+- **WHEN** configuration.nix lists both `packages = ["ripgrep"]` and `packageSources`
+- **THEN** ripgrep is resolved from the cache
+- **AND** source packages are built locally
+- **AND** both appear in the resulting manifest
 
 #### Scenario: Rebuild with hostname change
-- **WHEN** `configuration.nix` is edited to change `hostname`
-- **AND** `snix system rebuild` is run
-- **THEN** `/etc/hostname` contains the new hostname value
-- **AND** the current manifest reflects the new hostname
-- **AND** a new generation directory exists
-- **AND** the manifest's `boot` paths are unchanged
+- **WHEN** configuration.nix changes `hostname` to `"my-redox"`
+- **AND** `snix system rebuild` runs
+- **THEN** `/etc/hostname` contains `my-redox`
+- **AND** `snix system info` reports the new hostname
 
-#### Scenario: Rebuild with driver change without bridge
-- **WHEN** `configuration.nix` is edited to add a storage driver
-- **AND** the bridge is NOT available
-- **AND** `--local` is NOT passed
-- **THEN** the rebuild reports an error explaining that boot component changes require the bridge
+#### Scenario: Reboot recommended after boot path change
+- **WHEN** the new manifest's boot components differ from the current running system
+- **THEN** `reboot_recommended` is true in the activation result
+- **AND** the user is informed that a reboot is needed
 
-#### Scenario: Auto-route allows local path for config-only changes
-- **WHEN** `configuration.nix` changes only `hostname` and `timezone`
-- **AND** `snix system rebuild` is run without `--bridge` or `--local`
-- **THEN** the auto-router uses the local path
-- **AND** no bridge communication occurs
+#### Scenario: Rebuild without network uses local cache only
+- **WHEN** `snix system rebuild` runs without `--cache-url`
+- **THEN** packages are resolved from `/nix/cache` only
+- **AND** unresolvable packages produce a clear error
+
+### Requirement: Rebuild creates a generation before activation
+`snix system rebuild` SHALL create a numbered generation under `/etc/redox-system/generations/` containing the new manifest and metadata BEFORE activating. If activation fails, the generation remains but is not set as current.
+
+#### Scenario: Generation created on successful rebuild
+- **WHEN** rebuild succeeds
+- **THEN** a new directory exists at `/etc/redox-system/generations/N/`
+- **AND** it contains `manifest.json` and `metadata.json`
+- **AND** `/nix/system/current` symlink points to generation N
+
+#### Scenario: Generation preserved on activation failure
+- **WHEN** rebuild creates generation N but activation fails (e.g., broken service script)
+- **THEN** generation N's directory exists with its manifest
+- **AND** `/nix/system/current` still points to the previous generation

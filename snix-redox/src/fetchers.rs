@@ -39,10 +39,7 @@ pub fn fetch_to_store(
     // The Fetch variant determines the download mode. However, upstream
     // maps `unpack=1` derivations to Fetch::NAR (since the hash is NAR),
     // but the URL is actually a tarball. Check `unpack` directly.
-    let unpack = drv
-        .environment
-        .get("unpack")
-        .is_some_and(|v| v == "1");
+    let unpack = drv.environment.get("unpack").is_some_and(|v| v == "1");
 
     match &fetch {
         Fetch::URL { url, .. } => {
@@ -95,9 +92,7 @@ pub fn verify_fetch_hash(
             ..
         } => verify_flat_hash(out_path, expected),
 
-        Fetch::URL {
-            exp_hash: None, ..
-        } => Ok(()),
+        Fetch::URL { exp_hash: None, .. } => Ok(()),
 
         Fetch::Tarball {
             exp_nar_sha256: Some(expected),
@@ -112,9 +107,7 @@ pub fn verify_fetch_hash(
             ..
         } => Ok(()),
 
-        Fetch::NAR { hash, .. } | Fetch::Executable { hash, .. } => {
-            verify_nar_hash(out_path, hash)
-        }
+        Fetch::NAR { hash, .. } | Fetch::Executable { hash, .. } => verify_nar_hash(out_path, hash),
 
         Fetch::Git() => Ok(()),
     }
@@ -123,10 +116,7 @@ pub fn verify_fetch_hash(
 // ── Hash verification helpers ──────────────────────────────────────────────
 
 /// Verify the flat (content) hash of a file.
-fn verify_flat_hash(
-    out_path: &str,
-    expected: &NixHash,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn verify_flat_hash(out_path: &str, expected: &NixHash) -> Result<(), Box<dyn std::error::Error>> {
     use sha2::{Digest, Sha256};
     let content = std::fs::read(out_path)?;
     let actual = Sha256::digest(&content);
@@ -147,10 +137,7 @@ fn verify_flat_hash(
 }
 
 /// Verify the NAR hash of a path (file or directory).
-fn verify_nar_hash(
-    out_path: &str,
-    expected: &NixHash,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn verify_nar_hash(out_path: &str, expected: &NixHash) -> Result<(), Box<dyn std::error::Error>> {
     let path = std::path::Path::new(out_path);
     let (nar_hash_str, _) = crate::local_build::nar_hash_path(path)?;
     let actual_hex = nar_hash_str
@@ -203,7 +190,10 @@ pub fn fetch_git(
     let _ = std::fs::remove_dir_all(&tmp_bare);
 
     // Clone bare (faster — no working tree)
-    eprintln!("git clone {url} (rev {})...", &rev[..std::cmp::min(rev.len(), 12)]);
+    eprintln!(
+        "git clone {url} (rev {})...",
+        &rev[..std::cmp::min(rev.len(), 12)]
+    );
     let clone_out = std::process::Command::new(&git)
         .args(["clone", "--bare", url, &tmp_bare])
         .output()
@@ -212,18 +202,21 @@ pub fn fetch_git(
     if !clone_out.status.success() {
         let stderr = String::from_utf8_lossy(&clone_out.stderr);
         let _ = std::fs::remove_dir_all(&tmp_bare);
-        return Err(format!(
-            "git clone failed for '{url}':\n{stderr}"
-        ).into());
+        return Err(format!("git clone failed for '{url}':\n{stderr}").into());
     }
 
     // Create the output directory and checkout the specific rev
     std::fs::create_dir_all(out)?;
     let checkout_out = std::process::Command::new(&git)
         .args([
-            "--git-dir", &tmp_bare,
-            "--work-tree", out,
-            "checkout", rev, "--", ".",
+            "--git-dir",
+            &tmp_bare,
+            "--work-tree",
+            out,
+            "checkout",
+            rev,
+            "--",
+            ".",
         ])
         .output()
         .map_err(|e| format!("failed to run git checkout: {e}"))?;
@@ -232,9 +225,7 @@ pub fn fetch_git(
         let stderr = String::from_utf8_lossy(&checkout_out.stderr);
         let _ = std::fs::remove_dir_all(&tmp_bare);
         let _ = std::fs::remove_dir_all(out);
-        return Err(format!(
-            "git checkout failed for rev '{rev}':\n{stderr}"
-        ).into());
+        return Err(format!("git checkout failed for rev '{rev}':\n{stderr}").into());
     }
 
     // Clean up bare clone
@@ -245,15 +236,15 @@ pub fn fetch_git(
         verify_nar_hash_sri(out, expected_sri)?;
     }
 
-    eprintln!("✓ fetched git {url} @ {} to {out}", &rev[..std::cmp::min(rev.len(), 12)]);
+    eprintln!(
+        "✓ fetched git {url} @ {} to {out}",
+        &rev[..std::cmp::min(rev.len(), 12)]
+    );
     Ok(())
 }
 
 /// Resolve a git ref (branch/tag) to a commit hash via `git ls-remote`.
-pub fn resolve_git_ref(
-    url: &str,
-    ref_name: &str,
-) -> Result<String, Box<dyn std::error::Error>> {
+pub fn resolve_git_ref(url: &str, ref_name: &str) -> Result<String, Box<dyn std::error::Error>> {
     let git = find_git()?;
     let output = std::process::Command::new(&git)
         .args(["ls-remote", url, ref_name])
@@ -262,9 +253,7 @@ pub fn resolve_git_ref(
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(format!(
-            "git ls-remote failed for '{url}' ref '{ref_name}':\n{stderr}"
-        ).into());
+        return Err(format!("git ls-remote failed for '{url}' ref '{ref_name}':\n{stderr}").into());
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -273,9 +262,9 @@ pub fn resolve_git_ref(
         .lines()
         .next()
         .and_then(|line| line.split_whitespace().next())
-        .ok_or_else(|| format!(
-            "git ls-remote returned no results for ref '{ref_name}' at '{url}'"
-        ))?;
+        .ok_or_else(|| {
+            format!("git ls-remote returned no results for ref '{ref_name}' at '{url}'")
+        })?;
 
     Ok(hash.to_string())
 }
@@ -308,7 +297,8 @@ fn verify_nar_hash_sri(
         return Err(format!(
             "NAR hash mismatch for fetchGit output {}:\n  expected: {}\n  got:      {}",
             out_path, expected_hex, actual_hex
-        ).into());
+        )
+        .into());
     }
 
     Ok(())
@@ -317,19 +307,13 @@ fn verify_nar_hash_sri(
 /// Find the git binary.
 fn find_git() -> Result<String, Box<dyn std::error::Error>> {
     // Check common locations on Redox and standard paths
-    for path in [
-        "/nix/system/profile/bin/git",
-        "/usr/bin/git",
-        "/bin/git",
-    ] {
+    for path in ["/nix/system/profile/bin/git", "/usr/bin/git", "/bin/git"] {
         if std::path::Path::new(path).exists() {
             return Ok(path.to_string());
         }
     }
     // Fall back to PATH lookup
-    let which = std::process::Command::new("which")
-        .arg("git")
-        .output();
+    let which = std::process::Command::new("which").arg("git").output();
     if let Ok(out) = which {
         if out.status.success() {
             let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
@@ -417,10 +401,7 @@ fn decompress_reader(
 ///
 /// Strips the top-level directory component (like GitHub release tarballs
 /// where all entries are under `project-v1.0/`).
-fn extract_tar<R: std::io::Read>(
-    reader: R,
-    out: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn extract_tar<R: std::io::Read>(reader: R, out: &str) -> Result<(), Box<dyn std::error::Error>> {
     let out_path = std::path::Path::new(out);
     std::fs::create_dir_all(out_path)?;
 
@@ -469,10 +450,8 @@ fn extract_tar<R: std::io::Read>(
                 {
                     use std::os::unix::fs::PermissionsExt;
                     if let Ok(mode) = entry.header().mode() {
-                        let _ = std::fs::set_permissions(
-                            &dest,
-                            std::fs::Permissions::from_mode(mode),
-                        );
+                        let _ =
+                            std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(mode));
                     }
                 }
             }
@@ -542,9 +521,7 @@ mod tests {
 
         // Build a tar in memory
         let mut builder = tar::Builder::new(Vec::new());
-        builder
-            .append_dir_all("project-v1", &inner_dir)
-            .unwrap();
+        builder.append_dir_all("project-v1", &inner_dir).unwrap();
         let tar_data = builder.into_inner().unwrap();
 
         let tmp_out = tempfile::tempdir().unwrap();
@@ -649,7 +626,10 @@ mod tests {
 
         // Get the commit hash
         let rev_output = run_git(&["rev-parse", "HEAD"], &repo_dir);
-        let rev = String::from_utf8(rev_output.stdout).unwrap().trim().to_string();
+        let rev = String::from_utf8(rev_output.stdout)
+            .unwrap()
+            .trim()
+            .to_string();
 
         // Fetch via file:// URL
         let out_dir = tmp.path().join("output");

@@ -1,0 +1,5 @@
+$ nix-instantiate --parse nix/redox-system/profiles/self-hosting-test.nix
+OK nix/redox-system/profiles/self-hosting-test.nix
+
+$ nix-instantiate --parse nix/redox-system/modules/build/generated-files.nix
+OK nix/redox-system/modules/build/generated-files.nix

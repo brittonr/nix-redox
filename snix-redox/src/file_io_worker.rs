@@ -28,12 +28,12 @@
 //! }
 //! ```
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::{self, Read, Seek, SeekFrom};
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::thread;
-use std::collections::BTreeMap;
 
 /// Maximum number of cached open file descriptors. When exceeded,
 /// the lexicographically first entry is evicted. Keeps the worker's
@@ -117,12 +117,7 @@ impl FileIoWorker {
     /// from within a Redox scheme handler because the CALLER thread
     /// blocks on a channel receive, while the WORKER thread does the
     /// actual file: scheme I/O on a separate thread.
-    pub fn read_file(
-        &self,
-        path: &PathBuf,
-        offset: u64,
-        len: usize,
-    ) -> io::Result<Vec<u8>> {
+    pub fn read_file(&self, path: &PathBuf, offset: u64, len: usize) -> io::Result<Vec<u8>> {
         let (resp_tx, resp_rx) = mpsc::channel();
         self.sender
             .send(IoRequest::Read {

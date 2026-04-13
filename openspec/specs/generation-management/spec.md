@@ -1,68 +1,48 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: List system generations
-`snix system generations` SHALL list all saved generations with their ID, timestamp, and description.
+`snix system generations` SHALL list all saved generations with their ID, timestamp, and description. The current generation SHALL be marked. Output SHALL be sorted by generation number ascending.
 
-#### Scenario: List after first rebuild
-- **WHEN** the system has been rebuilt once (creating generations 1 and 2)
-- **AND** `snix system generations` is run
-- **THEN** the output lists at least two generations with IDs, timestamps, and descriptions
-- **AND** the current generation is indicated
+#### Scenario: List with multiple generations
+- **WHEN** three generations exist (1, 2, 3) and generation 3 is current
+- **AND** user runs `snix system generations`
+- **THEN** output lists all three with timestamps
+- **AND** generation 3 is marked as `(current)`
 
-#### Scenario: List with no generations directory
-- **WHEN** no generations exist in `/etc/redox-system/generations/`
-- **AND** `snix system generations` is run
-- **THEN** the command exits without error and reports no generations found
+#### Scenario: List with single generation
+- **WHEN** only generation 1 exists
+- **THEN** output shows generation 1 marked as `(current)`
 
-### Requirement: Rollback restores previous generation state
-`snix system rollback` SHALL revert the system to the previous generation's manifest and activate it. It SHALL also update the boot default marker. It SHALL create per-generation GC roots for the rollback generation without removing other generations' roots.
+### Requirement: Switch to a previous generation
+`snix system switch-generation N` SHALL activate generation N by updating the `/nix/system/current` symlink and writing that generation's etc files. Live service restarts remain deferred, but switch-generation SHALL surface the reboot recommendation when activation reports boot-component or service changes. The switch SHALL NOT delete any other generations.
 
-#### Scenario: Rollback after hostname change
-- **WHEN** the system was rebuilt with a hostname change (generation 2 is current)
-- **AND** `snix system rollback` is run
-- **THEN** `/etc/hostname` contains the original hostname from generation 1
-- **AND** the current manifest reflects the pre-rebuild state
-- **AND** a new generation (3) is created representing the rollback state
-- **AND** `/etc/redox-system/boot-default` is updated to the new generation's ID
-- **AND** GC roots `gen-3-{pkg}` are created for the rollback generation
+#### Scenario: Switch to older generation
+- **WHEN** generations 1, 2, 3 exist and generation 3 is current
+- **AND** user runs `snix system switch-generation 2`
+- **THEN** `/nix/system/current` points to generation 2
+- **AND** etc files reflect generation 2's manifest
+- **AND** generations 1, 2, 3 all still exist
 
-#### Scenario: Rollback to specific generation
-- **WHEN** multiple generations exist (1, 2, 3)
-- **AND** `snix system rollback --generation 1` is run
-- **THEN** the system reverts to generation 1's manifest
-- **AND** a new generation (4) is created with description indicating rollback to 1
-- **AND** `/etc/redox-system/boot-default` is updated to `4`
-- **AND** GC roots `gen-4-{pkg}` are created
+#### Scenario: Switch to nonexistent generation
+- **WHEN** user runs `snix system switch-generation 99`
+- **AND** generation 99 does not exist
+- **THEN** snix reports an error listing available generations
 
-#### Scenario: Rollback with no previous generations
-- **WHEN** only one generation exists
-- **AND** `snix system rollback` is run
-- **THEN** the command reports an error that no previous generation exists
-- **AND** the system state is unchanged
-- **AND** `/etc/redox-system/boot-default` is not changed
+#### Scenario: Switch reports reboot recommendation on boot differences
+- **WHEN** generation 2 has different boot components than the running system
+- **AND** user switches to generation 2
+- **THEN** the switch succeeds
+- **AND** the output warns that reboot is recommended
 
-### Requirement: Switch activates a specific manifest as a new generation
-`snix system switch` SHALL install a provided manifest as the current system, saving the previous state as a generation. It SHALL also update the boot default marker. It SHALL create per-generation GC roots for the new generation without removing old generations' roots.
+### Requirement: Rollback to previous generation
+`snix system rollback` SHALL switch to generation N-1 where N is the current generation number. This is a convenience wrapper around `switch-generation`.
 
-#### Scenario: Switch to a generation's manifest
-- **WHEN** generation 1's manifest is passed to `snix system switch`
-- **THEN** the system activates that manifest
-- **AND** a new generation is created
-- **AND** `/etc/redox-system/boot-default` is updated to the new generation's ID
-- **AND** GC roots `gen-{N}-{pkg}` are created for the new generation's packages
-- **AND** previous generations' GC roots are preserved
+#### Scenario: Rollback from generation 3
+- **WHEN** generation 3 is current
+- **AND** user runs `snix system rollback`
+- **THEN** generation 2 becomes current
 
-#### Scenario: Dry-run switch shows changes without applying
-- **WHEN** `snix system switch --dry-run` is run with a different manifest
-- **THEN** the planned changes are displayed
-- **AND** no files are modified
-- **AND** `/etc/redox-system/boot-default` is not changed
-
-### Requirement: Generations persist across the test lifecycle
-Generation directories SHALL survive the full test sequence (rebuild → list → rollback → list) without corruption.
-
-#### Scenario: Full lifecycle integrity
-- **WHEN** the system goes through rebuild, generation listing, rollback, and second listing
-- **THEN** all generation directories contain valid `manifest.json` files
-- **AND** generation IDs are monotonically increasing
-- **AND** the final manifest matches the expected rollback state
+#### Scenario: Rollback from generation 1
+- **WHEN** generation 1 is current (no prior generation)
+- **AND** user runs `snix system rollback`
+- **THEN** snix reports that there is no previous generation to roll back to

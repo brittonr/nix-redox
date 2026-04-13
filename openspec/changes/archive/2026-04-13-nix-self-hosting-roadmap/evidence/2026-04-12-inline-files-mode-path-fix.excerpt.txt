@@ -1,0 +1,320 @@
+diff --git a/nix/redox-system/modules/build/generated-files.nix b/nix/redox-system/modules/build/generated-files.nix
+index 0801bd9f..8baa23a9 100644
+--- a/nix/redox-system/modules/build/generated-files.nix
++++ b/nix/redox-system/modules/build/generated-files.nix
+@@ -650,9 +650,11 @@ let
+           # files = {
+           #   "etc/my-app/config.txt" = {
+           #     text = "hello from rebuild\n";
+-          #     mode = "0644";
++          #     mode = "0644"; # octal string, applied during live rebuild
+           #   };
+           # };
++          # Keys must be root-relative (no leading slash) and must not contain
++          # '.' or '..' path segments.
+         }
+       '';
+       mode = "0644";
+diff --git a/nix/redox-system/profiles/self-hosting-test.nix b/nix/redox-system/profiles/self-hosting-test.nix
+index 1765cfbf..db4d7ce3 100644
+--- a/nix/redox-system/profiles/self-hosting-test.nix
++++ b/nix/redox-system/profiles/self-hosting-test.nix
+@@ -3369,7 +3369,7 @@ let
+                             "  files = {" \
+                             "    \"etc/self-hosting/rebuild-proof.txt\" = {" \
+                             "      text = \"self-hosting-rebuild-ok\\n\";" \
+-                            "      mode = \"0644\";" \
++                            "      mode = \"0600\";" \
+                             "    };" \
+                             "  };" \
+                             "}" > "$CFG"
+@@ -3415,11 +3415,14 @@ let
+                           fi
+
+                           FILE=/etc/self-hosting/rebuild-proof.txt
+-                          if [ -f "$FILE" ] && [ "$(cat "$FILE")" = "self-hosting-rebuild-ok" ]; then
++                          FILE_MODE=$(ls -l "$FILE" 2>/dev/null || true)
++                          if [ -f "$FILE" ] && [ "$(cat "$FILE")" = "self-hosting-rebuild-ok" ] && \
++                             [[ "$FILE_MODE" == -rw-------* ]]; then
+                             echo "FUNC_TEST:rebuild-etc-file:PASS"
+                           else
+-                            echo "FUNC_TEST:rebuild-etc-file:FAIL:file missing or wrong contents"
++                            echo "FUNC_TEST:rebuild-etc-file:FAIL:file missing, wrong contents, or wrong mode"
+                             cat "$FILE" 2>/dev/null || true
++                            printf "%s\n" "$FILE_MODE"
+                           fi
+
+                           AFTER=$(ls /etc/redox-system/generations 2>/dev/null | wc -l)
+diff --git a/openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/design.md b/openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/design.md
+index 667d605b..f6ec7129 100644
+--- a/openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/design.md
++++ b/openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/design.md
+@@ -57,9 +57,9 @@ Rationale: VM boot + test takes 5-15 minutes. Running it per-commit during activ
+
+ Alternative considered: snix with `--daemon` subcommand. Rejected because init service management expects a dedicated binary path, and combining CLI + daemon in one binary complicates signal handling and error reporting.
+
+-### 4. Generation storage: numbered directories under /nix/system/generations/
++### 4. Generation storage: numbered directories under /etc/redox-system/generations/
+
+-Each generation is a directory containing `manifest.json`, a symlink `system` pointing to the profile store path, and a `metadata.json` with timestamp and description. The current generation is a symlink at `/nix/system/current` → `/nix/system/generations/N`. This mirrors NixOS's `/nix/var/nix/profiles/system-N-link` pattern but simplified for Redox's single-user model.
++Each generation is a directory containing `manifest.json`, a symlink `system` pointing to the profile store path, and a `metadata.json` with timestamp and description. The generation records live under `/etc/redox-system/generations/N`, while the current-generation link remains `/nix/system/current` → `/etc/redox-system/generations/N`. This mirrors NixOS's `/nix/var/nix/profiles/system-N-link` pattern but simplified for Redox's single-user model.
+
+ Alternative considered: storing generations as store paths themselves. Too complex for the initial implementation — manifests reference other store paths, creating a graph that needs GC roots. Flat directories with metadata files are simpler to list, switch, and delete.
+
+diff --git a/openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/specs/guest-rebuild/spec.md b/openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/specs/guest-rebuild/spec.md
+index 58c87e08..3dc3ade4 100644
+--- a/openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/specs/guest-rebuild/spec.md
++++ b/openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/specs/guest-rebuild/spec.md
+@@ -51,11 +51,11 @@
+ - **AND** unresolvable packages produce a clear error
+
+ ### Requirement: Rebuild creates a generation before activation
+-`snix system rebuild` SHALL create a numbered generation under `/nix/system/generations/` containing the new manifest and metadata BEFORE activating. If activation fails, the generation remains but is not set as current.
++`snix system rebuild` SHALL create a numbered generation under `/etc/redox-system/generations/` containing the new manifest and metadata BEFORE activating. If activation fails, the generation remains but is not set as current.
+
+ #### Scenario: Generation created on successful rebuild
+ - **WHEN** rebuild succeeds
+-- **THEN** a new directory exists at `/nix/system/generations/N/`
++- **THEN** a new directory exists at `/etc/redox-system/generations/N/`
+ - **AND** it contains `manifest.json` and `metadata.json`
+ - **AND** `/nix/system/current` symlink points to generation N
+
+diff --git a/openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/tasks.md b/openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/tasks.md
+index 38bc2f6a..49b369f8 100644
+--- a/openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/tasks.md
++++ b/openspec/changes/archive/2026-04-13-nix-self-hosting-roadmap/tasks.md
+@@ -41,7 +41,7 @@ All tasks below are blocked until the stabilization baseline is complete:
+ ## 4. Full guest rebuild flow (blocked on section 0-3)
+
+ - [x] 4.1 Wire remote cache resolution into rebuild.rs: try remote → local → source fallback chain
+-- [x] 4.2 Implement generation creation in rebuild: mkdir /nix/system/generations/N, write manifest.json + metadata.json
++- [x] 4.2 Implement generation creation in rebuild: mkdir /etc/redox-system/generations/N, write manifest.json + metadata.json
+ - [x] 4.3 Update /nix/system/current symlink on successful activation
+ - [x] 4.4 Implement rebuild-auto-routing: detect bridge vs remote vs local vs source
+ - [x] 4.5 Add reboot-recommended detection when boot components change
+diff --git a/openspec/specs/guest-rebuild/spec.md b/openspec/specs/guest-rebuild/spec.md
+index 58c87e08..3dc3ade4 100644
+--- a/openspec/specs/guest-rebuild/spec.md
++++ b/openspec/specs/guest-rebuild/spec.md
+@@ -51,11 +51,11 @@
+ - **AND** unresolvable packages produce a clear error
+
+ ### Requirement: Rebuild creates a generation before activation
+-`snix system rebuild` SHALL create a numbered generation under `/nix/system/generations/` containing the new manifest and metadata BEFORE activating. If activation fails, the generation remains but is not set as current.
++`snix system rebuild` SHALL create a numbered generation under `/etc/redox-system/generations/` containing the new manifest and metadata BEFORE activating. If activation fails, the generation remains but is not set as current.
+
+ #### Scenario: Generation created on successful rebuild
+ - **WHEN** rebuild succeeds
+-- **THEN** a new directory exists at `/nix/system/generations/N/`
++- **THEN** a new directory exists at `/etc/redox-system/generations/N/`
+ - **AND** it contains `manifest.json` and `metadata.json`
+ - **AND** `/nix/system/current` symlink points to generation N
+
+diff --git a/snix-redox/src/activate.rs b/snix-redox/src/activate.rs
+index a4e8e568..9385e5a5 100644
+--- a/snix-redox/src/activate.rs
++++ b/snix-redox/src/activate.rs
+@@ -199,9 +199,7 @@ pub fn plan(old: &Manifest, new: &Manifest) -> ActivationPlan {
+         match old_pkgs.get(name) {
+             None => packages_added.push(name.to_string()),
+             Some(old_pkg) => {
+-                if old_pkg.version != new_pkg.version
+-                    || old_pkg.store_path != new_pkg.store_path
+-                {
++                if old_pkg.version != new_pkg.version || old_pkg.store_path != new_pkg.store_path {
+                     packages_changed.push(PackageChange {
+                         name: name.to_string(),
+                         old_version: old_pkg.version.clone(),
+@@ -647,10 +645,7 @@ pub fn activate(
+     // ── Step 4b: Update /run/current-system ──
+     // Use the toplevel path from the manifest, or fall back to the
+     // manifest's own generation directory as the system identity.
+-    let current_system_target = new
+-        .toplevel
+-        .as_deref()
+-        .unwrap_or("/etc/redox-system");
++    let current_system_target = new.toplevel.as_deref().unwrap_or("/etc/redox-system");
+     if let Err(e) = update_current_system_link(current_system_target) {
+         warnings.push(format!("/run/current-system update failed: {e}"));
+     }
+@@ -718,11 +713,7 @@ const BOOT_DIR: &str = "/boot";
+ ///   - Store path file is missing (warns, continues)
+ ///
+ /// Returns true if any boot files were updated (reboot recommended).
+-fn update_boot_components(
+-    old: &Manifest,
+-    new: &Manifest,
+-    warnings: &mut Vec<String>,
+-) -> bool {
++fn update_boot_components(old: &Manifest, new: &Manifest, warnings: &mut Vec<String>) -> bool {
+     update_boot_components_at(old, new, BOOT_DIR, warnings)
+ }
+
+@@ -879,7 +870,10 @@ fn atomic_profile_swap(packages: &[Package]) -> Result<u32, Box<dyn std::error::
+
+ /// Populate a profile directory with symlinks to package binaries.
+ /// Returns the number of binaries linked.
+-fn populate_profile_dir(bin_dir: &Path, packages: &[Package]) -> Result<u32, Box<dyn std::error::Error>> {
++fn populate_profile_dir(
++    bin_dir: &Path,
++    packages: &[Package],
++) -> Result<u32, Box<dyn std::error::Error>> {
+     let mut count = 0u32;
+
+     for pkg in packages {
+@@ -964,20 +958,76 @@ fn update_config_files(
+     update_config_files_at(Path::new("/"), added, removed, changed, new_files, warnings)
+ }
+
+-fn parse_mode_string(mode: &str) -> Option<u32> {
++fn parse_mode_string(mode: &str) -> std::io::Result<u32> {
++    use std::io::{Error, ErrorKind};
++
+     let trimmed = mode.trim();
++    let trimmed = trimmed.strip_prefix("0o").unwrap_or(trimmed);
+     let trimmed = trimmed
+-        .strip_prefix("0o")
+-        .or_else(|| trimmed.strip_prefix('0').filter(|rest| !rest.is_empty()))
++        .strip_prefix('0')
++        .filter(|rest| !rest.is_empty())
+         .unwrap_or(trimmed);
+-    u32::from_str_radix(trimmed, 8).ok()
++
++    if trimmed.is_empty() || trimmed.len() > 4 || !trimmed.chars().all(|c| matches!(c, '0'..='7')) {
++        return Err(Error::new(
++            ErrorKind::InvalidInput,
++            format!("invalid file mode '{mode}' (expected octal like 0644)"),
++        ));
++    }
++
++    let parsed = u32::from_str_radix(trimmed, 8).map_err(|e| {
++        Error::new(
++            ErrorKind::InvalidInput,
++            format!("invalid file mode '{mode}': {e}"),
++        )
++    })?;
++    if parsed > 0o7777 {
++        return Err(Error::new(
++            ErrorKind::InvalidInput,
++            format!("invalid file mode '{mode}' (must be <= 07777)"),
++        ));
++    }
++
++    Ok(parsed)
++}
++
++fn validate_managed_relative_path(path: &str) -> std::io::Result<PathBuf> {
++    use std::io::{Error, ErrorKind};
++    use std::path::Component;
++
++    let mut relative = PathBuf::new();
++    for component in Path::new(path).components() {
++        match component {
++            Component::Normal(part) => relative.push(part),
++            _ => {
++                return Err(Error::new(
++                    ErrorKind::InvalidInput,
++                    format!(
++                        "managed file path '{path}' must be root-relative without '.', '..', or a leading '/'"
++                    ),
++                ))
++            }
++        }
++    }
++
++    if relative.as_os_str().is_empty() {
++        return Err(Error::new(
++            ErrorKind::InvalidInput,
++            "managed file path must not be empty",
++        ));
++    }
++
++    Ok(relative)
++}
++
++fn managed_file_path_at(root: &Path, path: &str) -> std::io::Result<PathBuf> {
++    Ok(root.join(validate_managed_relative_path(path)?))
+ }
+
+ fn write_inline_config_file_at(root: &Path, path: &str, info: &FileInfo) -> std::io::Result<()> {
+     use std::os::unix::fs::PermissionsExt;
+
+-    let relative = path.strip_prefix('/').unwrap_or(path);
+-    let full_path = root.join(relative);
++    let full_path = managed_file_path_at(root, path)?;
+
+     if let Some(parent) = full_path.parent() {
+         std::fs::create_dir_all(parent)?;
+@@ -989,9 +1039,8 @@ fn write_inline_config_file_at(root: &Path, path: &str, info: &FileInfo) -> std:
+     }
+
+     std::fs::write(&full_path, info.text.as_deref().unwrap_or(""))?;
+-    if let Some(mode) = parse_mode_string(&info.mode) {
+-        let _ = std::fs::set_permissions(&full_path, std::fs::Permissions::from_mode(mode));
+-    }
++    let mode = parse_mode_string(&info.mode)?;
++    std::fs::set_permissions(&full_path, std::fs::Permissions::from_mode(mode))?;
+
+     Ok(())
+ }
+@@ -1008,7 +1057,13 @@ fn update_config_files_at(
+
+     // Handle added config files
+     for path in added {
+-        let full_path = root.join(path);
++        let full_path = match managed_file_path_at(root, path) {
++            Ok(path_buf) => path_buf,
++            Err(e) => {
++                warnings.push(format!("invalid config file path '{path}': {e}"));
++                continue;
++            }
++        };
+         if let Some(info) = new_files.get(path) {
+             if info.text.is_some() {
+                 match write_inline_config_file_at(root, path, info) {
+@@ -1031,7 +1086,13 @@ fn update_config_files_at(
+
+     // Handle removed config files
+     for path in removed {
+-        let full_path = root.join(path);
++        let full_path = match managed_file_path_at(root, path) {
++            Ok(path_buf) => path_buf,
++            Err(e) => {
++                warnings.push(format!("invalid config file path '{path}': {e}"));
++                continue;
++            }
++        };
+         if full_path.exists() {
+             match std::fs::remove_file(&full_path) {
+                 Ok(()) => {
+@@ -1047,7 +1108,13 @@ fn update_config_files_at(
+
+     // Handle changed config files
+     for change in changed {
+-        let full_path = root.join(&change.path);
++        let full_path = match managed_file_path_at(root, &change.path) {
++            Ok(path_buf) => path_buf,
++            Err(e) => {
++                warnings.push(format!("invalid config file path '{}': {e}", change.path));
++                continue;
++            }
++        };
+         if let Some(info) = new_files.get(&change.path) {
+             if info.text.is_some() {
+                 match write_inline_config_file_at(root, &change.path, info) {
+@@ -1106,11 +1173,7 @@ fn hash_file_if_exists(path: &Path) -> Option<String> {
+ /// activate runs against the running filesystem. Config files like
+ /// /etc/hostname have content that comes from manifest.system.hostname,
+ /// not from hash-tracked rootTree entries. This function writes them.
+-fn write_manifest_derived_file_at(
+-    root: &Path,
+-    path: &str,
+-    contents: &[u8],
+-) -> std::io::Result<()> {
++fn write_manifest_derived_file_at(root: &Path, path: &str, contents: &[u8]) -> std::io::Result<()> {
+     let relative = path.strip_prefix('/').unwrap_or(path);
+     let full_path = root.join(relative);
+     if let Some(parent) = full_path.parent() {
+@@ -1134,7 +1197,8 @@ pub(crate) fn write_manifest_derived_files_at(
+
+     // /etc/hostname

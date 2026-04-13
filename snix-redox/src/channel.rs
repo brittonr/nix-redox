@@ -78,9 +78,10 @@ pub fn default_channel() -> Result<String, Box<dyn std::error::Error>> {
     }
 
     names.sort();
-    names.into_iter().next().ok_or_else(|| {
-        "No channels registered. Add one with: snix channel add <name> <url>".into()
-    })
+    names
+        .into_iter()
+        .next()
+        .ok_or_else(|| "No channels registered. Add one with: snix channel add <name> <url>".into())
 }
 
 /// Remove a channel registration.
@@ -157,7 +158,10 @@ pub fn list() -> Result<(), Box<dyn std::error::Error>> {
 pub fn update(name: &str) -> Result<(), Box<dyn std::error::Error>> {
     let channel_dir = Path::new(CHANNELS_DIR).join(name);
     if !channel_dir.exists() {
-        return Err(format!("channel '{name}' not found. Add it with: snix channel add {name} <url>").into());
+        return Err(format!(
+            "channel '{name}' not found. Add it with: snix channel add {name} <url>"
+        )
+        .into());
     }
 
     let url = fs::read_to_string(channel_dir.join("url"))
@@ -200,7 +204,8 @@ pub fn update(name: &str) -> Result<(), Box<dyn std::error::Error>> {
         format!("{url}packages.json")
     } else if url.ends_with(".json") {
         // If manifest URL was explicit, derive packages URL from base
-        url.rsplit_once('/').map(|(base, _)| format!("{base}/packages.json"))
+        url.rsplit_once('/')
+            .map(|(base, _)| format!("{base}/packages.json"))
             .unwrap_or_default()
     } else {
         format!("{url}/packages.json")
@@ -224,7 +229,10 @@ pub fn update(name: &str) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     println!("Channel '{name}' updated from {url}");
-    println!("Manifest saved to {}", channel_dir.join("manifest.json").display());
+    println!(
+        "Manifest saved to {}",
+        channel_dir.join("manifest.json").display()
+    );
     println!();
     println!("To upgrade to this channel:");
     println!("  snix system upgrade {name}");
@@ -235,7 +243,11 @@ pub fn update(name: &str) -> Result<(), Box<dyn std::error::Error>> {
 /// Get the packages.json path for a named channel, if it exists.
 pub fn get_packages_index_path(name: &str) -> Option<PathBuf> {
     let path = Path::new(CHANNELS_DIR).join(name).join("packages.json");
-    if path.exists() { Some(path) } else { None }
+    if path.exists() {
+        Some(path)
+    } else {
+        None
+    }
 }
 
 /// Update all registered channels.
@@ -282,10 +294,9 @@ pub fn update_all() -> Result<(), Box<dyn std::error::Error>> {
 pub fn get_manifest_path(name: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let manifest = Path::new(CHANNELS_DIR).join(name).join("manifest.json");
     if !manifest.exists() {
-        return Err(format!(
-            "channel '{name}' has no manifest. Run: snix channel update {name}"
-        )
-        .into());
+        return Err(
+            format!("channel '{name}' has no manifest. Run: snix channel update {name}").into(),
+        );
     }
     Ok(manifest)
 }
@@ -297,10 +308,7 @@ mod tests {
     #[test]
     fn channel_dir_format() {
         let path = Path::new(CHANNELS_DIR).join("stable");
-        assert_eq!(
-            path.to_str().unwrap(),
-            "/nix/var/snix/channels/stable"
-        );
+        assert_eq!(path.to_str().unwrap(), "/nix/var/snix/channels/stable");
     }
 
     #[test]

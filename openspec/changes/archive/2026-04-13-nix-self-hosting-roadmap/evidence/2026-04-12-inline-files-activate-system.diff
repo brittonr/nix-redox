@@ -1,0 +1,311 @@
+diff --git a/snix-redox/src/activate.rs b/snix-redox/src/activate.rs
+index 0ac000e1..a4e8e568 100644
+--- a/snix-redox/src/activate.rs
++++ b/snix-redox/src/activate.rs
+@@ -960,18 +960,68 @@ fn update_config_files(
+     changed: &[ConfigChange],
+     new_files: &BTreeMap<String, FileInfo>,
+     warnings: &mut Vec<String>,
++) -> u32 {
++    update_config_files_at(Path::new("/"), added, removed, changed, new_files, warnings)
++}
++
++fn parse_mode_string(mode: &str) -> Option<u32> {
++    let trimmed = mode.trim();
++    let trimmed = trimmed
++        .strip_prefix("0o")
++        .or_else(|| trimmed.strip_prefix('0').filter(|rest| !rest.is_empty()))
++        .unwrap_or(trimmed);
++    u32::from_str_radix(trimmed, 8).ok()
++}
++
++fn write_inline_config_file_at(root: &Path, path: &str, info: &FileInfo) -> std::io::Result<()> {
++    use std::os::unix::fs::PermissionsExt;
++
++    let relative = path.strip_prefix('/').unwrap_or(path);
++    let full_path = root.join(relative);
++
++    if let Some(parent) = full_path.parent() {
++        std::fs::create_dir_all(parent)?;
++    }
++    if let Ok(meta) = std::fs::symlink_metadata(&full_path) {
++        if meta.file_type().is_symlink() {
++            std::fs::remove_file(&full_path)?;
++        }
++    }
++
++    std::fs::write(&full_path, info.text.as_deref().unwrap_or(""))?;
++    if let Some(mode) = parse_mode_string(&info.mode) {
++        let _ = std::fs::set_permissions(&full_path, std::fs::Permissions::from_mode(mode));
++    }
++
++    Ok(())
++}
++
++fn update_config_files_at(
++    root: &Path,
++    added: &[String],
++    removed: &[String],
++    changed: &[ConfigChange],
++    new_files: &BTreeMap<String, FileInfo>,
++    warnings: &mut Vec<String>,
+ ) -> u32 {
+     let mut updated = 0u32;
+
+     // Handle added config files
+-    // Note: we can't create files from thin air — the manifest only has hashes.
+-    // Added files are only relevant if they exist in the rootTree (which was
+-    // already written to disk by the build process). For live activation,
+-    // new config files come from the new rootTree's store path.
+     for path in added {
+-        // The file should already exist if the rootTree was properly deployed.
+-        // Just verify it's there.
+-        let full_path = PathBuf::from("/").join(path);
++        let full_path = root.join(path);
++        if let Some(info) = new_files.get(path) {
++            if info.text.is_some() {
++                match write_inline_config_file_at(root, path, info) {
++                    Ok(()) => {
++                        updated += 1;
++                        eprintln!("  wrote /{path}");
++                    }
++                    Err(e) => warnings.push(format!("failed to write /{path}: {e}")),
++                }
++                continue;
++            }
++        }
++
+         if !full_path.exists() {
+             warnings.push(format!(
+                 "new config file /{path} not found on disk (expected from rootTree)"
+@@ -981,7 +1031,7 @@ fn update_config_files(
+
+     // Handle removed config files
+     for path in removed {
+-        let full_path = PathBuf::from("/").join(path);
++        let full_path = root.join(path);
+         if full_path.exists() {
+             match std::fs::remove_file(&full_path) {
+                 Ok(()) => {
+@@ -996,22 +1046,27 @@ fn update_config_files(
+     }
+
+     // Handle changed config files
+-    // For live systems, changed config files need their content from the new
+-    // rootTree. Since we track the hash but not the content in the manifest,
+-    // we check if the on-disk file already has the new hash (rootTree deployed
+-    // it) or if it needs updating from the new store path.
+     for change in changed {
+-        let full_path = PathBuf::from("/").join(&change.path);
++        let full_path = root.join(&change.path);
++        if let Some(info) = new_files.get(&change.path) {
++            if info.text.is_some() {
++                match write_inline_config_file_at(root, &change.path, info) {
++                    Ok(()) => {
++                        updated += 1;
++                        eprintln!("  updated /{}", change.path);
++                    }
++                    Err(e) => warnings.push(format!("failed to update /{}: {e}", change.path)),
++                }
++                continue;
++            }
++        }
++
+         if full_path.exists() {
+-            // Check if file already has the new content (rootTree was deployed)
+             match hash_file_if_exists(&full_path) {
+                 Some(hash) if hash == change.new_hash => {
+                     // Already up to date (rootTree deployed this file)
+                 }
+                 _ => {
+-                    // File exists but has different content.
+-                    // We can't update it without the new content bytes.
+-                    // Flag it for the user.
+                     warnings.push(format!(
+                         "config file /{} needs update (hash mismatch) — redeploy rootTree or reboot",
+                         change.path
+@@ -1485,6 +1540,7 @@ mod tests {
+                         blake3: "aaa111".to_string(),
+                         size: 42,
+                         mode: "644".to_string(),
++                        text: None,
+                     },
+                 ),
+                 (
+@@ -1493,6 +1549,7 @@ mod tests {
+                         blake3: "bbb222".to_string(),
+                         size: 100,
+                         mode: "644".to_string(),
++                        text: None,
+                     },
+                 ),
+             ]),
+@@ -1602,6 +1659,7 @@ mod tests {
+                 blake3: "ccc333".to_string(),
+                 size: 10,
+                 mode: "644".to_string(),
++                text: None,
+             },
+         );
+
+@@ -1861,6 +1919,7 @@ mod tests {
+                 blake3: "new".to_string(),
+                 size: 5,
+                 mode: "644".to_string(),
++                text: None,
+             },
+         );
+         new.services.declared.insert(
+@@ -2063,6 +2122,7 @@ mod tests {
+                 blake3: "abc".to_string(),
+                 size: 10,
+                 mode: "644".to_string(),
++                text: None,
+             },
+         )]);
+
+@@ -2081,6 +2141,7 @@ mod tests {
+                     blake3: "aaa".to_string(),
+                     size: 10,
+                     mode: "644".to_string(),
++                    text: None,
+                 },
+             ),
+             (
+@@ -2089,6 +2150,7 @@ mod tests {
+                     blake3: "bbb".to_string(),
+                     size: 5,
+                     mode: "644".to_string(),
++                    text: None,
+                 },
+             ),
+         ]);
+@@ -2100,6 +2162,7 @@ mod tests {
+                     blake3: "xxx".to_string(),
+                     size: 10,
+                     mode: "644".to_string(),
++                    text: None,
+                 },
+             ),
+             (
+@@ -2108,6 +2171,7 @@ mod tests {
+                     blake3: "yyy".to_string(),
+                     size: 15,
+                     mode: "644".to_string(),
++                    text: None,
+                 },
+             ),
+         ]);
+@@ -2119,6 +2183,65 @@ mod tests {
+         assert_eq!(changed[0].path, "etc/passwd");
+     }
+
++    #[test]
++    fn update_config_files_writes_inline_file_contents() {
++        let dir = tempfile::tempdir().unwrap();
++        let mut warnings = Vec::new();
++
++        let added = vec!["etc/new-inline.txt".to_string()];
++        let removed = Vec::new();
++        let changed = vec![ConfigChange {
++            path: "etc/changed-inline.txt".to_string(),
++            old_hash: "old".to_string(),
++            new_hash: "new".to_string(),
++        }];
++
++        let changed_path = dir.path().join("etc/changed-inline.txt");
++        std::fs::create_dir_all(changed_path.parent().unwrap()).unwrap();
++        std::fs::write(&changed_path, "old contents\n").unwrap();
++
++        let new_files = BTreeMap::from([
++            (
++                "etc/new-inline.txt".to_string(),
++                FileInfo {
++                    blake3: blake3::hash(b"new inline\n").to_hex().to_string(),
++                    size: 11,
++                    mode: "0644".to_string(),
++                    text: Some("new inline\n".to_string()),
++                },
++            ),
++            (
++                "etc/changed-inline.txt".to_string(),
++                FileInfo {
++                    blake3: blake3::hash(b"changed inline\n").to_hex().to_string(),
++                    size: 15,
++                    mode: "0600".to_string(),
++                    text: Some("changed inline\n".to_string()),
++                },
++            ),
++        ]);
++
++        let updated = update_config_files_at(
++            dir.path(),
++            &added,
++            &removed,
++            &changed,
++            &new_files,
++            &mut warnings,
++        );
++
++        assert_eq!(updated, 2);
++        assert!(warnings.is_empty());
++        assert_eq!(
++            std::fs::read_to_string(dir.path().join("etc/new-inline.txt")).unwrap(),
++            "new inline\n"
++        );
++        assert_eq!(
++            std::fs::read_to_string(dir.path().join("etc/changed-inline.txt")).unwrap(),
++            "changed inline\n"
++        );
++    }
++
+     // ── User diff tests ──
+
+     #[test]
+diff --git a/snix-redox/src/system.rs b/snix-redox/src/system.rs
+index 19a7abb9..00af2c6f 100644
+--- a/snix-redox/src/system.rs
++++ b/snix-redox/src/system.rs
+@@ -312,6 +312,9 @@ pub struct FileInfo {
+     pub blake3: String,
+     pub size: u64,
+     pub mode: String,
++    /// Optional inline file contents for live rebuild-managed files.
++    #[serde(default, skip_serializing_if = "Option::is_none")]
++    pub text: Option<String>,
+ }
+
+ // ===== Manifest Loading =====
+@@ -2265,6 +2268,7 @@ mod tests {
+                 blake3: "abc123".to_string(),
+                 size: 42,
+                 mode: "644".to_string(),
++                text: None,
+             },
+         );
+         assert_eq!(manifest.files.len(), 1);
+@@ -2411,6 +2415,7 @@ mod tests {
+                 blake3: hash,
+                 size: 6,
+                 mode: "644".to_string(),
++                text: None,
+             },
+         );
+
+@@ -3493,7 +3498,7 @@ mod tests {
+     fn upgrade_detects_config_and_service_changes() {
+         let mut current = sample_manifest();
+         current.files.insert("etc/passwd".to_string(), FileInfo {
+-            blake3: "aaa111".to_string(), size: 42, mode: "644".to_string(),
++            blake3: "aaa111".to_string(), size: 42, mode: "644".to_string(), text: None,
+         });
+         let mut new_m = current.clone();
+         // Add a declared service
+@@ -3516,6 +3521,7 @@ mod tests {
+             blake3: "newfile".to_string(),
+             size: 50,
+             mode: "644".to_string(),
++            text: None,
+         });
+
+         let plan = crate::activate::plan(&current, &new_m);

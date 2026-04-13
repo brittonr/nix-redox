@@ -313,7 +313,11 @@ fn ensure_dir_exists(path: &Path, root_fd: Option<usize>) -> std::io::Result<()>
     fs::create_dir_all(path)
 }
 
-fn cleanup_failed_extraction(abs_store_path: &str, manifest: &[ManifestEntry], root_fd: Option<usize>) {
+fn cleanup_failed_extraction(
+    abs_store_path: &str,
+    manifest: &[ManifestEntry],
+    root_fd: Option<usize>,
+) {
     #[cfg(target_os = "redox")]
     if let Some(rfd) = root_fd {
         let _ = remove_tree_via_manifest(abs_store_path, manifest, rfd);
@@ -378,10 +382,7 @@ impl<R: std::io::Read> std::io::Read for HashingExtractReader<R> {
 
 #[cfg(target_os = "redox")]
 fn raw_openat(path: &Path, root_fd: usize, flags: usize) -> std::io::Result<usize> {
-    let clean = path
-        .to_string_lossy()
-        .trim_start_matches('/')
-        .to_string();
+    let clean = path.to_string_lossy().trim_start_matches('/').to_string();
     let fcntl_flags = flags & syscall::O_FCNTL_MASK;
     unsafe {
         syscall::syscall5(
@@ -398,10 +399,7 @@ fn raw_openat(path: &Path, root_fd: usize, flags: usize) -> std::io::Result<usiz
 
 #[cfg(target_os = "redox")]
 fn raw_mkdir_p(path: &Path, root_fd: usize) -> std::io::Result<()> {
-    let clean = path
-        .to_string_lossy()
-        .trim_start_matches('/')
-        .to_string();
+    let clean = path.to_string_lossy().trim_start_matches('/').to_string();
     let mut built = String::new();
     for component in clean.split('/') {
         if component.is_empty() {
@@ -422,7 +420,9 @@ fn raw_mkdir_p(path: &Path, root_fd: usize) -> std::io::Result<()> {
                 flags & syscall::O_FCNTL_MASK,
             )
         }
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("mkdir {built}: {e}")))?;
+        .map_err(|e| {
+            std::io::Error::new(std::io::ErrorKind::Other, format!("mkdir {built}: {e}"))
+        })?;
         let _ = syscall::close(fd);
     }
     Ok(())

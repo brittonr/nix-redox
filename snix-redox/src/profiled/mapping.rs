@@ -25,7 +25,9 @@ use serde::{Deserialize, Serialize};
 /// The install manifest (created by `snix install`) has a different
 /// format than the profiled mapping. This converts between them so
 /// profiled can pick up packages installed before the daemon started.
-fn bootstrap_from_manifest(manifest_path: &Path) -> Result<ProfileMapping, Box<dyn std::error::Error>> {
+fn bootstrap_from_manifest(
+    manifest_path: &Path,
+) -> Result<ProfileMapping, Box<dyn std::error::Error>> {
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct InstallManifest {
@@ -195,21 +197,22 @@ impl ProfileMapping {
                     // Only direct children.
                     if let Some(slash_pos) = rel.find('/') {
                         let dir_name = &rel[..slash_pos];
-                        seen.entry(dir_name.to_string()).or_insert(
+                        seen.entry(dir_name.to_string()).or_insert(UnionEntry {
+                            name: dir_name.to_string(),
+                            is_dir: true,
+                            is_symlink: false,
+                            from_package: entry.name.clone(),
+                        });
+                    } else if !rel.is_empty() {
+                        seen.insert(
+                            rel.to_string(),
                             UnionEntry {
-                                name: dir_name.to_string(),
-                                is_dir: true,
-                                is_symlink: false,
+                                name: rel.to_string(),
+                                is_dir: m.entry_type == "dir",
+                                is_symlink: m.entry_type == "symlink",
                                 from_package: entry.name.clone(),
                             },
                         );
-                    } else if !rel.is_empty() {
-                        seen.insert(rel.to_string(), UnionEntry {
-                            name: rel.to_string(),
-                            is_dir: m.entry_type == "dir",
-                            is_symlink: m.entry_type == "symlink",
-                            from_package: entry.name.clone(),
-                        });
                     }
                 }
             }
@@ -268,12 +271,7 @@ impl ProfileStore {
                     if mapping_path.exists() {
                         let content = fs::read_to_string(&mapping_path)?;
                         let mapping: ProfileMapping = serde_json::from_str(&content)
-                            .map_err(|e| {
-                                format!(
-                                    "parsing {}: {e}",
-                                    mapping_path.display()
-                                )
-                            })?;
+                            .map_err(|e| format!("parsing {}: {e}", mapping_path.display()))?;
                         profiles.insert(name, mapping);
                     } else {
                         // Bootstrap from install manifest if mapping.json
@@ -304,9 +302,7 @@ impl ProfileStore {
         // Persist any bootstrapped profiles (creates mapping.json
         // from manifest.json so future loads don't need to re-bootstrap).
         for name in store.profiles.keys().cloned().collect::<Vec<_>>() {
-            let mapping_path = PathBuf::from(profiles_dir)
-                .join(&name)
-                .join("mapping.json");
+            let mapping_path = PathBuf::from(profiles_dir).join(&name).join("mapping.json");
             if !mapping_path.exists() {
                 if let Err(e) = store.persist(&name) {
                     eprintln!("profiled: failed to persist bootstrapped profile '{name}': {e}");
@@ -396,7 +392,10 @@ impl ProfileStore {
         &mut self,
         profile: &str,
         command_json: &str,
-    ) -> Result<(String, Option<(String, Vec<crate::nar::ManifestEntry>)>), Box<dyn std::error::Error>> {
+    ) -> Result<
+        (String, Option<(String, Vec<crate::nar::ManifestEntry>)>),
+        Box<dyn std::error::Error>,
+    > {
         let cmd: ControlCommand = serde_json::from_str(command_json)?;
 
         match cmd.action.as_str() {
@@ -416,9 +415,15 @@ impl ProfileStore {
             "remove" => {
                 let removed = self.remove_package(profile, &cmd.name)?;
                 if removed {
-                    Ok((format!("removed {} from profile {}", cmd.name, profile), None))
+                    Ok((
+                        format!("removed {} from profile {}", cmd.name, profile),
+                        None,
+                    ))
                 } else {
-                    Ok((format!("{} not found in profile {}", cmd.name, profile), None))
+                    Ok((
+                        format!("{} not found in profile {}", cmd.name, profile),
+                        None,
+                    ))
                 }
             }
             "list" => {
@@ -479,7 +484,10 @@ mod tests {
         m.add("ripgrep", "/nix/store/new-ripgrep");
 
         assert_eq!(m.packages.len(), 1);
-        assert_eq!(m.get("ripgrep").unwrap().store_path, "/nix/store/new-ripgrep");
+        assert_eq!(
+            m.get("ripgrep").unwrap().store_path,
+            "/nix/store/new-ripgrep"
+        );
     }
 
     #[test]
@@ -637,12 +645,8 @@ mod tests {
         let profiles_dir = tmp.path().to_str().unwrap();
 
         let mut store = ProfileStore::load(profiles_dir).unwrap();
-        store
-            .add_package("default", "x", "/nix/store/x")
-            .unwrap();
-        store
-            .add_package("dev", "y", "/nix/store/y")
-            .unwrap();
+        store.add_package("default", "x", "/nix/store/x").unwrap();
+        store.add_package("dev", "y", "/nix/store/y").unwrap();
 
         let mut names = store.list_profiles();
         names.sort();
@@ -655,12 +659,8 @@ mod tests {
         let profiles_dir = tmp.path().to_str().unwrap();
 
         let mut store = ProfileStore::load(profiles_dir).unwrap();
-        store
-            .add_package("default", "rg", "/nix/store/rg")
-            .unwrap();
-        store
-            .add_package("default", "fd", "/nix/store/fd")
-            .unwrap();
+        store.add_package("default", "rg", "/nix/store/rg").unwrap();
+        store.add_package("default", "fd", "/nix/store/fd").unwrap();
 
         assert!(store.remove_package("default", "rg").unwrap());
         assert!(!store.remove_package("default", "nonexistent").unwrap());
@@ -676,9 +676,7 @@ mod tests {
         let profiles_dir = tmp.path().to_str().unwrap();
 
         let mut store = ProfileStore::load(profiles_dir).unwrap();
-        store
-            .add_package("default", "x", "/nix/store/x")
-            .unwrap();
+        store.add_package("default", "x", "/nix/store/x").unwrap();
 
         // The mapping.json should exist, not mapping.json.tmp.
         let mapping_path = tmp.path().join("default/mapping.json");
@@ -711,9 +709,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut store = ProfileStore::load(tmp.path().to_str().unwrap()).unwrap();
 
-        store
-            .add_package("default", "rg", "/nix/store/rg")
-            .unwrap();
+        store.add_package("default", "rg", "/nix/store/rg").unwrap();
 
         let (msg, _files) = store
             .process_control("default", r#"{"action": "remove", "name": "rg"}"#)
@@ -728,9 +724,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut store = ProfileStore::load(tmp.path().to_str().unwrap()).unwrap();
 
-        store
-            .add_package("default", "rg", "/nix/store/rg")
-            .unwrap();
+        store.add_package("default", "rg", "/nix/store/rg").unwrap();
 
         let (msg, _files) = store
             .process_control("default", r#"{"action": "list", "name": ""}"#)
@@ -745,10 +739,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut store = ProfileStore::load(tmp.path().to_str().unwrap()).unwrap();
 
-        let result = store.process_control(
-            "default",
-            r#"{"action": "bogus", "name": "x"}"#,
-        );
+        let result = store.process_control("default", r#"{"action": "bogus", "name": "x"}"#);
         assert!(result.is_err());
     }
 
@@ -757,10 +748,7 @@ mod tests {
         let tmp = tempfile::tempdir().unwrap();
         let mut store = ProfileStore::load(tmp.path().to_str().unwrap()).unwrap();
 
-        let result = store.process_control(
-            "default",
-            r#"{"action": "add", "name": "rg"}"#,
-        );
+        let result = store.process_control("default", r#"{"action": "add", "name": "rg"}"#);
         assert!(result.is_err());
     }
 

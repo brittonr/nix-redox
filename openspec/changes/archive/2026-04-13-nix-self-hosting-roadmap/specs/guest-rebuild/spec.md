@@ -51,11 +51,11 @@
 - **AND** unresolvable packages produce a clear error
 
 ### Requirement: Rebuild creates a generation before activation
-`snix system rebuild` SHALL create a numbered generation under `/nix/system/generations/` containing the new manifest and metadata BEFORE activating. If activation fails, the generation remains but is not set as current.
+`snix system rebuild` SHALL create a numbered generation under `/etc/redox-system/generations/` containing the new manifest and metadata BEFORE activating. If activation fails, the generation remains but is not set as current.
 
 #### Scenario: Generation created on successful rebuild
 - **WHEN** rebuild succeeds
-- **THEN** a new directory exists at `/nix/system/generations/N/`
+- **THEN** a new directory exists at `/etc/redox-system/generations/N/`
 - **AND** it contains `manifest.json` and `metadata.json`
 - **AND** `/nix/system/current` symlink points to generation N
 

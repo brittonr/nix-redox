@@ -1,0 +1,357 @@
+diff --git a/nix/flake-modules/system.nix b/nix/flake-modules/system.nix
+index 08d61b26..9106fb55 100644
+--- a/nix/flake-modules/system.nix
++++ b/nix/flake-modules/system.nix
+@@ -481,8 +481,9 @@ let
+     memoryMB = 8192;
+     cpus = 4;
+     # The focused snix-compile rerun now takes ~3090s on a cold guest build,
+-    # and the full suite still has source-rebuild checks after it.
+-    defaultTimeout = 4800;
++    # the full suite still has source-rebuild checks after it, and the
++    # rebuild-cycle proof now runs at the end of self-hosting-test.
++    defaultTimeout = 6000;
+   };
+   selfHostingTest = wrapFunctionalTest {
+     base = selfHostingTestRaw;
+diff --git a/nix/pkgs/infrastructure/snix-source-bundle.nix b/nix/pkgs/infrastructure/snix-source-bundle.nix
+index 04a91b15..a2a3f1fd 100644
+--- a/nix/pkgs/infrastructure/snix-source-bundle.nix
++++ b/nix/pkgs/infrastructure/snix-source-bundle.nix
+@@ -23,7 +23,7 @@ let
+     src = combinedSrc;
+     # Dummy hash — replace after first build attempt reveals the real hash.
+     # Run: nix build .#snix-source-bundle 2>&1 | grep "got:"
+-    hash = "sha256-p4Qdnx0mKbJGmG+1KgPRRZT4TVZticCV+rHEc5ILwIs=";
++    hash = "sha256-J02jpwiwoKOLcCHRQ4xZmaBV7+/0to+qZC86VEAZzTI=";
+   };
+ in
+ pkgs.runCommand "snix-source-bundle" { } ''
+diff --git a/nix/redox-system/profiles/self-hosting-test.nix b/nix/redox-system/profiles/self-hosting-test.nix
+index d428c3e0..1765cfbf 100644
+--- a/nix/redox-system/profiles/self-hosting-test.nix
++++ b/nix/redox-system/profiles/self-hosting-test.nix
+@@ -3348,6 +3348,96 @@ let
+                           fi
+                         '
+
++                        # ── Live rebuild cycle test ──
++                        # Runs last because it mutates the live system state.
++                        echo "--- rebuild-cycle: hostname + inline etc file ---"
++                        /nix/system/profile/bin/bash -c '
++                          CFG=/etc/redox-system/configuration.nix
++                          GENDIR=/etc/redox-system/generations
++                          BEFORE=$(ls "$GENDIR" 2>/dev/null | wc -l)
++                          echo "$BEFORE" > /tmp/rebuild-cycle-gen-before
++
++                          if [ ! -f "$CFG" ]; then
++                            echo 97 > /tmp/rebuild-cycle-exit
++                            echo "missing $CFG" > /tmp/rebuild-cycle-err
++                            exit 0
++                          fi
++
++                          printf "%s\n" \
++                            "{" \
++                            "  hostname = \"self-hosting-rebuild\";" \
++                            "  files = {" \
++                            "    \"etc/self-hosting/rebuild-proof.txt\" = {" \
++                            "      text = \"self-hosting-rebuild-ok\\n\";" \
++                            "      mode = \"0644\";" \
++                            "    };" \
++                            "  };" \
++                            "}" > "$CFG"
++
++                          if ! grep -q "self-hosting-rebuild" "$CFG" || ! grep -q "rebuild-proof.txt" "$CFG"; then
++                            echo 98 > /tmp/rebuild-cycle-exit
++                            echo "configuration edit failed" > /tmp/rebuild-cycle-err
++                            cat "$CFG" > /tmp/rebuild-cycle-out
++                            exit 0
++                          fi
++
++                          /bin/snix system rebuild > /tmp/rebuild-cycle-out 2>/tmp/rebuild-cycle-err
++                          echo $? > /tmp/rebuild-cycle-exit
++                        '
++
++                        /nix/system/profile/bin/bash -c '
++                          EXIT=$(cat /tmp/rebuild-cycle-exit 2>/dev/null || echo 99)
++                          if [ "$EXIT" -ne 0 ]; then
++                            echo "FUNC_TEST:rebuild-hostname:FAIL:rebuild exit=$EXIT"
++                            echo "FUNC_TEST:rebuild-etc-file:FAIL:rebuild exit=$EXIT"
++                            echo "FUNC_TEST:rebuild-generation:FAIL:rebuild exit=$EXIT"
++                            echo "=== rebuild-cycle stdout ==="
++                            cat /tmp/rebuild-cycle-out 2>/dev/null || true
++                            echo "=== rebuild-cycle stderr ==="
++                            cat /tmp/rebuild-cycle-err 2>/dev/null || true
++                            exit 0
++                          fi
++
++                          INFO_OUT=$(/bin/snix system info 2>/tmp/rebuild-cycle-info-err)
++                          HOSTNAME_OK=0
++                          if [ -f /etc/hostname ] && [ "$(cat /etc/hostname)" = "self-hosting-rebuild" ]; then
++                            if printf "%s\n" "$INFO_OUT" | grep -q "self-hosting-rebuild"; then
++                              HOSTNAME_OK=1
++                            fi
++                          fi
++                          if [ "$HOSTNAME_OK" -eq 1 ]; then
++                            echo "FUNC_TEST:rebuild-hostname:PASS"
++                          else
++                            echo "FUNC_TEST:rebuild-hostname:FAIL:hostname not applied"
++                            cat /etc/hostname 2>/dev/null || true
++                            printf "%s\n" "$INFO_OUT"
++                            cat /tmp/rebuild-cycle-info-err 2>/dev/null || true
++                          fi
++
++                          FILE=/etc/self-hosting/rebuild-proof.txt
++                          if [ -f "$FILE" ] && [ "$(cat "$FILE")" = "self-hosting-rebuild-ok" ]; then
++                            echo "FUNC_TEST:rebuild-etc-file:PASS"
++                          else
++                            echo "FUNC_TEST:rebuild-etc-file:FAIL:file missing or wrong contents"
++                            cat "$FILE" 2>/dev/null || true
++                          fi
++
++                          AFTER=$(ls /etc/redox-system/generations 2>/dev/null | wc -l)
++                          BEFORE=$(cat /tmp/rebuild-cycle-gen-before 2>/dev/null || echo 0)
++                          /bin/snix system generations > /tmp/rebuild-cycle-gens 2>/tmp/rebuild-cycle-gens-err
++                          CURRENT=$(sed -n "s/.*\"id\": *\([0-9][0-9]*\).*/\1/p" /etc/redox-system/manifest.json | head -1)
++                          GENS=$(cat /tmp/rebuild-cycle-gens 2>/dev/null || true)
++                          if [ "$AFTER" -ge 2 ] && [ "$AFTER" -gt "$BEFORE" ] && [ -n "$CURRENT" ] && \
++                             [[ "$GENS" == *"Current generation: $CURRENT"* ]] && \
++                             [[ "$GENS" == *"$CURRENT *"* ]]; then
++                            echo "FUNC_TEST:rebuild-generation:PASS"
++                          else
++                            echo "FUNC_TEST:rebuild-generation:FAIL:before=$BEFORE after=$AFTER current=$CURRENT"
++                            cat /tmp/rebuild-cycle-gens 2>/dev/null || true
++                            cat /tmp/rebuild-cycle-gens-err 2>/dev/null || true
++                          fi
++                        '
++
+                         echo "FUNC_TESTS_COMPLETE"
+   '';
+
+diff --git a/openspec/changes/nix-self-hosting-roadmap/tasks.md b/openspec/changes/nix-self-hosting-roadmap/tasks.md
+index 1dfa7e07..38bc2f6a 100644
+--- a/openspec/changes/nix-self-hosting-roadmap/tasks.md
++++ b/openspec/changes/nix-self-hosting-roadmap/tasks.md
+@@ -61,7 +61,7 @@ All tasks below are blocked until the stabilization baseline is complete:
+
+ ## 6. End-to-end rebuild validation (blocked on section 0-5)
+
+-- [ ] 6.1 Add rebuild cycle test to self-hosting-test profile: change hostname via rebuild, verify
+-- [ ] 6.2 Add rebuild cycle test: add etc file via rebuild, verify file exists
+-- [ ] 6.3 Add rebuild cycle test: verify generation count after rebuild
+-- [ ] 6.4 All rebuild FUNC_TESTs pass: rebuild-hostname, rebuild-etc-file, rebuild-generation
++- [x] 6.1 Add rebuild cycle test to self-hosting-test profile: change hostname via rebuild, verify
++- [x] 6.2 Add rebuild cycle test: add etc file via rebuild, verify file exists
++- [x] 6.3 Add rebuild cycle test: verify generation count after rebuild
++- [x] 6.4 All rebuild FUNC_TESTs pass: rebuild-hostname, rebuild-etc-file, rebuild-generation
+diff --git a/snix-redox/src/rebuild.rs b/snix-redox/src/rebuild.rs
+index 83c3e4a3..85a7afcf 100644
+--- a/snix-redox/src/rebuild.rs
++++ b/snix-redox/src/rebuild.rs
+@@ -72,6 +72,8 @@ pub struct RebuildConfig {
+     pub power: Option<PowerConfig>,
+     pub users: Option<BTreeMap<String, UserConfig>>,
+     pub programs: Option<ProgramsConfig>,
++    /// Inline managed files written during activation, keyed by root-relative path.
++    pub files: Option<BTreeMap<String, ManagedFileInput>>,
+     /// Hardware/driver configuration — changes require bridge for initfs rebuild.
+     pub hardware: Option<HardwareConfigInput>,
+     /// Declared service names — additions/removals require initfs rebuild via bridge.
+@@ -132,6 +134,12 @@ pub struct ProgramsConfig {
+     pub editor: Option<String>,
+ }
+
++#[derive(Debug, Clone, Default, Deserialize, Serialize)]
++pub struct ManagedFileInput {
++    pub text: String,
++    pub mode: Option<String>,
++}
++
+ /// Hardware configuration that affects boot components (drivers → initfs).
+ #[derive(Debug, Clone, Default, Deserialize, Serialize)]
+ #[serde(rename_all = "camelCase")]
+@@ -629,24 +637,23 @@ fn evaluate_config(path: &str) -> Result<RebuildConfig, Box<dyn std::error::Erro
+         .ok_or_else(|| format!("no value produced from {path}"))?;
+
+     // The value is a Nix string containing JSON.
+-    // Its Display representation is a quoted string: "{ \"hostname\": ... }"
++    // Its Display representation is a quoted JSON string, so decode it with
++    // serde_json instead of manual backslash replacement. Manual `\\n -> \n`
++    // breaks inline file contents like `text = "hello\\n"`.
+     let repr = format!("{value}");
+-
+-    // Strip surrounding quotes and unescape
+-    let json_str = if repr.starts_with('"') && repr.ends_with('"') && repr.len() >= 2 {
+-        let inner = &repr[1..repr.len() - 1];
+-        inner
+-            .replace("\\\"", "\"")
+-            .replace("\\\\", "\\")
+-            .replace("\\n", "\n")
+-            .replace("\\t", "\t")
+-    } else {
+-        repr
+-    };
++    let json_str = decode_eval_json_string(&repr)?;
+
+     parse_config_json(&json_str)
+ }
+
++fn decode_eval_json_string(repr: &str) -> Result<String, Box<dyn std::error::Error>> {
++    if repr.starts_with('"') && repr.ends_with('"') {
++        Ok(serde_json::from_str::<String>(repr)?)
++    } else {
++        Ok(repr.to_string())
++    }
++}
++
+ /// Parse a JSON string into a RebuildConfig.
+ pub(crate) fn parse_config_json(json: &str) -> Result<RebuildConfig, Box<dyn std::error::Error>> {
+     let config: RebuildConfig = serde_json::from_str(json)?;
+@@ -964,6 +971,25 @@ pub(crate) fn merge_config(
+             .collect();
+     }
+
++    // Inline managed files — replace the prior inline set while preserving
++    // rootTree-tracked files (which have text = None).
++    if let Some(ref files) = config.files {
++        m.files.retain(|_, info| info.text.is_none());
++        for (path, file) in files {
++            let normalized = path.trim_start_matches('/').to_string();
++            let contents = file.text.as_bytes();
++            m.files.insert(
++                normalized,
++                crate::system::FileInfo {
++                    blake3: blake3::hash(contents).to_hex().to_string(),
++                    size: contents.len() as u64,
++                    mode: file.mode.clone().unwrap_or_else(|| "0644".to_string()),
++                    text: Some(file.text.clone()),
++                },
++            );
++        }
++    }
++
+     // Packages — if specified, merge with boot-essential set
+     if config.packages.is_some() && !resolved_packages.is_empty() {
+         // Keep boot-essential packages from current manifest
+@@ -1696,7 +1722,10 @@ mod tests {
+             "logging": { "level": "debug", "kernelLevel": "info", "logToFile": false },
+             "power": { "acpiEnabled": true, "powerAction": "reboot", "rebootOnPanic": true },
+             "users": { "admin": { "uid": 1001, "gid": 1001, "home": "/home/admin", "shell": "/bin/ion" } },
+-            "programs": { "editor": "helix" }
++            "programs": { "editor": "helix" },
++            "files": {
++                "etc/test/rebuild-proof.txt": { "text": "hello from rebuild\n", "mode": "0644" }
++            }
+         }"#;
+
+         let config = parse_config_json(json).unwrap();
+@@ -1720,6 +1749,83 @@ mod tests {
+
+         let prg = config.programs.unwrap();
+         assert_eq!(prg.editor, Some("helix".to_string()));
++
++        let files = config.files.unwrap();
++        let rebuild_file = &files["etc/test/rebuild-proof.txt"];
++        assert_eq!(rebuild_file.text, "hello from rebuild\n");
++        assert_eq!(rebuild_file.mode.as_deref(), Some("0644"));
++    }
++
++    #[test]
++    fn test_merge_config_adds_inline_files() {
++        let current = sample_manifest();
++        let config = parse_config_json(
++            r#"{
++                "files": {
++                    "etc/test/rebuild-proof.txt": {
++                        "text": "rebuild cycle ok\n",
++                        "mode": "0600"
++                    }
++                }
++            }"#,
++        )
++        .unwrap();
++
++        let merged = merge_config(&current, &config, &[]).unwrap();
++        let file = merged.files.get("etc/test/rebuild-proof.txt").unwrap();
++
++        assert_eq!(file.mode, "0600");
++        assert_eq!(file.size, "rebuild cycle ok\n".len() as u64);
++        assert_eq!(file.text.as_deref(), Some("rebuild cycle ok\n"));
++        assert_eq!(
++            file.blake3,
++            blake3::hash("rebuild cycle ok\n".as_bytes())
++                .to_hex()
++                .to_string()
++        );
++    }
++
++    #[test]
++    fn test_merge_config_replaces_prior_inline_files() {
++        let mut current = sample_manifest();
++        current.files.insert(
++            "etc/old-inline.txt".to_string(),
++            crate::system::FileInfo {
++                blake3: "oldhash".to_string(),
++                size: 4,
++                mode: "0644".to_string(),
++                text: Some("old\n".to_string()),
++            },
++        );
++        current.files.insert(
++            "etc/root-tree.txt".to_string(),
++            crate::system::FileInfo {
++                blake3: "keephash".to_string(),
++                size: 5,
++                mode: "0644".to_string(),
++                text: None,
++            },
++        );
++
++        let config = parse_config_json(
++            r#"{
++                "files": {
++                    "etc/new-inline.txt": {
++                        "text": "new\n",
++                        "mode": "0600"
++                    }
++                }
++            }"#,
++        )
++        .unwrap();
++
++        let merged = merge_config(&current, &config, &[]).unwrap();
++        assert!(!merged.files.contains_key("etc/old-inline.txt"));
++        assert!(merged.files.contains_key("etc/root-tree.txt"));
++        assert_eq!(
++            merged.files["etc/new-inline.txt"].text.as_deref(),
++            Some("new\n")
++        );
+     }
+
+     #[test]
+@@ -1904,6 +2010,7 @@ mod tests {
+             packages: None,
+             users: None,
+             programs: None,
++            files: None,
+             hardware: None,
+             services: None,
+             package_sources: None,
+@@ -2194,6 +2301,17 @@ mod tests {
+         assert_eq!(config.hostname, Some("json-host".to_string()));
+     }
+
++    #[test]
++    fn test_decode_eval_json_string_preserves_escaped_newlines() {
++        let repr = r#""{\"files\":{\"etc/test.txt\":{\"text\":\"hello\\n\",\"mode\":\"0644\"}}}""#;
++        let decoded = decode_eval_json_string(repr).unwrap();
++        let config = parse_config_json(&decoded).unwrap();
++        let file = &config.files.unwrap()["etc/test.txt"];
++
++        assert_eq!(file.text, "hello\n");
++        assert_eq!(file.mode.as_deref(), Some("0644"));
++    }
++
+     // ===== Init Config =====
+
+     #[test]

@@ -57,9 +57,9 @@ Rationale: VM boot + test takes 5-15 minutes. Running it per-commit during activ
 
 Alternative considered: snix with `--daemon` subcommand. Rejected because init service management expects a dedicated binary path, and combining CLI + daemon in one binary complicates signal handling and error reporting.
 
-### 4. Generation storage: numbered directories under /nix/system/generations/
+### 4. Generation storage: numbered directories under /etc/redox-system/generations/
 
-Each generation is a directory containing `manifest.json`, a symlink `system` pointing to the profile store path, and a `metadata.json` with timestamp and description. The current generation is a symlink at `/nix/system/current` → `/nix/system/generations/N`. This mirrors NixOS's `/nix/var/nix/profiles/system-N-link` pattern but simplified for Redox's single-user model.
+Each generation is a directory containing `manifest.json`, a symlink `system` pointing to the profile store path, and a `metadata.json` with timestamp and description. The generation records live under `/etc/redox-system/generations/N`, while the current-generation link remains `/nix/system/current` → `/etc/redox-system/generations/N`. This mirrors NixOS's `/nix/var/nix/profiles/system-N-link` pattern but simplified for Redox's single-user model.
 
 Alternative considered: storing generations as store paths themselves. Too complex for the initial implementation — manifests reference other store paths, creating a graph that needs GC roots. Flat directories with metadata files are simpler to list, switch, and delete.
 

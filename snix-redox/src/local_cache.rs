@@ -101,10 +101,7 @@ pub fn search(cache_path: &str, pattern: Option<&str>) -> Result<(), Box<dyn std
 /// Fetch a store path from a local binary cache.
 ///
 /// Reads narinfo, decompresses NAR, extracts to /nix/store/, verifies hash.
-pub fn fetch_local(
-    store_path: &str,
-    cache_path: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn fetch_local(store_path: &str, cache_path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let sp = StorePath::<String>::from_absolute_path(store_path.as_bytes())?;
     let dest = sp.to_absolute_path();
 
@@ -181,8 +178,13 @@ pub fn fetch_local(
     let signatures: Vec<String> = narinfo.signatures.iter().map(|s| s.to_string()).collect();
 
     store::register_path_with_files(
-        &db, &dest, &nar_hash_hex, narinfo.nar_size,
-        references, signatures, manifest,
+        &db,
+        &dest,
+        &nar_hash_hex,
+        narinfo.nar_size,
+        references,
+        signatures,
+        manifest,
     )?;
 
     eprintln!("✓ verified and installed: {dest}");

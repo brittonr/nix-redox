@@ -169,10 +169,10 @@ pub enum InputRef {
 
 /// Parse a `flake.lock` file from a path.
 pub fn parse_flake_lock(path: &Path) -> Result<FlakeLock, Box<dyn std::error::Error>> {
-    let content = std::fs::read_to_string(path)
-        .map_err(|e| format!("reading {}: {e}", path.display()))?;
-    let lock: FlakeLock = serde_json::from_str(&content)
-        .map_err(|e| format!("parsing {}: {e}", path.display()))?;
+    let content =
+        std::fs::read_to_string(path).map_err(|e| format!("reading {}: {e}", path.display()))?;
+    let lock: FlakeLock =
+        serde_json::from_str(&content).map_err(|e| format!("parsing {}: {e}", path.display()))?;
 
     if lock.version != 7 {
         return Err(format!(
@@ -205,10 +205,7 @@ pub fn resolve_tarball_url(locked: &LockedRef) -> Option<String> {
         "gitlab" => {
             let owner = locked.owner.as_deref()?;
             let repo = locked.repo.as_deref()?;
-            let host = locked
-                .host
-                .as_deref()
-                .unwrap_or("gitlab.com");
+            let host = locked.host.as_deref().unwrap_or("gitlab.com");
             Some(format!(
                 "https://{host}/{owner}/{repo}/-/archive/{rev}/{repo}-{rev}.tar.gz"
             ))
@@ -242,9 +239,7 @@ pub fn resolve_follows(
         let inputs = node
             .inputs
             .as_ref()
-            .ok_or_else(|| {
-                format!("follows: node '{}' has no inputs", current_node_name)
-            })?;
+            .ok_or_else(|| format!("follows: node '{}' has no inputs", current_node_name))?;
 
         match inputs.get(step) {
             Some(InputRef::Direct(target)) => {
@@ -418,7 +413,13 @@ fn nix_path_literal(path: &Path) -> String {
 /// Replaces `-` with `_` since Nix identifiers can't contain hyphens.
 fn nix_safe_ident(name: &str) -> String {
     name.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 
@@ -441,11 +442,7 @@ pub fn build_flake_installable(
     // Verify flake.nix exists
     let flake_nix = flake_dir.join("flake.nix");
     if !flake_nix.exists() {
-        return Err(format!(
-            "flake.nix not found in {}",
-            flake_dir.display()
-        )
-        .into());
+        return Err(format!("flake.nix not found in {}", flake_dir.display()).into());
     }
 
     // Parse flake.lock
@@ -473,7 +470,10 @@ pub fn build_flake_installable(
         let locked = match &node.locked {
             Some(l) => l,
             None => {
-                eprintln!("warning: input '{}' has no locked reference, skipping", input_name);
+                eprintln!(
+                    "warning: input '{}' has no locked reference, skipping",
+                    input_name
+                );
                 continue;
             }
         };
@@ -491,12 +491,7 @@ pub fn build_flake_installable(
     let system = current_system();
 
     // Build eval expression
-    let expr = build_flake_eval_expr(
-        flake_dir,
-        &resolved_inputs,
-        &installable.attr_path,
-        &system,
-    );
+    let expr = build_flake_eval_expr(flake_dir, &resolved_inputs, &installable.attr_path, &system);
 
     eprintln!("evaluating .#{}...", installable.attr_path);
 
@@ -506,16 +501,19 @@ pub fn build_flake_installable(
 
     let drv_path_str = drv_path_str.trim_matches('"').to_string();
     let drv_path =
-        nix_compat::store_path::StorePath::<String>::from_absolute_path(
-            drv_path_str.as_bytes(),
-        )
-        .map_err(|e| format!("invalid derivation path '{drv_path_str}': {e}"))?;
+        nix_compat::store_path::StorePath::<String>::from_absolute_path(drv_path_str.as_bytes())
+            .map_err(|e| format!("invalid derivation path '{drv_path_str}': {e}"))?;
 
     let known_paths_ref = state.known_paths.borrow();
-    let db = crate::pathinfo::PathInfoDb::open()
-        .map_err(|e| format!("opening pathinfo db: {e}"))?;
+    let db =
+        crate::pathinfo::PathInfoDb::open().map_err(|e| format!("opening pathinfo db: {e}"))?;
 
-    let result = crate::local_build::build_needed_with_options(&drv_path, &*known_paths_ref, &db, no_sandbox)?;
+    let result = crate::local_build::build_needed_with_options(
+        &drv_path,
+        &*known_paths_ref,
+        &db,
+        no_sandbox,
+    )?;
 
     // Print output paths
     for (name, path) in &result.outputs {
@@ -548,9 +546,10 @@ fn fetch_locked_input(
                 )
             })?;
 
-            let nar_hash = locked.nar_hash.as_deref().ok_or_else(|| {
-                format!("input '{}' has no narHash", name)
-            })?;
+            let nar_hash = locked
+                .nar_hash
+                .as_deref()
+                .ok_or_else(|| format!("input '{}' has no narHash", name))?;
 
             // Use the existing fetchTarball FOD machinery to compute the
             // store path. The actual download happens at build time.
@@ -578,18 +577,21 @@ fn fetch_locked_input(
             Ok(store_path)
         }
         "path" => {
-            let path = locked.path.as_deref().ok_or_else(|| {
-                format!("path input '{}' has no path field", name)
-            })?;
+            let path = locked
+                .path
+                .as_deref()
+                .ok_or_else(|| format!("path input '{}' has no path field", name))?;
             Ok(path.to_string())
         }
         "git" => {
-            let url = locked.url.as_deref().ok_or_else(|| {
-                format!("git input '{}' has no url field", name)
-            })?;
-            let rev = locked.rev.as_deref().ok_or_else(|| {
-                format!("git input '{}' has no rev field", name)
-            })?;
+            let url = locked
+                .url
+                .as_deref()
+                .ok_or_else(|| format!("git input '{}' has no url field", name))?;
+            let rev = locked
+                .rev
+                .as_deref()
+                .ok_or_else(|| format!("git input '{}' has no rev field", name))?;
             let nar_hash = locked.nar_hash.as_deref();
 
             // Optimization: if the git URL matches a known forge, download
@@ -620,7 +622,7 @@ fn fetch_locked_input(
                 // Without narHash, use a content-addressed temp path
                 let hash_input = format!("git-{}-{}", url, rev);
                 let hash = {
-                    use sha2::{Sha256, Digest};
+                    use sha2::{Digest, Sha256};
                     let h = Sha256::digest(hash_input.as_bytes());
                     data_encoding::HEXLOWER.encode(&h)[..32].to_string()
                 };
@@ -630,13 +632,7 @@ fn fetch_locked_input(
             crate::fetchers::fetch_git(url, rev, &store_path, nar_hash)?;
             Ok(store_path)
         }
-        other => {
-            Err(format!(
-                "unsupported input type '{}' for input '{}'",
-                other, name
-            )
-            .into())
-        }
+        other => Err(format!("unsupported input type '{}' for input '{}'", other, name).into()),
     }
 }
 
@@ -718,17 +714,13 @@ fn fetch_and_extract_to_store(
 }
 
 /// Verify the NAR hash of a fetched store path.
-fn verify_nar_hash(
-    store_path: &str,
-    expected_sri: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn verify_nar_hash(store_path: &str, expected_sri: &str) -> Result<(), Box<dyn std::error::Error>> {
     use nix_compat::nixhash::{HashAlgo, NixHash};
 
     let expected = NixHash::from_str(expected_sri, Some(HashAlgo::Sha256))
         .map_err(|e| format!("invalid expected hash: {e}"))?;
 
-    let (actual_hash_str, _size) =
-        crate::local_build::nar_hash_path(Path::new(store_path))?;
+    let (actual_hash_str, _size) = crate::local_build::nar_hash_path(Path::new(store_path))?;
 
     let actual_hex = actual_hash_str
         .strip_prefix("sha256:")
@@ -832,18 +824,14 @@ mod tests {
 
     #[test]
     fn attr_path_already_qualified() {
-        let resolved =
-            resolve_attr_path("packages.x86_64-linux.hello", "x86_64-linux");
+        let resolved = resolve_attr_path("packages.x86_64-linux.hello", "x86_64-linux");
         assert_eq!(resolved, "packages.x86_64-linux.hello");
     }
 
     #[test]
     fn attr_path_redox_system() {
         let resolved = resolve_attr_path("ripgrep", "x86_64-unknown-redox");
-        assert_eq!(
-            resolved,
-            "packages.\"x86_64-unknown-redox\".ripgrep"
-        );
+        assert_eq!(resolved, "packages.\"x86_64-unknown-redox\".ripgrep");
     }
 
     // ── resolve_tarball_url ────────────────────────────────────────────
@@ -1057,9 +1045,12 @@ mod tests {
                         locked: None,
                         original: None,
                         inputs: Some(
-                            [("hello".to_string(), InputRef::Direct("hello-src".to_string()))]
-                                .into_iter()
-                                .collect(),
+                            [(
+                                "hello".to_string(),
+                                InputRef::Direct("hello-src".to_string()),
+                            )]
+                            .into_iter()
+                            .collect(),
                         ),
                         flake: None,
                     },
@@ -1109,7 +1100,10 @@ mod tests {
                         original: None,
                         inputs: Some(
                             [
-                                ("nixpkgs".to_string(), InputRef::Direct("nixpkgs".to_string())),
+                                (
+                                    "nixpkgs".to_string(),
+                                    InputRef::Direct("nixpkgs".to_string()),
+                                ),
                                 (
                                     "utils".to_string(),
                                     InputRef::Direct("flake-utils".to_string()),
@@ -1175,8 +1169,7 @@ mod tests {
 
         // follows chain: ["flake-utils", "nixpkgs"] → resolves to "nixpkgs"
         let resolved =
-            resolve_follows(&lock, &["flake-utils".to_string(), "nixpkgs".to_string()])
-                .unwrap();
+            resolve_follows(&lock, &["flake-utils".to_string(), "nixpkgs".to_string()]).unwrap();
         assert_eq!(resolved, "nixpkgs");
     }
 
@@ -1193,7 +1186,10 @@ mod tests {
         let expr =
             build_flake_eval_expr(Path::new("/tmp/myflake"), &inputs, "hello", "x86_64-linux");
 
-        assert!(expr.contains("import /tmp/myflake/flake.nix"), "expr: {expr}");
+        assert!(
+            expr.contains("import /tmp/myflake/flake.nix"),
+            "expr: {expr}"
+        );
         assert!(expr.contains("__self = /tmp/myflake"), "expr: {expr}");
         assert!(
             expr.contains("__input_hello_src = /nix/store/abc-source"),
@@ -1220,10 +1216,7 @@ mod tests {
         );
 
         // Qualified attrs should be used as-is
-        assert!(
-            expr.contains("packages.x86_64-linux.hello"),
-            "expr: {expr}"
-        );
+        assert!(expr.contains("packages.x86_64-linux.hello"), "expr: {expr}");
     }
 
     // ── compute_fod_store_path ─────────────────────────────────────────
@@ -1240,16 +1233,10 @@ mod tests {
 
     #[test]
     fn fod_store_path_different_hash_different_path() {
-        let p1 = compute_fod_store_path(
-            "a",
-            "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=",
-        )
-        .unwrap();
-        let p2 = compute_fod_store_path(
-            "a",
-            "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
-        )
-        .unwrap();
+        let p1 = compute_fod_store_path("a", "sha256-Q3QXOoy+iN4VK2CflvRulYvPZXYgF0dO7FoF7CvWFTA=")
+            .unwrap();
+        let p2 = compute_fod_store_path("a", "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=")
+            .unwrap();
         assert_ne!(p1, p2);
     }
 
@@ -1273,11 +1260,18 @@ mod tests {
         assert_eq!(lock.root, "root");
 
         // Should have many nodes
-        assert!(lock.nodes.len() > 10, "expected many nodes, got {}", lock.nodes.len());
+        assert!(
+            lock.nodes.len() > 10,
+            "expected many nodes, got {}",
+            lock.nodes.len()
+        );
 
         // Root should have inputs
         let root_inputs = get_root_inputs(&lock).unwrap();
-        assert!(root_inputs.contains_key("nixpkgs"), "should have nixpkgs input");
+        assert!(
+            root_inputs.contains_key("nixpkgs"),
+            "should have nixpkgs input"
+        );
 
         // nixpkgs should be a github type
         let nixpkgs_node = root_inputs.get("nixpkgs").unwrap();
@@ -1333,11 +1327,7 @@ mod tests {
 
         let lock = parse_flake_lock(&lock_path).unwrap();
 
-        let non_flake_count = lock
-            .nodes
-            .values()
-            .filter(|n| !n.is_flake())
-            .count();
+        let non_flake_count = lock.nodes.values().filter(|n| !n.is_flake()).count();
 
         // Should have many non-flake (source-only) inputs
         assert!(
@@ -1350,10 +1340,7 @@ mod tests {
 
     #[test]
     fn forge_tarball_github() {
-        let url = git_url_to_forge_tarball(
-            "https://github.com/NixOS/nixpkgs.git",
-            "abc123",
-        );
+        let url = git_url_to_forge_tarball("https://github.com/NixOS/nixpkgs.git", "abc123");
         assert_eq!(
             url.unwrap(),
             "https://github.com/NixOS/nixpkgs/archive/abc123.tar.gz"
@@ -1362,10 +1349,7 @@ mod tests {
 
     #[test]
     fn forge_tarball_github_no_dot_git() {
-        let url = git_url_to_forge_tarball(
-            "https://github.com/owner/repo",
-            "def456",
-        );
+        let url = git_url_to_forge_tarball("https://github.com/owner/repo", "def456");
         assert_eq!(
             url.unwrap(),
             "https://github.com/owner/repo/archive/def456.tar.gz"
@@ -1374,10 +1358,8 @@ mod tests {
 
     #[test]
     fn forge_tarball_gitlab() {
-        let url = git_url_to_forge_tarball(
-            "https://gitlab.redox-os.org/redox-os/relibc.git",
-            "abc123",
-        );
+        let url =
+            git_url_to_forge_tarball("https://gitlab.redox-os.org/redox-os/relibc.git", "abc123");
         assert_eq!(
             url.unwrap(),
             "https://gitlab.redox-os.org/redox-os/relibc/-/archive/abc123/relibc-abc123.tar.gz"
@@ -1386,10 +1368,7 @@ mod tests {
 
     #[test]
     fn forge_tarball_gitlab_default_host() {
-        let url = git_url_to_forge_tarball(
-            "https://gitlab.com/user/project.git",
-            "def456",
-        );
+        let url = git_url_to_forge_tarball("https://gitlab.com/user/project.git", "def456");
         assert_eq!(
             url.unwrap(),
             "https://gitlab.com/user/project/-/archive/def456/project-def456.tar.gz"
@@ -1398,10 +1377,7 @@ mod tests {
 
     #[test]
     fn forge_tarball_gitlab_no_dot_git() {
-        let url = git_url_to_forge_tarball(
-            "https://gitlab.redox-os.org/redox-os/kernel",
-            "aaa111",
-        );
+        let url = git_url_to_forge_tarball("https://gitlab.redox-os.org/redox-os/kernel", "aaa111");
         assert_eq!(
             url.unwrap(),
             "https://gitlab.redox-os.org/redox-os/kernel/-/archive/aaa111/kernel-aaa111.tar.gz"
@@ -1410,19 +1386,13 @@ mod tests {
 
     #[test]
     fn forge_tarball_not_a_forge() {
-        let url = git_url_to_forge_tarball(
-            "https://git.example.com/foo/bar.git",
-            "abc123",
-        );
+        let url = git_url_to_forge_tarball("https://git.example.com/foo/bar.git", "abc123");
         assert!(url.is_none());
     }
 
     #[test]
     fn forge_tarball_ssh_not_supported() {
-        let url = git_url_to_forge_tarball(
-            "git@github.com:owner/repo.git",
-            "abc123",
-        );
+        let url = git_url_to_forge_tarball("git@github.com:owner/repo.git", "abc123");
         // SSH URLs don't start with https:// so shouldn't match
         assert!(url.is_none());
     }
