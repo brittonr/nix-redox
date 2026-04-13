@@ -12,6 +12,7 @@
 //!
 //! Only compiled on Redox (`#[cfg(target_os = "redox")]`).
 
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -107,10 +108,33 @@ impl BuildFsProxy {
         eprintln!("buildfs: pre-opening /");
         let root_file =
             File::open("/").map_err(|e| BuildFsProxyError::SetupFailed(format!("open /: {e}")))?;
+        let profile_root = File::open("/nix/system/profile").ok();
+        let store_root = File::open("/nix/store").ok();
         let dev_null = File::open("/dev/null").ok();
         let dev_urandom = File::open("/dev/urandom").ok();
 
-        let io_worker = BuildFsIoWorker::spawn(root_file, dev_null, dev_urandom);
+        let mut rustlib_dir_cache = HashMap::new();
+        if let Ok(canonical_rustlib) = std::fs::canonicalize("/nix/system/profile/lib/rustlib") {
+            let canonical_rustlib = strip_file_prefix(canonical_rustlib);
+            unsafe {
+                std::env::set_var("SNIX_PROFILE_RUSTLIB_ROOT", canonical_rustlib.as_os_str());
+            }
+            eprintln!("buildfs: canonical rustlib root {:?}", canonical_rustlib);
+            pre_scan_rustlib_dirs(&canonical_rustlib, &mut rustlib_dir_cache);
+            eprintln!(
+                "buildfs: pre-scanned {} rustlib directories",
+                rustlib_dir_cache.len()
+            );
+        }
+
+        let io_worker = BuildFsIoWorker::spawn(
+            root_file,
+            profile_root,
+            store_root,
+            dev_null,
+            dev_urandom,
+            rustlib_dir_cache,
+        );
         let mut handler = BuildFsHandler::new(allow_list, io_worker);
         handler.install_root_handle(0);
         let state = SchemeState::new();
@@ -188,6 +212,70 @@ fn wait_for_ready(path: &Path, child: &mut Child, attempts: usize) -> bool {
         }
     }
     false
+}
+
+fn strip_file_prefix(path: PathBuf) -> PathBuf {
+    path.to_string_lossy()
+        .strip_prefix("file:")
+        .map(PathBuf::from)
+        .unwrap_or(path)
+}
+
+fn pre_scan_rustlib_dirs(
+    rustlib_root: &Path,
+    cache: &mut HashMap<PathBuf, Vec<(String, syscall::dirent::DirentKind)>>,
+) {
+    fn walk(
+        rustlib_root: &Path,
+        rel: &Path,
+        cache: &mut HashMap<PathBuf, Vec<(String, syscall::dirent::DirentKind)>>,
+    ) {
+        let full = if rel.as_os_str().is_empty() {
+            rustlib_root.to_path_buf()
+        } else {
+            rustlib_root.join(rel)
+        };
+
+        let Ok(read_dir) = std::fs::read_dir(&full) else {
+            return;
+        };
+
+        let mut entries = Vec::new();
+        let mut subdirs = Vec::new();
+        for entry in read_dir.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let Ok(file_type) = entry.file_type() else {
+                continue;
+            };
+            let kind = if file_type.is_dir() {
+                subdirs.push(PathBuf::from(&name));
+                syscall::dirent::DirentKind::Directory
+            } else if file_type.is_symlink() {
+                syscall::dirent::DirentKind::Symlink
+            } else {
+                syscall::dirent::DirentKind::Regular
+            };
+            entries.push((name, kind));
+        }
+
+        let key = if rel.as_os_str().is_empty() {
+            PathBuf::from("nix/system/profile/lib/rustlib")
+        } else {
+            PathBuf::from("nix/system/profile/lib/rustlib").join(rel)
+        };
+        cache.insert(key, entries);
+
+        for subdir in subdirs {
+            let next_rel = if rel.as_os_str().is_empty() {
+                subdir
+            } else {
+                rel.join(subdir)
+            };
+            walk(rustlib_root, &next_rel, cache);
+        }
+    }
+
+    walk(rustlib_root, Path::new(""), cache);
 }
 
 fn current_exe_path() -> Result<String, BuildFsProxyError> {

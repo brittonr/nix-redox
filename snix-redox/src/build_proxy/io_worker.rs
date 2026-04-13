@@ -117,12 +117,29 @@ pub struct BuildFsIoWorker {
 }
 
 impl BuildFsIoWorker {
-    pub fn spawn(root_file: File, dev_null: Option<File>, dev_urandom: Option<File>) -> Self {
+    pub fn spawn(
+        root_file: File,
+        profile_root: Option<File>,
+        store_root: Option<File>,
+        dev_null: Option<File>,
+        dev_urandom: Option<File>,
+        rustlib_dir_cache: HashMap<PathBuf, Vec<(String, DirentKind)>>,
+    ) -> Self {
         let (tx, rx) = mpsc::channel::<IoRequest>();
 
         let handle = thread::Builder::new()
             .name("buildfs-io-worker".to_string())
-            .spawn(move || worker_main(rx, root_file, dev_null, dev_urandom))
+            .spawn(move || {
+                worker_main(
+                    rx,
+                    root_file,
+                    profile_root,
+                    store_root,
+                    dev_null,
+                    dev_urandom,
+                    rustlib_dir_cache,
+                )
+            })
             .expect("buildfs io worker spawn");
 
         Self {
@@ -304,10 +321,15 @@ impl Drop for BuildFsIoWorker {
 fn worker_main(
     rx: mpsc::Receiver<IoRequest>,
     root_file: File,
+    profile_root: Option<File>,
+    store_root: Option<File>,
     dev_null: Option<File>,
     dev_urandom: Option<File>,
+    rustlib_dir_cache: HashMap<PathBuf, Vec<(String, DirentKind)>>,
 ) {
     let root_fd = root_file.as_raw_fd() as usize;
+    let profile_root_fd = profile_root.as_ref().map(|f| f.as_raw_fd() as usize);
+    let store_root_fd = store_root.as_ref().map(|f| f.as_raw_fd() as usize);
     let dev_null_fd = dev_null.as_ref().map(|f| f.as_raw_fd() as usize);
     let dev_urandom_fd = dev_urandom.as_ref().map(|f| f.as_raw_fd() as usize);
     let mut next_map_token = 1u64;
@@ -322,6 +344,8 @@ fn worker_main(
             } => {
                 let _ = response.send(worker_open_path(
                     root_fd,
+                    profile_root_fd,
+                    store_root_fd,
                     dev_null_fd,
                     dev_urandom_fd,
                     &path,
@@ -339,6 +363,8 @@ fn worker_main(
             } => {
                 let _ = response.send(worker_read_at(
                     root_fd,
+                    profile_root_fd,
+                    store_root_fd,
                     dev_null_fd,
                     dev_urandom_fd,
                     &path,
@@ -355,6 +381,8 @@ fn worker_main(
             } => {
                 let _ = response.send(worker_write_at(
                     root_fd,
+                    profile_root_fd,
+                    store_root_fd,
                     dev_null_fd,
                     dev_urandom_fd,
                     &path,
@@ -370,6 +398,8 @@ fn worker_main(
             } => {
                 let _ = response.send(worker_stat_path(
                     root_fd,
+                    profile_root_fd,
+                    store_root_fd,
                     dev_null_fd,
                     dev_urandom_fd,
                     &path,
@@ -384,6 +414,8 @@ fn worker_main(
             } => {
                 let _ = response.send(worker_chmod_path(
                     root_fd,
+                    profile_root_fd,
+                    store_root_fd,
                     dev_null_fd,
                     dev_urandom_fd,
                     &path,
@@ -398,6 +430,8 @@ fn worker_main(
             } => {
                 let _ = response.send(worker_truncate_path(
                     root_fd,
+                    profile_root_fd,
+                    store_root_fd,
                     dev_null_fd,
                     dev_urandom_fd,
                     &path,
@@ -405,11 +439,21 @@ fn worker_main(
                 ));
             }
             IoRequest::ReadDir { path, response } => {
-                let _ = response.send(worker_read_dir(root_fd, &path));
+                let _ = response.send(worker_read_dir(
+                    root_fd,
+                    profile_root_fd,
+                    store_root_fd,
+                    dev_null_fd,
+                    dev_urandom_fd,
+                    &rustlib_dir_cache,
+                    &path,
+                ));
             }
             IoRequest::ResolvePath { path, response } => {
                 let _ = response.send(worker_resolve_path(
                     root_fd,
+                    profile_root_fd,
+                    store_root_fd,
                     dev_null_fd,
                     dev_urandom_fd,
                     &path,
@@ -422,6 +466,8 @@ fn worker_main(
             } => {
                 let _ = response.send(worker_rename_path(
                     root_fd,
+                    profile_root_fd,
+                    store_root_fd,
                     dev_null_fd,
                     dev_urandom_fd,
                     &old_path,
@@ -437,6 +483,8 @@ fn worker_main(
             } => {
                 let _ = response.send(worker_mmap_path(
                     root_fd,
+                    profile_root_fd,
+                    store_root_fd,
                     dev_null_fd,
                     dev_urandom_fd,
                     &path,
@@ -460,20 +508,48 @@ fn worker_main(
     }
 
     drop(root_file);
+    drop(profile_root);
+    drop(store_root);
     drop(dev_null);
     drop(dev_urandom);
 }
 
 fn worker_open_path(
     root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
     dev_null_fd: Option<usize>,
     dev_urandom_fd: Option<usize>,
     path: &Path,
     flags: usize,
 ) -> Result<OpenPathResult> {
-    let fd = open_fd(root_fd, dev_null_fd, dev_urandom_fd, path, flags)?;
+    let fd = open_fd(
+        root_fd,
+        profile_root_fd,
+        store_root_fd,
+        dev_null_fd,
+        dev_urandom_fd,
+        path,
+        flags,
+    )?;
     let stat = raw_fstat(fd)?;
-    let resolved_path = raw_fpath(fd).unwrap_or_else(|| path.to_path_buf());
+    let raw_path = raw_fpath(fd);
+    let clean = path.to_string_lossy();
+    let clean = clean.trim_start_matches('/');
+    let resolved_path = match clean {
+        "dev/null" | "dev/zero" | "dev/urandom" | "dev/random" => path.to_path_buf(),
+        "nix/system/profile" | "nix/store" => path.to_path_buf(),
+        _ if clean.starts_with("nix/system/profile/") || clean.starts_with("nix/store/") => {
+            path.to_path_buf()
+        }
+        _ => raw_path.clone().unwrap_or_else(|| path.to_path_buf()),
+    };
+    if clean == "dev/null" || clean == "dev/urandom" || clean == "dev/random" {
+        eprintln!(
+            "buildfs-io: open_path {:?} flags={:#x} raw_fpath={:?} resolved={:?}",
+            path, flags, raw_path, resolved_path
+        );
+    }
     raw_close(fd);
     Ok(OpenPathResult {
         stat,
@@ -488,6 +564,8 @@ fn worker_ensure_dir_tree(root_fd: usize, path: &Path) -> Result<()> {
 
 fn worker_read_at(
     root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
     dev_null_fd: Option<usize>,
     dev_urandom_fd: Option<usize>,
     path: &Path,
@@ -497,13 +575,25 @@ fn worker_read_at(
     let clean = path.to_string_lossy();
     let clean = clean.trim_start_matches('/');
     if clean == "dev/null" {
+        eprintln!(
+            "buildfs-io: read_at dev/null offset={} len={} -> eof",
+            offset, len
+        );
         return Ok(Vec::new());
     }
     if clean == "dev/zero" {
         return Ok(vec![0u8; len]);
     }
 
-    let fd = open_fd(root_fd, dev_null_fd, dev_urandom_fd, path, O_RDONLY)?;
+    let fd = open_fd(
+        root_fd,
+        profile_root_fd,
+        store_root_fd,
+        dev_null_fd,
+        dev_urandom_fd,
+        path,
+        O_RDONLY,
+    )?;
     let mut file = unsafe { File::from_raw_fd(fd as i32) };
     file.seek(SeekFrom::Start(offset))
         .map_err(|_| Error::new(EIO))?;
@@ -515,6 +605,8 @@ fn worker_read_at(
 
 fn worker_write_at(
     root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
     dev_null_fd: Option<usize>,
     dev_urandom_fd: Option<usize>,
     path: &Path,
@@ -531,7 +623,15 @@ fn worker_write_at(
         });
     }
 
-    let fd = open_fd(root_fd, dev_null_fd, dev_urandom_fd, path, O_RDWR)?;
+    let fd = open_fd(
+        root_fd,
+        profile_root_fd,
+        store_root_fd,
+        dev_null_fd,
+        dev_urandom_fd,
+        path,
+        O_RDWR,
+    )?;
     let mut file = unsafe { File::from_raw_fd(fd as i32) };
     let write_offset = if append {
         file.seek(SeekFrom::End(0)).map_err(|_| Error::new(EIO))?
@@ -549,6 +649,8 @@ fn worker_write_at(
 
 fn worker_stat_path(
     root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
     dev_null_fd: Option<usize>,
     dev_urandom_fd: Option<usize>,
     path: &Path,
@@ -559,7 +661,15 @@ fn worker_stat_path(
     } else {
         O_RDONLY
     };
-    let fd = open_fd(root_fd, dev_null_fd, dev_urandom_fd, path, flags)?;
+    let fd = open_fd(
+        root_fd,
+        profile_root_fd,
+        store_root_fd,
+        dev_null_fd,
+        dev_urandom_fd,
+        path,
+        flags,
+    )?;
     let stat = raw_fstat(fd)?;
     raw_close(fd);
     Ok(stat)
@@ -567,6 +677,8 @@ fn worker_stat_path(
 
 fn worker_chmod_path(
     root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
     dev_null_fd: Option<usize>,
     dev_urandom_fd: Option<usize>,
     path: &Path,
@@ -578,7 +690,15 @@ fn worker_chmod_path(
     } else {
         O_RDONLY
     };
-    let fd = open_fd(root_fd, dev_null_fd, dev_urandom_fd, path, flags)?;
+    let fd = open_fd(
+        root_fd,
+        profile_root_fd,
+        store_root_fd,
+        dev_null_fd,
+        dev_urandom_fd,
+        path,
+        flags,
+    )?;
     let result = unsafe { syscall::syscall2(syscall::SYS_FCHMOD, fd, new_mode as usize) };
     raw_close(fd);
     result.map(|_| ())
@@ -586,23 +706,43 @@ fn worker_chmod_path(
 
 fn worker_truncate_path(
     root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
     dev_null_fd: Option<usize>,
     dev_urandom_fd: Option<usize>,
     path: &Path,
     len: u64,
 ) -> Result<()> {
-    let fd = open_fd(root_fd, dev_null_fd, dev_urandom_fd, path, O_RDWR)?;
+    let fd = open_fd(
+        root_fd,
+        profile_root_fd,
+        store_root_fd,
+        dev_null_fd,
+        dev_urandom_fd,
+        path,
+        O_RDWR,
+    )?;
     let mut file = unsafe { File::from_raw_fd(fd as i32) };
     file.set_len(len).map_err(|_| Error::new(EIO))
 }
 
 fn worker_resolve_path(
     root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
     dev_null_fd: Option<usize>,
     dev_urandom_fd: Option<usize>,
     path: &Path,
 ) -> Result<PathBuf> {
-    let fd = open_fd(root_fd, dev_null_fd, dev_urandom_fd, path, O_RDONLY)?;
+    let fd = open_fd(
+        root_fd,
+        profile_root_fd,
+        store_root_fd,
+        dev_null_fd,
+        dev_urandom_fd,
+        path,
+        O_RDONLY,
+    )?;
     let resolved = raw_fpath(fd).ok_or(Error::new(EIO))?;
     raw_close(fd);
     Ok(resolved)
@@ -610,12 +750,22 @@ fn worker_resolve_path(
 
 fn worker_rename_path(
     root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
     dev_null_fd: Option<usize>,
     dev_urandom_fd: Option<usize>,
     old_path: &Path,
     new_path: &Path,
 ) -> Result<()> {
-    let fd = open_fd(root_fd, dev_null_fd, dev_urandom_fd, old_path, O_RDONLY)?;
+    let fd = open_fd(
+        root_fd,
+        profile_root_fd,
+        store_root_fd,
+        dev_null_fd,
+        dev_urandom_fd,
+        old_path,
+        O_RDONLY,
+    )?;
     let new_path = new_path.to_string_lossy();
     let result = syscall::frename(fd, new_path.as_ref()).map(|_| ());
     raw_close(fd);
@@ -624,6 +774,8 @@ fn worker_rename_path(
 
 fn worker_mmap_path(
     root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
     dev_null_fd: Option<usize>,
     dev_urandom_fd: Option<usize>,
     path: &Path,
@@ -638,7 +790,15 @@ fn worker_mmap_path(
     } else {
         O_RDONLY
     };
-    let fd = open_fd(root_fd, dev_null_fd, dev_urandom_fd, path, open_flags)?;
+    let fd = open_fd(
+        root_fd,
+        profile_root_fd,
+        store_root_fd,
+        dev_null_fd,
+        dev_urandom_fd,
+        path,
+        open_flags,
+    )?;
     let map = Map {
         offset: offset as usize,
         size,
@@ -675,16 +835,36 @@ fn worker_munmap_token(token: u64, active_maps: &mut HashMap<u64, ActiveMap>) ->
     Ok(())
 }
 
-fn worker_read_dir(root_fd: usize, path: &Path) -> Result<Vec<(String, DirentKind)>> {
-    let resolved_path = canonicalize_dir_path(root_fd, path).unwrap_or_else(|| path.to_path_buf());
-    let path_str = resolved_path.to_string_lossy();
-    let clean = path_str.trim_start_matches('/');
-    let open_path = if clean.is_empty() {
-        "."
-    } else {
-        clean.as_ref()
-    };
-    let dir_fd = raw_openat(root_fd, open_path, O_RDONLY | O_DIRECTORY)?;
+fn worker_read_dir(
+    root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
+    dev_null_fd: Option<usize>,
+    dev_urandom_fd: Option<usize>,
+    rustlib_dir_cache: &HashMap<PathBuf, Vec<(String, DirentKind)>>,
+    path: &Path,
+) -> Result<Vec<(String, DirentKind)>> {
+    let trace_rustlib = path.to_string_lossy().contains("rustlib");
+    let dir_fd = open_fd(
+        root_fd,
+        profile_root_fd,
+        store_root_fd,
+        dev_null_fd,
+        dev_urandom_fd,
+        path,
+        O_RDONLY | O_DIRECTORY,
+    )?;
+    let resolved_path = path.to_path_buf();
+    if trace_rustlib {
+        eprintln!(
+            "buildfs-io: read_dir request={:?} resolved={:?}",
+            path, resolved_path
+        );
+        eprintln!(
+            "buildfs-io: read_dir opened final fpath={:?}",
+            raw_fpath(dir_fd)
+        );
+    }
 
     let mut entries = Vec::new();
     let mut raw_buf = [0u8; 8192];
@@ -706,45 +886,64 @@ fn worker_read_dir(root_fd: usize, path: &Path) -> Result<Vec<(String, DirentKin
             }
         };
 
+        let before = entries.len();
         parse_raw_dirents(&raw_buf[..n], &mut entries);
+        if trace_rustlib {
+            let added = &entries[before..];
+            let sample: Vec<_> = added.iter().take(8).map(|(name, _)| name.clone()).collect();
+            eprintln!(
+                "buildfs-io: read_dir chunk bytes={} parsed={} sample={:?}",
+                n,
+                added.len(),
+                sample
+            );
+        }
     }
 
+    if entries.is_empty() {
+        let cache_key = PathBuf::from(path.to_string_lossy().trim_start_matches('/'));
+        if let Some(cached) = rustlib_dir_cache.get(&cache_key) {
+            if trace_rustlib {
+                eprintln!(
+                    "buildfs-io: read_dir using pre-scanned cache for {:?} ({} entries)",
+                    cache_key,
+                    cached.len()
+                );
+            }
+            entries = cached.clone();
+        } else if trace_rustlib {
+            let sample_keys: Vec<_> = rustlib_dir_cache
+                .keys()
+                .take(8)
+                .map(|key| key.display().to_string())
+                .collect();
+            eprintln!(
+                "buildfs-io: cache miss for {:?}; known keys={:?}",
+                cache_key, sample_keys
+            );
+        }
+    }
+
+    if trace_rustlib {
+        let sample: Vec<_> = entries
+            .iter()
+            .take(8)
+            .map(|(name, _)| name.clone())
+            .collect();
+        eprintln!(
+            "buildfs-io: read_dir final count={} sample={:?}",
+            entries.len(),
+            sample
+        );
+    }
     raw_close(dir_fd);
     Ok(entries)
 }
 
-fn canonicalize_dir_path(root_fd: usize, path: &Path) -> Option<PathBuf> {
-    let mut current = PathBuf::from("/");
-    for component in path.components() {
-        use std::path::Component;
-        match component {
-            Component::RootDir => {
-                current = PathBuf::from("/");
-            }
-            Component::Normal(part) => {
-                let next = if current == Path::new("/") {
-                    PathBuf::from("/").join(part)
-                } else {
-                    current.join(part)
-                };
-                let next_str = next.to_string_lossy();
-                let fd = raw_openat(
-                    root_fd,
-                    next_str.trim_start_matches('/'),
-                    O_RDONLY | O_DIRECTORY,
-                )
-                .ok()?;
-                current = raw_fpath(fd).unwrap_or(next);
-                raw_close(fd);
-            }
-            _ => {}
-        }
-    }
-    Some(current)
-}
-
 fn open_fd(
     root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
     dev_null_fd: Option<usize>,
     dev_urandom_fd: Option<usize>,
     path: &Path,
@@ -759,8 +958,45 @@ fn open_fd(
     if clean == "dev/urandom" || clean == "dev/random" {
         return syscall::dup(dev_urandom_fd.ok_or(Error::new(EIO))?, &[]);
     }
+    if clean == "nix/system/profile/lib/rustlib" {
+        if let Some(mapped) = map_profile_rustlib_path("") {
+            if let Some(rest) = mapped.strip_prefix("/nix/store/") {
+                return raw_openat(store_root_fd.ok_or(Error::new(EIO))?, rest, flags);
+            }
+            return raw_openat(root_fd, mapped.trim_start_matches('/'), flags);
+        }
+    }
+    if let Some(rest) = clean.strip_prefix("nix/system/profile/lib/rustlib/") {
+        if let Some(mapped) = map_profile_rustlib_path(rest) {
+            if let Some(store_rest) = mapped.strip_prefix("/nix/store/") {
+                return raw_openat(store_root_fd.ok_or(Error::new(EIO))?, store_rest, flags);
+            }
+            return raw_openat(root_fd, mapped.trim_start_matches('/'), flags);
+        }
+    }
+    if clean == "nix/system/profile" {
+        return raw_openat(profile_root_fd.ok_or(Error::new(EIO))?, ".", flags);
+    }
+    if let Some(rest) = clean.strip_prefix("nix/system/profile/") {
+        return raw_openat(profile_root_fd.ok_or(Error::new(EIO))?, rest, flags);
+    }
+    if clean == "nix/store" {
+        return raw_openat(store_root_fd.ok_or(Error::new(EIO))?, ".", flags);
+    }
+    if let Some(rest) = clean.strip_prefix("nix/store/") {
+        return raw_openat(store_root_fd.ok_or(Error::new(EIO))?, rest, flags);
+    }
 
     raw_openat(root_fd, clean, flags)
+}
+
+fn map_profile_rustlib_path(rest: &str) -> Option<String> {
+    let root = std::env::var("SNIX_PROFILE_RUSTLIB_ROOT").ok()?;
+    if rest.is_empty() {
+        Some(root)
+    } else {
+        Some(format!("{root}/{}", rest.trim_start_matches('/')))
+    }
 }
 
 fn raw_openat(root_fd: usize, path: &str, flags: usize) -> Result<usize> {

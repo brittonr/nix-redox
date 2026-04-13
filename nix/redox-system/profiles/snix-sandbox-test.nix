@@ -80,7 +80,7 @@ let
 
     echo "--- rustc-proxy-probe ---"
     /nix/system/profile/bin/bash -c '
-      OUTPUT=$(/bin/snix build --expr "derivation { name = \"rustc-proxy-probe\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"-c\" \"mkdir -p \\\$out && strace /nix/system/profile/bin/rustc - --crate-name ___ --print=file-names --crate-type bin --crate-type rlib --crate-type dylib --crate-type cdylib --crate-type staticlib --crate-type proc-macro --print=sysroot --print=split-debuginfo --print=crate-name --print=cfg -Wwarnings </dev/null > \\\$out/probe.out 2> /tmp/rustc-probe-trace; STATUS=\\\$?; head -80 /tmp/rustc-probe-trace >&2; exit \\\$STATUS\"]; system = \"x86_64-unknown-redox\"; }" 2>/tmp/rustc-proxy-probe-err)
+      OUTPUT=$(/bin/snix build --expr "derivation { name = \"rustc-proxy-probe\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"-c\" \"export HOME=/tmp; /bin/mkdir -p \\\$out && /bin/strace /nix/system/profile/bin/rustc - --crate-name ___ --print=file-names --crate-type bin --crate-type rlib --crate-type dylib --crate-type cdylib --crate-type staticlib --crate-type proc-macro --print=sysroot --print=split-debuginfo --print=crate-name --print=cfg -Wwarnings </dev/null > \\\$out/probe.out 2> /tmp/rustc-probe-trace; STATUS=\\\$?; /bin/head -80 /tmp/rustc-probe-trace >&2; exit \\\$STATUS\"]; system = \"x86_64-unknown-redox\"; }" 2>/tmp/rustc-proxy-probe-err)
       EXIT=$?
       if [ $EXIT -eq 0 ]; then
         echo "FUNC_TEST:rustc-proxy-probe:PASS"
