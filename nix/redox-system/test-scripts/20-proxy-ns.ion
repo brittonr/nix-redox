@@ -15,6 +15,7 @@ else
     echo "FUNC_TEST:proxy-getdents:SKIP"
     echo "FUNC_TEST:proxy-readback:SKIP"
     echo "FUNC_TEST:proxy-roundtrip:SKIP"
+    echo "FUNC_TEST:proxy-worker-cycles:SKIP"
     echo "  proxy_namespace_test binary not found"
 end
 

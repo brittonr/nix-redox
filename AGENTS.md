@@ -64,21 +64,18 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 - "Scheme 'file' not found" warnings during early boot are normal (before redoxfs mounts rootfs)
 
 ### Build Sandbox
-- snix builds use scheme-level namespace sandboxing (mkns/setns)
-- Builder runs in a restricted namespace with only essential schemes (file, memory, pipe, rand, null, zero, proc, sys, time, debug, shm)
-- file: is the REAL redoxfs — builder has full filesystem access but can't reach display:, disk:, irq:, audio:, etc.
-- FOD (fixed-output derivation) builds additionally get `net` scheme
+- snix builds prefer the per-path proxy sandbox (mkns/setns + proxy `file:` scheme)
+- Builder runs in a restricted namespace with only essential schemes (memory, pipe, rand, null, zero, proc, sys, time, debug, shm; FOD adds `net`)
+- Per-path proxy is active default again: builder `file:` access is filtered to declared inputs plus writable outputs/tmp paths
+- Scheme-level sandbox with real redoxfs `file:` remains fallback if proxy setup fails
 
-### Build Sandbox — Per-Path Proxy (DISABLED)
-- Per-path proxy code is preserved in build_proxy module but disabled in local_build.rs
-- **Root cause of deadlock**: proxy thread does `raw_openat(root_fd, ...)` to redoxfs, but the kernel blocks ALL file: I/O from a process that owns a scheme socket — even via pre-opened fds that bypass initnsmgr
-- Symptom: snix build hangs indefinitely on the first builder exec (bash never starts)
-- The proxy STARTS correctly (scheme registered, event loop running), but the first openat request deadlocks when the proxy tries to forward it to redoxfs
-- `setns()` correctly updates DYNAMIC_PROC_INFO.ns_fd (relibc's `redox_setns_v0` replaces it); exec correctly passes ns_fd through auxv (AT_REDOX_NS_FD=43)
-- The exec mechanism is NOT the issue — the deadlock is in the kernel's scheme I/O blocking policy
-- Fix requires kernel change: allow SYS_OPENAT on pre-opened fds (different scheme instance) from scheme-socket-owning processes
-- Proxy code preserved: AllowList, BuildFsProxy, handler, lifecycle, allow_list builder, setup_proxy_namespace
-- Proxy was designed with: mkdir_p_via_root_fd, O_APPEND seek-to-end, getdents filtering, /dev/* pre-opened fds
+### Build Sandbox — Per-Path Proxy Worker Model
+- The old "kernel blocks all file I/O from scheme-socket owners" theory was wrong
+- `stored`/`profiled` already proved a scheme-owning process can do root-fd file I/O from a separate worker thread
+- Actual deadlock shape: the proxy event-loop thread cannot block inside nested redoxfs calls while servicing a userspace `file:` request
+- Fix: `build_proxy` now forwards ALL real redoxfs/device I/O to a dedicated worker thread that owns the pre-opened root/device handles
+- Proxy path remains: AllowList, BuildFsProxy, handler, lifecycle, allow_list builder, setup_proxy_namespace
+- Proxy still uses: mkdir_p via root fd, O_APPEND seek-to-end semantics, getdents filtering, and pre-opened `/dev/null` + `/dev/urandom`
 
 ### relibc Limitations
 - `nanosleep()` works correctly (SYS_NANOSLEEP syscall 162, kernel context.wake + scheduler verified)
@@ -476,15 +473,9 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 - Tests checking file modes must use Nix-adjusted values
 - Must `chmod u+w` directory before copying additional files into store copies
 
-### Sandbox Proxy Deadlock (per-path proxy DISABLED)
-- The proxy deadlocks on the first builder file: request — snix build hangs indefinitely
-- Root cause: kernel blocks ALL file: scheme I/O from processes owning a scheme socket
-- The proxy owns a scheme socket (registered as file: in child namespace)
-- When the proxy thread does `raw_openat(root_fd, ...)`, this is a file: operation (root_fd points to redoxfs)
-- Even though root_fd bypasses initnsmgr, the kernel still blocks it because the process owns a scheme socket
-- `libredox::call::setns()` correctly updates relibc's DYNAMIC_PROC_INFO.ns_fd (not the issue)
-- exec correctly passes ns_fd through auxv AT_REDOX_NS_FD=43 (not the issue)
-- relibc_start_v1 reads ns_fd/proc_fd from auxv, initializes correctly (not the issue)
-- The original hypothesis about relibc fd state was wrong — the actual problem is kernel-level scheme I/O blocking
-- Non-proxy sandbox (scheme-level with real file:) works because no scheme socket is owned
-- Fix: proxy disabled in local_build.rs; scheme-level sandbox used as default; proxy code preserved for future kernel fix
+### Sandbox Proxy Deadlock (historical root cause)
+- The proxy used to hang on the first builder file: request
+- The failing shape was nested userspace-scheme I/O on the proxy EVENT-LOOP thread, not process-wide ownership of a scheme socket
+- `stored` and `profiled` avoid this by offloading real filesystem I/O to `FileIoWorker`; `build_proxy` now uses the same pattern
+- `setns()`/exec/auxv namespace propagation were not the issue
+- Current fix: proxy active again, with scheme-only sandbox as explicit fallback if proxy setup fails

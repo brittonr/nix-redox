@@ -1,26 +1,22 @@
 ## Why
 
-The strongest technical caveat in Redox self-hosting today is that the per-path snix sandbox is disabled. The intended proxy sandbox deadlocks on the first forwarded `file:` request because the proxy thread owns a scheme socket while trying to access redoxfs through a pre-opened root fd. Until that path works, sandboxed builds are real but weaker than intended.
+The per-path snix sandbox had been rolled back to scheme-only fallback because the build proxy hung on its first forwarded real-filesystem request. The old theory blamed process-wide scheme-socket ownership in the kernel. That turned out to be too broad: `stored` and `profiled` already prove that a scheme-owning process can do root-fd filesystem I/O from a separate worker thread. The real failure shape is narrower: the proxy event-loop thread cannot block inside nested redoxfs calls while it is servicing another userspace `file:` request.
 
 ## What Changes
 
-- Add a minimal kernel-safe path for proxy threads to forward filesystem I/O through a pre-opened real root fd without deadlocking.
-- Add a focused reproducer and regression test for the scheme-socket-owner + `SYS_OPENAT(root_fd, ...)` case.
-- Re-enable the per-path proxy sandbox in `snix-redox` on kernels that support the safe path, while keeping explicit fallback behavior for unsupported kernels.
-- Rebaseline sandbox validation with focused proxy tests and self-hosting runs that exercise real cargo build workloads.
+- Add a focused reproducer in `proxy_namespace_test` for repeated worker-backed proxy forwarding.
+- Move all real redoxfs and `/dev/*` I/O out of the proxy scheme thread into a dedicated worker thread.
+- Re-enable the per-path proxy sandbox as the default in `local_build.rs`.
+- Keep explicit warning + scheme-only fallback if proxy setup fails.
+- Refresh sandbox validation and docs so they describe the worker-thread fix, not the old kernel-blocking theory.
 
 ## Capabilities
 
 ### New Capabilities
-- `proxy-kernel-io-safety`: Let the kernel and snix proxy cooperate so allow-listed per-path sandboxing works without deadlocking and stays covered by regression tests.
-
-### Modified Capabilities
-
-None.
+- `proxy-kernel-io-safety`: Let the build proxy forward allow-listed filesystem operations safely by keeping real redoxfs I/O off the scheme event-loop thread.
 
 ## Impact
 
-- **Kernel**: Redox scheme / file I/O path that currently blocks proxy forwarding from scheme-socket-owning processes.
-- **snix**: `snix-redox/src/local_build.rs`, `snix-redox/src/build_proxy/`, namespace setup, runtime capability detection.
-- **Validation**: focused proxy reproducer, `snix-sandbox-test`, and self-hosting baselines.
-- **Docs**: AGENTS/open evidence should stop treating the proxy as permanently disabled once the kernel path is fixed.
+- **snix**: `snix-redox/src/build_proxy/`, `snix-redox/src/local_build.rs`, `snix-redox/src/sandbox.rs`
+- **Validation**: `snix-redox/tests/redox/proxy_namespace_test.rs`, `nix/redox-system/profiles/snix-sandbox-test.nix`, VM validation runs
+- **Docs**: AGENTS, OpenSpec notes, sandbox docs

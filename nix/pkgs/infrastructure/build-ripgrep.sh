@@ -12,26 +12,18 @@ export PATH=/nix/system/profile/bin:/bin:/usr/bin
 export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
 export HOME="$TMPDIR"
 export CARGO_HOME="$TMPDIR/cargo-home"
+export RUSTC=/nix/system/profile/bin/rustc
 export CARGO_INCREMENTAL=0
+export CARGO_TARGET_DIR="$TMPDIR/target"
 export AR=/nix/system/profile/bin/llvm-ar
 
 mkdir -p "$CARGO_HOME" "$out/bin"
 
-# Copy source to a writable directory, including dotfiles like .cargo/.
-SRCDIR="$TMPDIR/rg-src"
-mkdir -p "$SRCDIR"
-cp -r /usr/src/ripgrep/. "$SRCDIR"
-
-# Keep a defensive fallback in case the copy ever regresses.
-mkdir -p "$SRCDIR/.cargo"
-if [ ! -f "$SRCDIR/.cargo/config.toml" ]; then
-  cp /usr/src/ripgrep/.cargo/config.toml "$SRCDIR/.cargo/config.toml"
-fi
-
+SRCDIR="/usr/src/ripgrep"
 cd "$SRCDIR"
 
 echo "[build-ripgrep] Starting cargo build (JOBS=2, 33 crates)..."
 
 cargo build --offline --bin rg -j2
-cp target/x86_64-unknown-redox/debug/rg "$out/bin/rg"
+cp "$TMPDIR/target/x86_64-unknown-redox/debug/rg" "$out/bin/rg"
 echo "[build-ripgrep] ripgrep build complete"

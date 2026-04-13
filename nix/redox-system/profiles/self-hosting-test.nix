@@ -2760,29 +2760,28 @@ let
   linker = "/nix/system/profile/bin/cc"
   CFG
 
-                          # Ion builder: just copies source, runs cargo, installs binary.
-                          # Ion is statically linked — works inside sandbox proxy namespace.
-                          cat > /tmp/build-hello-cargo.ion << '"'"'BUILDEOF'"'"'
-                          let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
-                          export PATH
-                          let LD_LIBRARY_PATH = "/nix/system/profile/lib:/usr/lib/rustc:/lib"
-                          export LD_LIBRARY_PATH
-                          let HOME = "$TMPDIR"
-                          export HOME
-                          let CARGO_HOME = "$TMPDIR/cargo-home"
-                          export CARGO_HOME
-                          mkdir -p "$CARGO_HOME" "$out/bin"
-                          cp -r "$src" "$TMPDIR/src"
-                          cd "$TMPDIR/src"
-                          cargo build --offline -j2
-                          cp target/x86_64-unknown-redox/debug/hello "$out/bin/hello"
+                          cat > /tmp/build-hello-cargo.sh << '"'"'BUILDEOF'"'"'
+#!/nix/system/profile/bin/bash
+set -e
+export PATH=/nix/system/profile/bin:/bin:/usr/bin
+export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+export HOME="$TMPDIR"
+export CARGO_HOME="$TMPDIR/cargo-home"
+export RUSTC=/nix/system/profile/bin/rustc
+SRCDIR="$TMPDIR/src"
+mkdir -p "$CARGO_HOME" "$out/bin" "$SRCDIR"
+cp -r "$src"/. "$SRCDIR"
+cd "$SRCDIR"
+cargo build --offline -j2
+cp "$SRCDIR/target/x86_64-unknown-redox/debug/hello" "$out/bin/hello"
   BUILDEOF
+                          /nix/system/profile/bin/chmod +x /tmp/build-hello-cargo.sh
 
                           cat > /tmp/hello-cargo.nix << '"'"'HELLONIX'"'"'
         derivation {
           name = "hello-cargo";
-          builder = "/bin/sh";
-          args = ["/tmp/build-hello-cargo.ion"];
+          builder = "/nix/system/profile/bin/bash";
+          args = ["/tmp/build-hello-cargo.sh"];
           system = "x86_64-unknown-redox";
           src = "/tmp/hello-cargo-src";
         }

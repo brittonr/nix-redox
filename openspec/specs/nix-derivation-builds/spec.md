@@ -22,9 +22,9 @@ The local builder SHALL handle derivations whose `$out` is a directory tree (not
 
 ### Requirement: Cargo-based derivations build inside the sandbox
 
-Derivations that invoke cargo (cc-rs, workspaces, ripgrep) SHALL build successfully inside the scheme-only sandbox. The scheme-only sandbox restricts scheme access (blocks `display:`, `disk:`, `irq:`, etc.) while granting full `file:` (redoxfs) access. Builder derivations SHALL use bash (not Ion) when they need to set HOME or other protected variables, and SHALL vendor all transitive build-tool dependencies (e.g., `shlex` for `cc` 1.2.x). Cargo vendor paths SHALL match the layout produced by `fetchCargoVendor` (typically `vendor/source-registry-0/`).
+Derivations that invoke cargo (cc-rs, workspaces, ripgrep) SHALL build successfully inside the per-path proxy sandbox. The proxy sandbox restricts scheme access (blocks `display:`, `disk:`, `irq:`, etc.) and filters `file:` access to declared inputs plus writable output/temp paths. The proxy SHALL keep its real redoxfs I/O off the scheme event-loop thread by forwarding those operations to a dedicated worker thread. Builder derivations SHALL use bash (not Ion) when they need to set HOME or other protected variables, and SHALL vendor all transitive build-tool dependencies (e.g., `shlex` for `cc` 1.2.x). Cargo vendor paths SHALL match the layout produced by `fetchCargoVendor` (typically `vendor/source-registry-0/`).
 
-Note: The per-path proxy sandbox (which would restrict filesystem access to an allow-list) is disabled due to a kernel deadlock. The scheme-only sandbox is the active default.
+Note: If proxy setup fails at runtime, snix falls back to the scheme-only sandbox and emits a warning.
 
 #### Scenario: cc-rs build succeeds in sandbox
 - **WHEN** a derivation runs `cargo build` on a crate with `cc::Build::new().file("foo.c").compile("foo")`

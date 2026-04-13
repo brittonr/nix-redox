@@ -1,80 +1,99 @@
-//! Proxy lifecycle management: start, event loop, shutdown.
+//! Proxy lifecycle management: helper subprocess, event loop, shutdown.
 //!
-//! The proxy runs as a thread in the snix process. It creates a scheme
-//! socket, registers as `file` in the child namespace, and enters an
-//! event loop processing requests. The socket close (triggered when the
-//! builder exits or snix calls shutdown) terminates the loop.
+//! The build proxy runs in a dedicated helper process. That helper:
+//! 1. owns the scheme socket registered as `file` in the builder namespace
+//! 2. pre-opens `/` and device handles for direct redoxfs/device access
+//! 3. calls `setrens(0, 0)` to drop out of initnsmgr's namespace
+//! 4. runs the scheme event loop plus a worker thread for real I/O
 //!
-//! ## Known limitation: file: I/O deadlock
-//!
-//! The proxy thread (and ALL threads in the snix process) CANNOT do
-//! `file:` I/O while owning the scheme socket. The kernel prevents any
-//! context in a scheme-socket-owning process from making `file:` requests,
-//! even to a different `file:` scheme instance in a different namespace.
-//!
-//! This means the handler CANNOT open real files to forward them.
-//! A working implementation requires either:
-//! - A separate proxy process (fork, not thread) for real file I/O
-//! - Pre-reading all files into memory before starting the event loop
-//! - Kernel changes to allow cross-namespace file: I/O from scheme owners
+//! Process split matters: `setrens(0, 0)` is process-wide. Doing it in a
+//! thread inside `snix` breaks the parent build process. Running the proxy in
+//! a helper subprocess lets the parent stay in its normal namespace.
 //!
 //! Only compiled on Redox (`#[cfg(target_os = "redox")]`).
 
 use std::fs::File;
-use std::os::unix::io::{AsRawFd, IntoRawFd};
-use std::panic;
-use std::thread::{self, JoinHandle};
+use std::io::Write;
+use std::path::{Path, PathBuf};
+use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::Duration;
 
 use redox_scheme::scheme::{SchemeState, SchemeSync};
 use redox_scheme::{RequestKind, SignalBehavior, Socket};
 
 use super::allow_list::AllowList;
 use super::handler::BuildFsHandler;
+use super::io_worker::BuildFsIoWorker;
 use super::BuildFsProxyError;
 
-/// A running build filesystem proxy.
-///
-/// Holds the thread handle and socket fd. Dropping or calling
-/// `shutdown()` closes the socket and joins the thread.
+static ALLOW_LIST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+/// Running build filesystem proxy helper process.
 pub struct BuildFsProxy {
-    /// The proxy event loop thread.
-    thread: Option<JoinHandle<()>>,
-    /// The raw socket fd — closing it terminates the event loop.
-    /// Wrapped in Option so we can take it during shutdown.
-    socket_fd: Option<usize>,
+    child: Option<Child>,
+    allow_list_file: Option<PathBuf>,
+    ready_file: Option<PathBuf>,
 }
 
 impl BuildFsProxy {
-    /// Start the proxy: create socket, register in child namespace, spawn thread.
-    ///
-    /// `child_ns_fd`: namespace fd from `mkns()` (without `file`).
-    /// `allow_list`: paths the builder is permitted to access.
-    ///
-    /// After this returns, the proxy is running and ready to handle
-    /// requests from a child that calls `setns(child_ns_fd)`.
+    /// Start proxy helper and wait until it has registered `file:` in the
+    /// child namespace and entered the null namespace.
     pub fn start(child_ns_fd: usize, allow_list: AllowList) -> Result<Self, BuildFsProxyError> {
-        // Create a scheme socket.
+        let allow_list_file = write_allow_list_file(&allow_list)?;
+        let ready_file = write_ready_file_path()?;
+        let exe = current_exe_path()?;
+
+        let mut cmd = Command::new(&exe);
+        cmd.arg("build-proxy-helper")
+            .arg(child_ns_fd.to_string())
+            .arg(&allow_list_file)
+            .arg(&ready_file)
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::inherit());
+
+        let mut child = cmd.spawn().map_err(|e| {
+            BuildFsProxyError::SetupFailed(format!("spawn proxy helper '{exe}': {e}"))
+        })?;
+
+        if !wait_for_ready(&ready_file, &mut child, 200) {
+            let status = child.wait().ok();
+            let _ = std::fs::remove_file(&allow_list_file);
+            let _ = std::fs::remove_file(&ready_file);
+            return Err(BuildFsProxyError::SetupFailed(format!(
+                "proxy helper failed to become ready (status={status:?})"
+            )));
+        }
+
+        Ok(Self {
+            child: Some(child),
+            allow_list_file: Some(allow_list_file),
+            ready_file: Some(ready_file),
+        })
+    }
+
+    /// Parent keeps no scheme socket fd. Only helper owns it.
+    pub fn socket_fd(&self) -> Option<usize> {
+        None
+    }
+
+    /// Helper subprocess entrypoint.
+    pub fn run_helper(
+        child_ns_fd: usize,
+        allow_list_file: &str,
+        ready_file: &str,
+    ) -> Result<(), BuildFsProxyError> {
+        let allow_list = read_allow_list_file(Path::new(allow_list_file))?;
+
         eprintln!("buildfs: creating socket");
         let socket = Socket::create()
             .map_err(|e| BuildFsProxyError::SetupFailed(format!("Socket::create: {e}")))?;
         eprintln!("buildfs: socket created");
 
-        // Get the raw fd before moving the socket into the thread.
-        let socket_fd = socket.inner().raw();
-
-        // Create handler (root_fd filled in after registration).
-        let mut handler = BuildFsHandler::new(allow_list, 0);
-        let mut state = SchemeState::new();
-
-        // Get the root handle ID from the scheme handler.
-        let cap_id = handler
-            .scheme_root()
-            .map_err(|e| BuildFsProxyError::SetupFailed(format!("scheme_root: {e}")))?;
-
-        // Register as "file" in the CHILD namespace.
         eprintln!("buildfs: creating cap fd");
         let cap_fd = socket
-            .create_this_scheme_fd(0, cap_id, 0, 0)
+            .create_this_scheme_fd(0, 0, 0, 0)
             .map_err(|e| BuildFsProxyError::SetupFailed(format!("create_this_scheme_fd: {e}")))?;
 
         eprintln!("buildfs: registering in ns_fd={}", child_ns_fd);
@@ -82,96 +101,58 @@ impl BuildFsProxy {
             BuildFsProxyError::SetupFailed(format!("register_scheme_to_ns('file'): {e}"))
         })?;
         eprintln!("buildfs: registered");
-
-        // Close cap_fd now that registration is complete. The kernel
-        // duplicated the capability internally during register_scheme_to_ns.
-        // Leaving cap_fd open leaks it to fork'd children (it has no
-        // CLOEXEC), and the child closing it on exit can disrupt the
-        // scheme registration or block the child's _exit path — causing
-        // cmd.output() in the parent to hang (pipe write-ends never close,
-        // or waitpid never returns).
         let _ = syscall::close(cap_fd);
+        let _ = syscall::close(child_ns_fd);
 
-        // Pre-open "/" to get a direct fd to redoxfs.
-        // Must be done AFTER socket creation but BEFORE starting the event loop.
-        // This fd bypasses initnsmgr for file I/O in the handler.
         eprintln!("buildfs: pre-opening /");
         let root_file =
             File::open("/").map_err(|e| BuildFsProxyError::SetupFailed(format!("open /: {e}")))?;
-        let root_fd = root_file.as_raw_fd() as usize;
-        eprintln!("buildfs: root_fd={}", root_fd);
-        handler.root_fd = root_fd;
+        let dev_null = File::open("/dev/null").ok();
+        let dev_urandom = File::open("/dev/urandom").ok();
 
-        // Pre-open device paths that can't use raw_openat (scheme-backed).
-        // Must be done BEFORE the event loop starts — File::open() from
-        // within the event loop deadlocks initnsmgr (see AGENTS.md).
-        if let Ok(f) = File::open("/dev/null") {
-            let fd = f.into_raw_fd() as usize;
-            handler.dev_null_fd = Some(fd);
-            eprintln!("buildfs: dev_null_fd={}", fd);
-        }
-        if let Ok(f) = File::open("/dev/urandom") {
-            let fd = f.into_raw_fd() as usize;
-            handler.dev_urandom_fd = Some(fd);
-            eprintln!("buildfs: dev_urandom_fd={}", fd);
-        }
+        let io_worker = BuildFsIoWorker::spawn(root_file, dev_null, dev_urandom);
+        let mut handler = BuildFsHandler::new(allow_list, io_worker);
+        handler.install_root_handle(0);
+        let state = SchemeState::new();
+        let mut ready = std::fs::File::create(ready_file).map_err(|e| {
+            BuildFsProxyError::SetupFailed(format!("create ready file {ready_file}: {e}"))
+        })?;
 
-        // Spawn the event loop thread.
-        // Move root_file into the thread to keep it alive (it owns the fd
-        // that handler.root_fd references).
-        let thread = thread::Builder::new()
-            .name("buildfs-proxy".to_string())
-            .spawn(move || {
-                let _root_file = root_file; // Keep alive until thread exits.
-                let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
-                    run_event_loop(socket, handler, state);
-                }));
-                if let Err(e) = result {
-                    eprintln!("buildfs: proxy thread panicked: {e:?}");
-                }
-            })
-            .map_err(|e| BuildFsProxyError::SetupFailed(format!("thread spawn: {e}")))?;
+        eprintln!("buildfs: entering null namespace");
+        libredox::call::setrens(0, 0)
+            .map_err(|e| BuildFsProxyError::SetupFailed(format!("setrens(0, 0): {e}")))?;
 
-        Ok(Self {
-            thread: Some(thread),
-            socket_fd: Some(socket_fd),
-        })
+        ready.write_all(b"READY\n").ok();
+        ready.flush().ok();
+
+        run_event_loop(socket, handler, state);
+        Ok(())
     }
 
-    /// Return the raw scheme socket fd so the caller can close the
-    /// child's inherited copy in `pre_exec`. The parent's copy is
-    /// unaffected (pre_exec runs in the child after fork).
-    pub fn socket_fd(&self) -> Option<usize> {
-        self.socket_fd
-    }
-
-    /// Shut down the proxy: close the socket and join the thread.
-    ///
-    /// The socket close causes `socket.next_request()` in the event
-    /// loop to return `None`, which exits the loop.
     pub fn shutdown(mut self) {
         self.close_and_join();
     }
 
     fn close_and_join(&mut self) {
-        // Close the socket fd to signal the event loop to stop.
-        // This should cause next_request() to return with EBADF.
-        if let Some(fd) = self.socket_fd.take() {
-            eprintln!("buildfs: closing socket fd={}", fd);
-            let _ = syscall::close(fd);
-            eprintln!("buildfs: socket closed");
+        if let Some(mut child) = self.child.take() {
+            eprintln!("buildfs: waiting for proxy helper pid={}", child.id());
+            let exited = wait_for_exit(&mut child, 200);
+            if !exited {
+                eprintln!(
+                    "buildfs: proxy helper still alive, killing pid={}",
+                    child.id()
+                );
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+            eprintln!("buildfs: proxy helper reaped");
         }
 
-        // Join the proxy thread. On Redox, closing a scheme socket fd
-        // from another thread may not reliably unblock next_request().
-        // However, the event loop now exits proactively when all handles
-        // are closed (builder exited), so join should return quickly.
-        if let Some(thread) = self.thread.take() {
-            eprintln!("buildfs: joining proxy thread...");
-            match thread.join() {
-                Ok(()) => eprintln!("buildfs: proxy thread joined"),
-                Err(e) => eprintln!("buildfs: proxy thread join error: {e:?}"),
-            }
+        if let Some(path) = self.allow_list_file.take() {
+            let _ = std::fs::remove_file(path);
+        }
+        if let Some(path) = self.ready_file.take() {
+            let _ = std::fs::remove_file(path);
         }
     }
 }
@@ -182,9 +163,99 @@ impl Drop for BuildFsProxy {
     }
 }
 
-/// The proxy event loop — processes scheme requests until the socket closes.
+fn wait_for_exit(child: &mut Child, attempts: usize) -> bool {
+    for _ in 0..attempts {
+        match child.try_wait() {
+            Ok(Some(_)) => return true,
+            Ok(None) => std::thread::sleep(Duration::from_millis(10)),
+            Err(_) => return false,
+        }
+    }
+    false
+}
+
+fn wait_for_ready(path: &Path, child: &mut Child, attempts: usize) -> bool {
+    for _ in 0..attempts {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if content.trim() == "READY" {
+                return true;
+            }
+        }
+        match child.try_wait() {
+            Ok(Some(_)) => return false,
+            Ok(None) => std::thread::sleep(Duration::from_millis(10)),
+            Err(_) => return false,
+        }
+    }
+    false
+}
+
+fn current_exe_path() -> Result<String, BuildFsProxyError> {
+    let exe = std::env::current_exe()
+        .map_err(|e| BuildFsProxyError::SetupFailed(format!("current_exe: {e}")))?;
+    let exe_str = exe.to_string_lossy();
+    Ok(exe_str
+        .strip_prefix("file:")
+        .unwrap_or(&exe_str)
+        .to_string())
+}
+
+fn write_ready_file_path() -> Result<PathBuf, BuildFsProxyError> {
+    let id = ALLOW_LIST_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    let path = std::env::temp_dir().join(format!("snix-buildfs-ready-{pid}-{id}.txt"));
+    let _ = std::fs::remove_file(&path);
+    Ok(path)
+}
+
+fn write_allow_list_file(allow_list: &AllowList) -> Result<PathBuf, BuildFsProxyError> {
+    let id = ALLOW_LIST_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let pid = std::process::id();
+    let path = std::env::temp_dir().join(format!("snix-buildfs-allow-{pid}-{id}.txt"));
+    let mut file = std::fs::File::create(&path)
+        .map_err(|e| BuildFsProxyError::SetupFailed(format!("create allow-list file: {e}")))?;
+
+    for path in &allow_list.read_only {
+        writeln!(file, "ro\t{}", path.display()).map_err(|e| {
+            BuildFsProxyError::SetupFailed(format!("write allow-list file {}: {e}", path.display()))
+        })?;
+    }
+    for path in &allow_list.read_write {
+        writeln!(file, "rw\t{}", path.display()).map_err(|e| {
+            BuildFsProxyError::SetupFailed(format!("write allow-list file {}: {e}", path.display()))
+        })?;
+    }
+
+    Ok(path)
+}
+
+fn read_allow_list_file(path: &Path) -> Result<AllowList, BuildFsProxyError> {
+    let content = std::fs::read_to_string(path).map_err(|e| {
+        BuildFsProxyError::SetupFailed(format!("read allow-list file {}: {e}", path.display()))
+    })?;
+
+    let mut allow_list = AllowList::new();
+    for line in content.lines() {
+        let Some((kind, rest)) = line.split_once('\t') else {
+            continue;
+        };
+        let path = PathBuf::from(rest);
+        match kind {
+            "ro" => {
+                allow_list.read_only.insert(path);
+            }
+            "rw" => {
+                allow_list.read_write.insert(path);
+            }
+            _ => {}
+        }
+    }
+    Ok(allow_list)
+}
+
+/// Proxy event loop.
 fn run_event_loop(socket: Socket, mut handler: BuildFsHandler, mut state: SchemeState) {
-    eprintln!("buildfs: event loop started");
+    eprintln!("buildfs: entering event loop");
     loop {
         let req = match socket.next_request(SignalBehavior::Restart) {
             Ok(Some(req)) => {
@@ -205,40 +276,19 @@ fn run_event_loop(socket: Socket, mut handler: BuildFsHandler, mut state: Scheme
             RequestKind::Call(call_req) => {
                 let response = call_req.handle_sync(&mut handler, &mut state);
                 match socket.write_response(response, SignalBehavior::Restart) {
-                    Ok(true) => {
-                        eprintln!("buildfs: response sent");
-                    }
+                    Ok(true) => eprintln!("buildfs: response sent"),
                     Ok(false) => break,
                     Err(_) => break,
                 }
             }
-            RequestKind::OnClose { id } => {
-                handler.on_close(id);
-            }
+            RequestKind::OnClose { id } => handler.on_close(id),
             _ => continue,
         }
 
-        // When all handles are closed (builder exited), exit the loop
-        // immediately. This prevents blocking on next_request() after
-        // the last client disconnects — on Redox, closing a scheme
-        // socket fd from another thread does not reliably unblock a
-        // blocked next_request() read.
-        //
-        // Guard: only exit after a real client has connected (at least
-        // one openat processed). Without this guard, the proxy can exit
-        // if the scheme_root handle's cap_fd close event arrives before
-        // the builder opens its first file.
         if handler.had_client_opens && handler.handles.is_empty() {
             eprintln!("buildfs: all handles closed, exiting event loop");
             break;
         }
-    }
-    // Clean up pre-opened device fds.
-    if let Some(fd) = handler.dev_null_fd {
-        let _ = syscall::close(fd);
-    }
-    if let Some(fd) = handler.dev_urandom_fd {
-        let _ = syscall::close(fd);
     }
     eprintln!("buildfs: event loop exited");
 }

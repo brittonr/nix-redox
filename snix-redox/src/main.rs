@@ -208,6 +208,13 @@ enum Command {
         command: vendor::VendorCommand,
     },
 
+    #[command(hide = true)]
+    BuildProxyHelper {
+        child_ns_fd: usize,
+        allow_list_file: String,
+        ready_file: String,
+    },
+
     /// Manage the declarative system (rebuild, generations, rollback, gc)
     ///
     /// Edit configuration.nix, rebuild to create a new generation,
@@ -718,6 +725,12 @@ fn main() {
             StoreCommand::RemoveRoot { name } => store::remove_root(&name),
             StoreCommand::Roots => store::list_roots(),
         },
+        Command::BuildProxyHelper {
+            child_ns_fd,
+            allow_list_file,
+            ready_file,
+        } => build_proxy::BuildFsProxy::run_helper(child_ns_fd, &allow_list_file, &ready_file)
+            .map_err(|e| e.into()),
         Command::Install {
             name,
             cache_url,
