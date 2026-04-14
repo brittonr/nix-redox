@@ -213,6 +213,12 @@ in
       meta.description = "Run functional tests inside Redox OS (shell, filesystem, tools, config)";
     };
 
+    kernel-rebuild-test = {
+      type = "app";
+      program = "${self'.packages.kernel-rebuild-test}/bin/functional-test";
+      meta.description = "Build the Redox kernel natively inside a Redox guest and capture the resulting store path";
+    };
+
     multi-user-test = {
       type = "app";
       program = "${self'.packages.multi-user-test}/bin/functional-test";
