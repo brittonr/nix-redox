@@ -125,11 +125,11 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - For post-rebuild assertions, prefer shell builtins/pattern matching (`case`, `[[ ... == *...* ]]`) or resolve absolute tool paths before the rebuild.
 - Non-userutils startup is emitted as `99_startup.service` with `cmd = "/startup.sh"` and `type = "oneshot_async"`; `etc/init.toml` can stay empty.
 
-### `pkgs.nasm` in a Redox test profile did not produce a guest `nasm` binary
-- In `kernel-rebuild-test`, appending `pkgs.nasm` to `/environment.systemPackages` still left `/nix/system/profile/bin/nasm` missing in the guest.
-- The focused native kernel rebuild now gets past the cargo path-URL failure and reaches `kernel/build.rs`, where `Command::new("nasm")` fails the trampoline build.
-- Evidence from guest preflight: `/usr/src/native-kernel-rebuild/kernel/build-redox-kernel.sh: line 84: nasm: command not found` and `FUNC_TEST:nasm-present:FAIL:/nix/system/profile/bin/nasm missing`.
-- Treat `pkgs.nasm` here as not-yet-usable guest tooling; next fix is either a real Redox nasm package path or a staged trampoline artifact fallback.
+### Native guest kernel rebuild should use prebuilt trampoline blobs, not guest nasm
+- In `kernel-rebuild-test`, appending `pkgs.nasm` to `/environment.systemPackages` still left `/nix/system/profile/bin/nasm` missing in the guest, so trying to package guest nasm was wrong direction.
+- Correct long-term fix: patch kernel `build.rs` to support `REDOX_KERNEL_USE_PREBUILT_TRAMPOLINE`, generate `src/asm/{x86,x86_64}/trampoline.bin` during host-side source prep, and set that env var in the guest native builder.
+- This keeps host/cross builds using real `nasm`, while native Redox guest rebuilds use deterministic prebuilt blobs from the same asm sources.
+- After this fix, the focused native rebuild gets past the old trampoline blocker and fails later at kernel link, so the nasm issue is genuinely cleared.
 
 ### Rebuild VM test traps I hit this pass
 - I forgot `let PATH = "/nix/system/profile/bin:/bin:/usr/bin"; export PATH` at the top of a startup-script test, then blamed bash when `grep`/`sed` were just missing from PATH.

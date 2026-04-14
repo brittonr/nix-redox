@@ -46,7 +46,7 @@ let
       ./patches/kernel/patch-kernel-p2frame-init.patch
     ];
 
-    nativeBuildInputs = [ pkgs.python3 ];
+    nativeBuildInputs = [ pkgs.python3 pkgs.nasm ];
 
     postUnpack = ''
       rm -rf $sourceRoot/rmm
@@ -76,6 +76,13 @@ let
       # LAPIC timer for scheduling on KVM — Cloud Hypervisor doesn't
       # deliver PIT interrupts when all CPUs are in HLT
       python3 ${./patches/kernel/patch-kernel-lapic-timer.py} .
+
+      # Native guest kernel rebuilds may not have a working nasm package.
+      # Pre-generate trampoline blobs now and teach build.rs to use them when
+      # nasm is absent at build time.
+      python3 ${./patches/kernel/patch-kernel-trampoline-fallback.py} .
+      nasm -f bin -o src/asm/x86/trampoline.bin src/asm/x86/trampoline.asm
+      nasm -f bin -o src/asm/x86_64/trampoline.bin src/asm/x86_64/trampoline.asm
 
       # Skip 16550 loopback self-test during serial init. Intel N100
       # maps an LPSS HSUART to 0x3F8 ("COM0") which fails loopback,
