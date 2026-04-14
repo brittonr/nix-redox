@@ -48,7 +48,7 @@ let
       "installPhase"
     ];
 
-    nativeBuildInputs = [ pkgs.python3 ];
+    nativeBuildInputs = [ pkgs.python3 pkgs.nasm ];
 
     postUnpack = ''
       rm -rf $sourceRoot/rmm
@@ -74,6 +74,9 @@ let
 
       python3 ${../system/patches/kernel/patch-kernel-ptrace-proc-handles.py} .
       python3 ${../system/patches/kernel/patch-kernel-lapic-timer.py} .
+      python3 ${../system/patches/kernel/patch-kernel-trampoline-fallback.py} .
+      nasm -f bin -o src/asm/x86/trampoline.bin src/asm/x86/trampoline.asm
+      nasm -f bin -o src/asm/x86_64/trampoline.bin src/asm/x86_64/trampoline.asm
       python3 ${../patches/patch-kernel-serial-no-loopback.py} src/devices/uart_16550.rs
     '';
 
@@ -257,8 +260,7 @@ pkgs.runCommand "native-kernel-rebuild-bundle" { nativeBuildInputs = [ pkgs.pyth
         "/nix/system/profile/bin/llvm-ar",
         "/nix/system/profile/bin/llvm-objcopy",
         "/nix/system/profile/bin/ld.lld",
-        "/nix/system/profile/bin/cc",
-        "/nix/system/profile/bin/nasm"
+        "/nix/system/profile/bin/cc"
       ]
     },
     "guest_test_script": "run-native-kernel-rebuild-test.sh"

@@ -33,8 +33,7 @@ selfHosting
     systemPackages = builtins.filter (
       p: !(pkgs ? userutils && toString p == toString pkgs.userutils)
     ) (selfHosting."/environment".systemPackages or [ ])
-    ++ opt "strace-redox"
-    ++ opt "nasm";
+    ++ opt "strace-redox";
   };
 
   "/filesystem" = (selfHosting."/filesystem" or { }) // {

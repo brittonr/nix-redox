@@ -22,6 +22,7 @@ export RUST_BACKTRACE=1
 export AR=/nix/system/profile/bin/llvm-ar
 export CC=/nix/system/profile/bin/cc
 export RUST_SRC_PATH=/usr/src/native-kernel-rebuild/rust-src/library
+export REDOX_KERNEL_USE_PREBUILT_TRAMPOLINE=1
 export CARGO_TERM_PROGRESS_WHEN="${CARGO_TERM_PROGRESS_WHEN:-always}"
 export CARGO_TERM_PROGRESS_WIDTH="${CARGO_TERM_PROGRESS_WIDTH:-80}"
 
@@ -79,13 +80,6 @@ cd /usr/src/native-kernel-rebuild/kernel
 if ! cargo metadata --manifest-path "$custom_sysroot/lib/rustlib/src/rust/library/Cargo.toml" --no-deps --format-version 1 >/tmp/kernel-rust-src-from-kernel-dir.json 2>/tmp/kernel-rust-src-from-kernel-dir.err; then
   echo "[build-redox-kernel] cargo metadata from kernel dir on custom rust-src workspace failed" >&2
   cat /tmp/kernel-rust-src-from-kernel-dir.err >&2 || true
-fi
-
-if ! nasm -f bin -o "$TMPDIR/trampoline-preflight" src/asm/x86_64/trampoline.asm >/tmp/kernel-nasm.out 2>/tmp/kernel-nasm.err; then
-  echo "[build-redox-kernel] nasm preflight failed" >&2
-  cat /tmp/kernel-nasm.err >&2 || true
-else
-  echo "[build-redox-kernel] nasm preflight ok" >&2
 fi
 
 cargo rustc \
