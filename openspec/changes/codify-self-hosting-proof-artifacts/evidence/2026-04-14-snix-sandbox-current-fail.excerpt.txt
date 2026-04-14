@@ -1,0 +1,23 @@
+Flow:     snix-sandbox-test
+Run:      20260414T004002-snix-sandbox-test
+Verdict:  FAIL
+Duration: 219s
+Commit:   54cf12c5
+
+Command:  /nix/store/cjy7rbqvx5a4vhqarbv0lddi4dkd4aas-functional-test/bin/functional-test --verbose
+Capture:  /var/tmp/redox-self-hosting-captures/20260414T004002-snix-sandbox-test
+
+Results:  13 passed, 4 failed, 0 skipped
+
+Milestones:
+  Boot complete      @ 9.249s
+  Test suite started @ 9.249s
+  Test suite complete @ 215.456s
+  Bootloader started @ 8.918s
+  Kernel running     @ 9.138s
+
+Failures:
+  - cc-dep-expr-probe: exit=1 output=
+  - cc-dep-build-nix-copy: exit=1 output=
+  - cc-dep-build: exit=1
+  - rg-build: exit=1

@@ -1,0 +1,17 @@
+Flow:     self-hosting-test
+Run:      20260409T133254-self-hosting-test
+Verdict:  PASS
+Duration: 4785s
+Commit:   unknown
+
+Command:  /nix/store/lg71yc8qfgfvjgf0wkkfkq4hl0bakcj6-functional-test/bin/functional-test --verbose
+Capture:  /var/tmp/redox-self-hosting-captures/20260409T133254-self-hosting-test
+
+Results:  78 passed, 0 failed, 0 skipped
+
+Milestones:
+  Boot complete      @ 0.647s
+  Test suite started @ 0.647s
+  Test suite complete @ 4780.176s
+  Bootloader started @ 0.314s
+  Kernel running     @ 0.537s

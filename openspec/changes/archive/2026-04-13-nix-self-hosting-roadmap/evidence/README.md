@@ -17,6 +17,11 @@ This section references archived evidence; it does not duplicate those artifacts
 
 This section references archived evidence; it does not duplicate those artifacts into this active change directory.
 
+Current live capture index:
+- `docs/self-hosting/latest-success.md`
+- `docs/self-hosting/latest-success.json`
+- capture contract: `docs/self-hosting/proof-artifacts.md`
+
 Tasks `1.1` through `1.9` are backed by the archived self-hosting reruns and evidence from:
 - `openspec/changes/archive/2026-04-09-fix-snix-build-gaps/tasks.md`
 - `openspec/changes/archive/2026-04-09-fix-snix-build-gaps/evidence/README.md`

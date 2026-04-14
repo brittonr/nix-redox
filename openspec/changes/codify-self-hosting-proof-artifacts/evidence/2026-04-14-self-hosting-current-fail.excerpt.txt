@@ -1,0 +1,24 @@
+Flow:     self-hosting-test
+Run:      20260414T004855-self-hosting-test
+Verdict:  FAIL
+Duration: 191s
+Commit:   54cf12c5
+
+Command:  /nix/store/wx7gcd64873d5n427cq3j6mmm7bcb0fm-functional-test/bin/functional-test --verbose
+Capture:  /var/tmp/redox-self-hosting-captures/20260414T004855-self-hosting-test
+
+Results:  57 passed, 12 failed, 0 skipped
+
+Milestones:
+  Boot complete      @ 12.005s
+  Test suite started @ 12.005s
+  Test suite complete @ 188.212s
+  Bootloader started @ 11.677s
+  Kernel running     @ 11.789s
+
+Failures:
+  - real-program
+  - multifile-build
+  - buildscript: no-result
+  - cc-dep-build: exit=1
+  - workspace-build: exit=1

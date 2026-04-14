@@ -1,0 +1,20 @@
+Flow:     snix-compile-test
+Run:      20260414T004549-snix-compile-test
+Verdict:  FAIL
+Duration: 89s
+Commit:   54cf12c5
+
+Command:  /nix/store/wdbn98gynr45c7pvghln1r84z50znxrc-functional-test/bin/functional-test --verbose
+Capture:  /var/tmp/redox-self-hosting-captures/20260414T004549-snix-compile-test
+
+Results:  6 passed, 1 failed, 0 skipped
+
+Milestones:
+  Boot complete      @ 24.584s
+  Test suite started @ 24.584s
+  Test suite complete @ 84.938s
+  Bootloader started @ 24.040s
+  Kernel running     @ 24.369s
+
+Failures:
+  - snix-compile: exit or no binary at /bin/snix

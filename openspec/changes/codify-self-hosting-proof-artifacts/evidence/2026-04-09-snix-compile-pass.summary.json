@@ -1,0 +1,74 @@
+{
+  "bundle": "/nix/store/cz5r3qinfmxl5ndvyvrmg9qfj4h0jz4j-snix-source-bundle",
+  "capture_dir": "/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test",
+  "command": "/nix/store/zxkfa4mpcsj5axsb0s4n2x9rx577lia2-functional-test/bin/functional-test --verbose",
+  "duration_seconds": 3092,
+  "exit_code": 0,
+  "files": {
+    "excerpt_txt": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/excerpt.txt",
+      "present": true,
+      "size_bytes": 511
+    },
+    "host_monitor_log": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/host-monitor.log",
+      "present": true,
+      "size_bytes": 31397
+    },
+    "meta_txt": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/meta.txt",
+      "present": true,
+      "size_bytes": 905
+    },
+    "runner_log": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/runner.log",
+      "present": true,
+      "size_bytes": 15679
+    },
+    "serial_log": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/serial.log",
+      "present": true,
+      "size_bytes": 14200
+    },
+    "summary_json": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/summary.json",
+      "present": true,
+      "size_bytes": 2335
+    },
+    "vmm_log": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/vmm.log",
+      "present": true,
+      "size_bytes": 464
+    }
+  },
+  "finished_at": "2026-04-09T12:46:45-04:00",
+  "flow": "snix-compile-test",
+  "git_dirty": null,
+  "git_rev": "unknown",
+  "repo_root": "/home/brittonr/git/redox",
+  "run_id": "20260409T115513-snix-compile-test",
+  "runner": {
+    "image_size": "8.0G",
+    "milestones": {
+      "Boot complete": "0.649s",
+      "Bootloader started": "0.314s",
+      "Kernel running": "0.538s",
+      "Test suite complete": "3089.008s",
+      "Test suite started": "0.758s"
+    },
+    "timeout_seconds": 3600,
+    "vmm": "ch"
+  },
+  "schema_version": 1,
+  "started_at": "2026-04-09T11:55:13-04:00",
+  "test_counts": {
+    "fail": 0,
+    "failure_lines": [],
+    "pass": 7,
+    "skip": 0,
+    "tests_complete": true,
+    "tests_started": true,
+    "total": 7
+  },
+  "verdict": "pass"
+}

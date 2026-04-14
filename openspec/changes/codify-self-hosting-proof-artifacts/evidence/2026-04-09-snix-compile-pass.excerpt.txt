@@ -1,0 +1,17 @@
+Flow:     snix-compile-test
+Run:      20260409T115513-snix-compile-test
+Verdict:  PASS
+Duration: 3092s
+Commit:   unknown
+
+Command:  /nix/store/zxkfa4mpcsj5axsb0s4n2x9rx577lia2-functional-test/bin/functional-test --verbose
+Capture:  /var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test
+
+Results:  7 passed, 0 failed, 0 skipped
+
+Milestones:
+  Boot complete      @ 0.649s
+  Test suite started @ 0.758s
+  Test suite complete @ 3089.008s
+  Bootloader started @ 0.314s
+  Kernel running     @ 0.538s
