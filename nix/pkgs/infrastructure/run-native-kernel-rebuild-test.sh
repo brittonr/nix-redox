@@ -77,6 +77,25 @@ run_snix_build() {
   wait "$build_pid"
 }
 
+record_pathinfo() {
+  local name="$1"
+  local store_path="$2"
+  case "$store_path" in
+    /nix/store/*)
+      local base hash pathinfo
+      base=${store_path#/nix/store/}
+      hash=${base%%-*}
+      pathinfo="/nix/var/snix/pathinfo/${hash}.json"
+      if [ -f "$pathinfo" ]; then
+        artifact "$name-pathinfo" "$pathinfo"
+        echo "=== $name pathinfo ==="
+        cat "$pathinfo"
+        echo "=== end $name pathinfo ==="
+      fi
+      ;;
+  esac
+}
+
 echo ""
 echo "========================================"
 echo "  RedoxOS Native Kernel Rebuild Test"
@@ -119,10 +138,10 @@ else
   echo "FUNC_TEST:snix-binary-present:FAIL:/bin/snix missing"
 fi
 
-if [ -x /nix/system/profile/bin/ld.lld ] && [ -x /nix/system/profile/bin/llvm-objcopy ]; then
-  echo "FUNC_TEST:llvm-tools-present:PASS"
+if [ -x /nix/system/profile/bin/lld-wrapper ] && [ -x /nix/system/profile/bin/ld.lld ] && [ -x /nix/system/profile/bin/llvm-objcopy ]; then
+  echo "FUNC_TEST:linker-tools-present:PASS"
 else
-  echo "FUNC_TEST:llvm-tools-present:FAIL:ld.lld or llvm-objcopy missing"
+  echo "FUNC_TEST:linker-tools-present:FAIL:lld-wrapper, ld.lld, or llvm-objcopy missing"
 fi
 
 echo "=== bundle manifest ==="
@@ -142,19 +161,7 @@ then
   if [ -n "$kernel_output" ] && [ -f "$kernel_output/boot/kernel" ] && [ -f "$kernel_output/boot/kernel.sym" ]; then
     echo "FUNC_TEST:kernel-native-build:PASS"
     artifact kernel-store "$kernel_output"
-    case "$kernel_output" in
-      /nix/store/*)
-        kernel_base=${kernel_output#/nix/store/}
-        kernel_hash=${kernel_base%%-*}
-        kernel_pathinfo="/nix/var/snix/pathinfo/${kernel_hash}.json"
-        if [ -f "$kernel_pathinfo" ]; then
-          artifact kernel-pathinfo "$kernel_pathinfo"
-          echo "=== kernel pathinfo ==="
-          cat "$kernel_pathinfo"
-          echo "=== end kernel pathinfo ==="
-        fi
-        ;;
-    esac
+    record_pathinfo kernel "$kernel_output"
   else
     echo "FUNC_TEST:kernel-native-build:FAIL:missing boot/kernel or boot/kernel.sym in $kernel_output"
     echo "=== kernel build stderr ==="
@@ -168,8 +175,32 @@ else
   echo "=== end kernel build stderr ==="
 fi
 
-echo "FUNC_TEST:bootloader-native-build:SKIP:first slice stages bundle and builder; guest build path still blocked on follow-up proof run"
-artifact bootloader-status staged-not-run
+echo "--- bootloader native rebuild: snix build --file ---"
+if run_snix_build \
+  bootloader \
+  /usr/src/native-kernel-rebuild/bootloader/build.nix \
+  /tmp/bootloader-rebuild-output \
+  /tmp/bootloader-rebuild-err \
+  bootloader-rebuild
+then
+  bootloader_output=$(cat /tmp/bootloader-rebuild-output 2>/dev/null || true)
+  printf '%s\n' "$bootloader_output" > /tmp/bootloader-rebuild-output
+  if [ -n "$bootloader_output" ] && [ -f "$bootloader_output/boot/EFI/BOOT/BOOTX64.EFI" ]; then
+    echo "FUNC_TEST:bootloader-native-build:PASS"
+    artifact bootloader-store "$bootloader_output"
+    record_pathinfo bootloader "$bootloader_output"
+  else
+    echo "FUNC_TEST:bootloader-native-build:FAIL:missing boot/EFI/BOOT/BOOTX64.EFI in $bootloader_output"
+    echo "=== bootloader build stderr ==="
+    cat /tmp/bootloader-rebuild-err 2>/dev/null || true
+    echo "=== end bootloader build stderr ==="
+  fi
+else
+  echo "FUNC_TEST:bootloader-native-build:FAIL:snix build exited non-zero"
+  echo "=== bootloader build stderr ==="
+  cat /tmp/bootloader-rebuild-err 2>/dev/null || true
+  echo "=== end bootloader build stderr ==="
+fi
 
 echo ""
 echo "FUNC_TESTS_COMPLETE"
