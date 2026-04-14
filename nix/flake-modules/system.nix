@@ -410,6 +410,8 @@ let
     PY
   '';
 
+  selfHostingProofCapture = "${pkgs.python3}/bin/python3 ${../../scripts/self-hosting-proof-capture.py}";
+
   wrapFunctionalTest =
     {
       base,
@@ -419,48 +421,49 @@ let
     pkgs.writeShellScriptBin "functional-test" ''
       set -uo pipefail
 
-      run_dir="''${REDOX_CAPTURE_DIR:-}"
-      if [ -z "$run_dir" ]; then
-        run_dir="/var/tmp/redox-self-hosting-captures/$(date +%Y%m%dT%H%M%S)-${label}"
+      REPO_ROOT=$(${pkgs.git}/bin/git rev-parse --show-toplevel 2>/dev/null || pwd)
+      COMMAND_STR=$(printf "%q " "${base}/bin/functional-test" "$@")
+      COMMAND_STR="''${COMMAND_STR% }"
+
+      init_args=(
+        init
+        --capture-root /var/tmp/redox-self-hosting-captures
+        --flow ${label}
+        --repo-root "$REPO_ROOT"
+        --command "$COMMAND_STR"
+        --shell-output
+      )
+      if [ -n "''${REDOX_CAPTURE_DIR:-}" ]; then
+        init_args+=(--run-dir "$REDOX_CAPTURE_DIR")
       fi
-      mkdir -p "$run_dir"
-      : > "$run_dir/runner.log"
-      {
-        echo "started_at=$(date --iso-8601=seconds)"
-        echo "repo=$PWD"
-        echo "run_dir=$run_dir"
-        ${lib.optionalString (auditBundle != null) ''echo "bundle=${auditBundle}"''}
-        echo
-        echo "## command"
-        printf "%q " "${base}/bin/functional-test" "$@"
-        echo
-      } > "$run_dir/meta.txt"
+      ${lib.optionalString (auditBundle != null) ''init_args+=(--bundle "${auditBundle}")''}
+      eval "$(${selfHostingProofCapture} "''${init_args[@]}")"
 
-      exec > >(${pkgs.coreutils}/bin/tee -a "$run_dir/runner.log") 2>&1
+      status=125
+      finalize_capture() {
+        ${selfHostingProofCapture} finalize \
+          --run-dir "$RUN_DIR" \
+          --exit-code "$status" || true
+      }
+      trap finalize_capture EXIT
 
-      export REDOX_VM_MONITOR_DIR="$run_dir"
-      echo "[capture] run_dir=$run_dir"
+      : > "$RUN_DIR/runner.log"
+      exec > >(${pkgs.coreutils}/bin/tee -a "$RUN_DIR/runner.log") 2>&1
+
+      export REDOX_VM_MONITOR_DIR="$RUN_DIR"
+      echo "[capture] run_dir=$RUN_DIR"
+      echo "[capture] run_id=$RUN_ID"
       ${lib.optionalString (auditBundle != null) ''
         if ${auditSnixSourceBundle}/bin/audit-snix-source-bundle ${auditBundle}; then
           :
         else
           status=$?
-          {
-            echo
-            echo "finished_at=$(date --iso-8601=seconds)"
-            echo "exit_code=$status"
-          } >> "$run_dir/meta.txt"
           exit $status
         fi
       ''}
 
       ${base}/bin/functional-test "$@"
       status=$?
-      {
-        echo
-        echo "finished_at=$(date --iso-8601=seconds)"
-        echo "exit_code=$status"
-      } >> "$run_dir/meta.txt"
       exit $status
     '';
 

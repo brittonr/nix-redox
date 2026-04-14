@@ -64,6 +64,7 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - For long Redox VM runs, tee stdout/stderr to a durable file under `/var/tmp/redox-self-hosting-captures/<timestamp>/` and keep metadata (`git status`, patch, exit code) beside the log.
 - Treat pueue output as convenience for monitoring, not as the only evidence artifact.
 - `vm-tests` pueue group can be paused while still accepting `start_immediately` tasks; `pueue status` then shows confusing state, and `nix run` may stall before boot on `waiting for the big garbage collector lock...`. Check group pause state and host Nix GC lock before treating the VM test as a guest-side failure.
+- `mk-vm-test` uses `mktemp -d` on the host and copies the full disk image there before boot. For multi-GB self-hosting images, set `TMPDIR=/var/tmp` on the host if `/tmp` is a tmpfs or otherwise space-constrained, or the run can fail early with `cp: error writing ... redox.img: No space left on device` before the VM even starts.
 
 ### Focused `snix-compile` test exposed a new concrete blocker
 - Isolating `snix-compile` into a focused VM test removed the 2400s full-suite timeout and reproduced the failure in ~1169s with durable logs.
