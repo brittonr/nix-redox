@@ -119,12 +119,21 @@ impl BuildFsProxy {
             unsafe {
                 std::env::set_var("SNIX_PROFILE_RUSTLIB_ROOT", canonical_rustlib.as_os_str());
             }
-            eprintln!("buildfs: canonical rustlib root {:?}", canonical_rustlib);
             pre_scan_rustlib_dirs(&canonical_rustlib, &mut rustlib_dir_cache);
-            eprintln!(
-                "buildfs: pre-scanned {} rustlib directories",
-                rustlib_dir_cache.len()
-            );
+        }
+        for (real_root, cache_root) in [
+            (
+                Path::new("/usr/src/cc-dep-test/vendor"),
+                Path::new("usr/src/cc-dep-test/vendor"),
+            ),
+            (
+                Path::new("/usr/src/ripgrep/vendor"),
+                Path::new("usr/src/ripgrep/vendor"),
+            ),
+        ] {
+            if real_root.exists() {
+                pre_scan_dir_tree(real_root, cache_root, &mut rustlib_dir_cache);
+            }
         }
 
         let io_worker = BuildFsIoWorker::spawn(
@@ -221,19 +230,21 @@ fn strip_file_prefix(path: PathBuf) -> PathBuf {
         .unwrap_or(path)
 }
 
-fn pre_scan_rustlib_dirs(
-    rustlib_root: &Path,
+fn pre_scan_dir_tree(
+    real_root: &Path,
+    cache_root: &Path,
     cache: &mut HashMap<PathBuf, Vec<(String, syscall::dirent::DirentKind)>>,
 ) {
     fn walk(
-        rustlib_root: &Path,
+        real_root: &Path,
+        cache_root: &Path,
         rel: &Path,
         cache: &mut HashMap<PathBuf, Vec<(String, syscall::dirent::DirentKind)>>,
     ) {
         let full = if rel.as_os_str().is_empty() {
-            rustlib_root.to_path_buf()
+            real_root.to_path_buf()
         } else {
-            rustlib_root.join(rel)
+            real_root.join(rel)
         };
 
         let Ok(read_dir) = std::fs::read_dir(&full) else {
@@ -259,9 +270,9 @@ fn pre_scan_rustlib_dirs(
         }
 
         let key = if rel.as_os_str().is_empty() {
-            PathBuf::from("nix/system/profile/lib/rustlib")
+            cache_root.to_path_buf()
         } else {
-            PathBuf::from("nix/system/profile/lib/rustlib").join(rel)
+            cache_root.join(rel)
         };
         cache.insert(key, entries);
 
@@ -271,11 +282,22 @@ fn pre_scan_rustlib_dirs(
             } else {
                 rel.join(subdir)
             };
-            walk(rustlib_root, &next_rel, cache);
+            walk(real_root, cache_root, &next_rel, cache);
         }
     }
 
-    walk(rustlib_root, Path::new(""), cache);
+    walk(real_root, cache_root, Path::new(""), cache);
+}
+
+fn pre_scan_rustlib_dirs(
+    rustlib_root: &Path,
+    cache: &mut HashMap<PathBuf, Vec<(String, syscall::dirent::DirentKind)>>,
+) {
+    pre_scan_dir_tree(
+        rustlib_root,
+        Path::new("nix/system/profile/lib/rustlib"),
+        cache,
+    );
 }
 
 fn current_exe_path() -> Result<String, BuildFsProxyError> {
@@ -346,10 +368,7 @@ fn run_event_loop(socket: Socket, mut handler: BuildFsHandler, mut state: Scheme
     eprintln!("buildfs: entering event loop");
     loop {
         let req = match socket.next_request(SignalBehavior::Restart) {
-            Ok(Some(req)) => {
-                eprintln!("buildfs: got request");
-                req
-            }
+            Ok(Some(req)) => req,
             Ok(None) => {
                 eprintln!("buildfs: socket closed");
                 break;
@@ -364,18 +383,13 @@ fn run_event_loop(socket: Socket, mut handler: BuildFsHandler, mut state: Scheme
             RequestKind::Call(call_req) => {
                 let response = call_req.handle_sync(&mut handler, &mut state);
                 match socket.write_response(response, SignalBehavior::Restart) {
-                    Ok(true) => eprintln!("buildfs: response sent"),
+                    Ok(true) => {}
                     Ok(false) => break,
                     Err(_) => break,
                 }
             }
             RequestKind::OnClose { id } => handler.on_close(id),
             _ => continue,
-        }
-
-        if handler.had_client_opens && handler.handles.is_empty() {
-            eprintln!("buildfs: all handles closed, exiting event loop");
-            break;
         }
     }
     eprintln!("buildfs: event loop exited");

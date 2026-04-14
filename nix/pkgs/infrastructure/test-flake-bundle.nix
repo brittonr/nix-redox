@@ -39,7 +39,7 @@ name = "hello-flake"
 version = "0.1.0"
 LOCK
 
-  # ── Builder script (bash — needs HOME and reliable relative paths) ──
+  # ── Builder scripts (bash — needs HOME and reliable relative paths) ──
   cat > $out/build-hello.sh << 'BUILDER'
 #!/nix/system/profile/bin/bash
 set -e
@@ -58,6 +58,32 @@ cargo build --offline --locked --manifest-path "$src/Cargo.toml" -j2 </dev/null
 cp "$TMPDIR/target/x86_64-unknown-redox/debug/hello-flake" "$out/bin/hello"
 BUILDER
   chmod +x $out/build-hello.sh
+
+  cat > $out/build-file-probe.sh << 'BUILDER'
+#!/nix/system/profile/bin/bash
+set -e
+printf 'FILE_PROBE_OK\n' > "$out"
+BUILDER
+  chmod +x $out/build-file-probe.sh
+
+  # ── Tiny --file probe derivation ───────────────────────────────
+  cat > $out/file-build.nix << 'NIX'
+derivation {
+  name = "file-probe";
+  builder = "/nix/system/profile/bin/bash";
+  args = [ "/usr/src/test-flake/build-file-probe.sh" ];
+  system = "x86_64-unknown-redox";
+}
+NIX
+
+  cat > $out/file-build-multiarg.nix << 'NIX'
+derivation {
+  name = "file-probe-multiarg";
+  builder = "/nix/system/profile/bin/bash";
+  args = [ "--noprofile" "--norc" "/usr/src/test-flake/build-file-probe.sh" ];
+  system = "x86_64-unknown-redox";
+}
+NIX
 
   # ── flake.nix ──────────────────────────────────────────────────
   cat > $out/flake.nix << 'FLAKE'
