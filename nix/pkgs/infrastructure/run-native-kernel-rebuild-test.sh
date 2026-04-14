@@ -125,6 +125,12 @@ else
   echo "FUNC_TEST:llvm-tools-present:FAIL:ld.lld or llvm-objcopy missing"
 fi
 
+if [ -x /nix/system/profile/bin/nasm ]; then
+  echo "FUNC_TEST:nasm-present:PASS"
+else
+  echo "FUNC_TEST:nasm-present:FAIL:/nix/system/profile/bin/nasm missing"
+fi
+
 echo "=== bundle manifest ==="
 cat /usr/src/native-kernel-rebuild/bundle-manifest.json 2>/dev/null || true
 echo "=== end bundle manifest ==="

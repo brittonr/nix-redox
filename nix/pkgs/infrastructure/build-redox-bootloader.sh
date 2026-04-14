@@ -28,6 +28,20 @@ export CARGO_TARGET_X86_64_UNKNOWN_UEFI_RUSTFLAGS="--cfg aes_force_soft"
 
 mkdir -p "$HOME" "$CARGO_HOME" "$CARGO_TARGET_DIR" "$out/boot/EFI/BOOT"
 
+if [ -f /usr/src/native-kernel-rebuild/bootloader/.cargo/config.toml ]; then
+  mv /usr/src/native-kernel-rebuild/bootloader/.cargo/config.toml /usr/src/native-kernel-rebuild/bootloader/.cargo/config.toml.bundle
+fi
+cat > "$CARGO_HOME/config.toml" <<'EOF'
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "/usr/src/native-kernel-rebuild/bootloader/vendor"
+
+[net]
+offline = true
+EOF
+
 # cargo -Z build-std looks for rust-src at $(rustc --print sysroot)/lib/rustlib/src/rust/library.
 # The guest sysroot is read-only, so copy rustlib into TMPDIR and overlay rust-src there.
 real_sysroot=$(/nix/system/profile/bin/rustc --print sysroot 2>/dev/null || echo /nix/system/profile)

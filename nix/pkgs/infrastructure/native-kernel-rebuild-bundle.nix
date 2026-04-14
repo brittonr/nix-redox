@@ -141,7 +141,7 @@ let
     useCrane = true;
   };
 in
-pkgs.runCommand "native-kernel-rebuild-bundle" { } ''
+pkgs.runCommand "native-kernel-rebuild-bundle" { nativeBuildInputs = [ pkgs.python3 ]; } ''
   mkdir -p $out/kernel/.cargo $out/bootloader/.cargo $out/rust-src
 
   cp -r ${kernelSourceTree}/. $out/kernel
@@ -155,7 +155,7 @@ pkgs.runCommand "native-kernel-rebuild-bundle" { } ''
   replace-with = "vendored-sources"
 
   [source.vendored-sources]
-  directory = "vendor"
+  directory = "/usr/src/native-kernel-rebuild/kernel/vendor"
 
   [net]
   offline = true
@@ -172,13 +172,53 @@ pkgs.runCommand "native-kernel-rebuild-bundle" { } ''
   replace-with = "vendored-sources"
 
   [source.vendored-sources]
-  directory = "vendor"
+  directory = "/usr/src/native-kernel-rebuild/bootloader/vendor"
 
   [net]
   offline = true
   EOF
 
   cp -rL ${rustToolchain}/lib/rustlib/src/rust/library $out/rust-src/library
+  chmod -R u+w $out/rust-src/library
+
+  BUNDLE_RUST_SRC="$out/rust-src/library" ${pkgs.python3}/bin/python3 <<'PY'
+  import os
+  import re
+  from pathlib import Path
+
+  root = Path(os.environ["BUNDLE_RUST_SRC"]).resolve()
+  guest_root = Path("/usr/src/native-kernel-rebuild/rust-src/library")
+  path_re = re.compile(r'path = (["\'])([^"\']+)\1')
+
+  def rewrite_path(cargo_toml: Path, text: str) -> str:
+      def repl(match):
+          quote = match.group(1)
+          raw = match.group(2)
+          if raw.startswith("/") or raw.endswith(".rs"):
+              return match.group(0)
+          resolved = (cargo_toml.parent / raw).resolve()
+          try:
+              rel = resolved.relative_to(root)
+          except ValueError:
+              return match.group(0)
+          return f"path = {quote}{guest_root / rel}{quote}"
+
+      return path_re.sub(repl, text)
+
+  for cargo_toml in root.rglob('Cargo.toml'):
+      text = rewrite_path(cargo_toml, cargo_toml.read_text())
+      if cargo_toml == root / 'std' / 'Cargo.toml':
+          text = text.replace(
+              "[target.'cfg(any(windows, target_os = \"cygwin\"))'.dependencies.windows-targets]\npath = \"/usr/src/native-kernel-rebuild/rust-src/library/windows_targets\"\n\n",
+              "",
+          )
+          text = text.replace(
+              'windows_raw_dylib = ["windows-targets/windows_raw_dylib"]',
+              'windows_raw_dylib = []',
+          )
+      cargo_toml.write_text(text)
+  PY
+
   cp ${./run-native-kernel-rebuild-test.sh} $out/run-native-kernel-rebuild-test.sh
 
   cat > $out/bundle-manifest.json <<EOF
@@ -217,7 +257,8 @@ pkgs.runCommand "native-kernel-rebuild-bundle" { } ''
         "/nix/system/profile/bin/llvm-ar",
         "/nix/system/profile/bin/llvm-objcopy",
         "/nix/system/profile/bin/ld.lld",
-        "/nix/system/profile/bin/cc"
+        "/nix/system/profile/bin/cc",
+        "/nix/system/profile/bin/nasm"
       ]
     },
     "guest_test_script": "run-native-kernel-rebuild-test.sh"
