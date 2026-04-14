@@ -114,6 +114,7 @@ pkgs.runCommand "cc-dep-test-bundle" { } ''
   linker = "/nix/system/profile/bin/cc"
   CFG
 
-  # ── build.nix (for snix build --file) ──────────────────────────
+  # ── build.nix + builder script (for snix build --file) ────────
   cp ${./cc-dep-build.nix} $out/build.nix
+  cp ${./build-cc-dep.sh} $out/build-cc-dep.sh
 ''

@@ -213,6 +213,17 @@ pub fn build_allow_list(
     list.read_write.insert(normalize_path(output_dir));
     list.read_write.insert(normalize_path(tmp_dir));
 
+    // Read-write: fixed diagnostic files used by the Redox cc wrapper.
+    // The wrapper currently logs under /tmp instead of $TMPDIR.
+    for path in [
+        "/tmp/.cc-wrapper-raw-args",
+        "/tmp/.cc-wrapper-stderr",
+        "/tmp/.cc-wrapper-shared-cmd",
+        "/tmp/.cc-wrapper-last-err",
+    ] {
+        list.read_write.insert(normalize_path(path));
+    }
+
     // Read-write: device paths that builders need.
     // /dev/null is a sink — writes are discarded. Bash scripts use
     // `>/dev/null 2>/dev/null` extensively. Must be writable.
@@ -241,17 +252,15 @@ pub fn build_allow_list(
         list.read_only.insert(builder_path);
     }
 
-    // Read-only: builder arguments that are absolute file paths.
+    // Read-only: builder arguments that reference absolute paths.
     //
     // Derivation args like ["/tmp/build-hello-cargo.sh"] or
     // ["/usr/src/snix-redox/build-snix.sh"] reference files the
-    // builder must read. Non-path args ("-c", inline scripts) are
-    // harmlessly ignored — adding a non-existent path to the
-    // allow-list has no effect.
+    // builder must read. Inline shell bodies can also embed source-tree
+    // paths like `cd /usr/src/cc-dep-test`; harvest those too so the
+    // proxy allows the fixture source bundles during sandboxed builds.
     for arg in &drv.arguments {
-        if arg.starts_with('/') {
-            list.read_only.insert(normalize_path(arg));
-        }
+        add_arg_paths(&mut list, arg);
     }
 
     // Read-only: environment values that are absolute paths.
@@ -294,6 +303,37 @@ pub fn build_allow_list(
     }
 
     list
+}
+
+fn add_arg_paths(list: &mut AllowList, arg: &str) {
+    for token in arg.split_whitespace() {
+        let trimmed = token.trim_matches(|c: char| {
+            matches!(
+                c,
+                '\'' | '"' | ';' | '(' | ')' | '[' | ']' | '{' | '}' | ','
+            )
+        });
+        if !trimmed.starts_with('/') {
+            continue;
+        }
+
+        let normalized = normalize_path(trimmed);
+        list.read_only.insert(normalized.clone());
+
+        if trimmed.starts_with("/usr/src/") {
+            let path = Path::new(trimmed);
+            let looks_like_file = path
+                .file_name()
+                .map(|name| name.to_string_lossy().contains('.'))
+                .unwrap_or(false);
+            if looks_like_file {
+                if let Some(parent) = path.parent() {
+                    list.read_only
+                        .insert(normalize_path(&parent.to_string_lossy()));
+                }
+            }
+        }
+    }
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -500,6 +540,8 @@ mod tests {
         // Output and tmpdir are read-write.
         assert!(list.can_write(Path::new("/nix/store/out-hash-name/bin/foo")));
         assert!(list.can_write(Path::new("/tmp/build-1/scratch.o")));
+        assert!(list.can_write(Path::new("/tmp/.cc-wrapper-raw-args")));
+        assert!(list.can_write(Path::new("/tmp/.cc-wrapper-stderr")));
 
         // System paths are read-only (builder needs them).
         assert!(list.can_read(Path::new("/nix/system/profile/bin/bash")));
@@ -557,6 +599,37 @@ mod tests {
         assert!(list.can_read(Path::new("/tmp/build-hello-cargo.sh")));
         // But not writable.
         assert!(!list.can_write(Path::new("/tmp/build-hello-cargo.sh")));
+    }
+
+    #[test]
+    fn build_allow_list_harvests_inline_usr_src_paths() {
+        let mut drv = Derivation::default();
+        drv.builder = "/nix/system/profile/bin/bash".to_string();
+        drv.arguments = vec![
+            "--noprofile".to_string(),
+            "--norc".to_string(),
+            "-c".to_string(),
+            "cd /usr/src/cc-dep-test && cargo build --offline -j2".to_string(),
+        ];
+
+        let kp = KnownPaths::default();
+        let list = build_allow_list(&drv, &kp, "/nix/store/out", "/tmp/build");
+
+        assert!(list.can_read(Path::new("/usr/src/cc-dep-test/Cargo.toml")));
+        assert!(!list.can_write(Path::new("/usr/src/cc-dep-test/Cargo.toml")));
+    }
+
+    #[test]
+    fn build_allow_list_expands_usr_src_script_parent() {
+        let mut drv = Derivation::default();
+        drv.builder = "/nix/system/profile/bin/bash".to_string();
+        drv.arguments = vec!["/usr/src/ripgrep/build-ripgrep.sh".to_string()];
+
+        let kp = KnownPaths::default();
+        let list = build_allow_list(&drv, &kp, "/nix/store/out", "/tmp/build");
+
+        assert!(list.can_read(Path::new("/usr/src/ripgrep/build-ripgrep.sh")));
+        assert!(list.can_read(Path::new("/usr/src/ripgrep/Cargo.toml")));
     }
 
     #[test]

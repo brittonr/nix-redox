@@ -222,6 +222,10 @@ fn build_derivation_inner(
         env.insert(ev.key.clone(), actual_value);
     }
 
+    #[cfg(target_os = "redox")]
+    env.entry("RAYON_NUM_THREADS".to_string())
+        .or_insert_with(|| "4".to_string());
+
     // ── 3a. Write additional files (passAsFile / structuredAttrs) ──────
     for af in &build_request.additional_files {
         let file_path = build_dir
@@ -387,13 +391,11 @@ fn build_derivation_inner(
     cmd.stdout(std::process::Stdio::piped());
     cmd.stderr(std::process::Stdio::piped());
 
-    let (status, captured_stderr) = {
+    let (status, captured_stdout_len, captured_stderr) = {
+        eprintln!("buildfs: spawning builder {drv_name}");
         let mut child = cmd
             .spawn()
             .map_err(|e| BuildError::Io(format!("executing builder '{}': {e}", drv.builder)))?;
-        #[cfg(target_os = "redox")]
-        eprintln!("buildfs: child spawned pid={:?}", child.id());
-
         #[cfg(target_os = "redox")]
         if let Some(fd) = child_ns_fd_to_close.take() {
             let _ = syscall::close(fd);
@@ -441,16 +443,12 @@ fn build_derivation_inner(
         // Previously used try_wait()+sched_yield() poll loop, but
         // that was a workaround for pre-LAPIC scheduler starvation
         // and burns CPU spinning. Blocking wait is correct now.
-        #[cfg(target_os = "redox")]
-        eprintln!("buildfs: waiting for builder pid={:?}", child.id());
         let status = child
             .wait()
             .map_err(|e| BuildError::Io(format!("waiting for builder '{}': {e}", drv.builder)))?;
-        #[cfg(target_os = "redox")]
-        eprintln!("buildfs: builder exited status={status}");
 
         // Join reader threads (they should have gotten EOF by now).
-        let _stdout_data = stdout_thread
+        let stdout_data = stdout_thread
             .and_then(|r| r.ok())
             .and_then(|h| h.join().ok())
             .unwrap_or_default();
@@ -459,22 +457,36 @@ fn build_derivation_inner(
             .and_then(|h| h.join().ok())
             .unwrap_or_default();
 
-        (status, String::from_utf8_lossy(&stderr_data).into_owned())
+        eprintln!(
+            "buildfs: builder {} exited status={:?} stdout_bytes={} stderr_bytes={}",
+            drv_name,
+            status,
+            stdout_data.len(),
+            stderr_data.len()
+        );
+
+        (
+            status,
+            stdout_data.len(),
+            String::from_utf8_lossy(&stderr_data).into_owned(),
+        )
     };
 
     // ── 5b. Shut down the filesystem proxy ───────────────────────────
     #[cfg(target_os = "redox")]
     if let Some(proxy) = build_proxy.take() {
-        eprintln!("buildfs: proxy shutdown begin");
         proxy.shutdown();
-        eprintln!("buildfs: proxy shutdown done");
     }
 
     if !status.success() {
         return Err(BuildError::BuildFailed {
             drv_name,
             exit_code: status.code(),
-            stderr: captured_stderr,
+            stderr: if captured_stderr.is_empty() {
+                format!("builder stdout bytes: {captured_stdout_len}")
+            } else {
+                captured_stderr
+            },
         });
     }
 
@@ -1039,6 +1051,27 @@ pub fn run(expr: Option<String>, file: Option<String>) -> Result<(), Box<dyn std
 ///
 /// Reads `/etc/snix/config` for `sandbox=disabled` and checks `SNIX_NO_SANDBOX=1`.
 /// Returns true if sandbox should be disabled.
+fn debug_stderr(message: &str) {
+    let line = format!("{message}\n");
+
+    #[cfg(target_os = "redox")]
+    {
+        let _ = syscall::write(2, line.as_bytes());
+    }
+    #[cfg(not(target_os = "redox"))]
+    {
+        eprint!("{line}");
+    }
+
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/tmp/snix-debug.log")
+    {
+        let _ = std::io::Write::write_all(&mut file, line.as_bytes());
+    }
+}
+
 fn sandbox_disabled_by_config() -> bool {
     // Environment variable override
     if std::env::var("SNIX_NO_SANDBOX").unwrap_or_default() == "1" {
@@ -1064,27 +1097,51 @@ pub fn run_with_options(
     file: Option<String>,
     no_sandbox: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    debug_stderr(&format!(
+        "snix: run_with_options start expr_present={} file={:?} no_sandbox={}",
+        expr.is_some(),
+        file,
+        no_sandbox
+    ));
+
     let source = match (expr, file) {
         (Some(e), _) => e,
-        (_, Some(f)) => std::fs::read_to_string(&f)?,
+        (_, Some(f)) => {
+            debug_stderr(&format!("snix: reading {f}"));
+            let s = std::fs::read_to_string(&f)?;
+            debug_stderr(&format!("snix: read {} bytes from {f}", s.len()));
+            s
+        }
         _ => return Err("provide --expr or --file".into()),
     };
 
     // Evaluate `(expr).drvPath` to get the derivation path, keeping state
     // so we can access KnownPaths for the build.
     let drv_path_expr = format!("({source}).drvPath");
+    debug_stderr(&format!(
+        "snix: evaluating drvPath expression ({} bytes)",
+        drv_path_expr.len()
+    ));
     let (drv_path_str, state) = crate::eval::evaluate_with_state(&drv_path_expr)?;
+    debug_stderr(&format!("snix: drvPath eval result = {drv_path_str}"));
 
     // Strip surrounding quotes from the evaluated string
     let drv_path_str = drv_path_str.trim_matches('"').to_string();
 
     let drv_path = StorePath::<String>::from_absolute_path(drv_path_str.as_bytes())
         .map_err(|e| format!("invalid derivation path '{drv_path_str}': {e}"))?;
+    debug_stderr(&format!(
+        "snix: parsed drv path {}",
+        drv_path.to_absolute_path()
+    ));
 
     let known_paths_ref = state.known_paths.borrow();
+    debug_stderr("snix: opening pathinfo db");
     let db = PathInfoDb::open().map_err(|e| format!("opening pathinfo db: {e}"))?;
 
+    debug_stderr("snix: starting build_needed_with_options");
     let result = build_needed_with_options(&drv_path, &*known_paths_ref, &db, no_sandbox)?;
+    debug_stderr("snix: build_needed_with_options finished");
 
     // Print output paths. Explicit flush required — stdout is fully
     // buffered when redirected to a file, and Redox's exit handlers

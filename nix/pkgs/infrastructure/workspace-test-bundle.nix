@@ -85,6 +85,7 @@ target = "x86_64-unknown-redox"
 linker = "/nix/system/profile/bin/cc"
 CFG
 
-  # build.nix (external file to avoid Nix string escaping issues)
+  # build.nix + builder script (external files avoid parser issues)
   cp ${./workspace-build.nix} $out/build.nix
+  cp ${./build-workspace.sh} $out/build-workspace.sh
 ''

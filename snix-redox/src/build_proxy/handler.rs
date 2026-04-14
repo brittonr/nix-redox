@@ -23,21 +23,44 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use super::io_worker::{BuildFsIoWorker, MmapResult, OpenPathResult};
 
 use redox_scheme::scheme::SchemeSync;
 use redox_scheme::{CallerCtx, OpenResult};
-use syscall::data::Stat;
+use syscall::data::{Stat, StatVfs, TimeSpec};
 use syscall::dirent::{DirEntry as RedoxDirEntry, DirentBuf, DirentKind};
 use syscall::error::{Error, Result, EACCES, EBADF, EIO, EISDIR, ENOENT, ENOTDIR, EOPNOTSUPP};
 use syscall::flag::{
-    MapFlags, MunmapFlags, F_GETFD, F_GETFL, F_SETFD, F_SETFL, O_ACCMODE, O_APPEND, O_CREAT,
-    O_DIRECTORY, O_EXCL, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY,
+    MapFlags, MunmapFlags, AT_REMOVEDIR, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFD,
+    F_SETFL, MODE_PERM, O_ACCMODE, O_APPEND, O_CREAT, O_DIRECTORY, O_EXCL, O_RDONLY, O_RDWR,
+    O_TRUNC, O_WRONLY,
 };
 use syscall::schemev2::NewFdFlags;
 
 use super::allow_list::{AllowList, Permission};
+
+static DENY_LOG_BUDGET: AtomicUsize = AtomicUsize::new(64);
+static OPEN_ERR_LOG_BUDGET: AtomicUsize = AtomicUsize::new(64);
+
+fn log_denied(op: &str, path: &Path, detail: &str) {
+    if DENY_LOG_BUDGET
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1))
+        .is_ok()
+    {
+        eprintln!("buildfs: deny {op} path={:?} {detail}", path);
+    }
+}
+
+fn log_open_error(op: &str, path: &Path, errno: i32) {
+    if OPEN_ERR_LOG_BUDGET
+        .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_sub(1))
+        .is_ok()
+    {
+        eprintln!("buildfs: open error {op} path={:?} errno={}", path, errno);
+    }
+}
 
 // ── Flag Translation ───────────────────────────────────────────────────────
 
@@ -61,6 +84,8 @@ pub struct OpenFlags {
     pub append: bool,
     /// Open must be a directory (O_DIRECTORY).
     pub directory: bool,
+    /// Permission bits carried in Redox open flags when creating files.
+    pub mode_perm: usize,
 }
 
 /// Translate raw Redox open flags into the proxy's internal representation.
@@ -85,6 +110,7 @@ pub fn translate_open_flags(raw: usize) -> OpenFlags {
         exclusive: raw & O_EXCL != 0,
         append: raw & O_APPEND != 0,
         directory: raw & O_DIRECTORY != 0,
+        mode_perm: raw & MODE_PERM as usize,
     }
 }
 
@@ -112,7 +138,7 @@ impl OpenFlags {
         if self.directory {
             f |= O_DIRECTORY;
         }
-        f
+        f | self.mode_perm
     }
 }
 
@@ -252,12 +278,6 @@ pub struct BuildFsHandler {
     pub io_worker: BuildFsIoWorker,
     /// Active mmaps keyed by the scheme handle and mapping range.
     active_mmaps: HashMap<ActiveMapKey, Vec<u64>>,
-    /// True after at least one openat request from a client.
-    /// Guards the "all handles closed → exit" optimization so the
-    /// proxy doesn't exit if the scheme_root handle is closed before
-    /// any real client connects (race between cap_fd close and the
-    /// first builder file operation).
-    pub had_client_opens: bool,
     /// Per-instance handle ID counter (not global static).
     next_id: usize,
 }
@@ -269,7 +289,6 @@ impl BuildFsHandler {
             handles: HashMap::new(),
             io_worker,
             active_mmaps: HashMap::new(),
-            had_client_opens: false,
             next_id: 1,
         }
     }
@@ -298,6 +317,27 @@ impl BuildFsHandler {
                 return id;
             }
         }
+    }
+
+    fn dup_handle(&mut self, old_id: usize) -> Result<usize> {
+        let new_id = self.alloc_id();
+        let handle = match self.handles.get(&old_id) {
+            Some(ProxyHandle::File(fh)) => ProxyHandle::File(FileHandle {
+                real_path: fh.real_path.clone(),
+                scheme_path: fh.scheme_path.clone(),
+                writable: fh.writable,
+                append: fh.append,
+                size: fh.size,
+                mode: fh.mode,
+            }),
+            Some(ProxyHandle::Dir(dh)) => ProxyHandle::Dir(DirHandle {
+                real_path: dh.real_path.clone(),
+                scheme_path: dh.scheme_path.clone(),
+            }),
+            None => return Err(Error::new(EBADF)),
+        };
+        self.handles.insert(new_id, handle);
+        Ok(new_id)
     }
 
     /// Resolve a scheme path to an absolute filesystem path.
@@ -373,9 +413,6 @@ impl SchemeSync for BuildFsHandler {
         let (abs_path, scheme_path) = self.resolve_open_path(dirfd, path)?;
         let oflags = translate_open_flags(flags);
 
-        // A real client connected (not the scheme_root setup).
-        self.had_client_opens = true;
-
         // Check allow-list.
         let perm = self.check_with_symlink_resolution(&abs_path);
 
@@ -395,21 +432,21 @@ impl SchemeSync for BuildFsHandler {
             perm
         };
 
-        eprintln!(
-            "buildfs: openat {:?} flags={:?} perm={:?}",
-            abs_path, oflags, effective_perm
-        );
-        if abs_path == Path::new("/dev/null") {
-            eprintln!(
-                "buildfs: debug openat /dev/null scheme_path={} dirfd={}",
-                scheme_path, dirfd
-            );
-        }
         if effective_perm == Permission::Denied {
+            log_denied(
+                "openat",
+                &abs_path,
+                &format!("flags={flags:#x} perm={perm:?} effective={effective_perm:?}"),
+            );
             return Err(Error::new(EACCES));
         }
 
         if oflags.wants_write() && effective_perm != Permission::ReadWrite {
+            log_denied(
+                "openat-write",
+                &abs_path,
+                &format!("flags={flags:#x} perm={perm:?} effective={effective_perm:?}"),
+            );
             return Err(Error::new(EACCES));
         }
 
@@ -425,7 +462,10 @@ impl SchemeSync for BuildFsHandler {
             let opened = self
                 .io_worker
                 .open_path(&abs_path, O_RDONLY | O_DIRECTORY)
-                .map_err(|_| Error::new(ENOTDIR))?;
+                .map_err(|e| {
+                    log_open_error("dir", &abs_path, e.errno);
+                    Error::new(ENOTDIR)
+                })?;
             self.handles.insert(
                 id,
                 ProxyHandle::Dir(DirHandle {
@@ -453,6 +493,7 @@ impl SchemeSync for BuildFsHandler {
             .io_worker
             .open_path(&abs_path, real_flags)
             .map_err(|e| {
+                log_open_error("file", &abs_path, e.errno);
                 if e.errno == syscall::ENOENT as i32 {
                     Error::new(ENOENT)
                 } else if e.errno == syscall::EACCES as i32 {
@@ -474,12 +515,6 @@ impl SchemeSync for BuildFsHandler {
                 }),
             );
         } else {
-            if scheme_path == "dev/null" {
-                eprintln!(
-                    "buildfs: debug file handle scheme_path={} real_path={:?}",
-                    scheme_path, resolved_path
-                );
-            }
             self.handles.insert(
                 id,
                 ProxyHandle::File(FileHandle {
@@ -499,6 +534,29 @@ impl SchemeSync for BuildFsHandler {
         })
     }
 
+    fn unlinkat(&mut self, fd: usize, path: &str, flags: usize, _ctx: &CallerCtx) -> Result<()> {
+        let (abs_path, _) = self.resolve_open_path(fd, path)?;
+        let perm = self.check_with_symlink_resolution(&abs_path);
+        if perm != Permission::ReadWrite {
+            log_denied(
+                "unlinkat",
+                &abs_path,
+                &format!("flags={flags:#x} perm={perm:?}"),
+            );
+            return Err(Error::new(EACCES));
+        }
+        let directory = flags & AT_REMOVEDIR != 0;
+        self.io_worker.unlink_path(&abs_path, directory)
+    }
+
+    fn dup(&mut self, old_id: usize, _buf: &[u8], _ctx: &CallerCtx) -> Result<OpenResult> {
+        let new_id = self.dup_handle(old_id)?;
+        Ok(OpenResult::ThisScheme {
+            number: new_id,
+            flags: NewFdFlags::POSITIONED,
+        })
+    }
+
     fn read(
         &mut self,
         id: usize,
@@ -509,13 +567,6 @@ impl SchemeSync for BuildFsHandler {
     ) -> Result<usize> {
         match self.handles.get(&id) {
             Some(ProxyHandle::File(fh)) => {
-                eprintln!(
-                    "buildfs: read id={} len={} offset={} path={:?}",
-                    id,
-                    buf.len(),
-                    offset,
-                    fh.scheme_path
-                );
                 let start = std::time::Instant::now();
                 let data = self.io_worker.read_at(&fh.real_path, offset, buf.len())?;
                 let elapsed = start.elapsed();
@@ -530,21 +581,6 @@ impl SchemeSync for BuildFsHandler {
                 }
                 let n = data.len().min(buf.len());
                 buf[..n].copy_from_slice(&data[..n]);
-                if fh.scheme_path.contains("dev/null") {
-                    let hex: Vec<String> = data
-                        .iter()
-                        .take(16)
-                        .map(|byte| format!("{:02x}", byte))
-                        .collect();
-                    eprintln!(
-                        "buildfs: read result id={} path={:?} real_path={:?} returned={} preview={:?}",
-                        id,
-                        fh.scheme_path,
-                        fh.real_path,
-                        n,
-                        hex
-                    );
-                }
                 Ok(n)
             }
             Some(ProxyHandle::Dir(_)) => Err(Error::new(EISDIR)),
@@ -590,7 +626,6 @@ impl SchemeSync for BuildFsHandler {
     }
 
     fn fsize(&mut self, id: usize, _ctx: &CallerCtx) -> Result<u64> {
-        eprintln!("buildfs: fsize id={}", id);
         match self.handles.get(&id) {
             Some(ProxyHandle::File(fh)) => Ok(fh.size),
             Some(ProxyHandle::Dir(_)) => Ok(0),
@@ -611,7 +646,6 @@ impl SchemeSync for BuildFsHandler {
             format!("file:/{}", scheme_path.trim_start_matches('/'))
         };
 
-        eprintln!("buildfs: fpath id={} -> {}", id, full);
         let bytes = full.as_bytes();
         let len = bytes.len().min(buf.len());
         buf[..len].copy_from_slice(&bytes[..len]);
@@ -624,33 +658,21 @@ impl SchemeSync for BuildFsHandler {
             return Err(Error::new(EACCES));
         }
 
-        let (old_path, is_dir) = match self.handles.get(&id) {
-            Some(ProxyHandle::File(fh)) => (fh.real_path.clone(), false),
-            Some(ProxyHandle::Dir(dh)) => (dh.real_path.clone(), true),
+        let (old_path, old_scheme_path, is_dir) = match self.handles.get(&id) {
+            Some(ProxyHandle::File(fh)) => (fh.real_path.clone(), fh.scheme_path.clone(), false),
+            Some(ProxyHandle::Dir(dh)) => (dh.real_path.clone(), dh.scheme_path.clone(), true),
             None => return Err(Error::new(EBADF)),
         };
 
-        eprintln!(
-            "buildfs: frename id={} from {:?} to {:?}",
-            id, old_path, target_path
-        );
         self.io_worker.rename_path(&old_path, &target_path)?;
 
-        if is_dir {
-            if let Some(ProxyHandle::Dir(dh)) = self.handles.get_mut(&id) {
-                dh.real_path = target_path;
-                dh.scheme_path = path.trim_matches('/').to_string();
-            }
-        } else if let Some(ProxyHandle::File(fh)) = self.handles.get_mut(&id) {
-            fh.real_path = target_path;
-            fh.scheme_path = path.trim_matches('/').to_string();
-        }
+        let new_scheme_path = path.trim_matches('/').to_string();
+        self.rewrite_open_handle_paths(&old_path, &target_path, &old_scheme_path, &new_scheme_path);
 
         Ok(0)
     }
 
     fn fstat(&mut self, id: usize, stat: &mut Stat, _ctx: &CallerCtx) -> Result<()> {
-        eprintln!("buildfs: fstat id={}", id);
         match self.handles.get_mut(&id) {
             Some(ProxyHandle::File(fh)) => {
                 if let Ok(real_stat) = self.io_worker.stat_path(&fh.real_path, false) {
@@ -710,11 +732,6 @@ impl SchemeSync for BuildFsHandler {
             None => return Err(Error::new(EBADF)),
         };
 
-        eprintln!(
-            "buildfs: getdents {:?} offset={} under_allowed={}",
-            dir_path, opaque_offset, is_under_allowed
-        );
-
         // Collect visible entries.
         // For directories under an allowed prefix: read real entries unfiltered.
         // For ancestor directories (/, /nix, /tmp): filter or synthesize.
@@ -723,17 +740,18 @@ impl SchemeSync for BuildFsHandler {
         } else {
             self.list_visible_children(&dir_path)
         };
-        if dir_path
-            .to_string_lossy()
-            .contains("rustlib/x86_64-unknown-redox/lib")
-        {
+
+        let dir_path_text = dir_path.to_string_lossy();
+        if dir_path_text.contains("/vendor") || dir_path_text.contains("/target/debug/deps") {
             let sample: Vec<_> = entries
                 .iter()
                 .take(8)
                 .map(|(name, _)| name.clone())
                 .collect();
             eprintln!(
-                "buildfs: rustlib entries count={} sample={:?}",
+                "buildfs: traced getdents path={:?} allowed={} entries={} sample={:?}",
+                dir_path,
+                is_under_allowed,
                 entries.len(),
                 sample
             );
@@ -788,6 +806,26 @@ impl SchemeSync for BuildFsHandler {
         }
     }
 
+    fn fstatvfs(&mut self, id: usize, stat: &mut StatVfs, _ctx: &CallerCtx) -> Result<()> {
+        match self.handles.get(&id) {
+            Some(ProxyHandle::File(_)) | Some(ProxyHandle::Dir(_)) => {
+                stat.f_bsize = 4096;
+                stat.f_blocks = 0;
+                stat.f_bfree = 0;
+                stat.f_bavail = 0;
+                Ok(())
+            }
+            None => Err(Error::new(EBADF)),
+        }
+    }
+
+    fn futimens(&mut self, id: usize, _times: &[TimeSpec], _ctx: &CallerCtx) -> Result<()> {
+        match self.handles.get(&id) {
+            Some(ProxyHandle::File(_)) | Some(ProxyHandle::Dir(_)) => Ok(()),
+            None => Err(Error::new(EBADF)),
+        }
+    }
+
     fn mmap_prep(
         &mut self,
         id: usize,
@@ -802,10 +840,6 @@ impl SchemeSync for BuildFsHandler {
             None => return Err(Error::new(EBADF)),
         };
 
-        eprintln!(
-            "buildfs: mmap_prep id={} offset={} size={} flags={:?} path={:?}",
-            id, offset, size, flags, real_path
-        );
         let MmapResult { token, base_addr } =
             self.io_worker.mmap_path(&real_path, offset, size, flags)?;
         self.active_mmaps
@@ -827,10 +861,6 @@ impl SchemeSync for BuildFsHandler {
         flags: MunmapFlags,
         _ctx: &CallerCtx,
     ) -> Result<()> {
-        eprintln!(
-            "buildfs: munmap id={} offset={} size={} flags={:?}",
-            id, offset, size, flags
-        );
         let key = ActiveMapKey {
             handle_id: id,
             offset,
@@ -852,6 +882,7 @@ impl SchemeSync for BuildFsHandler {
         const F_SETLKW_CMD: usize = 7;
 
         match cmd {
+            F_DUPFD | F_DUPFD_CLOEXEC => self.dup_handle(id),
             F_GETFL => match self.handles.get(&id) {
                 Some(ProxyHandle::File(fh)) => {
                     let mut flags = if fh.writable { O_RDWR } else { O_RDONLY };
@@ -896,7 +927,6 @@ impl SchemeSync for BuildFsHandler {
     }
 
     fn on_close(&mut self, id: usize) {
-        eprintln!("buildfs: close id={}", id);
         self.handles.remove(&id);
 
         let keys: Vec<_> = self
@@ -948,6 +978,46 @@ impl BuildFsHandler {
         false
     }
 
+    fn rewrite_open_handle_paths(
+        &mut self,
+        old_real_root: &Path,
+        new_real_root: &Path,
+        old_scheme_root: &str,
+        new_scheme_root: &str,
+    ) {
+        let old_scheme_root = Path::new(old_scheme_root);
+        let new_scheme_root = Path::new(new_scheme_root);
+
+        for handle in self.handles.values_mut() {
+            match handle {
+                ProxyHandle::File(fh) => {
+                    if let Some(updated) =
+                        rewrite_path_prefix(&fh.real_path, old_real_root, new_real_root)
+                    {
+                        fh.real_path = updated;
+                    }
+                    if let Some(updated) =
+                        rewrite_scheme_prefix(&fh.scheme_path, old_scheme_root, new_scheme_root)
+                    {
+                        fh.scheme_path = updated;
+                    }
+                }
+                ProxyHandle::Dir(dh) => {
+                    if let Some(updated) =
+                        rewrite_path_prefix(&dh.real_path, old_real_root, new_real_root)
+                    {
+                        dh.real_path = updated;
+                    }
+                    if let Some(updated) =
+                        rewrite_scheme_prefix(&dh.scheme_path, old_scheme_root, new_scheme_root)
+                    {
+                        dh.scheme_path = updated;
+                    }
+                }
+            }
+        }
+    }
+
     /// List visible children of an ancestor directory.
     ///
     /// For directories that are NOT directly under an allowed prefix
@@ -991,6 +1061,26 @@ impl BuildFsHandler {
             })
             .collect()
     }
+}
+
+fn rewrite_path_prefix(path: &Path, old_root: &Path, new_root: &Path) -> Option<PathBuf> {
+    let rest = path.strip_prefix(old_root).ok()?;
+    if rest.as_os_str().is_empty() {
+        Some(new_root.to_path_buf())
+    } else {
+        Some(new_root.join(rest))
+    }
+}
+
+fn rewrite_scheme_prefix(path: &str, old_root: &Path, new_root: &Path) -> Option<String> {
+    let path = Path::new(path);
+    let rest = path.strip_prefix(old_root).ok()?;
+    let updated = if rest.as_os_str().is_empty() {
+        new_root.to_path_buf()
+    } else {
+        new_root.join(rest)
+    };
+    Some(updated.to_string_lossy().into_owned())
 }
 
 /// Read directory entries from a real directory via raw syscalls.

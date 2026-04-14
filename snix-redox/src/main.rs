@@ -645,7 +645,43 @@ enum ChannelCommand {
     },
 }
 
+fn debug_log(message: &str) {
+    let line = format!("{message}\n");
+
+    #[cfg(target_os = "redox")]
+    {
+        let _ = syscall::write(2, line.as_bytes());
+    }
+    #[cfg(not(target_os = "redox"))]
+    {
+        eprint!("{line}");
+    }
+
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("/tmp/snix-debug.log")
+    {
+        use std::io::Write;
+        let _ = file.write_all(line.as_bytes());
+    }
+}
+
 fn main() {
+    std::panic::set_hook(Box::new(|info| {
+        let msg = format!("snix panic: {info}\n");
+        #[cfg(target_os = "redox")]
+        {
+            let _ = syscall::write(2, msg.as_bytes());
+        }
+        #[cfg(not(target_os = "redox"))]
+        {
+            use std::io::Write;
+            let _ = std::io::stderr().write_all(msg.as_bytes());
+            let _ = std::io::stderr().flush();
+        }
+    }));
+
     // Bootstrap TLS: install ring crypto provider and ensure CA certs are
     // discoverable. Must happen before any reqwest Client is constructed
     // (which happens inside SnixStoreIO → Fetcher::new()).
@@ -677,6 +713,12 @@ fn main() {
             timeout,
             no_sandbox,
         } => {
+            debug_log(&format!(
+                "snix: main build installable={installable:?} expr_present={} file={file:?} bridge={} no_sandbox={}",
+                expr.is_some(),
+                bridge,
+                no_sandbox
+            ));
             // Check if we got a flake installable (contains '#')
             if let Some(ref inst_str) = installable {
                 if let Some(inst) = flake::parse_installable(inst_str) {
@@ -1015,7 +1057,17 @@ fn main() {
     };
 
     if let Err(e) = result {
-        eprintln!("error: {e}");
+        let msg = format!("error: {e}\n");
+        #[cfg(target_os = "redox")]
+        {
+            let _ = syscall::write(2, msg.as_bytes());
+        }
+        #[cfg(not(target_os = "redox"))]
+        {
+            use std::io::Write;
+            let _ = std::io::stderr().write_all(msg.as_bytes());
+            let _ = std::io::stderr().flush();
+        }
         std::process::exit(1);
     }
 }

@@ -22,7 +22,7 @@ use std::thread;
 use syscall::data::{Map, Stat};
 use syscall::dirent::DirentKind;
 use syscall::error::{Error, Result, EBADF, EIO};
-use syscall::flag::{MapFlags, O_CREAT, O_DIRECTORY, O_RDONLY, O_RDWR, O_TRUNC};
+use syscall::flag::{MapFlags, AT_REMOVEDIR, O_CREAT, O_DIRECTORY, O_RDONLY, O_RDWR, O_TRUNC};
 
 pub struct OpenPathResult {
     pub stat: Stat,
@@ -95,6 +95,11 @@ enum IoRequest {
     RenamePath {
         old_path: PathBuf,
         new_path: PathBuf,
+        response: mpsc::Sender<Result<()>>,
+    },
+    UnlinkPath {
+        path: PathBuf,
+        directory: bool,
         response: mpsc::Sender<Result<()>>,
     },
     MmapPath {
@@ -274,6 +279,18 @@ impl BuildFsIoWorker {
             IoRequest::RenamePath {
                 old_path: old_path.to_path_buf(),
                 new_path: new_path.to_path_buf(),
+                response: tx,
+            },
+            rx,
+        )
+    }
+
+    pub fn unlink_path(&self, path: &Path, directory: bool) -> Result<()> {
+        let (tx, rx) = mpsc::channel();
+        self.request(
+            IoRequest::UnlinkPath {
+                path: path.to_path_buf(),
+                directory,
                 response: tx,
             },
             rx,
@@ -474,6 +491,19 @@ fn worker_main(
                     &new_path,
                 ));
             }
+            IoRequest::UnlinkPath {
+                path,
+                directory,
+                response,
+            } => {
+                let _ = response.send(worker_unlink_path(
+                    root_fd,
+                    profile_root_fd,
+                    store_root_fd,
+                    &path,
+                    directory,
+                ));
+            }
             IoRequest::MmapPath {
                 path,
                 offset,
@@ -544,12 +574,6 @@ fn worker_open_path(
         }
         _ => raw_path.clone().unwrap_or_else(|| path.to_path_buf()),
     };
-    if clean == "dev/null" || clean == "dev/urandom" || clean == "dev/random" {
-        eprintln!(
-            "buildfs-io: open_path {:?} flags={:#x} raw_fpath={:?} resolved={:?}",
-            path, flags, raw_path, resolved_path
-        );
-    }
     raw_close(fd);
     Ok(OpenPathResult {
         stat,
@@ -575,10 +599,6 @@ fn worker_read_at(
     let clean = path.to_string_lossy();
     let clean = clean.trim_start_matches('/');
     if clean == "dev/null" {
-        eprintln!(
-            "buildfs-io: read_at dev/null offset={} len={} -> eof",
-            offset, len
-        );
         return Ok(Vec::new());
     }
     if clean == "dev/zero" {
@@ -772,6 +792,29 @@ fn worker_rename_path(
     result
 }
 
+fn worker_unlink_path(
+    root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
+    path: &Path,
+    directory: bool,
+) -> Result<()> {
+    let path_str = path.to_string_lossy();
+    let clean = path_str.trim_start_matches('/');
+    let flags = if directory { AT_REMOVEDIR } else { 0 };
+
+    if clean == "nix/system/profile" || clean.starts_with("nix/system/profile/") {
+        let rel = clean.strip_prefix("nix/system/profile/").unwrap_or(".");
+        return syscall::unlinkat(profile_root_fd.ok_or(Error::new(EIO))?, rel, flags).map(|_| ());
+    }
+    if clean == "nix/store" || clean.starts_with("nix/store/") {
+        let rel = clean.strip_prefix("nix/store/").unwrap_or(".");
+        return syscall::unlinkat(store_root_fd.ok_or(Error::new(EIO))?, rel, flags).map(|_| ());
+    }
+
+    syscall::unlinkat(root_fd, clean, flags).map(|_| ())
+}
+
 fn worker_mmap_path(
     root_fd: usize,
     profile_root_fd: Option<usize>,
@@ -844,7 +887,11 @@ fn worker_read_dir(
     rustlib_dir_cache: &HashMap<PathBuf, Vec<(String, DirentKind)>>,
     path: &Path,
 ) -> Result<Vec<(String, DirentKind)>> {
-    let trace_rustlib = path.to_string_lossy().contains("rustlib");
+    let cache_key = rustlib_cache_key(path);
+    if let Some(cached) = rustlib_dir_cache.get(&cache_key) {
+        return Ok(cached.clone());
+    }
+
     let dir_fd = open_fd(
         root_fd,
         profile_root_fd,
@@ -854,17 +901,6 @@ fn worker_read_dir(
         path,
         O_RDONLY | O_DIRECTORY,
     )?;
-    let resolved_path = path.to_path_buf();
-    if trace_rustlib {
-        eprintln!(
-            "buildfs-io: read_dir request={:?} resolved={:?}",
-            path, resolved_path
-        );
-        eprintln!(
-            "buildfs-io: read_dir opened final fpath={:?}",
-            raw_fpath(dir_fd)
-        );
-    }
 
     let mut entries = Vec::new();
     let mut raw_buf = [0u8; 8192];
@@ -886,58 +922,15 @@ fn worker_read_dir(
             }
         };
 
-        let before = entries.len();
         parse_raw_dirents(&raw_buf[..n], &mut entries);
-        if trace_rustlib {
-            let added = &entries[before..];
-            let sample: Vec<_> = added.iter().take(8).map(|(name, _)| name.clone()).collect();
-            eprintln!(
-                "buildfs-io: read_dir chunk bytes={} parsed={} sample={:?}",
-                n,
-                added.len(),
-                sample
-            );
-        }
     }
 
-    if entries.is_empty() {
-        let cache_key = PathBuf::from(path.to_string_lossy().trim_start_matches('/'));
-        if let Some(cached) = rustlib_dir_cache.get(&cache_key) {
-            if trace_rustlib {
-                eprintln!(
-                    "buildfs-io: read_dir using pre-scanned cache for {:?} ({} entries)",
-                    cache_key,
-                    cached.len()
-                );
-            }
-            entries = cached.clone();
-        } else if trace_rustlib {
-            let sample_keys: Vec<_> = rustlib_dir_cache
-                .keys()
-                .take(8)
-                .map(|key| key.display().to_string())
-                .collect();
-            eprintln!(
-                "buildfs-io: cache miss for {:?}; known keys={:?}",
-                cache_key, sample_keys
-            );
-        }
-    }
-
-    if trace_rustlib {
-        let sample: Vec<_> = entries
-            .iter()
-            .take(8)
-            .map(|(name, _)| name.clone())
-            .collect();
-        eprintln!(
-            "buildfs-io: read_dir final count={} sample={:?}",
-            entries.len(),
-            sample
-        );
-    }
     raw_close(dir_fd);
     Ok(entries)
+}
+
+fn rustlib_cache_key(path: &Path) -> PathBuf {
+    PathBuf::from(path.to_string_lossy().trim_start_matches('/'))
 }
 
 fn open_fd(
@@ -1064,34 +1057,17 @@ fn mkdir_p_via_root_fd(root_fd: usize, path: &Path) {
 }
 
 fn parse_raw_dirents(buf: &[u8], entries: &mut Vec<(String, DirentKind)>) {
-    const HEADER_SIZE: usize = 8 + 8 + 2 + 1;
-
-    let mut pos = 0;
-    while pos + HEADER_SIZE <= buf.len() {
-        let record_len = u16::from_ne_bytes(buf[pos + 16..pos + 18].try_into().unwrap_or([0; 2]));
-        let kind_byte = buf[pos + 18];
-
-        if record_len == 0 || pos + record_len as usize > buf.len() {
+    for entry in syscall::dirent::DirentIter::new(buf) {
+        let Ok((header, name_bytes)) = entry else {
             break;
+        };
+        let Ok(name) = std::str::from_utf8(name_bytes) else {
+            continue;
+        };
+        if name == "." || name == ".." {
+            continue;
         }
-
-        let name_start = pos + HEADER_SIZE;
-        let name_end = pos + record_len as usize;
-        let name_bytes = &buf[name_start..name_end];
-        let nul = name_bytes
-            .iter()
-            .position(|b| *b == 0)
-            .unwrap_or(name_bytes.len());
-
-        if nul != 0 {
-            if let Ok(name) = std::str::from_utf8(&name_bytes[..nul]) {
-                if name != "." && name != ".." {
-                    let kind = DirentKind::try_from_raw(kind_byte).unwrap_or(DirentKind::Regular);
-                    entries.push((name.to_string(), kind));
-                }
-            }
-        }
-
-        pos += record_len as usize;
+        let kind = DirentKind::try_from_raw(header.kind).unwrap_or(DirentKind::Regular);
+        entries.push((name.to_string(), kind));
     }
 }
