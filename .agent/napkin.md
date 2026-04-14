@@ -125,6 +125,12 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - For post-rebuild assertions, prefer shell builtins/pattern matching (`case`, `[[ ... == *...* ]]`) or resolve absolute tool paths before the rebuild.
 - Non-userutils startup is emitted as `99_startup.service` with `cmd = "/startup.sh"` and `type = "oneshot_async"`; `etc/init.toml` can stay empty.
 
+### `pkgs.nasm` in a Redox test profile did not produce a guest `nasm` binary
+- In `kernel-rebuild-test`, appending `pkgs.nasm` to `/environment.systemPackages` still left `/nix/system/profile/bin/nasm` missing in the guest.
+- The focused native kernel rebuild now gets past the cargo path-URL failure and reaches `kernel/build.rs`, where `Command::new("nasm")` fails the trampoline build.
+- Evidence from guest preflight: `/usr/src/native-kernel-rebuild/kernel/build-redox-kernel.sh: line 84: nasm: command not found` and `FUNC_TEST:nasm-present:FAIL:/nix/system/profile/bin/nasm missing`.
+- Treat `pkgs.nasm` here as not-yet-usable guest tooling; next fix is either a real Redox nasm package path or a staged trampoline artifact fallback.
+
 ### Rebuild VM test traps I hit this pass
 - I forgot `let PATH = "/nix/system/profile/bin:/bin:/usr/bin"; export PATH` at the top of a startup-script test, then blamed bash when `grep`/`sed` were just missing from PATH.
 - I put single quotes inside an Ion `bash -c '...'` block (`grep '"id"' ...`) and got an Ion parse error instead of a bash error. Use double quotes inside the bash snippet.

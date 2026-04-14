@@ -27,6 +27,20 @@ export CARGO_TERM_PROGRESS_WIDTH="${CARGO_TERM_PROGRESS_WIDTH:-80}"
 
 mkdir -p "$HOME" "$CARGO_HOME" "$CARGO_TARGET_DIR" "$out/boot"
 
+if [ -f /usr/src/native-kernel-rebuild/kernel/.cargo/config.toml ]; then
+  mv /usr/src/native-kernel-rebuild/kernel/.cargo/config.toml /usr/src/native-kernel-rebuild/kernel/.cargo/config.toml.bundle
+fi
+cat > "$CARGO_HOME/config.toml" <<'EOF'
+[source.crates-io]
+replace-with = "vendored-sources"
+
+[source.vendored-sources]
+directory = "/usr/src/native-kernel-rebuild/kernel/vendor"
+
+[net]
+offline = true
+EOF
+
 # cargo -Z build-std looks for rust-src at $(rustc --print sysroot)/lib/rustlib/src/rust/library.
 # The guest sysroot is read-only, so copy rustlib into TMPDIR and overlay rust-src there.
 real_sysroot=$(/nix/system/profile/bin/rustc --print sysroot 2>/dev/null || echo /nix/system/profile)
@@ -62,6 +76,17 @@ if ! cargo metadata --manifest-path "$custom_sysroot/lib/rustlib/src/rust/librar
 fi
 
 cd /usr/src/native-kernel-rebuild/kernel
+if ! cargo metadata --manifest-path "$custom_sysroot/lib/rustlib/src/rust/library/Cargo.toml" --no-deps --format-version 1 >/tmp/kernel-rust-src-from-kernel-dir.json 2>/tmp/kernel-rust-src-from-kernel-dir.err; then
+  echo "[build-redox-kernel] cargo metadata from kernel dir on custom rust-src workspace failed" >&2
+  cat /tmp/kernel-rust-src-from-kernel-dir.err >&2 || true
+fi
+
+if ! nasm -f bin -o "$TMPDIR/trampoline-preflight" src/asm/x86_64/trampoline.asm >/tmp/kernel-nasm.out 2>/tmp/kernel-nasm.err; then
+  echo "[build-redox-kernel] nasm preflight failed" >&2
+  cat /tmp/kernel-nasm.err >&2 || true
+else
+  echo "[build-redox-kernel] nasm preflight ok" >&2
+fi
 
 cargo rustc \
   --locked \
