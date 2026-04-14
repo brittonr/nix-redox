@@ -339,6 +339,26 @@ let
     inherit pkgs;
   };
 
+  nativeKernelRebuildBundle = import ../pkgs/infrastructure/native-kernel-rebuild-bundle.nix {
+    inherit
+      pkgs
+      lib
+      craneLib
+      rustToolchain
+      sysrootVendor
+      redoxTarget
+      ;
+    inherit (redoxLib) vendor;
+    inherit (inputs)
+      kernel-src
+      rmm-src
+      redox-path-src
+      fdt-src
+      bootloader-src
+      uefi-src
+      ;
+  };
+
   auditSnixSourceBundle = pkgs.writeShellScriptBin "audit-snix-source-bundle" ''
         set -euo pipefail
         bundle="''${1:-}"
@@ -410,6 +430,85 @@ let
     PY
   '';
 
+  auditNativeKernelRebuildBundle = pkgs.writeShellScriptBin "audit-native-kernel-rebuild-bundle" ''
+        set -euo pipefail
+        bundle="''${1:-}"
+        if [ -z "$bundle" ]; then
+          bundle=${nativeKernelRebuildBundle}
+        fi
+        echo "[audit-native-kernel-rebuild-bundle] bundle=$bundle"
+        ${pkgs.python3}/bin/python3 - "$bundle" <<'PY'
+    from pathlib import Path
+    import json
+    import sys
+
+    bundle = Path(sys.argv[1])
+    manifest_path = bundle / "bundle-manifest.json"
+    if not manifest_path.is_file():
+        print(f"[audit-native-kernel-rebuild-bundle] missing manifest: {manifest_path}", file=sys.stderr)
+        sys.exit(1)
+
+    manifest = json.loads(manifest_path.read_text())
+    missing: list[str] = []
+    checked: list[str] = []
+
+
+    def expect(rel: str, kind: str = "file") -> None:
+        path = bundle / rel
+        checked.append(rel)
+        ok = path.is_dir() if kind == "dir" else path.is_file()
+        if not ok:
+            missing.append(rel)
+
+
+    expect("bundle-manifest.json")
+    expect("run-native-kernel-rebuild-test.sh")
+    expect("rust-src/library/core/src/lib.rs")
+    for rel in (
+        "kernel/Cargo.toml",
+        "kernel/Cargo.lock",
+        "kernel/build.nix",
+        "kernel/build-redox-kernel.sh",
+        "kernel/.cargo/config.toml",
+        "kernel/targets/x86_64-unknown-kernel.json",
+        "bootloader/Cargo.toml",
+        "bootloader/Cargo.lock",
+        "bootloader/build.nix",
+        "bootloader/build-redox-bootloader.sh",
+        "bootloader/.cargo/config.toml",
+    ):
+        expect(rel)
+    for rel in ("kernel/vendor", "bootloader/vendor"):
+        expect(rel, "dir")
+
+    required_manifest_paths = {
+        "kernel": ["build_file", "build_script", "guest_dir", "target", "vendor_dir"],
+        "bootloader": ["build_file", "build_script", "guest_dir", "target", "vendor_dir"],
+        "toolchain": ["rust_src_path", "guest_bins"],
+    }
+    for section, keys in required_manifest_paths.items():
+        section_value = manifest.get(section)
+        if not isinstance(section_value, dict):
+            print(f"[audit-native-kernel-rebuild-bundle] missing manifest section: {section}", file=sys.stderr)
+            sys.exit(1)
+        for key in keys:
+            if key not in section_value:
+                print(f"[audit-native-kernel-rebuild-bundle] missing manifest key: {section}.{key}", file=sys.stderr)
+                sys.exit(1)
+
+    if missing:
+        print("[audit-native-kernel-rebuild-bundle] missing paths:", file=sys.stderr)
+        for rel in missing:
+            print(f"  - {rel}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"[audit-native-kernel-rebuild-bundle] ok: checked {len(checked)} paths")
+    print(f"  kernel target: {manifest['kernel']['target']}")
+    print(f"  bootloader target: {manifest['bootloader']['target']}")
+    print(f"  rust src: {manifest['toolchain']['rust_src_path']}")
+    PY
+  '';
+
   selfHostingProofCapture = "${pkgs.python3}/bin/python3 ${../../scripts/self-hosting-proof-capture.py}";
 
   wrapFunctionalTest =
@@ -417,6 +516,7 @@ let
       base,
       label,
       auditBundle ? null,
+      auditCommand ? null,
     }:
     pkgs.writeShellScriptBin "functional-test" ''
       set -uo pipefail
@@ -453,7 +553,15 @@ let
       export REDOX_VM_MONITOR_DIR="$RUN_DIR"
       echo "[capture] run_dir=$RUN_DIR"
       echo "[capture] run_id=$RUN_ID"
-      ${lib.optionalString (auditBundle != null) ''
+      ${lib.optionalString (auditCommand != null) ''
+        if ${auditCommand}; then
+          :
+        else
+          status=$?
+          exit $status
+        fi
+      ''}
+      ${lib.optionalString (auditCommand == null && auditBundle != null) ''
         if ${auditSnixSourceBundle}/bin/audit-snix-source-bundle ${auditBundle}; then
           :
         else
@@ -536,6 +644,27 @@ let
     base = snixSandboxTestRaw;
     label = "snix-sandbox-test";
     auditBundle = snixSourceBundle;
+  };
+
+  # Focused native kernel rebuild test — builds the kernel on a Redox guest
+  kernelRebuildTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/kernel-rebuild-test.nix ];
+    extraPkgs = extraPkgs // {
+      native-kernel-rebuild-bundle = nativeKernelRebuildBundle;
+    };
+  };
+  kernelRebuildTestRaw = mkFunctionalTest {
+    diskImage = kernelRebuildTestSystem.diskImage;
+    inherit bootloader;
+    memoryMB = 8192;
+    cpus = 4;
+    defaultTimeout = 3600;
+  };
+  kernelRebuildTest = wrapFunctionalTest {
+    base = kernelRebuildTestRaw;
+    label = "kernel-rebuild-test";
+    auditBundle = nativeKernelRebuildBundle;
+    auditCommand = "${auditNativeKernelRebuildBundle}/bin/audit-native-kernel-rebuild-bundle ${nativeKernelRebuildBundle}";
   };
 
   # Parallel build test: JOBS=1 baseline + JOBS=2 validation
@@ -797,6 +926,10 @@ in
 
     redox-self-hosting-test = selfHostingTestSystem.diskImage;
     self-hosting-test = selfHostingTest;
+
+    native-kernel-rebuild-bundle = nativeKernelRebuildBundle;
+    redox-kernel-rebuild-test = kernelRebuildTestSystem.diskImage;
+    kernel-rebuild-test = kernelRebuildTest;
 
     redox-snix-compile-test = snixCompileTestSystem.diskImage;
     snix-compile-test = snixCompileTest;

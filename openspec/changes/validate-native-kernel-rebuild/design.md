@@ -40,6 +40,14 @@ The repo already has good evidence for userspace self-hosting and host-side boot
 
 **Alternative considered:** Rely only on pueue logs or serial snippets. Rejected because they are too easy to lose and too weak for this milestone.
 
+### 4. Ship one audited guest bundle with kernel, bootloader, and rust-src inputs
+
+**Choice:** The first slice uses a single guest-visible bundle at `/usr/src/native-kernel-rebuild` with `kernel/`, `bootloader/`, `rust-src/library`, a bundle manifest, and the focused guest test script.
+
+**Rationale:** Kernel and bootloader rebuilds share the same guest toolchain and proof harness, while `-Z build-std` needs Rust library sources that the guest test can read without network access. One audited bundle keeps provenance and guest paths simple.
+
+**Alternative considered:** Separate kernel and bootloader bundles, or relying on the guest toolchain package to provide rust-src implicitly. Rejected for the first slice because it spreads provenance across multiple paths and makes the offline input contract harder to audit.
+
 ## Risks / Trade-offs
 
 - **Very long guest build times** → Use a focused profile, heartbeat logging, and durable capture directories.

@@ -17,6 +17,7 @@ KNOWN_FLOWS = [
     "self-hosting-test",
     "snix-compile-test",
     "snix-sandbox-test",
+    "kernel-rebuild-test",
 ]
 MILESTONE_RE = re.compile(r"✓ \[(.*?)\] (.+)$")
 
@@ -137,6 +138,20 @@ def parse_test_counts(serial_text: str) -> dict[str, Any]:
     }
 
 
+def parse_artifacts(serial_text: str) -> dict[str, str]:
+    artifacts: dict[str, str] = {}
+    for raw_line in serial_text.splitlines():
+        line = raw_line.strip()
+        if not line.startswith("FUNC_ARTIFACT:"):
+            continue
+        parts = line.split(":", 2)
+        if len(parts) != 3:
+            continue
+        _prefix, name, value = parts
+        artifacts[name] = value.strip()
+    return artifacts
+
+
 def parse_runner_metadata(runner_text: str) -> dict[str, Any]:
     meta: dict[str, Any] = {
         "vmm": None,
@@ -207,6 +222,13 @@ def make_excerpt(summary: dict[str, Any]) -> str:
             if name in {"Boot complete", "Test suite started", "Test suite complete"}:
                 continue
             lines.append(f"  {name:<18} @ {value}")
+
+    artifacts = summary.get("artifacts") or {}
+    if artifacts:
+        lines.append("")
+        lines.append("Artifacts:")
+        for name in sorted(artifacts):
+            lines.append(f"  {name}: {artifacts[name]}")
 
     failure_lines = tests.get("failure_lines") or []
     if failure_lines:
@@ -376,6 +398,7 @@ def cmd_finalize(args: argparse.Namespace) -> int:
     runner_text = read_text(runner_path)
     serial_text = read_text(serial_path)
     tests = parse_test_counts(serial_text)
+    artifacts = parse_artifacts(serial_text)
     runner = parse_runner_metadata(runner_text)
     verdict = detect_verdict(args.exit_code, tests["tests_complete"], runner_text, tests["fail"])
 
@@ -393,6 +416,7 @@ def cmd_finalize(args: argparse.Namespace) -> int:
         "bundle": state.get("bundle"),
         **git_metadata(repo_root),
         "test_counts": tests,
+        "artifacts": artifacts,
         "runner": runner,
         "files": {
             "meta_txt": file_info(meta_path),
