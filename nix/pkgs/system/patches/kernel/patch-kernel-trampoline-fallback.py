@@ -19,10 +19,11 @@ import sys
 def patch_file(path: str, old: str, new: str) -> None:
     with open(path, "r") as f:
         content = f.read()
-    if old not in content:
-        print(f"WARNING: patch target not found in {path}")
-        print(f"  Looking for: {repr(old[:100])}...")
-        return
+    count = content.count(old)
+    if count != 1:
+        print(f"ERROR: expected exactly one patch target in {path}, found {count}", file=sys.stderr)
+        print(f"  Looking for: {repr(old[:120])}...", file=sys.stderr)
+        sys.exit(1)
     content = content.replace(old, new, 1)
     with open(path, "w") as f:
         f.write(content)

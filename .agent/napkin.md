@@ -129,7 +129,8 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - In `kernel-rebuild-test`, appending `pkgs.nasm` to `/environment.systemPackages` still left `/nix/system/profile/bin/nasm` missing in the guest, so trying to package guest nasm was wrong direction.
 - Correct long-term fix: patch kernel `build.rs` to support `REDOX_KERNEL_USE_PREBUILT_TRAMPOLINE`, generate `src/asm/{x86,x86_64}/trampoline.bin` during host-side source prep, and set that env var in the guest native builder.
 - This keeps host/cross builds using real `nasm`, while native Redox guest rebuilds use deterministic prebuilt blobs from the same asm sources.
-- After this fix, the focused native rebuild gets past the old trampoline blocker and fails later at kernel link, so the nasm issue is genuinely cleared.
+- Follow-up lesson: use cargo `--message-format=json-render-diagnostics` in the guest builders and parse the `compiler-artifact` `executable` field. Guest cargo/rustc can claim an output path even when ad-hoc file guesses (`kernel.all`, `target/.../bootloader.efi`) are wrong.
+- Current state: focused native kernel rebuild now PASSes and records `/nix/store/0yiqaj311cni1rqqyqzc9pln2h3w6rss-redox-kernel-native-rebuild`; bootloader path is still blocked at native UEFI linker resolution (`rust-lld` path/provenance in guest is not straightforward, and direct `rust-lld` / wrapper attempts still fail).
 
 ### Rebuild VM test traps I hit this pass
 - I forgot `let PATH = "/nix/system/profile/bin:/bin:/usr/bin"; export PATH` at the top of a startup-script test, then blamed bash when `grep`/`sed` were just missing from PATH.

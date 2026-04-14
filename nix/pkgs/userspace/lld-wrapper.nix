@@ -38,8 +38,9 @@ let
             .name("lld-main".into())
             .stack_size(stack_size)
             .spawn(move || {
-                let lld = "/nix/system/profile/bin/ld.lld";
-                let mut cmd = Command::new(lld);
+                let lld = env::var("PI_LLD_REAL")
+                    .unwrap_or_else(|_| "/nix/system/profile/bin/ld.lld".to_string());
+                let mut cmd = Command::new(&lld);
                 cmd.env("LD_LIBRARY_PATH", "/nix/system/profile/lib:/usr/lib/rustc:/lib");
                 for arg in &args {
                     cmd.arg(arg);

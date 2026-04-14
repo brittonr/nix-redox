@@ -260,6 +260,7 @@ pkgs.runCommand "native-kernel-rebuild-bundle" { nativeBuildInputs = [ pkgs.pyth
         "/nix/system/profile/bin/llvm-ar",
         "/nix/system/profile/bin/llvm-objcopy",
         "/nix/system/profile/bin/ld.lld",
+        "/nix/system/profile/bin/lld-wrapper",
         "/nix/system/profile/bin/cc"
       ]
     },
