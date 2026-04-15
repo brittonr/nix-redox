@@ -138,10 +138,10 @@ else
   echo "FUNC_TEST:snix-binary-present:FAIL:/bin/snix missing"
 fi
 
-if [ -x /nix/system/profile/bin/lld-wrapper ] && [ -x /nix/system/profile/bin/ld.lld ] && [ -x /nix/system/profile/bin/llvm-objcopy ]; then
+if [ -x /nix/system/profile/bin/lld-wrapper ] && [ -x /nix/system/profile/bin/ld.lld ] && [ -x /nix/system/profile/bin/lld-link ] && [ -x /nix/system/profile/bin/llvm-objcopy ]; then
   echo "FUNC_TEST:linker-tools-present:PASS"
 else
-  echo "FUNC_TEST:linker-tools-present:FAIL:lld-wrapper, ld.lld, or llvm-objcopy missing"
+  echo "FUNC_TEST:linker-tools-present:FAIL:lld-wrapper, ld.lld, lld-link, or llvm-objcopy missing"
 fi
 
 echo "=== bundle manifest ==="

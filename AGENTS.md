@@ -176,7 +176,7 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - `-DLIBCPP_PROVIDES_DEFAULT_RUNE_TABLE` required (not Bionic/musl/glibc)
 - `-D_LIBUNWIND_USE_DL_ITERATE_PHDR=1` required (CMAKE_SYSTEM_NAME=Generic doesn't trigger it)
 - `link.h` stub with `struct dl_phdr_info` using raw types (relibc's elf.h uses `struct Elf64_Phdr`)
-- LLD MachO/COFF backends disabled — only ELF+Wasm
+- Redox LLVM now keeps the COFF LLD backend enabled for guest-native UEFI bootloader rebuilds; keep `lld-link` installed alongside `ld.lld`/`lld`
 
 ## Nix Build System
 
@@ -345,7 +345,8 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - Focused `snix-compile-test`: 7 pass, 0 fail out of 7 tests; durable capture `/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/`; attached excerpt `openspec/changes/archive/2026-04-09-resolve-libmimalloc-sys-redox/evidence/2026-04-09-snix-compile-focus-pass.excerpt.txt`
 - Focused `snix-sandbox-test`: 6 pass, 0 fail out of 6 tests; durable capture `/var/tmp/redox-self-hosting-captures/20260409T124808-snix-sandbox-test/`; attached excerpt `openspec/changes/archive/2026-04-09-fix-snix-build-gaps/evidence/2026-04-09-snix-sandbox-test.excerpt.txt`
 - Full `self-hosting-test`: 78 pass, 0 fail out of 78 tests; durable capture `/var/tmp/redox-self-hosting-captures/20260409T133254-self-hosting-test/`; attached excerpt `openspec/changes/archive/2026-04-09-fix-snix-build-gaps/evidence/2026-04-09-self-hosting-test.excerpt.txt`
-- The full suite now re-verifies `snix-compile`, `snix-binary-exists`, `snix-binary-runs`, `snix-eval-works`, `source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`, and `source-rebuild-dry` in one run
+- Focused `kernel-rebuild-test` (2026-04-14): 8 pass, 0 fail out of 8 tests; durable capture `/var/tmp/redox-self-hosting-captures/20260414T203723-kernel-rebuild-test/`; this proves guest-native kernel + bootloader store artifacts, but NOT boot staging / reboot smoke yet
+- The full suite now re-verifies `snix-compile`, `snix-binary-exists`, `snix-binary-runs`, `snix-eval-works`, `source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`, and `source-rebuild-dry` in one run; keep this userspace baseline separate from `kernel-rebuild-test`
 - `self-hosting-test` now needs `defaultTimeout = 6000`; 4800s was enough for the older suite, but adding the rebuild-cycle proof at the end pushed the cold run past that limit even after `snix-compile` finished
 - Test order: snix-compile moved BEFORE source-rebuild (source-rebuild's activate() drops ld.lld from the live profile)
 - The fixture-side lessons still stand: use bash for builders that need `HOME`; vendor missing crates; point Cargo at `vendor/source-registry-0` when using `fetchCargoVendor`; add `vendor/source-git-0` for git deps; seed source-rebuild tests from the real system manifest; and use full paths in source derivations when builder `PATH` is empty

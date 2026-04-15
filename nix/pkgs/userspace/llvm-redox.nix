@@ -187,15 +187,14 @@ pkgs.stdenv.mkDerivation {
   configurePhase = ''
     runHook preConfigure
 
-    # Disable MachO/COFF/MinGW linkers — we only need ELF+Wasm for Redox.
-    # MachO needs macOS headers (mach-o/compact_unwind_encoding.h),
-    # COFF needs Windows headers.
+    # Disable MachO/MinGW linkers. Keep COFF enabled for native UEFI bootloader
+    # rebuilds inside the Redox guest.
     chmod -R u+w lld/
 
-    # Remove MachO and COFF subdirectories from build
-    sed -i '/add_subdirectory(MachO)/d; /add_subdirectory(COFF)/d' lld/CMakeLists.txt
+    # Remove MachO subdirectory from build. Keep COFF.
+    sed -i '/add_subdirectory(MachO)/d' lld/CMakeLists.txt
 
-    # Rewrite lld driver CMakeLists.txt to only link ELF+Wasm
+    # Rewrite lld driver CMakeLists.txt to link COFF+ELF+Wasm
     cat > lld/tools/lld/CMakeLists.txt << 'LLDCMAKE'
     set(LLVM_LINK_COMPONENTS Support TargetParser)
     add_lld_tool(lld lld.cpp SUPPORT_PLUGINS GENERATE_DRIVER)
@@ -210,21 +209,21 @@ pkgs.stdenv.mkDerivation {
       endif()
       target_link_libraries(''${target} ''${type} ''${ARGN})
     endfunction()
-    lld_target_link_libraries(lld PRIVATE lldCommon lldELF lldWasm)
-    set(LLD_SYMLINKS_TO_CREATE ld.lld wasm-ld)
+    lld_target_link_libraries(lld PRIVATE lldCommon lldCOFF lldELF lldWasm)
+    set(LLD_SYMLINKS_TO_CREATE ld.lld lld-link wasm-ld)
     foreach(link ''${LLD_SYMLINKS_TO_CREATE})
       add_lld_symlink(''${link} lld)
     endforeach()
   LLDCMAKE
 
     # Remove driver registrations for disabled linker flavors
-    sed -i '/LLD_HAS_DRIVER(coff)/d; /LLD_HAS_DRIVER(macho)/d; /LLD_HAS_DRIVER(mingw)/d' lld/tools/lld/lld.cpp
+    sed -i '/LLD_HAS_DRIVER(macho)/d; /LLD_HAS_DRIVER(mingw)/d' lld/tools/lld/lld.cpp
 
-    # Rewrite LLD_ALL_DRIVERS to only include ELF+Wasm
+    # Rewrite LLD_ALL_DRIVERS to include COFF+ELF+Wasm
     chmod -R u+w lld/include/
     sed -i '/^#define LLD_ALL_DRIVERS/,/^  }$/c\
     #define LLD_ALL_DRIVERS \\\
-      { {lld::Gnu, \&lld::elf::link}, {lld::Wasm, \&lld::wasm::link} }' \
+      { {lld::WinLink, \&lld::coff::link}, {lld::Gnu, \&lld::elf::link}, {lld::Wasm, \&lld::wasm::link} }' \
       lld/include/lld/Common/Driver.h
 
     mkdir -p build && cd build
@@ -360,6 +359,7 @@ pkgs.stdenv.mkDerivation {
     ln -sf clang-21 clang
     ln -sf clang-21 clang++
     ln -sf lld ld.lld
+    ln -sf lld lld-link
     ln -sf llvm-objcopy llvm-strip
     ln -sf llvm-readobj llvm-readelf
 

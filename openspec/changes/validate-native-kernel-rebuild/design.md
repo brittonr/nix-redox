@@ -61,7 +61,12 @@ The repo already has good evidence for userspace self-hosting and host-side boot
 3. Validate the build-artifact proof first.
 4. Add a staged boot smoke path once the build proof is reliable.
 
+## Proof status after the first focused pass
+
+- The focused `kernel-rebuild-test` now proves that a running Redox guest can rebuild both the kernel and the bootloader from the audited `/usr/src/native-kernel-rebuild` bundle and emit guest-produced `/nix/store/...` outputs for each artifact.
+- The proof remains intentionally narrower than full OS self-hosting. It does not yet prove that those guest-produced outputs have been staged into the boot artifact selection flow or that the VM has rebooted with them.
+- This focused flow is therefore a separate proof rung from the existing `self-hosting-test` baseline. `self-hosting-test` still covers userspace self-hosting and rebuild flows; `kernel-rebuild-test` covers guest-native boot-component artifact production.
+
 ## Open Questions
 
 - Whether the first-pass boot smoke should reboot the same VM or stage artifacts only and validate manifest/boot selection plumbing.
-- Whether bootloader-native rebuild should share the same source bundle or a separate one.
