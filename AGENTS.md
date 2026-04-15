@@ -421,6 +421,7 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 - The same `/etc/static` step also re-symlinks `/etc/redox-system/configuration.nix` back to the store copy unless rebuild preserves the evaluated config as a regular file after `system::switch`; otherwise the next "no-op" rebuild re-reads stale config and reverts the prior hostname change
 - Rootfs oneshot services may fail silently — no error output visible without serial console
 - Current UEFI bootloader source (`bootloader/src/main.rs`) loads `usr/lib/boot/kernel` and `usr/lib/boot/initfs` from RedoxFS, not `/boot/*`. Activation/smoke paths that want to prove next-boot consumability must verify `/usr/lib/boot/*` gets refreshed too; `/boot/*` is now compatibility copy only.
+- `snix-redox/src/activate.rs` now treats the `/usr/lib/boot/*` refresh as the required success path. `/boot/*` copy failures only warn; `/boot/*` success without `/usr/lib/boot/*` success must NOT report the boot artifact as updated.
 - Numbered: 00_base, 12_stored, 13_profiled, 20_orbital, 30_console, 90_exit_initfs
 - `notify` blocks until daemon signals readiness; `nowait` fires and forgets
 - Redox init `notify` readiness is just a single zero byte to the `INIT_NOTIFY` pipe. `stored` can integrate without the `daemon` crate by writing that byte after registration/root-fd setup

@@ -716,16 +716,17 @@ const ACTIVE_BOOT_DIR: &str = "/usr/lib/boot";
 ///   - Boot paths are identical (no-op)
 ///   - Store path file is missing (warns, continues)
 ///
-/// Returns true if any boot files were updated (reboot recommended).
+/// Returns true if any active boot files were updated (reboot recommended).
 fn update_boot_components(old: &Manifest, new: &Manifest, warnings: &mut Vec<String>) -> bool {
-    update_boot_components_at(old, new, &[BOOT_DIR, ACTIVE_BOOT_DIR], warnings)
+    update_boot_components_at(old, new, ACTIVE_BOOT_DIR, &[BOOT_DIR], warnings)
 }
 
 /// Inner implementation with configurable boot directories (for testing).
 fn update_boot_components_at(
     old: &Manifest,
     new: &Manifest,
-    boot_dirs: &[&str],
+    active_boot_dir: &str,
+    compatibility_boot_dirs: &[&str],
     warnings: &mut Vec<String>,
 ) -> bool {
     let new_boot = match &new.boot {
@@ -740,7 +741,15 @@ fn update_boot_components_at(
     // Update kernel if path changed
     if let Some(ref kernel_path) = new_boot.kernel {
         let changed = old_boot.map_or(true, |ob| ob.kernel.as_ref() != Some(kernel_path));
-        if changed && copy_boot_component(kernel_path, "kernel", boot_dirs, warnings) {
+        if changed
+            && copy_boot_component(
+                kernel_path,
+                "kernel",
+                active_boot_dir,
+                compatibility_boot_dirs,
+                warnings,
+            )
+        {
             println!("Boot: kernel updated from {kernel_path}");
             updated = true;
         }
@@ -749,7 +758,15 @@ fn update_boot_components_at(
     // Update initfs if path changed
     if let Some(ref initfs_path) = new_boot.initfs {
         let changed = old_boot.map_or(true, |ob| ob.initfs.as_ref() != Some(initfs_path));
-        if changed && copy_boot_component(initfs_path, "initfs", boot_dirs, warnings) {
+        if changed
+            && copy_boot_component(
+                initfs_path,
+                "initfs",
+                active_boot_dir,
+                compatibility_boot_dirs,
+                warnings,
+            )
+        {
             println!("Boot: initfs updated from {initfs_path}");
             updated = true;
         }
@@ -761,7 +778,8 @@ fn update_boot_components_at(
 fn copy_boot_component(
     src: &str,
     file_name: &str,
-    boot_dirs: &[&str],
+    active_boot_dir: &str,
+    compatibility_boot_dirs: &[&str],
     warnings: &mut Vec<String>,
 ) -> bool {
     if !Path::new(src).exists() {
@@ -771,18 +789,31 @@ fn copy_boot_component(
         return false;
     }
 
-    let mut copied_any = false;
-    for boot_dir in boot_dirs {
+    let active_dst = format!("{active_boot_dir}/{file_name}");
+    let active_copied = match copy_boot_file(src, &active_dst) {
+        Ok(()) => true,
+        Err(e) => {
+            warnings.push(format!(
+                "boot: failed to copy active {file_name} from {src} to {active_dst}: {e}"
+            ));
+            false
+        }
+    };
+
+    for boot_dir in compatibility_boot_dirs {
+        if *boot_dir == active_boot_dir {
+            continue;
+        }
+
         let dst = format!("{boot_dir}/{file_name}");
-        match copy_boot_file(src, &dst) {
-            Ok(()) => copied_any = true,
-            Err(e) => warnings.push(format!(
-                "boot: failed to copy {file_name} from {src} to {dst}: {e}"
-            )),
+        if let Err(e) = copy_boot_file(src, &dst) {
+            warnings.push(format!(
+                "boot: failed to copy compatibility {file_name} from {src} to {dst}: {e}"
+            ));
         }
     }
 
-    copied_any
+    active_copied
 }
 
 /// Copy a boot component file from its store path to the target location.
@@ -2562,9 +2593,15 @@ mod tests {
 
         let boot_dir_s = boot_dir.to_string_lossy().to_string();
         let active_boot_dir_s = active_boot_dir.to_string_lossy().to_string();
-        let boot_dirs = [boot_dir_s.as_str(), active_boot_dir_s.as_str()];
+        let compatibility_boot_dirs = [boot_dir_s.as_str()];
         let mut warnings = Vec::new();
-        let updated = update_boot_components_at(&old, &new, &boot_dirs, &mut warnings);
+        let updated = update_boot_components_at(
+            &old,
+            &new,
+            active_boot_dir_s.as_str(),
+            &compatibility_boot_dirs,
+            &mut warnings,
+        );
         assert!(updated);
         assert!(warnings.is_empty());
 
@@ -2610,9 +2647,15 @@ mod tests {
 
         let boot_dir_s = boot_dir.to_string_lossy().to_string();
         let active_boot_dir_s = active_boot_dir.to_string_lossy().to_string();
-        let boot_dirs = [boot_dir_s.as_str(), active_boot_dir_s.as_str()];
+        let compatibility_boot_dirs = [boot_dir_s.as_str()];
         let mut warnings = Vec::new();
-        let updated = update_boot_components_at(&old, &new, &boot_dirs, &mut warnings);
+        let updated = update_boot_components_at(
+            &old,
+            &new,
+            active_boot_dir_s.as_str(),
+            &compatibility_boot_dirs,
+            &mut warnings,
+        );
         assert!(!updated);
         assert!(warnings.is_empty());
     }
@@ -2622,9 +2665,15 @@ mod tests {
         let old = sample_manifest(); // boot: None
         let new = sample_manifest(); // boot: None
 
-        let boot_dirs = ["/tmp/nonexistent-boot", "/tmp/nonexistent-active-boot"];
+        let compatibility_boot_dirs = ["/tmp/nonexistent-boot"];
         let mut warnings = Vec::new();
-        let updated = update_boot_components_at(&old, &new, &boot_dirs, &mut warnings);
+        let updated = update_boot_components_at(
+            &old,
+            &new,
+            "/tmp/nonexistent-active-boot",
+            &compatibility_boot_dirs,
+            &mut warnings,
+        );
         assert!(!updated);
         assert!(warnings.is_empty());
     }
@@ -2647,12 +2696,60 @@ mod tests {
 
         let boot_dir_s = boot_dir.to_string_lossy().to_string();
         let active_boot_dir_s = active_boot_dir.to_string_lossy().to_string();
-        let boot_dirs = [boot_dir_s.as_str(), active_boot_dir_s.as_str()];
+        let compatibility_boot_dirs = [boot_dir_s.as_str()];
         let mut warnings = Vec::new();
-        let updated = update_boot_components_at(&old, &new, &boot_dirs, &mut warnings);
+        let updated = update_boot_components_at(
+            &old,
+            &new,
+            active_boot_dir_s.as_str(),
+            &compatibility_boot_dirs,
+            &mut warnings,
+        );
         assert!(!updated); // couldn't copy, so not "updated"
         assert_eq!(warnings.len(), 1);
         assert!(warnings[0].contains("missing or unreadable"));
+    }
+
+    #[test]
+    fn boot_update_requires_active_boot_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let kernel_src = dir.path().join("store-kernel");
+        let boot_dir = dir.path().join("boot");
+        let active_root = dir.path().join("usr");
+        let active_boot_dir = active_root.join("lib/boot");
+        std::fs::create_dir_all(&boot_dir).unwrap();
+        std::fs::write(&kernel_src, b"KERNEL_V2").unwrap();
+        std::fs::write(boot_dir.join("kernel"), b"KERNEL_V1").unwrap();
+        std::fs::write(&active_root, b"not-a-directory").unwrap();
+
+        let old = sample_manifest();
+        let mut new = sample_manifest();
+        new.boot = Some(BootComponents {
+            kernel: Some(kernel_src.to_string_lossy().to_string()),
+            initfs: None,
+            bootloader: None,
+        });
+
+        let boot_dir_s = boot_dir.to_string_lossy().to_string();
+        let active_boot_dir_s = active_boot_dir.to_string_lossy().to_string();
+        let compatibility_boot_dirs = [boot_dir_s.as_str()];
+        let mut warnings = Vec::new();
+        let updated = update_boot_components_at(
+            &old,
+            &new,
+            active_boot_dir_s.as_str(),
+            &compatibility_boot_dirs,
+            &mut warnings,
+        );
+
+        assert!(!updated);
+        assert_eq!(
+            std::fs::read(boot_dir.join("kernel")).unwrap(),
+            b"KERNEL_V2"
+        );
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("failed to copy active kernel"));
+        assert!(warnings[0].contains(active_boot_dir_s.as_str()));
     }
 
     #[test]

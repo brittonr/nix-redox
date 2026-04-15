@@ -1,0 +1,11 @@
+
+running 5 tests
+Boot: kernel updated from /tmp/.tmpdESRg6/store-kernel
+Boot: initfs updated from /tmp/.tmpdESRg6/store-initfs
+test activate::tests::boot_update_none_boot_section_skips ... ok
+test activate::tests::boot_update_missing_store_path_warns ... ok
+test activate::tests::boot_update_requires_active_boot_copy ... ok
+test activate::tests::boot_update_with_changed_paths_copies_files ... ok
+test activate::tests::boot_update_same_paths_skips ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 616 filtered out; finished in 0.00s
