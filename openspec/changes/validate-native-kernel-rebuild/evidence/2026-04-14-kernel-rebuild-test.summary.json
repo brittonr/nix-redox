@@ -1,0 +1,84 @@
+{
+  "artifacts": {
+    "bootloader-build-file": "/usr/src/native-kernel-rebuild/bootloader/build.nix",
+    "bootloader-pathinfo": "/nix/var/snix/pathinfo/06x25abzqs38pyscj58vssf9z9p1gv1n.json",
+    "bootloader-store": "/nix/store/06x25abzqs38pyscj58vssf9z9p1gv1n-redox-bootloader-native-rebuild",
+    "bundle-manifest": "/usr/src/native-kernel-rebuild/bundle-manifest.json",
+    "kernel-build-file": "/usr/src/native-kernel-rebuild/kernel/build.nix",
+    "kernel-pathinfo": "/nix/var/snix/pathinfo/0yiqaj311cni1rqqyqzc9pln2h3w6rss.json",
+    "kernel-store": "/nix/store/0yiqaj311cni1rqqyqzc9pln2h3w6rss-redox-kernel-native-rebuild",
+    "rust-src": "/usr/src/native-kernel-rebuild/rust-src/library"
+  },
+  "bundle": "/nix/store/63h79p978v9mpraimciwbqs82gmq3abp-native-kernel-rebuild-bundle",
+  "capture_dir": "/var/tmp/redox-self-hosting-captures/20260414T205052-kernel-rebuild-test",
+  "command": "/nix/store/ydrm9xyczccm4119f61fi55ljbvkpija-functional-test/bin/functional-test --timeout 5400 --verbose",
+  "duration_seconds": 464,
+  "exit_code": 0,
+  "files": {
+    "excerpt_txt": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T205052-kernel-rebuild-test/excerpt.txt",
+      "present": true,
+      "size_bytes": 1172
+    },
+    "host_monitor_log": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T205052-kernel-rebuild-test/host-monitor.log",
+      "present": true,
+      "size_bytes": 5045
+    },
+    "meta_txt": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T205052-kernel-rebuild-test/meta.txt",
+      "present": true,
+      "size_bytes": 937
+    },
+    "runner_log": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T205052-kernel-rebuild-test/runner.log",
+      "present": true,
+      "size_bytes": 9838
+    },
+    "serial_log": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T205052-kernel-rebuild-test/serial.log",
+      "present": true,
+      "size_bytes": 8181
+    },
+    "summary_json": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T205052-kernel-rebuild-test/summary.json",
+      "present": true,
+      "size_bytes": 3058
+    },
+    "vmm_log": {
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T205052-kernel-rebuild-test/vmm.log",
+      "present": true,
+      "size_bytes": 464
+    }
+  },
+  "finished_at": "2026-04-14T20:58:36-04:00",
+  "flow": "kernel-rebuild-test",
+  "git_dirty": false,
+  "git_rev": "96f1857b",
+  "repo_root": "/home/brittonr/git/redox",
+  "run_id": "20260414T205052-kernel-rebuild-test",
+  "runner": {
+    "image_size": "12G",
+    "milestones": {
+      "Boot complete": "36.015s",
+      "Bootloader started": "35.245s",
+      "Kernel running": "35.578s",
+      "Test suite complete": "457.528s",
+      "Test suite started": "36.123s"
+    },
+    "timeout_seconds": 5400,
+    "vmm": "ch"
+  },
+  "schema_version": 1,
+  "started_at": "2026-04-14T20:50:52-04:00",
+  "test_counts": {
+    "fail": 0,
+    "failure_lines": [],
+    "pass": 8,
+    "skip": 0,
+    "tests_complete": true,
+    "tests_started": true,
+    "total": 8
+  },
+  "verdict": "pass"
+}

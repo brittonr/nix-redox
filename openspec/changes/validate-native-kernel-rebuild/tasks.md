@@ -18,6 +18,6 @@
 
 ## 4. Document the self-hosting claim
 
-- [ ] 4.1 Document what this change proves about kernel-native self-hosting and what still remains out of scope.
-- [ ] 4.2 Update roadmap/baseline notes so userspace and kernel-native proof are no longer conflated.
-- [ ] 4.3 Attach durable evidence excerpts from a passing focused run.
+- [x] 4.1 Document what this change proves about kernel-native self-hosting and what still remains out of scope.
+- [x] 4.2 Update roadmap/baseline notes so userspace and kernel-native proof are no longer conflated.
+- [x] 4.3 Attach durable evidence excerpts from a passing focused run.

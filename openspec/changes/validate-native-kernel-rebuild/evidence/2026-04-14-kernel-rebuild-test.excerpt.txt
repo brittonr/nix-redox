@@ -1,0 +1,27 @@
+Flow:     kernel-rebuild-test
+Run:      20260414T205052-kernel-rebuild-test
+Verdict:  PASS
+Duration: 464s
+Commit:   96f1857b
+
+Command:  /nix/store/ydrm9xyczccm4119f61fi55ljbvkpija-functional-test/bin/functional-test --timeout 5400 --verbose
+Capture:  /var/tmp/redox-self-hosting-captures/20260414T205052-kernel-rebuild-test
+
+Results:  8 passed, 0 failed, 0 skipped
+
+Milestones:
+  Boot complete      @ 36.015s
+  Test suite started @ 36.123s
+  Test suite complete @ 457.528s
+  Bootloader started @ 35.245s
+  Kernel running     @ 35.578s
+
+Artifacts:
+  bootloader-build-file: /usr/src/native-kernel-rebuild/bootloader/build.nix
+  bootloader-pathinfo: /nix/var/snix/pathinfo/06x25abzqs38pyscj58vssf9z9p1gv1n.json
+  bootloader-store: /nix/store/06x25abzqs38pyscj58vssf9z9p1gv1n-redox-bootloader-native-rebuild
+  bundle-manifest: /usr/src/native-kernel-rebuild/bundle-manifest.json
+  kernel-build-file: /usr/src/native-kernel-rebuild/kernel/build.nix
+  kernel-pathinfo: /nix/var/snix/pathinfo/0yiqaj311cni1rqqyqzc9pln2h3w6rss.json
+  kernel-store: /nix/store/0yiqaj311cni1rqqyqzc9pln2h3w6rss-redox-kernel-native-rebuild
+  rust-src: /usr/src/native-kernel-rebuild/rust-src/library
