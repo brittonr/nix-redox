@@ -8,4 +8,4 @@ See `docs/self-hosting/proof-artifacts.md` for the capture contract.
 | self-hosting-test | 20260409T133254-self-hosting-test | 2026-04-09T14:52:39-04:00 | `unknown` | 78/78 pass | `/var/tmp/redox-self-hosting-captures/20260409T133254-self-hosting-test` |
 | snix-compile-test | 20260409T115513-snix-compile-test | 2026-04-09T12:46:45-04:00 | `unknown` | 7/7 pass | `/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test` |
 | snix-sandbox-test | 20260409T124808-snix-sandbox-test | 2026-04-09T12:50:16-04:00 | `unknown` | 6/6 pass | `/var/tmp/redox-self-hosting-captures/20260409T124808-snix-sandbox-test` |
-| kernel-rebuild-test | 20260414T203723-kernel-rebuild-test | 2026-04-14T20:45:00-04:00 | `3a8102d0` | 8/8 pass | `/var/tmp/redox-self-hosting-captures/20260414T203723-kernel-rebuild-test` |
+| kernel-rebuild-test | 20260414T205052-kernel-rebuild-test | 2026-04-14T20:58:36-04:00 | `96f1857b` | 8/8 pass | `/var/tmp/redox-self-hosting-captures/20260414T205052-kernel-rebuild-test` |

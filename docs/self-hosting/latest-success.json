@@ -1,17 +1,17 @@
 {
   "flows": {
     "kernel-rebuild-test": {
-      "capture_dir": "/var/tmp/redox-self-hosting-captures/20260414T203723-kernel-rebuild-test",
-      "duration_seconds": 457,
-      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20260414T203723-kernel-rebuild-test/excerpt.txt",
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20260414T205052-kernel-rebuild-test",
+      "duration_seconds": 464,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20260414T205052-kernel-rebuild-test/excerpt.txt",
       "exit_code": 0,
-      "finished_at": "2026-04-14T20:45:00-04:00",
+      "finished_at": "2026-04-14T20:58:36-04:00",
       "flow": "kernel-rebuild-test",
-      "git_dirty": true,
-      "git_rev": "3a8102d0",
-      "run_id": "20260414T203723-kernel-rebuild-test",
-      "started_at": "2026-04-14T20:37:23-04:00",
-      "summary_path": "/var/tmp/redox-self-hosting-captures/20260414T203723-kernel-rebuild-test/summary.json",
+      "git_dirty": false,
+      "git_rev": "96f1857b",
+      "run_id": "20260414T205052-kernel-rebuild-test",
+      "started_at": "2026-04-14T20:50:52-04:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20260414T205052-kernel-rebuild-test/summary.json",
       "test_counts": {
         "fail": 0,
         "failure_lines": [],
@@ -94,5 +94,5 @@
     }
   },
   "schema_version": 1,
-  "updated_at": "2026-04-14T20:45:00-04:00"
+  "updated_at": "2026-04-14T20:58:36-04:00"
 }
