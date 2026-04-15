@@ -15,67 +15,67 @@
     "staged-generation-manifest": "/etc/redox-system/generations/2/manifest.json"
   },
   "bundle": "/nix/store/4f234p6kmzvrsrmq52z1imyndj4bf5si-native-kernel-rebuild-bundle",
-  "capture_dir": "/var/tmp/redox-self-hosting-captures/20260414T231931-kernel-rebuild-test",
-  "command": "/nix/store/gy7byj6k2a1bxpw8r55s0mfc6xz506mh-functional-test/bin/functional-test --timeout 5400 --verbose",
-  "duration_seconds": 745,
+  "capture_dir": "/var/tmp/redox-self-hosting-captures/20260414T234753-kernel-rebuild-test",
+  "command": "/nix/store/716yzjdyxai0wv443vijxcs44cb6qvba-functional-test/bin/functional-test --timeout 5400 --verbose",
+  "duration_seconds": 710,
   "exit_code": 0,
   "files": {
     "excerpt_txt": {
-      "path": "/var/tmp/redox-self-hosting-captures/20260414T231931-kernel-rebuild-test/excerpt.txt",
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T234753-kernel-rebuild-test/excerpt.txt",
       "present": true,
       "size_bytes": 1416
     },
     "host_monitor_log": {
-      "path": "/var/tmp/redox-self-hosting-captures/20260414T231931-kernel-rebuild-test/host-monitor.log",
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T234753-kernel-rebuild-test/host-monitor.log",
       "present": true,
-      "size_bytes": 8135
+      "size_bytes": 7398
     },
     "meta_txt": {
-      "path": "/var/tmp/redox-self-hosting-captures/20260414T231931-kernel-rebuild-test/meta.txt",
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T234753-kernel-rebuild-test/meta.txt",
       "present": true,
       "size_bytes": 939
     },
     "runner_log": {
-      "path": "/var/tmp/redox-self-hosting-captures/20260414T231931-kernel-rebuild-test/runner.log",
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T234753-kernel-rebuild-test/runner.log",
       "present": true,
-      "size_bytes": 10464
+      "size_bytes": 10386
     },
     "serial_log": {
-      "path": "/var/tmp/redox-self-hosting-captures/20260414T231931-kernel-rebuild-test/serial.log",
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T234753-kernel-rebuild-test/serial.log",
       "present": true,
-      "size_bytes": 8765
+      "size_bytes": 8687
     },
     "summary_json": {
-      "path": "/var/tmp/redox-self-hosting-captures/20260414T231931-kernel-rebuild-test/summary.json",
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T234753-kernel-rebuild-test/summary.json",
       "present": true,
       "size_bytes": 3339
     },
     "vmm_log": {
-      "path": "/var/tmp/redox-self-hosting-captures/20260414T231931-kernel-rebuild-test/vmm.log",
+      "path": "/var/tmp/redox-self-hosting-captures/20260414T234753-kernel-rebuild-test/vmm.log",
       "present": true,
       "size_bytes": 464
     }
   },
-  "finished_at": "2026-04-14T23:31:56-04:00",
+  "finished_at": "2026-04-14T23:59:43-04:00",
   "flow": "kernel-rebuild-test",
   "git_dirty": false,
-  "git_rev": "03ac9309",
+  "git_rev": "a7ed752b",
   "repo_root": "/home/brittonr/git/redox",
-  "run_id": "20260414T231931-kernel-rebuild-test",
+  "run_id": "20260414T234753-kernel-rebuild-test",
   "runner": {
     "image_size": "12G",
     "milestones": {
-      "Boot complete": "16.352s",
-      "Bootloader started": "16.021s",
-      "Kernel running": "16.133s",
-      "Test suite complete": "740.232s",
-      "Test suite started": "16.352s"
+      "Boot complete": "41.363s",
+      "Bootloader started": "40.923s",
+      "Kernel running": "41.144s",
+      "Test suite complete": "701.927s",
+      "Test suite started": "41.363s"
     },
     "timeout_seconds": 5400,
     "vmm": "ch"
   },
   "schema_version": 1,
-  "started_at": "2026-04-14T23:19:31-04:00",
+  "started_at": "2026-04-14T23:47:53-04:00",
   "test_counts": {
     "fail": 0,
     "failure_lines": [],

@@ -1,9 +1,15 @@
 # validate-native-kernel-rebuild evidence
 
+Host-side activation unit tests:
+- command: `PROTO_ROOT=$PWD/upstream PROTOC=$(nix shell nixpkgs#protobuf --command which protoc | tail -n1) cargo test --lib --target x86_64-unknown-linux-gnu boot_update_ -- --nocapture`
+- evidence: `2026-04-15-activate-unit-tests.txt`
+- result: `5 passed, 0 failed`
+- includes: `boot_update_requires_active_boot_copy`, which proves `/boot/*` success alone no longer reports boot artifact update success when `/usr/lib/boot/*` refresh fails.
+
 Passing focused proof run:
-- run: `20260414T231931-kernel-rebuild-test`
-- commit: `03ac9309`
-- capture: `/var/tmp/redox-self-hosting-captures/20260414T231931-kernel-rebuild-test`
+- run: `20260414T234753-kernel-rebuild-test`
+- commit: `a7ed752b`
+- capture: `/var/tmp/redox-self-hosting-captures/20260414T234753-kernel-rebuild-test`
 - excerpt: `2026-04-14-kernel-rebuild-test.excerpt.txt`
 - summary: `2026-04-14-kernel-rebuild-test.summary.json`
 
