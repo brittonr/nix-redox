@@ -1,20 +1,20 @@
 Flow:     kernel-rebuild-test
-Run:      20260414T234753-kernel-rebuild-test
+Run:      20260415T000324-kernel-rebuild-test
 Verdict:  PASS
-Duration: 710s
-Commit:   a7ed752b
+Duration: 728s
+Commit:   af057438
 
 Command:  /nix/store/716yzjdyxai0wv443vijxcs44cb6qvba-functional-test/bin/functional-test --timeout 5400 --verbose
-Capture:  /var/tmp/redox-self-hosting-captures/20260414T234753-kernel-rebuild-test
+Capture:  /var/tmp/redox-self-hosting-captures/20260415T000324-kernel-rebuild-test
 
 Results:  10 passed, 0 failed, 0 skipped
 
 Milestones:
-  Boot complete      @ 41.363s
-  Test suite started @ 41.363s
-  Test suite complete @ 701.927s
-  Bootloader started @ 40.923s
-  Kernel running     @ 41.144s
+  Boot complete      @ 12.392s
+  Test suite started @ 12.392s
+  Test suite complete @ 724.079s
+  Bootloader started @ 11.133s
+  Kernel running     @ 12.026s
 
 Artifacts:
   boot-default-marker: /etc/redox-system/boot-default

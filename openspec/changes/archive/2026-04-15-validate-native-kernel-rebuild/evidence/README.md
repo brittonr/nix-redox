@@ -7,9 +7,9 @@ Host-side activation unit tests:
 - includes: `boot_update_requires_active_boot_copy`, which proves `/boot/*` success alone no longer reports boot artifact update success when `/usr/lib/boot/*` refresh fails.
 
 Passing focused proof run:
-- run: `20260414T234753-kernel-rebuild-test`
-- commit: `a7ed752b`
-- capture: `/var/tmp/redox-self-hosting-captures/20260414T234753-kernel-rebuild-test`
+- run: `20260415T000324-kernel-rebuild-test`
+- commit: `af057438`
+- capture: `/var/tmp/redox-self-hosting-captures/20260415T000324-kernel-rebuild-test`
 - excerpt: `2026-04-14-kernel-rebuild-test.excerpt.txt`
 - summary: `2026-04-14-kernel-rebuild-test.summary.json`
 
