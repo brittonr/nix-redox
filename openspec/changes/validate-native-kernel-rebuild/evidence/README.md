@@ -1,9 +1,9 @@
 # validate-native-kernel-rebuild evidence
 
 Passing focused proof run:
-- run: `20260414T230502-kernel-rebuild-test`
-- commit: `ea2921a9`
-- capture: `/var/tmp/redox-self-hosting-captures/20260414T230502-kernel-rebuild-test`
+- run: `20260414T231931-kernel-rebuild-test`
+- commit: `03ac9309`
+- capture: `/var/tmp/redox-self-hosting-captures/20260414T231931-kernel-rebuild-test`
 - excerpt: `2026-04-14-kernel-rebuild-test.excerpt.txt`
 - summary: `2026-04-14-kernel-rebuild-test.summary.json`
 
