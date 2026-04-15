@@ -57,6 +57,7 @@ export CARGO_TERM_PROGRESS_WIDTH="${CARGO_TERM_PROGRESS_WIDTH:-80}"
 export CARGO_TARGET_X86_64_UNKNOWN_UEFI_RUSTFLAGS="--cfg aes_force_soft"
 
 bootloader_dir=/usr/src/native-kernel-rebuild/bootloader
+bootloader_linker_log="$TMPDIR/bootloader-linker"
 bootloader_linker="$TMPDIR/bootloader-linker-wrapper"
 bootloader_cargo_json="$TMPDIR/bootloader-cargo.jsonl"
 
@@ -91,53 +92,32 @@ cp -r "$rustlib_src/." "$custom_sysroot/lib/rustlib/"
 rm -rf "$custom_sysroot/lib/rustlib/src/rust"
 cp -r /usr/src/native-kernel-rebuild/rust-src "$custom_sysroot/lib/rustlib/src/rust"
 
-rustc_meta=$(ls -ld /nix/system/profile/bin/rustc)
-case "$rustc_meta" in
-  *' -> '*) rustc_bin=${rustc_meta##* -> } ;;
-  *) rustc_bin=/nix/system/profile/bin/rustc ;;
-esac
-manifest_toolchain_line=$(grep '"rust_toolchain_store":' /usr/src/native-kernel-rebuild/bundle-manifest.json || true)
-manifest_toolchain_key='"rust_toolchain_store": "'
-case "$manifest_toolchain_line" in
-  *"$manifest_toolchain_key"*)
-    rust_toolchain_root=${manifest_toolchain_line#*$manifest_toolchain_key}
-    rust_toolchain_root=${rust_toolchain_root%%\"*}
-    ;;
-  *)
-    rust_toolchain_root=${rustc_bin%/bin/rustc}
-    ;;
-esac
-
-rust_lld=""
-for candidate in "$rust_toolchain_root"/lib/rustlib/*/bin/rust-lld; do
-  if [ -e "$candidate" ]; then
-    rust_lld="$candidate"
-    break
-  fi
-done
-
-if [ -z "$rust_lld" ]; then
-  echo "[build-redox-bootloader] rust-lld not found under $rust_toolchain_root/lib/rustlib/*/bin" >&2
-  exit 1
-fi
-
 cp /nix/system/profile/bin/bash "$bootloader_linker"
 cat > "$bootloader_linker" <<EOF
 #!/nix/system/profile/bin/bash
-export PI_LLD_REAL="$rust_lld"
-exec /nix/system/profile/bin/lld-wrapper "\$@"
+printf '%s\n' "\$@" > "$bootloader_linker_log.args"
+: > "$bootloader_linker_log.rsp"
+for arg in "\$@"; do
+  case "\$arg" in
+    @*)
+      rsp_file=\${arg#@}
+      if [ -f "\$rsp_file" ]; then
+        printf '=== %s ===\n' "\$rsp_file" >> "$bootloader_linker_log.rsp"
+        cat "\$rsp_file" >> "$bootloader_linker_log.rsp"
+        printf '\n' >> "$bootloader_linker_log.rsp"
+      fi
+      ;;
+  esac
+done
+exec /nix/system/profile/bin/lld-wrapper "\$@" 2> "$bootloader_linker_log.stderr"
 EOF
 
 echo "[build-redox-bootloader] real_sysroot=$real_sysroot" >&2
 echo "[build-redox-bootloader] rustlib_src=$rustlib_src" >&2
 echo "[build-redox-bootloader] custom_sysroot=$custom_sysroot" >&2
-echo "[build-redox-bootloader] rustc_bin=$rustc_bin" >&2
-echo "[build-redox-bootloader] rust_toolchain_root=$rust_toolchain_root" >&2
-echo "[build-redox-bootloader] rust_lld=$rust_lld" >&2
-echo "[build-redox-bootloader] bootloader_linker=$bootloader_linker" >&2
+echo "[build-redox-bootloader] bootloader_linker=$bootloader_linker (lld-wrapper -flavor link)" >&2
 ls -ld "$custom_sysroot/lib/rustlib/src/rust/library" >&2 || true
 ls -ld "$custom_sysroot/lib/rustlib/src/rust/library/std" >&2 || true
-ls -ld "$rust_lld" >&2 || true
 ls -ld /nix/system/profile/bin/lld-wrapper >&2 || true
 ls -ld /nix/system/profile/bin/ld.lld >&2 || true
 
@@ -160,6 +140,15 @@ if ! cargo rustc \
   -C linker="$bootloader_linker" \
   > "$bootloader_cargo_json"
 then
+  echo "=== bootloader linker args ===" >&2
+  cat "$bootloader_linker_log.args" >&2 || true
+  echo "=== end bootloader linker args ===" >&2
+  echo "=== bootloader linker stderr ===" >&2
+  cat "$bootloader_linker_log.stderr" >&2 || true
+  echo "=== end bootloader linker stderr ===" >&2
+  echo "=== bootloader linker response ===" >&2
+  cat "$bootloader_linker_log.rsp" >&2 || true
+  echo "=== end bootloader linker response ===" >&2
   exit 1
 fi
 
@@ -171,6 +160,15 @@ if [ -z "$bootloader_bin" ] || [ ! -f "$bootloader_bin" ]; then
   echo "=== bootloader cargo json ===" >&2
   cat "$bootloader_cargo_json" >&2 || true
   echo "=== end bootloader cargo json ===" >&2
+  echo "=== bootloader linker args ===" >&2
+  cat "$bootloader_linker_log.args" >&2 || true
+  echo "=== end bootloader linker args ===" >&2
+  echo "=== bootloader linker stderr ===" >&2
+  cat "$bootloader_linker_log.stderr" >&2 || true
+  echo "=== end bootloader linker stderr ===" >&2
+  echo "=== bootloader linker response ===" >&2
+  cat "$bootloader_linker_log.rsp" >&2 || true
+  echo "=== end bootloader linker response ===" >&2
   ls -ld "$CARGO_TARGET_DIR/x86_64-unknown-uefi/release" >&2 || true
   ls "$CARGO_TARGET_DIR/x86_64-unknown-uefi/release" >&2 || true
   ls "$CARGO_TARGET_DIR/x86_64-unknown-uefi/release/deps" >&2 || true

@@ -130,7 +130,9 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Correct long-term fix: patch kernel `build.rs` to support `REDOX_KERNEL_USE_PREBUILT_TRAMPOLINE`, generate `src/asm/{x86,x86_64}/trampoline.bin` during host-side source prep, and set that env var in the guest native builder.
 - This keeps host/cross builds using real `nasm`, while native Redox guest rebuilds use deterministic prebuilt blobs from the same asm sources.
 - Follow-up lesson: use cargo `--message-format=json-render-diagnostics` in the guest builders and parse the `compiler-artifact` `executable` field. Guest cargo/rustc can claim an output path even when ad-hoc file guesses (`kernel.all`, `target/.../bootloader.efi`) are wrong.
-- Current state: focused native kernel rebuild now PASSes and records `/nix/store/0yiqaj311cni1rqqyqzc9pln2h3w6rss-redox-kernel-native-rebuild`; bootloader path is still blocked at native UEFI linker resolution (`rust-lld` path/provenance in guest is not straightforward, and direct `rust-lld` / wrapper attempts still fail).
+- Real bootloader blocker was not guest `rust-lld` lookup. Redox `llvm-redox` had COFF LLD disabled, so guest `ld.lld` could link ELF userspace/kernel targets but not UEFI `x86_64-unknown-uefi` artifacts. Fix was in `nix/pkgs/userspace/llvm-redox.nix`: keep COFF enabled and install `lld-link`.
+- UEFI rustc also emits UTF-16LE `@response` files for the MSVC/COFF linker flavor. `lld-wrapper` now expands UTF-16LE argfiles defensively before `exec`, which keeps guest-native bootloader linking debuggable even when the raw response file is unreadable from shell.
+- Current state: focused native `kernel-rebuild-test` now passes 8/8 and records both guest-produced store paths: `/nix/store/0yiqaj311cni1rqqyqzc9pln2h3w6rss-redox-kernel-native-rebuild` and `/nix/store/06x25abzqs38pyscj58vssf9z9p1gv1n-redox-bootloader-native-rebuild`.
 
 ### Rebuild VM test traps I hit this pass
 - I forgot `let PATH = "/nix/system/profile/bin:/bin:/usr/bin"; export PATH` at the top of a startup-script test, then blamed bash when `grep`/`sed` were just missing from PATH.
