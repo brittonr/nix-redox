@@ -12,8 +12,8 @@
 
 ## 3. Prove the artifacts are consumable
 
-- [ ] 3.1 Validate that the guest-produced artifacts can be registered/staged in the system's boot artifact flow.
-- [ ] 3.2 Add a boot smoke path that proves the rebuilt artifacts can be selected for boot, if practical in the focused VM.
+- [x] 3.1 Validate that the guest-produced artifacts can be registered/staged in the system's boot artifact flow.
+- [x] 3.2 Add a boot smoke path that proves the rebuilt artifacts can be selected for boot, if practical in the focused VM.
 - [x] 3.3 Record artifact provenance and resulting store paths in the durable capture output.
 
 ## 4. Document the self-hosting claim

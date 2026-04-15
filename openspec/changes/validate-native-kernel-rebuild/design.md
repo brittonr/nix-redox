@@ -61,12 +61,14 @@ The repo already has good evidence for userspace self-hosting and host-side boot
 3. Validate the build-artifact proof first.
 4. Add a staged boot smoke path once the build proof is reliable.
 
-## Proof status after the first focused pass
+## Proof status after the focused pass
 
 - The focused `kernel-rebuild-test` now proves that a running Redox guest can rebuild both the kernel and the bootloader from the audited `/usr/src/native-kernel-rebuild` bundle and emit guest-produced `/nix/store/...` outputs for each artifact.
-- The proof remains intentionally narrower than full OS self-hosting. It does not yet prove that those guest-produced outputs have been staged into the boot artifact selection flow or that the VM has rebooted with them.
-- This focused flow is therefore a separate proof rung from the existing `self-hosting-test` baseline. `self-hosting-test` still covers userspace self-hosting and rebuild flows; `kernel-rebuild-test` covers guest-native boot-component artifact production.
+- The same focused flow now stages those guest-produced paths into the existing boot-generation flow by switching to a manifest that references them, verifying the resulting generation manifest / GC roots / boot-default marker, and checking that activation refreshes both `/boot/*` and the bootloader-consumed `/usr/lib/boot/*` copies from the guest-produced kernel path.
+- The boot smoke uses `snix system boot` plus `snix system activate-boot` to exercise the same selection path that the init script uses at boot, without needing a full reboot in the harness.
+- This remains narrower than full OS self-hosting. The focused proof does not yet show a firmware-level reboot of the same VM with the guest-produced bootloader binary loaded from the ESP.
+- This focused flow is therefore a separate proof rung from the existing `self-hosting-test` baseline. `self-hosting-test` still covers userspace self-hosting and rebuild flows; `kernel-rebuild-test` covers guest-native boot-component artifact production plus boot-selection staging.
 
 ## Open Questions
 
-- Whether the first-pass boot smoke should reboot the same VM or stage artifacts only and validate manifest/boot selection plumbing.
+- Whether a later follow-up should add an actual same-VM reboot/ESP smoke path once the harness can observe it reliably.
