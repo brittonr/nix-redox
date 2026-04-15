@@ -190,7 +190,7 @@ pkgs.writeShellScriptBin "channel-update-test" ''
       break
     fi
 
-    LOG_CONTENT=$(cat "$SERIAL_LOG" 2>/dev/null || true)
+    LOG_CONTENT=$(${pkgs.coreutils}/bin/tr -d '\000' < "$SERIAL_LOG" 2>/dev/null || true)
 
     if [ -z "$LOG_CONTENT" ]; then
       sleep 0.1

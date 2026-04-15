@@ -652,15 +652,31 @@ impl SchemeSync for BuildFsHandler {
         Ok(len)
     }
 
+    fn flink(&mut self, id: usize, path: &str, _ctx: &CallerCtx) -> Result<usize> {
+        let target_path = self.resolve_path(path);
+        if self.check_with_symlink_resolution(&target_path) != Permission::ReadWrite {
+            return Err(Error::new(EACCES));
+        }
+
+        let old_path = match self.handles.get(&id) {
+            Some(ProxyHandle::File(fh)) => fh.real_path.clone(),
+            Some(ProxyHandle::Dir(_)) => return Err(Error::new(EISDIR)),
+            None => return Err(Error::new(EBADF)),
+        };
+
+        self.io_worker.link_path(&old_path, &target_path)?;
+        Ok(0)
+    }
+
     fn frename(&mut self, id: usize, path: &str, _ctx: &CallerCtx) -> Result<usize> {
         let target_path = self.resolve_path(path);
         if self.check_with_symlink_resolution(&target_path) != Permission::ReadWrite {
             return Err(Error::new(EACCES));
         }
 
-        let (old_path, old_scheme_path, is_dir) = match self.handles.get(&id) {
-            Some(ProxyHandle::File(fh)) => (fh.real_path.clone(), fh.scheme_path.clone(), false),
-            Some(ProxyHandle::Dir(dh)) => (dh.real_path.clone(), dh.scheme_path.clone(), true),
+        let (old_path, old_scheme_path) = match self.handles.get(&id) {
+            Some(ProxyHandle::File(fh)) => (fh.real_path.clone(), fh.scheme_path.clone()),
+            Some(ProxyHandle::Dir(dh)) => (dh.real_path.clone(), dh.scheme_path.clone()),
             None => return Err(Error::new(EBADF)),
         };
 
@@ -736,7 +752,13 @@ impl SchemeSync for BuildFsHandler {
         // For directories under an allowed prefix: read real entries unfiltered.
         // For ancestor directories (/, /nix, /tmp): filter or synthesize.
         let entries = if is_under_allowed {
-            self.io_worker.read_dir(&dir_path).unwrap_or_default()
+            match self.io_worker.read_dir(&dir_path) {
+                Ok(entries) => entries,
+                Err(err) => {
+                    eprintln!("buildfs: read_dir {:?} failed: {}", dir_path, err);
+                    return Err(err);
+                }
+            }
         } else {
             self.list_visible_children(&dir_path)
         };

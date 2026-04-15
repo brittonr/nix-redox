@@ -97,6 +97,11 @@ enum IoRequest {
         new_path: PathBuf,
         response: mpsc::Sender<Result<()>>,
     },
+    LinkPath {
+        old_path: PathBuf,
+        new_path: PathBuf,
+        response: mpsc::Sender<Result<()>>,
+    },
     UnlinkPath {
         path: PathBuf,
         directory: bool,
@@ -277,6 +282,18 @@ impl BuildFsIoWorker {
         let (tx, rx) = mpsc::channel();
         self.request(
             IoRequest::RenamePath {
+                old_path: old_path.to_path_buf(),
+                new_path: new_path.to_path_buf(),
+                response: tx,
+            },
+            rx,
+        )
+    }
+
+    pub fn link_path(&self, old_path: &Path, new_path: &Path) -> Result<()> {
+        let (tx, rx) = mpsc::channel();
+        self.request(
+            IoRequest::LinkPath {
                 old_path: old_path.to_path_buf(),
                 new_path: new_path.to_path_buf(),
                 response: tx,
@@ -482,6 +499,21 @@ fn worker_main(
                 response,
             } => {
                 let _ = response.send(worker_rename_path(
+                    root_fd,
+                    profile_root_fd,
+                    store_root_fd,
+                    dev_null_fd,
+                    dev_urandom_fd,
+                    &old_path,
+                    &new_path,
+                ));
+            }
+            IoRequest::LinkPath {
+                old_path,
+                new_path,
+                response,
+            } => {
+                let _ = response.send(worker_link_path(
                     root_fd,
                     profile_root_fd,
                     store_root_fd,
@@ -786,8 +818,32 @@ fn worker_rename_path(
         old_path,
         O_RDONLY,
     )?;
-    let new_path = new_path.to_string_lossy();
-    let result = syscall::frename(fd, new_path.as_ref()).map(|_| ());
+    let new_path_str = new_path.to_string_lossy();
+    let result = syscall::frename(fd, new_path_str.as_ref()).map(|_| ());
+    raw_close(fd);
+    result
+}
+
+fn worker_link_path(
+    root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
+    dev_null_fd: Option<usize>,
+    dev_urandom_fd: Option<usize>,
+    old_path: &Path,
+    new_path: &Path,
+) -> Result<()> {
+    let fd = open_fd(
+        root_fd,
+        profile_root_fd,
+        store_root_fd,
+        dev_null_fd,
+        dev_urandom_fd,
+        old_path,
+        O_RDONLY,
+    )?;
+    let new_path_str = new_path.to_string_lossy();
+    let result = syscall::flink(fd, new_path_str.as_ref()).map(|_| ());
     raw_close(fd);
     result
 }
@@ -903,30 +959,32 @@ fn worker_read_dir(
     )?;
 
     let mut entries = Vec::new();
-    let mut raw_buf = [0u8; 8192];
+    let mut raw_buf = vec![0u8; 8192];
+    let mut opaque = 0u64;
 
     loop {
-        let n = match unsafe {
-            syscall::syscall3(
-                syscall::SYS_GETDENTS,
-                dir_fd,
-                raw_buf.as_mut_ptr() as usize,
-                raw_buf.len(),
-            )
-        } {
-            Ok(0) => break,
-            Ok(n) => n,
-            Err(e) => {
-                raw_close(dir_fd);
-                return Err(e);
+        let n = loop {
+            match libredox::call::getdents(dir_fd, &mut raw_buf, opaque) {
+                Ok(n) => break n,
+                Err(err) if err.errno() == syscall::EINVAL as i32 => {
+                    let next_len = raw_buf.len().saturating_mul(2).max(16384);
+                    raw_buf.resize(next_len, 0);
+                    continue;
+                }
+                Err(err) => {
+                    raw_close(dir_fd);
+                    return Err(err.into());
+                }
             }
         };
 
-        parse_raw_dirents(&raw_buf[..n], &mut entries);
-    }
+        if n == 0 {
+            raw_close(dir_fd);
+            return Ok(entries);
+        }
 
-    raw_close(dir_fd);
-    Ok(entries)
+        opaque = parse_raw_dirents(&raw_buf[..n], &mut entries).unwrap_or(opaque);
+    }
 }
 
 fn rustlib_cache_key(path: &Path) -> PathBuf {
@@ -1056,11 +1114,13 @@ fn mkdir_p_via_root_fd(root_fd: usize, path: &Path) {
     }
 }
 
-fn parse_raw_dirents(buf: &[u8], entries: &mut Vec<(String, DirentKind)>) {
+fn parse_raw_dirents(buf: &[u8], entries: &mut Vec<(String, DirentKind)>) -> Option<u64> {
+    let mut last_opaque = None;
     for entry in syscall::dirent::DirentIter::new(buf) {
         let Ok((header, name_bytes)) = entry else {
             break;
         };
+        last_opaque = Some(header.next_opaque_id);
         let Ok(name) = std::str::from_utf8(name_bytes) else {
             continue;
         };
@@ -1070,4 +1130,5 @@ fn parse_raw_dirents(buf: &[u8], entries: &mut Vec<(String, DirentKind)>) {
         let kind = DirentKind::try_from_raw(header.kind).unwrap_or(DirentKind::Regular);
         entries.push((name.to_string(), kind));
     }
+    last_opaque
 }

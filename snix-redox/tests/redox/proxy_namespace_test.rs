@@ -12,6 +12,7 @@
 //! 6. Write 1KB, read back, byte-for-byte match.
 //! 7. Latency: 1000 open+read+close, print mean and p99.
 //! 8. Repeated write+read cycles stay live through the worker-backed proxy path.
+//! 9. Temp-file rename + hard-link flow stays visible through getdents.
 //!
 //! Run inside Redox:
 //!   /nix/system/profile/bin/proxy_namespace_test
@@ -33,6 +34,7 @@ fn main() {
             "test6" => child_test_6(),
             "test7" => child_test_7(),
             "test8" => child_test_8(),
+            "test9" => child_test_9(),
             other => {
                 eprintln!("unknown child test: {}", other);
                 std::process::exit(99);
@@ -137,7 +139,7 @@ fn test_register_file_scheme_to_ns() {
     let _ = syscall::close(ns_fd);
 }
 
-// ── Tests 3-7: Proxy I/O round-trip tests ──────────────────────────────
+// ── Tests 3-9: Proxy I/O round-trip tests ──────────────────────────────
 
 #[cfg(target_os = "redox")]
 fn test_proxy_io() {
@@ -185,6 +187,7 @@ fn test_proxy_io() {
             println!("TEST 6: SKIP");
             println!("TEST 7: SKIP");
             println!("TEST 8: SKIP");
+            println!("TEST 9: SKIP");
             return;
         }
     };
@@ -239,6 +242,14 @@ fn test_proxy_io() {
         socket_fd,
         "proxy-worker-cycles",
         Some(verify_test_8),
+    );
+    run_child_test(
+        "TEST 9: rename + hard-link keeps dir entries visible",
+        "test9",
+        child_ns_fd,
+        socket_fd,
+        "proxy-rename-link-visibility",
+        Some(verify_test_9),
     );
 
     // Shut down the proxy.
@@ -637,4 +648,57 @@ fn verify_test_8() -> Result<(), String> {
     } else {
         Err(format!("unexpected final content: {content:?}"))
     }
+}
+
+#[cfg(target_os = "redox")]
+fn child_test_9() {
+    use std::io::Write;
+
+    let dir = "/tmp/proxy-test-out/rename-link";
+    std::fs::create_dir_all(dir).expect("mkdir through proxy");
+
+    let tmp_path = format!("{dir}/libshlex.tmp");
+    let final_path = format!("{dir}/libshlex.rlib");
+    let linked_path = format!("{dir}/libshlex-linked.rlib");
+
+    {
+        let mut f = std::fs::File::create(&tmp_path).expect("create temp file through proxy");
+        f.write_all(b"rlib-placeholder\n")
+            .expect("write temp file through proxy");
+    }
+
+    std::fs::rename(&tmp_path, &final_path).expect("rename through proxy");
+    std::fs::hard_link(&final_path, &linked_path).expect("hard link through proxy");
+
+    let entries: Vec<String> = std::fs::read_dir(dir)
+        .expect("read_dir through proxy after rename+link")
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+
+    for expected in ["libshlex.rlib", "libshlex-linked.rlib"] {
+        if !entries.contains(&expected.to_string()) {
+            eprintln!(
+                "rename/link dir listing missing {expected}, got {:?}",
+                entries
+            );
+            std::process::exit(1);
+        }
+    }
+}
+
+#[cfg(target_os = "redox")]
+fn verify_test_9() -> Result<(), String> {
+    let entries: Vec<String> = std::fs::read_dir("/tmp/proxy-test-out/rename-link")
+        .map_err(|e| format!("read_dir on real fs: {e}"))?
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().to_string())
+        .collect();
+
+    for expected in ["libshlex.rlib", "libshlex-linked.rlib"] {
+        if !entries.contains(&expected.to_string()) {
+            return Err(format!("missing {expected} in {:?}", entries));
+        }
+    }
+    Ok(())
 }

@@ -1206,14 +1206,14 @@ let
 
                         println!("REAL_PROGRAM_OK: {} tests passed, {}", 8, msg);
                     }
-  RUSTEOF
+RUSTEOF
 
                           cat > /tmp/realtest/Cargo.toml << '"'"'TOMLEOF'"'"'
                     [package]
                     name = "realtest"
                     version = "0.1.0"
                     edition = "2021"
-  TOMLEOF
+TOMLEOF
 
                           cd /tmp/realtest
                           rm -f /root/.cargo/.package-cache* /root/.cargo/.global-cache* 2>/dev/null
@@ -1323,7 +1323,7 @@ let
                                 .join(" ")
                         }
                     }
-  LIBEOF
+LIBEOF
 
                           cat > /tmp/multifile/src/main.rs << '"'"'MAINEOF'"'"'
                     use multifile::math::{gcd, lcm};
@@ -1345,7 +1345,7 @@ let
 
                         println!("MULTIFILE_OK: math+text modules working");
                     }
-  MAINEOF
+MAINEOF
 
                           cat > /tmp/multifile/Cargo.toml << '"'"'TOMLEOF'"'"'
                     [package]
@@ -1360,7 +1360,7 @@ let
                     [lib]
                     name = "multifile"
                     path = "src/lib.rs"
-  TOMLEOF
+TOMLEOF
 
                           cd /tmp/multifile
                           echo "[multifile] starting cargo build (offline)..."
@@ -1418,7 +1418,7 @@ let
                     fs::write(&dest_path, code).expect("write failed");
                     eprintln!("build.rs: wrote generated.rs");
                 }
-  BUILDEOF
+BUILDEOF
 
                           cat > /tmp/buildscript/src/main.rs << MAINEOF
                 include!("/tmp/buildscript/out/generated.rs");
@@ -1427,7 +1427,7 @@ let
                     assert_eq!(BUILD_TARGET, "x86_64-unknown-redox");
                     println!("BUILDSCRIPT_OK: target={}, val={}", BUILD_TARGET, GENERATED_VALUE);
                 }
-  MAINEOF
+MAINEOF
 
                           echo "[bs] Step 1: compile build.rs..."
                           rustc --edition=2021 /tmp/buildscript/build.rs \
@@ -1862,7 +1862,7 @@ let
     name = "envpkgtest"
     version = "0.1.0"
     edition = "2021"
-  TOMLEOF
+TOMLEOF
 
                           cat > /tmp/env-pkg-test/src/main.rs << RSEOF
     fn main() {
@@ -1876,7 +1876,7 @@ let
         println!("ENV_PKG_OK: name={} version={}", name, version);
         println!("ENV_PROPAGATION: LD_LIBRARY_PATH={:?} CARGO_HOME={:?}", ld_lib, cargo_home);
     }
-  RSEOF
+RSEOF
 
                           cd /tmp/env-pkg-test
                           cargo build --offline >/dev/null 2>/tmp/env-pkg-stderr &
@@ -1934,7 +1934,7 @@ let
     name = "heavyfork"
     version = "0.1.0"
     edition = "2021"
-  TOMLEOF
+TOMLEOF
 
                           # build.rs that dumps env AND forks clang 20 times
                           cat > /tmp/heavyfork/build.rs << RSEOF
@@ -1968,7 +1968,7 @@ let
         // Also emit a cargo:rustc-env to test both paths
         println!("cargo:rustc-env=BUILD_FORKS=20");
     }
-  RSEOF
+RSEOF
 
                           # Library with env!("CARGO_PKG_NAME") — same pattern as ring
                           cat > /tmp/heavyfork/src/lib.rs << RSEOF
@@ -1980,7 +1980,7 @@ let
     // Check environ propagation survives heavy fork load (DSO environ stress test)
     pub const LD_LIB: Option<&str> = option_env!("LD_LIBRARY_PATH");
     pub const CARGO_HOME_ENV: Option<&str> = option_env!("CARGO_HOME");
-  RSEOF
+RSEOF
 
                           cat > /tmp/heavyfork/src/main.rs << RSEOF
     fn main() {
@@ -1992,7 +1992,7 @@ let
             heavyfork::LD_LIB,
             heavyfork::CARGO_HOME_ENV);
     }
-  RSEOF
+RSEOF
 
                           cd /tmp/heavyfork
                           echo "[heavyfork] starting cargo build..."
@@ -2632,7 +2632,7 @@ let
             inherit dep;
           };
         in main
-  NIXEOF
+NIXEOF
 
                           OUTPUT=$(/bin/snix build --file /tmp/snix-dep-test.nix 2>/tmp/snix-build-dep-err)
                           EXIT=$?
@@ -2659,7 +2659,7 @@ let
           args = ["-c" "export PATH=/nix/system/profile/bin:/bin:/usr/bin; mkdir -p $out/bin; echo SNIX_BUILT_AND_RAN > $out/bin/hello"];
           system = "x86_64-unknown-redox";
         }
-  NIXEOF
+NIXEOF
 
                           OUTPUT=$(/bin/snix build --file /tmp/snix-exec-test.nix 2>/tmp/snix-build-exec-err)
                           EXIT=$?
@@ -2686,7 +2686,7 @@ let
           args = ["-c" "echo built-from-nix-file > $out"];
           system = "x86_64-unknown-redox";
         }
-  NIXEOF
+NIXEOF
 
                           OUTPUT=$(/bin/snix build --file /tmp/snix-file-test.nix 2>/tmp/snix-build-file-err)
                           EXIT=$?
@@ -2746,19 +2746,19 @@ let
   name = "hello"
   version = "0.1.0"
   edition = "2021"
-  TOML
+TOML
                           cat > /tmp/hello-cargo-src/src/main.rs << RUST
   fn main() {
       println!("Hello from Nix-built Rust on Redox!");
   }
-  RUST
+RUST
                           cat > /tmp/hello-cargo-src/.cargo/config.toml << CFG
   [build]
   jobs = 2
   target = "x86_64-unknown-redox"
   [target.x86_64-unknown-redox]
   linker = "/nix/system/profile/bin/cc"
-  CFG
+CFG
 
                           cat > /tmp/build-hello-cargo.sh << '"'"'BUILDEOF'"'"'
 #!/nix/system/profile/bin/bash
@@ -2774,7 +2774,7 @@ cp -r "$src"/. "$SRCDIR"
 cd "$SRCDIR"
 cargo build --offline -j2
 cp "$SRCDIR/target/x86_64-unknown-redox/debug/hello" "$out/bin/hello"
-  BUILDEOF
+BUILDEOF
                           /nix/system/profile/bin/chmod +x /tmp/build-hello-cargo.sh
 
                           cat > /tmp/hello-cargo.nix << '"'"'HELLONIX'"'"'
@@ -2785,7 +2785,7 @@ cp "$SRCDIR/target/x86_64-unknown-redox/debug/hello" "$out/bin/hello"
           system = "x86_64-unknown-redox";
           src = "/tmp/hello-cargo-src";
         }
-  HELLONIX
+HELLONIX
 
                           # Clear stale cc-wrapper debug files
                           rm -f /tmp/.cc-wrapper-raw-args /tmp/.cc-wrapper-stderr /tmp/.cc-wrapper-shared-cmd /tmp/.cc-wrapper-last-err 2>/dev/null
@@ -3060,7 +3060,7 @@ cp "$SRCDIR/target/x86_64-unknown-redox/debug/hello" "$out/bin/hello"
     name = "j2test"
     version = "0.1.0"
     edition = "2021"
-  TOMLEOF
+TOMLEOF
                           mkdir -p src
                           echo "fn main() { println!(\"parallel\"); }" > src/main.rs
 
@@ -3260,14 +3260,14 @@ cp "$SRCDIR/target/x86_64-unknown-redox/debug/hello" "$out/bin/hello"
             system = "x86_64-unknown-redox";
           };
         }
-  PKGNIX
+PKGNIX
 
                           # Create configuration.nix with packageSources
                           cat > "$CFGDIR/configuration.nix" << '"'"'CFGNIX'"'"'
         {
           packageSources = "/tmp/source-rebuild-test/packages.nix";
         }
-  CFGNIX
+CFGNIX
 
                           # Set up a writable gen dir and manifest for this test.
                           # Seed from the live system manifest so source rebuild

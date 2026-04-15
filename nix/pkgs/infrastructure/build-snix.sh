@@ -49,7 +49,10 @@ if [ -x /nix/system/profile/bin/protoc ]; then
   export PROTOC=/nix/system/profile/bin/protoc
 fi
 
-export SNIX_RUSTC_LOG=/tmp/snix-rustc.log
+# Under the proxy sandbox, the builder may only write inside its declared
+# tmp/output paths. Keep rustc wrapper traces under $TMPDIR instead of the
+# guest-global /tmp used by the outer test harness.
+export SNIX_RUSTC_LOG="${TMPDIR:-/tmp}/snix-rustc.log"
 : >"$SNIX_RUSTC_LOG"
 RUSTC_WRAPPER_SH="$TMPDIR/rustc-wrapper.sh"
 cp /nix/system/profile/bin/bash "$RUSTC_WRAPPER_SH"
