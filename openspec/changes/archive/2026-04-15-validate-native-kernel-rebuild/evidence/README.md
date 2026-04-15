@@ -10,8 +10,13 @@ Passing focused proof run:
 - run: `20260415T000324-kernel-rebuild-test`
 - commit: `af057438`
 - capture: `/var/tmp/redox-self-hosting-captures/20260415T000324-kernel-rebuild-test`
-- excerpt: `2026-04-14-kernel-rebuild-test.excerpt.txt`
-- summary: `2026-04-14-kernel-rebuild-test.summary.json`
+- excerpt: `2026-04-15-kernel-rebuild-test.excerpt.txt`
+- summary: `2026-04-15-kernel-rebuild-test.summary.json`
+
+Archive note:
+- The archived in-repo proof files above prove revision `af057438`.
+- Later archive/doc-only commits may adjust filenames or wording without changing the tested code paths.
+- Exact re-verification of a later metadata-only tip must come from an external capture recorded during the session, not by silently rewriting these archived proof files to a different commit.
 
 What this proves:
 - Redox guest rebuilt the kernel natively and produced `/nix/store/0yiqaj311cni1rqqyqzc9pln2h3w6rss-redox-kernel-native-rebuild`.
