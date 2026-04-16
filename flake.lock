@@ -716,23 +716,6 @@
         "type": "gitlab"
       }
     },
-    "lsd-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1760257753,
-        "narHash": "sha256-BDwptBRGy2IGc3FrgFZ1rt/e1bpKs1Y0C3H4JfqRqHc=",
-        "owner": "lsd-rs",
-        "repo": "lsd",
-        "rev": "d5a4e1cb80626d5ec94b237f6b77f7280d0f2fc9",
-        "type": "github"
-      },
-      "original": {
-        "owner": "lsd-rs",
-        "ref": "v1.2.0",
-        "repo": "lsd",
-        "type": "github"
-      }
-    },
     "netdb-src": {
       "flake": false,
       "locked": {
@@ -1091,25 +1074,6 @@
         "type": "gitlab"
       }
     },
-    "redox-liner-src": {
-      "flake": false,
-      "locked": {
-        "host": "gitlab.redox-os.org",
-        "lastModified": 1721416659,
-        "narHash": "sha256-WbNpJceHtPOyPxkN2jcd6j0OHhmwLD4DIlVWSZ+MT7Q=",
-        "owner": "redox-os",
-        "repo": "liner",
-        "rev": "f3fb3b754623026dca820cbf36231fa92772416f",
-        "type": "gitlab"
-      },
-      "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
-        "ref": "master",
-        "repo": "liner",
-        "type": "gitlab"
-      }
-    },
     "redox-log-src": {
       "flake": false,
       "locked": {
@@ -1354,7 +1318,6 @@
         "kprofiling-src": "kprofiling-src",
         "liblibc-src": "liblibc-src",
         "libredox-src": "libredox-src",
-        "lsd-src": "lsd-src",
         "netdb-src": "netdb-src",
         "netutils-src": "netutils-src",
         "nixpkgs": "nixpkgs",
@@ -1374,7 +1337,6 @@
         "perg-src": "perg-src",
         "pkgar-src": "pkgar-src",
         "pkgutils-src": "pkgutils-src",
-        "redox-liner-src": "redox-liner-src",
         "redox-log-src": "redox-log-src",
         "redox-path-src": "redox-path-src",
         "redox-scheme-src": "redox-scheme-src",
@@ -1394,7 +1356,6 @@
         "strace-redox-src": "strace-redox-src",
         "terminfo-src": "terminfo-src",
         "termion-src": "termion-src",
-        "tokei-src": "tokei-src",
         "treefmt-nix": "treefmt-nix",
         "uefi-src": "uefi-src",
         "unit2nix": "unit2nix",
@@ -1548,23 +1509,6 @@
         "ref": "master",
         "repo": "termion",
         "type": "gitlab"
-      }
-    },
-    "tokei-src": {
-      "flake": false,
-      "locked": {
-        "lastModified": 1767093542,
-        "narHash": "sha256-BpQ+Aurx2CkFRcozUTbmLLAg7v3NkgKXm5y0TiQCfHw=",
-        "owner": "XAMPPRocky",
-        "repo": "tokei",
-        "rev": "8cdd6fa3a54f8cd69442d2f00effb29aa3110353",
-        "type": "github"
-      },
-      "original": {
-        "owner": "XAMPPRocky",
-        "ref": "v14.0.0",
-        "repo": "tokei",
-        "type": "github"
       }
     },
     "treefmt-nix": {

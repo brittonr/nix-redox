@@ -72,6 +72,7 @@ let
     trap cleanup EXIT
 
     SERIAL_LOG="$WORK_DIR/serial.log"
+    RESULT_LOG="$SERIAL_LOG"
     touch "$SERIAL_LOG"
 
     start_vm_monitor() {
@@ -150,22 +151,23 @@ let
     # === Count test results from serial log ===
     count_results() {
       local prefix="$1"
+      local result_log="''${RESULT_LOG:-$SERIAL_LOG}"
       if [ -n "$TEST_FILTER" ]; then
         # Filter and count matching tests
-        PASS_COUNT=$(${grep} "^$prefix:.*:PASS" "$SERIAL_LOG" 2>/dev/null | while IFS=: read -r _marker name _result; do
+        PASS_COUNT=$(${grep} "^$prefix:.*:PASS" "$result_log" 2>/dev/null | while IFS=: read -r _marker name _result; do
           if echo "$name" | ${grep} -q "$TEST_FILTER"; then echo "$name"; fi
         done | wc -l) || PASS_COUNT=0
-        FAIL_COUNT=$(${grep} "^$prefix:.*:FAIL" "$SERIAL_LOG" 2>/dev/null | while IFS=: read -r _marker name _result; do
+        FAIL_COUNT=$(${grep} "^$prefix:.*:FAIL" "$result_log" 2>/dev/null | while IFS=: read -r _marker name _result; do
           if echo "$name" | ${grep} -q "$TEST_FILTER"; then echo "$name"; fi
         done | wc -l) || FAIL_COUNT=0
-        SKIP_COUNT=$(${grep} "^$prefix:.*:SKIP" "$SERIAL_LOG" 2>/dev/null | while IFS=: read -r _marker name _result; do
+        SKIP_COUNT=$(${grep} "^$prefix:.*:SKIP" "$result_log" 2>/dev/null | while IFS=: read -r _marker name _result; do
           if echo "$name" | ${grep} -q "$TEST_FILTER"; then echo "$name"; fi
         done | wc -l) || SKIP_COUNT=0
       else
         # Count all tests
-        PASS_COUNT=$(${grep} -c "^$prefix:.*:PASS" "$SERIAL_LOG" 2>/dev/null) || PASS_COUNT=0
-        FAIL_COUNT=$(${grep} -c "^$prefix:.*:FAIL" "$SERIAL_LOG" 2>/dev/null) || FAIL_COUNT=0
-        SKIP_COUNT=$(${grep} -c "^$prefix:.*:SKIP" "$SERIAL_LOG" 2>/dev/null) || SKIP_COUNT=0
+        PASS_COUNT=$(${grep} -c "^$prefix:.*:PASS" "$result_log" 2>/dev/null) || PASS_COUNT=0
+        FAIL_COUNT=$(${grep} -c "^$prefix:.*:FAIL" "$result_log" 2>/dev/null) || FAIL_COUNT=0
+        SKIP_COUNT=$(${grep} -c "^$prefix:.*:SKIP" "$result_log" 2>/dev/null) || SKIP_COUNT=0
       fi
       TOTAL_COUNT=$((PASS_COUNT + FAIL_COUNT + SKIP_COUNT))
     }
@@ -187,8 +189,9 @@ let
       echo ""
 
       if [ "$FAIL_COUNT" -gt 0 ]; then
+        local result_log="''${RESULT_LOG:-$SERIAL_LOG}"
         echo "  ''${RED}Failed tests:''${RESET}"
-        ${grep} "^$TEST_PREFIX:.*:FAIL" "$SERIAL_LOG" 2>/dev/null | tr -d '\r' \
+        ${grep} "^$TEST_PREFIX:.*:FAIL" "$result_log" 2>/dev/null | tr -d '\r' \
           | while IFS=: read -r _marker name _fail reason; do
               # If filter is set, skip tests that don't match
               if [ -n "$TEST_FILTER" ] && ! echo "$name" | ${grep} -q "$TEST_FILTER"; then
@@ -308,6 +311,8 @@ in
   #   timeoutEnvVar  - Environment variable for timeout override
   #   memoryMB, cpus - VM resources
   #   defaultMode    - "auto", "qemu", or "ch"
+  #   enableQemu     - Include/support QEMU launch path in the runner
+  #   enableCH       - Include/support Cloud Hypervisor launch path in the runner
   #   qemuExtraArgs  - Additional QEMU command line args
   #   chExtraArgs    - Additional Cloud Hypervisor args
   #   testPrefix     - "FUNC_TEST", "NET_TEST", or null (boot-only)
@@ -325,6 +330,8 @@ in
       memoryMB ? 1024,
       cpus ? 2,
       defaultMode ? "auto",
+      enableQemu ? true,
+      enableCH ? true,
       qemuExtraArgs ? "",
       chExtraArgs ? "",
       testPrefix ? null,
@@ -348,6 +355,7 @@ in
       MODE="${defaultMode}"
       VERBOSE=0
       TEST_FILTER=""
+      STOP_AFTER_SCRIPT=""
 
       usage() {
         echo "Usage: ${name} [OPTIONS]"
@@ -355,10 +363,12 @@ in
         echo "  ${title}"
         echo ""
         echo "Options:"
-        echo "  --qemu         Force QEMU TCG mode (no KVM required)"
-        echo "  --ch           Force Cloud Hypervisor mode (KVM required)"
+        ${lib.optionalString enableQemu ''echo "  --qemu         Force QEMU TCG mode (no KVM required)"''}
+        ${lib.optionalString enableCH ''echo "  --ch           Force Cloud Hypervisor mode (KVM required)"''}
         echo "  --timeout SEC  Set timeout (default: ${toString defaultTimeout}, env: ${timeoutEnvVar})"
-        echo "  --filter PAT   Only run tests matching pattern (substring match)"
+        echo "  --filter PAT   Only report tests matching pattern (substring match)"
+        echo "  --stop-after-script NAME"
+        echo "                 Stop after script banner NAME completes"
         echo "  --verbose      Show serial output in real time"
         echo "  --help         Show this help"
         exit 0
@@ -366,27 +376,62 @@ in
 
       while [ $# -gt 0 ]; do
         case "$1" in
-          --qemu)    MODE="qemu"; shift ;;
-          --ch)      MODE="ch"; shift ;;
+          ${lib.optionalString enableQemu ''--qemu)    MODE="qemu"; shift ;;''}
+          ${lib.optionalString enableCH ''--ch)      MODE="ch"; shift ;;''}
           --timeout) TIMEOUT="$2"; shift 2 ;;
           --filter)  TEST_FILTER="$2"; shift 2 ;;
+          --stop-after-script) STOP_AFTER_SCRIPT="$2"; shift 2 ;;
           --verbose) VERBOSE=1; shift ;;
           --help)    usage ;;
           *)         echo "Unknown option: $1"; usage ;;
         esac
       done
 
+      ${lib.optionalString (!enableQemu) ''
+        if [ "$MODE" = "qemu" ]; then
+          echo "QEMU mode not available for ${name}"
+          exit 1
+        fi
+      ''}
+      ${lib.optionalString (!enableCH) ''
+        if [ "$MODE" = "ch" ]; then
+          echo "Cloud Hypervisor mode not available for ${name}"
+          exit 1
+        fi
+      ''}
+
       # Auto-detect VMM
       if [ "$MODE" = "auto" ]; then
-        if [ -w /dev/kvm ] 2>/dev/null; then
-          MODE="ch"
-        else
-          echo "  Warning: /dev/kvm not available — falling back to QEMU TCG (slower)"
-          MODE="qemu"
-          if [ "$TIMEOUT" -lt ${toString chMinTimeout} ]; then
-            TIMEOUT=${toString chMinTimeout}
-          fi
-        fi
+        ${
+          if enableCH && enableQemu then
+            ''
+              if [ -w /dev/kvm ] 2>/dev/null; then
+                MODE="ch"
+              else
+                echo "  Warning: /dev/kvm not available — falling back to QEMU TCG (slower)"
+                MODE="qemu"
+                if [ "$TIMEOUT" -lt ${toString chMinTimeout} ]; then
+                  TIMEOUT=${toString chMinTimeout}
+                fi
+              fi
+            ''
+          else if enableCH then
+            ''
+              MODE="ch"
+            ''
+          else if enableQemu then
+            ''
+              MODE="qemu"
+              if [ "$TIMEOUT" -lt ${toString chMinTimeout} ]; then
+                TIMEOUT=${toString chMinTimeout}
+              fi
+            ''
+          else
+            ''
+              echo "No VM mode available for ${name}"
+              exit 1
+            ''
+        }
       fi
 
       ${bashLib}
@@ -405,11 +450,20 @@ in
       echo ""
 
       # === Launch VM ===
-      if [ "$MODE" = "ch" ]; then
-        ${launchCH { inherit memoryMB cpus; extraArgs = chExtraArgs; }}
-      else
-        ${launchQemu { inherit bootloader memoryMB cpus; extraArgs = qemuExtraArgs; }}
-      fi
+      ${
+        if enableCH && enableQemu then
+          ''
+            if [ "$MODE" = "ch" ]; then
+              ${launchCH { inherit memoryMB cpus; extraArgs = chExtraArgs; }}
+            else
+              ${launchQemu { inherit bootloader memoryMB cpus; extraArgs = qemuExtraArgs; }}
+            fi
+          ''
+        else if enableCH then
+          launchCH { inherit memoryMB cpus; extraArgs = chExtraArgs; }
+        else
+          launchQemu { inherit bootloader memoryMB cpus; extraArgs = qemuExtraArgs; }
+      }
 
       echo "  VM started (PID: $VM_PID)"
       if [ -n "''${REDOX_VM_MONITOR_DIR:-}" ]; then
@@ -434,6 +488,9 @@ in
         TESTS_COMPLETE=0
         LAST_PARSED_LINE=0
         TEST_PREFIX="${testPrefix}"
+        CURRENT_SCRIPT=""
+        LAST_SCRIPT_LINE=0
+        STOP_AFTER_SCRIPT_SEEN=0
       ''}
 
       START_MS=$(ms_now)
@@ -485,9 +542,52 @@ in
             echo ""
           fi
 
+          PARSE_LOG_CONTENT="$LOG_CONTENT"
+          STOP_AFTER_TRIGGERED=0
+          STOP_AFTER_NEXT_SCRIPT=""
+
+          if [ "$TESTS_STARTED" = "1" ]; then
+            CURRENT_SCRIPT_LINES=$(echo "$LOG_CONTENT" | tr -d '\r' | ${grep} -- '--- .*\.ion ---' 2>/dev/null | wc -l)
+            if [ "$CURRENT_SCRIPT_LINES" -gt "$LAST_SCRIPT_LINE" ]; then
+              while IFS= read -r NEXT_SCRIPT; do
+                if [ -n "$STOP_AFTER_SCRIPT" ] && [ "$STOP_AFTER_SCRIPT_SEEN" = "1" ] && [ "$CURRENT_SCRIPT" = "$STOP_AFTER_SCRIPT" ] && [ "$NEXT_SCRIPT" != "$CURRENT_SCRIPT" ]; then
+                  TESTS_COMPLETE=1
+                  STOP_AFTER_TRIGGERED=1
+                  STOP_AFTER_NEXT_SCRIPT="$NEXT_SCRIPT"
+                  break
+                fi
+                CURRENT_SCRIPT="$NEXT_SCRIPT"
+                if [ -n "$STOP_AFTER_SCRIPT" ] && [ "$CURRENT_SCRIPT" = "$STOP_AFTER_SCRIPT" ]; then
+                  STOP_AFTER_SCRIPT_SEEN=1
+                fi
+              done < <(
+                echo "$LOG_CONTENT" | tr -d '\r' | ${grep} -- '--- .*\.ion ---' 2>/dev/null \
+                  | tail -n +"$((LAST_SCRIPT_LINE + 1))" \
+                  | ${sed} -e 's/^ *--- //' -e 's/ ---$//'
+              )
+              LAST_SCRIPT_LINE=$CURRENT_SCRIPT_LINES
+              if [ "$STOP_AFTER_TRIGGERED" = "1" ] && [ -n "$STOP_AFTER_NEXT_SCRIPT" ]; then
+                CUTOFF_LINE=$(printf '%s\n' "$LOG_CONTENT" | tr -d '\r' | ${grep} -nF -- "--- $STOP_AFTER_NEXT_SCRIPT ---" | head -n 1 | ${sed} 's/:.*//' || true)
+                if [ -n "$CUTOFF_LINE" ] && [ "$CUTOFF_LINE" -gt 1 ] 2>/dev/null; then
+                  PARSE_LOG_CONTENT=$(printf '%s\n' "$LOG_CONTENT" | tr -d '\r' | head -n "$((CUTOFF_LINE - 1))")
+                else
+                  PARSE_LOG_CONTENT=$(printf '%s\n' "$LOG_CONTENT" | tr -d '\r')
+                fi
+                RESULT_LOG="$WORK_DIR/result-serial.log"
+                printf '%s\n' "$PARSE_LOG_CONTENT" > "$RESULT_LOG"
+              fi
+            fi
+          fi
+
           # Parse test result lines incrementally
           if [ "$TESTS_STARTED" = "1" ]; then
-            parse_test_lines "$LOG_CONTENT" "${testPrefix}"
+            parse_test_lines "$PARSE_LOG_CONTENT" "${testPrefix}"
+          fi
+
+          if [ "$STOP_AFTER_TRIGGERED" = "1" ]; then
+            echo ""
+            echo "  ✓ [$(fmt_ms $ELAPSED_MS)] Stopped after script $STOP_AFTER_SCRIPT"
+            break
           fi
 
           # Test completion

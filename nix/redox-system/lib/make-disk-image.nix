@@ -38,7 +38,7 @@ hostPkgs.stdenv.mkDerivation {
   dontUnpack = true;
   dontPatchELF = true;
   dontFixup = true;
-  nativeBuildInputs = [ hostPkgs.parted ];
+  nativeBuildInputs = [ hostPkgs.parted hostPkgs.python3 ];
   SOURCE_DATE_EPOCH = "1";
   buildPhase = ''
     runHook preBuild
@@ -53,6 +53,84 @@ hostPkgs.stdenv.mkDerivation {
     parted -s disk.img set 1 boot on
     parted -s disk.img set 1 esp on
     parted -s disk.img mkpart RedoxFS ${toString (espSizeMB + 1)}MiB 100%
+
+    ${hostPkgs.python3}/bin/python3 - <<'PY'
+    import binascii
+    import hashlib
+    import os
+    import struct
+    import uuid
+
+    SECTOR_SIZE = 512
+    ENTRY_GUID_OFFSET = 16
+
+    def guid_le(seed: str) -> bytes:
+        raw = bytearray(hashlib.sha256(seed.encode()).digest()[:16])
+        raw[6] = (raw[6] & 0x0F) | 0x40
+        raw[8] = (raw[8] & 0x3F) | 0x80
+        return uuid.UUID(bytes=bytes(raw)).bytes_le
+
+    def read_at(handle, offset: int, size: int) -> bytearray:
+        handle.seek(offset)
+        return bytearray(handle.read(size))
+
+    def write_at(handle, offset: int, data: bytes) -> None:
+        handle.seek(offset)
+        handle.write(data)
+
+    disk_seed = "disk:${toString totalSizeMB}:${toString espSizeMB}:${toString espImage}:${toString redoxfsImage}"
+    esp_seed = "esp:${toString totalSizeMB}:${toString espSizeMB}:${toString espImage}"
+    redoxfs_seed = "redoxfs:${toString totalSizeMB}:${toString espSizeMB}:${toString redoxfsImage}"
+
+    with open("disk.img", "r+b") as f:
+        image_size = os.fstat(f.fileno()).st_size
+        last_lba = image_size // SECTOR_SIZE - 1
+
+        primary_header_offset = SECTOR_SIZE
+        backup_header_offset = last_lba * SECTOR_SIZE
+        primary_header = read_at(f, primary_header_offset, SECTOR_SIZE)
+        backup_header = read_at(f, backup_header_offset, SECTOR_SIZE)
+
+        header_size = struct.unpack_from("<I", primary_header, 12)[0]
+        primary_entries_lba = struct.unpack_from("<Q", primary_header, 72)[0]
+        backup_entries_lba = struct.unpack_from("<Q", backup_header, 72)[0]
+        entry_count = struct.unpack_from("<I", primary_header, 80)[0]
+        entry_size = struct.unpack_from("<I", primary_header, 84)[0]
+        entries_size = entry_count * entry_size
+
+        primary_entries_offset = primary_entries_lba * SECTOR_SIZE
+        backup_entries_offset = backup_entries_lba * SECTOR_SIZE
+        primary_entries = read_at(f, primary_entries_offset, entries_size)
+        backup_entries = read_at(f, backup_entries_offset, entries_size)
+
+        disk_guid = guid_le(disk_seed)
+        primary_header[56:72] = disk_guid
+        backup_header[56:72] = disk_guid
+
+        for index, seed in enumerate((esp_seed, redoxfs_seed)):
+            guid = guid_le(seed)
+            offset = index * entry_size + ENTRY_GUID_OFFSET
+            primary_entries[offset:offset + 16] = guid
+            backup_entries[offset:offset + 16] = guid
+
+        write_at(f, primary_entries_offset, primary_entries)
+        write_at(f, backup_entries_offset, backup_entries)
+
+        entries_crc = binascii.crc32(primary_entries) & 0xFFFFFFFF
+        struct.pack_into("<I", primary_header, 88, entries_crc)
+        struct.pack_into("<I", backup_header, 88, entries_crc)
+
+        struct.pack_into("<I", primary_header, 16, 0)
+        primary_crc = binascii.crc32(primary_header[:header_size]) & 0xFFFFFFFF
+        struct.pack_into("<I", primary_header, 16, primary_crc)
+
+        struct.pack_into("<I", backup_header, 16, 0)
+        backup_crc = binascii.crc32(backup_header[:header_size]) & 0xFFFFFFFF
+        struct.pack_into("<I", backup_header, 16, backup_crc)
+
+        write_at(f, primary_header_offset, primary_header)
+        write_at(f, backup_header_offset, backup_header)
+    PY
 
     dd if=${espImage} of=disk.img bs=512 seek=2048 conv=notrunc
     dd if=${redoxfsImage} of=disk.img bs=512 seek=$REDOXFS_START conv=notrunc

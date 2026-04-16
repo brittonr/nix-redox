@@ -41,8 +41,13 @@ hostPkgs.runCommand "redox-redoxfs"
   }
   ''
     mkdir -p root
-    cp -r ${rootTree}/* root/
-    chmod -R u+w root/
+    cp -r ${rootTree}/. root/
+    chmod u+w root
+    for dir in root/tmp root/etc root/etc/ssh root/nix root/nix/store root/usr root/usr/lib; do
+      if [ -e "$dir" ]; then
+        chmod u+w "$dir"
+      fi
+    done
 
     # Generated SSH host keys must be private inside the guest image.
     # The Nix store strips write bits from rootTree files, so the recursive
@@ -77,8 +82,11 @@ hostPkgs.runCommand "redox-redoxfs"
     cp ${kernel}/boot/kernel root/usr/lib/boot/kernel
     cp ${initfs}/boot/initfs root/usr/lib/boot/initfs
 
-    # Pre-allocate the image file — redoxfs-ar requires it to exist
-    dd if=/dev/zero of=redoxfs.img bs=1M count=${toString sizeMB} 2>/dev/null
+    # Pre-allocate the image file — redoxfs-ar requires it to exist.
+    # fallocate is much faster than zero-filling on filesystems that support it.
+    if ! ${hostPkgs.util-linux}/bin/fallocate -l ${toString sizeMB}M redoxfs.img 2>/dev/null; then
+      dd if=/dev/zero of=redoxfs.img bs=1M count=${toString sizeMB} 2>/dev/null
+    fi
 
     # Populate with RedoxFS (formats and archives in one step)
     # --uid 0 --gid 0: default everything to root ownership

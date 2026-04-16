@@ -28,6 +28,9 @@
   cpus ? 2,
   defaultTimeout ? 120,
   vmConfig ? { },
+  defaultMode ? null,
+  enableQemu ? true,
+  enableCH ? true,
 }:
 
 let
@@ -43,5 +46,7 @@ vmTest.mkVmTest {
   memoryMB = effectiveMemory;
   cpus = effectiveCpus;
   chMinTimeout = vmConfig.chMinTimeout or 180;
+  defaultMode = if defaultMode != null then defaultMode else (vmConfig.vmm or "auto");
+  inherit enableQemu enableCH;
   testPrefix = "FUNC_TEST";
 }
