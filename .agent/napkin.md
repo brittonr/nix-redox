@@ -269,6 +269,11 @@ Active corrections and recurring mistakes. Permanent knowledge lives in AGENTS.m
 - Code: `snix-redox/src/build_proxy/lifecycle.rs` ~line 206.
 - Upstream fix would be in kernel/redox-scheme — not actionable from here.
 
+### `snix-sandbox-test` proves workload path, not the focused proxy reproducer
+- The current `nix run .#snix-sandbox-test -- --verbose` profile does show `buildfs: proxy mode active` and real sandboxed workloads like `cc-dep-build`, `workspace-build`, and `rg-build` passing.
+- It does NOT invoke `nix/redox-system/test-scripts/20-proxy-ns.ion`, so it is not evidence that `proxy_namespace_test` itself ran in that proof.
+- Keep the distinction straight in OpenSpec tasks/evidence: sandbox pass = workload validation, separate from the focused reproducer regression.
+
 ### Code patterns to maintain (not bugs, just Redox differences)
 
 - **child_ns_fd close after spawn**: mkns() fd shared by parent and child. Parent must close its copy after spawn. Do NOT close in child's pre_exec — setns() stores the raw fd. Code: `local_build.rs` ~line 401.
