@@ -10,10 +10,12 @@
 #     lib/              — libc.a, libpthread.a, crt0.o, crti.o, crtn.o
 #     lib/clang/21/     — clang resource headers (intrinsics, builtins)
 #   bin/
-#     cc                — CC wrapper (clang → lld with sysroot flags)
+#     cc                — ELF launcher for the CC helper
+#     cc-helper         — bash helper with compile/link logic
 #
 # The CC wrapper is what rustc invokes for the final link step.
-# It adds CRT files, sysroot paths, and drives lld.
+# Keep that public entrypoint as an ELF binary so proxy-sandbox exec does not
+# have to target a shell script directly.
 
 {
   pkgs,
@@ -23,6 +25,7 @@
   redox-llvm,
   redox-libcxx,
   rustc-redox,
+  cc-wrapper-redox,
   ...
 }:
 
@@ -251,14 +254,13 @@ pkgs.runCommand "redox-sysroot"
     fi
 
     # ===== CC wrapper =====
-    # This script is what `rustc` invokes when it needs to link a binary.
-    # The Redox target uses LinkerFlavor::Gcc, so rustc passes GCC-style flags
-    # (-L, -l, -o, etc.). Clang understands these and drives lld.
+    # `/nix/system/profile/bin/cc` is an ELF launcher copied from
+    # cc-wrapper-redox. The full shell logic lives in a helper script so
+    # rustc/cc-rs do not exec a shebang target directly through the proxy.
     #
-    # When invoked for compilation (-c, -S, -E), passes through to clang
-    # with the sysroot include paths.
-    # When invoked for linking, adds CRT files and drives lld.
-    cat > $out/bin/cc << 'WRAPPER'
+    # The helper still handles both compile-only clang passthrough and final
+    # link steps with the Redox sysroot + lld-wrapper.
+    cat > $out/bin/cc-helper << 'WRAPPER'
     #!/nix/system/profile/bin/bash
     # CC wrapper for Redox self-hosting — invokes ld.lld directly.
     #
@@ -438,6 +440,8 @@ pkgs.runCommand "redox-sysroot"
     printf '%s\n' "$@" > /tmp/linker-args.txt
     PRINTARGS
     chmod +x $out/bin/cc-print-args
+    chmod 755 $out/bin/cc-helper
+    cp ${cc-wrapper-redox}/bin/cc-wrapper $out/bin/cc
     chmod 755 $out/bin/cc
 
     # Also provide 'gcc' symlink (some tools look for gcc)

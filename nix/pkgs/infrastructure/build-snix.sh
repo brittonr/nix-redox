@@ -23,7 +23,10 @@ export CARGO_BUILD_JOBS=1
 # unimplemented _SC_NPROCESSORS_ONLN path. The regular self-hosting tests
 # export this too; keep the self-compile builder aligned.
 export RAYON_NUM_THREADS=4
-export RUSTFLAGS="-C panic=abort"
+# Proxy-active self-build currently dies on the first proc-macro shared-link
+# spawn (`could not exec the linker ... File exists`). Trim linker command
+# pressure while we debug that Redox/rustc spawn path.
+export RUSTFLAGS="-C panic=abort -C codegen-units=1 -C debuginfo=0"
 REAL_RUSTC=/nix/system/profile/bin/rustc
 export RUSTC="$REAL_RUSTC"
 export AR=/nix/system/profile/bin/llvm-ar
@@ -111,7 +114,7 @@ if [ "${SNIX_CARGO_VERBOSE:-0}" = "1" ]; then
   CARGO_VERBOSE_ARGS=(-vv)
 fi
 
-echo "[build-snix] Starting cargo build for --bin snix (JOBS=1)..."
+echo "[build-snix] Starting cargo build for --bin snix (JOBS=1)..." >&2
 cargo build "${CARGO_VERBOSE_ARGS[@]}" --offline -j1 --bin snix
 cp target/x86_64-unknown-redox/debug/snix "$out/bin/snix"
-echo "[build-snix] snix build complete"
+echo "[build-snix] snix build complete" >&2
