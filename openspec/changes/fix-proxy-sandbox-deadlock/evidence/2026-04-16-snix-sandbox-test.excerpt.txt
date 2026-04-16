@@ -1,0 +1,29 @@
+# 2026-04-16 snix-sandbox-test excerpt
+
+commit: 047fd36e
+capture_dir: /var/tmp/redox-self-hosting-captures/20260416T154023-snix-sandbox-test/
+command: TMPDIR=/var/tmp nix run .#snix-sandbox-test -- --verbose
+
+buildfs: proxy mode active
+FUNC_TEST:snix-simple:PASS
+FUNC_TEST:snix-build-cargo:PASS
+FUNC_TEST:flake-build:PASS
+FUNC_TEST:file-build-tmp-probe:PASS
+FUNC_TEST:file-build-usrsrc-probe:PASS
+FUNC_TEST:direct-bash-multiarg-probe:PASS
+FUNC_TEST:file-build-multiarg-tmp-probe:PASS
+FUNC_TEST:file-build-multiarg-usrsrc-probe:PASS
+FUNC_TEST:direct-cc-dep-script:PASS
+FUNC_TEST:direct-workspace-script:PASS
+FUNC_TEST:cc-dep-expr-serial:exit=0
+FUNC_TEST:cc-dep-expr-probe:PASS
+FUNC_TEST:workspace-expr-probe:PASS
+FUNC_TEST:cc-dep-build-nix-copy:PASS
+FUNC_TEST:cc-dep-build:PASS
+FUNC_TEST:workspace-build:PASS
+FUNC_TEST:direct-rg-script:PASS
+FUNC_TEST:rg-build:PASS
+    Passed:  17
+    Failed:  0
+    Total:   17
+  ║       FUNCTIONAL TEST PASSED
