@@ -1124,10 +1124,26 @@ let
     }
   );
 
+  cc-wrapper-redox = import ../pkgs/userspace/cc-wrapper-redox.nix {
+    inherit
+      pkgs
+      lib
+      rustToolchain
+      redoxTarget
+      ;
+    inherit (modularPkgs.system) relibc;
+    inherit (redoxLib) stubLibs;
+  };
+
   redox-sysroot = import ../pkgs/userspace/redox-sysroot.nix {
     inherit pkgs lib;
     inherit (modularPkgs.system) relibc;
-    inherit redoxTarget redox-llvm redox-libcxx;
+    inherit
+      redoxTarget
+      redox-llvm
+      redox-libcxx
+      cc-wrapper-redox
+      ;
     rustc-redox = redox-rustc;
   };
 

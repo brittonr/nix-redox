@@ -62,6 +62,16 @@ fn log_open_error(op: &str, path: &Path, errno: i32) {
     }
 }
 
+fn should_trace_exec_path(path: &Path) -> bool {
+    matches!(
+        path.to_str(),
+        Some("/nix/system/profile/bin/cc")
+            | Some("/nix/system/profile/bin/bash")
+            | Some("/nix/system/profile/bin/cc-helper")
+            | Some("/usr/src/snix-redox/build-snix.sh")
+    )
+}
+
 // ── Flag Translation ───────────────────────────────────────────────────────
 
 /// Translated open flags — the proxy's internal representation.
@@ -452,6 +462,14 @@ impl SchemeSync for BuildFsHandler {
 
         let id = self.alloc_id();
         let real_flags = oflags.to_real_flags();
+        let trace_exec = should_trace_exec_path(&abs_path);
+
+        if trace_exec {
+            eprintln!(
+                "buildfs: trace openat path={:?} raw_flags={:#x} oflags={:?} perm={perm:?} effective={effective_perm:?} real_flags={:#x}",
+                abs_path, flags, oflags, real_flags
+            );
+        }
 
         // If O_DIRECTORY requested, open as directory.
         if oflags.directory {
@@ -494,6 +512,12 @@ impl SchemeSync for BuildFsHandler {
             .open_path(&abs_path, real_flags)
             .map_err(|e| {
                 log_open_error("file", &abs_path, e.errno);
+                if trace_exec || e.errno == syscall::EEXIST as i32 {
+                    eprintln!(
+                        "buildfs: trace open failure path={:?} raw_flags={:#x} oflags={:?} real_flags={:#x} errno={}",
+                        abs_path, flags, oflags, real_flags, e.errno
+                    );
+                }
                 if e.errno == syscall::ENOENT as i32 {
                     Error::new(ENOENT)
                 } else if e.errno == syscall::EACCES as i32 {

@@ -1,6 +1,5 @@
-diff -ruN a/library/std/src/sys/process/unix/unix.rs b/library/std/src/sys/process/unix/unix.rs
---- a/library/std/src/sys/process/unix/unix.rs	2026-03-13 12:37:01.595954248 -0400
-+++ b/library/std/src/sys/process/unix/unix.rs	2026-03-13 12:37:09.260764077 -0400
+--- a/library/std/src/sys/process/unix/unix.rs
++++ b/library/std/src/sys/process/unix/unix.rs
 @@ -11,6 +11,7 @@
  use libc::{gid_t, uid_t};
  
@@ -17,29 +16,57 @@ diff -ruN a/library/std/src/sys/process/unix/unix.rs b/library/std/src/sys/proce
      pub fn spawn(
          &mut self,
          default: Stdio,
-@@ -117,7 +119,10 @@
+@@ -77,9 +79,12 @@
+         #[cfg(target_os = "linux")]
+         let (input, output) = sys::net::Socket::new_pair(libc::AF_UNIX, libc::SOCK_SEQPACKET)?;
+ 
+-        #[cfg(not(target_os = "linux"))]
++        #[cfg(all(not(target_os = "linux"), not(target_os = "redox")))]
+         let (input, output) = sys::pipe::anon_pipe()?;
+ 
++        #[cfg(target_os = "redox")]
++        let (input, output) = ((), ());
++
+         // Whatever happens after the fork is almost for sure going to touch or
+         // look at the environment in one way or another (PATH in `execvp` or
+         // accessing the `environ` pointer ourselves). Make sure no other thread
+@@ -96,7 +101,10 @@
+         if pid == 0 {
+             crate::panic::always_abort();
+             mem::forget(env_lock); // avoid non-async-signal-safe unlocking
++            #[cfg(not(target_os = "redox"))]
+             drop(input);
++            #[cfg(target_os = "redox")]
++            let _ = input;
+             #[cfg(target_os = "linux")]
+             if self.get_create_pidfd() {
+                 self.send_pidfd(&output);
+@@ -117,12 +125,18 @@
              // pipe I/O up to PIPE_BUF bytes should be atomic, and then
              // we want to be sure we *don't* run at_exit destructors as
              // we're being torn down regardless
 +            #[cfg(not(target_os = "redox"))]
              rtassert!(output.write(&bytes).is_ok());
 +            #[cfg(target_os = "redox")]
-+            let _ = &bytes; // suppress unused warning
++            let _ = &bytes;
              unsafe { libc::_exit(1) }
          }
  
-@@ -132,6 +137,19 @@
+         drop(env_lock);
++        #[cfg(not(target_os = "redox"))]
+         drop(output);
++        #[cfg(target_os = "redox")]
++        let _ = output;
+ 
+         #[cfg(target_os = "linux")]
+         let pidfd = if self.get_create_pidfd() { self.recv_pidfd(&input) } else { -1 };
+@@ -132,6 +146,14 @@
  
          // Safety: We obtained the pidfd (on Linux) using SOCK_SEQPACKET, so it's valid.
          let mut p = unsafe { Process::new(pid, pidfd) };
-+        // REDOX PATCH: Skip CLOEXEC error pipe on Redox.
-+        // On Redox, blocking pipe reads crash (Invalid opcode) when the
-+        // child process runs for non-trivial time. Close the pipe and
-+        // return success. If exec() failed, waitpid() will report exit.
 +        #[cfg(target_os = "redox")]
 +        {
-+            drop(input);
-+            #[allow(unused_mut)]
++            let _ = input;
 +            return Ok((p, ours));
 +        }
 +
@@ -48,7 +75,7 @@ diff -ruN a/library/std/src/sys/process/unix/unix.rs b/library/std/src/sys/proce
          let mut bytes = [0; 8];
  
          // loop to handle EINTR
-@@ -162,6 +180,7 @@
+@@ -162,6 +184,7 @@
                  }
              }
          }
@@ -56,3 +83,27 @@ diff -ruN a/library/std/src/sys/process/unix/unix.rs b/library/std/src/sys/proce
      }
  
      // WatchOS and TVOS headers mark the `fork`/`exec*` functions with
+@@ -183,7 +206,22 @@
+ 
+     // Attempts to fork the process. If successful, returns Ok((0, -1))
+     // in the child, and Ok((child_pid, -1)) in the parent.
+-    #[cfg(not(any(target_os = "watchos", target_os = "tvos", target_os = "nto")))]
++    #[cfg(target_os = "redox")]
++    unsafe fn do_fork(&mut self) -> Result<pid_t, io::Error> {
++        let mut attempts = 0;
++        loop {
++            match cvt(libc::fork()) {
++                Ok(pid) => return Ok(pid),
++                Err(e) if e.raw_os_error() == Some(libc::EEXIST) && attempts < 3 => {
++                    attempts += 1;
++                    let _ = libc::sched_yield();
++                }
++                Err(e) => return Err(e),
++            }
++        }
++    }
++
++    #[cfg(not(any(target_os = "watchos", target_os = "tvos", target_os = "nto", target_os = "redox")))]
+     unsafe fn do_fork(&mut self) -> Result<pid_t, io::Error> {
+         cvt(libc::fork())
+     }
