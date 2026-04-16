@@ -93,14 +93,14 @@
       "license": "MIT",
       "repository": "https://github.com/nix-rust/nix"
     },
-    "git+https://gitlab.redox-os.org/redox-os/calc?rev=d2719efb67ab38c4c33ab3590822114453960da5#calculate@0.7.0": {
+    "git+https://gitlab.redox-os.org/redox-os/calc.git?rev=d2719efb67ab38c4c33ab3590822114453960da5#calculate@0.7.0": {
       "crateName": "calculate",
       "version": "0.7.0",
       "edition": "2018",
       "sha256": null,
       "source": {
         "type": "git",
-        "url": "https://gitlab.redox-os.org/redox-os/calc",
+        "url": "https://gitlab.redox-os.org/redox-os/calc.git",
         "rev": "d2719efb67ab38c4c33ab3590822114453960da5",
         "sha256": "1v7gwjkv5y49akickz5mw4dkpw9b288q6qlhx8j5nnsy6vnkw8nw"
       },
@@ -127,7 +127,7 @@
           "externCrateName": "rand"
         },
         {
-          "packageId": "git+https://gitlab.redox-os.org/redox-os/liner#redox_liner@0.5.3",
+          "packageId": "git+https://gitlab.redox-os.org/redox-os/liner.git#redox_liner@0.5.3",
           "externCrateName": "liner"
         }
       ],
@@ -145,17 +145,17 @@
         "Hunter Goldstein <hunter.d.goldstein@gmail.com>"
       ],
       "description": "Rust library for parsing and processing arithmetic expressions",
-      "homepage": "https://gitlab.redox-os.org/redox-os/calc",
-      "repository": "https://gitlab.redox-os.org/redox-os/calc"
+      "homepage": "https://gitlab.redox-os.org/redox-os/calc.git",
+      "repository": "https://gitlab.redox-os.org/redox-os/calc.git"
     },
-    "git+https://gitlab.redox-os.org/redox-os/liner#redox_liner@0.5.3": {
+    "git+https://gitlab.redox-os.org/redox-os/liner.git#redox_liner@0.5.3": {
       "crateName": "redox_liner",
       "version": "0.5.3",
       "edition": "2018",
       "sha256": null,
       "source": {
         "type": "git",
-        "url": "https://gitlab.redox-os.org/redox-os/liner",
+        "url": "https://gitlab.redox-os.org/redox-os/liner.git",
         "rev": "f3fb3b754623026dca820cbf36231fa92772416f",
         "sha256": "1d2gijgljmjm481kwb5h34g0wgga3lvxl38r7yrg7d47qwjnkcsr"
       },
@@ -199,18 +199,18 @@
         "Jeremy Soller <jackpot51@gmail.com>"
       ],
       "description": "A library offering readline-like functionality.",
-      "homepage": "https://gitlab.redox-os.org/redox-os/liner",
+      "homepage": "https://gitlab.redox-os.org/redox-os/liner.git",
       "license": "MIT",
-      "repository": "https://gitlab.redox-os.org/redox-os/liner"
+      "repository": "https://gitlab.redox-os.org/redox-os/liner.git"
     },
-    "git+https://gitlab.redox-os.org/redox-os/small#0.1.0": {
+    "git+https://gitlab.redox-os.org/redox-os/small.git#0.1.0": {
       "crateName": "small",
       "version": "0.1.0",
       "edition": "2015",
       "sha256": null,
       "source": {
         "type": "git",
-        "url": "https://gitlab.redox-os.org/redox-os/small",
+        "url": "https://gitlab.redox-os.org/redox-os/small.git",
         "rev": "4374ae30a2de281d686e14a1626dcb22e23ffae4",
         "sha256": "0x37a28a20c6s656hmg75sycygzfjmfcb67zjljk241laxyc9320"
       },
@@ -267,7 +267,7 @@
           "externCrateName": "builtins_proc"
         },
         {
-          "packageId": "git+https://gitlab.redox-os.org/redox-os/calc?rev=d2719efb67ab38c4c33ab3590822114453960da5#calculate@0.7.0",
+          "packageId": "git+https://gitlab.redox-os.org/redox-os/calc.git?rev=d2719efb67ab38c4c33ab3590822114453960da5#calculate@0.7.0",
           "externCrateName": "calc"
         },
         {
@@ -307,7 +307,7 @@
           "externCrateName": "rand"
         },
         {
-          "packageId": "git+https://gitlab.redox-os.org/redox-os/liner#redox_liner@0.5.3",
+          "packageId": "git+https://gitlab.redox-os.org/redox-os/liner.git#redox_liner@0.5.3",
           "externCrateName": "liner"
         },
         {
@@ -323,7 +323,7 @@
           "externCrateName": "scopes"
         },
         {
-          "packageId": "git+https://gitlab.redox-os.org/redox-os/small#0.1.0",
+          "packageId": "git+https://gitlab.redox-os.org/redox-os/small.git#0.1.0",
           "externCrateName": "small"
         },
         {
@@ -494,7 +494,7 @@
           "externCrateName": "lexical"
         },
         {
-          "packageId": "git+https://gitlab.redox-os.org/redox-os/small#0.1.0",
+          "packageId": "git+https://gitlab.redox-os.org/redox-os/small.git#0.1.0",
           "externCrateName": "small"
         }
       ],

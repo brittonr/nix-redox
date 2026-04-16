@@ -123,6 +123,9 @@ in
       cpus ? 2,
       defaultTimeout ? 300,
       vmConfig ? { },
+      defaultMode ? null,
+      enableQemu ? true,
+      enableCH ? true,
     }:
     import ./functional-test.nix {
       inherit
@@ -134,6 +137,9 @@ in
         cpus
         defaultTimeout
         vmConfig
+        defaultMode
+        enableQemu
+        enableCH
         ;
     };
 

@@ -19,18 +19,9 @@
 }:
 let
   inputs = self.inputs;
+  sharedEnv = self'.legacyPackages.redoxEnv;
 
-  # Shared build environment
-  env = import ./redox-env.nix {
-    inherit
-      pkgs
-      system
-      lib
-      inputs
-      ;
-  };
-
-  inherit (env)
+  inherit (sharedEnv)
     rustToolchain
     craneLib
     sysrootVendor
@@ -258,6 +249,18 @@ let
   functionalTest = mkFunctionalTest {
     diskImage = functionalTestSystem.diskImage;
     inherit bootloader;
+  };
+
+  functionalSmokeTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/functional-smoke-test.nix ];
+    extraPkgs = { };
+  };
+  functionalSmokeTest = mkFunctionalTest {
+    diskImage = functionalSmokeTestSystem.diskImage;
+    inherit bootloader;
+    defaultTimeout = 60;
+    defaultMode = "ch";
+    enableQemu = false;
   };
 
   mkNetworkTest = modularPkgs.infrastructure.mkNetworkTest;
@@ -905,6 +908,9 @@ in
 
     redox-functional-test = functionalTestSystem.diskImage;
     inherit functionalTest;
+
+    redox-functional-smoke-test = functionalSmokeTestSystem.diskImage;
+    inherit functionalSmokeTest;
 
     redox-network-test = networkTestSystem.diskImage;
     inherit networkTest;

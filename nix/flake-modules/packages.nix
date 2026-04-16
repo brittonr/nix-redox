@@ -796,14 +796,24 @@ let
 
   tokei = mkCrossPackage {
     pname = "tokei";
-    src = inputs.tokei-src;
+    src = pkgs.fetchFromGitHub {
+      owner = "XAMPPRocky";
+      repo = "tokei";
+      rev = "8cdd6fa3a54f8cd69442d2f00effb29aa3110353";
+      hash = "sha256-BpQ+Aurx2CkFRcozUTbmLLAg7v3NkgKXm5y0TiQCfHw=";
+    };
     plan = ../pkgs/infrastructure/tokei-redox-plan.json;
     member = "tokei";
   };
 
   lsd = mkCrossPackage {
     pname = "lsd";
-    src = inputs.lsd-src;
+    src = pkgs.fetchFromGitHub {
+      owner = "lsd-rs";
+      repo = "lsd";
+      rev = "d5a4e1cb80626d5ec94b237f6b77f7280d0f2fc9";
+      hash = "sha256-BDwptBRGy2IGc3FrgFZ1rt/e1bpKs1Y0C3H4JfqRqHc=";
+    };
     plan = ../pkgs/infrastructure/lsd-redox-plan.json;
     member = "lsd";
     extraCrateOverrides = cratePatches.rustixOverride;
@@ -1519,7 +1529,11 @@ in
     inherit (modularPkgs.infrastructure) initfsTools bootstrap;
 
     # Per-crate builds (unit2nix incremental)
-    inherit kernelPerCrate basePerCrate kernelSyscallDebug;
+    inherit
+      kernelPerCrate
+      basePerCrate
+      kernelSyscallDebug
+      ;
 
     # Options documentation (auto-generated from module definitions)
     inherit
@@ -1537,6 +1551,16 @@ in
   # Expose build environment for other modules via legacyPackages
   legacyPackages = {
     inherit rustToolchain craneLib;
+    redoxEnv = {
+      inherit
+        rustToolchain
+        craneLib
+        sysrootVendor
+        redoxTarget
+        redoxLib
+        modularPkgs
+        ;
+    };
     # Parameterized kernel builder for custom syscall debug variants.
     # Usage: mkKernelSyscallDebug { debugProcesses = ["cargo" "rustc"]; }
     inherit mkKernelSyscallDebug;

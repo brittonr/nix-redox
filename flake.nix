@@ -288,12 +288,6 @@
       flake = false;
     };
 
-    # redox_liner - line editing library
-    redox-liner-src = {
-      url = "gitlab:redox-os/liner/master?host=gitlab.redox-os.org";
-      flake = false;
-    };
-
     # ripgrep - fast regex search tool (upstream with Redox support via libc)
     ripgrep-src = {
       url = "github:BurntSushi/ripgrep/14.1.1";
@@ -327,18 +321,6 @@
     # dust - intuitive disk usage analyzer (upstream)
     dust-src = {
       url = "github:bootandy/dust/v1.0.0";
-      flake = false;
-    };
-
-    # tokei - count lines of code (upstream)
-    tokei-src = {
-      url = "github:XAMPPRocky/tokei/v14.0.0";
-      flake = false;
-    };
-
-    # lsd - modern ls replacement (upstream)
-    lsd-src = {
-      url = "github:lsd-rs/lsd/v1.2.0";
       flake = false;
     };
 

@@ -99,6 +99,10 @@ let
       sed -i 's/export AR=x86_64-unknown-redox-ar/export AR=llvm-ar/g' config.mk
       sed -i 's/export NM=x86_64-unknown-redox-nm/export NM=llvm-nm/g' config.mk
       sed -i 's/export OBJCOPY=x86_64-unknown-redox-objcopy/export OBJCOPY=llvm-objcopy/g' config.mk
+
+      # Canonicalize redirected git dependency URLs in the relibc source too.
+      substituteInPlace Cargo.toml Cargo.lock \
+        --replace-fail 'https://gitlab.redox-os.org/andypython/object' 'https://gitlab.redox-os.org/andypython/object.git'
     '';
 
     installPhase = ''
@@ -127,8 +131,8 @@ let
       branch = "riscv-abi-arch-fix";
     }
     {
-      url = "https://gitlab.redox-os.org/andypython/object";
-      git = "https://gitlab.redox-os.org/andypython/object";
+      url = "https://gitlab.redox-os.org/andypython/object.git";
+      git = "https://gitlab.redox-os.org/andypython/object.git";
     }
     {
       url = "https://gitlab.redox-os.org/redox-os/syscall.git?branch=master";
