@@ -1,0 +1,22 @@
+# 2026-04-16 self-hosting-test excerpt
+
+commit: 9c3f2325
+capture_dir: /var/tmp/redox-self-hosting-captures/20260416T165825-self-hosting-test/
+command: TMPDIR=/var/tmp nix run .#self-hosting-test -- --verbose
+verdict: FAIL
+
+actionable lines:
+- buildfs: proxy mode active
+- /nix/system/profile/bin/bash: line 40: /nix/system/profile/bin/chmod: No such file or directory
+- FUNC_TEST:cc-dep-build:FAIL:exit=1
+- FUNC_TEST:workspace-build:FAIL:exit=1
+- FUNC_TEST:rg-build:PASS
+- Results: 68 passed, 2 failed, 0 skipped
+- Total time: 6000.084s
+
+summary:
+- Boot completed and test suite started normally.
+- Proxy mode was active inside the failing guest build runs.
+- The first self-hosting blockers were `cc-dep-build` and `workspace-build`.
+- The earlier `chmod` error came from the self-hosting `snix-build-cargo` fixture drift, not from `build-cc-dep.sh` or `build-workspace.sh`; those builder scripts do not call `chmod` and are invoked via `bash` args.
+- The run later hit the suite timeout while `snix-compile` was still heartbeating with stalled stderr growth.

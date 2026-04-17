@@ -2894,11 +2894,59 @@ HELLONIX
                           echo "FUNC_TEST:cc-dep-src-present:FAIL:not at /usr/src/cc-dep-test"
                         end
 
+                        echo "--- direct-cc-dep-script ---"
+                        /nix/system/profile/bin/bash -c '
+                          rm -rf /tmp/direct-cc-dep-out /tmp/direct-cc-dep-tmp
+                          mkdir -p /tmp/direct-cc-dep-tmp
+                          out=/tmp/direct-cc-dep-out TMPDIR=/tmp/direct-cc-dep-tmp /nix/system/profile/bin/bash --noprofile --norc /usr/src/cc-dep-test/build-cc-dep.sh >/tmp/direct-cc-dep-stdout 2>/tmp/direct-cc-dep-stderr
+                          EXIT=$?
+                          if [ $EXIT -eq 0 ] && [ -x /tmp/direct-cc-dep-out/bin/cc-dep-test ]; then
+                            RUN=$(/tmp/direct-cc-dep-out/bin/cc-dep-test 2>&1)
+                            if echo "$RUN" | grep -q "CC_DEP_OK"; then
+                              echo "FUNC_TEST:direct-cc-dep-script:PASS"
+                            else
+                              echo "FUNC_TEST:direct-cc-dep-script:FAIL:output=$RUN"
+                            fi
+                          else
+                            echo "FUNC_TEST:direct-cc-dep-script:FAIL:exit=$EXIT"
+                            echo "=== direct cc-dep stderr ===" >&2
+                            cat /tmp/direct-cc-dep-stderr 2>/dev/null >&2
+                            echo "=== direct cc-dep stdout ===" >&2
+                            cat /tmp/direct-cc-dep-stdout 2>/dev/null | head -60 >&2
+                          fi
+                        '
+
+                        echo "--- cc-dep-expr-probe ---"
+                        /nix/system/profile/bin/bash -c '
+                          rm -f /tmp/snix-debug.log
+                          /bin/snix build --expr "derivation { name = \"cc-dep-expr-probe\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"--noprofile\" \"--norc\" \"/usr/src/cc-dep-test/build-cc-dep.sh\"]; system = \"x86_64-unknown-redox\"; }" >/tmp/cc-dep-expr-out 2>/tmp/cc-dep-expr-err
+                          EXIT=$?
+                          OUTPUT=$(head -1 /tmp/cc-dep-expr-out 2>/dev/null)
+                          if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/cc-dep-test" ]; then
+                            RUN=$("$OUTPUT/bin/cc-dep-test" 2>&1)
+                            if echo "$RUN" | grep -q "CC_DEP_OK"; then
+                              echo "FUNC_TEST:cc-dep-expr-probe:PASS"
+                            else
+                              echo "FUNC_TEST:cc-dep-expr-probe:FAIL:output=$RUN"
+                            fi
+                          else
+                            echo "FUNC_TEST:cc-dep-expr-probe:FAIL:exit=$EXIT output=$OUTPUT"
+                            echo "=== cc-dep expr stderr ===" >&2
+                            cat /tmp/cc-dep-expr-err 2>/dev/null >&2
+                            echo "=== cc-dep expr stdout ===" >&2
+                            cat /tmp/cc-dep-expr-out 2>/dev/null | head -40 >&2
+                            echo "=== cc-dep expr snix-debug ===" >&2
+                            cat /tmp/snix-debug.log 2>/dev/null >&2
+                          fi
+                        '
+
                         echo "--- cc-dep-build: Rust + C via cc-rs ---"
                         /nix/system/profile/bin/bash -c '
                           mkdir -p /nix/store /nix/var/snix/pathinfo
-                          OUTPUT=$(/bin/snix build --file /usr/src/cc-dep-test/build.nix 2>/tmp/cc-dep-build-err)
+                          rm -f /tmp/snix-debug.log
+                          /bin/snix build --file /usr/src/cc-dep-test/build.nix >/tmp/cc-dep-build-out 2>/tmp/cc-dep-build-err
                           EXIT=$?
+                          OUTPUT=$(head -1 /tmp/cc-dep-build-out 2>/dev/null)
                           if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/cc-dep-test" ]; then
                             RUN=$("$OUTPUT/bin/cc-dep-test" 2>&1)
                             if echo "$RUN" | grep -q "CC_DEP_OK"; then
@@ -2908,7 +2956,18 @@ HELLONIX
                             fi
                           else
                             echo "FUNC_TEST:cc-dep-build:FAIL:exit=$EXIT"
-                            cat /tmp/cc-dep-build-err 2>/dev/null | head -20
+                            echo "=== cc-dep-build stderr ===" >&2
+                            cat /tmp/cc-dep-build-err 2>/dev/null >&2
+                            echo "=== cc-dep-build stdout ===" >&2
+                            cat /tmp/cc-dep-build-out 2>/dev/null | head -40 >&2
+                            echo "=== cc-dep-build snix-debug ===" >&2
+                            cat /tmp/snix-debug.log 2>/dev/null >&2
+                            if [ -n "$OUTPUT" ]; then
+                              echo "=== cc-dep-build output tree ===" >&2
+                              ls -ld "$OUTPUT" "$OUTPUT/bin" "$OUTPUT/bin/cc-dep-test" >/tmp/cc-dep-build-tree 2>&1
+                              ls -l "$OUTPUT/bin" >>/tmp/cc-dep-build-tree 2>&1
+                              cat /tmp/cc-dep-build-tree 2>/dev/null >&2
+                            fi
                           fi
                         '
 
@@ -2919,10 +2978,59 @@ HELLONIX
                           echo "FUNC_TEST:workspace-src-present:FAIL:not at /usr/src/workspace-test"
                         end
 
+                        echo "--- direct-workspace-script ---"
+                        /nix/system/profile/bin/bash -c '
+                          rm -rf /tmp/direct-workspace-out /tmp/direct-workspace-tmp
+                          mkdir -p /tmp/direct-workspace-tmp
+                          out=/tmp/direct-workspace-out TMPDIR=/tmp/direct-workspace-tmp /nix/system/profile/bin/bash --noprofile --norc /usr/src/workspace-test/build-workspace.sh >/tmp/direct-workspace-stdout 2>/tmp/direct-workspace-stderr
+                          EXIT=$?
+                          if [ $EXIT -eq 0 ] && [ -x /tmp/direct-workspace-out/bin/mybin ]; then
+                            RUN=$(/tmp/direct-workspace-out/bin/mybin 2>&1)
+                            if echo "$RUN" | grep -q "WORKSPACE_OK"; then
+                              echo "FUNC_TEST:direct-workspace-script:PASS"
+                            else
+                              echo "FUNC_TEST:direct-workspace-script:FAIL:output=$RUN"
+                            fi
+                          else
+                            echo "FUNC_TEST:direct-workspace-script:FAIL:exit=$EXIT"
+                            echo "=== direct workspace stderr ===" >&2
+                            cat /tmp/direct-workspace-stderr 2>/dev/null >&2
+                            echo "=== direct workspace stdout ===" >&2
+                            cat /tmp/direct-workspace-stdout 2>/dev/null | head -60 >&2
+                          fi
+                        '
+
+                        echo "--- workspace-expr-probe ---"
+                        /nix/system/profile/bin/bash -c '
+                          rm -f /tmp/snix-debug.log
+                          /bin/snix build --expr "derivation { name = \"workspace-expr-probe\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"--noprofile\" \"--norc\" \"/usr/src/workspace-test/build-workspace.sh\"]; system = \"x86_64-unknown-redox\"; }" >/tmp/workspace-expr-out 2>/tmp/workspace-expr-err
+                          EXIT=$?
+                          OUTPUT=$(head -1 /tmp/workspace-expr-out 2>/dev/null)
+                          if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/mybin" ]; then
+                            RUN=$("$OUTPUT/bin/mybin" 2>&1)
+                            if echo "$RUN" | grep -q "WORKSPACE_OK"; then
+                              echo "FUNC_TEST:workspace-expr-probe:PASS"
+                            else
+                              echo "FUNC_TEST:workspace-expr-probe:FAIL:output=$RUN"
+                            fi
+                          else
+                            echo "FUNC_TEST:workspace-expr-probe:FAIL:exit=$EXIT output=$OUTPUT"
+                            echo "=== workspace expr stderr ===" >&2
+                            cat /tmp/workspace-expr-err 2>/dev/null >&2
+                            echo "=== workspace expr stdout ===" >&2
+                            cat /tmp/workspace-expr-out 2>/dev/null | head -40 >&2
+                            echo "=== workspace expr snix-debug ===" >&2
+                            cat /tmp/snix-debug.log 2>/dev/null >&2
+                          fi
+                        '
+
                         echo "--- workspace-build: two-crate workspace ---"
                         /nix/system/profile/bin/bash -c '
-                          OUTPUT=$(/bin/snix build --file /usr/src/workspace-test/build.nix 2>/tmp/workspace-build-err)
+                          mkdir -p /nix/store /nix/var/snix/pathinfo
+                          rm -f /tmp/snix-debug.log
+                          /bin/snix build --file /usr/src/workspace-test/build.nix >/tmp/workspace-build-out 2>/tmp/workspace-build-err
                           EXIT=$?
+                          OUTPUT=$(head -1 /tmp/workspace-build-out 2>/dev/null)
                           if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/mybin" ]; then
                             RUN=$("$OUTPUT/bin/mybin" 2>&1)
                             if echo "$RUN" | grep -q "WORKSPACE_OK"; then
@@ -2932,7 +3040,18 @@ HELLONIX
                             fi
                           else
                             echo "FUNC_TEST:workspace-build:FAIL:exit=$EXIT"
-                            cat /tmp/workspace-build-err 2>/dev/null | head -20
+                            echo "=== workspace-build stderr ===" >&2
+                            cat /tmp/workspace-build-err 2>/dev/null >&2
+                            echo "=== workspace-build stdout ===" >&2
+                            cat /tmp/workspace-build-out 2>/dev/null | head -40 >&2
+                            echo "=== workspace-build snix-debug ===" >&2
+                            cat /tmp/snix-debug.log 2>/dev/null >&2
+                            if [ -n "$OUTPUT" ]; then
+                              echo "=== workspace-build output tree ===" >&2
+                              ls -ld "$OUTPUT" "$OUTPUT/bin" "$OUTPUT/bin/mybin" >/tmp/workspace-build-tree 2>&1
+                              ls -l "$OUTPUT/bin" >>/tmp/workspace-build-tree 2>&1
+                              cat /tmp/workspace-build-tree 2>/dev/null >&2
+                            fi
                           fi
                         '
 

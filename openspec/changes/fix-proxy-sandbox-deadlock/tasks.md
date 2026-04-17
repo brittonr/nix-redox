@@ -15,4 +15,6 @@
 - [x] 3.1 Keep the focused deadlock regression in `proxy_namespace_test` / sandbox-focused coverage.
 - [x] 3.2 Re-run `snix-sandbox-test` with proxy mode active and capture durable evidence (`evidence/2026-04-16-snix-sandbox-test.excerpt.txt`, capture dir `/var/tmp/redox-self-hosting-captures/20260416T154023-snix-sandbox-test/`).
 - [ ] 3.3 Re-run at least one self-hosting validation pass with proxy mode active (use the current proof wrapper, keep timeout at least 4800s, and preserve heartbeat/capture artifacts).
+  - 2026-04-16 attempt captured durable artifacts at `/var/tmp/redox-self-hosting-captures/20260416T165825-self-hosting-test/` and `evidence/2026-04-16-self-hosting-test-fail.excerpt.txt`, but the run failed with `cc-dep-build` and `workspace-build` under `buildfs: proxy mode active`, so this task stays open until a passing rerun exists.
+  - Current classification: `snix-sandbox-test` and `self-hosting-test` share the same self-hosting base profile and source bundles, so the regression currently localizes to the weaker `self-hosting-test` harness/observability around these fixtures rather than an obvious static package mismatch.
 - [x] 3.4 Update OpenSpec evidence and repo proof docs to reflect the current sandbox pass.
