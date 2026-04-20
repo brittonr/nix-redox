@@ -41,7 +41,7 @@ Those carries are spread across `nix/pkgs/userspace/`, `nix/pkgs/system/`, `nix/
 
 ### 2. Require an explicit disposition before editing package state
 
-**Choice:** Build an inventory first in `openspec/changes/sync-vendored-crates-upstream/evidence/crate-inventory.md`, then assign each carry one of three dispositions: `update`, `keep-local`, or `defer`.
+**Choice:** Build an inventory first in [`evidence/crate-inventory.md`](./evidence/crate-inventory.md), then assign each carry one of three dispositions: `update`, `keep-local`, or `defer`.
 
 **Rationale:** User asked for "where it makes sense," which implies selection criteria. Writing the disposition before changing source pins prevents cargo-edit churn without a reason and gives us a durable list of exceptions instead of tribal knowledge. Keeping the first inventory under change-local evidence makes the initial pass easy to review without committing yet to a long-lived docs format.
 

@@ -26,6 +26,59 @@
 }:
 
 let
+  patchedSrc = pkgs.runCommand "pkgutils-src-patched" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+    cp -r ${pkgutils-src} $out
+    chmod -R u+w $out
+
+    python - "$out/Cargo.toml" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+old = """[patch.crates-io]
+# https://github.com/briansmith/ring/issues/1999
+ring = { git = "https://gitlab.redox-os.org/redox-os/ring.git", branch = "redox-0.17.8" }
+cc-11 = { git = "https://github.com/tea/cc-rs", branch="riscv-abi-arch-fix", package = "cc" }
+"""
+new = """[patch.crates-io]
+# https://github.com/briansmith/ring/issues/1999
+ring = { git = "https://gitlab.redox-os.org/redox-os/ring.git", branch = "redox-0.17.8" }
+"""
+if old not in text:
+    raise SystemExit("pkgutils: expected cc patch snippet not found")
+path.write_text(text.replace(old, new, 1))
+PY
+
+    python - "$out/Cargo.lock" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+old = """[[package]]
+name = \"cc\"
+version = \"1.1.22\"
+source = \"git+https://github.com/tea/cc-rs?branch=riscv-abi-arch-fix#588ceacb084af41415690c57688e338a32a1f1b4\"
+dependencies = [
+ \"shlex\",
+]
+"""
+new = """[[package]]
+name = \"cc\"
+version = \"1.1.22\"
+source = \"registry+https://github.com/rust-lang/crates.io-index\"
+checksum = \"9540e661f81799159abee814118cc139a2004b3a3aa3ea37724a1b66530b90e0\"
+dependencies = [
+ \"shlex\",
+]
+"""
+if old not in text:
+    raise SystemExit("pkgutils: expected cc lock block not found")
+path.write_text(text.replace(old, new, 1))
+PY
+  '';
+
   mkUserspace = import ./mk-userspace.nix {
     inherit
       pkgs
@@ -43,24 +96,19 @@ in
 mkUserspace.mkPackage {
   pname = "pkgutils";
   version = "0.3.0";
-  src = pkgutils-src;
+  src = patchedSrc;
   cargoBuildFlags = "--manifest-path pkg-cli/Cargo.toml";
 
   # Perl needed by ring's build.rs to generate assembly from .pl files
   nativeBuildInputs = [ pkgs.perl ];
 
-  vendorHash = "sha256-RK9KDZ6wUw06C/Oi7j7X/7hvI+grU0GObWdWdfke7GU=";
+  vendorHash = "sha256-c6KOKcNUyxSpDM/KIRFLvnBDA6C5nRTKc49kyXczZbE=";
 
   gitSources = [
     {
       url = "git+https://gitlab.redox-os.org/redox-os/ring.git?branch=redox-0.17.8";
       git = "https://gitlab.redox-os.org/redox-os/ring.git";
       branch = "redox-0.17.8";
-    }
-    {
-      url = "git+https://github.com/tea/cc-rs?branch=riscv-abi-arch-fix";
-      git = "https://github.com/tea/cc-rs";
-      branch = "riscv-abi-arch-fix";
     }
   ];
 

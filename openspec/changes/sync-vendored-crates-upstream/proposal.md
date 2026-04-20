@@ -5,6 +5,7 @@ Redox still carries several vendored crates, forked crate sources, and one-off v
 ## What Changes
 
 - Audit the current vendored-crate and forked-source surface across `nix/pkgs/`, `snix-redox/`, and source-bundle derivations.
+- Keep the live inventory in [`evidence/crate-inventory.md`](./evidence/crate-inventory.md).
 - Classify each case as one of: update directly to upstream, keep a local carry with documented blocker, or defer because Redox-specific behavior still needs a patch.
 - Replace vendored or forked crate sources with upstream releases/commits where validation shows Redox behavior stays correct.
 - Tighten the maintenance path for the crates we still vendor locally: record why they remain local, what test protects them, and what would let us upstream or drop the delta later.

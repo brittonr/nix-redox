@@ -129,15 +129,16 @@
     "bottom-src": {
       "flake": false,
       "locked": {
-        "lastModified": 1762206029,
-        "narHash": "sha256-ryzI0dF5XzvHOmn+UgDG6to+OsrYXpOLA9wvSP70iUY=",
-        "owner": "jackpot51",
+        "lastModified": 1759876296,
+        "narHash": "sha256-xX7W137OCMbdOsuFSv7lvKn67jDUKuKmtTSRt5Bb3i0=",
+        "owner": "ClementTsang",
         "repo": "bottom",
-        "rev": "7cf3105d8856eb3d6a931ce31cfa56ee0262d691",
+        "rev": "6dc02ea0413dc72af1d6cf84106e791361c65c3c",
         "type": "github"
       },
       "original": {
-        "owner": "jackpot51",
+        "owner": "ClementTsang",
+        "ref": "0.11.2",
         "repo": "bottom",
         "type": "github"
       }

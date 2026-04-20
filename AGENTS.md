@@ -155,6 +155,9 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - `fetchCargoVendor` registry bundles may be laid out as `vendor/source-registry-0/*` — `.cargo/config.toml` must point Cargo at that exact directory, not just `vendor/`
 - ring crate from git needs `pregenerated/` assembly files not in registry download
 - cc-rs 1.2.x depends on `shlex` crate — must vendor both cc AND shlex for offline builds
+- Current vendored-crate carry inventory lives at `openspec/changes/sync-vendored-crates-upstream/evidence/crate-inventory.md`; reuse its disposition + validation columns before changing forked crate sources or vendored patches, and re-check `.cargo/config.toml` vendor directory paths after any vendor refresh
+- `nix/pkgs/userspace/extrautils.nix` no longer needs the `jackpot51/filetime` git carry; upstream `filetime 0.2.27` now passes both host cross-build and guest smoke (`activate-toplevel-test`, which exercises guest `grep`)
+- `nix/pkgs/userspace/bottom.nix` can use upstream `ClementTsang/bottom 0.11.2` plus crates.io `sysinfo 0.37.0`; the remaining Redox-local delta is small and package-local (drop battery from deploy defaults, gate `ctrlc`, add Redox cfgs for sysinfo-backed collectors, and keep the `Condvar::wait_timeout` sleep workaround). Host cross-build is green, and guest smoke is green in an ad hoc tty image with `userutils`: login over serial raw input, `/nix/system/profile/bin/btm --version`, then `/nix/system/profile/bin/btm --basic` and quit with `q`
 
 ### C Library Cross-Compilation
 - CRITICAL: C builds CANNOT build test/app binaries — `-nostdlib -static` in LDFLAGS

@@ -21,7 +21,6 @@
   openlibm-src,
   compiler-builtins-src,
   dlmalloc-rs-src,
-  cc-rs-src,
   redox-syscall-src,
   object-src,
   vendor,
@@ -103,6 +102,42 @@ let
       # Canonicalize redirected git dependency URLs in the relibc source too.
       substituteInPlace Cargo.toml Cargo.lock \
         --replace-fail 'https://gitlab.redox-os.org/andypython/object' 'https://gitlab.redox-os.org/andypython/object.git'
+
+      python3 - <<'PY'
+from pathlib import Path
+
+cargo_toml = Path('Cargo.toml')
+text = cargo_toml.read_text()
+old = """[patch.crates-io]
+cc-11 = { git = "https://github.com/tea/cc-rs", branch = "riscv-abi-arch-fix", package = "cc" }
+"""
+if old not in text:
+    raise SystemExit('relibc: expected cc patch snippet not found')
+cargo_toml.write_text(text.replace(old, "", 1))
+
+cargo_lock = Path('Cargo.lock')
+text = cargo_lock.read_text()
+old = """[[package]]
+name = \"cc\"
+version = \"1.1.22\"
+source = \"git+https://github.com/tea/cc-rs?branch=riscv-abi-arch-fix#588ceacb084af41415690c57688e338a32a1f1b4\"
+dependencies = [
+ \"shlex\",
+]
+"""
+new = """[[package]]
+name = \"cc\"
+version = \"1.1.22\"
+source = \"registry+https://github.com/rust-lang/crates.io-index\"
+checksum = \"9540e661f81799159abee814118cc139a2004b3a3aa3ea37724a1b66530b90e0\"
+dependencies = [
+ \"shlex\",
+]
+"""
+if old not in text:
+    raise SystemExit('relibc: expected cc lock block not found')
+cargo_lock.write_text(text.replace(old, new, 1))
+PY
     '';
 
     installPhase = ''
@@ -125,11 +160,6 @@ let
 
   # Git source mappings for cargo config
   gitSources = [
-    {
-      url = "https://github.com/tea/cc-rs?branch=riscv-abi-arch-fix";
-      git = "https://github.com/tea/cc-rs";
-      branch = "riscv-abi-arch-fix";
-    }
     {
       url = "https://gitlab.redox-os.org/andypython/object.git";
       git = "https://gitlab.redox-os.org/andypython/object.git";
