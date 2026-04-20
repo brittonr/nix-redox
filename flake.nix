@@ -425,9 +425,9 @@
       url = "path:/home/brittonr/git/wasmtime-redox";
     };
 
-    # bottom - graphical system monitor (Redox fork)
+    # bottom - graphical system monitor (upstream release)
     bottom-src = {
-      url = "github:jackpot51/bottom";
+      url = "github:ClementTsang/bottom/0.11.2";
       flake = false;
     };
 

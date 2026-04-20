@@ -14,8 +14,6 @@
   stubLibs,
   vendor,
   extrautils-src,
-  filetime-src,
-  cc-rs-src,
   ...
 }:
 
@@ -31,9 +29,93 @@ let
       ;
   };
 
+  patchedSrc = pkgs.runCommand "extrautils-src-patched" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+    cp -r ${extrautils-src} $out
+    chmod -R u+w $out
+
+    python - "$out/Cargo.toml" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+old = """tar = { version = "0.4.27", default-features = false }
+filetime = { git = "https://github.com/jackpot51/filetime.git" }
+termion = "4"
+"""
+new = """tar = { version = "0.4.27", default-features = false }
+filetime = "0.2.27"
+termion = "4"
+"""
+if old not in text:
+    raise SystemExit("extrautils: expected filetime dependency snippet not found")
+text = text.replace(old, new, 1)
+old_patch = """[patch.crates-io]
+filetime = { git = "https://github.com/jackpot51/filetime.git" }
+cc-11 = { git = "https://github.com/tea/cc-rs", branch="riscv-abi-arch-fix", package = "cc" }
+"""
+if old_patch not in text:
+    raise SystemExit("extrautils: expected filetime/cc patch snippet not found")
+path.write_text(text.replace(old_patch, "", 1))
+PY
+
+    python - "$out/Cargo.lock" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+old = """[[package]]
+name = \"filetime\"
+version = \"0.2.24\"
+source = \"git+https://github.com/jackpot51/filetime.git#186e19d3190ead16b05329400cb5b2350d8f44cf\"
+dependencies = [
+ \"cfg-if\",
+ \"libc\",
+ \"libredox\",
+ \"windows-sys 0.59.0\",
+]
+"""
+new = """[[package]]
+name = \"filetime\"
+version = \"0.2.27\"
+source = \"registry+https://github.com/rust-lang/crates.io-index\"
+checksum = \"f98844151eee8917efc50bd9e8318cb963ae8b297431495d3f758616ea5c57db\"
+dependencies = [
+ \"cfg-if\",
+ \"libc\",
+ \"libredox\",
+]
+"""
+if old not in text:
+    raise SystemExit("extrautils: expected filetime lock block not found")
+text = text.replace(old, new, 1)
+old = """[[package]]
+name = \"cc\"
+version = \"1.1.22\"
+source = \"git+https://github.com/tea/cc-rs?branch=riscv-abi-arch-fix#588ceacb084af41415690c57688e338a32a1f1b4\"
+dependencies = [
+ \"shlex\",
+]
+"""
+new = """[[package]]
+name = \"cc\"
+version = \"1.1.22\"
+source = \"registry+https://github.com/rust-lang/crates.io-index\"
+checksum = \"9540e661f81799159abee814118cc139a2004b3a3aa3ea37724a1b66530b90e0\"
+dependencies = [
+ \"shlex\",
+]
+"""
+if old not in text:
+    raise SystemExit("extrautils: expected cc lock block not found")
+path.write_text(text.replace(old, new, 1))
+PY
+  '';
+
   # Vendor using crane (handles complex git deps better)
   extrautilsVendor = craneLib.vendorCargoDeps {
-    src = extrautils-src;
+    src = patchedSrc;
   };
 
   # Create merged vendor directory (cached as separate derivation)
@@ -66,15 +148,6 @@ let
       url = "git+https://gitlab.redox-os.org/nicholasbishop/os_release.git?rev=bb0b7bd";
       git = "https://gitlab.redox-os.org/nicholasbishop/os_release.git";
       rev = "bb0b7bd";
-    }
-    {
-      url = "git+https://github.com/tea/cc-rs?branch=riscv-abi-arch-fix";
-      git = "https://github.com/tea/cc-rs";
-      branch = "riscv-abi-arch-fix";
-    }
-    {
-      url = "git+https://github.com/jackpot51/filetime.git";
-      git = "https://github.com/jackpot51/filetime.git";
     }
     {
       url = "git+https://gitlab.redox-os.org/redox-os/libpager.git";
@@ -112,7 +185,7 @@ pkgs.stdenv.mkDerivation {
   configurePhase = ''
     runHook preConfigure
 
-    cp -r ${extrautils-src}/* .
+    cp -r ${patchedSrc}/* .
     chmod -R u+w .
 
     # Remove checksums from Cargo.lock for git dependencies
@@ -125,13 +198,6 @@ pkgs.stdenv.mkDerivation {
       /name = "tar"/,/^path = /{d}
     }' Cargo.toml
     sed -i '/^\[\[bin\]\]$/{N; /\n$/d}' Cargo.toml
-
-    # Replace patch section with path dependencies
-    substituteInPlace Cargo.toml \
-      --replace-quiet 'filetime = { git = "https://github.com/jackpot51/filetime.git" }' \
-                      'filetime = { path = "${filetime-src}" }' \
-      --replace-quiet 'cc-11 = { git = "https://github.com/tea/cc-rs", branch="riscv-abi-arch-fix", package = "cc" }' \
-                      'cc-11 = { path = "${cc-rs-src}", package = "cc" }'
 
     # Use pre-merged vendor directory
     cp -rL ${mergedVendor} vendor-combined
