@@ -1,0 +1,9 @@
+[package]
+name = "futures-macro"
+version = "0.3.32"
+edition = "2018"
+description = "Minimal Redox self-hosting replacement for futures-macro"
+license = "MIT OR Apache-2.0"
+
+[lib]
+proc-macro = true

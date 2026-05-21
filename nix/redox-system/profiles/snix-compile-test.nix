@@ -59,7 +59,7 @@ let
                             local last=""
                             while IFS= read -r line; do
                               case "$line" in
-                                *"Compiling "*|*"Finished "*|*"Running "*|*"warning:"*|*"error:"*|*"build complete"*)
+                                *"Compiling "*|*"Finished "*|*"Running "*|*"warning:"*|*"error:"*|*"build complete"*|*"[build-snix] rustc-progress"*)
                                   last="$line"
                                   ;;
                               esac
@@ -80,6 +80,7 @@ let
 
                           PREV_ERR_BYTES=-1
                           STALLED_HEARTBEATS=0
+                          DUMPED_STALL_STDERR=0
 
                           /bin/snix build --file /usr/src/snix-redox/build.nix > /tmp/snix-compile-output 2> /tmp/snix-compile-err &
                           SNIX_PID=$!
@@ -108,6 +109,21 @@ let
                               echo "[snix-compile] heartbeat elapsed=''${SECONDS}s stdout=''${OUT_BYTES}B stderr=''${ERR_BYTES}B stalled=$STALLED_HEARTBEATS rustc=$LAST_RUSTC"
                             else
                               echo "[snix-compile] heartbeat elapsed=''${SECONDS}s stdout=''${OUT_BYTES}B stderr=''${ERR_BYTES}B stalled=$STALLED_HEARTBEATS"
+                            fi
+                            if [ "$STALLED_HEARTBEATS" -gt 0 ] && [ $((STALLED_HEARTBEATS % 5)) -eq 0 ]; then
+                              echo "[snix-compile] sys-context snapshot"
+                              cat /scheme/sys/context 2>/dev/null || true
+                              echo "[snix-compile] sys-block snapshot"
+                              cat /scheme/sys/block 2>/dev/null || true
+                              echo "[snix-compile] stderr progress snapshot"
+                              latest_progress 2>/dev/null || true
+                              echo
+                              if [ "$DUMPED_STALL_STDERR" = "0" ]; then
+                                DUMPED_STALL_STDERR=1
+                                echo "[snix-compile] stalled stderr dump begin"
+                                cat /tmp/snix-compile-err 2>/dev/null || true
+                                echo "[snix-compile] stalled stderr dump end"
+                              fi
                             fi
                           done
 

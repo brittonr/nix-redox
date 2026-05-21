@@ -1,0 +1,15 @@
+[package]
+edition = "2021"
+rust-version = "1.71"
+name = "prost-derive"
+version = "0.13.5"
+description = "Minimal prost derive shim for Redox self-hosting builds"
+license = "Apache-2.0"
+repository = "https://github.com/tokio-rs/prost"
+
+[workspace]
+
+[lib]
+name = "prost_derive"
+path = "src/lib.rs"
+proc-macro = true

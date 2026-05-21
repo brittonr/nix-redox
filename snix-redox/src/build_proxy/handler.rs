@@ -787,22 +787,6 @@ impl SchemeSync for BuildFsHandler {
             self.list_visible_children(&dir_path)
         };
 
-        let dir_path_text = dir_path.to_string_lossy();
-        if dir_path_text.contains("/vendor") || dir_path_text.contains("/target/debug/deps") {
-            let sample: Vec<_> = entries
-                .iter()
-                .take(8)
-                .map(|(name, _)| name.clone())
-                .collect();
-            eprintln!(
-                "buildfs: traced getdents path={:?} allowed={} entries={} sample={:?}",
-                dir_path,
-                is_under_allowed,
-                entries.len(),
-                sample
-            );
-        }
-
         // Paginate: skip entries before opaque_offset.
         let start = opaque_offset as usize;
         for (i, (name, kind)) in entries.iter().enumerate().skip(start) {

@@ -114,7 +114,45 @@ if [ "${SNIX_CARGO_VERBOSE:-0}" = "1" ]; then
   CARGO_VERBOSE_ARGS=(-vv)
 fi
 
+report_rustc_progress() {
+  last_size=-1
+  stalled=0
+  while true; do
+    sleep 60
+    if [ -f "$SNIX_RUSTC_LOG" ]; then
+      size=$(wc -c < "$SNIX_RUSTC_LOG" 2>/dev/null || echo 0)
+      if [ "$size" = "$last_size" ]; then
+        stalled=$((stalled + 1))
+      else
+        stalled=0
+      fi
+      last_size="$size"
+      last=""
+      while IFS= read -r line; do
+        last="$line"
+      done < "$SNIX_RUSTC_LOG"
+      if [ -n "$last" ]; then
+        echo "[build-snix] rustc-progress bytes=$size stalled=$stalled last=$last" >&2
+      else
+        echo "[build-snix] rustc-progress bytes=$size stalled=$stalled" >&2
+      fi
+    else
+      echo "[build-snix] rustc-progress log-missing=$SNIX_RUSTC_LOG" >&2
+    fi
+  done
+}
+
+report_rustc_progress &
+PROGRESS_PID=$!
+cleanup_progress() {
+  kill "$PROGRESS_PID" 2>/dev/null || true
+  wait "$PROGRESS_PID" 2>/dev/null || true
+}
+trap cleanup_progress EXIT
+
 echo "[build-snix] Starting cargo build for --bin snix (JOBS=1)..." >&2
 cargo build "${CARGO_VERBOSE_ARGS[@]}" --offline -j1 --bin snix
+cleanup_progress
+trap - EXIT
 cp target/x86_64-unknown-redox/debug/snix "$out/bin/snix"
 echo "[build-snix] snix build complete" >&2

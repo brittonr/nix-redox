@@ -308,6 +308,13 @@ let
         skipTargetCheck = true;
         inherit rustSrcPath;
         extraCrateOverrides = {
+          # Rust 1.92 core includes stdarch via #[path = "../../stdarch/..."];
+          # buildRustCrate must unpack the whole library source tree, not just
+          # library/core, or core_arch is missing during kernel build-std.
+          core = attrs: {
+            src = "${rustToolchain}/lib/rustlib/src/rust/library";
+          };
+
           # The kernel crate needs nasm for build.rs and linker script args.
           kernel = attrs: {
             nativeBuildInputs = (attrs.nativeBuildInputs or [ ]) ++ [

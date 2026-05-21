@@ -1,0 +1,9 @@
+[package]
+name = "clap_derive"
+version = "4.6.0"
+edition = "2021"
+
+[workspace]
+
+[lib]
+proc-macro = true

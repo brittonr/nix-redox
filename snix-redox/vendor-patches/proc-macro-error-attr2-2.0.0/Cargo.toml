@@ -1,0 +1,14 @@
+[package]
+name = "proc-macro-error-attr2"
+version = "2.0.0"
+edition = "2021"
+rust-version = "1.61"
+description = "Tiny Redox guest shim for proc-macro-error-attr2"
+license = "MIT OR Apache-2.0"
+
+[lib]
+name = "proc_macro_error_attr2"
+path = "src/lib.rs"
+proc-macro = true
+
+[workspace]

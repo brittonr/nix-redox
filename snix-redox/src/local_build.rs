@@ -25,7 +25,7 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::fs;
-use std::io::{self, BufReader};
+use std::io::{self, BufReader, Read, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -414,7 +414,19 @@ fn build_derivation_inner(
                 .name("build-stderr-reader".to_string())
                 .spawn(move || {
                     let mut buf = Vec::new();
-                    let _ = std::io::Read::read_to_end(&mut pipe, &mut buf);
+                    let mut chunk = [0u8; 8192];
+                    loop {
+                        match pipe.read(&mut chunk) {
+                            Ok(0) => break,
+                            Ok(n) => {
+                                buf.extend_from_slice(&chunk[..n]);
+                                let mut stderr = std::io::stderr().lock();
+                                let _ = stderr.write_all(&chunk[..n]);
+                                let _ = stderr.flush();
+                            }
+                            Err(_) => break,
+                        }
+                    }
                     buf
                 })
         });
@@ -424,7 +436,19 @@ fn build_derivation_inner(
                 .name("build-stdout-reader".to_string())
                 .spawn(move || {
                     let mut buf = Vec::new();
-                    let _ = std::io::Read::read_to_end(&mut pipe, &mut buf);
+                    let mut chunk = [0u8; 8192];
+                    loop {
+                        match pipe.read(&mut chunk) {
+                            Ok(0) => break,
+                            Ok(n) => {
+                                buf.extend_from_slice(&chunk[..n]);
+                                let mut stdout = std::io::stdout().lock();
+                                let _ = stdout.write_all(&chunk[..n]);
+                                let _ = stdout.flush();
+                            }
+                            Err(_) => break,
+                        }
+                    }
                     buf
                 })
         });
