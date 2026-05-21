@@ -365,6 +365,15 @@ IGCD_CARGO_EOF
       ${pkgs.python3}/bin/python3 ${./patches/bootstrap/patch-procmgr-ptrace-forward.py} .
       echo "procmgr ptrace forwarding patch applied"
 
+      # scheme-utils HandleMap::get now accepts ids by value and returns Result.
+      substituteInPlace randd/src/main.rs \
+        --replace-fail 'self.handles.get(&id).ok_or(Error::new(EBADF))?' 'self.handles.get(id)?'
+
+      # pcid_interface::PciFunctionHandle::map_bar now requires a MemoryType.
+      substituteInPlace drivers/net/igcd/src/main.rs \
+        --replace-fail 'use pcid_interface::PciFunctionHandle;' $'use common::MemoryType;\nuse pcid_interface::PciFunctionHandle;' \
+        --replace-fail 'pcid_handle.map_bar(0)' 'pcid_handle.map_bar(0, MemoryType::Uncacheable)'
+
       runHook postPatch
     '';
 
@@ -391,8 +400,9 @@ IGCD_CARGO_EOF
   # Git source mappings for cargo config
   gitSources = [
     {
-      url = "git+https://github.com/jackpot51/acpi.git";
-      git = "https://github.com/jackpot51/acpi.git";
+      url = "git+https://gitlab.redox-os.org/redox-os/acpi.git?branch=redox-6.x";
+      git = "https://gitlab.redox-os.org/redox-os/acpi.git";
+      branch = "redox-6.x";
     }
     {
       url = "git+https://github.com/repnop/fdt.git";
