@@ -1,14 +1,15 @@
 --- a/src/platform/redox/mod.rs	2026-03-27 15:36:52.684966644 -0400
 +++ b/src/platform/redox/mod.rs	2026-03-27 15:37:13.698390360 -0400
-@@ -55,7 +55,6 @@
+@@ -57,7 +57,7 @@
      ld_so::tcb::OsSpecific,
      out::Out,
      platform::sys::timer::{timer_routine, timer_update_wake_time},
--    sync::rwlock::RwLock,
+-    sync::{Mutex, rwlock::RwLock},
++    sync::Mutex,
  };
  
  pub use redox_rt::proc::FdGuard;
-@@ -100,7 +99,12 @@
+@@ -105,7 +105,12 @@
      }};
  }
  

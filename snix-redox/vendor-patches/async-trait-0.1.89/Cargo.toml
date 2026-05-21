@@ -1,0 +1,15 @@
+[package]
+name = "async-trait"
+version = "0.1.89"
+edition = "2021"
+
+[lib]
+name = "async_trait"
+proc-macro = true
+
+[dependencies]
+proc-macro2 = "1"
+quote = "1"
+syn = { version = "2", features = ["full", "visit-mut"] }
+
+[workspace]

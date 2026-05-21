@@ -1,0 +1,11 @@
+[package]
+name = "curve25519-dalek-derive"
+version = "0.1.1"
+edition = "2021"
+description = "guest-only minimal shim for Redox self-hosted snix builds"
+license = "MIT OR Apache-2.0"
+
+[lib]
+proc-macro = true
+
+[workspace]

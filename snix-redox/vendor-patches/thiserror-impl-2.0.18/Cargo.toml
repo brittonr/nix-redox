@@ -1,0 +1,11 @@
+[package]
+name = "thiserror-impl"
+version = "2.0.18"
+edition = "2021"
+
+[lib]
+name = "thiserror_impl"
+path = "src/lib.rs"
+proc-macro = true
+
+[workspace]

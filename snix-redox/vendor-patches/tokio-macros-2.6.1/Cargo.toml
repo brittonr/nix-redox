@@ -1,0 +1,15 @@
+[package]
+edition = "2021"
+rust-version = "1.71"
+name = "tokio-macros"
+version = "2.6.1"
+description = "Minimal tokio proc-macro shim for Redox self-hosting builds"
+license = "MIT"
+repository = "https://github.com/tokio-rs/tokio"
+
+[workspace]
+
+[lib]
+name = "tokio_macros"
+path = "src/lib.rs"
+proc-macro = true

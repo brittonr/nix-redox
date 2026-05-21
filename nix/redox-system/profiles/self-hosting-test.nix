@@ -3235,7 +3235,7 @@ TOMLEOF
                             local last=""
                             while IFS= read -r line; do
                               case "$line" in
-                                *"Compiling "*|*"Finished "*|*"Running "*|*"warning:"*|*"error:"*|*"build complete"*)
+                                *"Compiling "*|*"Finished "*|*"Running "*|*"warning:"*|*"error:"*|*"build complete"*|*"[build-snix] rustc-progress"*)
                                   last="$line"
                                   ;;
                               esac
@@ -3284,6 +3284,15 @@ TOMLEOF
                               echo "[snix-compile] heartbeat elapsed=''${SECONDS}s stdout=''${OUT_BYTES}B stderr=''${ERR_BYTES}B stalled=$STALLED_HEARTBEATS rustc=$LAST_RUSTC"
                             else
                               echo "[snix-compile] heartbeat elapsed=''${SECONDS}s stdout=''${OUT_BYTES}B stderr=''${ERR_BYTES}B stalled=$STALLED_HEARTBEATS"
+                            fi
+                            if [ "$STALLED_HEARTBEATS" -gt 0 ] && [ $((STALLED_HEARTBEATS % 5)) -eq 0 ]; then
+                              echo "[snix-compile] sys-context snapshot"
+                              cat /scheme/sys/context 2>/dev/null || true
+                              echo "[snix-compile] sys-block snapshot"
+                              cat /scheme/sys/block 2>/dev/null || true
+                              echo "[snix-compile] stderr progress snapshot"
+                              latest_progress 2>/dev/null || true
+                              echo
                             fi
                           done
 

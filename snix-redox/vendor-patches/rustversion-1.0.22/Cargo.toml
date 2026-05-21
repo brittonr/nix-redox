@@ -1,0 +1,10 @@
+[package]
+name = "rustversion"
+version = "1.0.22"
+edition = "2018"
+
+[lib]
+proc-macro = true
+path = "src/lib.rs"
+
+[workspace]

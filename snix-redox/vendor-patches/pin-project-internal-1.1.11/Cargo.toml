@@ -1,0 +1,9 @@
+[package]
+name = "pin-project-internal"
+version = "1.1.11"
+edition = "2021"
+
+[workspace]
+
+[lib]
+proc-macro = true

@@ -29,6 +29,18 @@ members = [
 version = "0.1.0"
 rust-version = "1.91.1"
 
+[patch.crates-io]
+# Redox rustc currently stalls compiling tokio-macros. Tonic enables Tokio's
+# macros feature through transport/tls feature plumbing even though snix-redox
+# does not use Tokio attribute macros; keep a local tonic copy with those feature
+# edges removed so the Redox self-hosted build avoids the proc-macro crate.
+tonic = { path = "vendor-patches/tonic-0.13.1" }
+# Redox rustc spins compiling several upstream proc-macro implementations during
+# self-hosting; keep link/source-compatible minimal replacements where the snix
+# binary closure does not need the macro expansion semantics.
+futures-macro = { path = "vendor-patches/futures-macro-0.3.32" }
+tracing-attributes = { path = "vendor-patches/tracing-attributes-0.1.31" }
+
 # Upstream snix workspace dependency versions.
 # Copied from https://git.snix.dev/snix/snix @ 34604636d7e3adbad6f7f909c98bb493f26855f9
 [workspace.dependencies]
@@ -72,7 +84,9 @@ md-5 = "0.10.6"
 mimalloc = "0.1.43"
 nix = "0.27.1"
 nom = "8.0"
-object_store = "0.13.1"
+# Avoid object_store default cloud features on Redox; they enable tokio/macros and
+# pull Tokio's proc-macro crate into the self-hosted build.
+object_store = { version = "0.13.1", default-features = false }
 opentelemetry = "0.30.0"
 opentelemetry-http = "0.30.0"
 opentelemetry-otlp = "0.30.0"
@@ -125,7 +139,7 @@ tokio-stream = "0.1.15"
 tokio-tar = { package = "astral-tokio-tar", version = "0.5.6" }
 tokio-test = "0.4.4"
 tokio-util = "0.7.11"
-tonic = { version = "0.13.1", default-features = false, features = ["transport", "codegen", "prost", "tls-ring", "tls-native-roots"] }
+tonic = { version = "0.13.1", default-features = false, features = ["transport", "router", "codegen", "prost", "tls-ring", "tls-native-roots"] }
 tonic-build = "0.13.1"
 tonic-health = { version = "0.13.1", default-features = false }
 tonic-reflection = "0.13.1"
@@ -194,7 +208,10 @@ snix-castore = { path = "upstream/castore", default-features = false, features =
 snix-build = { path = "upstream/build", default-features = false, features = [] }
 
 # === Async runtime (upstream snix requires tokio) ===
-tokio = { version = "1", features = ["rt-multi-thread", "sync", "macros", "fs"] }
+# Avoid tokio's proc-macro crate on Redox: rustc self-hosting currently stalls
+# while compiling tokio-macros, and the snix-redox binary does not use
+# #[tokio::*] attributes.
+tokio = { version = "1", features = ["rt-multi-thread", "sync", "fs"] }
 
 # === TLS crypto provider (ring, not aws-lc-rs — relibc compatibility) ===
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }

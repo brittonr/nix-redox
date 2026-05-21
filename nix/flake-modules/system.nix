@@ -594,10 +594,11 @@ let
     inherit bootloader;
     memoryMB = 8192;
     cpus = 4;
-    # The focused snix-compile rerun now takes ~3090s on a cold guest build,
-    # the full suite still has source-rebuild checks after it, and the
-    # rebuild-cycle proof now runs at the end of self-hosting-test.
-    defaultTimeout = 6000;
+    # snix self-compile can spend more than 5600s in a CPU-bound final phase
+    # without producing stderr progress. The full suite runs dozens of smoke
+    # tests before that phase and source-rebuild checks after it, so keep a
+    # deliberately large timeout for a complete proof run.
+    defaultTimeout = 14400;
   };
   selfHostingTest = wrapFunctionalTest {
     base = selfHostingTestRaw;
@@ -617,7 +618,10 @@ let
     inherit bootloader;
     memoryMB = 8192;
     cpus = 4;
-    defaultTimeout = 3600; # focused self-compile only; leave headroom for j1 builds
+    # Focused self-compile may be CPU-bound and silent for more than an hour
+    # after stderr progress stops; keep enough timeout to distinguish slow
+    # completion from a real hang.
+    defaultTimeout = 9000;
   };
   snixCompileTest = wrapFunctionalTest {
     base = snixCompileTestRaw;
