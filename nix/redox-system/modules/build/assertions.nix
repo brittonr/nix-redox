@@ -25,8 +25,8 @@ let
       assertion =
         !cfg.graphicsEnabled
         || (inputs.hardware.graphicsDrivers or [ ]) == [ ]
-        || builtins.any (d: d == "virtio-gpud" || d == "bgad") (inputs.hardware.graphicsDrivers or [ ]);
-      message = "graphics.enable is set but graphicsDrivers contains unrecognized drivers. Use [] for vesad-only (bare metal) or include virtio-gpud/bgad for VMs.";
+        || builtins.any (d: d == "virtio-gpud") (inputs.hardware.graphicsDrivers or [ ]);
+      message = "graphics.enable is set but graphicsDrivers contains unrecognized drivers. Use [] for vesad-only (bare metal) or include virtio-gpud for VMs.";
     }
     {
       assertion = cfg.diskSizeMB > cfg.espSizeMB;

@@ -22,7 +22,6 @@ let
   ];
   graphicsDriver = t.enum "GraphicsDriver" [
     "virtio-gpud"
-    "bgad"
   ];
   audioDriver = t.enum "AudioDriver" [
     "ihdad"
@@ -61,7 +60,6 @@ in
       type = t.listOf graphicsDriver;
       default = [
         "virtio-gpud"
-        "bgad"
       ];
       description = "Graphics drivers";
     };

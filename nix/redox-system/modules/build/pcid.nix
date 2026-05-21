@@ -114,14 +114,6 @@ let
         device = "0x1050";
       }
     ];
-    bgad = [
-      {
-        name = "Bochs VGA";
-        class = "0x03";
-        vendor = "0x1234";
-        device = "0x1111";
-      }
-    ];
     ihdad = [
       {
         name = "Intel HD Audio ICH6";

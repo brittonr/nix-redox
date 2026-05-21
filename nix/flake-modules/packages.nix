@@ -520,7 +520,6 @@ let
         "ahcid"
         "audiod"
         "bcm2835-sdhcid"
-        "bgad"
         "e1000d"
         "fbbootlogd"
         "fbcond"
