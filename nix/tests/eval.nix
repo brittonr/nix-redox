@@ -1187,7 +1187,6 @@ in
           graphicsEnable = true;
           graphicsDrivers = [
             "virtio-gpud"
-            "bgad"
           ];
           audioEnable = true;
           audioDrivers = [

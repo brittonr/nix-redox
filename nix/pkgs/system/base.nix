@@ -377,7 +377,7 @@ IGCD_CARGO_EOF
   baseVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "base-cargo-vendor";
     src = patchedSrc;
-    hash = "sha256-SnetwqeSdrTmBK59zZfenkYQ0OPKNwFYzVQOs+dzdn0=";
+    hash = "sha256-4Qjw9/GBmPU+nuYo5oK3EJ8MezXdSXckgT8DYx2Botk=";
   };
 
   # Create merged vendor directory (cached as separate derivation)

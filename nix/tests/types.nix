@@ -307,7 +307,6 @@ in
           graphicsEnable = true;
           graphicsDrivers = [
             "virtio-gpud"
-            "bgad"
           ];
         };
       }

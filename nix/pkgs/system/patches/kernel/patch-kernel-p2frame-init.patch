@@ -230,20 +230,19 @@ diff -ruN a/src/context/memory.rs b/src/context/memory.rs
      },
      Other {
          actions: TlbShootdownActions,
-@@ -2854,11 +2920,12 @@
-             let PageQueueEntry::Free {
-                 base,
-                 phys_contiguous_count,
-+                alloc_order,
-             } = entry
-             else {
-                 continue;
-             };
--            handle_free_action(base, phys_contiguous_count);
-+            handle_free_action(base, phys_contiguous_count, alloc_order);
-         }
-     }
- }
+@@ -2995,10 +3062,11 @@
+         for entry in pages {
+             match entry {
+                 PageQueueEntry::Free {
+                     base,
+                     phys_contiguous_count,
++                    alloc_order,
+                 } => {
+-                    handle_free_action(base, phys_contiguous_count);
++                    handle_free_action(base, phys_contiguous_count, alloc_order);
+                 }
+                 PageQueueEntry::Other { actions } => {
+                     // We currently invalidate everything on each flush
 @@ -2869,12 +2936,22 @@
          phys_contiguous_count: Option<NonZeroUsize>,
          actions: TlbShootdownActions,

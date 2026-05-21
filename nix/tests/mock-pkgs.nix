@@ -85,7 +85,6 @@ rec {
       "fbcond"
       "ps2d"
       "virtio-gpud"
-      "bgad"
       # USB support
       "xhcid"
       "usbhubd"
