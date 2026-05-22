@@ -11,7 +11,7 @@
   "cargoLockHash": "94e2577d9bf56a03aec025ac28ea05885b290a9a93f2775ef10e6afd3e4fab93",
   "inputsHash": "e2feca751fcd72f6df31e63510921443203f558772fb6c453aa930e5a5f0f1ed",
   "crates": {
-    "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0": {
+    "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0": {
       "crateName": "alloc",
       "version": "0.0.0",
       "edition": "2024",
@@ -25,18 +25,18 @@
       ],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "/nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc/src/lib.rs",
+      "libPath": "/nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -44,7 +44,7 @@
       "crateBin": [],
       "links": null
     },
-    "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160": {
+    "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160": {
       "crateName": "compiler_builtins",
       "version": "0.1.160",
       "edition": "2024",
@@ -62,14 +62,14 @@
       "hostFeatures": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
       "buildDependencies": [],
       "procMacro": false,
-      "build": "/nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins/build.rs",
-      "libPath": "/nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins/src/lib.rs",
+      "build": "/nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins/build.rs",
+      "libPath": "/nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -77,7 +77,7 @@
       "crateBin": [],
       "links": null
     },
-    "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0": {
+    "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0": {
       "crateName": "core",
       "version": "0.0.0",
       "edition": "2024",
@@ -91,7 +91,7 @@
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
-      "libPath": "/nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core/src/lib.rs",
+      "libPath": "/nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core/src/lib.rs",
       "libName": null,
       "libCrateTypes": [
         "lib"
@@ -119,7 +119,7 @@
       "hostFeatures": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
@@ -135,11 +135,11 @@
           "externCrateName": "bitflags"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         },
         {
@@ -230,15 +230,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -267,7 +267,7 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
@@ -275,11 +275,11 @@
           "externCrateName": "cfg_if"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         },
         {
@@ -324,15 +324,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -364,15 +364,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -404,15 +404,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -446,15 +446,15 @@
       ],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -487,15 +487,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -565,15 +565,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -605,15 +605,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -673,15 +673,15 @@
           "externCrateName": "ahash"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -713,15 +713,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -765,15 +765,15 @@
           "externCrateName": "hashbrown"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -808,15 +808,15 @@
       ],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         },
         {
@@ -856,15 +856,15 @@
       ],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         },
         {
@@ -900,15 +900,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -946,15 +946,15 @@
       "hostFeatures": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         },
         {
@@ -990,15 +990,15 @@
       ],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -1030,7 +1030,7 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
@@ -1038,11 +1038,11 @@
           "externCrateName": "bitflags"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -1075,15 +1075,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -1111,7 +1111,7 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
@@ -1119,11 +1119,11 @@
           "externCrateName": "bitflags"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -1155,15 +1155,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -1196,15 +1196,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -1371,15 +1371,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -1411,15 +1411,15 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],
@@ -1461,15 +1461,15 @@
       ],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         },
         {
@@ -1509,15 +1509,15 @@
       ],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         },
         {
@@ -1765,7 +1765,7 @@
       "features": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
@@ -1777,11 +1777,11 @@
           "externCrateName": "bitflags"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         },
         {
@@ -1838,15 +1838,15 @@
       "hostFeatures": [],
       "dependencies": [
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/alloc#0.0.0",
           "externCrateName": "alloc"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/compiler-builtins/compiler-builtins#compiler_builtins@0.1.160",
           "externCrateName": "compiler_builtins"
         },
         {
-          "packageId": "path+file:///nix/store/31m4bdnx7d0c4chizb4zbvlbnq1mnk3b-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
+          "packageId": "path+file:///nix/store/7fc9i7k0ki5vrb83vyzjppim6cmg8k6c-rust-default-1.92.0-nightly-2025-10-03/lib/rustlib/src/rust/library/core#0.0.0",
           "externCrateName": "core"
         }
       ],

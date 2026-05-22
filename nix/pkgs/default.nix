@@ -307,7 +307,7 @@ let
     netutils = mkUserspace.mkPackage {
       pname = "netutils";
       src = inputs.netutils-src;
-      vendorHash = "sha256-bXjd6oVEl4GmxgNtGqYpAIvNH1u3to31jzlQlYKWD9Y=";
+      vendorHash = "sha256-Fs76XG6XcNLbhbvuNZquVIpDoZ+uqJQSBC2cGNqhN9M=";
       preConfigure = ''
           # Patch nc to add -e/--exec support for spawning commands on connections
           cat > src/nc/main.rs << 'NC_MAIN'
@@ -629,7 +629,7 @@ let
     redoxfsTarget = mkUserspace.mkPackage {
       pname = "redoxfs-target";
       src = inputs.redoxfs-src;
-      vendorHash = "sha256-4xwpe+fhNI+YnB3FC8GZsXvEc7DznR6759zE3mkO0bE=";
+      vendorHash = "sha256-DtkZ/gWXK0GzomTD5KspPrmRB+m4pdS7yJwj1Q2e2KA=";
       cargoBuildFlags = "--bin redoxfs";
       installPhase = ''
         runHook preInstall

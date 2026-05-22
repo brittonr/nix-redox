@@ -113,9 +113,6 @@ let
       }
     LINKERSCRIPT
 
-      # Handle new ProcCall variants (SetPriority, GetPriority) added in redox_syscall 0.7.3
-      sed -i 's/ProcCall::Setrens => Response::ready_err(EINVAL, op),/ProcCall::Setrens => Response::ready_err(EINVAL, op),\n                    ProcCall::SetPriority | ProcCall::GetPriority => Response::ready_err(ENOSYS, op),/' bootstrap/src/procmgr.rs
-
       # Forward ptrace handle opens (trace, mem) from procmgr to kernel
       ${pkgs.python3}/bin/python3 ${../system/patches/bootstrap/patch-procmgr-ptrace-forward.py} .
 
@@ -143,7 +140,7 @@ let
     name = "bootstrap-cargo-vendor";
     src = patchedSrc;
     sourceRoot = "bootstrap-src-patched/bootstrap";
-    hash = "sha256-KJFHCkOyJArvbEyOdRSzzBYEVpDxfpRwjvCxuU2KHaE=";
+    hash = "sha256-TxBagMJMUgo1JrodBitBUn+AATycZTLgkvcack9Od4g=";
   };
 
   # Create merged vendor directory (cached as separate derivation)
@@ -193,6 +190,7 @@ pkgs.stdenv.mkDerivation {
     cat > .cargo/config.toml << 'CARGOCONF'
     ${vendor.mkCargoConfig {
       target = redoxTarget;
+      linker = "ld.lld";
       panic = "abort";
       lto = "fat";
     }}
@@ -208,7 +206,7 @@ pkgs.stdenv.mkDerivation {
 
     cd $BOOTSTRAP_DIR
 
-    # Build bootstrap as staticlib
+    # Build bootstrap directly for Redox.
     RUSTFLAGS="-Ctarget-feature=+crt-static" cargo \
       -Z build-std=core,alloc,compiler_builtins \
       -Z build-std-features=compiler-builtins-mem \
@@ -216,13 +214,7 @@ pkgs.stdenv.mkDerivation {
       --target ${redoxTarget} \
       --release
 
-    # Link with custom linker script
-    ld.lld \
-      -o bootstrap \
-      --gc-sections \
-      -T src/x86_64.ld \
-      -z max-page-size=4096 \
-      target/${redoxTarget}/release/libbootstrap.a
+    cp target/${redoxTarget}/release/bootstrap bootstrap
 
     runHook postBuild
   '';

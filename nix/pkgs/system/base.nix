@@ -369,6 +369,71 @@ IGCD_CARGO_EOF
       substituteInPlace randd/src/main.rs \
         --replace-fail 'self.handles.get(&id).ok_or(Error::new(EBADF))?' 'self.handles.get(id)?'
 
+      # rand 0.8 removed Redox's old make_rng helper; use SmallRng directly.
+      substituteInPlace ipcd/src/uds/dgram.rs \
+        --replace-fail 'use rand::Rng;' 'use rand::{Rng, RngCore, SeedableRng};' \
+        --replace-fail 'rng: rand::make_rng(),' 'rng: SmallRng::from_entropy(),'
+      substituteInPlace ipcd/src/uds/stream.rs \
+        --replace-fail 'use rand::prelude::*;' $'use rand::prelude::*;\nuse rand::SeedableRng;' \
+        --replace-fail 'rng: rand::make_rng(),' 'rng: SmallRng::from_entropy(),'
+
+      # acpi 6.1 collapsed Local/Arg reference kinds into LocalOrArg and removed Index/Named.
+      substituteInPlace drivers/amlserde/src/lib.rs \
+        --replace-fail '                    ReferenceKind::Local => AmlSerdeReferenceKind::Local,
+                    ReferenceKind::Arg => AmlSerdeReferenceKind::Arg,
+                    ReferenceKind::Index => AmlSerdeReferenceKind::Index,
+                    ReferenceKind::Named => AmlSerdeReferenceKind::Named,' '                    ReferenceKind::LocalOrArg => AmlSerdeReferenceKind::Local,
+                    ReferenceKind::Unresolved => AmlSerdeReferenceKind::Unresolved,' \
+        --replace-fail '                    ReferenceKind::Unresolved => AmlSerdeReferenceKind::Unresolved,
+                }' '                }' \
+        --replace-fail '                    AmlSerdeReferenceKind::Local => ReferenceKind::Local,
+                    AmlSerdeReferenceKind::Arg => ReferenceKind::Arg,
+                    AmlSerdeReferenceKind::Index => ReferenceKind::Index,
+                    AmlSerdeReferenceKind::Named => ReferenceKind::Named,' '                    AmlSerdeReferenceKind::Local | AmlSerdeReferenceKind::Arg => ReferenceKind::LocalOrArg,
+                    AmlSerdeReferenceKind::Index | AmlSerdeReferenceKind::Named => ReferenceKind::RefOf,'
+
+      # redox-ioctl dropped wrappers/constants for legacy DRM unique/set-version
+      # ioctls and only exposes MODE_GET_FB2's struct wrapper. Keep driver-graphics
+      # compatible by handling legacy structs directly and using the DRM ADD_FB2 nr.
+      ${pkgs.python3}/bin/python3 - <<'PY'
+from pathlib import Path
+p = Path('drivers/graphics/driver-graphics/src/ioctl/mod.rs')
+s = p.read_text()
+s = s.replace('use std::mem;\n', 'use std::{cmp, mem, ptr, slice};\n')
+s = s.replace('const MODE_ADD_FB2: u64 = 0xB8;\n\n', "")
+s = s.replace('mod cursor;\n', 'const MODE_ADD_FB2: u64 = 0xB8;\n\nmod cursor;\n')
+helper = """\nfn payload_as_mut<T>(payload: &mut [u8]) -> syscall::Result<&mut T> {\n    if payload.len() < mem::size_of::<T>() {\n        return Err(Error::new(EINVAL));\n    }\n    Ok(unsafe { &mut *(payload.as_mut_ptr() as *mut T) })\n}\n\nfn get_unique<T: GraphicsAdapter>(adapter: &mut T, handle: &mut DrmHandle<T>, payload: &mut [u8]) -> syscall::Result<usize> {\n    let data = payload_as_mut::<drm_sys::drm_unique>(payload)?;\n    let unique = handle.unique.get_or_insert_with(|| adapter.get_unique());\n    let bytes = unique.as_bytes();\n    let capacity = data.unique_len as usize;\n    if !data.unique.is_null() && capacity > 0 {\n        unsafe {\n            ptr::copy_nonoverlapping(\n                bytes.as_ptr() as *const c_char,\n                data.unique,\n                cmp::min(capacity, bytes.len()),\n            );\n        }\n    }\n    data.unique_len = bytes.len() as drm_sys::__kernel_size_t;\n    Ok(0)\n}\n\nfn set_version<T: GraphicsAdapter>(adapter: &mut T, handle: &mut DrmHandle<T>, payload: &mut [u8]) -> syscall::Result<usize> {\n    let data = payload_as_mut::<drm_sys::drm_set_version>(payload)?;\n    // We only support version 1.4 currently.\n    if data.drm_di_major != 0 || data.drm_di_minor != 4 {\n        return Err(Error::new(EINVAL));\n    }\n    if data.drm_dd_major != 0 || data.drm_dd_minor != 4 {\n        return Err(Error::new(EINVAL));\n    }\n    data.drm_di_major = 1;\n    data.drm_di_minor = 4;\n    data.drm_dd_major = 1;\n    data.drm_dd_minor = 4;\n    handle.unique = Some(adapter.get_unique());\n    Ok(0)\n}\n"""
+s = s.replace('pub(crate) fn call_ioctl<T: GraphicsAdapter>(\n', helper + '\npub(crate) fn call_ioctl<T: GraphicsAdapter>(\n')
+s = s.replace("""        ipc::GET_UNIQUE => ipc::DrmUnique::with(payload, |mut data| {
+            if let Some(unique) = &handle.unique {
+                data.set_unique(unsafe { mem::transmute::<&[u8], &[c_char]>(unique.as_bytes()) });
+            } else {
+                data.set_unique_len(0);
+            }
+            Ok(0)
+        }),
+        ipc::SET_VERSION => ipc::DrmSetVersion::with(payload, |mut data| {
+            // We only support version 1.4 currently
+            if data.drm_di_major() != 0 || data.drm_di_minor() != 4 {
+                return Err(Error::new(EINVAL));
+            }
+            if data.drm_dd_major() != 0 || data.drm_dd_minor() != 4 {
+                return Err(Error::new(EINVAL));
+            }
+            data.set_drm_di_major(1);
+            data.set_drm_di_minor(4);
+            data.set_drm_dd_major(1);
+            data.set_drm_dd_minor(4);
+
+            handle.unique = Some(adapter.get_unique());
+
+            Ok(0)
+        }),""", """        0x01 => get_unique(adapter, handle, payload),
+        0x07 => set_version(adapter, handle, payload),""")
+s = s.replace('ipc::MODE_ADD_FB2 => ipc::DrmModeFbCmd2::with(payload, |data| {', 'MODE_ADD_FB2 => ipc::DrmModeFbCmd2::with(payload, |data| {')
+p.write_text(s)
+PY
+
       # pcid_interface::PciFunctionHandle::map_bar now requires a MemoryType.
       substituteInPlace drivers/net/igcd/src/main.rs \
         --replace-fail 'use pcid_interface::PciFunctionHandle;' $'use common::MemoryType;\nuse pcid_interface::PciFunctionHandle;' \
