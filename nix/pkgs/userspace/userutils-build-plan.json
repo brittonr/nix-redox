@@ -31,7 +31,7 @@
         "type": "git",
         "url": "https://gitlab.redox-os.org/redox-os/libextra.git",
         "rev": "cf213969493db8667052a591e32a1e26d43c4234",
-        "sha256": "0j8c0n4q0b89hsmb8zwxighv6labhf1xwhqsk0yh5kfkmp7y8r5j"
+        "sha256": "09f498271llvlih7xy231q0bfnxvkanrywp2vza221h3ykr0rs1m"
       },
       "features": [],
       "dependencies": [],
@@ -102,7 +102,7 @@
           "externCrateName": "ioslice"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.15",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.16",
           "externCrateName": "redox_protocols"
         },
         {
@@ -114,7 +114,7 @@
           "externCrateName": "redox_path"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.5",
           "externCrateName": "syscall"
         }
       ],
@@ -190,7 +190,7 @@
           "externCrateName": "liner"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.5",
           "externCrateName": "syscall"
         },
         {
@@ -1050,7 +1050,7 @@
           "externCrateName": "plain"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.5",
           "externCrateName": "syscall"
         }
       ],
@@ -1340,7 +1340,7 @@
           "externCrateName": "libredox"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.5",
           "externCrateName": "syscall"
         }
       ],
@@ -2343,13 +2343,13 @@
         "tbu- <>",
         "Manish Goregaokar <>",
         "Aaron Turon <aturon@mozilla.com>",
-        "Adolfo Ochagavía <>",
+        "Adolfo Ochagav\u00eda <>",
         "Niko Matsakis <>",
         "Steven Fackler <>",
         "Chase Southwood <csouth3@illinois.edu>",
         "Eduard Burtescu <>",
         "Florian Wilkens <>",
-        "Félix Raimundo <>",
+        "F\u00e9lix Raimundo <>",
         "Tibor Benke <>",
         "Markus Siemens <markus@m-siemens.de>",
         "Josh Branchaud <jbranchaud@gmail.com>",
@@ -2505,6 +2505,171 @@
       "description": "Custom derive support for zeroize",
       "license": "Apache-2.0 OR MIT",
       "repository": "https://github.com/RustCrypto/utils/tree/master/zeroize/derive"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.16": {
+      "crateName": "libredox",
+      "version": "0.1.16",
+      "edition": "2021",
+      "sha256": "e02f3bb43d335493c96bf3fd3a321600bf6bd07ed34bc64118e9293bdffea46c",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "base",
+        "bitflags",
+        "call",
+        "default",
+        "ioslice",
+        "libc",
+        "mkns",
+        "plain",
+        "protocol",
+        "redox_syscall",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.1",
+          "externCrateName": "bitflags"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ioslice@0.6.0",
+          "externCrateName": "ioslice"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.183",
+          "externCrateName": "libc"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#plain@0.2.3",
+          "externCrateName": "plain"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.5",
+          "externCrateName": "syscall"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "4lDO2 <4lDO2@protonmail.com>"
+      ],
+      "description": "Redox stable ABI",
+      "license": "MIT",
+      "repository": "https://gitlab.redox-os.org/redox-os/libredox.git"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.5": {
+      "crateName": "redox_syscall",
+      "version": "0.7.5",
+      "edition": "2021",
+      "sha256": "4666a1a60d8412eab19d94f6d13dcc9cea0a5ef4fdf6a5db306537413c661b1b",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std",
+        "userspace"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.1",
+          "externCrateName": "bitflags"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": "syscall",
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Jeremy Soller <jackpot51@gmail.com>"
+      ],
+      "description": "A Rust library to access raw Redox system calls",
+      "license": "MIT",
+      "repository": "https://gitlab.redox-os.org/redox-os/syscall"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#bitflags@2.11.1": {
+      "crateName": "bitflags",
+      "version": "2.11.1",
+      "edition": "2021",
+      "sha256": "c4512299f36f043ab09a583e57bceb5a5aab7a73db1805848e8fef3c9e8c78b3",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "serde",
+        "serde_core",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde_core@1.0.228",
+          "externCrateName": "serde_core"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rust Project Developers"
+      ],
+      "description": "A macro to generate structures which behave like bitflags. ",
+      "homepage": "https://github.com/bitflags/bitflags",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/bitflags/bitflags"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.186": {
+      "crateName": "libc",
+      "version": "0.2.186",
+      "edition": "2021",
+      "sha256": "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std",
+        "use_std"
+      ],
+      "hostFeatures": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "The Rust Project Developers"
+      ],
+      "description": "Raw FFI bindings to platform libraries like libc.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/rust-lang/libc"
     }
   }
 }

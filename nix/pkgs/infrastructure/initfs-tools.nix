@@ -29,7 +29,7 @@ let
         # FOD for generating Cargo.lock
         outputHashAlgo = "sha256";
         outputHashMode = "recursive";
-        outputHash = "sha256-5yIX7Kh7VE8xrDG4ZV+7FOEuXuVrGI5B8KH4inSkwh4=";
+        outputHash = "sha256-OgFNJIrLsl5TwfccqbsZmLIZB4vNyHkl2wHfRsf3doU=";
         SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
       }
       ''
@@ -66,7 +66,7 @@ let
   initfsToolsVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "initfs-tools-vendor";
     src = initfsToolsSrc;
-    hash = "sha256-pZo5NkEKDgPWvnkPtMUVqHZkVU0T4fQFl806wUjtEnA=";
+    hash = "sha256-v2EZBo3v2Cfkblt+1erADvldConjCxCJvYDgxHY2CmA=";
   };
 
   # Create vendor directory (no sysroot merge needed for host tools)

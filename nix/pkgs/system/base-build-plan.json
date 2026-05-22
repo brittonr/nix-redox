@@ -64,7 +64,8 @@
     "path+file:///tmp/tmp.CGAYEYVcNw/drivers/net/virtio-netd#0.1.0",
     "path+file:///tmp/tmp.CGAYEYVcNw/drivers/usb/xhcid#0.1.0",
     "path+file:///tmp/tmp.CGAYEYVcNw/drivers/usb/xhcid#0.1.0",
-    "path+file:///tmp/tmp.CGAYEYVcNw/zerod#0.1.0"
+    "path+file:///tmp/tmp.CGAYEYVcNw/zerod#0.1.0",
+    "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0"
   ],
   "workspaceMembers": {
     "ac97d": "path+file:///tmp/tmp.CGAYEYVcNw/drivers/audio/ac97d#0.1.0",
@@ -124,7 +125,8 @@
     "virtio-gpud": "path+file:///tmp/tmp.CGAYEYVcNw/drivers/graphics/virtio-gpud#0.1.0",
     "virtio-netd": "path+file:///tmp/tmp.CGAYEYVcNw/drivers/net/virtio-netd#0.1.0",
     "xhcid": "path+file:///tmp/tmp.CGAYEYVcNw/drivers/usb/xhcid#0.1.0",
-    "zerod": "path+file:///tmp/tmp.CGAYEYVcNw/zerod#0.1.0"
+    "zerod": "path+file:///tmp/tmp.CGAYEYVcNw/zerod#0.1.0",
+    "scheme-utils": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0"
   },
   "target": "x86_64-unknown-redox",
   "cargoLockHash": "49faf55bdfeabc8165ca62ac5aea5573c11dbbce6238534d39c7e743ce812cfc",
@@ -139,7 +141,7 @@
         "type": "git",
         "url": "https://github.com/jackpot51/acpi.git",
         "rev": "3dc8a2d98a7a164cbf87e7a86855c4d3bed4de75",
-        "sha256": "0fwz74aa5cb7d9jlq5w9pkr0s291h230gljwwvns8y5wdaln1ng4"
+        "sha256": "167ng2nx1jkjdwps5l06wv51rnrgrg7fdsssw0zwkl9kj8xrh6if"
       },
       "features": [
         "alloc",
@@ -198,7 +200,7 @@
         "type": "git",
         "url": "https://github.com/jackpot51/hidreport",
         "rev": "1cf47ffcd30f1b18b636d699de8ed76a45a813e3",
-        "sha256": "0q8jr4vpn48aiq3ppbgrnrajq6lbzzfghswc73h9iwbykqnn5j6h"
+        "sha256": "0z7n58qx8mz814m678jf65irhky08fj0n0wnqmrjc5m6pn64x6bq"
       },
       "features": [],
       "dependencies": [
@@ -231,7 +233,7 @@
         "type": "git",
         "url": "https://github.com/jackpot51/range-alloc.git",
         "rev": "23493c401729c9617355804d4ef6bd0ffafb0465",
-        "sha256": "1ah2w406xhxpd40wqmlrzmsh6wj9zvd6k3kc44zk11h708m68gx8"
+        "sha256": "0mcwnqxf5vn35za72bhggp94d79kkcmgh4lpznpa6kchnh2v7ip2"
       },
       "features": [],
       "dependencies": [],
@@ -262,7 +264,7 @@
         "type": "git",
         "url": "https://gitlab.redox-os.org/redox-os/rehid.git",
         "rev": "39d7ef05c97fd4e5e2cfd38b1a21f20d888c5e00",
-        "sha256": "19gd2mvd27x3bmxz3s4gcb2lyvh4gj87vi91x8n0rsjg4lvxkzx4"
+        "sha256": "1jan3viqf6djd78p96gzvy1dhhqicgzzs1rqc26vr90ndzsz4mci"
       },
       "features": [],
       "dependencies": [
@@ -304,7 +306,7 @@
         "url": "https://gitlab.redox-os.org/redox-os/relibc.git",
         "rev": "18e6c9f5c17b4db1361e536cd59e902a2080c4c0",
         "subDir": "redox-ioctl",
-        "sha256": "1vs5g3ffgjpgl99nh8l9z6r0vpr5m2zvnpp5m82ywi6awz9y543d"
+        "sha256": "0b7cxbx9jjd8xnqn27lyn59fbnxmpgavfk10z5pw1r24576r04b3"
       },
       "features": [],
       "dependencies": [
@@ -446,6 +448,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -611,6 +617,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.18",
           "externCrateName": "thiserror"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -718,6 +728,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#spin@0.10.0",
           "externCrateName": "spin"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -785,6 +799,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#spin@0.10.0",
           "externCrateName": "spin"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -848,6 +866,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#spin@0.10.0",
           "externCrateName": "spin"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -1040,6 +1062,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#ransid@0.4.9",
           "externCrateName": "ransid"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#psf-rs@2.2.0",
+          "externCrateName": "psf_rs"
         }
       ],
       "buildDependencies": [],
@@ -1104,6 +1130,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -1174,6 +1204,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -1255,6 +1289,18 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
+          "externCrateName": "serde"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml@1.0.6+spec-1.1.0",
+          "externCrateName": "toml"
         }
       ],
       "buildDependencies": [],
@@ -1374,6 +1420,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#void@1.0.2",
           "externCrateName": "void"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#drm-fourcc@2.2.0",
+          "externCrateName": "drm_fourcc"
         }
       ],
       "buildDependencies": [],
@@ -1570,7 +1620,7 @@
           "externCrateName": "daemon"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#fdt@0.1.5",
+          "packageId": "path+file:///nix/store/0f5ivaxb7j5m52y3kimjhm45iwsi6rhd-source#fdt@0.2.0-alpha1",
           "externCrateName": "fdt"
         },
         {
@@ -1714,6 +1764,14 @@
         {
           "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/drivers/usb/xhcid#0.1.0",
           "externCrateName": "xhcid_interface"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#plain@0.2.3",
+          "externCrateName": "plain"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#smallvec@0.6.14",
+          "externCrateName": "smallvec"
         }
       ],
       "buildDependencies": [],
@@ -1777,6 +1835,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -1825,6 +1887,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -2178,7 +2244,7 @@
           "externCrateName": "daemon"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#fdt@0.1.5",
+          "packageId": "path+file:///nix/store/0f5ivaxb7j5m52y3kimjhm45iwsi6rhd-source#fdt@0.2.0-alpha1",
           "externCrateName": "fdt"
         },
         {
@@ -2216,6 +2282,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#serde@1.0.228",
           "externCrateName": "serde"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -2563,6 +2633,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -3223,6 +3297,14 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml@1.0.6+spec-1.1.0",
           "externCrateName": "toml"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/config#0.0.0",
+          "externCrateName": "config"
         }
       ],
       "buildDependencies": [],
@@ -3402,6 +3484,18 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#toml@1.0.6+spec-1.1.0",
           "externCrateName": "toml"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libc@0.2.183",
+          "externCrateName": "libc"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#plain@0.2.3",
+          "externCrateName": "plain"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.5.18",
+          "externCrateName": "syscall"
         }
       ],
       "buildDependencies": [],
@@ -3565,6 +3659,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -3608,6 +3706,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -3674,6 +3776,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#smoltcp@0.12.0",
           "externCrateName": "smoltcp"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -3725,6 +3831,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_termios@0.1.3",
           "externCrateName": "redox_termios"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -3776,6 +3886,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#slab@0.4.12",
           "externCrateName": "slab"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -3839,6 +3953,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#sha2@0.8.2",
           "externCrateName": "sha2"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -3882,6 +4000,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
           "externCrateName": "syscall"
+        },
+        {
+          "packageId": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0",
+          "externCrateName": "scheme_utils"
         }
       ],
       "buildDependencies": [],
@@ -5930,7 +6052,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "Bartłomiej Kamiński <fizyk20@gmail.com>",
+        "Bart\u0142omiej Kami\u0144ski <fizyk20@gmail.com>",
         "Aaron Trent <novacrazy@gmail.com>"
       ],
       "description": "Generic types implementing functionality of arrays",
@@ -6227,7 +6349,7 @@
       "links": null,
       "authors": [
         "Andrew Straw <strawman@astraw.com>",
-        "René Kijewski <rene.kijewski@fu-berlin.de>",
+        "Ren\u00e9 Kijewski <rene.kijewski@fu-berlin.de>",
         "Ryan Lopopolo <rjl@hyperbo.la>"
       ],
       "description": "get the IANA time zone for the current system",
@@ -6383,7 +6505,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "Marvin Löbel <loebel.marvin@gmail.com>"
+        "Marvin L\u00f6bel <loebel.marvin@gmail.com>"
       ],
       "description": "A macro for declaring lazily evaluated statics in Rust.",
       "license": "MIT OR Apache-2.0",
@@ -6976,7 +7098,7 @@
       "crateBin": [],
       "links": null,
       "authors": [
-        "Marvin Löbel <loebel.marvin@gmail.com>"
+        "Marvin L\u00f6bel <loebel.marvin@gmail.com>"
       ],
       "description": "A library for creating references that carry their owner with them.",
       "license": "MIT",
@@ -8886,7 +9008,7 @@
         "Danny Guo <danny@dannyguo.com>",
         "maxbachmann <oss@maxbachmann.de>"
       ],
-      "description": "Implementations of string similarity metrics. Includes Hamming, Levenshtein, OSA, Damerau-Levenshtein, Jaro, Jaro-Winkler, and Sørensen-Dice. ",
+      "description": "Implementations of string similarity metrics. Includes Hamming, Levenshtein, OSA, Damerau-Levenshtein, Jaro, Jaro-Winkler, and S\u00f8rensen-Dice. ",
       "homepage": "https://github.com/rapidfuzz/strsim-rs",
       "license": "MIT",
       "repository": "https://github.com/rapidfuzz/strsim-rs"
@@ -9764,6 +9886,218 @@
       "description": "A double-to-string conversion algorithm based on Schubfach and yy",
       "license": "MIT",
       "repository": "https://github.com/dtolnay/zmij"
+    },
+    "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0": {
+      "crateName": "scheme-utils",
+      "version": "0.0.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "local",
+        "path": "scheme-utils"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.15",
+          "externCrateName": "libredox"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox-scheme@0.11.0",
+          "externCrateName": "redox_scheme"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.3",
+          "externCrateName": "syscall"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#psf-rs@2.2.0": {
+      "crateName": "psf-rs",
+      "version": "2.2.0",
+      "edition": "2021",
+      "sha256": "065311c47c07d1bd124117c2739388a5fd5788f8997fab6065e93e77874b7123",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#ahash@0.8.12",
+          "externCrateName": "ahash"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#hash32@0.3.1",
+          "externCrateName": "hash32"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#heapless@0.8.0",
+          "externCrateName": "heapless"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "talwat"
+      ],
+      "description": "A super simple no_std psf2 parser for rust.",
+      "homepage": "https://github.com/talwat/psf-rs",
+      "license": "MIT",
+      "repository": "https://github.com/talwat/psf-rs"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#ahash@0.8.12": {
+      "crateName": "ahash",
+      "version": "0.8.12",
+      "edition": "2018",
+      "sha256": "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#cfg-if@1.0.4",
+          "externCrateName": "cfg_if"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#once_cell@1.21.4",
+          "externCrateName": "once_cell"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.48",
+          "externCrateName": "zerocopy"
+        }
+      ],
+      "buildDependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5",
+          "externCrateName": "version_check"
+        }
+      ],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Tom Kaitchuck <Tom.Kaitchuck@gmail.com>"
+      ],
+      "description": "A non-cryptographic hash function using AES-NI for high performance",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/tkaitchuck/ahash"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#zerocopy@0.8.48": {
+      "crateName": "zerocopy",
+      "version": "0.8.48",
+      "edition": "2021",
+      "sha256": "eed437bf9d6692032087e337407a86f04cd8d6a16a37199ed57949d415bd68e9",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "simd"
+      ],
+      "hostFeatures": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Joshua Liebow-Feeser <joshlf@google.com>",
+        "Jack Wrenn <jswrenn@amazon.com>"
+      ],
+      "description": "Zerocopy makes zero-cost memory manipulation effortless. We write 'unsafe' so you don't have to.",
+      "license": "BSD-2-Clause OR Apache-2.0 OR MIT",
+      "repository": "https://github.com/google/zerocopy"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#once_cell@1.21.4": {
+      "crateName": "once_cell",
+      "version": "1.21.4",
+      "edition": "2021",
+      "sha256": "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "alloc",
+        "race"
+      ],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Aleksey Kladov <aleksey.kladov@gmail.com>"
+      ],
+      "description": "Single assignment cells and lazy values.",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/matklad/once_cell"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#version_check@0.9.5": {
+      "crateName": "version_check",
+      "version": "0.9.5",
+      "edition": "2015",
+      "sha256": "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "Sergio Benitez <sb@sergio.bz>"
+      ],
+      "description": "Tiny crate to check the version of the installed/running rustc.",
+      "license": "MIT/Apache-2.0",
+      "repository": "https://github.com/SergioBenitez/version_check"
     }
+  },
+  "packageNames": {
+    "scheme-utils": "path+file:///tmp/tmp.CGAYEYVcNw/scheme-utils#0.0.0"
   }
 }
