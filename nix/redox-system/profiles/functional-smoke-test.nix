@@ -83,7 +83,6 @@ in
   "/filesystem" = {
     specialSymlinks = {
       "bin/sh" = "/bin/ion";
-      "bin/dash" = "/bin/ion";
     };
   };
 
