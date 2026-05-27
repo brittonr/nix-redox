@@ -67,6 +67,7 @@ in
       ++ opt "uutils";
 
     shellAliases = { };
+    motd = "";
   };
 
   "/networking" = {
