@@ -80,9 +80,7 @@ INIT_SCRIPT_EOF
       + "\n"
     )}
 
-    redox-initfs-ar initfs ${pkgs.bootstrap}/bin/bootstrap -o initfs.img --max-size ${
-      toString (cfg.initfsSizeMB * 1024 * 1024)
-    }
+    redox-initfs-ar initfs ${pkgs.bootstrap}/bin/bootstrap -o initfs.img
     runHook postBuild
   '';
   installPhase = ''

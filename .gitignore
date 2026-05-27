@@ -9,3 +9,5 @@ result-snix-upstream
 result-source-bundle
 snix-redox/upstream
 /.agent
+
+.pi/

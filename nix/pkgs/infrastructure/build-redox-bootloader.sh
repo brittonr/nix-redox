@@ -22,19 +22,19 @@ extract_executable() {
 
   while IFS= read -r line; do
     case "$line" in
-      *'"reason":"compiler-artifact"'*'"name":"'"$target_name"'"'*)
-        match="$line"
-        ;;
+    *'"reason":"compiler-artifact"'*'"name":"'"$target_name"'"'*)
+      match="$line"
+      ;;
     esac
-  done < "$json_file"
+  done <"$json_file"
 
   case "$match" in
-    *'"executable":"'*)
-      match=${match#*\"executable\":\"}
-      match=${match%%\"*}
-      printf '%s' "$match"
-      return 0
-      ;;
+  *'"executable":"'*)
+    match=${match#*\"executable\":\"}
+    match=${match%%\"*}
+    printf '%s' "$match"
+    return 0
+    ;;
   esac
 
   return 1
@@ -66,7 +66,7 @@ mkdir -p "$HOME" "$CARGO_HOME" "$CARGO_TARGET_DIR" "$out/boot/EFI/BOOT"
 if [ -f "$bootloader_dir/.cargo/config.toml" ]; then
   mv "$bootloader_dir/.cargo/config.toml" "$bootloader_dir/.cargo/config.toml.bundle"
 fi
-cat > "$CARGO_HOME/config.toml" <<'CFG'
+cat >"$CARGO_HOME/config.toml" <<'CFG'
 [source.crates-io]
 replace-with = "vendored-sources"
 
@@ -85,15 +85,15 @@ mkdir -p "$custom_sysroot/lib/rustlib/src"
 rustlib_path="$real_sysroot/lib/rustlib"
 rustlib_meta=$(ls -ld "$rustlib_path")
 case "$rustlib_meta" in
-  *' -> '*) rustlib_src=${rustlib_meta##* -> } ;;
-  *) rustlib_src="$rustlib_path" ;;
+*' -> '*) rustlib_src=${rustlib_meta##* -> } ;;
+*) rustlib_src="$rustlib_path" ;;
 esac
 cp -r "$rustlib_src/." "$custom_sysroot/lib/rustlib/"
 rm -rf "$custom_sysroot/lib/rustlib/src/rust"
 cp -r /usr/src/native-kernel-rebuild/rust-src "$custom_sysroot/lib/rustlib/src/rust"
 
 cp /nix/system/profile/bin/bash "$bootloader_linker"
-cat > "$bootloader_linker" <<EOF
+cat >"$bootloader_linker" <<EOF
 #!/nix/system/profile/bin/bash
 printf '%s\n' "\$@" > "$bootloader_linker_log.args"
 : > "$bootloader_linker_log.rsp"
@@ -123,7 +123,7 @@ ls -ld /nix/system/profile/bin/ld.lld >&2 || true
 
 wrapper="$TMPDIR/rustc-sysroot"
 cp /nix/system/profile/bin/bash "$wrapper"
-printf '%s\n' '#!/nix/system/profile/bin/bash' "exec /nix/system/profile/bin/rustc --sysroot $custom_sysroot \"\$@\"" > "$wrapper"
+printf '%s\n' '#!/nix/system/profile/bin/bash' "exec /nix/system/profile/bin/rustc --sysroot $custom_sysroot \"\$@\"" >"$wrapper"
 export RUSTC="$wrapper"
 
 cd "$bootloader_dir"
@@ -138,8 +138,7 @@ if ! cargo rustc \
   -Z build-std-features=compiler-builtins-mem \
   -- \
   -C linker="$bootloader_linker" \
-  > "$bootloader_cargo_json"
-then
+  >"$bootloader_cargo_json"; then
   echo "=== bootloader linker args ===" >&2
   cat "$bootloader_linker_log.args" >&2 || true
   echo "=== end bootloader linker args ===" >&2

@@ -120,7 +120,7 @@ report_rustc_progress() {
   while true; do
     sleep 60
     if [ -f "$SNIX_RUSTC_LOG" ]; then
-      size=$(wc -c < "$SNIX_RUSTC_LOG" 2>/dev/null || echo 0)
+      size=$(wc -c <"$SNIX_RUSTC_LOG" 2>/dev/null || echo 0)
       if [ "$size" = "$last_size" ]; then
         stalled=$((stalled + 1))
       else
@@ -130,7 +130,7 @@ report_rustc_progress() {
       last=""
       while IFS= read -r line; do
         last="$line"
-      done < "$SNIX_RUSTC_LOG"
+      done <"$SNIX_RUSTC_LOG"
       if [ -n "$last" ]; then
         echo "[build-snix] rustc-progress bytes=$size stalled=$stalled last=$last" >&2
       else

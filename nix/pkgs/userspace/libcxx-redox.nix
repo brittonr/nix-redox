@@ -205,28 +205,8 @@ pkgs.stdenv.mkDerivation {
         // Stub: Redox doesn't have robust TLS cleanup yet.
         int __cxa_thread_atexit(void (*)(void*), void*, void*) { return 0; }
 
-        // POSIX *at functions missing from relibc (needed by libc++ filesystem)
-        #include <fcntl.h>
-        #include <sys/stat.h>
-        int openat(int dirfd, const char *path, int flags, ...) {
-          (void)dirfd;
-          // Ignore dirfd — Redox doesn't support *at functions, fall back to open()
-          va_list ap;
-          va_start(ap, flags);
-          mode_t mode = 0;
-          if (flags & O_CREAT) mode = va_arg(ap, int);
-          va_end(ap);
-          return open(path, flags, mode);
-        }
-        int unlinkat(int dirfd, const char *path, int flags) {
-          (void)dirfd; (void)flags;
-          return unlink(path);
-        }
-        int utimensat(int dirfd, const char *path, const struct timespec ts[2], int flags) {
-          (void)dirfd; (void)path; (void)ts; (void)flags;
-          // No-op: Redox doesn't support utimensat
-          return 0;
-        }
+        // POSIX *at declarations live in the force-included compat header.
+        // relibc now provides the link symbols, so do not define wrappers here.
 
         // Locale-aware printf/scanf stubs (ignore locale, use C locale)
         #include <stdarg.h>

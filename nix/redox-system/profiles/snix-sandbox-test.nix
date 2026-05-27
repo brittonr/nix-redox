@@ -22,6 +22,10 @@ let
     export CARGO_HOME
     let RUST_BACKTRACE = "1"
     export RUST_BACKTRACE
+    let CARGO_PROFILE_DEV_DEBUG = "0"
+    export CARGO_PROFILE_DEV_DEBUG
+    let RUSTFLAGS = "-Cdebuginfo=0 -Clink-arg=-z -Clink-arg=stack-size=16777216"
+    export RUSTFLAGS
 
     echo ""
     echo "FUNC_TESTS_START"
@@ -51,6 +55,8 @@ export PATH=/nix/system/profile/bin:/bin:/usr/bin
 export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
 export HOME="$TMPDIR"
 export CARGO_HOME="$TMPDIR/cargo-home"
+export CARGO_PROFILE_DEV_DEBUG=0
+export RUSTFLAGS="-Cdebuginfo=0 -Clink-arg=-z -Clink-arg=stack-size=16777216"
 SRCDIR="$TMPDIR/hello-src"
 mkdir -p "$SRCDIR/src" "$CARGO_HOME" "$out/bin"
 cat > "$SRCDIR/Cargo.toml" << TOML

@@ -47,9 +47,17 @@ pkgs.runCommand "cc-dep-test-bundle" { } ''
   # ── build.rs (uses cc-rs) ──────────────────────────────────────
   cat > $out/build.rs << 'BUILD'
   fn main() {
-      cc::Build::new()
-          .file("src/hello.c")
-          .compile("hello");
+      std::thread::Builder::new()
+          .name("cc-build".into())
+          .stack_size(16 * 1024 * 1024)
+          .spawn(|| {
+              cc::Build::new()
+                  .file("src/hello.c")
+                  .compile("hello");
+          })
+          .expect("spawn cc build thread")
+          .join()
+          .expect("cc build thread");
   }
   BUILD
 

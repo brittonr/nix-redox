@@ -54,7 +54,7 @@ let
   installerVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "installer-cargo-vendor";
     src = patchedSrc;
-    hash = "sha256-UsSs0zyZnrZAmhgUPAkWoQ3vOAecdm4DPW+EpM+uvjI=";
+    hash = "sha256-xuVC9tn23fQ+eRFJG9C1duHc6giRVcWDGElu3xRz8sg=";
   };
 
 in

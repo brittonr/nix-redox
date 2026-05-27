@@ -4,12 +4,12 @@ set -euo pipefail
 repo_root=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." >/dev/null && pwd)
 crate_dir="$repo_root/snix-redox"
 
-if [[ ! -d "$crate_dir" ]]; then
+if [[ ! -d $crate_dir ]]; then
   echo "snix-redox directory not found at $crate_dir" >&2
   exit 1
 fi
 
-if [[ -z "${PROTOC:-}" ]]; then
+if [[ -z ${PROTOC:-} ]]; then
   if command -v protoc >/dev/null 2>&1; then
     PROTOC=$(command -v protoc)
   else
@@ -18,7 +18,7 @@ if [[ -z "${PROTOC:-}" ]]; then
 fi
 export PROTOC
 
-if [[ -z "${PROTO_ROOT:-}" ]]; then
+if [[ -z ${PROTO_ROOT:-} ]]; then
   if [[ ! -e "$crate_dir/upstream/nix-compat/Cargo.toml" ]]; then
     echo "snix-redox/upstream missing; building result-snix-upstream for local validation" >&2
     nix build --impure --out-link "$repo_root/result-snix-upstream" --expr "let flake = builtins.getFlake (toString $repo_root); pkgs = import flake.inputs.nixpkgs { system = builtins.currentSystem; }; in import $repo_root/nix/pkgs/infrastructure/snix-upstream-source.nix { inherit pkgs; }" >/dev/null
