@@ -66,9 +66,7 @@ in
       opt "ion"
       ++ opt "uutils";
 
-    shellAliases = {
-      ls = "ls --color=auto";
-    };
+    shellAliases = { };
   };
 
   "/networking" = {
