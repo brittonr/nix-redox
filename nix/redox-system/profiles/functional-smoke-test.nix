@@ -80,6 +80,16 @@ in
   };
 
   "/filesystem" = {
+    extraDirectories = [
+      "/tmp"
+      "/etc"
+      "/bin"
+      "/usr"
+      "/usr/bin"
+      "/scheme"
+      "/dev"
+    ];
+
     specialSymlinks = {
       "bin/sh" = "/bin/ion";
     };
