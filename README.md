@@ -3,6 +3,14 @@
 A complete [Redox OS](https://www.redox-os.org/) built entirely from source
 using Nix. One command gets you a running Redox desktop.
 
+## Alpha Status
+
+This tree is being prepared as an alpha-quality Redox/Nix distribution:
+the VM build/run path, declarative system assembly, on-guest `snix` workflows,
+and self-hosting proofs are in scope; bare-metal board support and some
+networking paths remain experimental. See `docs/alpha-release.md` for the
+release gate, evidence rules, and known limitations.
+
 ## Run It
 
 ```bash
@@ -124,15 +132,30 @@ snix install ripgrep         # Install a package from the binary cache
 
 ## Testing
 
+Use tiered release gates for normal validation:
+
 ```bash
-nix run .#functional-test          # 152 in-guest tests
-nix run .#self-hosting-test        # 66 compilation tests
-nix run .#rebuild-generations-test # 25 rebuild/rollback tests
-nix run .#e2e-rebuild-test         # 17 full activate pipeline tests
-nix run .#network-test             # 9 connectivity tests
-nix run .#bridge-test              # 45 virtio-fs package delivery tests
-nix flake check                    # 163 Nix-level module system checks
+nix run .#test-quick  # module eval, type, artifact, and library checks
+nix run .#test-host   # quick tier plus host tools and snix host tests
+nix run .#test-cross  # host tier plus cross-compiled Redox packages
+nix run .#test-vm     # fast VM integration tier: boot, functional, schemes, bridge
 ```
+
+Focused VM suites remain available when touching their subsystem:
+
+```bash
+nix run .#functional-test
+nix run .#bridge-test
+nix run .#rebuild-generations-test
+nix run .#e2e-rebuild-test
+nix run .#network-test
+nix run .#snix-sandbox-test -- --verbose
+nix run .#self-hosting-test -- --verbose
+```
+
+Run `nix flake check` as the final aggregate gate for a release candidate.
+See `docs/alpha-release.md` for the full alpha checklist and proof-artifact
+rules.
 
 ## Build Bridge
 

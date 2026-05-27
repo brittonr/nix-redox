@@ -648,13 +648,15 @@ enum ChannelCommand {
 fn debug_log(message: &str) {
     let line = format!("{message}\n");
 
-    #[cfg(target_os = "redox")]
-    {
-        let _ = syscall::write(2, line.as_bytes());
-    }
-    #[cfg(not(target_os = "redox"))]
-    {
-        eprint!("{line}");
+    if std::env::var("SNIX_DEBUG_STDERR").ok().as_deref() == Some("1") {
+        #[cfg(target_os = "redox")]
+        {
+            let _ = syscall::write(2, line.as_bytes());
+        }
+        #[cfg(not(target_os = "redox"))]
+        {
+            eprint!("{line}");
+        }
     }
 
     if let Ok(mut file) = std::fs::OpenOptions::new()

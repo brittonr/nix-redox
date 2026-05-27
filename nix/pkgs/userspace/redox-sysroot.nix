@@ -413,7 +413,7 @@ pkgs.runCommand "redox-sysroot"
         --undefined-version \
         -L "$S/lib" -lc -lgcc_eh \
         "$S/lib/crtn.o" \
-        > /dev/null 2> "$ERR" &
+        > /dev/null 2> "$ERR"
     else
       # Executable: full CRT + static libc
       "$LLD" \
@@ -421,16 +421,13 @@ pkgs.runCommand "redox-sysroot"
         "''${ARGS[@]}" \
         -L "$S/lib" -l:libc.a -l:libpthread.a -l:libgcc_eh.a \
         "$S/lib/crtn.o" \
-        > /dev/null 2> "$ERR" &
+        > /dev/null 2> "$ERR"
     fi
-    pid=$!
-
-    # Close stdout/stderr — sends EOF to rustc's pipes immediately
-    exec 1>&- 2>&-
-
-    # Wait for ld.lld to finish
-    wait $pid
-    exit $?
+    rc=$?
+    if [ "$rc" -ne 0 ] && [ -s "$ERR" ]; then
+      cat "$ERR" >&2
+    fi
+    exit "$rc"
     WRAPPER
 
     # Arg-capture "linker" — writes its arguments to /tmp/linker-args.txt then exits 0.

@@ -22,19 +22,19 @@ extract_executable() {
 
   while IFS= read -r line; do
     case "$line" in
-      *'"reason":"compiler-artifact"'*'"name":"'"$target_name"'"'*)
-        match="$line"
-        ;;
+    *'"reason":"compiler-artifact"'*'"name":"'"$target_name"'"'*)
+      match="$line"
+      ;;
     esac
-  done < "$json_file"
+  done <"$json_file"
 
   case "$match" in
-    *'"executable":"'*)
-      match=${match#*\"executable\":\"}
-      match=${match%%\"*}
-      printf '%s' "$match"
-      return 0
-      ;;
+  *'"executable":"'*)
+    match=${match#*\"executable\":\"}
+    match=${match%%\"*}
+    printf '%s' "$match"
+    return 0
+    ;;
   esac
 
   return 1
@@ -67,7 +67,7 @@ mkdir -p "$HOME" "$CARGO_HOME" "$CARGO_TARGET_DIR" "$out/boot"
 if [ -f "$kernel_dir/.cargo/config.toml" ]; then
   mv "$kernel_dir/.cargo/config.toml" "$kernel_dir/.cargo/config.toml.bundle"
 fi
-cat > "$CARGO_HOME/config.toml" <<'CFG'
+cat >"$CARGO_HOME/config.toml" <<'CFG'
 [source.crates-io]
 replace-with = "vendored-sources"
 
@@ -79,7 +79,7 @@ offline = true
 CFG
 
 cp /nix/system/profile/bin/bash "$kernel_linker"
-cat > "$kernel_linker" <<EOF
+cat >"$kernel_linker" <<EOF
 #!/nix/system/profile/bin/bash
 printf '%s\n' "\$@" > "$kernel_linker_log.args"
 exec /nix/system/profile/bin/lld-wrapper "\$@" 2> "$kernel_linker_log.stderr"
@@ -93,8 +93,8 @@ mkdir -p "$custom_sysroot/lib/rustlib/src"
 rustlib_path="$real_sysroot/lib/rustlib"
 rustlib_meta=$(ls -ld "$rustlib_path")
 case "$rustlib_meta" in
-  *' -> '*) rustlib_src=${rustlib_meta##* -> } ;;
-  *) rustlib_src="$rustlib_path" ;;
+*' -> '*) rustlib_src=${rustlib_meta##* -> } ;;
+*) rustlib_src="$rustlib_path" ;;
 esac
 cp -r "$rustlib_src/." "$custom_sysroot/lib/rustlib/"
 rm -rf "$custom_sysroot/lib/rustlib/src/rust"
@@ -116,7 +116,7 @@ ls -ld /nix/system/profile/bin/ld.lld >&2 || true
 # cp bash to get exec permission, then overwrite contents (keeps mode on Redox).
 wrapper="$TMPDIR/rustc-sysroot"
 cp /nix/system/profile/bin/bash "$wrapper"
-printf '%s\n' '#!/nix/system/profile/bin/bash' "exec /nix/system/profile/bin/rustc --sysroot $custom_sysroot \"\$@\"" > "$wrapper"
+printf '%s\n' '#!/nix/system/profile/bin/bash' "exec /nix/system/profile/bin/rustc --sysroot $custom_sysroot \"\$@\"" >"$wrapper"
 export RUSTC="$wrapper"
 
 if ! cargo metadata --manifest-path "$custom_sysroot/lib/rustlib/src/rust/library/Cargo.toml" --no-deps --format-version 1 >/tmp/kernel-rust-src-metadata.json 2>/tmp/kernel-rust-src-metadata.err; then
@@ -145,8 +145,7 @@ if ! cargo rustc \
   -C link-arg="$linker_script" \
   -C link-arg=-z \
   -C link-arg=max-page-size=0x1000 \
-  > "$kernel_cargo_json"
-then
+  >"$kernel_cargo_json"; then
   echo "=== kernel linker args ===" >&2
   cat "$kernel_linker_log.args" >&2 || true
   echo "=== end kernel linker args ===" >&2

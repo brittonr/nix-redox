@@ -369,28 +369,11 @@ IGCD_CARGO_EOF
       substituteInPlace randd/src/main.rs \
         --replace-fail 'self.handles.get(&id).ok_or(Error::new(EBADF))?' 'self.handles.get(id)?'
 
-      # rand 0.8 removed Redox's old make_rng helper; use SmallRng directly.
-      substituteInPlace ipcd/src/uds/dgram.rs \
-        --replace-fail 'use rand::Rng;' 'use rand::{Rng, RngCore, SeedableRng};' \
-        --replace-fail 'rng: rand::make_rng(),' 'rng: SmallRng::from_entropy(),'
-      substituteInPlace ipcd/src/uds/stream.rs \
-        --replace-fail 'use rand::prelude::*;' $'use rand::prelude::*;\nuse rand::SeedableRng;' \
-        --replace-fail 'rng: rand::make_rng(),' 'rng: SmallRng::from_entropy(),'
+      # rand 0.10 exposes next_u64 through rand::Rng and keeps make_rng().
+      # Do not force the old RngCore/from_entropy API; it no longer exists.
 
-      # acpi 6.1 collapsed Local/Arg reference kinds into LocalOrArg and removed Index/Named.
-      substituteInPlace drivers/amlserde/src/lib.rs \
-        --replace-fail '                    ReferenceKind::Local => AmlSerdeReferenceKind::Local,
-                    ReferenceKind::Arg => AmlSerdeReferenceKind::Arg,
-                    ReferenceKind::Index => AmlSerdeReferenceKind::Index,
-                    ReferenceKind::Named => AmlSerdeReferenceKind::Named,' '                    ReferenceKind::LocalOrArg => AmlSerdeReferenceKind::Local,
-                    ReferenceKind::Unresolved => AmlSerdeReferenceKind::Unresolved,' \
-        --replace-fail '                    ReferenceKind::Unresolved => AmlSerdeReferenceKind::Unresolved,
-                }' '                }' \
-        --replace-fail '                    AmlSerdeReferenceKind::Local => ReferenceKind::Local,
-                    AmlSerdeReferenceKind::Arg => ReferenceKind::Arg,
-                    AmlSerdeReferenceKind::Index => ReferenceKind::Index,
-                    AmlSerdeReferenceKind::Named => ReferenceKind::Named,' '                    AmlSerdeReferenceKind::Local | AmlSerdeReferenceKind::Arg => ReferenceKind::LocalOrArg,
-                    AmlSerdeReferenceKind::Index | AmlSerdeReferenceKind::Named => ReferenceKind::RefOf,'
+      # acpi 6.1.1 still exposes Local, Arg, Index, and Named reference kinds;
+      # leave amlserde's reference serialization mappings unchanged.
 
       # redox-ioctl dropped wrappers/constants for legacy DRM unique/set-version
       # ioctls and only exposes MODE_GET_FB2's struct wrapper. Keep driver-graphics

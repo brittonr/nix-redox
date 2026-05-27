@@ -500,6 +500,42 @@ let
             ${pkgs.python3}/bin/python3 ${../pkgs/patches/patch-acpi-match-opcode.py} .
           '';
         };
+        # The per-crate graph uses the newer acpi git source from the generated
+        # build plan. That source collapsed Local/Arg/Index/Named into
+        # LocalOrArg/RefOf, while the monolithic fallback still builds against
+        # the older redox-6.x API. Keep this compatibility shim per-crate only.
+        amlserde = _: {
+          postPatch = ''
+            sed -i \
+              -e 's/ReferenceKind::Local => AmlSerdeReferenceKind::Local,/ReferenceKind::LocalOrArg => AmlSerdeReferenceKind::Local,/' \
+              -e '/ReferenceKind::Arg => AmlSerdeReferenceKind::Arg,/d' \
+              -e '/ReferenceKind::Index => AmlSerdeReferenceKind::Index,/d' \
+              -e '/ReferenceKind::Named => AmlSerdeReferenceKind::Named,/d' \
+              -e 's/AmlSerdeReferenceKind::Local => ReferenceKind::Local,/AmlSerdeReferenceKind::Local | AmlSerdeReferenceKind::Arg => ReferenceKind::LocalOrArg,/' \
+              -e '/AmlSerdeReferenceKind::Arg => ReferenceKind::Arg,/d' \
+              -e 's/AmlSerdeReferenceKind::Index => ReferenceKind::Index,/AmlSerdeReferenceKind::Index | AmlSerdeReferenceKind::Named => ReferenceKind::RefOf,/' \
+              -e '/AmlSerdeReferenceKind::Named => ReferenceKind::Named,/d' \
+              src/lib.rs
+            grep -q 'ReferenceKind::LocalOrArg' src/lib.rs
+            if grep -q 'ReferenceKind::Local =>' src/lib.rs; then
+              echo 'amlserde still references old ReferenceKind::Local' >&2
+              exit 1
+            fi
+          '';
+        };
+        # The per-crate graph resolves ipcd against rand 0.8, where make_rng()
+        # is absent and next_u64() is provided by RngCore. The monolithic
+        # fallback currently resolves rand 0.10, so keep this shim per-crate.
+        ipcd = _: {
+          postPatch = ''
+            substituteInPlace src/uds/dgram.rs \
+              --replace-fail 'use rand::Rng;' 'use rand::{Rng, RngCore, SeedableRng};' \
+              --replace-fail 'rng: rand::make_rng(),' 'rng: SmallRng::from_entropy(),'
+            sed -i '/use rand::prelude::\*/a use rand::SeedableRng;' src/uds/stream.rs
+            substituteInPlace src/uds/stream.rs \
+              --replace-fail 'rng: rand::make_rng(),' 'rng: SmallRng::from_entropy(),'
+          '';
+        };
       };
 
       ws = buildFromUnitGraph {

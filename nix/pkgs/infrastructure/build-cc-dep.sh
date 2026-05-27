@@ -8,6 +8,8 @@ export RUSTC=/nix/system/profile/bin/rustc
 export CARGO_INCREMENTAL=0
 export CARGO_TARGET_DIR="$TMPDIR/target"
 export CARGO_TERM_PROGRESS_WHEN=never
+export CARGO_PROFILE_DEV_DEBUG=0
+export RUSTFLAGS="-Cdebuginfo=0 -Clink-arg=-z -Clink-arg=stack-size=16777216"
 export AR=/nix/system/profile/bin/llvm-ar
 
 mkdir -p "$CARGO_HOME" "$out/bin"

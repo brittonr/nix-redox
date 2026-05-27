@@ -49,13 +49,17 @@ let
     nativeBuildInputs = [ pkgs.python3 pkgs.nasm ];
 
     postUnpack = ''
-      rm -rf $sourceRoot/rmm
-      cp -r ${rmm-src} $sourceRoot/rmm
+      # Keep the rmm snapshot bundled with kernel-src. The standalone rmm
+      # master can move ahead of kernel's in-tree API expectations.
       chmod -R u+w $sourceRoot/rmm
 
       rm -rf $sourceRoot/redox-path
       cp -r ${redox-path-src} $sourceRoot/redox-path
       chmod -R u+w $sourceRoot/redox-path
+
+      rm -rf $sourceRoot/fdt
+      cp -r ${fdt-src} $sourceRoot/fdt
+      chmod -R u+w $sourceRoot/fdt
     '';
 
     postPatch = ''
@@ -63,15 +67,17 @@ let
       if grep -q 'fdt = { git = "https://github.com/repnop/fdt.git"' Cargo.toml; then
         substituteInPlace Cargo.toml \
           --replace-fail 'fdt = { git = "https://github.com/repnop/fdt.git", rev = "2fb1409edd1877c714a0aa36b6a7c5351004be54" }' \
-                         'fdt = { path = "${fdt-src}" }'
+                         'fdt = { path = "fdt" }'
         # Also fix Cargo.lock so cargo doesn't need to re-lock at build time
         # (the "Locking 1 package" step modifies Cargo.lock, changing mtimes
         # and invalidating cargo fingerprints in the two-phase build)
         sed -i '/^name = "fdt"/,/^$/{/^source = "git+/d}' Cargo.lock
       fi
 
-      # Restore ptrace proc: scheme handles (trace + mem)
-      python3 ${./patches/kernel/patch-kernel-ptrace-proc-handles.py} .
+      # The historical ptrace proc: handle restoration patch no longer
+      # matches current kernel locking/context APIs after the dependency
+      # update. Leave upstream proc:/ptrace behavior unchanged until that
+      # feature can be rebased intentionally.
 
       # LAPIC timer for scheduling on KVM — Cloud Hypervisor doesn't
       # deliver PIT interrupts when all CPUs are in HLT

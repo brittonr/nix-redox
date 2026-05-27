@@ -21,11 +21,11 @@ latest_progress() {
   fi
   while IFS= read -r line; do
     case "$line" in
-      *"Compiling "*|*"Finished "*|*"Running "*|*"warning:"*|*"error:"*|*"build complete"*)
-        last="$line"
-        ;;
+    *"Compiling "* | *"Finished "* | *"Running "* | *"warning:"* | *"error:"* | *"build complete"*)
+      last="$line"
+      ;;
     esac
-  done < "$err_file"
+  done <"$err_file"
   printf '%s' "$last"
 }
 
@@ -37,10 +37,10 @@ run_snix_build() {
   local prefix="$5"
 
   rm -f "$output_file" "$err_file"
-  : > "$output_file"
-  : > "$err_file"
+  : >"$output_file"
+  : >"$err_file"
 
-  /bin/snix build --no-sandbox --file "$build_file" > "$output_file" 2> "$err_file" &
+  /bin/snix build --no-sandbox --file "$build_file" >"$output_file" 2>"$err_file" &
   local build_pid=$!
   printf '[%s] started pid=%s heartbeat=60s\n' "$prefix" "$build_pid"
 
@@ -55,8 +55,8 @@ run_snix_build() {
     fi
 
     local out_bytes err_bytes elapsed last
-    out_bytes=$(wc -c < "$output_file" 2>/dev/null || echo 0)
-    err_bytes=$(wc -c < "$err_file" 2>/dev/null || echo 0)
+    out_bytes=$(wc -c <"$output_file" 2>/dev/null || echo 0)
+    err_bytes=$(wc -c <"$err_file" 2>/dev/null || echo 0)
     if [ "$err_bytes" = "$prev_err_bytes" ]; then
       stalled_heartbeats=$((stalled_heartbeats + 1))
     else
@@ -81,34 +81,34 @@ record_pathinfo() {
   local name="$1"
   local store_path="$2"
   case "$store_path" in
-    /nix/store/*)
-      local base hash pathinfo
-      base=${store_path#/nix/store/}
-      hash=${base%%-*}
-      pathinfo="/nix/var/snix/pathinfo/${hash}.json"
-      if [ -f "$pathinfo" ]; then
-        artifact "$name-pathinfo" "$pathinfo"
-        echo "=== $name pathinfo ==="
-        cat "$pathinfo"
-        echo "=== end $name pathinfo ==="
-      fi
-      ;;
+  /nix/store/*)
+    local base hash pathinfo
+    base=${store_path#/nix/store/}
+    hash=${base%%-*}
+    pathinfo="/nix/var/snix/pathinfo/${hash}.json"
+    if [ -f "$pathinfo" ]; then
+      artifact "$name-pathinfo" "$pathinfo"
+      echo "=== $name pathinfo ==="
+      cat "$pathinfo"
+      echo "=== end $name pathinfo ==="
+    fi
+    ;;
   esac
 }
 
 extract_generation_id() {
   local manifest="$1"
-  sed -n '/"generation"[[:space:]]*:/,/^[[:space:]]*}/ s/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$manifest" \
-    | head -1 \
-    || true
+  sed -n '/"generation"[[:space:]]*:/,/^[[:space:]]*}/ s/.*"id"[[:space:]]*:[[:space:]]*\([0-9][0-9]*\).*/\1/p' "$manifest" |
+    head -1 ||
+    true
 }
 
 extract_boot_path() {
   local manifest="$1"
   local field="$2"
-  sed -n "/\"boot\"[[:space:]]*:/,/^[[:space:]]*}/ s/.*\"${field}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\\1/p" "$manifest" \
-    | head -1 \
-    || true
+  sed -n "/\"boot\"[[:space:]]*:/,/^[[:space:]]*}/ s/.*\"${field}\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\\1/p" "$manifest" |
+    head -1 ||
+    true
 }
 
 escape_sed_replacement() {
@@ -193,10 +193,9 @@ if run_snix_build \
   /usr/src/native-kernel-rebuild/kernel/build.nix \
   /tmp/kernel-rebuild-output \
   /tmp/kernel-rebuild-err \
-  kernel-rebuild
-then
+  kernel-rebuild; then
   kernel_output=$(cat /tmp/kernel-rebuild-output 2>/dev/null || true)
-  printf '%s\n' "$kernel_output" > /tmp/kernel-rebuild-output
+  printf '%s\n' "$kernel_output" >/tmp/kernel-rebuild-output
   if [ -n "$kernel_output" ] && [ -f "$kernel_output/boot/kernel" ] && [ -f "$kernel_output/boot/kernel.sym" ]; then
     echo "FUNC_TEST:kernel-native-build:PASS"
     artifact kernel-store "$kernel_output"
@@ -222,10 +221,9 @@ if run_snix_build \
   /usr/src/native-kernel-rebuild/bootloader/build.nix \
   /tmp/bootloader-rebuild-output \
   /tmp/bootloader-rebuild-err \
-  bootloader-rebuild
-then
+  bootloader-rebuild; then
   bootloader_output=$(cat /tmp/bootloader-rebuild-output 2>/dev/null || true)
-  printf '%s\n' "$bootloader_output" > /tmp/bootloader-rebuild-output
+  printf '%s\n' "$bootloader_output" >/tmp/bootloader-rebuild-output
   if [ -n "$bootloader_output" ] && [ -f "$bootloader_output/boot/EFI/BOOT/BOOTX64.EFI" ]; then
     echo "FUNC_TEST:bootloader-native-build:PASS"
     artifact bootloader-store "$bootloader_output"
@@ -261,25 +259,24 @@ if [ "$kernel_build_ok" -eq 1 ] && [ "$bootloader_build_ok" -eq 1 ]; then
   echo "--- boot artifact staging proof: snix system switch ---"
   staged_generation_id=""
   staged_generation_manifest=""
-  if /bin/snix system switch "$boot_proof_manifest" -D native-kernel-boot-proof > /tmp/boot-stage-switch-out 2> /tmp/boot-stage-switch-err; then
+  if /bin/snix system switch "$boot_proof_manifest" -D native-kernel-boot-proof >/tmp/boot-stage-switch-out 2>/tmp/boot-stage-switch-err; then
     staged_generation_id=$(extract_generation_id "$current_manifest")
     staged_generation_manifest="/etc/redox-system/generations/${staged_generation_id}/manifest.json"
     artifact staged-generation "$staged_generation_id"
     artifact boot-default-marker /etc/redox-system/boot-default
-    if [ -n "$staged_generation_id" ] \
-      && [ -f "$staged_generation_manifest" ] \
-      && [ "$(extract_boot_path "$current_manifest" kernel)" = "$kernel_artifact" ] \
-      && [ "$(extract_boot_path "$current_manifest" bootloader)" = "$bootloader_artifact" ] \
-      && [ "$(extract_boot_path "$staged_generation_manifest" kernel)" = "$kernel_artifact" ] \
-      && [ "$(extract_boot_path "$staged_generation_manifest" bootloader)" = "$bootloader_artifact" ] \
-      && [ -f /etc/redox-system/boot-default ] \
-      && [ "$(cat /etc/redox-system/boot-default 2>/dev/null || true)" = "$staged_generation_id" ] \
-      && [ -e "/nix/var/snix/gcroots/gen-${staged_generation_id}-boot-kernel" ] \
-      && [ -e "/nix/var/snix/gcroots/gen-${staged_generation_id}-boot-bootloader" ] \
-      && compare_files "$kernel_artifact" /boot/kernel \
-      && compare_files "$kernel_artifact" /usr/lib/boot/kernel \
-      && [ "$(cat /etc/hostname 2>/dev/null || true)" = "$proof_hostname" ]
-    then
+    if [ -n "$staged_generation_id" ] &&
+      [ -f "$staged_generation_manifest" ] &&
+      [ "$(extract_boot_path "$current_manifest" kernel)" = "$kernel_artifact" ] &&
+      [ "$(extract_boot_path "$current_manifest" bootloader)" = "$bootloader_artifact" ] &&
+      [ "$(extract_boot_path "$staged_generation_manifest" kernel)" = "$kernel_artifact" ] &&
+      [ "$(extract_boot_path "$staged_generation_manifest" bootloader)" = "$bootloader_artifact" ] &&
+      [ -f /etc/redox-system/boot-default ] &&
+      [ "$(cat /etc/redox-system/boot-default 2>/dev/null || true)" = "$staged_generation_id" ] &&
+      [ -e "/nix/var/snix/gcroots/gen-${staged_generation_id}-boot-kernel" ] &&
+      [ -e "/nix/var/snix/gcroots/gen-${staged_generation_id}-boot-bootloader" ] &&
+      compare_files "$kernel_artifact" /boot/kernel &&
+      compare_files "$kernel_artifact" /usr/lib/boot/kernel &&
+      [ "$(cat /etc/hostname 2>/dev/null || true)" = "$proof_hostname" ]; then
       echo "FUNC_TEST:boot-artifacts-staged:PASS"
       artifact staged-generation-manifest "$staged_generation_manifest"
     else
@@ -297,8 +294,10 @@ if [ "$kernel_build_ok" -eq 1 ] && [ "$bootloader_build_ok" -eq 1 ]; then
       echo "DEBUG hostname=$(cat /etc/hostname 2>/dev/null || true)"
       ls -ld "/nix/var/snix/gcroots/gen-${staged_generation_id}-boot-kernel" 2>/dev/null || true
       ls -ld "/nix/var/snix/gcroots/gen-${staged_generation_id}-boot-bootloader" 2>/dev/null || true
-      cmp -s "$kernel_artifact" /boot/kernel; echo "DEBUG cmp_boot_kernel=$?"
-      cmp -s "$kernel_artifact" /usr/lib/boot/kernel; echo "DEBUG cmp_usr_lib_boot_kernel=$?"
+      cmp -s "$kernel_artifact" /boot/kernel
+      echo "DEBUG cmp_boot_kernel=$?"
+      cmp -s "$kernel_artifact" /usr/lib/boot/kernel
+      echo "DEBUG cmp_usr_lib_boot_kernel=$?"
       echo "=== staged manifest ==="
       cat "$current_manifest" 2>/dev/null || true
       echo "=== end staged manifest ==="
@@ -315,26 +314,23 @@ if [ "$kernel_build_ok" -eq 1 ] && [ "$bootloader_build_ok" -eq 1 ]; then
 
   echo "--- boot selection smoke: switch-generation + boot + activate-boot ---"
   if [ -n "$staged_generation_id" ] && [ -n "$original_generation_id" ] && [ "$staged_generation_id" != "$original_generation_id" ]; then
-    if /bin/snix system switch-generation "$original_generation_id" > /tmp/boot-smoke-return-out 2> /tmp/boot-smoke-return-err \
-      && [ "$(cat /etc/hostname 2>/dev/null || true)" = "$original_hostname" ] \
-      && [ "$(extract_boot_path "$current_manifest" kernel)" = "$original_kernel_path" ] \
-      && [ "$(extract_boot_path "$current_manifest" bootloader)" = "$original_bootloader_path" ]
-    then
+    if /bin/snix system switch-generation "$original_generation_id" >/tmp/boot-smoke-return-out 2>/tmp/boot-smoke-return-err &&
+      [ "$(cat /etc/hostname 2>/dev/null || true)" = "$original_hostname" ] &&
+      [ "$(extract_boot_path "$current_manifest" kernel)" = "$original_kernel_path" ] &&
+      [ "$(extract_boot_path "$current_manifest" bootloader)" = "$original_bootloader_path" ]; then
       generation_count_before=$(ls /etc/redox-system/generations 2>/dev/null | wc -l)
-      if /bin/snix system boot "$staged_generation_id" > /tmp/boot-smoke-boot-out 2> /tmp/boot-smoke-boot-err \
-        && [ -f /etc/redox-system/boot-default ] \
-        && [ "$(cat /etc/redox-system/boot-default 2>/dev/null || true)" = "$staged_generation_id" ] \
-        && [ "$(cat /etc/hostname 2>/dev/null || true)" = "$original_hostname" ]
-      then
-        if /bin/snix system activate-boot --generation "$staged_generation_id" > /tmp/boot-smoke-activate-out 2> /tmp/boot-smoke-activate-err; then
+      if /bin/snix system boot "$staged_generation_id" >/tmp/boot-smoke-boot-out 2>/tmp/boot-smoke-boot-err &&
+        [ -f /etc/redox-system/boot-default ] &&
+        [ "$(cat /etc/redox-system/boot-default 2>/dev/null || true)" = "$staged_generation_id" ] &&
+        [ "$(cat /etc/hostname 2>/dev/null || true)" = "$original_hostname" ]; then
+        if /bin/snix system activate-boot --generation "$staged_generation_id" >/tmp/boot-smoke-activate-out 2>/tmp/boot-smoke-activate-err; then
           generation_count_after=$(ls /etc/redox-system/generations 2>/dev/null | wc -l)
-          if [ "$generation_count_before" = "$generation_count_after" ] \
-            && [ "$(cat /etc/hostname 2>/dev/null || true)" = "$proof_hostname" ] \
-            && [ "$(extract_boot_path "$current_manifest" kernel)" = "$kernel_artifact" ] \
-            && [ "$(extract_boot_path "$current_manifest" bootloader)" = "$bootloader_artifact" ] \
-            && compare_files "$kernel_artifact" /boot/kernel \
-            && compare_files "$kernel_artifact" /usr/lib/boot/kernel
-          then
+          if [ "$generation_count_before" = "$generation_count_after" ] &&
+            [ "$(cat /etc/hostname 2>/dev/null || true)" = "$proof_hostname" ] &&
+            [ "$(extract_boot_path "$current_manifest" kernel)" = "$kernel_artifact" ] &&
+            [ "$(extract_boot_path "$current_manifest" bootloader)" = "$bootloader_artifact" ] &&
+            compare_files "$kernel_artifact" /boot/kernel &&
+            compare_files "$kernel_artifact" /usr/lib/boot/kernel; then
             echo "FUNC_TEST:boot-selection-smoke:PASS"
             artifact boot-selected-generation "$staged_generation_id"
           else
