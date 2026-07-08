@@ -25,6 +25,7 @@ let
   typeTests = import ./types.nix { inherit pkgs lib; };
   artifactTests = import ./artifacts.nix { inherit pkgs lib; };
   libTests = import ./lib.nix { inherit pkgs lib; };
+  substrateTests = import ./substrate.nix { inherit pkgs lib; };
 
   # Add layer prefix to test names for clarity
   prefixTests =
@@ -37,13 +38,15 @@ in
   types = prefixTests "type" typeTests;
   artifacts = prefixTests "artifact" artifactTests;
   lib = prefixTests "lib" libTests;
+  substrate = prefixTests "substrate" substrateTests;
 
   # Convenience: flat namespace for direct access
   all =
     (prefixTests "eval" evalTests)
     // (prefixTests "type" typeTests)
     // (prefixTests "artifact" artifactTests)
-    // (prefixTests "lib" libTests);
+    // (prefixTests "lib" libTests)
+    // (prefixTests "substrate" substrateTests);
 
   # Meta information
   meta = {
@@ -53,13 +56,17 @@ in
       types = "Type validation tests (Korora type system)";
       artifacts = "Build artifact tests (file content verification)";
       lib = "Library function tests (passwd/group formatting)";
+      substrate = "Public Redox substrate manifest, primitive normalization, and compatibility tests";
     };
     count = {
       eval = builtins.length (builtins.attrNames evalTests);
       types = builtins.length (builtins.attrNames typeTests);
       artifacts = builtins.length (builtins.attrNames artifactTests);
       lib = builtins.length (builtins.attrNames libTests);
-      total = builtins.length (builtins.attrNames (evalTests // typeTests // artifactTests // libTests));
+      substrate = builtins.length (builtins.attrNames substrateTests);
+      total = builtins.length (
+        builtins.attrNames (evalTests // typeTests // artifactTests // libTests // substrateTests)
+      );
     };
   };
 }

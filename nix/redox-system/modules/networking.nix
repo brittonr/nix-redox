@@ -12,6 +12,7 @@ let
     address = t.string;
     netmask = t.optionalAttr t.string;
     gateway = t.string;
+    prefixLength = t.optionalAttr t.int;
   };
 in
 
@@ -41,6 +42,11 @@ in
         "8.8.8.8"
       ];
       description = "DNS server addresses";
+    };
+    searchDomains = {
+      type = t.listOf t.string;
+      default = [ ];
+      description = "DNS search domains, preserved in declared resolver order";
     };
     defaultRouter = {
       type = t.string;
@@ -91,8 +97,7 @@ in
                 names = builtins.attrNames options.interfaces;
               in
               if names != [ ] then builtins.head names else null;
-            firstIface =
-              if firstIfaceName != null then options.interfaces.${firstIfaceName} else null;
+            firstIface = if firstIfaceName != null then options.interfaces.${firstIfaceName} else null;
           in
           {
             smolnetd = {

@@ -2,7 +2,12 @@
 # Extracts configuration values from module inputs and computes
 # derived values like package lists, drivers, directories, etc.
 
-{ lib, inputs, pkgs, redoxLib }:
+{
+  lib,
+  inputs,
+  pkgs,
+  redoxLib,
+}:
 
 let
   # ===== SHARED COMPUTATIONS =====
@@ -103,7 +108,7 @@ let
   # Compute all drivers
   # In live mode, storage drivers are excluded — rootfs is RAM-backed via lived.
   allDrivers = lib.unique (
-    (if liveMode then [] else inputs.hardware.storageDrivers)
+    (if liveMode then [ ] else inputs.hardware.storageDrivers)
     ++ inputs.hardware.networkDrivers
     ++ (lib.optionals graphicsEnabled inputs.hardware.graphicsDrivers)
     ++ (lib.optionals audioEnabled inputs.hardware.audioDrivers)
@@ -145,8 +150,9 @@ let
     ]);
 
   allDaemons = lib.unique (
-    builtins.filter (d: !(builtins.elem d initfsExcludeDaemons))
-      (coreDaemons ++ initfsDaemons ++ inputs.boot.initfsExtraBinaries)
+    builtins.filter (d: !(builtins.elem d initfsExcludeDaemons)) (
+      coreDaemons ++ initfsDaemons ++ inputs.boot.initfsExtraBinaries
+    )
   );
 
   # ===== STORE-BASED PACKAGE MANAGEMENT =====
@@ -250,8 +256,9 @@ let
 
   # Collect all directories
   homeDirectories = lib.filter (d: d != null) (
-    lib.mapAttrsToList (name: user: if user.createHome or false then user.home else null)
-      inputs.users.users
+    lib.mapAttrsToList (
+      name: user: if user.createHome or false then user.home else null
+    ) inputs.users.users
   );
 
   # Per-path ownership overrides for redoxfs-ar.
@@ -273,6 +280,7 @@ let
 
   allDirectories =
     inputs.filesystem.extraDirectories
+    ++ inputs.filesystem.substrateDirectories
     ++ homeDirectories
     ++ (lib.optional networkingEnabled "/var/log")
     ++ (lib.optional logToFile logPath)
@@ -300,8 +308,7 @@ let
     # Parent directories for user-declared etc files (environment.etc)
     ++ (lib.unique (
       lib.filter (d: d != "" && d != "." && d != "/") (
-        builtins.map (key: "/" + builtins.dirOf key)
-          (builtins.attrNames inputs.environment.etc)
+        builtins.map (key: "/" + builtins.dirOf key) (builtins.attrNames inputs.environment.etc)
       )
     ));
 

@@ -102,7 +102,8 @@ let
     moduleSystemTests.eval
     // moduleSystemTests.types
     // moduleSystemTests.artifacts
-    // moduleSystemTests.lib;
+    // moduleSystemTests.lib
+    // moduleSystemTests.substrate;
 
   # ── Tier 2: host (minutes) ──────────────────────────────────────
   # Native host-side builds and tests. No cross-compilation.

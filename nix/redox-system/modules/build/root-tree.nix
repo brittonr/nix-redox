@@ -2,7 +2,20 @@
 # Assembles the complete root filesystem with packages, configuration files,
 # and system setup. Uses external tools for ELF fixing and manifest hashing.
 
-{ hostPkgs, lib, cfg, inputs, allGeneratedFiles, initScripts, binaryCache, assertionCheck, warningCheck, fix-elf-palign, hash-manifest, etcDerivation }:
+{
+  hostPkgs,
+  lib,
+  cfg,
+  inputs,
+  allGeneratedFiles,
+  initScripts,
+  binaryCache,
+  assertionCheck,
+  warningCheck,
+  fix-elf-palign,
+  hash-manifest,
+  etcDerivation,
+}:
 
 let
   # Shell helpers for rootTree
@@ -14,7 +27,7 @@ let
 
   mkDevSymlinks = lib.concatStringsSep "\n" (
     lib.mapAttrsToList (name: target: "ln -sf ${target} $out/dev/${name}") (
-      inputs.filesystem.devSymlinks or { }
+      (inputs.filesystem.devSymlinks or { }) // (inputs.filesystem.extraDevSymlinks or { })
     )
   );
 
@@ -28,7 +41,7 @@ let
         ${lib.optionalString (dir != "." && dir != "/") "mkdir -p $out/${dir}"}
         ln -sf ${target} $out/${name}
       ''
-    ) (inputs.filesystem.specialSymlinks or { })
+    ) ((inputs.filesystem.specialSymlinks or { }) // (inputs.filesystem.extraSpecialSymlinks or { }))
   );
 
   # Boot-essential packages: flat-copied to /bin/ for init scripts and early boot
@@ -140,119 +153,123 @@ hostPkgs.runCommand "redox-root-tree"
     ];
   }
   ''
-    ${assert assertionCheck; assert warningCheck; ""}
-    ${mkDirs cfg.allDirectories}
-    mkdir -p $out/dev
-    ${mkDevSymlinks}
-    ${mkSpecialSymlinks}
-    # Boot-essential packages in /bin/ (survive generation switches)
-    ${mkBootPackages}
+        ${
+          assert assertionCheck;
+          assert warningCheck;
+          ""
+        }
+        ${mkDirs cfg.allDirectories}
+        mkdir -p $out/dev
+        ${mkDevSymlinks}
+        ${mkSpecialSymlinks}
+        # Boot-essential packages in /bin/ (survive generation switches)
+        ${mkBootPackages}
 
-    # All packages in /nix/store/ with content-addressed paths
-    ${mkStorePackages}
+        # All packages in /nix/store/ with content-addressed paths
+        ${mkStorePackages}
 
-    # System profile with symlinks to managed (non-boot) packages
-    ${mkSystemProfile}
+        # System profile with symlinks to managed (non-boot) packages
+        ${mkSystemProfile}
 
-    # Self-hosting: create well-known sysroot path
-    ${lib.optionalString cfg.hasSelfHosting ''
-      echo "Setting up self-hosting sysroot..."
-      mkdir -p $out/usr/lib
-      # Create /usr/lib/redox-sysroot → /nix/store/<hash>-redox-sysroot/sysroot
-      ln -sf "/nix/store/${cfg.pkgStoreName cfg.sysrootPkg}/sysroot" \
-        $out/usr/lib/redox-sysroot
+        # Self-hosting: create well-known sysroot path
+        ${lib.optionalString cfg.hasSelfHosting ''
+          echo "Setting up self-hosting sysroot..."
+          mkdir -p $out/usr/lib
+          # Create /usr/lib/redox-sysroot → /nix/store/<hash>-redox-sysroot/sysroot
+          ln -sf "/nix/store/${cfg.pkgStoreName cfg.sysrootPkg}/sysroot" \
+            $out/usr/lib/redox-sysroot
 
-      # Dynamic linker: ld64.so.1 must be at /lib/ for the kernel's ELF loader
-      # Also provide libc.so for dynamically linked binaries
-      mkdir -p $out/lib
-      cp "/nix/store/${cfg.pkgStoreName cfg.sysrootPkg}/lib/ld64.so.1" $out/lib/ld64.so.1
-      chmod 555 $out/lib/ld64.so.1
-      cp "/nix/store/${cfg.pkgStoreName cfg.sysrootPkg}/lib/libc.so" $out/lib/libc.so
-      chmod 555 $out/lib/libc.so
-      ln -sf libc.so $out/lib/libc.so.6
-      # libstdc++.so.6 shim (libc++ with libstdc++ soname, for librustc_driver.so)
-      ${lib.optionalString (cfg.libstdcxxShimPkg != null) ''
-        if [ -f "$out/nix/store/${cfg.pkgStoreName cfg.libstdcxxShimPkg}/lib/libstdc++.so.6" ]; then
-          cp "$out/nix/store/${cfg.pkgStoreName cfg.libstdcxxShimPkg}/lib/libstdc++.so.6" $out/lib/libstdc++.so.6
-          chmod 555 $out/lib/libstdc++.so.6
-          # Also copy alongside librustc_driver.so for RUNPATH=$ORIGIN resolution
-          ${lib.optionalString (cfg.rustcPkg != null) ''
-            chmod u+w "$out/nix/store/${cfg.pkgStoreName cfg.rustcPkg}/lib"
-            cp "$out/nix/store/${cfg.pkgStoreName cfg.libstdcxxShimPkg}/lib/libstdc++.so.6" \
-              "$out/nix/store/${cfg.pkgStoreName cfg.rustcPkg}/lib/libstdc++.so.6"
-            chmod 555 "$out/nix/store/${cfg.pkgStoreName cfg.rustcPkg}/lib/libstdc++.so.6"
+          # Dynamic linker: ld64.so.1 must be at /lib/ for the kernel's ELF loader
+          # Also provide libc.so for dynamically linked binaries
+          mkdir -p $out/lib
+          cp "/nix/store/${cfg.pkgStoreName cfg.sysrootPkg}/lib/ld64.so.1" $out/lib/ld64.so.1
+          chmod 555 $out/lib/ld64.so.1
+          cp "/nix/store/${cfg.pkgStoreName cfg.sysrootPkg}/lib/libc.so" $out/lib/libc.so
+          chmod 555 $out/lib/libc.so
+          ln -sf libc.so $out/lib/libc.so.6
+          # libstdc++.so.6 shim (libc++ with libstdc++ soname, for librustc_driver.so)
+          ${lib.optionalString (cfg.libstdcxxShimPkg != null) ''
+            if [ -f "$out/nix/store/${cfg.pkgStoreName cfg.libstdcxxShimPkg}/lib/libstdc++.so.6" ]; then
+              cp "$out/nix/store/${cfg.pkgStoreName cfg.libstdcxxShimPkg}/lib/libstdc++.so.6" $out/lib/libstdc++.so.6
+              chmod 555 $out/lib/libstdc++.so.6
+              # Also copy alongside librustc_driver.so for RUNPATH=$ORIGIN resolution
+              ${lib.optionalString (cfg.rustcPkg != null) ''
+                chmod u+w "$out/nix/store/${cfg.pkgStoreName cfg.rustcPkg}/lib"
+                cp "$out/nix/store/${cfg.pkgStoreName cfg.libstdcxxShimPkg}/lib/libstdc++.so.6" \
+                  "$out/nix/store/${cfg.pkgStoreName cfg.rustcPkg}/lib/libstdc++.so.6"
+                chmod 555 "$out/nix/store/${cfg.pkgStoreName cfg.rustcPkg}/lib/libstdc++.so.6"
+              ''}
+            fi
           ''}
+
+          # LD_LIBRARY_PATH for rustc's dynamic libs
+          # rustc needs librustc_driver.so + proc-macro .so files at runtime
+          mkdir -p $out/usr/lib/rustc
+          if [ -d "$out/nix/store/${cfg.pkgStoreName cfg.rustcPkg}/lib" ]; then
+            for f in $out/nix/store/${cfg.pkgStoreName cfg.rustcPkg}/lib/*.so; do
+              [ -e "$f" ] || continue
+              lib_name=$(basename "$f")
+              ln -sf "/nix/store/${cfg.pkgStoreName cfg.rustcPkg}/lib/$lib_name" \
+                "$out/usr/lib/rustc/$lib_name"
+            done
+          fi
+
+          # Fix p_align=0 in ELF program headers (relibc ld_so bug workaround).
+          echo "Fixing p_align=0 in ELF program headers..."
+          fix-elf-palign $out
+        ''}
+
+        ${mkGeneratedFiles}
+
+        # Extra paths: copy arbitrary store derivations to target directories
+        ${lib.concatStringsSep "\n" (
+          builtins.map (ep: ''
+            echo "Copying extra path to ${ep.target}..."
+            mkdir -p "$out/${ep.target}"
+            # Use /. instead of /* to include dotfiles (.cargo/, etc.)
+            cp -r ${ep.source}/. "$out/${ep.target}/"
+          '') (inputs.filesystem.extraPaths or [ ])
+        )}
+
+        # Include local binary cache if configured
+        ${lib.optionalString cfg.hasBinaryCache ''
+          echo "Including binary cache (${toString (builtins.length (builtins.attrNames cfg.binaryCachePackages))} packages)..."
+          mkdir -p $out/nix/cache
+          cp -r ${binaryCache.cache}/* $out/nix/cache/
+        ''}
+
+        # Compute file hashes, generation buildHash, and seed generations dir.
+        # The base manifest was written above; now we add:
+        #   1. "files" key with BLAKE3 hashes of every rootTree file
+        #   2. "generation.buildHash" — BLAKE3 of the sorted file inventory
+        #   3. "etcSource" — etc derivation store path (injected to avoid circular dep)
+        #   4. /etc/redox-system/generations/1/ with a copy of the manifest
+        # Copy the etc derivation into the rootTree's nix store so
+        # activate can find it at runtime for /etc/static symlinks.
+        etc_store="$out/nix/store/$(basename ${etcDerivation})"
+        cp -r ${etcDerivation} "$etc_store"
+        chmod -R u+w "$etc_store"
+
+        hash-manifest $out
+
+        # Inject etcSource into the manifest post hash-manifest.
+        # Can't be in manifestJson (circular dep: manifestJson → allGeneratedFiles → etcDrv).
+        manifest="$out/etc/redox-system/manifest.json"
+        tmp="$manifest.tmp"
+        ${hostPkgs.python3}/bin/python3 -c "
+    import json, sys
+    with open(sys.argv[1]) as f:
+        d = json.load(f)
+    d['etcSource'] = '/nix/store/' + sys.argv[2].split('/')[-1]
+    with open(sys.argv[3], 'w') as f:
+        json.dump(d, f, indent=2, sort_keys=True)
+    " "$manifest" "$etc_store" "$tmp"
+        mv "$tmp" "$manifest"
+        # Also update the generation 1 copy
+        gen1="$out/etc/redox-system/generations/1/manifest.json"
+        if [ -f "$gen1" ]; then
+          cp "$manifest" "$gen1"
         fi
-      ''}
 
-      # LD_LIBRARY_PATH for rustc's dynamic libs
-      # rustc needs librustc_driver.so + proc-macro .so files at runtime
-      mkdir -p $out/usr/lib/rustc
-      if [ -d "$out/nix/store/${cfg.pkgStoreName cfg.rustcPkg}/lib" ]; then
-        for f in $out/nix/store/${cfg.pkgStoreName cfg.rustcPkg}/lib/*.so; do
-          [ -e "$f" ] || continue
-          lib_name=$(basename "$f")
-          ln -sf "/nix/store/${cfg.pkgStoreName cfg.rustcPkg}/lib/$lib_name" \
-            "$out/usr/lib/rustc/$lib_name"
-        done
-      fi
-
-      # Fix p_align=0 in ELF program headers (relibc ld_so bug workaround).
-      echo "Fixing p_align=0 in ELF program headers..."
-      fix-elf-palign $out
-    ''}
-
-    ${mkGeneratedFiles}
-
-    # Extra paths: copy arbitrary store derivations to target directories
-    ${lib.concatStringsSep "\n" (
-      builtins.map (ep: ''
-        echo "Copying extra path to ${ep.target}..."
-        mkdir -p "$out/${ep.target}"
-        # Use /. instead of /* to include dotfiles (.cargo/, etc.)
-        cp -r ${ep.source}/. "$out/${ep.target}/"
-      '') (inputs.filesystem.extraPaths or [ ])
-    )}
-
-    # Include local binary cache if configured
-    ${lib.optionalString cfg.hasBinaryCache ''
-      echo "Including binary cache (${toString (builtins.length (builtins.attrNames cfg.binaryCachePackages))} packages)..."
-      mkdir -p $out/nix/cache
-      cp -r ${binaryCache.cache}/* $out/nix/cache/
-    ''}
-
-    # Compute file hashes, generation buildHash, and seed generations dir.
-    # The base manifest was written above; now we add:
-    #   1. "files" key with BLAKE3 hashes of every rootTree file
-    #   2. "generation.buildHash" — BLAKE3 of the sorted file inventory
-    #   3. "etcSource" — etc derivation store path (injected to avoid circular dep)
-    #   4. /etc/redox-system/generations/1/ with a copy of the manifest
-    # Copy the etc derivation into the rootTree's nix store so
-    # activate can find it at runtime for /etc/static symlinks.
-    etc_store="$out/nix/store/$(basename ${etcDerivation})"
-    cp -r ${etcDerivation} "$etc_store"
-    chmod -R u+w "$etc_store"
-
-    hash-manifest $out
-
-    # Inject etcSource into the manifest post hash-manifest.
-    # Can't be in manifestJson (circular dep: manifestJson → allGeneratedFiles → etcDrv).
-    manifest="$out/etc/redox-system/manifest.json"
-    tmp="$manifest.tmp"
-    ${hostPkgs.python3}/bin/python3 -c "
-import json, sys
-with open(sys.argv[1]) as f:
-    d = json.load(f)
-d['etcSource'] = '/nix/store/' + sys.argv[2].split('/')[-1]
-with open(sys.argv[3], 'w') as f:
-    json.dump(d, f, indent=2, sort_keys=True)
-" "$manifest" "$etc_store" "$tmp"
-    mv "$tmp" "$manifest"
-    # Also update the generation 1 copy
-    gen1="$out/etc/redox-system/generations/1/manifest.json"
-    if [ -f "$gen1" ]; then
-      cp "$manifest" "$gen1"
-    fi
-
-    echo "Root tree: $(find $out -type f | wc -l) files, $(find $out/bin -type f 2>/dev/null | wc -l) binaries"
+        echo "Root tree: $(find $out -type f | wc -l) files, $(find $out/bin -type f 2>/dev/null | wc -l) binaries"
   ''

@@ -75,6 +75,11 @@ upstream Makefile/cookbook. The build has three layers:
 3. **Assembly** — A NixOS-style module system (17 modules) evaluates the
    config and produces the root tree, initfs, and bootable disk image.
 
+External system-layer consumers should target the public substrate surface at
+`legacyPackages.${system}.redoxSubstrate`, not private flake-module internals or
+Adios path-keyed profiles. See `docs/redox-substrate.md` for the manifest,
+primitive plan shape, builder shell, and Redox/OnixOS boundary.
+
 ### NixOS-style Configuration
 
 Profiles are declarative, composable Nix expressions:

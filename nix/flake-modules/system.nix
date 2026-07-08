@@ -162,6 +162,34 @@ let
     };
   };
 
+  redoxSubstrate = import ../substrate {
+    inherit
+      lib
+      pkgs
+      redoxSystemFactory
+      ;
+    target = redoxTarget;
+    mkRedoxSystem = { modules }: mkSystem { inherit modules extraPkgs; };
+    mkQemuRunners = modularPkgs.infrastructure.mkQemuRunners;
+    mkCloudHypervisorRunners = modularPkgs.infrastructure.mkCloudHypervisorRunners;
+    packageIngredients = {
+      runtime = [
+        "relibc"
+        "kernel"
+        "bootloader"
+        "base"
+        "redoxfs"
+      ];
+      userspace = builtins.attrNames extraPkgs;
+      infrastructure = [
+        "initfsTools"
+        "bootstrap"
+        "qemu-runner"
+        "cloud-hypervisor-runner"
+      ];
+    };
+  };
+
   # Runner factory functions from the infrastructure module
   mkCHRunners = modularPkgs.infrastructure.mkCloudHypervisorRunners;
   mkQemuRunners = modularPkgs.infrastructure.mkQemuRunners;
@@ -990,6 +1018,7 @@ in
   # Expose the system builder for advanced use
   legacyPackages = {
     inherit (redoxSystemFactory) redoxSystem;
+    inherit redoxSubstrate;
     redoxConfigurations = systems;
 
     # Build a Redox system from a list of profile modules.
