@@ -2,7 +2,16 @@
 # Creates all system configuration files: /etc/profile, /etc/passwd,
 # network config, ion configuration, security policies, etc.
 
-{ lib, cfg, inputs, hostPkgs, pkgs, redoxLib, initScripts, manifestJson }:
+{
+  lib,
+  cfg,
+  inputs,
+  hostPkgs,
+  pkgs,
+  redoxLib,
+  initScripts,
+  manifestJson,
+}:
 
 let
   # Environment: /etc/profile
@@ -10,8 +19,7 @@ let
     lib.mapAttrsToList (name: value: "export ${name} ${value}") inputs.environment.variables
   );
   aliasLines = lib.concatStringsSep "\n" (
-    lib.mapAttrsToList (name: value: ''alias ${name} = "${value}"'')
-      inputs.environment.shellAliases
+    lib.mapAttrsToList (name: value: ''alias ${name} = "${value}"'') inputs.environment.shellAliases
   );
   networkingVarLines = lib.optionalString cfg.networkingEnabled ''
     # TLS root certificates for HTTPS (rustls-native-certs, curl, etc.)
@@ -63,12 +71,14 @@ let
     ${lib.optionalString cfg.hasSelfHosting (
       let
         extraPaths = [ "/usr/lib/rustc" ] ++ cfg.extraLdLibraryPath;
-      in ''
-      # Self-hosting: rustc needs its dynamic libraries at runtime
-      export LD_LIBRARY_PATH ${lib.concatStringsSep ":" extraPaths}:$LD_LIBRARY_PATH
-      # CARGO_HOME for cargo to store its config and cache
-      export CARGO_HOME ${cfg.cargoConfig.home}
-    '')}
+      in
+      ''
+        # Self-hosting: rustc needs its dynamic libraries at runtime
+        export LD_LIBRARY_PATH ${lib.concatStringsSep ":" extraPaths}:$LD_LIBRARY_PATH
+        # CARGO_HOME for cargo to store its config and cache
+        export CARGO_HOME ${cfg.cargoConfig.home}
+      ''
+    )}
     ${inputs.environment.shellInit}
   '';
 
@@ -128,656 +138,689 @@ let
     else
       null;
 
-  # Collect all generated files
-  allGeneratedFiles = {
-    "etc/profile" = {
-      text = profileContent;
-      mode = "0644";
-    };
-    "etc/passwd" = {
-      text = passwdContent;
-      mode = "0644";
-    };
-    "etc/group" = {
-      text = groupContent;
-      mode = "0644";
-    };
-    "etc/shadow" = {
-      source = shadowFile;
-      mode = "0600";
-    };
-    "etc/init.toml" = {
-      text = initScripts.initToml;
-      mode = "0644";
-    };
-    "startup.sh" = {
-      text = initScripts.startupContent;
-      mode = "0755";
-    };
-  }
-  // (lib.optionalAttrs cfg.networkingEnabled {
-    "etc/net/dns" = {
-      text = lib.concatStringsSep "\n" inputs.networking.dns;
-      mode = "0644";
-    };
-    "etc/net/ip_router" = {
-      text = inputs.networking.defaultRouter;
-      mode = "0644";
-    };
-  })
-  // (lib.optionalAttrs (cfg.autoLogin != "") (
-    let
-      loginUser = cfg.autoLogin;
-      userCfg = inputs.users.users.${loginUser} or null;
-      userHome = if userCfg != null then userCfg.home or "/root" else "/root";
-      userShell = if userCfg != null then userCfg.shell or "/bin/ion" else "/bin/ion";
-    in {
-      "bin/contain_login" = {
-        text = "#!/bin/ion\nexec ${userShell}";
+  # Collect all generated files. Substrate extra files are merged first so
+  # built-in generated files win on accidental path collisions.
+  allGeneratedFiles =
+    inputs.filesystem.extraFiles
+    // {
+      "etc/profile" = {
+        text = profileContent;
+        mode = "0644";
+      };
+      "etc/passwd" = {
+        text = passwdContent;
+        mode = "0644";
+      };
+      "etc/group" = {
+        text = groupContent;
+        mode = "0644";
+      };
+      "etc/shadow" = {
+        source = shadowFile;
+        mode = "0600";
+      };
+      "etc/init.toml" = {
+        text = initScripts.initToml;
+        mode = "0644";
+      };
+      "startup.sh" = {
+        text = initScripts.startupContent;
         mode = "0755";
       };
     }
-  ))
-  // (lib.optionalAttrs
-    (cfg.networkingEnabled && (inputs.networking.mode == "dhcp" || inputs.networking.mode == "auto"))
-    {
-      "bin/dhcpd-quiet" = {
-        text = "#!/bin/ion\n/bin/netcfg-setup dhcpd &> ${cfg.logPath}/dhcpd.log";
-        mode = "0755";
-      };
-    }
-  )
-  // (lib.optionalAttrs (cfg.networkingEnabled && inputs.networking.mode == "static")
-    (let
-      firstIfaceName = let names = builtins.attrNames inputs.networking.interfaces;
-        in if names != [] then builtins.head names else null;
-      firstIface = if firstIfaceName != null then inputs.networking.interfaces.${firstIfaceName} else null;
-    in lib.optionalAttrs (firstIface != null) {
-      "bin/netcfg-static-quiet" = {
-        text = "#!/bin/ion\nsleep 2\necho ${firstIface.address} > /scheme/netcfg/ifaces/eth0/addr/set\necho default via ${firstIface.gateway} > /scheme/netcfg/route/add\necho ${builtins.head inputs.networking.dns} > /scheme/netcfg/resolv/nameserver";
-        mode = "0755";
-      };
-    })
-  )
-  # Per-interface files
-  // (builtins.foldl' (acc: entry: acc // entry) { } (
-    lib.mapAttrsToList (name: iface: {
-      "etc/net/${name}/ip" = {
-        text = iface.address or "";
-        mode = "0644";
-      };
-      "etc/net/${name}/netmask" = {
-        text = iface.netmask or cfg.defaultNetmask;
-        mode = "0644";
-      };
-      "etc/net/${name}/gateway" = {
-        text = iface.gateway or "";
-        mode = "0644";
-      };
-    }) inputs.networking.interfaces
-  ))
-  # ===== NEW MODULE GENERATED FILES =====
-
-  # /time: hostname, timezone, hosts
-  // {
-    "etc/hostname" = {
-      text = cfg.hostname;
-      mode = "0644";
-    };
-    "etc/hosts" = {
-      text = ''
-        127.0.0.1 localhost ${cfg.hostname}
-        ::1       localhost ${cfg.hostname}
-      ''
-      + lib.optionalString (cfg.extraHosts != "") (cfg.extraHosts + "\n");
-      mode = "0644";
-    };
-    "etc/timezone" = {
-      text = cfg.timezone;
-      mode = "0644";
-    };
-    "etc/hwclock" = {
-      text = cfg.hwclock;
-      mode = "0644";
-    };
-  }
-  // (lib.optionalAttrs cfg.ntpEnabled {
-    "etc/ntp.conf" = {
-      text =
-        "# NTP configuration (generated by adios module system)\n"
-        + lib.concatMapStringsSep "\n" (server: "server ${server}") cfg.ntpServers
-        + "\n";
-      mode = "0644";
-    };
-  })
-
-  # /logging: log config
-  // (lib.optionalAttrs cfg.logToFile {
-    "etc/logging.conf" = {
-      text = lib.concatStringsSep "\n" [
-        "# RedoxOS Logging Configuration (generated by adios module system)"
-        "level=${cfg.logLevel}"
-        "kernel_level=${cfg.kernelLogLevel}"
-        "log_path=${cfg.logPath}"
-        "max_size_mb=${toString inputs.logging.maxLogSizeMB}"
-        "persist=${if inputs.logging.persistAcrossBoot then "true" else "false"}"
-      ];
-      mode = "0644";
-    };
-  })
-
-  # /security: namespace access, security policy
-  // {
-    "etc/security/namespaces" = {
-      text =
-        "# Scheme namespace access policy (generated by adios module system)\n"
-        + lib.concatStringsSep "\n" (
-          lib.mapAttrsToList (scheme: access: "${scheme}=${access}") inputs.security.namespaceAccess
-        )
-        + "\n";
-      mode = "0644";
-    };
-    "etc/security/policy" = {
-      text = lib.concatStringsSep "\n" [
-        "# Security policy (generated by adios module system)"
-        "protect_kernel_schemes=${if cfg.protectKernelSchemes then "true" else "false"}"
-        "require_passwords=${if cfg.requirePasswords then "true" else "false"}"
-        "allow_remote_root=${if cfg.allowRemoteRoot then "true" else "false"}"
-      ];
-      mode = "0644";
-    };
-    "etc/security/setuid" = {
-      text =
-        "# Setuid programs (generated by adios module system)\n"
-        + lib.concatStringsSep "\n" cfg.setuidPrograms
-        + "\n";
-      mode = "0644";
-    };
-  }
-
-  # /login_schemes: per-user namespace scheme lists for login sessions.
-  # The login binary from userutils reads this file and calls mkns() with
-  # the scheme list for the authenticating user. If no entry exists for a
-  # user, login falls back to DEFAULT_SCHEMES (26 hardcoded schemes).
-  #
-  # Format matches upstream userutils LoginConfig (login.rs):
-  #   [user_schemes.<username>]
-  #   schemes = ["scheme1", "scheme2", ...]
-  #
-  # Scheme list resolution:
-  #   - Explicit schemes attr on user  -> use that list directly
-  #   - Root (uid 0) without schemes   -> cfg.fullSchemes (27 schemes incl. proc)
-  #   - Non-root with createHome       -> cfg.restrictedSchemes (22 schemes, no irq/sys/memory/serio)
-  #   - Non-root without createHome    -> no entry (falls back to binary default)
-  // (
-    let
-      users = inputs.users.users;
-
-      # Resolve the scheme list for a user
-      resolveSchemes = name: user:
-        if user ? schemes then
-          user.schemes
-        else if (user.uid or 1) == 0 then
-          cfg.fullSchemes
-        else if user.createHome or false then
-          cfg.restrictedSchemes
-        else
-          null;  # No entry — login uses DEFAULT_SCHEMES
-
-      # Build per-user TOML sections
-      userSections = lib.concatStringsSep "\n" (
-        lib.filter (s: s != "") (
-          lib.mapAttrsToList (name: user:
-            let schemes = resolveSchemes name user;
-            in
-            if schemes == null then ""
-            else
-              "[user_schemes.${name}]\n"
-              + "schemes = ["
-              + lib.concatMapStringsSep ", " (s: ''"${s}"'') schemes
-              + "]\n"
-          ) users
-        )
-      );
-    in
-    {
-      "etc/login_schemes.toml" = {
-        text = lib.concatStringsSep "\n" [
-          "# Login namespace schemes (generated by adios module system)"
-          "# Overrides the hardcoded DEFAULT_SCHEMES in userutils login binary."
-          "# Each user gets a namespace containing only the listed schemes."
-          ""
-          userSections
-        ];
-        mode = "0644";
-      };
-    }
-  )
-
-  # /programs: ion initrc, helix config, editor
-  // {
-    "etc/ion/initrc" = {
-      text =
-        let
-          ion = cfg.ionConfig;
-          # Ion-compatible environment setup.
-          # Ion uses `let VAR = value` + `export VAR`, not bash's `export VAR=value`.
-          # HOME, USER, SHELL are already set by login — don't override.
-          envVars = {
-            HOSTNAME = cfg.hostname;
-            TZ = cfg.timezone;
-            EDITOR = cfg.defaultEditor;
-            LANG = cfg.localeLang;
-            TERM = inputs.environment.variables.TERM or "xterm-256color";
-          }
-          // (lib.optionalAttrs (cfg.localeLcAll != "") { LC_ALL = cfg.localeLcAll; })
-          // (lib.optionalAttrs (cfg.localeLcCollate != "") { LC_COLLATE = cfg.localeLcCollate; })
-          // (lib.optionalAttrs (cfg.localeLcCtype != "") { LC_CTYPE = cfg.localeLcCtype; })
-          // (lib.optionalAttrs (cfg.localeLcMessages != "") { LC_MESSAGES = cfg.localeLcMessages; })
-          // (lib.optionalAttrs (cfg.localeLcMonetary != "") { LC_MONETARY = cfg.localeLcMonetary; })
-          // (lib.optionalAttrs (cfg.localeLcNumeric != "") { LC_NUMERIC = cfg.localeLcNumeric; })
-          // (lib.optionalAttrs (cfg.localeLcTime != "") { LC_TIME = cfg.localeLcTime; })
-          // (lib.filterAttrs (n: _: n != "HOME" && n != "USER" && n != "SHELL" && n != "PATH")
-            inputs.environment.variables
-          );
-          envLines = lib.concatStringsSep "\n" (
-            lib.mapAttrsToList (name: value: "let ${name} = \"${value}\"\nexport ${name}") envVars
-          );
-          # PATH needs special handling — set directly
-          profilePath = "/nix/system/profile/bin:/bin:/usr/bin";
-          pathSetup = ''
-            let PATH = "${profilePath}"
-            export PATH
-          ''
-          + lib.optionalString cfg.hasBinaryCache ''
-            let PATH = "/nix/var/snix/profiles/default/bin:$PATH"
-            export PATH
-          '';
-          # Aliases that use $ must be in single quotes to prevent Ion expansion at source time.
-          # Only include simple aliases here; complex ones go in ion.initExtra.
-          simpleAliases = lib.filterAttrs (n: v: !(lib.hasInfix "$" v))
-            inputs.environment.shellAliases;
-          aliasLines = lib.concatStringsSep "\n" (
-            lib.mapAttrsToList (name: value: ''alias ${name} = "${value}"'') simpleAliases
-          );
-        in
-        lib.concatStringsSep "\n" (
-          [
-            "# Ion shell initrc (generated by adios module system)"
-            envLines
-            pathSetup
-            aliasLines
-          ]
-          ++ lib.optional (ion.initExtra or "" != "") (ion.initExtra)
-          ++ [
-            # PROMPT must be set LAST so all variables exist.
-            ''let PROMPT = "${ion.prompt}"''
-          ]
-        );
-      mode = "0644";
-    };
-  }
-  // (lib.optionalAttrs cfg.helixConfig.enable {
-    "etc/helix/config.toml" = {
-      text = ''
-        # Helix editor config (generated by adios module system)
-        theme = "${cfg.helixConfig.theme}"
-      '';
-      mode = "0644";
-    };
-  })
-  // (lib.optionalAttrs cfg.httpdConfig.enable {
-    "etc/httpd.conf" = {
-      text = lib.concatStringsSep "\n" [
-        "# HTTP server config (generated by adios module system)"
-        "port=${toString cfg.httpdConfig.port}"
-        "root_dir=${cfg.httpdConfig.rootDir}"
-      ];
-      mode = "0644";
-    };
-  })
-
-  # ═══════════════════════════════════════════════════════════════════
-  # Typed service module config files
-  # ═══════════════════════════════════════════════════════════════════
-
-  # /services.ssh: SSH server config — reads from cfg (adios-validated)
-  // (lib.optionalAttrs cfg.sshEnabled {
-    "etc/ssh/sshd_config" = {
-      text = lib.concatStringsSep "\n" [
-        "# SSH server configuration (generated by adios module system)"
-        "# Service module: services.ssh"
-        "Port ${toString cfg.sshOpts.port}"
-        "ListenAddress ${cfg.sshOpts.listenAddress}"
-        "AddressFamily inet"
-        "UsePAM no"
-        "PasswordAuthentication yes"
-        "PermitEmptyPasswords no"
-        "HostKey ${cfg.sshOpts.hostKeyEd25519Path}"
-        "HostKey ${cfg.sshOpts.hostKeyRsaPath}"
-        "HostKey ${cfg.sshOpts.hostKeyEcdsaPath}"
-        "PermitRootLogin ${if cfg.sshOpts.permitRootLogin then "yes" else "no"}"
-        "AuthorizedKeysFile ${cfg.sshOpts.authorizedKeysPath}"
-        "Subsystem sftp /bin/sftp-server"
-      ];
-      mode = "0644";
-    };
-    "etc/ssh/authorized_keys" = {
-      text = "# Authorized SSH public keys (one per line)\n";
-      mode = "0600";
-    };
-    "etc/ssh/ssh_host_ed25519_key" = {
-      source = sshHostKeys + "/ssh_host_ed25519_key";
-      mode = "0600";
-    };
-    "etc/ssh/ssh_host_ed25519_key.pub" = {
-      source = sshHostKeys + "/ssh_host_ed25519_key.pub";
-      mode = "0644";
-    };
-    "etc/ssh/ssh_host_rsa_key" = {
-      source = sshHostKeys + "/ssh_host_rsa_key";
-      mode = "0600";
-    };
-    "etc/ssh/ssh_host_rsa_key.pub" = {
-      source = sshHostKeys + "/ssh_host_rsa_key.pub";
-      mode = "0644";
-    };
-    "etc/ssh/ssh_host_ecdsa_key" = {
-      source = sshHostKeys + "/ssh_host_ecdsa_key";
-      mode = "0600";
-    };
-    "etc/ssh/ssh_host_ecdsa_key.pub" = {
-      source = sshHostKeys + "/ssh_host_ecdsa_key.pub";
-      mode = "0644";
-    };
-  })
-
-  # /services.httpd: HTTP server config — reads from cfg (adios-validated)
-  // (lib.optionalAttrs cfg.svcHttpdEnabled {
-    "etc/httpd/config" = {
-      text = lib.concatStringsSep "\n" [
-        "# HTTP server configuration (generated by adios module system)"
-        "# Service module: services.httpd"
-        "port=${toString cfg.svcHttpdOpts.port}"
-        "root_dir=${cfg.svcHttpdOpts.rootDir}"
-      ];
-      mode = "0644";
-    };
-  })
-
-  # /power: ACPI config
-  // (lib.optionalAttrs cfg.acpiEnabled {
-    "etc/acpi/config" = {
-      text = lib.concatStringsSep "\n" [
-        "# ACPI power management (generated by adios module system)"
-        "power_action=${cfg.powerAction}"
-        "idle_action=${inputs.power.idleAction}"
-        "idle_timeout_minutes=${toString inputs.power.idleTimeoutMinutes}"
-        "reboot_on_panic=${if cfg.rebootOnPanic then "true" else "false"}"
-      ];
-      mode = "0644";
-    };
-  })
-
-  # /graphics: orbterm config (prevents EACCES on first launch)
-  #
-  # orbterm uses xdg::BaseDirectories to find its config file.
-  # XDG_CONFIG_HOME is set to /etc by the init script. Without a
-  # pre-created config, orbterm tries to create /etc/orbterm/config
-  # which fails with EACCES for non-root users.
-  # Pre-creating it with defaults avoids the write attempt entirely.
-  // (lib.optionalAttrs (cfg.graphicsEnabled && pkgs ? orbterm) {
-    "etc/orbterm/config" = {
-      text = ''
-        # orbterm configuration (generated by adios module system)
-        # See https://gitlab.redox-os.org/redox-os/orbterm
-        font = ""
-        font_bold = ""
-      '';
-      mode = "0644";
-    };
-  })
-
-  # /snix: scheme daemon and sandbox configuration
-  // (
-    let
-      storedEnabled = inputs.snix.stored.enable;
-      profiledEnabled = inputs.snix.profiled.enable;
-      sandboxEnabled = inputs.snix.sandbox;
-    in
-    lib.optionalAttrs (storedEnabled || profiledEnabled || !sandboxEnabled) {
-      "etc/snix/config" = {
-        text = lib.concatStringsSep "\n" (
-          [ "# snix configuration (generated by adios module system)" ]
-          ++ lib.optional storedEnabled "stored=enabled"
-          ++ lib.optional profiledEnabled "profiled=enabled"
-          ++ [ "sandbox=${if sandboxEnabled then "enabled" else "disabled"}" ]
-        );
-        mode = "0644";
-      };
-    }
-  )
-
-  # System manifest (base — file hashes merged at rootTree build time)
-  // {
-    "etc/redox-system/manifest.json" = {
-      source = manifestJson;
-      mode = "0644";
-    };
-  }
-
-  # Default configuration.nix for `snix system rebuild`
-  # This comes from the shared image-generation pipeline, so every image
-  # built through mkSystem — including self-hosting profiles — gets the
-  # same editable /etc/redox-system/configuration.nix on disk.
-  # Users can edit this file on the running system, then run
-  # `snix system rebuild` to apply changes declaratively.
-  // {
-    "etc/redox-system/configuration.nix" = {
-      text = ''
-        # /etc/redox-system/configuration.nix
-        #
-        # Declarative system configuration for Redox OS.
-        # Edit this file and run `snix system rebuild` to apply changes.
-        #
-        # Only set the options you want to change — everything else keeps
-        # its current value from the running system.
-        #
-        # After editing:
-        #   snix system rebuild --dry-run   # Preview changes
-        #   snix system rebuild             # Apply changes
-        #
-        # Config-only changes (hostname, timezone, etc.) are applied locally.
-        # Package changes require the build bridge (host builds packages):
-        #   nix run .#run-redox-shared   (start VM with shared filesystem)
-        #   nix run .#build-bridge       (start host-side build daemon)
-        #   snix system rebuild          (auto-detects bridge)
-        #
-        # Available options:
-        #   hostname, timezone, packages, files,
-        #   networking.{enable, mode, dns, defaultRouter, remoteShellEnable},
-        #   graphics.{enable, resolution, virtualTerminal, loginCommand},
-        #   security.{protectKernelSchemes, requirePasswords, allowRemoteRoot},
-        #   logging.{level, kernelLevel, logToFile, logPath, maxLogSizeMB},
-        #   power.{acpiEnabled, powerAction, idleAction, idleTimeoutMinutes,
-        #          rebootOnPanic},
-        #   users.{name = { uid, gid, home, shell, password, createHome }},
-        #   programs.{editor, ion.{prompt, initExtra}, helix.{enable, theme},
-        #             cargo.{buildJobs, home}},
-        #   services.ssh.{enable, port, permitRootLogin, listenAddress},
-        #   services.httpd.{enable, port, rootDir},
-        #   services.getty.{enable, device, extraArgs},
-        #   services.exampled.{enable, schemeName},
-        #   boot.{diskSizeMB, espSizeMB, espLabel, initfsSizeMB,
-        #         kernelSyscallDebug},
-        #   system.{name, version}
-
-        {
-          hostname = "${cfg.hostname}";
-          timezone = "${cfg.timezone}";
-
-          networking = {
-            enable = ${if cfg.networkingEnabled then "true" else "false"};
-            mode = "${inputs.networking.mode}";
-            dns = [ ${
-              lib.concatMapStringsSep " " (d: ''"${d}"'') inputs.networking.dns
-            } ];
-          };
-
-          security = {
-            protectKernelSchemes = ${if cfg.protectKernelSchemes then "true" else "false"};
-            requirePasswords = ${if cfg.requirePasswords then "true" else "false"};
-          };
-
-          # packages = [
-          #   "ripgrep"
-          #   "fd"
-          #   "helix"
-          # ];
-
-          # services.ssh = {
-          #   enable = true;
-          #   port = 22;
-          #   permitRootLogin = false;
-          # };
-
-          # services.httpd = {
-          #   enable = true;
-          #   port = 8080;
-          #   rootDir = "/var/www";
-          # };
-          #
-          # files = {
-          #   "etc/my-app/config.txt" = {
-          #     text = "hello from rebuild\n";
-          #     mode = "0644"; # octal string, applied during live rebuild
-          #   };
-          # };
-          # Keys must be root-relative (no leading slash) and must not contain
-          # '.' or '..' path segments.
-        }
-      '';
-      mode = "0644";
-    };
-  }
-
-  # Self-hosting: cargo config + environment setup
-  // (lib.optionalAttrs cfg.hasSelfHosting {
-    # Global cargo config: tells cargo where rustc is and how to link for Redox
-    #
-    # Uses the CC wrapper (/nix/system/profile/bin/cc) as linker because:
-    # 1. It adds CRT objects (crt0.o, crti.o, crtn.o) that ld.lld alone misses
-    # 2. It adds libc, libgcc, and dynamic linker configuration
-    # 3. It handles the --export-dynamic + version script for DSO symbol export
-    #
-    # The CC wrapper is a bash script that wraps clang→ld.lld with all the
-    # sysroot library paths and CRT files.
-    "${lib.removePrefix "/" cfg.cargoConfig.home}/config.toml" = {
-      text = ''
-        # Cargo configuration for on-guest Rust compilation
-        # Generated by the Redox module system
-
-        [build]
-        target = "${cfg.systemTarget}"
-
-        [target.${cfg.systemTarget}]
-        linker = "/nix/system/profile/bin/cc"
-        rustflags = [
-          "-C", "link-arg=-L/usr/lib/redox-sysroot/lib",
-        ]
-
-        # Disable cargo's global cache auto-GC — relibc's flock() is
-        # unimplemented (error 3850) and cargo sometimes hangs trying
-        # to acquire the advisory lock on .package-cache.
-        [gc]
-        auto = false
-      '';
-      mode = "0644";
-    };
-  })
-
-  # Init script files (raw initScripts + rendered structured services)
-  // (builtins.listToAttrs (
-    lib.mapAttrsToList (
-      name: script:
+    // (lib.optionalAttrs cfg.networkingEnabled (
+      {
+        "etc/net/dns" = {
+          text = lib.concatStringsSep "\n" inputs.networking.dns;
+          mode = "0644";
+        };
+        "etc/net/ip_router" = {
+          text = inputs.networking.defaultRouter;
+          mode = "0644";
+        };
+      }
+      // lib.optionalAttrs (inputs.networking.searchDomains != [ ]) {
+        "etc/net/search" = {
+          text = lib.concatStringsSep "\n" inputs.networking.searchDomains;
+          mode = "0644";
+        };
+      }
+    ))
+    // (lib.optionalAttrs (cfg.autoLogin != "") (
       let
-        dir = if (script.directory or "init.d") == "init.d" then "etc/init.d" else script.directory;
+        loginUser = cfg.autoLogin;
+        userCfg = inputs.users.users.${loginUser} or null;
+        userHome = if userCfg != null then userCfg.home or "/root" else "/root";
+        userShell = if userCfg != null then userCfg.shell or "/bin/ion" else "/bin/ion";
       in
       {
-        name = "${dir}/${name}";
-        value = {
-          text = script.text;
+        "bin/contain_login" = {
+          text = "#!/bin/ion\nexec ${userShell}";
           mode = "0755";
         };
       }
-    ) initScripts.allInitScriptsWithServices
-  ))
+    ))
+    // (lib.optionalAttrs
+      (cfg.networkingEnabled && (inputs.networking.mode == "dhcp" || inputs.networking.mode == "auto"))
+      {
+        "bin/dhcpd-quiet" = {
+          text = "#!/bin/ion\n/bin/netcfg-setup dhcpd &> ${cfg.logPath}/dhcpd.log";
+          mode = "0755";
+        };
+      }
+    )
+    // (lib.optionalAttrs (cfg.networkingEnabled && inputs.networking.mode == "static") (
+      let
+        firstIfaceName =
+          let
+            names = builtins.attrNames inputs.networking.interfaces;
+          in
+          if names != [ ] then builtins.head names else null;
+        firstIface =
+          if firstIfaceName != null then inputs.networking.interfaces.${firstIfaceName} else null;
+      in
+      lib.optionalAttrs (firstIface != null) {
+        "bin/netcfg-static-quiet" = {
+          text = "#!/bin/ion\nsleep 2\necho ${firstIface.address} > /scheme/netcfg/ifaces/eth0/addr/set\necho default via ${firstIface.gateway} > /scheme/netcfg/route/add\necho ${builtins.head inputs.networking.dns} > /scheme/netcfg/resolv/nameserver";
+          mode = "0755";
+        };
+      }
+    ))
+    # Per-interface files
+    // (builtins.foldl' (acc: entry: acc // entry) { } (
+      lib.mapAttrsToList (
+        name: iface:
+        {
+          "etc/net/${name}/ip" = {
+            text = iface.address or "";
+            mode = "0644";
+          };
+          "etc/net/${name}/netmask" = {
+            text = iface.netmask or cfg.defaultNetmask;
+            mode = "0644";
+          };
+          "etc/net/${name}/gateway" = {
+            text = iface.gateway or "";
+            mode = "0644";
+          };
+        }
+        // lib.optionalAttrs (iface ? prefixLength) {
+          "etc/net/${name}/prefix_length" = {
+            text = toString iface.prefixLength;
+            mode = "0644";
+          };
+        }
+      ) inputs.networking.interfaces
+    ))
+    # ===== NEW MODULE GENERATED FILES =====
 
-  # Activation scripts — stored as executable files in /etc/redox-system/activation.d/
-  # Executed by activate.rs during `snix system switch` in dependency order.
-  // (lib.mapAttrs' (
-    name: script:
-    {
+    # /time: hostname, timezone, hosts
+    // {
+      "etc/hostname" = {
+        text = cfg.hostname;
+        mode = "0644";
+      };
+      "etc/hosts" = {
+        text = ''
+          127.0.0.1 localhost ${cfg.hostname}
+          ::1       localhost ${cfg.hostname}
+        ''
+        + lib.optionalString (cfg.extraHosts != "") (cfg.extraHosts + "\n");
+        mode = "0644";
+      };
+      "etc/timezone" = {
+        text = cfg.timezone;
+        mode = "0644";
+      };
+      "etc/hwclock" = {
+        text = cfg.hwclock;
+        mode = "0644";
+      };
+    }
+    // (lib.optionalAttrs cfg.ntpEnabled {
+      "etc/ntp.conf" = {
+        text =
+          "# NTP configuration (generated by adios module system)\n"
+          + lib.concatMapStringsSep "\n" (server: "server ${server}") cfg.ntpServers
+          + "\n";
+        mode = "0644";
+      };
+    })
+
+    # /logging: log config
+    // (lib.optionalAttrs cfg.logToFile {
+      "etc/logging.conf" = {
+        text = lib.concatStringsSep "\n" [
+          "# RedoxOS Logging Configuration (generated by adios module system)"
+          "level=${cfg.logLevel}"
+          "kernel_level=${cfg.kernelLogLevel}"
+          "log_path=${cfg.logPath}"
+          "max_size_mb=${toString inputs.logging.maxLogSizeMB}"
+          "persist=${if inputs.logging.persistAcrossBoot then "true" else "false"}"
+        ];
+        mode = "0644";
+      };
+    })
+
+    # /security: namespace access, security policy
+    // {
+      "etc/security/namespaces" = {
+        text =
+          "# Scheme namespace access policy (generated by adios module system)\n"
+          + lib.concatStringsSep "\n" (
+            lib.mapAttrsToList (scheme: access: "${scheme}=${access}") inputs.security.namespaceAccess
+          )
+          + "\n";
+        mode = "0644";
+      };
+      "etc/security/policy" = {
+        text = lib.concatStringsSep "\n" [
+          "# Security policy (generated by adios module system)"
+          "protect_kernel_schemes=${if cfg.protectKernelSchemes then "true" else "false"}"
+          "require_passwords=${if cfg.requirePasswords then "true" else "false"}"
+          "allow_remote_root=${if cfg.allowRemoteRoot then "true" else "false"}"
+        ];
+        mode = "0644";
+      };
+      "etc/security/setuid" = {
+        text =
+          "# Setuid programs (generated by adios module system)\n"
+          + lib.concatStringsSep "\n" cfg.setuidPrograms
+          + "\n";
+        mode = "0644";
+      };
+    }
+
+    # /login_schemes: per-user namespace scheme lists for login sessions.
+    # The login binary from userutils reads this file and calls mkns() with
+    # the scheme list for the authenticating user. If no entry exists for a
+    # user, login falls back to DEFAULT_SCHEMES (26 hardcoded schemes).
+    #
+    # Format matches upstream userutils LoginConfig (login.rs):
+    #   [user_schemes.<username>]
+    #   schemes = ["scheme1", "scheme2", ...]
+    #
+    # Scheme list resolution:
+    #   - Explicit schemes attr on user  -> use that list directly
+    #   - Root (uid 0) without schemes   -> cfg.fullSchemes (27 schemes incl. proc)
+    #   - Non-root with createHome       -> cfg.restrictedSchemes (22 schemes, no irq/sys/memory/serio)
+    #   - Non-root without createHome    -> no entry (falls back to binary default)
+    // (
+      let
+        users = inputs.users.users;
+
+        # Resolve the scheme list for a user
+        resolveSchemes =
+          name: user:
+          if user ? schemes then
+            user.schemes
+          else if (user.uid or 1) == 0 then
+            cfg.fullSchemes
+          else if user.createHome or false then
+            cfg.restrictedSchemes
+          else
+            null; # No entry — login uses DEFAULT_SCHEMES
+
+        # Build per-user TOML sections
+        userSections = lib.concatStringsSep "\n" (
+          lib.filter (s: s != "") (
+            lib.mapAttrsToList (
+              name: user:
+              let
+                schemes = resolveSchemes name user;
+              in
+              if schemes == null then
+                ""
+              else
+                "[user_schemes.${name}]\n"
+                + "schemes = ["
+                + lib.concatMapStringsSep ", " (s: ''"${s}"'') schemes
+                + "]\n"
+            ) users
+          )
+        );
+      in
+      {
+        "etc/login_schemes.toml" = {
+          text = lib.concatStringsSep "\n" [
+            "# Login namespace schemes (generated by adios module system)"
+            "# Overrides the hardcoded DEFAULT_SCHEMES in userutils login binary."
+            "# Each user gets a namespace containing only the listed schemes."
+            ""
+            userSections
+          ];
+          mode = "0644";
+        };
+      }
+    )
+
+    # /programs: ion initrc, helix config, editor
+    // {
+      "etc/ion/initrc" = {
+        text =
+          let
+            ion = cfg.ionConfig;
+            # Ion-compatible environment setup.
+            # Ion uses `let VAR = value` + `export VAR`, not bash's `export VAR=value`.
+            # HOME, USER, SHELL are already set by login — don't override.
+            envVars = {
+              HOSTNAME = cfg.hostname;
+              TZ = cfg.timezone;
+              EDITOR = cfg.defaultEditor;
+              LANG = cfg.localeLang;
+              TERM = inputs.environment.variables.TERM or "xterm-256color";
+            }
+            // (lib.optionalAttrs (cfg.localeLcAll != "") { LC_ALL = cfg.localeLcAll; })
+            // (lib.optionalAttrs (cfg.localeLcCollate != "") { LC_COLLATE = cfg.localeLcCollate; })
+            // (lib.optionalAttrs (cfg.localeLcCtype != "") { LC_CTYPE = cfg.localeLcCtype; })
+            // (lib.optionalAttrs (cfg.localeLcMessages != "") { LC_MESSAGES = cfg.localeLcMessages; })
+            // (lib.optionalAttrs (cfg.localeLcMonetary != "") { LC_MONETARY = cfg.localeLcMonetary; })
+            // (lib.optionalAttrs (cfg.localeLcNumeric != "") { LC_NUMERIC = cfg.localeLcNumeric; })
+            // (lib.optionalAttrs (cfg.localeLcTime != "") { LC_TIME = cfg.localeLcTime; })
+            // (lib.filterAttrs (
+              n: _: n != "HOME" && n != "USER" && n != "SHELL" && n != "PATH"
+            ) inputs.environment.variables);
+            envLines = lib.concatStringsSep "\n" (
+              lib.mapAttrsToList (name: value: "let ${name} = \"${value}\"\nexport ${name}") envVars
+            );
+            # PATH needs special handling — set directly
+            profilePath = "/nix/system/profile/bin:/bin:/usr/bin";
+            pathSetup = ''
+              let PATH = "${profilePath}"
+              export PATH
+            ''
+            + lib.optionalString cfg.hasBinaryCache ''
+              let PATH = "/nix/var/snix/profiles/default/bin:$PATH"
+              export PATH
+            '';
+            # Aliases that use $ must be in single quotes to prevent Ion expansion at source time.
+            # Only include simple aliases here; complex ones go in ion.initExtra.
+            simpleAliases = lib.filterAttrs (n: v: !(lib.hasInfix "$" v)) inputs.environment.shellAliases;
+            aliasLines = lib.concatStringsSep "\n" (
+              lib.mapAttrsToList (name: value: ''alias ${name} = "${value}"'') simpleAliases
+            );
+          in
+          lib.concatStringsSep "\n" (
+            [
+              "# Ion shell initrc (generated by adios module system)"
+              envLines
+              pathSetup
+              aliasLines
+            ]
+            ++ lib.optional (ion.initExtra or "" != "") (ion.initExtra)
+            ++ [
+              # PROMPT must be set LAST so all variables exist.
+              ''let PROMPT = "${ion.prompt}"''
+            ]
+          );
+        mode = "0644";
+      };
+    }
+    // (lib.optionalAttrs cfg.helixConfig.enable {
+      "etc/helix/config.toml" = {
+        text = ''
+          # Helix editor config (generated by adios module system)
+          theme = "${cfg.helixConfig.theme}"
+        '';
+        mode = "0644";
+      };
+    })
+    // (lib.optionalAttrs cfg.httpdConfig.enable {
+      "etc/httpd.conf" = {
+        text = lib.concatStringsSep "\n" [
+          "# HTTP server config (generated by adios module system)"
+          "port=${toString cfg.httpdConfig.port}"
+          "root_dir=${cfg.httpdConfig.rootDir}"
+        ];
+        mode = "0644";
+      };
+    })
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Typed service module config files
+    # ═══════════════════════════════════════════════════════════════════
+
+    # /services.ssh: SSH server config — reads from cfg (adios-validated)
+    // (lib.optionalAttrs cfg.sshEnabled {
+      "etc/ssh/sshd_config" = {
+        text = lib.concatStringsSep "\n" [
+          "# SSH server configuration (generated by adios module system)"
+          "# Service module: services.ssh"
+          "Port ${toString cfg.sshOpts.port}"
+          "ListenAddress ${cfg.sshOpts.listenAddress}"
+          "AddressFamily inet"
+          "UsePAM no"
+          "PasswordAuthentication yes"
+          "PermitEmptyPasswords no"
+          "HostKey ${cfg.sshOpts.hostKeyEd25519Path}"
+          "HostKey ${cfg.sshOpts.hostKeyRsaPath}"
+          "HostKey ${cfg.sshOpts.hostKeyEcdsaPath}"
+          "PermitRootLogin ${if cfg.sshOpts.permitRootLogin then "yes" else "no"}"
+          "AuthorizedKeysFile ${cfg.sshOpts.authorizedKeysPath}"
+          "Subsystem sftp /bin/sftp-server"
+        ];
+        mode = "0644";
+      };
+      "etc/ssh/authorized_keys" = {
+        text = "# Authorized SSH public keys (one per line)\n";
+        mode = "0600";
+      };
+      "etc/ssh/ssh_host_ed25519_key" = {
+        source = sshHostKeys + "/ssh_host_ed25519_key";
+        mode = "0600";
+      };
+      "etc/ssh/ssh_host_ed25519_key.pub" = {
+        source = sshHostKeys + "/ssh_host_ed25519_key.pub";
+        mode = "0644";
+      };
+      "etc/ssh/ssh_host_rsa_key" = {
+        source = sshHostKeys + "/ssh_host_rsa_key";
+        mode = "0600";
+      };
+      "etc/ssh/ssh_host_rsa_key.pub" = {
+        source = sshHostKeys + "/ssh_host_rsa_key.pub";
+        mode = "0644";
+      };
+      "etc/ssh/ssh_host_ecdsa_key" = {
+        source = sshHostKeys + "/ssh_host_ecdsa_key";
+        mode = "0600";
+      };
+      "etc/ssh/ssh_host_ecdsa_key.pub" = {
+        source = sshHostKeys + "/ssh_host_ecdsa_key.pub";
+        mode = "0644";
+      };
+    })
+
+    # /services.httpd: HTTP server config — reads from cfg (adios-validated)
+    // (lib.optionalAttrs cfg.svcHttpdEnabled {
+      "etc/httpd/config" = {
+        text = lib.concatStringsSep "\n" [
+          "# HTTP server configuration (generated by adios module system)"
+          "# Service module: services.httpd"
+          "port=${toString cfg.svcHttpdOpts.port}"
+          "root_dir=${cfg.svcHttpdOpts.rootDir}"
+        ];
+        mode = "0644";
+      };
+    })
+
+    # /power: ACPI config
+    // (lib.optionalAttrs cfg.acpiEnabled {
+      "etc/acpi/config" = {
+        text = lib.concatStringsSep "\n" [
+          "# ACPI power management (generated by adios module system)"
+          "power_action=${cfg.powerAction}"
+          "idle_action=${inputs.power.idleAction}"
+          "idle_timeout_minutes=${toString inputs.power.idleTimeoutMinutes}"
+          "reboot_on_panic=${if cfg.rebootOnPanic then "true" else "false"}"
+        ];
+        mode = "0644";
+      };
+    })
+
+    # /graphics: orbterm config (prevents EACCES on first launch)
+    #
+    # orbterm uses xdg::BaseDirectories to find its config file.
+    # XDG_CONFIG_HOME is set to /etc by the init script. Without a
+    # pre-created config, orbterm tries to create /etc/orbterm/config
+    # which fails with EACCES for non-root users.
+    # Pre-creating it with defaults avoids the write attempt entirely.
+    // (lib.optionalAttrs (cfg.graphicsEnabled && pkgs ? orbterm) {
+      "etc/orbterm/config" = {
+        text = ''
+          # orbterm configuration (generated by adios module system)
+          # See https://gitlab.redox-os.org/redox-os/orbterm
+          font = ""
+          font_bold = ""
+        '';
+        mode = "0644";
+      };
+    })
+
+    # /snix: scheme daemon and sandbox configuration
+    // (
+      let
+        storedEnabled = inputs.snix.stored.enable;
+        profiledEnabled = inputs.snix.profiled.enable;
+        sandboxEnabled = inputs.snix.sandbox;
+      in
+      lib.optionalAttrs (storedEnabled || profiledEnabled || !sandboxEnabled) {
+        "etc/snix/config" = {
+          text = lib.concatStringsSep "\n" (
+            [ "# snix configuration (generated by adios module system)" ]
+            ++ lib.optional storedEnabled "stored=enabled"
+            ++ lib.optional profiledEnabled "profiled=enabled"
+            ++ [ "sandbox=${if sandboxEnabled then "enabled" else "disabled"}" ]
+          );
+          mode = "0644";
+        };
+      }
+    )
+
+    # System manifest (base — file hashes merged at rootTree build time)
+    // {
+      "etc/redox-system/manifest.json" = {
+        source = manifestJson;
+        mode = "0644";
+      };
+    }
+
+    # Default configuration.nix for `snix system rebuild`
+    # This comes from the shared image-generation pipeline, so every image
+    # built through mkSystem — including self-hosting profiles — gets the
+    # same editable /etc/redox-system/configuration.nix on disk.
+    # Users can edit this file on the running system, then run
+    # `snix system rebuild` to apply changes declaratively.
+    // {
+      "etc/redox-system/configuration.nix" = {
+        text = ''
+          # /etc/redox-system/configuration.nix
+          #
+          # Declarative system configuration for Redox OS.
+          # Edit this file and run `snix system rebuild` to apply changes.
+          #
+          # Only set the options you want to change — everything else keeps
+          # its current value from the running system.
+          #
+          # After editing:
+          #   snix system rebuild --dry-run   # Preview changes
+          #   snix system rebuild             # Apply changes
+          #
+          # Config-only changes (hostname, timezone, etc.) are applied locally.
+          # Package changes require the build bridge (host builds packages):
+          #   nix run .#run-redox-shared   (start VM with shared filesystem)
+          #   nix run .#build-bridge       (start host-side build daemon)
+          #   snix system rebuild          (auto-detects bridge)
+          #
+          # Available options:
+          #   hostname, timezone, packages, files,
+          #   networking.{enable, mode, dns, defaultRouter, remoteShellEnable},
+          #   graphics.{enable, resolution, virtualTerminal, loginCommand},
+          #   security.{protectKernelSchemes, requirePasswords, allowRemoteRoot},
+          #   logging.{level, kernelLevel, logToFile, logPath, maxLogSizeMB},
+          #   power.{acpiEnabled, powerAction, idleAction, idleTimeoutMinutes,
+          #          rebootOnPanic},
+          #   users.{name = { uid, gid, home, shell, password, createHome }},
+          #   programs.{editor, ion.{prompt, initExtra}, helix.{enable, theme},
+          #             cargo.{buildJobs, home}},
+          #   services.ssh.{enable, port, permitRootLogin, listenAddress},
+          #   services.httpd.{enable, port, rootDir},
+          #   services.getty.{enable, device, extraArgs},
+          #   services.exampled.{enable, schemeName},
+          #   boot.{diskSizeMB, espSizeMB, espLabel, initfsSizeMB,
+          #         kernelSyscallDebug},
+          #   system.{name, version}
+
+          {
+            hostname = "${cfg.hostname}";
+            timezone = "${cfg.timezone}";
+
+            networking = {
+              enable = ${if cfg.networkingEnabled then "true" else "false"};
+              mode = "${inputs.networking.mode}";
+              dns = [ ${lib.concatMapStringsSep " " (d: ''"${d}"'') inputs.networking.dns} ];
+            };
+
+            security = {
+              protectKernelSchemes = ${if cfg.protectKernelSchemes then "true" else "false"};
+              requirePasswords = ${if cfg.requirePasswords then "true" else "false"};
+            };
+
+            # packages = [
+            #   "ripgrep"
+            #   "fd"
+            #   "helix"
+            # ];
+
+            # services.ssh = {
+            #   enable = true;
+            #   port = 22;
+            #   permitRootLogin = false;
+            # };
+
+            # services.httpd = {
+            #   enable = true;
+            #   port = 8080;
+            #   rootDir = "/var/www";
+            # };
+            #
+            # files = {
+            #   "etc/my-app/config.txt" = {
+            #     text = "hello from rebuild\n";
+            #     mode = "0644"; # octal string, applied during live rebuild
+            #   };
+            # };
+            # Keys must be root-relative (no leading slash) and must not contain
+            # '.' or '..' path segments.
+          }
+        '';
+        mode = "0644";
+      };
+    }
+
+    # Self-hosting: cargo config + environment setup
+    // (lib.optionalAttrs cfg.hasSelfHosting {
+      # Global cargo config: tells cargo where rustc is and how to link for Redox
+      #
+      # Uses the CC wrapper (/nix/system/profile/bin/cc) as linker because:
+      # 1. It adds CRT objects (crt0.o, crti.o, crtn.o) that ld.lld alone misses
+      # 2. It adds libc, libgcc, and dynamic linker configuration
+      # 3. It handles the --export-dynamic + version script for DSO symbol export
+      #
+      # The CC wrapper is a bash script that wraps clang→ld.lld with all the
+      # sysroot library paths and CRT files.
+      "${lib.removePrefix "/" cfg.cargoConfig.home}/config.toml" = {
+        text = ''
+          # Cargo configuration for on-guest Rust compilation
+          # Generated by the Redox module system
+
+          [build]
+          target = "${cfg.systemTarget}"
+
+          [target.${cfg.systemTarget}]
+          linker = "/nix/system/profile/bin/cc"
+          rustflags = [
+            "-C", "link-arg=-L/usr/lib/redox-sysroot/lib",
+          ]
+
+          # Disable cargo's global cache auto-GC — relibc's flock() is
+          # unimplemented (error 3850) and cargo sometimes hangs trying
+          # to acquire the advisory lock on .package-cache.
+          [gc]
+          auto = false
+        '';
+        mode = "0644";
+      };
+    })
+
+    # Init script files (raw initScripts + rendered structured services)
+    // (builtins.listToAttrs (
+      lib.mapAttrsToList (
+        name: script:
+        let
+          dir = if (script.directory or "init.d") == "init.d" then "etc/init.d" else script.directory;
+        in
+        {
+          name = "${dir}/${name}";
+          value = {
+            text = script.text;
+            mode = "0755";
+          };
+        }
+      ) initScripts.allInitScriptsWithServices
+    ))
+
+    # Activation scripts — stored as executable files in /etc/redox-system/activation.d/
+    # Executed by activate.rs during `snix system switch` in dependency order.
+    // (lib.mapAttrs' (name: script: {
       name = "etc/redox-system/activation.d/${name}";
       value = {
         text = "#!/bin/sh\n${script.text}";
         mode = "0755";
       };
+    }) (inputs.activation.scripts or { }))
+
+    # Standard /etc files expected by upstream Redox programs
+    // {
+      "etc/motd" = {
+        text = cfg.motd;
+        mode = "0644";
+      };
+      "etc/shells" = {
+        text =
+          lib.concatStringsSep "\n" (
+            [
+              "/bin/ion"
+              "/bin/sh"
+            ]
+            ++ lib.optional (cfg.hasBash or false) "/bin/bash"
+            ++ cfg.extraShells
+          )
+          + "\n";
+        mode = "0644";
+      };
     }
-  ) (inputs.activation.scripts or { }))
 
-  # Standard /etc files expected by upstream Redox programs
-  // {
-    "etc/motd" = {
-      text = cfg.motd;
-      mode = "0644";
-    };
-    "etc/shells" = {
-      text = lib.concatStringsSep "\n" (
-        [ "/bin/ion" "/bin/sh" ]
-        ++ lib.optional (cfg.hasBash or false) "/bin/bash"
-        ++ cfg.extraShells
-      ) + "\n";
-      mode = "0644";
-    };
-  }
+    # User-declared etc files (environment.etc) — applied LAST so they override built-ins.
+    # Like NixOS environment.etc: keys are paths relative to / (e.g. "etc/motd").
+    # Each entry has text or source content and optional mode (default: 0644).
+    # /iroh: P2P networking config
+    # TLS root certificates — needed by any program using HTTPS (snix, curl, etc.)
+    # Installs the concatenated Mozilla CA bundle so rustls-native-certs and
+    # openssl can find roots via SSL_CERT_FILE (set in /etc/profile above).
+    // (lib.optionalAttrs (cfg.networkingEnabled && pkgs ? "ca-certificates") {
+      "etc/ssl/certs/ca-certificates.crt" = {
+        source = pkgs."ca-certificates" + "/etc/ssl/certs/ca-certificates.crt";
+        mode = "0644";
+      };
+    })
 
-  # User-declared etc files (environment.etc) — applied LAST so they override built-ins.
-  # Like NixOS environment.etc: keys are paths relative to / (e.g. "etc/motd").
-  # Each entry has text or source content and optional mode (default: 0644).
-  # /iroh: P2P networking config
-  # TLS root certificates — needed by any program using HTTPS (snix, curl, etc.)
-  # Installs the concatenated Mozilla CA bundle so rustls-native-certs and
-  # openssl can find roots via SSL_CERT_FILE (set in /etc/profile above).
-  // (lib.optionalAttrs (cfg.networkingEnabled && pkgs ? "ca-certificates") {
-    "etc/ssl/certs/ca-certificates.crt" = {
-      source = pkgs."ca-certificates" + "/etc/ssl/certs/ca-certificates.crt";
-      mode = "0644";
-    };
-  })
+    // (lib.optionalAttrs cfg.irohEnabled {
+      "etc/iroh/peers.json" = {
+        text = builtins.toJSON (
+          builtins.listToAttrs (
+            map (p: {
+              name = p.name;
+              value = p.nodeId;
+            }) (cfg.irohOpts.peers or [ ])
+          )
+        );
+        mode = "0644";
+      };
+    })
 
-  // (lib.optionalAttrs cfg.irohEnabled {
-    "etc/iroh/peers.json" = {
-      text = builtins.toJSON (
-        builtins.listToAttrs (
-          map (p: { name = p.name; value = p.nodeId; })
-            (cfg.irohOpts.peers or [ ])
-        )
-      );
-      mode = "0644";
-    };
-  })
-
-  // (lib.mapAttrs (
-    name: entry:
-    let
-      hasSource = (entry ? source) && entry.source != null;
-      hasText = (entry ? text) && entry.text != null;
-    in
-    (lib.optionalAttrs hasText { text = entry.text; })
-    // (lib.optionalAttrs hasSource { source = entry.source; })
-    // { mode = entry.mode or "0644"; }
-  ) (inputs.environment.etc or { }));
+    // (lib.mapAttrs (
+      name: entry:
+      let
+        hasSource = (entry ? source) && entry.source != null;
+        hasText = (entry ? text) && entry.text != null;
+      in
+      (lib.optionalAttrs hasText { text = entry.text; })
+      // (lib.optionalAttrs hasSource { source = entry.source; })
+      // {
+        mode = entry.mode or "0644";
+      }
+    ) (inputs.environment.etc or { }));
 
 in
 

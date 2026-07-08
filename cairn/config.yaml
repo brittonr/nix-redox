@@ -1,0 +1,36 @@
+project:
+  name: redox-nix
+  description: Redox OS built from source with Nix, including kernel/userspace/image ingredients for OnixOS and Mantle substrate materialization
+  language: nix-rust
+  schema: spec-driven
+
+domains:
+  - substrate-ingredients
+  - system-builder
+  - module-merge
+  - services
+  - networking
+  - documentation
+  - testing
+
+context: |
+  Redox owns the low-level substrate: kernel, relibc, sysroot, drivers, RedoxFS,
+  init/initfs, package recipes, image assembly tools, and VM runner mechanics.
+  OnixOS may consume Redox as a substrate while keeping system-layer semantics in
+  Nickel/onix-modules. Redox should expose stable substrate ingredients and native
+  primitive schemas, not become dependent on Onix or require external frontends to
+  consume Redox Adios modules as their system contract.
+
+rules:
+  proposal:
+    - "Name the substrate ingredient surface and compatibility boundary explicitly."
+    - "State non-goals for Onix-owned system semantics, guest-side snix, and Redox Adios as an external module API."
+  specs:
+    - "Use normative MUST/SHALL/SHOULD/MAY wording and concrete GIVEN/WHEN/THEN scenarios."
+    - "Include both positive compatibility scenarios and negative fail-closed scenarios for external substrate inputs."
+  design:
+    - "Separate pure manifest/schema behavior from Nix build shells and VM execution."
+    - "Document Redox/Ion/runtime differences when OnixOS substrate lowerers could otherwise assume POSIX or NixOS behavior."
+  tasks:
+    - "Every checkbox must include [serial] or [parallel] and reference a requirement id."
+    - "Keep implementation, tests, docs, and validation evidence as separate tasks."

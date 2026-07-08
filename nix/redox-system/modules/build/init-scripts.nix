@@ -12,7 +12,12 @@
 # Services are topologically sorted by `after` dependencies and assigned
 # numeric prefixes (10-79). Raw initScripts keep their explicit names.
 
-{ lib, cfg, inputs, pkgs }:
+{
+  lib,
+  cfg,
+  inputs,
+  pkgs,
+}:
 
 let
   # ═══════════════════════════════════════════════════════════════════
@@ -56,7 +61,12 @@ let
 
   # Validate: all `after` references exist in the service set
   serviceNames = builtins.attrNames allDeclaredServices;
-  serviceNameSet = builtins.listToAttrs (map (n: { name = n; value = true; }) serviceNames);
+  serviceNameSet = builtins.listToAttrs (
+    map (n: {
+      name = n;
+      value = true;
+    }) serviceNames
+  );
 
   validateAfterRefs =
     let
@@ -100,17 +110,12 @@ let
         }:
         let
           # Find nodes with zero in-degree (sorted for determinism)
-          ready = builtins.sort builtins.lessThan (
-            builtins.filter (n: degrees.${n} == 0) remaining
-          );
+          ready = builtins.sort builtins.lessThan (builtins.filter (n: degrees.${n} == 0) remaining);
         in
         if remaining == [ ] then
           result
         else if ready == [ ] then
-          throw (
-            "Service dependency cycle detected among: "
-            + lib.concatStringsSep ", " remaining
-          )
+          throw ("Service dependency cycle detected among: " + lib.concatStringsSep ", " remaining)
         else
           let
             # Remove ready nodes from remaining
@@ -193,62 +198,64 @@ let
       requiresWeak ? [ ],
     }:
     let
-      # Map service type to TOML type field
+      tomlString = value: builtins.toJSON value;
+
+      # Map service type to TOML type field.
       tomlType =
         if svc.type == "scheme" then
-          ''{ scheme = "${svc.args}" }''
+          "{ scheme = ${tomlString svc.args} }"
         else if svc.type == "daemon" then
-          ''"notify"''
+          tomlString "notify"
         else if svc.type == "oneshot" then
-          ''"oneshot"''
+          tomlString "oneshot"
         else if svc.type == "nowait" then
-          ''"oneshot_async"''
+          tomlString "oneshot_async"
         else
           throw "Unknown service type: ${svc.type}";
 
-      # Build args array — scheme services pass scheme name as first arg
-      argsArray =
-        if svc.type == "scheme" then
-          ''["${svc.args}"]''
+      # Build args array. Structured argv preserves argument boundaries;
+      # legacy args keep the old space-splitting behavior.
+      argsList =
+        if svc ? argv then
+          svc.argv
+        else if svc.type == "scheme" then
+          [ svc.args ]
         else if svc.args == "" then
-          "[]"
+          [ ]
         else
-          let
-            parts = lib.splitString " " svc.args;
-          in
-          "[" + lib.concatMapStringsSep ", " (a: ''"${a}"'') parts + "]";
+          lib.splitString " " svc.args;
+      argsArray = builtins.toJSON argsList;
 
       # Use full path if command starts with /; otherwise strip to basename
       # (initfs commands are in PATH, rootfs commands may need full path)
       cmdName = if lib.hasPrefix "/" svc.command then svc.command else builtins.baseNameOf svc.command;
 
       # [unit] section lines
-      unitLines =
-        [ ''description = "${svc.description}"'' ]
-        ++ lib.optional (!defaultDependencies) "default_dependencies = false"
-        ++ lib.optional (requiresWeak != [ ]) (
-          "requires_weak = ["
-          + lib.concatMapStringsSep ", " (d: ''"${d}"'') requiresWeak
-          + "]"
-        );
+      unitLines = [
+        "description = ${tomlString svc.description}"
+      ]
+      ++ lib.optional (!defaultDependencies) "default_dependencies = false"
+      ++ lib.optional (requiresWeak != [ ]) ("requires_weak = ${builtins.toJSON requiresWeak}");
 
       # [service] section lines
-      serviceLines =
-        [
-          ''cmd = "${cmdName}"''
-          "args = ${argsArray}"
-          "type = ${tomlType}"
-        ]
-        ++ lib.optional (svc.environment or { } != { }) (
-          "envs = { "
-          + lib.concatStringsSep ", " (lib.mapAttrsToList (k: v: ''${k} = "${v}"'') svc.environment)
-          + " }"
-        );
+      serviceLines = [
+        "cmd = ${tomlString cmdName}"
+        "args = ${argsArray}"
+        "type = ${tomlType}"
+      ]
+      ++ lib.optional (svc.environment or { } != { }) (
+        "envs = { "
+        + lib.concatStringsSep ", " (lib.mapAttrsToList (k: v: "${k} = ${tomlString v}") svc.environment)
+        + " }"
+      );
     in
     lib.concatStringsSep "\n" (
       [ "[unit]" ]
       ++ unitLines
-      ++ [ "" "[service]" ]
+      ++ [
+        ""
+        "[service]"
+      ]
       ++ serviceLines
     );
 
@@ -257,7 +264,8 @@ let
   # Rootfs services get rootfsBaseEnv merged into their envs so
   # PATH, TERM, HOME etc. are available to all rootfs daemons.
   renderedServices = builtins.listToAttrs (
-    map (entry:
+    map (
+      entry:
       let
         isRootfs = (entry.service.wantedBy or "rootfs") == "rootfs";
         mergedEnv =
@@ -265,7 +273,9 @@ let
             rootfsBaseEnv // (entry.service.environment or { })
           else
             entry.service.environment or { };
-        svcWithEnv = entry.service // { environment = mergedEnv; };
+        svcWithEnv = entry.service // {
+          environment = mergedEnv;
+        };
       in
       {
         name = "${entry.numStr}_${entry.name}.service";
@@ -274,11 +284,7 @@ let
             svc = svcWithEnv;
             requiresWeak = map (dep: serviceFilenameMap.${dep}) (entry.service.after or [ ]);
           };
-          directory =
-            if isRootfs then
-              "usr/lib/init.d"
-            else
-              "etc/init.d";
+          directory = if isRootfs then "usr/lib/init.d" else "etc/init.d";
         };
       }
     ) autoNumbered
@@ -315,7 +321,8 @@ let
     HOME = cfg.defaultUser.home;
     USER = cfg.defaultUser.name;
     PATH = "/nix/system/profile/bin:${inputs.environment.variables.PATH or "/bin:/usr/bin"}";
-  } // lib.optionalAttrs cfg.hasSelfHosting (
+  }
+  // lib.optionalAttrs cfg.hasSelfHosting (
     let
       basePaths = [
         "/lib"
@@ -333,35 +340,32 @@ let
 
   # Boot banner — legacy script using only echo commands (supported by
   # the new init's script parser).
-  rootfsEnvScript =
-    {
-      "99_environment" = {
-        text = lib.concatStringsSep "\n" (
-          [ "# Boot banner" ]
-          ++ map (line: "echo ${line}") (
-            [ "" ]
-            ++ lib.splitString "\n" (lib.removeSuffix "\n" cfg.bootBanner)
-            ++ [ "" ]
-          )
-        );
-        directory = "usr/lib/init.d";
-      };
-    }
-    # For non-userutils profiles: start the test/shell script via
-    # a oneshot_async service (replaces the old init.toml [[services]]).
-    // lib.optionalAttrs (!cfg.userutilsInstalled) {
-      "99_startup.service" = {
-        text = lib.concatStringsSep "\n" [
-          "[unit]"
-          ''description = "Startup shell"''
-          ""
-          "[service]"
-          ''cmd = "/startup.sh"''
-          ''type = "oneshot_async"''
-        ];
-        directory = "usr/lib/init.d";
-      };
+  rootfsEnvScript = {
+    "99_environment" = {
+      text = lib.concatStringsSep "\n" (
+        [ "# Boot banner" ]
+        ++ map (line: "echo ${line}") (
+          [ "" ] ++ lib.splitString "\n" (lib.removeSuffix "\n" cfg.bootBanner) ++ [ "" ]
+        )
+      );
+      directory = "usr/lib/init.d";
     };
+  }
+  # For non-userutils profiles: start the test/shell script via
+  # a oneshot_async service (replaces the old init.toml [[services]]).
+  // lib.optionalAttrs (!cfg.userutilsInstalled) {
+    "99_startup.service" = {
+      text = lib.concatStringsSep "\n" [
+        "[unit]"
+        ''description = "Startup shell"''
+        ""
+        "[service]"
+        ''cmd = "/startup.sh"''
+        ''type = "oneshot_async"''
+      ];
+      directory = "usr/lib/init.d";
+    };
+  };
 
   # Merge: raw scripts + rendered services + rootfs env.
   # Raw scripts take precedence on name collision.
@@ -507,40 +511,39 @@ let
   graphicsServiceFiles = builtins.attrNames graphicsServices;
 
   # --- Driver services ---
-  driverServices =
-    {
-      "40_hwd.service" = ''
-        [unit]
-        description = "Hardware manager"
-        requires_weak = ["30_lived.service"]
+  driverServices = {
+    "40_hwd.service" = ''
+      [unit]
+      description = "Hardware manager"
+      requires_weak = ["30_lived.service"]
 
-        [service]
-        cmd = "hwd"
-        inherit_envs = ["RSDP_ADDR", "RSDP_SIZE"]
-        type = "notify"
-      '';
+      [service]
+      cmd = "hwd"
+      inherit_envs = ["RSDP_ADDR", "RSDP_SIZE"]
+      type = "notify"
+    '';
 
-      "40_pcid-spawner.service" = ''
-        [unit]
-        description = "PCI driver spawner"
-        requires_weak = ["30_lived.service", "40_hwd.service"]
+    "40_pcid-spawner.service" = ''
+      [unit]
+      description = "PCI driver spawner"
+      requires_weak = ["30_lived.service", "40_hwd.service"]
 
-        [service]
-        cmd = "pcid-spawner"
-        args = ["--initfs"]
-        type = "oneshot"
-      '';
-    }
-    // lib.optionalAttrs cfg.initfsEnableGraphics {
-      "40_ps2d.service" = ''
-        [unit]
-        description = "PS/2 keyboard and mouse daemon"
+      [service]
+      cmd = "pcid-spawner"
+      args = ["--initfs"]
+      type = "oneshot"
+    '';
+  }
+  // lib.optionalAttrs cfg.initfsEnableGraphics {
+    "40_ps2d.service" = ''
+      [unit]
+      description = "PS/2 keyboard and mouse daemon"
 
-        [service]
-        cmd = "ps2d"
-        type = "notify"
-      '';
-    };
+      [service]
+      cmd = "ps2d"
+      type = "notify"
+    '';
+  };
 
   driverServiceFiles = builtins.attrNames driverServices;
 
@@ -593,41 +596,47 @@ let
     "ramfs@logging.service"
   ];
 
-  initfsTargetReqs =
-    [ "50_redoxfs.service" ]
-    ++ lib.optional cfg.initfsEnableGraphics "20_graphics.target"
-    ++ lib.optional (cfg.usbEnabled && !cfg.initfsEnableGraphics) "19_inputd.service";
+  initfsTargetReqs = [
+    "50_redoxfs.service"
+  ]
+  ++ lib.optional cfg.initfsEnableGraphics "20_graphics.target"
+  ++ lib.optional (cfg.usbEnabled && !cfg.initfsEnableGraphics) "19_inputd.service";
 
-  targetFiles =
-    {
-      "00_runtime.target" = ''
-        [unit]
-        description = "Core runtime services"
-        default_dependencies = false
-        requires_weak = [${lib.concatMapStringsSep ", " (r: ''"${r}"'') (lib.sort builtins.lessThan runtimeTargetReqs)}]
-      '';
+  targetFiles = {
+    "00_runtime.target" = ''
+      [unit]
+      description = "Core runtime services"
+      default_dependencies = false
+      requires_weak = [${
+        lib.concatMapStringsSep ", " (r: ''"${r}"'') (lib.sort builtins.lessThan runtimeTargetReqs)
+      }]
+    '';
 
-      "40_drivers.target" = let
+    "40_drivers.target" =
+      let
         allDriverDeps = lib.sort builtins.lessThan (driverServiceFiles ++ [ "30_lived.service" ]);
-      in ''
+      in
+      ''
         [unit]
         description = "Initfs drivers"
         requires_weak = [${lib.concatMapStringsSep ", " (r: ''"${r}"'') allDriverDeps}]
       '';
 
-      "90_initfs.target" = ''
-        [unit]
-        description = "Initfs boot complete"
-        requires_weak = [${lib.concatMapStringsSep ", " (r: ''"${r}"'') initfsTargetReqs}]
-      '';
-    }
-    // lib.optionalAttrs cfg.initfsEnableGraphics {
-      "20_graphics.target" = ''
-        [unit]
-        description = "Graphics and input subsystem"
-        requires_weak = [${lib.concatMapStringsSep ", " (r: ''"${r}"'') (lib.sort builtins.lessThan graphicsServiceFiles)}]
-      '';
-    };
+    "90_initfs.target" = ''
+      [unit]
+      description = "Initfs boot complete"
+      requires_weak = [${lib.concatMapStringsSep ", " (r: ''"${r}"'') initfsTargetReqs}]
+    '';
+  }
+  // lib.optionalAttrs cfg.initfsEnableGraphics {
+    "20_graphics.target" = ''
+      [unit]
+      description = "Graphics and input subsystem"
+      requires_weak = [${
+        lib.concatMapStringsSep ", " (r: ''"${r}"'') (lib.sort builtins.lessThan graphicsServiceFiles)
+      }]
+    '';
+  };
 
   # --- Combine all initfs files ---
   defaultInitScriptFiles =
@@ -647,13 +656,17 @@ let
   # Exported: service metadata for manifest
   # ═══════════════════════════════════════════════════════════════════
   # Full service declarations (for manifest.nix to embed in manifest JSON)
-  declaredServicesForManifest = lib.mapAttrs (
-    name: svc: {
-      inherit (svc) description command type args wantedBy;
-      environment = svc.environment or { };
-      after = svc.after or [ ];
-    }
-  ) allDeclaredServices;
+  declaredServicesForManifest = lib.mapAttrs (name: svc: {
+    inherit (svc)
+      description
+      command
+      type
+      args
+      wantedBy
+      ;
+    environment = svc.environment or { };
+    after = svc.after or [ ];
+  }) allDeclaredServices;
 
 in
 

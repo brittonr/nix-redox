@@ -22,8 +22,12 @@ t.struct "Service" {
     "nowait"
     "scheme"
   ];
-  # Extra arguments (for scheme: the scheme name; for others: CLI args)
+  # Extra arguments in legacy string form (for scheme: the scheme name; for others: CLI args).
+  # Kept for existing profiles; new substrate consumers should prefer argv.
   args = t.string;
+  # Structured argument vector. When present, init rendering uses these exact
+  # elements instead of splitting legacy args on spaces.
+  argv = t.optionalAttr (t.listOf t.string);
   # Which init phase should start this service:
   #   initfs  — early boot (before rootfs mount)
   #   rootfs  — after rootfs is mounted

@@ -34,6 +34,11 @@ in
       ];
       description = "Directories to create in the root filesystem";
     };
+    substrateDirectories = {
+      type = t.listOf t.string;
+      default = [ ];
+      description = "Additional filesystem directories supplied by the public Redox substrate primitive plan";
+    };
     devSymlinks = {
       type = t.attrsOf t.string;
       default = {
@@ -45,12 +50,32 @@ in
       };
       description = "/dev symlinks (name → target)";
     };
+    extraDevSymlinks = {
+      type = t.attrsOf t.string;
+      default = { };
+      description = "Additional /dev symlinks supplied by substrate primitive plans";
+    };
     specialSymlinks = {
       type = t.attrsOf t.string;
       default = {
         "bin/sh" = "/bin/ion";
       };
       description = "Special symlinks (path → target)";
+    };
+    extraSpecialSymlinks = {
+      type = t.attrsOf t.string;
+      default = { };
+      description = "Additional special symlinks supplied by substrate primitive plans";
+    };
+    extraFiles = {
+      type = t.attrsOf (
+        t.struct "ExtraFile" {
+          text = t.string;
+          mode = t.optionalAttr t.string;
+        }
+      );
+      default = { };
+      description = "Extra generated files supplied by substrate primitive plans (relative path → text/mode)";
     };
     extraPaths = {
       type = t.listOf (
