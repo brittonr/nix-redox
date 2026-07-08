@@ -77,6 +77,47 @@ in
 The checked fixture in `examples/substrate-consumer/` uses this shape and imports
 only the public substrate value supplied by the caller.
 
+## Reproducible VM proof artifacts
+
+The repo-owned VM proof fixture lives in `examples/substrate-vm-proof/`. It also
+consumes only the public substrate value supplied by the caller, then requests a
+VM artifact set with `image.vmRunner = "qemu"`.
+
+Build the proof artifacts with:
+
+```bash
+nix build .#redox-substrate-vm-proof -L
+```
+
+The output contains:
+
+- `kernel` — Redox kernel from the built disk image;
+- `initfs` — Redox initfs payload;
+- `redoxfs.img` — RedoxFS image;
+- `disk.img` — bootable VM disk image;
+- `run-redox-qemu` — headless QEMU runner for manual proof execution;
+- `README.txt` — output-local claim boundary summary.
+
+For focused checks that do not boot QEMU, run:
+
+```bash
+nix build \
+  .#checks.x86_64-linux.substrate-vm-proof-artifact-plan-from-public-surface \
+  .#checks.x86_64-linux.substrate-initfs-tools-fixed-output-fetches-own-cacert \
+  --no-link -L
+```
+
+The artifact build is Nix-backed Redox bootstrap evidence. It is reproducible
+from checked-in Redox expressions and fixed-output hashes; it should not require
+proof-only temporary package files or an operator-supplied `NIX_SSL_CERT_FILE`.
+Real QEMU execution remains opt-in/manual because it depends on host virtualization
+support and can be slower than evaluation checks.
+
+A successful build or boot proves only Redox substrate artifact materialization
+and, when QEMU is run, VM boot of that artifact. It does not prove OnixOS deploy,
+activation, physical install, rollback, power-loss, broad service/provider
+support, or Mantle/no-Nix-runtime support.
+
 ## Compatibility shell
 
 `builders.buildSystem { plan = ...; }` validates the primitive plan, converts it

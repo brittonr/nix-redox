@@ -190,12 +190,82 @@ let
     };
   };
 
+  substrateVmProofPlan = import ../../examples/substrate-vm-proof/primitive-plan.nix;
+  substrateVmProofReceiptLine =
+    let
+      receipt = (builtins.fromJSON substrateVmProofPlan.filesystem.files."onixos/status.json".text);
+    in
+    "ONIXOS_REDOX_VM_RECEIPT_JSON=${builtins.toJSON receipt}";
+  redoxSubstrateVmProof = import ../substrate {
+    inherit
+      lib
+      pkgs
+      redoxSystemFactory
+      ;
+    target = redoxTarget;
+    mkRedoxSystem = { modules }: mkSystem { inherit modules; };
+    mkQemuRunners = modularPkgs.infrastructure.mkQemuRunners;
+    mkCloudHypervisorRunners = modularPkgs.infrastructure.mkCloudHypervisorRunners;
+    packageIngredients = {
+      runtime = [
+        "kernel"
+        "bootloader"
+        "base"
+        "redoxfs"
+      ];
+      userspace = [
+        "ion"
+        "uutils"
+        "netutils"
+      ];
+      infrastructure = [
+        "initfsTools"
+        "bootstrap"
+        "qemu-runner"
+      ];
+    };
+  };
+
   # Runner factory functions from the infrastructure module
   mkCHRunners = modularPkgs.infrastructure.mkCloudHypervisorRunners;
   mkQemuRunners = modularPkgs.infrastructure.mkQemuRunners;
   mkBootTest = modularPkgs.infrastructure.mkBootTest;
 
   bootloader = modularPkgs.system.bootloader;
+
+  substrateVmProofSystem = redoxSubstrateVmProof.builders.buildSystem {
+    plan = substrateVmProofPlan;
+    modules = [
+      {
+        "/boot" = {
+          banner = ''
+            ${substrateVmProofReceiptLine}
+          '';
+        };
+      }
+    ];
+  };
+
+  substrateVmProofQemuRunners = mkQemuRunners {
+    diskImage = substrateVmProofSystem.diskImage;
+    inherit bootloader;
+    vmConfig = substrateVmProofSystem.vmConfig;
+  };
+
+  substrateVmProofExport = pkgs.runCommand "redox-substrate-vm-proof-export" { } ''
+    set -eu
+    mkdir -p "$out"
+    ln -s ${substrateVmProofSystem.diskImage}/redox.img "$out/disk.img"
+    ln -s ${substrateVmProofSystem.diskImage}/boot/kernel "$out/kernel"
+    ln -s ${substrateVmProofSystem.initfs}/boot/initfs "$out/initfs"
+    ln -s ${substrateVmProofSystem.redoxfsImage} "$out/redoxfs.img"
+    ln -s ${substrateVmProofQemuRunners.headless}/bin/run-redox "$out/run-redox-qemu"
+    cat > "$out/README.txt" <<'README'
+    Repo-owned Redox substrate VM proof artifacts built through the public redoxSubstrate surface.
+    This output is VM/build evidence only; it does not claim deploy, activation, physical install,
+    rollback, power-loss, or OnixOS runtime lifecycle support.
+    README
+  '';
 
   # === Runners for each profile ===
 
@@ -871,6 +941,12 @@ in
 {
   packages = {
     # Disk images
+    redox-substrate-vm-proof = substrateVmProofExport;
+    redox-substrate-vm-proof-disk = substrateVmProofSystem.diskImage;
+    redox-substrate-vm-proof-initfs = substrateVmProofSystem.initfs;
+    redox-substrate-vm-proof-root-tree = substrateVmProofSystem.rootTree;
+    run-redox-substrate-vm-proof-qemu = substrateVmProofQemuRunners.headless;
+
     redox-default = systems.default.diskImage;
     redox-minimal = systems.minimal.diskImage;
     redox-graphical = systems.graphical.diskImage;

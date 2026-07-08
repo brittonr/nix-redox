@@ -29,7 +29,7 @@ let
         # FOD for generating Cargo.lock
         outputHashAlgo = "sha256";
         outputHashMode = "recursive";
-        outputHash = "sha256-hhd13ybzMKUHxgEBcbKxzEzPSneSDi/u6M2XZ0L7dWI=";
+        outputHash = "sha256-BJCdk2oFEZZeqIUbTiqpP9gWMaA1WSOOVEpyXAQZrtQ=";
         SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
       }
       ''
@@ -66,7 +66,7 @@ let
   initfsToolsVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "initfs-tools-vendor";
     src = initfsToolsSrc;
-    hash = "sha256-DzOBhj+a7PjV16e8Aepjo5m6wnwDzuPDAlW3HV0nGvE=";
+    hash = "sha256-FSOjnh/oTVO9XFw0UfmOfAfSvo9+tTdmnYjlBhgaiMM=";
   };
 
   # Create vendor directory (no sysroot merge needed for host tools)
@@ -91,28 +91,28 @@ pkgs.stdenv.mkDerivation {
   ];
 
   buildPhase = ''
-    runHook preBuild
+      runHook preBuild
 
-    export HOME=$(mktemp -d)
+      export HOME=$(mktemp -d)
 
-    # Copy workspace source from initfsToolsSrc (has workspace root + generated lockfile)
-    cp -r ${initfsToolsSrc}/. .
-    chmod -R u+w .
+      # Copy workspace source from initfsToolsSrc (has workspace root + generated lockfile)
+      cp -r ${initfsToolsSrc}/. .
+      chmod -R u+w .
 
-    # Use pre-merged vendor directory
-    cp -rL ${mergedVendor} vendor-combined
-    chmod -R u+w vendor-combined
+      # Use pre-merged vendor directory
+      cp -rL ${mergedVendor} vendor-combined
+      chmod -R u+w vendor-combined
 
-    # Set up cargo config
-    mkdir -p .cargo
-    cat > .cargo/config.toml << 'EOF'
-    ${vendor.mkCargoConfig { }}
-  EOF
+      # Set up cargo config
+      mkdir -p .cargo
+      cat > .cargo/config.toml << 'EOF'
+      ${vendor.mkCargoConfig { }}
+    EOF
 
-    # Build tools
-    cargo build --manifest-path initfs/tools/Cargo.toml --release
+      # Build tools
+      cargo build --manifest-path initfs/tools/Cargo.toml --release
 
-    runHook postBuild
+      runHook postBuild
   '';
 
   installPhase = ''
