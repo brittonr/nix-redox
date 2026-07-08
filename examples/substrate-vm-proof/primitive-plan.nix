@@ -7,7 +7,7 @@ let
     machine = "redoxvm";
     machine_class = "onixos";
     substrate = "redox";
-    descriptor_hash = "redox-substrate-vm-proof-fixture";
+    descriptor_hash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     materialization_refs = [
       "export/initfs"
       "export/kernel"
@@ -25,6 +25,30 @@ let
     runtime_owned = true;
     nix_runtime_fallback = false;
   };
+  runtimeStatus = {
+    schema = "onixos-redox-runtime-status-v1";
+    schema_version = 1;
+    machine = receipt.machine;
+    system = "x86_64-linux";
+    machine_class = receipt.machine_class;
+    substrate = receipt.substrate;
+    redox_target = "vm";
+    descriptor_hash = receipt.descriptor_hash;
+    materialization_refs = receipt.materialization_refs;
+    status_source_path = receipt.receipt_path;
+    status_entrypoint = receipt.status_entrypoint;
+    receipt_path = receipt.receipt_path;
+    runtime_owner = "redox-guest:${receipt.status_entrypoint}";
+    runtime_owned = true;
+    host_copied = false;
+    nix_runtime_fallback = false;
+    freshness = {
+      boot_id = receipt.boot_id;
+      boot_sequence = receipt.freshness_ref;
+      fresh = true;
+    };
+    service_states = receipt.service_states;
+  };
 in
 {
   services.boot_receipt = {
@@ -41,6 +65,11 @@ in
 
   filesystem.files."onixos/status.json" = {
     text = builtins.toJSON receipt;
+    mode = "0644";
+  };
+
+  filesystem.files."onixos/runtime-status.json" = {
+    text = builtins.toJSON runtimeStatus;
     mode = "0644";
   };
 

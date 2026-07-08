@@ -191,6 +191,13 @@ let
   };
 
   substrateVmProofPlan = import ../../examples/substrate-vm-proof/primitive-plan.nix;
+  substrateVmProofRuntimeStatusLine =
+    let
+      status = (
+        builtins.fromJSON substrateVmProofPlan.filesystem.files."onixos/runtime-status.json".text
+      );
+    in
+    "ONIXOS_REDOX_RUNTIME_STATUS_JSON=${builtins.toJSON status}";
   substrateVmProofReceiptLine =
     let
       receipt = (builtins.fromJSON substrateVmProofPlan.filesystem.files."onixos/status.json".text);
@@ -239,6 +246,7 @@ let
       {
         "/boot" = {
           banner = ''
+            ${substrateVmProofRuntimeStatusLine}
             ${substrateVmProofReceiptLine}
           '';
         };
