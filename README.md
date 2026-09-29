@@ -6,7 +6,7 @@ using Nix. One command gets you a running Redox desktop.
 ## Run It
 
 ```bash
-nix run github:brittonr/redox
+nix run github:brittonr/nix-redox
 ```
 
 That builds everything from source and boots a graphical Redox VM in QEMU.
