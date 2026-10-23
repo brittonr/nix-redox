@@ -57,6 +57,10 @@ configuration is available. Custom graphical login namespaces must retain the
 `orbital` scheme. Declared home directories regain owner-write permission when
 the filesystem image is assembled; packaged store contents remain unchanged.
 
+During root-tree assembly, merged package `usr/` and `ui/` trees must remain
+owner-writable for later package merges and generated service files. This is
+temporary staging access; Nix normalizes the completed output to read-only modes.
+
 The default QEMU launcher uses its built-in PS/2 keyboard and absolute vmmouse.
 An emulated USB HID run stalled during xhcid initialization; USB HID attachment
 is not part of the validated default QEMU path.

@@ -96,6 +96,19 @@ in
   };
 
   "/services" = {
+    services = {
+      ptyd = {
+        description = "Pseudo-terminal daemon";
+        command = "/bin/ptyd";
+        type = "daemon";
+        args = "";
+        wantedBy = "rootfs";
+        enable = false;
+        after = [ ];
+        environment = { };
+        priority = 11;
+      };
+    };
     startupScriptText = testRunner;
   };
 
