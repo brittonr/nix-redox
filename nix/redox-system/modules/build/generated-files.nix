@@ -342,8 +342,8 @@ let
     #
     # Scheme list resolution:
     #   - Explicit schemes attr on user  -> use that list directly
-    #   - Root (uid 0) without schemes   -> cfg.fullSchemes (27 schemes incl. proc)
-    #   - Non-root with createHome       -> cfg.restrictedSchemes (22 schemes, no irq/sys/memory/serio)
+    #   - Root (uid 0) without schemes   -> cfg.fullSchemes (includes proc)
+    #   - Non-root with createHome       -> cfg.restrictedSchemes (no irq/sys/memory/serio)
     #   - Non-root without createHome    -> no entry (falls back to binary default)
     // (
       let

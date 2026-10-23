@@ -51,6 +51,8 @@ hostPkgs.stdenv.mkDerivation {
         [ -f ${pkgs.base}/bin/$bin ] && cp -f ${pkgs.base}/bin/$bin initfs/bin/
         [ -f ${pkgs.base}/bin/$bin ] && cp -f ${pkgs.base}/bin/$bin initfs/usr/lib/drivers/
       done
+      # xhcid reads this table before spawning USB keyboard and hub drivers.
+      cp -r ${pkgs.base}/usr/lib/xhcid.d initfs/lib/
     ''}
 
     # Write pcid config to new location (etc/pcid.d/ instead of etc/pcid/)

@@ -13,27 +13,27 @@
 }:
 
 let
-  # Extract initfs tools source with generated Cargo.lock (FOD)
+  # Extract initfs tools source with the pre-generated Cargo.lock
   #
   # The upstream initfs crates now use workspace-inherited dependencies
   # (anyhow.workspace = true, log.workspace = true) from the base root
   # Cargo.toml. Since we only copy the initfs/ subdirectory, we need to
-  # replace these with explicit versions.
-  initfsToolsSrc =
-    pkgs.runCommand "initfs-tools-src"
-      {
-        nativeBuildInputs = [
-          rustToolchain
-          pkgs.cacert
-        ];
-        # FOD for generating Cargo.lock
-        outputHashAlgo = "sha256";
-        outputHashMode = "recursive";
-        outputHash = "sha256-BJCdk2oFEZZeqIUbTiqpP9gWMaA1WSOOVEpyXAQZrtQ=";
-        SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
-      }
-      ''
-        export HOME=$(mktemp -d)
+  # provide a workspace root with explicit versions.
+  #
+  # == Lockfile Regeneration ==
+  # Never resolve the lockfile at build time: `cargo generate-lockfile`
+  # picks the newest semver-compatible crates on every run, so the fixed
+  # output hash changes whenever crates.io publishes (and the build needs
+  # network). The lockfile is committed instead, like bootstrap-Cargo.lock.
+  # Regenerate when base-src initfs manifests change (e.g. `nix flake update`):
+  #   1. In a temp dir, copy base-src/initfs/ and write the workspace root
+  #      Cargo.toml below at the workspace root.
+  #   2. Run `cargo generate-lockfile` from initfs/tools.
+  #   3. Copy the resulting lockfile to
+  #      nix/pkgs/infrastructure/initfs-tools-Cargo.lock.
+  #   4. Update the vendor hash below (set dummy, build, read the real hash
+  #      from the mismatch error), then `git add` the lockfile.
+  initfsToolsSrc = pkgs.runCommand "initfs-tools-src" { } ''
         mkdir -p $out/initfs
         # Copy entire initfs directory to include archive-common
         cp -r ${base-src}/initfs/. $out/initfs/
@@ -58,15 +58,21 @@ let
         [workspace.lints.clippy]
         WORKSPACE
 
-        cd $out/initfs/tools
-        cargo generate-lockfile
+        # Committed lockfile: no dependency resolution (or network) at build time.
+        cp ${./initfs-tools-Cargo.lock} $out/Cargo.lock
+
+        # The release default caps the image at 64 MiB, which the graphical
+        # profile now exceeds (~67 MiB with drivers in both bin/ and
+        # lib/drivers/). Raise the cap to 256 MiB (the debug default).
+        sed -i 's/pub const DEFAULT_MAX_SIZE: u64 = 64 \* MEBIBYTE;/pub const DEFAULT_MAX_SIZE: u64 = 256 * MEBIBYTE;/' \
+          $out/initfs/tools/src/lib.rs
       '';
 
   # Vendor dependencies using fetchCargoVendor (FOD)
   initfsToolsVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "initfs-tools-vendor";
     src = initfsToolsSrc;
-    hash = "sha256-FSOjnh/oTVO9XFw0UfmOfAfSvo9+tTdmnYjlBhgaiMM=";
+    hash = "sha256-1yqEF2K1GXx3upOgf1VXa/hwFWVlrwCd3liHGZwlZ+k=";
   };
 
   # Create vendor directory (no sysroot merge needed for host tools)

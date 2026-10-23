@@ -74,6 +74,8 @@ in
 
 {
   # Graphical QEMU runner with serial logging and auto-resolution selection
+  # Use the pc machine's PS/2 keyboard and absolute vmmouse input. Redundant
+  # USB HID devices can stall early boot while xhcid services transfers.
   graphical = pkgs.writeShellScriptBin "run-redox-graphical" ''
     ${commonSetup}
 
@@ -99,9 +101,6 @@ in
         -bios $OVMF \
         -vga std \
         -display gtk \
-        -device qemu-xhci,id=xhci \
-        -device usb-kbd \
-        -device usb-tablet \
         -device intel-hda \
         -device hda-duplex \
         -serial mon:stdio

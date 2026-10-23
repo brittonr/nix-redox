@@ -8,14 +8,15 @@
 # - pauseVm/resumeVm/snapshotVm/restoreVm: ch-remote wrapper scripts
 #
 # Cloud Hypervisor is a Rust-based VMM using virtio devices:
-# - virtio-blk for storage (with direct I/O for performance)
+# - virtio-blk for storage (buffered I/O by default for firmware compatibility)
 # - virtio-net for networking (multi-queue for throughput)
 # - CLOUDHV.fd firmware
 #
 # RedoxOS boots fully in Cloud Hypervisor with modern virtio support.
 #
 # Performance Features (v50+):
-# - direct=on: Bypasses host page cache for better I/O performance
+# - CH_DIRECT_IO=on: Opt-in host page-cache bypass; prevented firmware boot
+#   in the verified Cloud Hypervisor/CLOUDHV.fd run
 # - num_queues=4: Multi-queue networking for parallel packet processing
 # - topology: CPU topology for better guest scheduler decisions
 # - hugepages: Optional huge page support for memory performance
@@ -181,7 +182,7 @@ in
   '';
 
   # Headless Cloud Hypervisor runner with serial console (no networking)
-  # Performance optimized with direct I/O and CPU topology
+  # CPU topology tuning with optional direct I/O
   headless = pkgs.writeShellScriptBin "run-redox-cloud-hypervisor" ''
     set -e
 
@@ -189,7 +190,7 @@ in
     CH_CPUS="''${CH_CPUS:-${defaultCpus}}"
     CH_MEMORY="''${CH_MEMORY:-${defaultMemory}}"
     CH_HUGEPAGES="''${CH_HUGEPAGES:-}"
-    CH_DIRECT_IO="''${CH_DIRECT_IO:-on}"
+    CH_DIRECT_IO="''${CH_DIRECT_IO:-off}"
 
     # Create writable copies
     WORK_DIR=$(mktemp -d)
@@ -245,13 +246,13 @@ in
     echo "  CH_CPUS=N       - Number of vCPUs (default: ${defaultCpus})"
     echo "  CH_MEMORY=SIZE  - Memory size (default: ${defaultMemory})"
     echo "  CH_HUGEPAGES=1  - Enable huge pages"
-    echo "  CH_DIRECT_IO=on|off - Direct I/O bypass (default: on)"
+    echo "  CH_DIRECT_IO=on|off - Direct I/O bypass (default: off for firmware compatibility)"
     echo ""
     echo "Controls:"
     echo "  Ctrl+C: Quit Cloud Hypervisor"
     echo ""
     echo "Network: Disabled (use run-redox-cloud-hypervisor-net for networking)"
-    echo "Storage: virtio-blk with direct I/O"
+    echo "Storage: virtio-blk (direct I/O: $CH_DIRECT_IO)"
     echo ""
 
     # Switch to raw mode right before launching (after all echo output)
@@ -259,7 +260,7 @@ in
 
     # Cloud Hypervisor UEFI boot with performance tuning:
     # - --firmware: CLOUDHV.fd for UEFI
-    # - --disk: virtio-blk with direct=on for bypassing host page cache
+    # - --disk: virtio-blk with optional host page-cache bypass
     # - --cpus: boot count + topology for better guest scheduler decisions
     # - --memory: size + optional hugepages
     # - --platform: Configure PCI segments
@@ -281,7 +282,7 @@ in
   # Cloud Hypervisor runner with TAP networking
   # Requires: NixOS cloud-hypervisor-host tag or manual TAP setup
   # Uses static IP configuration for fast boot (no DHCP dependency)
-  # Performance optimized with direct I/O, CPU topology, and multi-queue networking
+  # CPU topology and multi-queue networking with optional direct I/O
   withNetwork = pkgs.writeShellScriptBin "run-redox-cloud-hypervisor-net" ''
     set -e
 
@@ -295,7 +296,7 @@ in
     CH_CPUS="''${CH_CPUS:-${defaultCpus}}"
     CH_MEMORY="''${CH_MEMORY:-${defaultMemory}}"
     CH_HUGEPAGES="''${CH_HUGEPAGES:-}"
-    CH_DIRECT_IO="''${CH_DIRECT_IO:-on}"
+    CH_DIRECT_IO="''${CH_DIRECT_IO:-off}"
     CH_NET_QUEUES="''${CH_NET_QUEUES:-${netQueues}}"
     CH_NET_QUEUE_SIZE="''${CH_NET_QUEUE_SIZE:-${netQueueSize}}"
 
@@ -385,7 +386,7 @@ in
     echo "  CH_CPUS=N            - Number of vCPUs (default: ${defaultCpus})"
     echo "  CH_MEMORY=SIZE       - Memory size (default: ${defaultMemory})"
     echo "  CH_HUGEPAGES=1       - Enable huge pages"
-    echo "  CH_DIRECT_IO=on|off  - Direct I/O bypass (default: on)"
+    echo "  CH_DIRECT_IO=on|off  - Direct I/O bypass (default: off for firmware compatibility)"
     echo "  CH_NET_QUEUES=N      - Network queues (default: ${netQueues})"
     echo "  CH_NET_QUEUE_SIZE=N  - Queue size (default: ${netQueueSize})"
     echo ""
@@ -399,7 +400,7 @@ in
     [ -n "$SAVED_TTY" ] && stty raw -echo
 
     # Cloud Hypervisor with virtio-net (multi-queue for parallel packet processing):
-    # - --disk: virtio-blk with direct=on for bypassing host page cache
+    # - --disk: virtio-blk with optional host page-cache bypass
     # - --cpus: boot count + topology for better guest scheduler decisions
     # - --memory: size + optional hugepages
     # - --net: TAP with multi-queue (num_queues + queue_size) for throughput
@@ -427,7 +428,7 @@ in
     CH_CPUS="''${CH_CPUS:-${defaultCpus}}"
     CH_MEMORY="''${CH_MEMORY:-${defaultMemory}}"
     CH_HUGEPAGES="''${CH_HUGEPAGES:-}"
-    CH_DIRECT_IO="''${CH_DIRECT_IO:-on}"
+    CH_DIRECT_IO="''${CH_DIRECT_IO:-off}"
     SHARED_DIR="''${REDOX_SHARED_DIR:-${defaultSharedDir}}"
     VIRTIOFSD_SOCKET="''${VIRTIOFSD_SOCKET:-/tmp/virtiofsd-redox.sock}"
     FS_TAG="''${FS_TAG:-${defaultSharedTag}}"
@@ -555,7 +556,7 @@ in
     CH_CPUS="''${CH_CPUS:-${defaultCpus}}"
     CH_MEMORY="''${CH_MEMORY:-${defaultMemory}}"
     CH_HUGEPAGES="''${CH_HUGEPAGES:-}"
-    CH_DIRECT_IO="''${CH_DIRECT_IO:-on}"
+    CH_DIRECT_IO="''${CH_DIRECT_IO:-off}"
     CH_API_SOCKET="''${CH_API_SOCKET:-${defaultApiSocket}}"
 
     # Create writable copies

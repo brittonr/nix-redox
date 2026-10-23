@@ -41,6 +41,26 @@ nix run .#kernel-rebuild-test -- --verbose
 
 Use `nix flake check` as the final aggregate gate when time allows. It includes all flat checks plus package/app/devshell validation and can take much longer than the tiered apps. If teeing logs, run it under `bash -o pipefail -c 'nix flake check 2>&1 | tee ...'` so a failing check cannot be hidden by `tee`.
 
+### Graphical session smoke
+
+For changes to the graphical image or launcher, a boot banner is not sufficient:
+
+1. Run `nix run .` on a KVM-capable host with a graphical display.
+2. Log in as `user` with password `redox`; verify keyboard and mouse input.
+3. In the terminal, run `echo NIX_RUN_OK`.
+4. Create, read, and remove a file under `$HOME`. The unprivileged user must
+   still be unable to create files under `/nix/store`.
+
+The image must carry the upstream `xhcid.d` USB driver table in both initfs
+and the root filesystem. xhcid must search initfs configuration before rootfs
+configuration is available. Custom graphical login namespaces must retain the
+`orbital` scheme. Declared home directories regain owner-write permission when
+the filesystem image is assembled; packaged store contents remain unchanged.
+
+The default QEMU launcher uses its built-in PS/2 keyboard and absolute vmmouse.
+An emulated USB HID run stalled during xhcid initialization; USB HID attachment
+is not part of the validated default QEMU path.
+
 ## Evidence handling
 
 - Long VM proof wrappers write durable artifacts under `/var/tmp/redox-self-hosting-captures/<run-id>/`.
@@ -69,3 +89,6 @@ Before tagging alpha:
 - Redox Ion is not POSIX shell; user docs and examples must avoid POSIX-only syntax unless explicitly using bash.
 - Bare-metal support is hardware-specific and should ship as experimental unless a board has fresh boot/login/input/network evidence.
 - Remote HTTPS/cache behavior depends on CA bundle handling and should stay documented as tested only by the relevant VM proof.
+- QEMU boot can report a missing initfs log service, an aborted `fbbootlogd`,
+  and optional audio readiness failures. These did not prevent the exercised
+  graphical login, shell commands, or home-directory writes.

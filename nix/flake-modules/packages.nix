@@ -191,7 +191,7 @@ let
         redox-log-src
         redox-syscall-src
         redox-scheme-src
-        base-orbital-compat-src
+        base-orbital-src
         ;
     }
   );
@@ -609,6 +609,8 @@ let
           [ -f "$bin" ] && cp "$bin" $out/bin/
         done
       done
+      mkdir -p $out/usr/lib/xhcid.d
+      cp ${patchedBaseSrc}/drivers/usb/xhcid/drivers.toml $out/usr/lib/xhcid.d/
     '';
 
   snix =

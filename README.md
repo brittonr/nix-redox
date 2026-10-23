@@ -23,6 +23,19 @@ Login: `user` / `redox` (or `root` / `redox`).
 First build takes a while (cross-compiling the full OS). Subsequent runs
 use cached artifacts.
 
+From a local checkout, run `nix run .`. The graphical launcher requires an
+`x86_64-linux` host with access to `/dev/kvm` and an X11 or Wayland display.
+Use `nix run .#headless` when no graphical display is available.
+
+To use `nix run redox` from any directory, register this checkout once:
+
+```bash
+nix registry add redox "git+file://$PWD"
+nix run redox
+```
+
+The alias follows this local checkout, including tracked working-tree changes.
+
 ### Other ways to run
 
 ```bash
@@ -33,6 +46,10 @@ nix run .#run-redox-self-hosting # With Rust toolchain for on-guest compilation
 ```
 
 **Exit:** Close the QEMU window (graphical) · `Ctrl+C` (headless) · `Ctrl+A X` (QEMU headless)
+
+Cloud Hypervisor runners default to buffered disk I/O. `CH_DIRECT_IO=on`
+remains an opt-in override, but prevented the pinned firmware from finding
+the bootable disk in the verified run; leave it unset for normal boots.
 
 ### Build the disk image
 

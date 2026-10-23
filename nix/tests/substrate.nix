@@ -42,7 +42,6 @@ let
   vmProofSource =
     (builtins.readFile ../../examples/substrate-vm-proof/default.nix)
     + (builtins.readFile ../../examples/substrate-vm-proof/primitive-plan.nix);
-  initfsToolsSource = builtins.readFile ../pkgs/infrastructure/initfs-tools.nix;
 
   mkPassTest =
     name: description:
@@ -159,20 +158,6 @@ in
     assert redoxSubstrate.manifestTools.requireIngredient "packages" "initfsTools" == "initfsTools";
     assert redoxSubstrate.manifestTools.requireIngredient "packages" "qemu-runner" == "qemu-runner";
     mkPassTest "vm-proof-artifact-plan-from-public-surface" "Repo-owned VM proof fixture plans kernel/initfs/RedoxFS/disk/QEMU artifact families through the public substrate surface";
-
-  initfs-tools-fixed-output-fetches-own-cacert =
-    let
-      hasUpdatedSourceHash = lib.hasInfix "sha256-BJCdk2oFEZZeqIUbTiqpP9gWMaA1WSOOVEpyXAQZrtQ=" initfsToolsSource;
-      hasUpdatedVendorHash = lib.hasInfix "sha256-FSOjnh/oTVO9XFw0UfmOfAfSvo9+tTdmnYjlBhgaiMM=" initfsToolsSource;
-      hasCacertInput = lib.hasInfix "pkgs.cacert" initfsToolsSource;
-      hasDerivationSslCert =
-        lib.hasInfix "SSL_CERT_FILE" initfsToolsSource && lib.hasInfix "ca-bundle.crt" initfsToolsSource;
-    in
-    assert hasUpdatedSourceHash;
-    assert hasUpdatedVendorHash;
-    assert hasCacertInput;
-    assert hasDerivationSslCert;
-    mkPassTest "initfs-tools-fixed-output-fetches-own-cacert" "initfs-tools fixed-output source/vendor hashes are current and Cargo.lock generation owns its CA certificate input";
 
   rejects-malformed-service-argv =
     mkRejectTest "malformed-service-argv"

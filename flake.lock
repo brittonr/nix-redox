@@ -33,22 +33,22 @@
         "type": "github"
       }
     },
-    "base-orbital-compat-src": {
+    "base-orbital-src": {
       "flake": false,
       "locked": {
         "host": "gitlab.redox-os.org",
-        "lastModified": 1765748613,
-        "narHash": "sha256-np5hnvfNlYsgFPqxZ7wVYQEci6dYglHeCoNhLr5dPF4=",
+        "lastModified": 1777388839,
+        "narHash": "sha256-jzdd17hZ1JYghKwluQMS/I9i96G2TRGSWqTnGfm6L9U=",
         "owner": "redox-os",
         "repo": "base",
-        "rev": "620b4bd80c4f437adcaeec570b6cbba0487506d3",
+        "rev": "698f90a064dc9921332b9ab84a7df1d79ff33b93",
         "type": "gitlab"
       },
       "original": {
         "host": "gitlab.redox-os.org",
         "owner": "redox-os",
         "repo": "base",
-        "rev": "620b4bd80c4f437adcaeec570b6cbba0487506d3",
+        "rev": "698f90a064dc9921332b9ab84a7df1d79ff33b93",
         "type": "gitlab"
       }
     },
@@ -1285,7 +1285,7 @@
     "root": {
       "inputs": {
         "adios-flake": "adios-flake",
-        "base-orbital-compat-src": "base-orbital-compat-src",
+        "base-orbital-src": "base-orbital-src",
         "base-src": "base-src",
         "bat-src": "bat-src",
         "binutils-src": "binutils-src",
