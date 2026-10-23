@@ -70,7 +70,7 @@ in
         # File schemes
         "file" "store"
         # Display schemes
-        "display.vesa" "display*"
+        "display.vesa" "display*" "orbital"
         # Other schemes
         "pty" "sudo" "audio"
         # Debugging (root only)
@@ -86,7 +86,7 @@ in
         "ip" "icmp" "tcp" "udp"
         "shm" "chan" "uds_stream" "uds_dgram"
         "file" "store"
-        "display.vesa" "display*"
+        "display.vesa" "display*" "orbital"
         "pty" "sudo" "audio"
       ];
       description = "Default scheme namespace list for non-root users (excludes irq, sys, memory, serio)";

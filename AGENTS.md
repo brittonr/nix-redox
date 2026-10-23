@@ -149,6 +149,13 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 
 ### Vendor Management
 - `fetchCargoVendor` ONLY works when Cargo.lock exists
+- NEVER resolve a lockfile at build time (`cargo generate-lockfile` inside a fixed-output derivation): it picks the newest semver-compatible crates on every run, so the hash changes whenever crates.io publishes and the build needs network. Commit the lockfile (`nix/pkgs/infrastructure/initfs-tools-Cargo.lock`, `nix/pkgs/infrastructure/bootstrap-Cargo.lock`, `nix/pkgs/userspace/orbital-Cargo.lock`) and regenerate it only when the pinned source's manifests change
+- Fixed-output derivations derive their store path from `outputHash` + name, NOT from the derivation inputs. After changing a source tree or lockfile, an unchanged (stale) hash makes Nix substitute the OLD content from cache and Cargo then fails offline with "failed to select a version" / "perhaps a crate was updated and forgotten to be re-vendored". Always re-run the dummy-hash → read the real hash from the mismatch error → pin it
+- Flake updates that move `*-src` inputs (orbital-src, orbutils-src, userutils-src, ...) change the upstream Cargo.lock, so every vendor hash for those packages goes stale and must be refreshed
+- Upstream orbital now depends on base at rev `698f90a` (`base-orbital-src` flake input), where `graphics-ipc` re-exports `V2GraphicsHandle`/`CpuBackedBuffer` at the crate root and `first_display()` returns a connector `Handle`. Base `main` (`base-src`) is older than that API, and the previous pinned compat commit lacked it entirely — do not reuse `base-src` for orbital
+- Orbital's copied base crates inherit `workspace = true` deps, so orbital's package root gets a `[workspace]` fragment (`workspaceToml` in `orbital.nix`) with base's dependency versions pinned with `=`; unpinned versions pull `redox_syscall 0.9`/`libredox 0.1.25` and break the libredox error-type boundary
+- `drm 0.15` pulls `rustix` from crates.io, whose libc backend mis-handles relibc's 64-bit `dev_t`. Orbital has to patch `rustix` to `rustix-redox-src` itself now
+- `redox-initfs-ar` caps the release image at 64 MiB (`DEFAULT_MAX_SIZE` in `initfs/tools/src/lib.rs`); the graphical profile now emits ~70 MiB, so `initfs-tools.nix` raises the constant to 256 MiB
 - Patching vendored crates requires regenerating `.cargo-checksum.json` (SHA-256)
 - Both `snix.nix` and `snix-source-bundle.nix` need the SAME vendor hash
 - Git dependencies need `gitSources` in package args for offline vendor config

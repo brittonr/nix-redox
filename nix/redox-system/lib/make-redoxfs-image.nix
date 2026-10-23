@@ -34,6 +34,9 @@ let
   chownArgs = lib.concatMapStringsSep " " (
     entry: "--chown ${entry.path}:${toString entry.uid}:${toString entry.gid}"
   ) ownershipMap;
+  homeWriteCommands = lib.concatMapStringsSep "\n" (
+    entry: "chmod -R u+w ${lib.escapeShellArg "root/${entry.path}"}"
+  ) ownershipMap;
 in
 hostPkgs.runCommand "redox-redoxfs"
   {
@@ -49,9 +52,13 @@ hostPkgs.runCommand "redox-redoxfs"
       fi
     done
 
+    # Nix strips write bits from rootTree, including user-owned home directories.
+    # Restore those homes without making packaged store contents writable.
+    ${homeWriteCommands}
+
     # Generated SSH host keys must be private inside the guest image.
-    # The Nix store strips write bits from rootTree files, so the recursive
-    # chmod above turns 0444 into 0644. Tighten them back here before archiving.
+    # rootTree has read-only Nix store modes; restore private-key permissions
+    # explicitly before archiving.
     if [ -d root/etc/ssh ]; then
       chmod 600 root/etc/ssh/ssh_host_*_key 2>/dev/null || true
       chmod 644 root/etc/ssh/ssh_host_*.pub 2>/dev/null || true

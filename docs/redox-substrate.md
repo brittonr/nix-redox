@@ -103,13 +103,15 @@ For focused checks that do not boot QEMU, run:
 ```bash
 nix build \
   .#checks.x86_64-linux.substrate-vm-proof-artifact-plan-from-public-surface \
-  .#checks.x86_64-linux.substrate-initfs-tools-fixed-output-fetches-own-cacert \
   --no-link -L
 ```
 
 The artifact build is Nix-backed Redox bootstrap evidence. It is reproducible
-from checked-in Redox expressions and fixed-output hashes; it should not require
-proof-only temporary package files or an operator-supplied `NIX_SSL_CERT_FILE`.
+from checked-in Redox expressions, committed Cargo lockfiles, and fixed-output
+hashes; it should not require proof-only temporary package files or an
+operator-supplied `NIX_SSL_CERT_FILE`. `initfs-tools` builds from
+`nix/pkgs/infrastructure/initfs-tools-Cargo.lock` instead of resolving newest
+crates.io versions at build time.
 Real QEMU execution remains opt-in/manual because it depends on host virtualization
 support and can be slower than evaluation checks.
 

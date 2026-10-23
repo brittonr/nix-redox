@@ -163,10 +163,11 @@
       flake = false;
     };
 
-    # base pinned to the commit that orbital's Cargo.lock references
-    # This older version of graphics-ipc uses drm-sys 0.8.0 and is compatible with syscall 0.5
-    base-orbital-compat-src = {
-      url = "gitlab:redox-os/base/620b4bd80c4f437adcaeec570b6cbba0487506d3?host=gitlab.redox-os.org";
+    # base pinned to the commit orbital's Cargo.lock references. Orbital's
+    # graphics-ipc/inputd API (first_display returns a connector Handle, root
+    # re-exports) matches exactly this rev.
+    base-orbital-src = {
+      url = "gitlab:redox-os/base/698f90a064dc9921332b9ab84a7df1d79ff33b93?host=gitlab.redox-os.org";
       flake = false;
     };
 

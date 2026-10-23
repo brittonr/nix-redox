@@ -193,6 +193,16 @@ let
           drivers/usb/xhcid/src/xhci/mod.rs
         echo "Done patching xhcid"
 
+        # Driver discovery runs before the root filesystem is available.
+        # Keep rootfs configuration later in the search order so it overrides initfs.
+        substituteInPlace drivers/usb/xhcid/src/xhci/mod.rs \
+          --replace-fail 'config::config("xhcid")' 'config::config_for_dirs(&[
+            std::path::Path::new("/scheme/initfs/lib/xhcid.d"),
+            std::path::Path::new("/scheme/initfs/etc/xhcid.d"),
+            std::path::Path::new("/usr/lib/xhcid.d"),
+            std::path::Path::new("/etc/xhcid.d"),
+        ])'
+
         # Fix sub-driver paths: try multiple locations so drivers are found
         # in both initfs (/bin/) and rootfs (/usr/lib/drivers/) environments.
         echo "Patching xhcid sub-driver path lookup for initfs+rootfs..."
@@ -589,6 +599,10 @@ pkgs.stdenv.mkDerivation {
     # Copy libraries if any
     find target/${redoxTarget}/release -maxdepth 1 -name "*.so" \
       -exec cp {} $out/lib/ \; 2>/dev/null || true
+
+    # xhcid discovers USB class drivers from runtime configuration.
+    mkdir -p $out/usr/lib/xhcid.d
+    cp drivers/usb/xhcid/drivers.toml $out/usr/lib/xhcid.d/
 
     runHook postInstall
   '';

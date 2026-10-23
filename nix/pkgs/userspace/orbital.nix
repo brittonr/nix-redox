@@ -24,9 +24,9 @@
   stubLibs,
   vendor,
   orbital-src,
-  # Use the orbital-compatible base-src (commit 620b4bd) which has graphics-ipc
-  # using drm-sys 0.8.0 instead of drm 0.14, and doesn't require syscall 0.6
-  base-orbital-compat-src,
+  # Upstream base crates orbital depends on (graphics-ipc, inputd, daemon),
+  # pinned to the base rev orbital's Cargo.lock references.
+  base-orbital-src,
   # Optional/unused inputs accepted for compatibility
   orbclient-src ? null,
   orbfont-src ? null,
@@ -54,9 +54,42 @@ let
       ;
   };
 
+  # Workspace root fragment for the copied base crates. They inherit
+  # dependencies and lints from base's workspace root, which we do not copy;
+  # orbital's package root becomes the workspace root. Versions mirror
+  # base/Cargo.toml [workspace.dependencies].
+  workspaceToml = pkgs.writeText "orbital-workspace.toml" ''
+    [workspace]
+    resolver = "2"
+    members = [
+      "base/daemon",
+      "base/scheme-utils",
+      "base/drivers/common",
+      "base/drivers/inputd",
+      "base/drivers/graphics/graphics-ipc",
+    ]
+
+    [workspace.dependencies]
+    anyhow = "1"
+    drm = "0.15.0"
+    libc = "=0.2.181"
+    libredox = "=0.1.16"
+    log = "0.4"
+    orbclient = "=0.3.54"
+    redox-log = { path = "${redox-log-src}" }
+    redox-scheme = "=0.11.0"
+    redox_syscall = { version = "=0.7.5", features = ["std"] }
+
+    [workspace.lints.rust]
+    missing_docs = "allow"
+
+    [workspace.lints.clippy]
+    precedence = "deny"
+  '';
+
   # Create patched source with all path dependencies resolved
   patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "orbital-src-patched-v9"; # v9: Fix table-format dep version bumps
+    name = "orbital-src-patched-v10"; # v10: track current base graphics-ipc API + committed Cargo.lock
     src = orbital-src;
 
     phases = [
@@ -70,35 +103,20 @@ let
     patchPhase = ''
             runHook prePatch
 
-            # Create local copies of base subdirectories needed
-            # Use orbital-compatible base commit (620b4bd) which has drm-sys 0.8.0
-            mkdir -p base/drivers/graphics base/drivers/common
-            cp -r ${base-orbital-compat-src}/drivers/inputd base/drivers/
-            cp -r ${base-orbital-compat-src}/drivers/graphics/graphics-ipc base/drivers/graphics/
-            cp -r ${base-orbital-compat-src}/drivers/common base/drivers/
-            # inputd depends on daemon
-            cp -r ${base-orbital-compat-src}/daemon base/
+            # Create local copies of the base crates orbital depends on.
+            mkdir -p base/drivers/graphics
+            cp -r ${base-orbital-src}/drivers/inputd base/drivers/
+            cp -r ${base-orbital-src}/drivers/graphics/graphics-ipc base/drivers/graphics/
+            cp -r ${base-orbital-src}/drivers/common base/drivers/
+            # inputd depends on daemon and scheme-utils
+            cp -r ${base-orbital-src}/daemon base/
+            cp -r ${base-orbital-src}/scheme-utils base/
 
-            # Make base writable for any needed patches
             chmod -R u+w base/
 
-            # Broadly update version requirements in base subdirectories to match vendored versions.
-            # The base-orbital-compat-src is pinned to an older commit with older dep versions,
-            # while the orbital Cargo.lock has newer versions vendored.
-            # Handle both simple ("X.Y") and table ({ version = "X.Y", ... }) formats.
-            find base/ -name Cargo.toml -exec sed -i \
-              -e 's|redox-scheme = "0\.[0-9][^"]*"|redox-scheme = "0.11"|g' \
-              -e 's|redox_syscall = "0\.[0-5][^"]*"|redox_syscall = "0.7"|g' \
-              -e '/redox_syscall/s|version = "0\.[0-5][^"]*"|version = "0.7"|g' \
-              -e 's|libredox = "0\.1\.[0-9]*"|libredox = "0.1"|g' \
-              -e '/libredox/s|version = "0\.1\.[0-9]*"|version = "0.1"|g' \
-              {} +
-
-            # The orbital-compatible base commit (620b4bd) has graphics-ipc using:
-            # - drm-sys = "0.8.0" (from crates.io, will be vendored)
-            # - No redox-ioctl dependency (that was added later)
-            # - common = { path = "../../common" } (already correct)
-            # So no patching needed for graphics-ipc at this commit
+            # Make orbital's package root the workspace root for the copied base
+            # crates, which inherit dependencies and lints from base.
+            cat >> Cargo.toml ${workspaceToml}
 
             # Patch orbital Cargo.toml to use local paths for git deps
             substituteInPlace Cargo.toml \
@@ -126,12 +144,14 @@ let
             # Also remove relibc git override from [patch.crates-io] if present
             sed -i '/^relibc = { git = /d' Cargo.toml
 
-            # Strip orbclient git source from Cargo.lock to prevent fetchCargoVendor
-            # from downloading both crates.io and git versions (same version number collision)
-            # Remove any source lines referencing orbclient git
-            sed -i '/^source = "git+https:\/\/gitlab.redox-os.org\/redox-os\/orbclient.git/d' Cargo.lock
-            # Remove any source lines referencing relibc git in Cargo.lock
-            sed -i '/^source = "git+https:\/\/gitlab.redox-os.org\/redox-os\/relibc.git/d' Cargo.lock
+            # drm 0.15 pulls rustix from crates.io, whose libc backend does not
+            # handle relibc's 64-bit dev_t on Redox. Upstream orbital no longer
+            # carries the rustix patch itself, so add it to its [patch.crates-io].
+            sed -i '/^\[patch.crates-io\]$/a rustix = { path = "${rustix-redox-src}" }' Cargo.toml
+
+            # The committed lockfile replaces upstream's, which still points at
+            # git sources for the crates we now consume as local paths.
+            cp ${./orbital-Cargo.lock} Cargo.lock
 
             # Fix ImageAligned to use manual page alignment instead of libc::memalign
             # The libc::memalign in relibc may not properly page-align allocations,
@@ -277,7 +297,7 @@ let
   orbitalVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "orbital-cargo-vendor";
     src = patchedSrc;
-    hash = "sha256-za8LnNzcaKG7WRu0RwEBl4hyeDtIAbi++AsBQT2TL04=";
+    hash = "sha256-eVao4g4+FyhhM8A+yJDLFg2+aKjKStwUZtlfBq61vVY=";
   };
 
   # Create merged vendor directory (project + sysroot)
