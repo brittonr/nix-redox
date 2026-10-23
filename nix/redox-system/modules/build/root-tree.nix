@@ -58,13 +58,17 @@ let
       # Orbital expects /ui/orbital.toml, /ui/fonts/, /ui/icons/, etc.
       # Use "source/." to merge contents into existing directories rather than
       # nesting (cp -r pkg/usr $out/usr would create $out/usr/usr/ if $out/usr exists).
+      # Keep staging trees writable for later merges and generated files.
+      # Nix restores read-only output modes after assembly.
       if [ -d "${pkg}/ui" ]; then
         mkdir -p $out/ui
         cp -rn "${pkg}/ui/." "$out/ui/"
+        chmod -R u+w "$out/ui"
       fi
       if [ -d "${pkg}/usr" ]; then
         mkdir -p $out/usr
         cp -rn "${pkg}/usr/." "$out/usr/"
+        chmod -R u+w "$out/usr"
       fi
     '') cfg.bootPackages
   );
