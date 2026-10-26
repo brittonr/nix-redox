@@ -1614,14 +1614,18 @@
         "wasmtime-src": "wasmtime-src"
       },
       "locked": {
-        "lastModified": 1778508182,
-        "narHash": "sha256-asDut/dDvyFJ/37VX88KTFG1nOyYaXSX9jtBFT3Enfg=",
-        "path": "/home/brittonr/git/wasmtime-redox",
-        "type": "path"
+        "lastModified": 1774307197,
+        "narHash": "sha256-ipCPyRDKTLIEQTU3ntHn52pUojyGi9jzxJzxAJQ/hjg=",
+        "owner": "brittonr",
+        "repo": "wasmtime-redox",
+        "rev": "dfa064f8889900effdc54b9a257cedfee4fcc399",
+        "type": "github"
       },
       "original": {
-        "path": "/home/brittonr/git/wasmtime-redox",
-        "type": "path"
+        "owner": "brittonr",
+        "repo": "wasmtime-redox",
+        "rev": "dfa064f8889900effdc54b9a257cedfee4fcc399",
+        "type": "github"
       }
     },
     "wasmtime-src": {

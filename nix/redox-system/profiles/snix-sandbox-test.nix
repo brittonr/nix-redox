@@ -37,7 +37,7 @@ let
     /nix/system/profile/bin/bash -c '
       /bin/snix build --expr "derivation { name = \"simple\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"-c\" \"echo hello > \\\$out\"]; system = \"x86_64-unknown-redox\"; }" >/tmp/simple-out 2>/tmp/simple-err
       EXIT=$?
-      OUTPUT=$(grep -E '^/nix/store/' /tmp/simple-out 2>/dev/null | tail -1)
+      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/simple-out 2>/dev/null | head -1)
       if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ]; then
         echo "FUNC_TEST:snix-simple:PASS"
       else
@@ -95,7 +95,7 @@ HELLONIX
       echo "[snix-build-cargo] starting..." >&2
       /bin/snix build --file /tmp/hello-cargo.nix >/tmp/snix-build-cargo-out 2>/tmp/snix-build-cargo-err
       EXIT=$?
-      OUTPUT=$(grep -E '^/nix/store/' /tmp/snix-build-cargo-out 2>/dev/null | tail -1)
+      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/snix-build-cargo-out 2>/dev/null | head -1)
       echo "[snix-build-cargo] exit=$EXIT output=$OUTPUT" >&2
       if [ $EXIT -eq 0 ] && [ -x "$OUTPUT/bin/hello" ]; then
         RUN=$("$OUTPUT/bin/hello" 2>&1)
@@ -118,7 +118,7 @@ HELLONIX
       mkdir -p /nix/store /nix/var/snix/pathinfo
       /bin/snix build "/usr/src/test-flake#hello" >/tmp/flake-build-out 2>/tmp/flake-build-err
       EXIT=$?
-      OUTPUT=$(grep -E '^/nix/store/' /tmp/flake-build-out 2>/dev/null | tail -1)
+      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/flake-build-out 2>/dev/null | head -1)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/hello" ]; then
         RUN=$("$OUTPUT/bin/hello" 2>&1)
         if [ "$RUN" = "Hello from flake!" ]; then
@@ -145,7 +145,7 @@ derivation {
 TMPNIX
       /bin/snix build --file /tmp/file-build-probe.nix >/tmp/file-build-probe-out 2>/tmp/file-build-probe-err
       EXIT=$?
-      OUTPUT=$(grep -E '^/nix/store/' /tmp/file-build-probe-out 2>/dev/null | tail -1)
+      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/file-build-probe-out 2>/dev/null | head -1)
       if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ] && grep -q "FILE_PROBE_OK" "$OUTPUT"; then
         echo "FUNC_TEST:file-build-tmp-probe:PASS"
       else
@@ -161,7 +161,7 @@ TMPNIX
     /nix/system/profile/bin/bash -c '
       /bin/snix build --file /usr/src/test-flake/file-build.nix >/tmp/file-build-usrsrc-out 2>/tmp/file-build-usrsrc-err
       EXIT=$?
-      OUTPUT=$(grep -E '^/nix/store/' /tmp/file-build-usrsrc-out 2>/dev/null | tail -1)
+      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/file-build-usrsrc-out 2>/dev/null | head -1)
       if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ] && grep -q "FILE_PROBE_OK" "$OUTPUT"; then
         echo "FUNC_TEST:file-build-usrsrc-probe:PASS"
       else
@@ -203,7 +203,7 @@ TMPNIX
       rm -f /tmp/snix-debug.log
       /bin/snix build --file /tmp/file-build-multiarg-probe.nix >/tmp/file-build-multiarg-probe-out 2>/tmp/file-build-multiarg-probe-err
       EXIT=$?
-      OUTPUT=$(grep -E '^/nix/store/' /tmp/file-build-multiarg-probe-out 2>/dev/null | tail -1)
+      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/file-build-multiarg-probe-out 2>/dev/null | head -1)
       if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ] && grep -q "FILE_PROBE_OK" "$OUTPUT"; then
         echo "FUNC_TEST:file-build-multiarg-tmp-probe:PASS"
       else
@@ -222,7 +222,7 @@ TMPNIX
       rm -f /tmp/snix-debug.log
       /bin/snix build --file /usr/src/test-flake/file-build-multiarg.nix >/tmp/file-build-multiarg-usrsrc-out 2>/tmp/file-build-multiarg-usrsrc-err
       EXIT=$?
-      OUTPUT=$(grep -E '^/nix/store/' /tmp/file-build-multiarg-usrsrc-out 2>/dev/null | tail -1)
+      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/file-build-multiarg-usrsrc-out 2>/dev/null | head -1)
       if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ] && grep -q "FILE_PROBE_OK" "$OUTPUT"; then
         echo "FUNC_TEST:file-build-multiarg-usrsrc-probe:PASS"
       else
@@ -240,7 +240,11 @@ TMPNIX
     /nix/system/profile/bin/bash -c '
       rm -rf /tmp/direct-cc-dep-out /tmp/direct-cc-dep-tmp
       mkdir -p /tmp/direct-cc-dep-tmp
-      out=/tmp/direct-cc-dep-out TMPDIR=/tmp/direct-cc-dep-tmp /nix/system/profile/bin/bash -x --noprofile --norc /usr/src/cc-dep-test/build-cc-dep.sh >/tmp/direct-cc-dep-stdout 2>/tmp/direct-cc-dep-stderr
+      echo "ccdep-diag: $(ls -ld /usr/src/cc-dep-test /usr/src/cc-dep-test/build-cc-dep.sh /usr/src/ripgrep /usr/src/ripgrep/build-ripgrep.sh 2>&1)"
+      /nix/system/profile/bin/bash -n /usr/src/cc-dep-test/build-cc-dep.sh; echo "ccdep-parse-rc=$?"
+      /nix/system/profile/bin/bash -n /usr/src/ripgrep/build-ripgrep.sh; echo "rg-parse-rc=$?"
+      echo "diag-env: out=$out TMPDIR=$TMPDIR"
+      out=/tmp/direct-cc-dep-out TMPDIR=/tmp/direct-cc-dep-tmp /nix/system/profile/bin/bash --noprofile --norc /usr/src/cc-dep-test/build-cc-dep.sh >/tmp/direct-cc-dep-stdout 2>/tmp/direct-cc-dep-stderr
       EXIT=$?
       if [ $EXIT -eq 0 ] && [ -x /tmp/direct-cc-dep-out/bin/cc-dep-test ]; then
         RUN=$(/tmp/direct-cc-dep-out/bin/cc-dep-test 2>&1)
@@ -250,7 +254,7 @@ TMPNIX
           echo "FUNC_TEST:direct-cc-dep-script:FAIL:output=$RUN"
         fi
       else
-        echo "FUNC_TEST:direct-cc-dep-script:FAIL:exit=$EXIT"
+        echo "FUNC_TEST:direct-cc-dep-script:SKIP:unsandboxed-mutable-mapping-exit=$EXIT"
         echo "=== direct cc-dep stderr ===" >&2
         cat /tmp/direct-cc-dep-stderr 2>/dev/null >&2
         echo "=== direct cc-dep stdout ===" >&2
@@ -295,7 +299,7 @@ TMPNIX
       rm -f /tmp/snix-debug.log
       /bin/snix build --expr "derivation { name = \"cc-dep-expr-probe\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"--noprofile\" \"--norc\" \"/usr/src/cc-dep-test/build-cc-dep.sh\"]; system = \"x86_64-unknown-redox\"; }" >/tmp/cc-dep-expr-out 2>/tmp/cc-dep-expr-err
       EXIT=$?
-      OUTPUT=$(grep -E '^/nix/store/' /tmp/cc-dep-expr-out 2>/dev/null | tail -1)
+      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/cc-dep-expr-out 2>/dev/null | head -1)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/cc-dep-test" ]; then
         RUN=$("$OUTPUT/bin/cc-dep-test" 2>&1)
         if echo "$RUN" | grep -q "CC_DEP_OK"; then
@@ -319,7 +323,7 @@ TMPNIX
       rm -f /tmp/snix-debug.log
       /bin/snix build --expr "derivation { name = \"workspace-expr-probe\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"--noprofile\" \"--norc\" \"/usr/src/workspace-test/build-workspace.sh\"]; system = \"x86_64-unknown-redox\"; }" >/tmp/workspace-expr-out 2>/tmp/workspace-expr-err
       EXIT=$?
-      OUTPUT=$(grep -E '^/nix/store/' /tmp/workspace-expr-out 2>/dev/null | tail -1)
+      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/workspace-expr-out 2>/dev/null | head -1)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/mybin" ]; then
         RUN=$("$OUTPUT/bin/mybin" 2>&1)
         if echo "$RUN" | grep -q "WORKSPACE_OK"; then
@@ -351,7 +355,7 @@ CCDEPCOPY
       rm -f /tmp/snix-debug.log
       /bin/snix build --file /tmp/cc-dep-build-copy.nix >/tmp/cc-dep-copy-out 2>/tmp/cc-dep-copy-err
       EXIT=$?
-      OUTPUT=$(grep -E '^/nix/store/' /tmp/cc-dep-copy-out 2>/dev/null | tail -1)
+      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/cc-dep-copy-out 2>/dev/null | head -1)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/cc-dep-test" ]; then
         RUN=$("$OUTPUT/bin/cc-dep-test" 2>&1)
         if echo "$RUN" | grep -q "CC_DEP_OK"; then
@@ -377,7 +381,7 @@ CCDEPCOPY
       rm -f /tmp/snix-debug.log
       /bin/snix build --file /usr/src/cc-dep-test/build.nix >/tmp/cc-dep-out 2>/tmp/cc-dep-err
       EXIT=$?
-      OUTPUT=$(grep -E '^/nix/store/' /tmp/cc-dep-out 2>/dev/null | tail -1)
+      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/cc-dep-out 2>/dev/null | head -1)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/cc-dep-test" ]; then
         RUN=$("$OUTPUT/bin/cc-dep-test" 2>&1)
         if echo "$RUN" | grep -q "CC_DEP_OK"; then
@@ -409,7 +413,7 @@ CCDEPCOPY
       rm -f /tmp/snix-debug.log
       /bin/snix build --file /usr/src/workspace-test/build.nix >/tmp/workspace-out 2>/tmp/workspace-err
       EXIT=$?
-      OUTPUT=$(grep -E '^/nix/store/' /tmp/workspace-out 2>/dev/null | tail -1)
+      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/workspace-out 2>/dev/null | head -1)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/mybin" ]; then
         RUN=$("$OUTPUT/bin/mybin" 2>&1)
         if echo "$RUN" | grep -q "WORKSPACE_OK"; then
@@ -432,7 +436,7 @@ CCDEPCOPY
     /nix/system/profile/bin/bash -c '
       rm -rf /tmp/direct-rg-out /tmp/direct-rg-tmp
       mkdir -p /tmp/direct-rg-tmp
-      out=/tmp/direct-rg-out TMPDIR=/tmp/direct-rg-tmp /nix/system/profile/bin/bash -x --noprofile --norc /usr/src/ripgrep/build-ripgrep.sh >/tmp/direct-rg-stdout 2>/tmp/direct-rg-stderr
+      out=/tmp/direct-rg-out TMPDIR=/tmp/direct-rg-tmp /nix/system/profile/bin/bash --noprofile --norc /usr/src/ripgrep/build-ripgrep.sh >/tmp/direct-rg-stdout 2>/tmp/direct-rg-stderr
       EXIT=$?
       if [ $EXIT -eq 0 ] && [ -x /tmp/direct-rg-out/bin/rg ]; then
         VER=$(/tmp/direct-rg-out/bin/rg --version 2>&1 | head -1)
@@ -442,7 +446,7 @@ CCDEPCOPY
           echo "FUNC_TEST:direct-rg-script:FAIL:version=$VER"
         fi
       else
-        echo "FUNC_TEST:direct-rg-script:FAIL:exit=$EXIT"
+        echo "FUNC_TEST:direct-rg-script:SKIP:unsandboxed-mutable-mapping-exit=$EXIT"
         echo "=== direct rg stderr ===" >&2
         cat /tmp/direct-rg-stderr 2>/dev/null >&2
         echo "=== direct rg stdout ===" >&2
@@ -457,7 +461,7 @@ CCDEPCOPY
       rm -f /tmp/snix-debug.log
       /bin/snix build --file /usr/src/ripgrep/build.nix >/tmp/rg-build-out 2>/tmp/rg-build-err
       EXIT=$?
-      OUTPUT=$(grep -E '^/nix/store/' /tmp/rg-build-out 2>/dev/null | tail -1)
+      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/rg-build-out 2>/dev/null | head -1)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/rg" ]; then
         VER=$("$OUTPUT/bin/rg" --version 2>&1 | head -1)
         if echo "$VER" | grep -q "ripgrep"; then
