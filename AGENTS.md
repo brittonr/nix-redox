@@ -223,6 +223,14 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - `adios.lib.importModules` auto-discovers .nix files in modules/ — but only tracked ones
 - New source files (`.rs`) in flake-referenced paths also need `git add`
 
+### CI checks (2026-10-26)
+
+- The formatting check is `checks.x86_64-linux.formatting`; `checks.x86_64-linux.treefmt` does not exist.
+- Flake inputs must be fetchable from CI: `path:` inputs resolve only on the author's machine, and private `github:` inputs return 404 for the runner tarball. Pin a public revision instead.
+- The cold cross job (userspace + disk image) takes ~2.5h on hosted runners; `timeout-minutes: 360` is required.
+- The workflow concurrency group cancels in-progress runs when another push lands on `main`; do not expect every pushed commit to have a completed run.
+- Mock packages must stage paths the initfs builder copies unconditionally, e.g. `$out/usr/lib/xhcid.d/drivers.toml` for `base`.
+
 ### snix unit2nix build plans
 - Changing `snix-redox/Cargo.toml` or `Cargo.lock` is NOT enough for `nix build` / VM image builds — the cross build uses `nix/pkgs/userspace/snix-build-plan.json`, and host-side unit2nix checks use `snix-redox/build-plan.json`
 - After snix dependency changes, run `snix-redox/regenerate-build-plan.sh` to refresh BOTH plan files; otherwise mkCrossPackage can omit new `--extern` deps (for example `minreq`) even when plain host `cargo test` passes
@@ -283,6 +291,13 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - QEMU: `-vga none` required for headless (otherwise bootloader waits for resolution selection)
 - Expect `-re ".+"` fails on ANSI escape codes — use file-based polling instead
 
+### Guest test harnesses (2026-10-26)
+
+- Parse `snix build` output with shell builtins: `OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < file)`. `tail` is not reliably in the test PATH and `grep -E` is unsupported; bare `grep`/`head` may resolve only under `/bin`.
+- Generated `Cargo.lock` fixtures must be `version = 4` for cargo 1.92. A v3 lock makes offline cargo re-resolve, exit 101, and (inside a read-only sandbox source) fail with "failed to write Cargo.lock".
+- `snix-sandbox-test` is the fast proxy validation: 16 pass / 0 fail / 2 skip; the skips are direct unsandboxed probes blocked by mutable-path mapping corruption.
+- The full `self-hosting-test` needs `defaultTimeout = 21600`; `source-rebuild` alone can exceed four hours on this host.
+
 ### Test Script Idioms
 - Emit `FUNC_TEST:name:PASS/FAIL` directly — don't rely on exit codes through Ion
 - Use `/nix/system/profile/bin/bash -c '...'` for complex logic (not bare `bash`)
@@ -315,6 +330,12 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - Linux-target host tests do NOT compile `#[cfg(target_os = "redox")]` modules like `stored/scheme.rs`; treat them as logic coverage only, not proof that Redox scheme daemons compile
 - Adding a new `[[bin]]` target to `snix-redox/Cargo.toml` also requires `snix-redox/regenerate-build-plan.sh`; otherwise `self.packages.snix` keeps omitting the new binary even though plain `cargo check --bins` passes
 - repo helper: `scripts/validate-snix-redox-host.sh` wraps that host-side validation sequence
+
+### Guest self-compile proc-macro shims
+
+- `snix-redox/vendor-patches/` contains hand-written shims for proc-macro crates (async-trait, auto_impl, thiserror-impl, serde_derive, prost-derive, ...) because the guest rustc historically spun compiling the real derives. The shims are only pairwise compatible: the shim async-trait + shim auto_impl combination builds, but mixing the real async-trait with the shim auto_impl fails with E0195 lifetime mismatches.
+- `snix-castore` needs real derive semantics (`Arc<Concrete>` -> `Arc<dyn Trait>` coercions, `return` inside async bodies, `E: Debug` bounds). Shim fixes tried: adding `Self: 'async_trait` to impls, removing the nested `async move` around impl bodies, upstream's `None::<Ret>` return-coercion trick; each surfaced another shim gap (auto_impl E0195, thiserror E0277).
+- Testing the guest bundle with all shims removed (real vendored derives) is the current experiment; the focused wrapper is `nix run .#snix-compile-test -- --verbose` (9000s).
 
 ### What Doesn't
 - `CARGO_BUILD_JOBS > 1` had two issues: (1) lld stack overflow — fixed by `lld-wrapper` (16MB stack thread + exec); (2) cargo job manager hangs on multi-crate workspace builds — fixed by `patch-relibc-fork-lock.py` (see below)
