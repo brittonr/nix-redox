@@ -37,7 +37,7 @@ let
     /nix/system/profile/bin/bash -c '
       /bin/snix build --expr "derivation { name = \"simple\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"-c\" \"echo hello > \\\$out\"]; system = \"x86_64-unknown-redox\"; }" >/tmp/simple-out 2>/tmp/simple-err
       EXIT=$?
-      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/simple-out 2>/dev/null | head -1)
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/simple-out)
       if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ]; then
         echo "FUNC_TEST:snix-simple:PASS"
       else
@@ -95,7 +95,7 @@ HELLONIX
       echo "[snix-build-cargo] starting..." >&2
       /bin/snix build --file /tmp/hello-cargo.nix >/tmp/snix-build-cargo-out 2>/tmp/snix-build-cargo-err
       EXIT=$?
-      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/snix-build-cargo-out 2>/dev/null | head -1)
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/snix-build-cargo-out)
       echo "[snix-build-cargo] exit=$EXIT output=$OUTPUT" >&2
       if [ $EXIT -eq 0 ] && [ -x "$OUTPUT/bin/hello" ]; then
         RUN=$("$OUTPUT/bin/hello" 2>&1)
@@ -118,7 +118,7 @@ HELLONIX
       mkdir -p /nix/store /nix/var/snix/pathinfo
       /bin/snix build "/usr/src/test-flake#hello" >/tmp/flake-build-out 2>/tmp/flake-build-err
       EXIT=$?
-      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/flake-build-out 2>/dev/null | head -1)
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/flake-build-out)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/hello" ]; then
         RUN=$("$OUTPUT/bin/hello" 2>&1)
         if [ "$RUN" = "Hello from flake!" ]; then
@@ -145,7 +145,7 @@ derivation {
 TMPNIX
       /bin/snix build --file /tmp/file-build-probe.nix >/tmp/file-build-probe-out 2>/tmp/file-build-probe-err
       EXIT=$?
-      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/file-build-probe-out 2>/dev/null | head -1)
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/file-build-probe-out)
       if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ] && grep -q "FILE_PROBE_OK" "$OUTPUT"; then
         echo "FUNC_TEST:file-build-tmp-probe:PASS"
       else
@@ -161,7 +161,7 @@ TMPNIX
     /nix/system/profile/bin/bash -c '
       /bin/snix build --file /usr/src/test-flake/file-build.nix >/tmp/file-build-usrsrc-out 2>/tmp/file-build-usrsrc-err
       EXIT=$?
-      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/file-build-usrsrc-out 2>/dev/null | head -1)
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/file-build-usrsrc-out)
       if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ] && grep -q "FILE_PROBE_OK" "$OUTPUT"; then
         echo "FUNC_TEST:file-build-usrsrc-probe:PASS"
       else
@@ -203,7 +203,7 @@ TMPNIX
       rm -f /tmp/snix-debug.log
       /bin/snix build --file /tmp/file-build-multiarg-probe.nix >/tmp/file-build-multiarg-probe-out 2>/tmp/file-build-multiarg-probe-err
       EXIT=$?
-      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/file-build-multiarg-probe-out 2>/dev/null | head -1)
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/file-build-multiarg-probe-out)
       if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ] && grep -q "FILE_PROBE_OK" "$OUTPUT"; then
         echo "FUNC_TEST:file-build-multiarg-tmp-probe:PASS"
       else
@@ -222,7 +222,7 @@ TMPNIX
       rm -f /tmp/snix-debug.log
       /bin/snix build --file /usr/src/test-flake/file-build-multiarg.nix >/tmp/file-build-multiarg-usrsrc-out 2>/tmp/file-build-multiarg-usrsrc-err
       EXIT=$?
-      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/file-build-multiarg-usrsrc-out 2>/dev/null | head -1)
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/file-build-multiarg-usrsrc-out)
       if [ $EXIT -eq 0 ] && [ -f "$OUTPUT" ] && grep -q "FILE_PROBE_OK" "$OUTPUT"; then
         echo "FUNC_TEST:file-build-multiarg-usrsrc-probe:PASS"
       else
@@ -299,7 +299,7 @@ TMPNIX
       rm -f /tmp/snix-debug.log
       /bin/snix build --expr "derivation { name = \"cc-dep-expr-probe\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"--noprofile\" \"--norc\" \"/usr/src/cc-dep-test/build-cc-dep.sh\"]; system = \"x86_64-unknown-redox\"; }" >/tmp/cc-dep-expr-out 2>/tmp/cc-dep-expr-err
       EXIT=$?
-      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/cc-dep-expr-out 2>/dev/null | head -1)
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/cc-dep-expr-out)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/cc-dep-test" ]; then
         RUN=$("$OUTPUT/bin/cc-dep-test" 2>&1)
         if echo "$RUN" | grep -q "CC_DEP_OK"; then
@@ -323,7 +323,7 @@ TMPNIX
       rm -f /tmp/snix-debug.log
       /bin/snix build --expr "derivation { name = \"workspace-expr-probe\"; builder = \"/nix/system/profile/bin/bash\"; args = [\"--noprofile\" \"--norc\" \"/usr/src/workspace-test/build-workspace.sh\"]; system = \"x86_64-unknown-redox\"; }" >/tmp/workspace-expr-out 2>/tmp/workspace-expr-err
       EXIT=$?
-      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/workspace-expr-out 2>/dev/null | head -1)
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/workspace-expr-out)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/mybin" ]; then
         RUN=$("$OUTPUT/bin/mybin" 2>&1)
         if echo "$RUN" | grep -q "WORKSPACE_OK"; then
@@ -355,7 +355,7 @@ CCDEPCOPY
       rm -f /tmp/snix-debug.log
       /bin/snix build --file /tmp/cc-dep-build-copy.nix >/tmp/cc-dep-copy-out 2>/tmp/cc-dep-copy-err
       EXIT=$?
-      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/cc-dep-copy-out 2>/dev/null | head -1)
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/cc-dep-copy-out)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/cc-dep-test" ]; then
         RUN=$("$OUTPUT/bin/cc-dep-test" 2>&1)
         if echo "$RUN" | grep -q "CC_DEP_OK"; then
@@ -381,7 +381,7 @@ CCDEPCOPY
       rm -f /tmp/snix-debug.log
       /bin/snix build --file /usr/src/cc-dep-test/build.nix >/tmp/cc-dep-out 2>/tmp/cc-dep-err
       EXIT=$?
-      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/cc-dep-out 2>/dev/null | head -1)
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/cc-dep-out)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/cc-dep-test" ]; then
         RUN=$("$OUTPUT/bin/cc-dep-test" 2>&1)
         if echo "$RUN" | grep -q "CC_DEP_OK"; then
@@ -413,7 +413,7 @@ CCDEPCOPY
       rm -f /tmp/snix-debug.log
       /bin/snix build --file /usr/src/workspace-test/build.nix >/tmp/workspace-out 2>/tmp/workspace-err
       EXIT=$?
-      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/workspace-out 2>/dev/null | head -1)
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/workspace-out)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/mybin" ]; then
         RUN=$("$OUTPUT/bin/mybin" 2>&1)
         if echo "$RUN" | grep -q "WORKSPACE_OK"; then
@@ -461,7 +461,7 @@ CCDEPCOPY
       rm -f /tmp/snix-debug.log
       /bin/snix build --file /usr/src/ripgrep/build.nix >/tmp/rg-build-out 2>/tmp/rg-build-err
       EXIT=$?
-      OUTPUT=$(/bin/grep '^/nix/store/' /tmp/rg-build-out 2>/dev/null | head -1)
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/rg-build-out)
       if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -x "$OUTPUT/bin/rg" ]; then
         VER=$("$OUTPUT/bin/rg" --version 2>&1 | head -1)
         if echo "$VER" | grep -q "ripgrep"; then
