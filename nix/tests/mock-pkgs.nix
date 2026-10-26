@@ -19,6 +19,7 @@ let
       name,
       binaries,
       pname ? null,
+      extraSetup ? "",
     }:
     (pkgs.runCommand "mock-${name}" { } ''
       mkdir -p $out/bin
@@ -27,6 +28,7 @@ let
         echo 'echo "Mock ${bin} (from ${name})"' >> $out/bin/${bin}
         chmod +x $out/bin/${bin}
       '') binaries}
+      ${extraSetup}
     '')
     // (lib.optionalAttrs (pname != null) { inherit pname; });
 
@@ -52,6 +54,12 @@ rec {
   base = mkMockPackageWithBins {
     name = "base";
     pname = "redox-base";
+    # xhcid reads its USB class driver table from /usr/lib/xhcid.d at runtime;
+    # the real base package stages drivers.toml there and initfs copies it.
+    extraSetup = ''
+      mkdir -p $out/usr/lib/xhcid.d
+      echo '# mock USB class driver table' > $out/usr/lib/xhcid.d/drivers.toml
+    '';
     binaries = [
       # Core daemons (required by initfs)
       "init"
