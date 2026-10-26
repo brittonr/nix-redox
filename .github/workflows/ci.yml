@@ -37,7 +37,7 @@ jobs:
             accept-flake-config = true
 
       - name: "Formatting check"
-        run: nix build .#checks.x86_64-linux.treefmt --no-link
+        run: nix build .#checks.x86_64-linux.formatting --no-link
 
       - name: "Eval tests (all profiles + modules)"
         run: |
