@@ -51,27 +51,28 @@ export RAYON_NUM_THREADS=4
 export RUST_BACKTRACE=1
 export AR=/nix/system/profile/bin/llvm-ar
 export CC=/nix/system/profile/bin/cc
-export RUST_SRC_PATH=/usr/src/native-kernel-rebuild/rust-src/library
+export RUST_SRC_PATH="${rustSource:-/usr/src/native-kernel-rebuild/rust-src}/library"
 export CARGO_TERM_PROGRESS_WHEN="${CARGO_TERM_PROGRESS_WHEN:-always}"
 export CARGO_TERM_PROGRESS_WIDTH="${CARGO_TERM_PROGRESS_WIDTH:-80}"
 export CARGO_TARGET_X86_64_UNKNOWN_UEFI_RUSTFLAGS="--cfg aes_force_soft"
 
-bootloader_dir=/usr/src/native-kernel-rebuild/bootloader
+bootloader_source="${source:-/usr/src/native-kernel-rebuild/bootloader}"
+bootloader_dir="$TMPDIR/bootloader"
+cp -r "$bootloader_source" "$bootloader_dir"
+chmod -R u+w "$bootloader_dir"
 bootloader_linker_log="$TMPDIR/bootloader-linker"
 bootloader_linker="$TMPDIR/bootloader-linker-wrapper"
 bootloader_cargo_json="$TMPDIR/bootloader-cargo.jsonl"
 
 mkdir -p "$HOME" "$CARGO_HOME" "$CARGO_TARGET_DIR" "$out/boot/EFI/BOOT"
 
-if [ -f "$bootloader_dir/.cargo/config.toml" ]; then
-  mv "$bootloader_dir/.cargo/config.toml" "$bootloader_dir/.cargo/config.toml.bundle"
-fi
-cat >"$CARGO_HOME/config.toml" <<'CFG'
+rm -f "$bootloader_dir/.cargo/config.toml"
+cat >"$CARGO_HOME/config.toml" <<CFG
 [source.crates-io]
 replace-with = "vendored-sources"
 
 [source.vendored-sources]
-directory = "/usr/src/native-kernel-rebuild/bootloader/vendor"
+directory = "$bootloader_source/vendor"
 
 [net]
 offline = true
@@ -90,7 +91,16 @@ case "$rustlib_meta" in
 esac
 cp -r "$rustlib_src/." "$custom_sysroot/lib/rustlib/"
 rm -rf "$custom_sysroot/lib/rustlib/src/rust"
-cp -r /usr/src/native-kernel-rebuild/rust-src "$custom_sysroot/lib/rustlib/src/rust"
+cp -r "${rustSource:-/usr/src/native-kernel-rebuild/rust-src}" "$custom_sysroot/lib/rustlib/src/rust"
+chmod -R u+w "$custom_sysroot/lib/rustlib/src/rust"
+# Keep Cargo's absolute rust source dependencies inside this private snapshot.
+export RUST_SRC_PATH="$custom_sysroot/lib/rustlib/src/rust/library"
+shopt -s globstar
+for manifest in "$RUST_SRC_PATH"/**/Cargo.toml; do
+  manifest_text=$(cat "$manifest")
+  printf '%s\n' "${manifest_text//\/usr\/src\/native-kernel-rebuild\/rust-src/$custom_sysroot/lib/rustlib/src/rust}" >"$manifest"
+done
+shopt -u globstar
 
 cp /nix/system/profile/bin/bash "$bootloader_linker"
 cat >"$bootloader_linker" <<EOF

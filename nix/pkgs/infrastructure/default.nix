@@ -55,6 +55,11 @@ in
 {
   inherit initfsTools bootstrap;
 
+  # Host-evaluated bootstrap data is explicit; build.nix itself runs on Redox.
+  mkNativeSystemSourceBundle = args: import ./native-system-source-bundle.nix (
+    { inherit pkgs lib initfsTools; } // args
+  );
+
   # QEMU runners factory - requires diskImage and bootloader
   # Optional vmConfig from /virtualisation module for resource defaults
   mkQemuRunners =

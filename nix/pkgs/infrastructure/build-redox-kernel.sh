@@ -51,12 +51,15 @@ export RAYON_NUM_THREADS=4
 export RUST_BACKTRACE=1
 export AR=/nix/system/profile/bin/llvm-ar
 export CC=/nix/system/profile/bin/cc
-export RUST_SRC_PATH=/usr/src/native-kernel-rebuild/rust-src/library
+export RUST_SRC_PATH="${rustSource:-/usr/src/native-kernel-rebuild/rust-src}/library"
 export REDOX_KERNEL_USE_PREBUILT_TRAMPOLINE=1
 export CARGO_TERM_PROGRESS_WHEN="${CARGO_TERM_PROGRESS_WHEN:-always}"
 export CARGO_TERM_PROGRESS_WIDTH="${CARGO_TERM_PROGRESS_WIDTH:-80}"
 
-kernel_dir=/usr/src/native-kernel-rebuild/kernel
+kernel_source="${source:-/usr/src/native-kernel-rebuild/kernel}"
+kernel_dir="$TMPDIR/kernel"
+cp -r "$kernel_source" "$kernel_dir"
+chmod -R u+w "$kernel_dir"
 linker_script="$kernel_dir/linkers/x86_64.ld"
 kernel_linker_log="$TMPDIR/kernel-linker"
 kernel_linker="$TMPDIR/kernel-linker-wrapper"
@@ -64,15 +67,13 @@ kernel_cargo_json="$TMPDIR/kernel-cargo.jsonl"
 
 mkdir -p "$HOME" "$CARGO_HOME" "$CARGO_TARGET_DIR" "$out/boot"
 
-if [ -f "$kernel_dir/.cargo/config.toml" ]; then
-  mv "$kernel_dir/.cargo/config.toml" "$kernel_dir/.cargo/config.toml.bundle"
-fi
-cat >"$CARGO_HOME/config.toml" <<'CFG'
+rm -f "$kernel_dir/.cargo/config.toml"
+cat >"$CARGO_HOME/config.toml" <<CFG
 [source.crates-io]
 replace-with = "vendored-sources"
 
 [source.vendored-sources]
-directory = "/usr/src/native-kernel-rebuild/kernel/vendor"
+directory = "$kernel_source/vendor"
 
 [net]
 offline = true
@@ -98,7 +99,17 @@ case "$rustlib_meta" in
 esac
 cp -r "$rustlib_src/." "$custom_sysroot/lib/rustlib/"
 rm -rf "$custom_sysroot/lib/rustlib/src/rust"
-cp -r /usr/src/native-kernel-rebuild/rust-src "$custom_sysroot/lib/rustlib/src/rust"
+cp -r "${rustSource:-/usr/src/native-kernel-rebuild/rust-src}" "$custom_sysroot/lib/rustlib/src/rust"
+chmod -R u+w "$custom_sysroot/lib/rustlib/src/rust"
+# The staged bootstrap manifests use guest-visible absolute paths. Retarget
+# only our private copy so the native graph reads its snapshotted source input.
+export RUST_SRC_PATH="$custom_sysroot/lib/rustlib/src/rust/library"
+shopt -s globstar
+for manifest in "$RUST_SRC_PATH"/**/Cargo.toml; do
+  manifest_text=$(cat "$manifest")
+  printf '%s\n' "${manifest_text//\/usr\/src\/native-kernel-rebuild\/rust-src/$custom_sysroot/lib/rustlib/src/rust}" >"$manifest"
+done
+shopt -u globstar
 
 echo "[build-redox-kernel] real_sysroot=$real_sysroot" >&2
 echo "[build-redox-kernel] rustlib_src=$rustlib_src" >&2
@@ -119,20 +130,20 @@ cp /nix/system/profile/bin/bash "$wrapper"
 printf '%s\n' '#!/nix/system/profile/bin/bash' "exec /nix/system/profile/bin/rustc --sysroot $custom_sysroot \"\$@\"" >"$wrapper"
 export RUSTC="$wrapper"
 
-if ! cargo metadata --manifest-path "$custom_sysroot/lib/rustlib/src/rust/library/Cargo.toml" --no-deps --format-version 1 >/tmp/kernel-rust-src-metadata.json 2>/tmp/kernel-rust-src-metadata.err; then
+if ! cargo metadata --manifest-path "$custom_sysroot/lib/rustlib/src/rust/library/Cargo.toml" --no-deps --format-version 1 >"$TMPDIR/kernel-rust-src-metadata.json" 2>"$TMPDIR/kernel-rust-src-metadata.err"; then
   echo "[build-redox-kernel] cargo metadata on custom rust-src workspace failed" >&2
-  cat /tmp/kernel-rust-src-metadata.err >&2 || true
+  cat "$TMPDIR/kernel-rust-src-metadata.err" >&2 || true
 fi
 
 cd "$kernel_dir"
-if ! cargo metadata --manifest-path "$custom_sysroot/lib/rustlib/src/rust/library/Cargo.toml" --no-deps --format-version 1 >/tmp/kernel-rust-src-from-kernel-dir.json 2>/tmp/kernel-rust-src-from-kernel-dir.err; then
+if ! cargo metadata --manifest-path "$custom_sysroot/lib/rustlib/src/rust/library/Cargo.toml" --no-deps --format-version 1 >"$TMPDIR/kernel-rust-src-from-kernel-dir.json" 2>"$TMPDIR/kernel-rust-src-from-kernel-dir.err"; then
   echo "[build-redox-kernel] cargo metadata from kernel dir on custom rust-src workspace failed" >&2
-  cat /tmp/kernel-rust-src-from-kernel-dir.err >&2 || true
+  cat "$TMPDIR/kernel-rust-src-from-kernel-dir.err" >&2 || true
 fi
 
 if ! cargo rustc \
   --message-format=json-render-diagnostics \
-  --locked \
+  --offline \
   --bin kernel \
   --manifest-path Cargo.toml \
   --target targets/x86_64-unknown-kernel.json \

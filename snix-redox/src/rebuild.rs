@@ -74,14 +74,17 @@ pub struct RebuildConfig {
     pub programs: Option<ProgramsConfig>,
     /// Inline managed files written during activation, keyed by root-relative path.
     pub files: Option<BTreeMap<String, ManagedFileInput>>,
-    /// Hardware/driver configuration — changes require bridge for initfs rebuild.
+    /// Hardware/driver configuration, applied by native system builds or the bridge.
     pub hardware: Option<HardwareConfigInput>,
-    /// Declared service names — additions/removals require initfs rebuild via bridge.
+    /// Declared service names, applied by native system builds or the bridge.
     pub services: Option<Vec<String>>,
     /// Path to a .nix file returning `{ name = derivation; ... }` for source builds.
     /// Used with `snix system rebuild --source`.
     #[serde(rename = "packageSources")]
     pub package_sources: Option<String>,
+    /// Nix file returning `{ config, currentManifest }: derivation` for a complete system.
+    #[serde(rename = "systemSource")]
+    pub system_source: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
@@ -232,9 +235,10 @@ pub fn has_boot_affecting_changes(
     hw_changed || services_changed
 }
 
-/// Check if the config requires the bridge (package or boot-affecting changes).
+/// Check whether changes need the bridge when no native system source is configured.
 pub fn needs_bridge(config: &RebuildConfig, current_manifest: Option<&Manifest>) -> bool {
-    has_package_changes(config) || has_boot_affecting_changes(config, current_manifest)
+    config.system_source.is_none()
+        && (has_package_changes(config) || has_boot_affecting_changes(config, current_manifest))
 }
 
 /// Check if the build bridge is available.
@@ -249,6 +253,7 @@ pub fn bridge_available(shared_dir: Option<&str>) -> bool {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AutoRebuildRoute {
+    Native,
     Bridge,
     Local,
 }
@@ -258,19 +263,25 @@ fn select_auto_rebuild_route(
     current_manifest: Option<&Manifest>,
     bridge_is_available: bool,
 ) -> Result<AutoRebuildRoute, Box<dyn std::error::Error>> {
+    if config.system_source.is_some() {
+        return Ok(AutoRebuildRoute::Native);
+    }
+
     if has_boot_affecting_changes(config, current_manifest) {
         if bridge_is_available {
             return Ok(AutoRebuildRoute::Bridge);
         }
 
-        return Err("changes require the build bridge\n\
+        return Err(
+            "boot-affecting changes require a native system source or the build bridge\n\
              \n\
-             Your configuration.nix modifies hardware/drivers or services, which\n\
-             requires the host to rebuild the initfs. Start the VM with shared filesystem:\n\
+             Set systemSource to a native system build expression, for example:\n\
              \n\
-               nix run .#run-redox-shared     (in one terminal)\n\
-               nix run .#build-bridge         (in another terminal)\n"
-            .into());
+               systemSource = \"/usr/src/nix-redox/build.nix\";\n\
+             \n\
+             Or start the shared VM and host build bridge."
+                .into(),
+        );
     }
 
     if has_package_changes(config) && bridge_is_available {
@@ -283,10 +294,10 @@ fn select_auto_rebuild_route(
 /// Auto-routing rebuild entry point.
 ///
 /// Parses configuration.nix, then decides which path to use:
+///   - systemSource configured → build and activate the system natively
 ///   - Boot-affecting changes + bridge available → bridge rebuild
 ///   - Package changes + bridge available → bridge rebuild
-///   - Package changes + no bridge → guest-local rebuild (remote/local cache fallback)
-///   - Config-only changes → local rebuild
+///   - Other changes → guest-local rebuild (remote/local cache fallback)
 pub fn auto_rebuild(
     config_path: Option<&str>,
     dry_run: bool,
@@ -311,6 +322,9 @@ pub fn auto_rebuild(
     let route = select_auto_rebuild_route(&config, manifest_ref, bridge_available(shared_dir))?;
 
     match route {
+        AutoRebuildRoute::Native => {
+            rebuild_native_system(cfg_path, &config, dry_run, mpath, gen_dir)
+        }
         AutoRebuildRoute::Bridge => {
             let has_svc = has_service_changes(&config, manifest_ref);
             let has_hw = has_boot_affecting_changes(&config, manifest_ref);
@@ -355,6 +369,14 @@ pub fn rebuild(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cfg_path = config_path.unwrap_or(DEFAULT_CONFIG_PATH);
     let mpath = manifest_path.unwrap_or(DEFAULT_MANIFEST_PATH);
+
+    // Step 1: Evaluate configuration.nix
+    println!("Evaluating {cfg_path}...");
+    let config = evaluate_config(cfg_path)?;
+
+    if config.system_source.is_some() {
+        return rebuild_native_system(cfg_path, &config, dry_run, mpath, gen_dir);
+    }
     let cache_path = cache_index_path.unwrap_or(DEFAULT_CACHE_INDEX);
     let primary_cache = cache_source_for_rebuild(cache_path, cache_url);
     let local_cache = local_cache_source_for_rebuild(cache_path);
@@ -368,10 +390,6 @@ pub fn rebuild(
     } else {
         None
     };
-
-    // Step 1: Evaluate configuration.nix
-    println!("Evaluating {cfg_path}...");
-    let config = evaluate_config(cfg_path)?;
 
     // Warn if using local path with package changes (--local or legacy behavior)
     if has_package_changes(&config) {
@@ -1368,6 +1386,229 @@ pub fn init_config(path: Option<&str>) -> Result<(), Box<dyn std::error::Error>>
 
 // ===== Source-based rebuild =====
 
+fn nix_string_literal(value: &str) -> String {
+    let mut quoted = String::with_capacity(value.len() + 2);
+    quoted.push('"');
+    let mut chars = value.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => quoted.push_str("\\\\"),
+            '"' => quoted.push_str("\\\""),
+            '\n' => quoted.push_str("\\n"),
+            '\r' => quoted.push_str("\\r"),
+            '\t' => quoted.push_str("\\t"),
+            '$' if chars.peek() == Some(&'{') => quoted.push_str("\\$"),
+            _ => quoted.push(c),
+        }
+    }
+    quoted.push('"');
+    quoted
+}
+
+/// Build a complete generation using the same native derivation executor as `snix build`.
+/// Evaluation and every dependency build finish before the running generation is changed.
+fn rebuild_native_system(
+    cfg_path: &str,
+    config: &RebuildConfig,
+    dry_run: bool,
+    manifest_path: &str,
+    gen_dir: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = config
+        .system_source
+        .as_deref()
+        .ok_or("systemSource is not configured")?;
+    let source = if Path::new(source).is_absolute() {
+        PathBuf::from(source)
+    } else {
+        Path::new(cfg_path)
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(source)
+    };
+    let source = fs::canonicalize(&source)
+        .map_err(|e| format!("cannot open systemSource {}: {e}", source.display()))?;
+    let source = source.to_string_lossy();
+    let source = source.strip_prefix("file:").unwrap_or(&source);
+    let current = system::load_manifest_from(manifest_path)?;
+    let preserved_config = if cfg_path == DEFAULT_CONFIG_PATH {
+        Some(fs::read_to_string(cfg_path)?)
+    } else {
+        None
+    };
+
+    let config_json = serde_json::to_string(config)?;
+    let manifest_json = serde_json::to_string(&current)?;
+    let expression = format!(
+        "((import (builtins.toPath {})) {{ config = builtins.fromJSON {}; currentManifest = builtins.fromJSON {}; }}).drvPath",
+        nix_string_literal(source),
+        nix_string_literal(&config_json),
+        nix_string_literal(&manifest_json),
+    );
+    let db = if dry_run {
+        None
+    } else {
+        Some(crate::pathinfo::PathInfoDb::open()?)
+    };
+    println!("Evaluating native system source {source}...");
+    let evaluation = match db.as_ref() {
+        Some(db) => crate::eval::evaluate_for_build(&expression, db),
+        None => crate::eval::evaluate_with_state(&expression),
+    };
+    let (drv_path, state) =
+        evaluation.map_err(|e| format!("evaluating systemSource {source}: {e}"))?;
+    let drv_path = decode_eval_json_string(&drv_path)?;
+    let drv = nix_compat::store_path::StorePath::<String>::from_absolute_path(drv_path.as_bytes())
+        .map_err(|e| format!("systemSource did not produce a derivation: {e}"))?;
+
+    println!("Native system derivation: {drv_path}");
+    if dry_run {
+        println!(
+            "Dry run complete. The system dependency graph would be built locally; no generation changed."
+        );
+        return Ok(());
+    }
+
+    let db = db.expect("non-dry-run rebuild opens a pathinfo database");
+    let built = crate::local_build::build_needed(&drv, &state.known_paths.borrow(), &db)
+        .map_err(|e| format!("native system build failed: {e}"))?;
+    let output = built
+        .outputs
+        .get("out")
+        .ok_or("native system build has no 'out' output")?;
+    let manifest = load_native_system_manifest(config, output, &current)?;
+
+    let temporary_manifest = format!("/tmp/snix-native-rebuild-{}.json", std::process::id());
+    fs::write(
+        &temporary_manifest,
+        serde_json::to_string_pretty(&manifest)?,
+    )?;
+    let result = system::switch(
+        &temporary_manifest,
+        Some("native system rebuild"),
+        false,
+        gen_dir,
+        Some(manifest_path),
+    );
+    let _ = fs::remove_file(&temporary_manifest);
+    result?;
+
+    if let Some(text) = preserved_config.as_deref() {
+        preserve_active_config(DEFAULT_CONFIG_PATH, text)?;
+    }
+    println!("System rebuilt natively at {output}");
+    Ok(())
+}
+
+fn load_native_system_manifest(
+    config: &RebuildConfig,
+    output: &str,
+    current: &Manifest,
+) -> Result<Manifest, Box<dyn std::error::Error>> {
+    let root = Path::new(output);
+    let manifest_path = root.join("manifest.json");
+    let mut manifest = system::load_manifest_from(&manifest_path.to_string_lossy())?;
+    if manifest.system.target != current.system.target {
+        return Err(format!(
+            "native system target '{}' does not match running target '{}'",
+            manifest.system.target, current.system.target,
+        )
+        .into());
+    }
+    let boot = manifest
+        .boot
+        .as_ref()
+        .ok_or("native system manifest has no boot artifacts")?;
+    for (name, path) in [
+        ("kernel", boot.kernel.as_deref()),
+        ("initfs", boot.initfs.as_deref()),
+        ("bootloader", boot.bootloader.as_deref()),
+    ] {
+        let path = path.ok_or_else(|| format!("native system manifest has no boot.{name}"))?;
+        if !Path::new(path).is_file() {
+            return Err(format!("native system boot.{name} artifact is missing: {path}").into());
+        }
+    }
+
+    if manifest.etc_source.is_none() {
+        let sidecar = root.join("etc-source-path");
+        manifest.etc_source = Some(
+            fs::read_to_string(&sidecar)
+                .map_err(|e| {
+                    format!(
+                        "native system has no etcSource or {}: {e}",
+                        sidecar.display()
+                    )
+                })?
+                .trim()
+                .to_string(),
+        );
+    }
+    if !manifest
+        .etc_source
+        .as_ref()
+        .is_some_and(|path| Path::new(path).join("etc").is_dir())
+    {
+        return Err("native system etcSource does not contain an etc directory".into());
+    }
+    manifest.toplevel = Some(output.to_string());
+    manifest = merge_config(&manifest, config, &[])?;
+
+    // Rootfs units are not /etc overrides. Replace the tracked set so removed or
+    // renumbered units disappear and generation rollback can restore their text.
+    let root_files = root.join("root-files");
+    if root_files.is_dir() {
+        manifest
+            .files
+            .retain(|path, _| !path.starts_with("usr/lib/init.d/"));
+        collect_native_root_files(&root_files, &root_files, &mut manifest.files)?;
+    }
+    Ok(manifest)
+}
+
+fn collect_native_root_files(
+    root: &Path,
+    directory: &Path,
+    files: &mut BTreeMap<String, crate::system::FileInfo>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for entry in fs::read_dir(directory)? {
+        let entry = entry?;
+        let path = entry.path();
+        let kind = entry.file_type()?;
+        if kind.is_dir() {
+            collect_native_root_files(root, &path, files)?;
+        } else if kind.is_file() {
+            let relative = path.strip_prefix(root)?.to_string_lossy().into_owned();
+            let relative = validate_managed_file_path(&relative)?;
+            let text = fs::read_to_string(&path)?;
+            #[cfg(unix)]
+            let mode = {
+                use std::os::unix::fs::PermissionsExt;
+                // Nix strips staging write bits; generated runtime files stay mutable.
+                (entry.metadata()?.permissions().mode() & 0o7777) | 0o200
+            };
+            #[cfg(not(unix))]
+            let mode = 0o644;
+            files.insert(
+                relative,
+                crate::system::FileInfo {
+                    blake3: blake3::hash(text.as_bytes()).to_hex().to_string(),
+                    size: text.len() as u64,
+                    mode: format!("{mode:04o}"),
+                    text: Some(text),
+                },
+            );
+        } else {
+            return Err(format!(
+                "native root file must be a regular file: {}",
+                path.display()
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
 /// Rebuild the system by compiling packages from Nix expressions.
 ///
 /// Reads `packageSources` from configuration.nix, evaluates the referenced
@@ -1383,6 +1624,14 @@ pub fn rebuild_from_source(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cfg_path = config_path.unwrap_or(DEFAULT_CONFIG_PATH);
     let mpath = manifest_path.unwrap_or(DEFAULT_MANIFEST_PATH);
+
+    // Step 1: Evaluate configuration.nix
+    println!("Evaluating {cfg_path}...");
+    let config = evaluate_config(cfg_path)?;
+
+    if config.system_source.is_some() {
+        return rebuild_native_system(cfg_path, &config, dry_run, mpath, gen_dir);
+    }
     let cache_path = cache_index_path.unwrap_or(DEFAULT_CACHE_INDEX);
     let primary_cache = cache_source_for_rebuild(cache_path, cache_url);
     let local_cache = local_cache_source_for_rebuild(cache_path);
@@ -1391,10 +1640,6 @@ pub fn rebuild_from_source(
     } else {
         None
     };
-
-    // Step 1: Evaluate configuration.nix
-    println!("Evaluating {cfg_path}...");
-    let config = evaluate_config(cfg_path)?;
 
     // Step 2: Resolve packageSources path
     let sources_path = config.package_sources.as_deref().ok_or(
@@ -1571,7 +1816,7 @@ fn build_source_packages(
 
         // Evaluate the package from the sources file to populate KnownPaths
         let drv_path_expr = format!("(import {}).{}.drvPath", sources_path, name);
-        let (drv_path_str, state) = crate::eval::evaluate_with_state(&drv_path_expr)
+        let (drv_path_str, state) = crate::eval::evaluate_for_build(&drv_path_expr, &db)
             .map_err(|e| format!("evaluating drvPath for '{name}': {e}"))?;
         let drv_path_str = drv_path_str.trim_matches('"').to_string();
 
@@ -1817,9 +2062,10 @@ mod tests {
         )
         .unwrap_err();
 
-        assert!(err
-            .to_string()
-            .contains("must be root-relative without '.', '..', or a leading '/'"));
+        assert!(
+            err.to_string()
+                .contains("must be root-relative without '.', '..', or a leading '/'")
+        );
     }
 
     #[test]
@@ -1833,9 +2079,10 @@ mod tests {
         )
         .unwrap_err();
 
-        assert!(err
-            .to_string()
-            .contains("must be root-relative without '.', '..', or a leading '/'"));
+        assert!(
+            err.to_string()
+                .contains("must be root-relative without '.', '..', or a leading '/'")
+        );
     }
 
     #[test]
@@ -1939,9 +2186,10 @@ mod tests {
         };
 
         let err = merge_config(&current, &config, &[]).unwrap_err();
-        assert!(err
-            .to_string()
-            .contains("must be root-relative without '.', '..', or a leading '/'"));
+        assert!(
+            err.to_string()
+                .contains("must be root-relative without '.', '..', or a leading '/'")
+        );
     }
 
     #[test]
@@ -2048,7 +2296,7 @@ mod tests {
         assert!(names.contains(&"ion")); // boot-essential
         assert!(names.contains(&"base")); // boot-essential
         assert!(names.contains(&"uutils")); // boot-essential
-                                            // New managed packages added
+        // New managed packages added
         assert!(names.contains(&"fd"));
         assert!(names.contains(&"helix"));
         // Old managed package (ripgrep) removed
@@ -2148,6 +2396,7 @@ mod tests {
             hardware: None,
             services: None,
             package_sources: None,
+            system_source: None,
         };
 
         let merged = merge_config(&current, &config, &[]).unwrap();
@@ -2746,11 +2995,7 @@ mod tests {
             ..Default::default()
         };
         let manifest = sample_manifest();
-        let err = select_auto_rebuild_route(&config, Some(&manifest), false)
-            .unwrap_err()
-            .to_string();
-        assert!(err.contains("build bridge"));
-        assert!(err.contains("hardware/drivers or services"));
+        assert!(select_auto_rebuild_route(&config, Some(&manifest), false).is_err());
     }
 
     #[test]
@@ -2972,5 +3217,77 @@ mod tests {
         // New unresolved packages present
         assert!(names.contains(&"pkg1"));
         assert!(names.contains(&"pkg2"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn native_manifest_keeps_generated_units_with_inline_file_replacement() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().unwrap();
+        let unit_path = "usr/lib/init.d/50_retained.service";
+        let unit_text = "[service]\nname = \"retained\"\n";
+        let unit = root.path().join("root-files").join(unit_path);
+        fs::create_dir_all(unit.parent().unwrap()).unwrap();
+        fs::write(&unit, unit_text).unwrap();
+        fs::set_permissions(&unit, fs::Permissions::from_mode(0o444)).unwrap();
+        let etc = root.path().join("etc-source");
+        fs::create_dir_all(etc.join("etc")).unwrap();
+
+        let current = sample_manifest();
+        let mut built = current.clone();
+        let executable = std::env::current_exe()
+            .unwrap()
+            .to_str()
+            .unwrap()
+            .to_string();
+        built.boot = Some(system::BootComponents {
+            kernel: Some(executable.clone()),
+            initfs: Some(executable.clone()),
+            bootloader: Some(executable),
+        });
+        built.etc_source = Some(etc.to_str().unwrap().into());
+        built.files.insert(
+            "usr/lib/init.d/51_removed.service".into(),
+            system::FileInfo {
+                blake3: blake3::hash(b"removed").to_hex().to_string(),
+                size: 7,
+                mode: "644".into(),
+                text: None,
+            },
+        );
+        fs::write(
+            root.path().join("manifest.json"),
+            serde_json::to_vec(&built).unwrap(),
+        )
+        .unwrap();
+        let config = RebuildConfig {
+            files: Some(BTreeMap::from([(
+                "etc/native.conf".into(),
+                ManagedFileInput {
+                    text: "managed\n".into(),
+                    mode: Some("0640".into()),
+                },
+            )])),
+            ..Default::default()
+        };
+
+        let loaded =
+            load_native_system_manifest(&config, root.path().to_str().unwrap(), &current).unwrap();
+        assert!(
+            !loaded
+                .files
+                .contains_key("usr/lib/init.d/51_removed.service")
+        );
+        assert_eq!(loaded.files[unit_path].text.as_deref(), Some(unit_text));
+        assert_eq!(
+            loaded.files[unit_path].blake3,
+            blake3::hash(unit_text.as_bytes()).to_hex().as_str()
+        );
+        assert_eq!(loaded.files[unit_path].mode, "0644");
+        assert_eq!(
+            loaded.files["etc/native.conf"].text.as_deref(),
+            Some("managed\n")
+        );
     }
 }

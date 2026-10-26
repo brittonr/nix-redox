@@ -5,5 +5,8 @@ derivation {
   name = "redox-kernel-native-rebuild";
   system = "x86_64-unknown-redox";
   builder = "/nix/system/profile/bin/bash";
-  args = [ "--noprofile" "--norc" "/usr/src/native-kernel-rebuild/kernel/build-redox-kernel.sh" ];
+  args = [ "--noprofile" "--norc" "${./.}/build-redox-kernel.sh" ];
+  source = ./.;
+  rustSource = ../rust-src;
+  bootstrapInputs = builtins.readFile ../bundle-manifest.json;
 }

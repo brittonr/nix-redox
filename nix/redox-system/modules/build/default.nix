@@ -240,6 +240,52 @@ adios:
       inherit (manifest) toplevel;
       version = manifest.versionInfo;
 
+      # Serializable bootstrap inputs for the guest-native system graph. Keep
+      # package/store identities explicit without capturing this system's image.
+      nativeBuildSeed = {
+        seedEtc = etcDerivation;
+        seedPackages = manifest.manifestData.packages;
+        seedConfig = (lib.getAttrs [
+          "defaultUser"
+          "hasSelfHosting"
+          "extraLdLibraryPath"
+          "cargoConfig"
+          "bootBanner"
+          "userutilsInstalled"
+          "initfsEnableGraphics"
+          "usbEnabled"
+          "consoleFbcondVT"
+          "consoleInputd"
+          "consoleInputdVT"
+          "consoleBootLog"
+          "initfsScriptOverrides"
+          "allDrivers"
+          "allDaemons"
+          "coreDaemons"
+          "initfsDaemons"
+          "initfsPrompt"
+          "initDebug"
+          "initSkip"
+          "graphicsEnabled"
+          "audioEnabled"
+        ] cfg) // {
+          initfsForceGraphics = inputs.boot.initfsEnableGraphics;
+          initfsExtraDrivers = inputs.boot.initfsExtraDrivers;
+          initfsExcludeDaemons = inputs.boot.initfsExcludeDaemons;
+        };
+        seedInputs = {
+          services = lib.getAttrs [
+            "_generatedServices" "services" "startupScriptText" "initScripts"
+          ] inputs.services;
+          hardware = lib.getAttrs [
+            "storageDrivers" "networkDrivers" "graphicsDrivers" "audioDrivers" "extraPciDrivers"
+          ] inputs.hardware;
+          environment = { inherit (inputs.environment) variables; };
+        } // lib.genAttrs [ "networking" "graphics" "audio" "snix" "iroh" ] (name: {
+          services = inputs.${name}.services or { };
+        });
+      };
+
       vmConfig = {
         vmm = inputs.virtualisation.vmm;
         memorySize = inputs.virtualisation.memorySize;

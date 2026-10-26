@@ -23,6 +23,29 @@
       },
       "verdict": "pass"
     },
+    "native-rebuild-test": {
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261026T052853-native-rebuild-test",
+      "duration_seconds": 1587,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261026T052853-native-rebuild-test/excerpt.txt",
+      "exit_code": 0,
+      "finished_at": "2026-10-26T05:55:20-04:00",
+      "flow": "native-rebuild-test",
+      "git_dirty": true,
+      "git_rev": "50395ba6",
+      "run_id": "20261026T052853-native-rebuild-test",
+      "started_at": "2026-10-26T05:28:53-04:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261026T052853-native-rebuild-test/summary.json",
+      "test_counts": {
+        "fail": 0,
+        "failure_lines": [],
+        "pass": 88,
+        "skip": 0,
+        "tests_complete": true,
+        "tests_started": true,
+        "total": 88
+      },
+      "verdict": "pass"
+    },
     "self-hosting-test": {
       "capture_dir": "/var/tmp/redox-self-hosting-captures/20260409T133254-self-hosting-test",
       "duration_seconds": 4785,
@@ -94,5 +117,5 @@
     }
   },
   "schema_version": 1,
-  "updated_at": "2026-04-16T15:46:53-04:00"
+  "updated_at": "2026-10-26T05:55:20-04:00"
 }

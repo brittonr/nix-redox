@@ -3,16 +3,27 @@
 //! Sets up a tokio runtime, constructs in-memory store services, and
 //! uses upstream SnixStoreIO with derivation/fetcher/import builtins.
 
+use std::collections::BTreeSet;
+use std::ffi::OsStr;
+use std::fs;
 use std::io::{self, BufRead, Write};
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
+use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 
 use snix_eval::{EvalIO, Evaluation};
 
 use snix_build::buildservice::DummyBuildService;
+use snix_castore::{blobservice::BlobService, directoryservice::DirectoryService, Node};
 use snix_glue::builtins::{add_derivation_builtins, add_fetcher_builtins, add_import_builtins};
+use snix_glue::known_paths::KnownPaths;
 use snix_glue::snix_store_io::SnixStoreIO;
+use snix_store::pathinfoservice::PathInfoService;
 use snix_store::utils::{construct_services, ServiceUrlsMemory};
+
+use crate::pathinfo::{PathInfo, PathInfoDb};
 
 /// Evaluate a Nix expression from --expr or --file
 pub fn run(
@@ -115,6 +126,25 @@ fn evaluate(expr: &str) -> Result<String, Box<dyn std::error::Error>> {
 pub fn evaluate_with_state(
     expr: &str,
 ) -> Result<(String, Rc<SnixStoreIO>), Box<dyn std::error::Error>> {
+    evaluate_with_state_impl(expr, None)
+}
+
+/// Evaluate a build graph and publish its imported sources before executing builders.
+/// Plain evaluation and dry runs keep their in-memory-only store behavior.
+pub fn evaluate_for_build(
+    expr: &str,
+    db: &PathInfoDb,
+) -> Result<(String, Rc<SnixStoreIO>), Box<dyn std::error::Error>> {
+    evaluate_with_state_impl(
+        expr,
+        Some((db, Path::new(nix_compat::store_path::STORE_DIR))),
+    )
+}
+
+fn evaluate_with_state_impl(
+    expr: &str,
+    store: Option<(&PathInfoDb, &Path)>,
+) -> Result<(String, Rc<SnixStoreIO>), Box<dyn std::error::Error>> {
     // Install ring as the default rustls crypto provider. Required because
     // we use reqwest with rustls-no-provider (to avoid aws-lc-rs which
     // doesn't compile on Redox). This is idempotent — repeated calls are fine.
@@ -142,16 +172,18 @@ pub fn evaluate_with_state(
         .map_err(|e| format!("store services: {e}"))?;
 
     let io = Rc::new(SnixStoreIO::new(
-        blob_service,
-        directory_service,
-        path_info_service,
+        Arc::clone(&blob_service),
+        Arc::clone(&directory_service),
+        Arc::clone(&path_info_service),
         nar_calculation_service.into(),
         Arc::<DummyBuildService>::default(),
         runtime.handle().clone(),
         Vec::new(),
     ));
 
-    let mut eval_builder = Evaluation::builder(io.clone() as Rc<dyn EvalIO>).enable_import();
+    let mut eval_builder = Evaluation::builder(io.clone() as Rc<dyn EvalIO>)
+        .enable_import()
+        .add_builtins(snix_eval::builtins::impure_builtins());
     eval_builder = add_derivation_builtins(eval_builder, Rc::clone(&io));
     eval_builder = add_fetcher_builtins(eval_builder, Rc::clone(&io));
     eval_builder = add_import_builtins(eval_builder, Rc::clone(&io));
@@ -165,19 +197,167 @@ pub fn evaluate_with_state(
 
     let result = eval.evaluate(expr, None);
 
-    // Keep runtime alive until evaluation completes — SnixStoreIO holds
-    // a handle but the runtime itself must outlive it.
-    let _rt_guard = runtime;
-
     if !result.errors.is_empty() {
-        let errors: Vec<String> = result.errors.iter().map(|e| format!("{e}")).collect();
+        let errors: Vec<String> = result
+            .errors
+            .iter()
+            .map(|error| {
+                // Generated expressions can embed entire manifests. Keep the root
+                // diagnostic and source span without repeatedly dumping trace frames.
+                let mut cause = error;
+                while let snix_eval::ErrorKind::NativeError { err, .. }
+                | snix_eval::ErrorKind::BytecodeError(err) = &cause.kind
+                {
+                    cause = err;
+                }
+                cause.fancy_format_str()
+            })
+            .collect();
         return Err(errors.join("\n").into());
+    }
+    if result.value.is_some() {
+        if let Some((db, store_root)) = store {
+            runtime.block_on(materialize_input_sources(
+                &io.known_paths.borrow(),
+                blob_service.as_ref(),
+                directory_service.as_ref(),
+                path_info_service.as_ref(),
+                db,
+                store_root,
+            ))?;
+        }
     }
 
     match result.value {
         Some(v) => Ok((format!("{v}"), io)),
         None => Err("no value produced".into()),
     }
+}
+
+async fn materialize_input_sources(
+    known_paths: &KnownPaths,
+    blobs: &dyn BlobService,
+    directories: &dyn DirectoryService,
+    path_infos: &dyn PathInfoService,
+    db: &PathInfoDb,
+    store_root: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static IMPORT_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    let sources: BTreeSet<_> = known_paths
+        .get_derivations()
+        .flat_map(|(_, drv)| drv.input_sources.iter())
+        .collect();
+    for source in sources {
+        let store_path = source.to_absolute_path();
+        let destination = store_root.join(source.to_string());
+        let present = match fs::symlink_metadata(&destination) {
+            Ok(_) => true,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => false,
+            Err(e) => return Err(e.into()),
+        };
+        if present && db.is_registered(&store_path) {
+            continue;
+        }
+        let info = path_infos
+            .get(*source.digest())
+            .await
+            .map_err(io::Error::other)?;
+        let Some(info) = info else {
+            if present {
+                // Existing store inputs need not have been imported by this evaluation.
+                continue;
+            }
+            return Err(format!("source input is unavailable: {store_path}").into());
+        };
+        let metadata = PathInfo::from_upstream(&info);
+        if !present {
+            fs::create_dir_all(store_root)?;
+            let id = IMPORT_COUNTER.fetch_add(1, Ordering::Relaxed);
+            let staging = store_root.join(format!(".snix-import-{}-{id}", std::process::id()));
+            fs::DirBuilder::new().mode(0o700).create(&staging)?;
+            let staged_source = staging.join("source");
+            let result = async {
+                write_source_node(info.node, &staged_source, blobs, directories).await?;
+                if let Err(e) = fs::rename(&staged_source, &destination) {
+                    // Another importer may have finished the same immutable store object.
+                    if fs::symlink_metadata(&destination).is_err() {
+                        return Err(e);
+                    }
+                }
+                Ok::<_, io::Error>(())
+            }
+            .await;
+            let cleanup = fs::remove_dir_all(&staging);
+            result?;
+            cleanup?;
+        }
+        db.register(&metadata)?;
+    }
+    Ok(())
+}
+
+async fn write_source_node(
+    node: Node,
+    destination: &Path,
+    blobs: &dyn BlobService,
+    directories: &dyn DirectoryService,
+) -> io::Result<()> {
+    use tokio::io::AsyncWriteExt;
+
+    let mut pending = vec![(destination.to_path_buf(), node)];
+    while let Some((path, node)) = pending.pop() {
+        match node {
+            Node::Directory { digest, .. } => {
+                let directory = directories
+                    .get(&digest)
+                    .await
+                    .map_err(io::Error::other)?
+                    .ok_or_else(|| {
+                        io::Error::new(
+                            io::ErrorKind::NotFound,
+                            format!("missing source directory {digest}"),
+                        )
+                    })?;
+                fs::create_dir(&path)?;
+                for (name, child) in directory.into_nodes() {
+                    pending.push((path.join(OsStr::from_bytes(name.as_ref())), child));
+                }
+            }
+            Node::File {
+                digest,
+                size,
+                executable,
+            } => {
+                let mut reader = blobs.open_read(&digest).await?.ok_or_else(|| {
+                    io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!("missing source blob {digest}"),
+                    )
+                })?;
+                let mut file = tokio::fs::File::create(&path).await?;
+                let written = tokio::io::copy(&mut reader, &mut file).await?;
+                file.flush().await?;
+                if written != size {
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("source blob {digest}: expected {size} bytes, received {written}"),
+                    ));
+                }
+                file.set_permissions(fs::Permissions::from_mode(if executable {
+                    0o555
+                } else {
+                    0o444
+                }))
+                .await?;
+            }
+            Node::Symlink { target } => {
+                std::os::unix::fs::symlink(OsStr::from_bytes(target.as_ref()), &path)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 /// Build a `fetchGit` builtin that uses our git CLI-based fetch.
@@ -322,6 +502,106 @@ fn make_fetchgit_builtin(io: Rc<SnixStoreIO>) -> Vec<(&'static str, snix_eval::V
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn manifest_json_can_be_read_and_decoded() {
+        let tmp = tempfile::tempdir().unwrap();
+        let manifest = tmp.path().join("manifest.json");
+        fs::write(&manifest, r#"{"generation":{"id":7}}"#).unwrap();
+        let expression = format!(
+            "let m = builtins.fromJSON (builtins.readFile {}); in builtins.toString m.generation.id",
+            manifest.display(),
+        );
+        assert_eq!(evaluate(&expression).unwrap(), "\"7\"");
+    }
+
+    #[test]
+    fn build_inputs_survive_original_removal_with_contents_modes_and_symlinks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let original = tmp.path().join("source-tree");
+        fs::create_dir_all(original.join("nested")).unwrap();
+        fs::write(original.join("nested/data"), b"\x00\xffsource\n").unwrap();
+        fs::write(original.join("build.sh"), "#!/bin/sh\necho native\n").unwrap();
+        fs::set_permissions(original.join("build.sh"), fs::Permissions::from_mode(0o755)).unwrap();
+        std::os::unix::fs::symlink("nested/data", original.join("data-link")).unwrap();
+        let file_input = tmp.path().join("single-source");
+        fs::write(&file_input, b"standalone\x00input").unwrap();
+        let expression = format!(
+            "let child = derivation {{ name = \"source-child\"; system = \"x86_64-linux\"; builder = \"/bin/sh\"; source = {}; }}; in (derivation {{ name = \"source-root\"; system = \"x86_64-linux\"; builder = \"/bin/sh\"; inherit child; source = {}; generated = builtins.toFile \"builder-config\" \"generated source\\n\"; }}).drvPath",
+            original.display(), file_input.display(),
+        );
+        let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+        let store = tmp.path().join("store");
+        let (_, state) = evaluate_with_state_impl(&expression, Some((&db, &store))).unwrap();
+        fs::remove_dir_all(&original).unwrap();
+        fs::remove_file(&file_input).unwrap();
+
+        let known = state.known_paths.borrow();
+        let sources: BTreeSet<_> = known
+            .get_derivations()
+            .flat_map(|(_, drv)| drv.input_sources.iter())
+            .collect();
+        assert_eq!(
+            sources.len(),
+            3,
+            "literal and generated dependency sources must be published"
+        );
+        let mut file_contents = BTreeSet::new();
+        for source in sources {
+            let path = store.join(source.to_string());
+            if path.is_dir() {
+                assert_eq!(
+                    fs::read(path.join("nested/data")).unwrap(),
+                    b"\x00\xffsource\n"
+                );
+                assert_eq!(
+                    fs::read(path.join("build.sh")).unwrap(),
+                    b"#!/bin/sh\necho native\n"
+                );
+                assert_eq!(
+                    fs::metadata(path.join("build.sh"))
+                        .unwrap()
+                        .permissions()
+                        .mode()
+                        & 0o777,
+                    0o555
+                );
+                assert_eq!(
+                    fs::metadata(path.join("nested/data"))
+                        .unwrap()
+                        .permissions()
+                        .mode()
+                        & 0o777,
+                    0o444
+                );
+                assert_eq!(
+                    fs::read_link(path.join("data-link")).unwrap(),
+                    Path::new("nested/data")
+                );
+                assert_eq!(
+                    fs::read(path.join("data-link")).unwrap(),
+                    b"\x00\xffsource\n"
+                );
+            } else {
+                file_contents.insert(fs::read(&path).unwrap());
+                assert_eq!(
+                    fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+                    0o444
+                );
+            }
+            let metadata = db.get(&source.to_absolute_path()).unwrap().unwrap();
+            let (hash, size) = crate::local_build::nar_hash_path(&path).unwrap();
+            assert_eq!(metadata.nar_hash, hash);
+            assert_eq!(metadata.nar_size, size);
+        }
+        assert_eq!(
+            file_contents,
+            BTreeSet::from([
+                b"standalone\x00input".to_vec(),
+                b"generated source\n".to_vec(),
+            ])
+        );
+    }
 
     // ===== Arithmetic =====
 

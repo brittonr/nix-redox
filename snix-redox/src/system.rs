@@ -1205,6 +1205,25 @@ pub fn generations(gen_dir: Option<&str>) -> Result<(), Box<dyn std::error::Erro
     Ok(())
 }
 
+fn snapshot_root_files(
+    manifest: &mut Manifest,
+    root: &Path,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let mut changed = false;
+    for (path, info) in &mut manifest.files {
+        if info.text.is_some() || !(path.starts_with("usr/lib/init.d/") || path == "startup.sh") {
+            continue;
+        }
+        let text = fs::read_to_string(root.join(path))?;
+        if blake3::hash(text.as_bytes()).to_hex().as_str() != info.blake3 {
+            return Err(format!("cannot snapshot modified generation file: /{path}").into());
+        }
+        info.text = Some(text);
+        changed = true;
+    }
+    Ok(changed)
+}
+
 /// Switch to a new manifest, saving the current one as a generation.
 ///
 /// If `dry_run` is true, computes and displays the activation plan without
@@ -1220,7 +1239,7 @@ pub fn switch(
     let mpath = manifest_path.unwrap_or(MANIFEST_PATH);
 
     // Load current manifest
-    let current = load_manifest_from(mpath)?;
+    let mut current = load_manifest_from(mpath)?;
 
     // Load new manifest
     let mut new_manifest = load_manifest_from(new_manifest_path)?;
@@ -1243,9 +1262,10 @@ pub fn switch(
 
     // ── Save generations ──
 
-    // Save current manifest as a generation (if not already saved)
+    // Keep original rootfs unit contents even for the image-seeded generation.
+    let enriched = snapshot_root_files(&mut current, Path::new("/"))?;
     let current_gen_dir = Path::new(dir).join(current.generation.id.to_string());
-    if !current_gen_dir.exists() {
+    if !current_gen_dir.exists() || enriched {
         fs::create_dir_all(&current_gen_dir)?;
         let current_json = serde_json::to_string_pretty(&current)?;
         fs::write(current_gen_dir.join("manifest.json"), current_json)?;
@@ -1254,6 +1274,9 @@ pub fn switch(
             "Saved current system as generation {}",
             current.generation.id
         );
+    }
+    if let Err(e) = update_system_gc_roots(&current, gen_dir) {
+        eprintln!("warning: could not protect previous generation: {e}");
     }
 
     // Save new manifest as a generation before activation.
@@ -1788,9 +1811,24 @@ fn update_system_gc_roots_with(
     // Add roots for boot component store paths
     let boot_added = add_boot_gc_roots(gc_roots, gen_id, &manifest.boot)?;
 
-    let total = added + boot_added;
+    let mut system_added = 0;
+    for (name, path) in [
+        ("toplevel", manifest.toplevel.as_deref()),
+        ("etc-source", manifest.etc_source.as_deref()),
+    ] {
+        if let Some(path) = path {
+            let root_name = format!("gen-{gen_id}-{name}");
+            if let Err(e) = gc_roots.add_root(&root_name, path) {
+                eprintln!("warning: could not add GC root for {root_name}: {e}");
+            } else {
+                system_added += 1;
+            }
+        }
+    }
+
+    let total = added + boot_added + system_added;
     if total > 0 {
-        println!("GC roots updated: {added} packages + {boot_added} boot components protected for generation {gen_id}");
+        println!("GC roots updated: {added} packages + {boot_added} boot components + {system_added} system outputs protected for generation {gen_id}");
     }
 
     Ok(())
@@ -2411,6 +2449,41 @@ mod tests {
             toplevel: None,
             etc_source: None,
         }
+    }
+
+    #[test]
+    fn snapshot_preserves_removed_image_units_for_rollback() {
+        let root = tempfile::tempdir().unwrap();
+        let path = "usr/lib/init.d/50_original.service";
+        let text = "[service]\nname = \"original\"\n";
+        fs::create_dir_all(root.path().join("usr/lib/init.d")).unwrap();
+        fs::write(root.path().join(path), text).unwrap();
+        let mut original = sample_manifest();
+        original.files.insert(
+            path.into(),
+            FileInfo {
+                blake3: blake3::hash(text.as_bytes()).to_hex().to_string(),
+                size: text.len() as u64,
+                mode: "644".into(),
+                text: None,
+            },
+        );
+
+        snapshot_root_files(&mut original, root.path()).unwrap();
+        let removed = sample_manifest();
+        let rollback = crate::activate::plan(&removed, &original);
+        assert_eq!(rollback.config_files_added, vec![path]);
+        assert_eq!(original.files[path].text.as_deref(), Some(text));
+
+        original.files.get_mut(path).unwrap().text = None;
+        let before = original.clone();
+        fs::write(root.path().join(path), "locally modified\n").unwrap();
+        assert!(snapshot_root_files(&mut original, root.path()).is_err());
+        assert_eq!(original, before);
+        assert_eq!(
+            fs::read_to_string(root.path().join(path)).unwrap(),
+            "locally modified\n"
+        );
     }
 
     #[test]
@@ -4429,6 +4502,8 @@ mod tests {
             initfs: Some(format!("{SP_INITFS}/boot/initfs")),
             bootloader: None,
         });
+        m.toplevel = Some(SP_KERNEL2.into());
+        m.etc_source = Some(SP_RIPGREP.into());
 
         update_system_gc_roots_with(&gc_roots, &m, Some(gen_dir.to_str().unwrap())).unwrap();
 
@@ -4439,7 +4514,9 @@ mod tests {
         // Boot roots
         assert!(names.contains(&"gen-1-boot-kernel".to_string()));
         assert!(names.contains(&"gen-1-boot-initfs".to_string()));
-        assert_eq!(names.len(), 4);
+        assert!(names.contains(&"gen-1-toplevel".to_string()));
+        assert!(names.contains(&"gen-1-etc-source".to_string()));
+        assert_eq!(names.len(), 6);
     }
 
     // ===== Delete Generations Tests =====

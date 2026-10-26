@@ -18,6 +18,7 @@ KNOWN_FLOWS = [
     "snix-compile-test",
     "snix-sandbox-test",
     "kernel-rebuild-test",
+    "native-rebuild-test",
 ]
 MILESTONE_RE = re.compile(r"✓ \[(.*?)\] (.+)$")
 

@@ -552,7 +552,7 @@ enum SystemCommand {
         #[arg(long, conflicts_with = "bridge")]
         local: bool,
 
-        /// Build packages from source using Nix expressions (packageSources in config)
+        /// Build from source using systemSource or packageSources in configuration
         #[arg(long)]
         source: bool,
 

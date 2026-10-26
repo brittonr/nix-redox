@@ -21,8 +21,10 @@ use std::thread;
 
 use syscall::data::{Map, Stat};
 use syscall::dirent::DirentKind;
-use syscall::error::{Error, Result, EBADF, EIO};
-use syscall::flag::{MapFlags, AT_REMOVEDIR, O_CREAT, O_DIRECTORY, O_RDONLY, O_RDWR, O_TRUNC};
+use syscall::error::{Error, Result, EBADF, EIO, ENOMEM};
+use syscall::flag::{
+    MapFlags, AT_REMOVEDIR, O_CREAT, O_DIRECTORY, O_RDONLY, O_RDWR, O_SYMLINK, O_TRUNC, O_WRONLY,
+};
 
 pub struct OpenPathResult {
     pub stat: Stat,
@@ -43,6 +45,8 @@ struct ActiveMap {
     base_addr: usize,
     len: usize,
     backing_fd: usize,
+    /// Mapping is a private anonymous copy rather than a file-backed fmap.
+    anonymous: bool,
 }
 
 enum IoRequest {
@@ -59,12 +63,14 @@ enum IoRequest {
         path: PathBuf,
         offset: u64,
         len: usize,
+        symlink: bool,
         response: mpsc::Sender<Result<Vec<u8>>>,
     },
     WriteAt {
         path: PathBuf,
         offset: u64,
         append: bool,
+        symlink: bool,
         data: Vec<u8>,
         response: mpsc::Sender<Result<WriteResult>>,
     },
@@ -82,6 +88,7 @@ enum IoRequest {
     TruncatePath {
         path: PathBuf,
         len: u64,
+        symlink: bool,
         response: mpsc::Sender<Result<()>>,
     },
     ReadDir {
@@ -186,13 +193,20 @@ impl BuildFsIoWorker {
         )
     }
 
-    pub fn read_at(&self, path: &Path, offset: u64, len: usize) -> Result<Vec<u8>> {
+    pub fn read_at(
+        &self,
+        path: &Path,
+        offset: u64,
+        len: usize,
+        symlink: bool,
+    ) -> Result<Vec<u8>> {
         let (tx, rx) = mpsc::channel();
         self.request(
             IoRequest::ReadAt {
                 path: path.to_path_buf(),
                 offset,
                 len,
+                symlink,
                 response: tx,
             },
             rx,
@@ -204,6 +218,7 @@ impl BuildFsIoWorker {
         path: &Path,
         offset: u64,
         append: bool,
+        symlink: bool,
         data: &[u8],
     ) -> Result<WriteResult> {
         let (tx, rx) = mpsc::channel();
@@ -212,6 +227,7 @@ impl BuildFsIoWorker {
                 path: path.to_path_buf(),
                 offset,
                 append,
+                symlink,
                 data: data.to_vec(),
                 response: tx,
             },
@@ -244,12 +260,13 @@ impl BuildFsIoWorker {
         )
     }
 
-    pub fn truncate_path(&self, path: &Path, len: u64) -> Result<()> {
+    pub fn truncate_path(&self, path: &Path, len: u64, symlink: bool) -> Result<()> {
         let (tx, rx) = mpsc::channel();
         self.request(
             IoRequest::TruncatePath {
                 path: path.to_path_buf(),
                 len,
+                symlink,
                 response: tx,
             },
             rx,
@@ -393,6 +410,7 @@ fn worker_main(
                 path,
                 offset,
                 len,
+                symlink,
                 response,
             } => {
                 let _ = response.send(worker_read_at(
@@ -404,12 +422,14 @@ fn worker_main(
                     &path,
                     offset,
                     len,
+                    symlink,
                 ));
             }
             IoRequest::WriteAt {
                 path,
                 offset,
                 append,
+                symlink,
                 data,
                 response,
             } => {
@@ -422,6 +442,7 @@ fn worker_main(
                     &path,
                     offset,
                     append,
+                    symlink,
                     &data,
                 ));
             }
@@ -460,6 +481,7 @@ fn worker_main(
             IoRequest::TruncatePath {
                 path,
                 len,
+                symlink,
                 response,
             } => {
                 let _ = response.send(worker_truncate_path(
@@ -470,6 +492,7 @@ fn worker_main(
                     dev_urandom_fd,
                     &path,
                     len,
+                    symlink,
                 ));
             }
             IoRequest::ReadDir { path, response } => {
@@ -627,6 +650,7 @@ fn worker_read_at(
     path: &Path,
     offset: u64,
     len: usize,
+    symlink: bool,
 ) -> Result<Vec<u8>> {
     let clean = path.to_string_lossy();
     let clean = clean.trim_start_matches('/');
@@ -644,8 +668,26 @@ fn worker_read_at(
         dev_null_fd,
         dev_urandom_fd,
         path,
-        O_RDONLY,
+        if symlink {
+            O_RDONLY | O_SYMLINK
+        } else {
+            O_RDONLY
+        },
     )?;
+    // Never return bytes past EOF for regular files: some filesystem paths
+    // return zero-filled block tails for short reads, and callers such as cp
+    // would then copy the padding into the destination file. Devices and other
+    // non-regular files keep their advertised size semantics.
+    let available = raw_fstat(fd)
+        .ok()
+        .filter(|stat| stat.st_mode & syscall::MODE_FILE != 0)
+        .map(|stat| stat.st_size.saturating_sub(offset))
+        .unwrap_or(len as u64);
+    let len = (len as u64).min(available) as usize;
+    if len == 0 {
+        raw_close(fd);
+        return Ok(Vec::new());
+    }
     let mut file = unsafe { File::from_raw_fd(fd as i32) };
     file.seek(SeekFrom::Start(offset))
         .map_err(|_| Error::new(EIO))?;
@@ -664,6 +706,7 @@ fn worker_write_at(
     path: &Path,
     offset: u64,
     append: bool,
+    symlink: bool,
     data: &[u8],
 ) -> Result<WriteResult> {
     let clean = path.to_string_lossy();
@@ -682,7 +725,11 @@ fn worker_write_at(
         dev_null_fd,
         dev_urandom_fd,
         path,
-        O_RDWR,
+        if symlink {
+            O_WRONLY | O_SYMLINK
+        } else {
+            O_RDWR
+        },
     )?;
     let mut file = unsafe { File::from_raw_fd(fd as i32) };
     let write_offset = if append {
@@ -764,6 +811,7 @@ fn worker_truncate_path(
     dev_urandom_fd: Option<usize>,
     path: &Path,
     len: u64,
+    symlink: bool,
 ) -> Result<()> {
     let fd = open_fd(
         root_fd,
@@ -772,7 +820,11 @@ fn worker_truncate_path(
         dev_null_fd,
         dev_urandom_fd,
         path,
-        O_RDWR,
+        if symlink {
+            O_WRONLY | O_SYMLINK
+        } else {
+            O_RDWR
+        },
     )?;
     let mut file = unsafe { File::from_raw_fd(fd as i32) };
     file.set_len(len).map_err(|_| Error::new(EIO))
@@ -884,6 +936,25 @@ fn worker_mmap_path(
     next_map_token: &mut u64,
     active_maps: &mut HashMap<u64, ActiveMap>,
 ) -> Result<MmapResult> {
+    let size = size.div_ceil(syscall::PAGE_SIZE) * syscall::PAGE_SIZE;
+    // Keep writable and executable mappings file-backed: these are used by the
+    // dynamic loader, where a private copy would change the mapping semantics.
+    let file_backed = flags.contains(MapFlags::PROT_EXEC)
+        || (flags.contains(MapFlags::MAP_SHARED) && flags.contains(MapFlags::PROT_WRITE));
+    if is_mutable_path(path) && !file_backed {
+        return copy_path_mapping(
+            root_fd,
+            profile_root_fd,
+            store_root_fd,
+            dev_null_fd,
+            dev_urandom_fd,
+            path,
+            offset,
+            size,
+            next_map_token,
+            active_maps,
+        );
+    }
     let open_flags = if flags.contains(MapFlags::PROT_WRITE) {
         O_RDWR
     } else {
@@ -904,7 +975,6 @@ fn worker_mmap_path(
         flags,
         address: 0,
     };
-
     let base_addr = match unsafe { syscall::fmap(fd, &map) } {
         Ok(base_addr) => base_addr,
         Err(err) => {
@@ -921,14 +991,136 @@ fn worker_mmap_path(
             base_addr,
             len: size,
             backing_fd: fd,
+            anonymous: false,
         },
     );
 
     Ok(MmapResult { token, base_addr })
 }
 
+/// Paths owned by the running build. RedoxFS recycles node IDs after a file
+/// is deleted, and its per-node fmap ranges can still hold frames from the
+/// previous owner, so file-backed scheme mappings of these paths can expose
+/// another file's pages. Copy the requested range into private memory instead.
+fn is_mutable_path(path: &Path) -> bool {
+    const IMMUTABLE: &[&str] = &[
+        "/nix/store",
+        "/nix/system/profile",
+        "/usr/lib",
+        "/usr/src",
+        "/usr/bin",
+        "/usr/share",
+        "/lib",
+        "/bin",
+        "/etc",
+        "/dev",
+    ];
+    let path = path.to_string_lossy();
+    !IMMUTABLE
+        .iter()
+        .any(|prefix| path == *prefix || path.starts_with(&format!("{prefix}/")))
+}
+
+fn anon_map_zeroed(len: usize) -> Result<usize> {
+    let ptr = unsafe {
+        libredox::call::mmap(libredox::call::MmapArgs {
+            addr: core::ptr::null_mut(),
+            length: len,
+            prot: libredox::flag::PROT_READ | libredox::flag::PROT_WRITE,
+            flags: libredox::flag::MAP_PRIVATE,
+            fd: !0,
+            offset: 0,
+        })
+    }
+    .map_err(|_| Error::new(ENOMEM))?;
+    Ok(ptr as usize)
+}
+
+fn anon_unmap(addr: usize, len: usize) {
+    let _ = unsafe { libredox::call::munmap(addr as *mut (), len) };
+}
+
+fn copy_path_mapping(
+    root_fd: usize,
+    profile_root_fd: Option<usize>,
+    store_root_fd: Option<usize>,
+    dev_null_fd: Option<usize>,
+    dev_urandom_fd: Option<usize>,
+    path: &Path,
+    offset: u64,
+    size: usize,
+    next_map_token: &mut u64,
+    active_maps: &mut HashMap<u64, ActiveMap>,
+) -> Result<MmapResult> {
+    let fd = open_fd(
+        root_fd,
+        profile_root_fd,
+        store_root_fd,
+        dev_null_fd,
+        dev_urandom_fd,
+        path,
+        O_RDONLY,
+    )?;
+    let base_addr = match anon_map_zeroed(size) {
+        Ok(addr) => addr,
+        Err(err) => {
+            raw_close(fd);
+            return Err(err);
+        }
+    };
+    let copied = {
+        let mut file = unsafe { File::from_raw_fd(fd as i32) };
+        let result = (|| -> std::io::Result<usize> {
+            file.seek(SeekFrom::Start(offset))?;
+            let mut filled = 0usize;
+            while filled < size {
+                let dst = unsafe {
+                    std::slice::from_raw_parts_mut((base_addr + filled) as *mut u8, size - filled)
+                };
+                match file.read(dst) {
+                    Ok(0) => break,
+                    Ok(n) => filled += n,
+                    Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(err) => return Err(err),
+                }
+            }
+            Ok(filled)
+        })();
+        std::mem::forget(file);
+        result
+    };
+    raw_close(fd);
+    match copied {
+        Ok(filled) => {
+            if filled < size {
+                unsafe { core::ptr::write_bytes((base_addr + filled) as *mut u8, 0, size - filled) };
+            }
+        }
+        Err(_) => {
+            anon_unmap(base_addr, size);
+            return Err(Error::new(EIO));
+        }
+    }
+    let token = *next_map_token;
+    *next_map_token = next_map_token.wrapping_add(1).max(1);
+    active_maps.insert(
+        token,
+        ActiveMap {
+            base_addr,
+            len: size,
+            backing_fd: usize::MAX,
+            anonymous: true,
+        },
+    );
+    Ok(MmapResult { token, base_addr })
+}
+
 fn worker_munmap_token(token: u64, active_maps: &mut HashMap<u64, ActiveMap>) -> Result<()> {
     let active_map = active_maps.remove(&token).ok_or(Error::new(EBADF))?;
+    if active_map.anonymous {
+        anon_unmap(active_map.base_addr, active_map.len);
+        return Ok(());
+    }
     unsafe { syscall::funmap(active_map.base_addr, active_map.len) }?;
     raw_close(active_map.backing_fd);
     Ok(())
@@ -1093,7 +1285,7 @@ fn raw_close(fd: usize) {
 
 fn raw_mkdir(root_fd: usize, path: &str) -> Result<()> {
     let clean = path.trim_start_matches('/');
-    let fd = raw_openat(root_fd, clean, O_CREAT | O_DIRECTORY)?;
+    let fd = raw_openat(root_fd, clean, O_CREAT | O_DIRECTORY | 0o755)?;
     raw_close(fd);
     Ok(())
 }

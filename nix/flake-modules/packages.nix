@@ -311,8 +311,23 @@ let
           # Rust 1.92 core includes stdarch via #[path = "../../stdarch/..."];
           # buildRustCrate must unpack the whole library source tree, not just
           # library/core, or core_arch is missing during kernel build-std.
+          #
+          # Build plans record absolute libPath/build paths from the rust-src
+          # toolchain that generated them; recompute them from the current
+          # toolchain so a GC'd or relocated plan toolchain cannot break the
+          # stdlib crates.
           core = attrs: {
             src = "${rustToolchain}/lib/rustlib/src/rust/library";
+            libPath = "${rustToolchain}/lib/rustlib/src/rust/library/core/src/lib.rs";
+            build = "";
+          };
+          alloc = attrs: {
+            libPath = "${attrs.src}/src/lib.rs";
+            build = "";
+          };
+          compiler_builtins = attrs: {
+            libPath = "${attrs.src}/src/lib.rs";
+            build = "${attrs.src}/build.rs";
           };
 
           # The kernel crate needs nasm for build.rs and linker script args.

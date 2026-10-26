@@ -468,6 +468,19 @@ let
       ;
   };
 
+  nativeSystemBundle = modularPkgs.infrastructure.mkNativeSystemSourceBundle (
+    systems.self-hosting.nativeBuildSeed
+    // {
+      inherit nativeKernelRebuildBundle;
+      nixpkgsLib = inputs.nixpkgs.outPath + "/lib";
+      bootstrap = modularPkgs.infrastructure.bootstrap;
+      base = self'.packages.basePerCrate;
+      ion = self'.packages.ion;
+      inherit (modularPkgs.userspace) redoxfsTarget netutils;
+      userutils = self'.packages.userutils;
+    }
+  );
+
   auditSnixSourceBundle = pkgs.writeShellScriptBin "audit-snix-source-bundle" ''
         set -euo pipefail
         bundle="''${1:-}"
@@ -780,6 +793,27 @@ let
     auditCommand = "${auditNativeKernelRebuildBundle}/bin/audit-native-kernel-rebuild-bundle ${nativeKernelRebuildBundle}";
   };
 
+  nativeRebuildTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/native-rebuild-test.nix ];
+    extraPkgs = extraPkgs // {
+      native-system-bundle = nativeSystemBundle;
+      native-kernel-rebuild-bundle = nativeKernelRebuildBundle;
+    };
+  };
+  nativeRebuildTestRaw = mkFunctionalTest {
+    diskImage = nativeRebuildTestSystem.diskImage;
+    inherit bootloader;
+    memoryMB = 8192;
+    cpus = 4;
+    defaultTimeout = 14400;
+  };
+  nativeRebuildTest = wrapFunctionalTest {
+    base = nativeRebuildTestRaw;
+    label = "native-rebuild-test";
+    auditBundle = nativeKernelRebuildBundle;
+    auditCommand = "${auditNativeKernelRebuildBundle}/bin/audit-native-kernel-rebuild-bundle ${nativeKernelRebuildBundle}";
+  };
+
   # Parallel build test: JOBS=1 baseline + JOBS=2 validation
   parallelBuildTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/parallel-build-test.nix ];
@@ -1052,6 +1086,9 @@ in
     native-kernel-rebuild-bundle = nativeKernelRebuildBundle;
     redox-kernel-rebuild-test = kernelRebuildTestSystem.diskImage;
     kernel-rebuild-test = kernelRebuildTest;
+    native-system-source-bundle = nativeSystemBundle;
+    redox-native-rebuild-test = nativeRebuildTestSystem.diskImage;
+    native-rebuild-test = nativeRebuildTest;
 
     redox-snix-compile-test = snixCompileTestSystem.diskImage;
     snix-compile-test = snixCompileTest;
