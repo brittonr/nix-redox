@@ -205,7 +205,9 @@ jobs:
     name: "Cross-compiled packages"
     runs-on: ubuntu-latest
     needs: host-builds
-    timeout-minutes: 120
+    # Cold builds of the full userspace + disk image exceed two hours on
+    # hosted runners without a binary cache; allow the full six-hour budget.
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
 
