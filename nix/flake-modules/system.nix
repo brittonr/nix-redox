@@ -715,9 +715,9 @@ let
     cpus = 4;
     # snix self-compile can spend more than 5600s in a CPU-bound final phase
     # without producing stderr progress. The full suite runs dozens of smoke
-    # tests before that phase and source-rebuild checks after it, so keep a
-    # deliberately large timeout for a complete proof run.
-    defaultTimeout = 14400;
+    # tests before that phase and rebuilds the whole system from source after
+    # it; a 4h budget cut the 2026-10-26 run off inside source-rebuild.
+    defaultTimeout = 21600;
   };
   selfHostingTest = wrapFunctionalTest {
     base = selfHostingTestRaw;
