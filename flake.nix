@@ -423,7 +423,7 @@
 
     # wasmtime - WebAssembly runtime cross-compiled for Redox
     wasmtime-redox = {
-      url = "path:/home/brittonr/git/wasmtime-redox";
+      url = "github:brittonr/wasmtime-redox/dfa064f8889900effdc54b9a257cedfee4fcc399";
     };
 
     # bottom - graphical system monitor (upstream release)
