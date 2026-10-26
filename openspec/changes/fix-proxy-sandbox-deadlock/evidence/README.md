@@ -1,5 +1,50 @@
 # Evidence for `fix-proxy-sandbox-deadlock`
 
+## Self-hosting validation attempt (2026-10-26)
+
+- Tree under test: `f07b8efd`
+- Command:
+  - `TMPDIR=/var/tmp nix run .#self-hosting-test -- --verbose`
+- Capture dir:
+  - `/var/tmp/redox-self-hosting-captures/20261026T102638-self-hosting-test/`
+- Committed excerpt:
+  - `2026-10-26-self-hosting-test.excerpt.txt`
+- Summary:
+  - `buildfs: proxy mode active`
+  - 74 passed, 2 failed, 1 skipped (77 total)
+  - `cargo-vendored-dep: vendored=101`
+  - `snix-compile: exit or no binary at /bin/snix` (upstream `castore`
+    `async-trait` errors in the guest self-build)
+  - tests did not complete: the VM hit its 14400s cap inside
+    `source-rebuild`
+- Proxy-path results: the focused `snix-sandbox-test` is clean and the
+  `cc-dep-build` / `workspace-build` / `rg-build` checks pass under proxy
+  mode. The two failures above are cargo/guest-self-build issues outside
+  the proxy path, and the suite needs a longer budget for
+  `source-rebuild`.
+- Task 3.3 therefore stays open until a full passing run exists.
+
+## Sandbox validation (2026-10-26)
+
+- Tree under test: `c10ef995` plus the builtin-output-parsing fix that landed as `a1289115`
+- Command:
+  - `TMPDIR=/var/tmp nix run .#snix-sandbox-test -- --verbose`
+- Capture dir:
+  - `/var/tmp/redox-self-hosting-captures/20261026T101751-snix-sandbox-test/`
+- Committed excerpt:
+  - `2026-10-26-snix-sandbox-test.excerpt.txt`
+- Summary from excerpt:
+  - `buildfs: proxy mode active`
+  - `FUNC_TEST:cc-dep-build:PASS`
+  - `FUNC_TEST:workspace-build:PASS`
+  - `FUNC_TEST:rg-build:PASS`
+  - `15 passed, 0 failed, 2 skipped`
+- The two skips are the direct unsandboxed `cc-dep`/`rg` probes: they now fail
+  on the separate RedoxFS mutable-mapping corruption
+  (`section table goes past the end of file`), which only the proxy path
+  masks. The proxy-path equivalents pass.
+
+
 ## Current sandbox validation (2026-04-16)
 
 - Tree under test: current `main` at `047fd36e`

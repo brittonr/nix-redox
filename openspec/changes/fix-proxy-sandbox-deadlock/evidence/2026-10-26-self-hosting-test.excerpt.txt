@@ -1,0 +1,20 @@
+Flow:     self-hosting-test
+Run:      20261026T102638-self-hosting-test
+Verdict:  FAIL
+Duration: 14402s
+Commit:   f07b8efd
+
+Command:  /nix/store/pm5wxhgrzdir3cyz9lhqx4w2pq16dqv2-functional-test/bin/functional-test --verbose
+Capture:  /var/tmp/redox-self-hosting-captures/20261026T102638-self-hosting-test
+
+Results:  74 passed, 2 failed, 1 skipped
+
+Milestones:
+  Boot complete      @ 2.071s
+  Test suite started @ 2.071s
+  Bootloader started @ 0.750s
+  Kernel running     @ 1.191s
+
+Failures:
+  - cargo-vendored-dep: vendored=101
+  - snix-compile: exit or no binary at /bin/snix

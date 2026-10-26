@@ -1,0 +1,17 @@
+Flow:     snix-sandbox-test
+Run:      20261026T101751-snix-sandbox-test
+Verdict:  PASS
+Duration: 328s
+Commit:   c10ef995
+
+Command:  /nix/store/pf5m1gq3h1dl7gpp4qhaakr3m2899fxb-functional-test/bin/functional-test --verbose
+Capture:  /var/tmp/redox-self-hosting-captures/20261026T101751-snix-sandbox-test
+
+Results:  15 passed, 0 failed, 2 skipped
+
+Milestones:
+  Boot complete      @ 2.194s
+  Test suite started @ 2.306s
+  Test suite complete @ 325.557s
+  Bootloader started @ 0.872s
+  Kernel running     @ 1.317s
