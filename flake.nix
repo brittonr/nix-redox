@@ -52,7 +52,7 @@
     };
 
     kernel-src = {
-      url = "gitlab:redox-os/kernel/master?host=gitlab.redox-os.org";
+      url = "gitlab:redox-os/kernel/5865ec079006185f70e5a6480663aa1319ffb733?host=gitlab.redox-os.org";
       flake = false;
     };
 

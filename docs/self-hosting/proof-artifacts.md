@@ -9,6 +9,8 @@ These host-side wrappers create capture artifacts automatically:
 - `nix run .#snix-compile-test -- --verbose`
 - `nix run .#snix-sandbox-test -- --verbose`
 - `nix run .#self-hosting-test -- --verbose`
+- `nix run .#kernel-rebuild-test -- --verbose`
+- `TMPDIR=/var/tmp nix run .#native-rebuild-test -- --verbose`
 
 Each wrapper creates a timestamped run directory under `/var/tmp/redox-self-hosting-captures/` unless `REDOX_CAPTURE_DIR` overrides it.
 
@@ -60,3 +62,18 @@ Failed runs keep their capture directories for debugging but do not replace the 
 
 Use the generated latest-success index when you want the current canonical capture path.
 Use archived OpenSpec evidence when you need an exact historical run tied to a specific change.
+
+## Native system proof scope
+
+`native-rebuild-test` boots without networking or a build bridge. It invokes
+ordinary `snix system rebuild` with `systemSource`, builds actual guest-native
+kernel/UEFI/initfs artifacts, checks generated PCI configuration and real
+`/usr/lib/init.d` units, verifies generation/store/GC-root identities, and checks
+that a missing-driver build fails before publishing a generation. Boot-default
+consumption and rollback compare the active kernel/initfs and restored service
+contents. The existing runner stops after the first completion marker: this is
+not a firmware restart or proof that the newly built EFI binary ran from the ESP.
+
+The 16 GiB mutable image and native build scratch need host disk space; use
+`TMPDIR=/var/tmp` when `/tmp` is memory-backed or small. Capture metadata reports
+the exact run verdict; test fixtures alone are not evidence of a successful run.

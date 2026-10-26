@@ -22,7 +22,7 @@ main() {
   runner_out=$(nix build "$RUNNER_ATTR" "$NIX_BUILD_NO_LINK" "$NIX_PRINT_OUT_PATHS")
   runner_bin="$runner_out/bin/$RUNNER_BIN"
   image_path=$(grep -oE "$IMAGE_PATH_PATTERN" "$runner_bin" | head -n 1 || true)
-  if [[ -n "$image_path" ]]; then
+  if [[ -n $image_path ]]; then
     image_out=${image_path%/$IMAGE_FILE}
   else
     image_out=$(nix path-info "$IMAGE_ATTR")

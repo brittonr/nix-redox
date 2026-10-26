@@ -219,6 +219,12 @@ in
       meta.description = "Build the Redox kernel natively inside a Redox guest and capture the resulting store path";
     };
 
+    native-rebuild-test = {
+      type = "app";
+      program = "${self'.packages.native-rebuild-test}/bin/functional-test";
+      meta.description = "Build and activate a complete native Redox system graph without the Linux bridge";
+    };
+
     multi-user-test = {
       type = "app";
       program = "${self'.packages.multi-user-test}/bin/functional-test";

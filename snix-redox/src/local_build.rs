@@ -33,7 +33,7 @@ use std::process::Command;
 use std::os::unix::fs::PermissionsExt;
 
 use nix_compat::nixbase32;
-use nix_compat::store_path::{StorePath, STORE_DIR};
+use nix_compat::store_path::{STORE_DIR, StorePath};
 use sha2::{Digest, Sha256};
 
 use crate::pathinfo::{self, PathInfo, PathInfoDb};
@@ -152,6 +152,55 @@ pub struct BuildResult {
 
 // ── Core: Build a Single Derivation ────────────────────────────────────────
 
+/// Materialize a derivation's `.drv` file in the store and register it.
+///
+/// The evaluator keeps derivations in `KnownPaths` only; a real store path is
+/// required for Nix semantics: `builtins.pathExists drv.drvPath`, closures and
+/// GC that follow pathinfo `deriver` fields, and downstream cache lookups.
+fn register_derivation_file(
+    drv: &nix_compat::derivation::Derivation,
+    drv_path: &StorePath<String>,
+    db: &PathInfoDb,
+) -> Result<(), BuildError> {
+    let abs = drv_path.to_absolute_path();
+    let path = Path::new(&abs);
+
+    if !path.exists() {
+        fs::write(path, drv.to_aterm_bytes())
+            .map_err(|e| BuildError::Io(format!("writing derivation {abs}: {e}")))?;
+    }
+
+    if db
+        .get(&abs)
+        .map_err(|e| BuildError::Io(format!("reading pathinfo for {abs}: {e}")))?
+        .is_some()
+    {
+        return Ok(());
+    }
+
+    let mut references = BTreeSet::new();
+    for input_drv_path in drv.input_derivations.keys() {
+        references.insert(input_drv_path.to_absolute_path());
+    }
+    for input_source in &drv.input_sources {
+        references.insert(input_source.to_absolute_path());
+    }
+
+    let (nar_hash, nar_size) = nar_hash_path(path)
+        .map_err(|e| BuildError::Io(format!("computing NAR hash for {abs}: {e}")))?;
+    db.register(&PathInfo {
+        store_path: abs,
+        nar_hash,
+        nar_size,
+        references: references.into_iter().collect(),
+        deriver: None,
+        registration_time: pathinfo::current_timestamp(),
+        signatures: vec![],
+        files: vec![],
+    })
+    .map_err(|e| BuildError::Io(format!("registering derivation: {e}")))
+}
+
 /// Build a single derivation, unsandboxed.
 ///
 /// Assumes all input derivations have already been built (their outputs
@@ -177,6 +226,8 @@ fn build_derivation_inner(
     db: &PathInfoDb,
     no_sandbox: bool,
 ) -> Result<BuildResult, BuildError> {
+    register_derivation_file(drv, drv_path, db)?;
+
     // Derive a human-readable name from the drv path
     let drv_name = drv_path
         .to_string()
@@ -201,10 +252,12 @@ fn build_derivation_inner(
     // ── 3. Convert Derivation → BuildRequest ───────────────────────────
     // Use upstream snix-glue to produce environment variables, command
     // args, output paths, refscan needles, constraints, and additional
-    // files. We pass an empty inputs map because we don't have castore
-    // Nodes — the function still produces correct env/args/needles.
-    let build_request = derivation_into_build_request(drv.clone(), &BTreeMap::new())
-        .map_err(|e| BuildError::Io(format!("converting derivation to build request: {e}")))?;
+    // files. The inputs map supplies the refscan needles (direct input
+    // outputs and sources); placeholder nodes are fine because builders
+    // read the real files from the store.
+    let build_request =
+        derivation_into_build_request(drv.clone(), &direct_inputs(drv, known_paths))
+            .map_err(|e| BuildError::Io(format!("converting derivation to build request: {e}")))?;
 
     // Build environment from BuildRequest, substituting upstream's
     // "/build" temp dir paths with the actual build directory.
@@ -619,6 +672,8 @@ fn build_result_from_existing(
     known_paths: &KnownPaths,
     db: &PathInfoDb,
 ) -> Result<BuildResult, BuildError> {
+    register_derivation_file(drv, drv_path, db)?;
+
     let mut output_paths: BTreeMap<String, String> = BTreeMap::new();
     for (name, out) in &drv.outputs {
         if let Some(ref sp) = out.path {
@@ -644,8 +699,9 @@ fn build_result_from_existing(
 
     // Exists on disk but not registered — scan and register.
     // Build a BuildRequest to get refscan needles from upstream.
-    let build_request = derivation_into_build_request(drv.clone(), &BTreeMap::new())
-        .map_err(|e| BuildError::Io(format!("converting derivation: {e}")))?;
+    let build_request =
+        derivation_into_build_request(drv.clone(), &direct_inputs(drv, known_paths))
+            .map_err(|e| BuildError::Io(format!("converting derivation: {e}")))?;
     let candidates = needles_to_candidates(&build_request, drv, known_paths);
     let references = scan_references(Path::new(&primary_out), &candidates)
         .map_err(|e| BuildError::Io(format!("scanning references: {e}")))?;
@@ -862,6 +918,46 @@ fn write_path_to_nar<W: io::Write>(
 
 // ── Reference Scanning ─────────────────────────────────────────────────────
 
+/// Direct inputs of a derivation, keyed by output store path.
+///
+/// `derivation_into_build_request` derives `refscan_needles` from the map keys,
+/// so it must contain every direct input output and source; otherwise reference
+/// scanning only discovers self-references. The node values are placeholders:
+/// this builder reads the real files from the store, not from castore.
+fn direct_inputs(
+    drv: &nix_compat::derivation::Derivation,
+    known_paths: &KnownPaths,
+) -> BTreeMap<StorePath<String>, snix_castore::Node> {
+    let dummy = || snix_castore::Node::File {
+        digest: snix_castore::B3Digest::from(&[0u8; 32]),
+        size: 0,
+        executable: false,
+    };
+
+    let mut inputs = BTreeMap::new();
+
+    for input_source in &drv.input_sources {
+        inputs.insert(input_source.clone(), dummy());
+    }
+
+    for (input_drv_path, output_names) in &drv.input_derivations {
+        let Some(input_drv) = known_paths.get_drv_by_drvpath(input_drv_path) else {
+            continue;
+        };
+        for output_name in output_names {
+            if let Some(path) = input_drv
+                .outputs
+                .get(output_name)
+                .and_then(|output| output.path.clone())
+            {
+                inputs.insert(path, dummy());
+            }
+        }
+    }
+
+    inputs
+}
+
 /// Map BuildRequest refscan needles to full store paths.
 ///
 /// The BuildRequest contains nixbase32 hash needles for all output and
@@ -1030,8 +1126,9 @@ fn build_builtin_fetcher(
     })?;
 
     // Scan for references and compute NAR hash
-    let fetcher_request = derivation_into_build_request(drv.clone(), &BTreeMap::new())
-        .map_err(|e| BuildError::Io(format!("converting derivation: {e}")))?;
+    let fetcher_request =
+        derivation_into_build_request(drv.clone(), &direct_inputs(drv, known_paths))
+            .map_err(|e| BuildError::Io(format!("converting derivation: {e}")))?;
     let candidates = needles_to_candidates(&fetcher_request, drv, known_paths);
     let references = scan_references(Path::new(&out_path), &candidates)
         .map_err(|e| BuildError::Io(format!("scanning references: {e}")))?;
@@ -1148,7 +1245,9 @@ pub fn run_with_options(
         "snix: evaluating drvPath expression ({} bytes)",
         drv_path_expr.len()
     ));
-    let (drv_path_str, state) = crate::eval::evaluate_with_state(&drv_path_expr)?;
+    debug_stderr("snix: opening pathinfo db");
+    let db = PathInfoDb::open().map_err(|e| format!("opening pathinfo db: {e}"))?;
+    let (drv_path_str, state) = crate::eval::evaluate_for_build(&drv_path_expr, &db)?;
     debug_stderr(&format!("snix: drvPath eval result = {drv_path_str}"));
 
     // Strip surrounding quotes from the evaluated string
@@ -1162,8 +1261,6 @@ pub fn run_with_options(
     ));
 
     let known_paths_ref = state.known_paths.borrow();
-    debug_stderr("snix: opening pathinfo db");
-    let db = PathInfoDb::open().map_err(|e| format!("opening pathinfo db: {e}"))?;
 
     debug_stderr("snix: starting build_needed_with_options");
     let result = build_needed_with_options(&drv_path, &*known_paths_ref, &db, no_sandbox)?;
@@ -1662,6 +1759,34 @@ mod tests {
         assert!(refs.contains_key("1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r"));
     }
 
+    #[test]
+    fn needles_include_input_derivation_outputs() {
+        let mut kp = KnownPaths::default();
+
+        let (dep_path, mut dep_drv) = make_test_drv("needle-dep", vec![]);
+        let dep_hdm = dep_drv.hash_derivation_modulo(|_| panic!("no inputs"));
+        dep_drv
+            .calculate_output_paths("needle-dep", &dep_hdm)
+            .unwrap();
+        let dep_output = dep_drv.outputs["out"].path.clone().unwrap();
+        kp.add_derivation(dep_path.clone(), dep_drv);
+
+        let (_, mut root_drv) = make_test_drv("needle-root", vec![dep_path]);
+        let root_hdm = root_drv
+            .hash_derivation_modulo(|p| *kp.get_hash_derivation_modulo(&p.to_owned()).unwrap());
+        root_drv
+            .calculate_output_paths("needle-root", &root_hdm)
+            .unwrap();
+
+        let inputs = direct_inputs(&root_drv, &kp);
+        let br = derivation_into_build_request(root_drv.clone(), &inputs).unwrap();
+        let refs = needles_to_candidates(&br, &root_drv, &kp);
+        assert!(
+            refs.contains_key(&nixbase32::encode(dep_output.digest())),
+            "input derivation outputs must be scanned as references"
+        );
+    }
+
     // ── Build Derivation (integration) ─────────────────────────────────
 
     // These tests actually execute builders. They require /bin/sh and
@@ -1844,9 +1969,11 @@ mod tests {
         let config = sandbox::config_from_derivation(&drv, "/nix/store/out", "/tmp/build");
 
         assert!(!config.needs_network);
-        assert!(config
-            .allowed_input_hashes
-            .contains("1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r"));
+        assert!(
+            config
+                .allowed_input_hashes
+                .contains("1b9jydsiygi6jhlz2dxbrxi6b4m1rn4r")
+        );
         assert_eq!(config.output_dir, "/nix/store/out");
     }
 

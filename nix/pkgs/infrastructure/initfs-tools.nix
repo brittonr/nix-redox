@@ -127,6 +127,9 @@ pkgs.stdenv.mkDerivation {
     cp target/release/redox-initfs-dump $out/bin/
   '';
 
+  # The guest-native recipe consumes the same source, lockfile and vendor tree.
+  passthru = { inherit initfsToolsSrc mergedVendor; };
+
   meta = with lib; {
     description = "Redox initfs archive tools";
     homepage = "https://gitlab.redox-os.org/redox-os/base";

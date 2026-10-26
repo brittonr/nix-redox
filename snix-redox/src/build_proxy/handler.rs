@@ -35,7 +35,7 @@ use syscall::error::{Error, Result, EACCES, EBADF, EIO, EISDIR, ENOENT, ENOTDIR,
 use syscall::flag::{
     MapFlags, MunmapFlags, AT_REMOVEDIR, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFD,
     F_SETFL, MODE_PERM, O_ACCMODE, O_APPEND, O_CREAT, O_DIRECTORY, O_EXCL, O_RDONLY, O_RDWR,
-    O_TRUNC, O_WRONLY,
+    O_SYMLINK, O_TRUNC, O_WRONLY,
 };
 use syscall::schemev2::NewFdFlags;
 
@@ -62,6 +62,7 @@ fn log_open_error(op: &str, path: &Path, errno: i32) {
     }
 }
 
+
 fn should_trace_exec_path(path: &Path) -> bool {
     matches!(
         path.to_str(),
@@ -71,6 +72,7 @@ fn should_trace_exec_path(path: &Path) -> bool {
             | Some("/usr/src/snix-redox/build-snix.sh")
     )
 }
+
 
 // ── Flag Translation ───────────────────────────────────────────────────────
 
@@ -94,6 +96,8 @@ pub struct OpenFlags {
     pub append: bool,
     /// Open must be a directory (O_DIRECTORY).
     pub directory: bool,
+    /// Operate on a symlink itself instead of its target (O_SYMLINK).
+    pub symlink: bool,
     /// Permission bits carried in Redox open flags when creating files.
     pub mode_perm: usize,
 }
@@ -120,6 +124,7 @@ pub fn translate_open_flags(raw: usize) -> OpenFlags {
         exclusive: raw & O_EXCL != 0,
         append: raw & O_APPEND != 0,
         directory: raw & O_DIRECTORY != 0,
+        symlink: raw & O_SYMLINK != 0,
         mode_perm: raw & MODE_PERM as usize,
     }
 }
@@ -132,7 +137,18 @@ impl OpenFlags {
 
     /// Build redoxfs-compatible flags for the real open via root_fd.
     pub fn to_real_flags(&self) -> usize {
-        let mut f = if self.write { O_RDWR } else { O_RDONLY };
+        // relibc creates symlinks with O_WRONLY|O_CREAT|O_SYMLINK, then writes
+        // the target string. Keep O_SYMLINK so the write lands on the link
+        // itself instead of creating or following a regular file.
+        let mut f = if self.write {
+            if self.symlink {
+                O_WRONLY
+            } else {
+                O_RDWR
+            }
+        } else {
+            O_RDONLY
+        };
         if self.create {
             f |= O_CREAT;
         }
@@ -147,6 +163,9 @@ impl OpenFlags {
         }
         if self.directory {
             f |= O_DIRECTORY;
+        }
+        if self.symlink {
+            f |= O_SYMLINK;
         }
         f | self.mode_perm
     }
@@ -174,6 +193,8 @@ pub struct FileHandle {
     pub writable: bool,
     /// Append mode — seek to end before each write.
     pub append: bool,
+    /// The handle refers to a symlink rather than its target.
+    pub symlink: bool,
     /// Cached file size.
     pub size: u64,
     /// Cached mode bits.
@@ -245,7 +266,9 @@ fn raw_close(fd: usize) {
 /// with both flags creates the directory if it does not exist.
 fn raw_mkdir(root_fd: usize, path: &str) -> Result<()> {
     let clean = path.trim_start_matches('/');
-    let flags = O_CREAT | O_DIRECTORY;
+    // Include a normal mode: callers such as autocfg inspect the resulting
+    // directory permissions, and a mode of 0 looks read-only to them.
+    let flags = O_CREAT | O_DIRECTORY | 0o755;
     let fd = raw_openat(root_fd, clean, flags)?;
     raw_close(fd);
     Ok(())
@@ -337,6 +360,7 @@ impl BuildFsHandler {
                 scheme_path: fh.scheme_path.clone(),
                 writable: fh.writable,
                 append: fh.append,
+                symlink: fh.symlink,
                 size: fh.size,
                 mode: fh.mode,
             }),
@@ -546,6 +570,7 @@ impl SchemeSync for BuildFsHandler {
                     scheme_path,
                     writable: oflags.wants_write(),
                     append: oflags.append,
+                    symlink: oflags.symlink,
                     size: stat.st_size,
                     mode: stat.st_mode as u32,
                 }),
@@ -592,7 +617,9 @@ impl SchemeSync for BuildFsHandler {
         match self.handles.get(&id) {
             Some(ProxyHandle::File(fh)) => {
                 let start = std::time::Instant::now();
-                let data = self.io_worker.read_at(&fh.real_path, offset, buf.len())?;
+                let data = self
+                    .io_worker
+                    .read_at(&fh.real_path, offset, buf.len(), fh.symlink)?;
                 let elapsed = start.elapsed();
                 if elapsed.as_secs() >= IO_TIMEOUT_SECS {
                     eprintln!(
@@ -628,7 +655,7 @@ impl SchemeSync for BuildFsHandler {
                 let start = std::time::Instant::now();
                 let result = self
                     .io_worker
-                    .write_at(&fh.real_path, offset, fh.append, buf)?;
+                    .write_at(&fh.real_path, offset, fh.append, fh.symlink, buf)?;
                 if result.end_offset > fh.size {
                     fh.size = result.end_offset;
                 }
@@ -651,7 +678,9 @@ impl SchemeSync for BuildFsHandler {
 
     fn fsize(&mut self, id: usize, _ctx: &CallerCtx) -> Result<u64> {
         match self.handles.get(&id) {
-            Some(ProxyHandle::File(fh)) => Ok(fh.size),
+            Some(ProxyHandle::File(fh)) => {
+                Ok(fh.size)
+            }
             Some(ProxyHandle::Dir(_)) => Ok(0),
             None => Err(Error::new(EBADF)),
         }
@@ -807,14 +836,22 @@ impl SchemeSync for BuildFsHandler {
     }
 
     fn fchmod(&mut self, id: usize, new_mode: u16, _ctx: &CallerCtx) -> Result<()> {
+        // POSIX `chmod(path)` is implemented as open + fchmod, so the caller's
+        // handle is often read-only even for a file it is allowed to modify.
+        // Permission comes from the path's allow-list entry, not the open mode.
         match self.handles.get(&id) {
             Some(ProxyHandle::File(fh)) => {
-                if !fh.writable {
+                if !self.allow_list.can_write(&fh.real_path) {
                     return Err(Error::new(EACCES));
                 }
                 self.io_worker.chmod_path(&fh.real_path, false, new_mode)
             }
-            Some(ProxyHandle::Dir(dh)) => self.io_worker.chmod_path(&dh.real_path, true, new_mode),
+            Some(ProxyHandle::Dir(dh)) => {
+                if !self.allow_list.can_write(&dh.real_path) {
+                    return Err(Error::new(EACCES));
+                }
+                self.io_worker.chmod_path(&dh.real_path, true, new_mode)
+            }
             None => Err(Error::new(EBADF)),
         }
     }
@@ -825,7 +862,8 @@ impl SchemeSync for BuildFsHandler {
                 if !fh.writable {
                     return Err(Error::new(EACCES));
                 }
-                self.io_worker.truncate_path(&fh.real_path, len)?;
+                self.io_worker
+                    .truncate_path(&fh.real_path, len, fh.symlink)?;
                 if len < fh.size {
                     fh.size = len;
                 }
@@ -872,11 +910,15 @@ impl SchemeSync for BuildFsHandler {
 
         let MmapResult { token, base_addr } =
             self.io_worker.mmap_path(&real_path, offset, size, flags)?;
+        // The kernel reports the page-aligned span on munmap, while mmap_prep
+        // receives the caller's requested length. Normalize the bookkeeping
+        // key so both sides match.
+        let key_size = size.div_ceil(syscall::PAGE_SIZE) * syscall::PAGE_SIZE;
         self.active_mmaps
             .entry(ActiveMapKey {
                 handle_id: id,
                 offset,
-                size,
+                size: key_size,
             })
             .or_default()
             .push(token);
@@ -897,14 +939,55 @@ impl SchemeSync for BuildFsHandler {
             size,
         };
         let token = {
-            let tokens = self.active_mmaps.get_mut(&key).ok_or(Error::new(EBADF))?;
-            let token = tokens.pop().ok_or(Error::new(EBADF))?;
+            let Some(tokens) = self.active_mmaps.get_mut(&key) else {
+                // The kernel can report a slightly different range than the one
+                // the scheme prepared (for example after splitting a mapping).
+                // Release any mapping still registered for this handle instead
+                // of failing the caller's munmap and leaking the scheme-side
+                // mapping and its file ranges.
+                eprintln!(
+                    "buildfs: munmap range mismatch id={} offset={} size={} flags={:?}",
+                    id, offset, size, flags
+                );
+                let fallback = self
+                    .active_mmaps
+                    .keys()
+                    .copied()
+                    .find(|candidate| candidate.handle_id == id);
+                if let Some(fallback) = fallback {
+                    let tokens = self.active_mmaps.get_mut(&fallback).unwrap();
+                    let token = match tokens.pop() {
+                        Some(token) => token,
+                        None => return Ok(()),
+                    };
+                    if tokens.is_empty() {
+                        self.active_mmaps.remove(&fallback);
+                    }
+                    let result = self.io_worker.munmap_token(token);
+                    if let Err(err) = &result {
+                        eprintln!("buildfs: munmap fallback token={} errno={}", token, err.errno);
+                    }
+                    return Ok(());
+                }
+                return Ok(());
+            };
+            let Some(token) = tokens.pop() else {
+                eprintln!("buildfs: munmap empty id={} offset={} size={}", id, offset, size);
+                return Ok(());
+            };
             if tokens.is_empty() {
                 self.active_mmaps.remove(&key);
             }
             token
         };
-        self.io_worker.munmap_token(token)
+        let result = self.io_worker.munmap_token(token);
+        if let Err(err) = &result {
+            eprintln!(
+                "buildfs: munmap token={} failed errno={} id={} offset={} size={}",
+                token, err.errno, id, offset, size
+            );
+        }
+        Ok(())
     }
 
     fn fcntl(&mut self, id: usize, cmd: usize, arg: usize, _ctx: &CallerCtx) -> Result<usize> {

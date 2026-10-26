@@ -645,18 +645,18 @@
       "flake": false,
       "locked": {
         "host": "gitlab.redox-os.org",
-        "lastModified": 1779258947,
-        "narHash": "sha256-svZuJRtkbU+bEkSQVYGeTh/y3PIsnRoUkX8QhfxIf6M=",
+        "lastModified": 1774559703,
+        "narHash": "sha256-SMdFh6PeDwgTuz+E/J2CJbh/uoVsYR4u+pO9X5BFkn4=",
         "owner": "redox-os",
         "repo": "kernel",
-        "rev": "40e76875d7560dd5c683b84f1d6ec956c52b1f1e",
+        "rev": "5865ec079006185f70e5a6480663aa1319ffb733",
         "type": "gitlab"
       },
       "original": {
         "host": "gitlab.redox-os.org",
         "owner": "redox-os",
-        "ref": "master",
         "repo": "kernel",
+        "rev": "5865ec079006185f70e5a6480663aa1319ffb733",
         "type": "gitlab"
       }
     },

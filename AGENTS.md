@@ -42,9 +42,9 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 - `echo $var | grep` pipes fail silently — use Ion-native `test` or `is` for comparisons
 
 ### Available Commands
-**In uutils**: cat, cp, df, du, echo, head, ls, mkdir, mv, pwd, rm, sort, touch, uniq, wc
+**In uutils**: cat, cp, df, du, echo, head, ls, mkdir, mv, pwd, rm, sort, touch, uniq, wc, chmod, ln
 **In extrautils**: grep, less, tar
-**NOT available**: dd, tail, sed, awk, cut, find, chmod (use full path `/nix/system/profile/bin/chmod`)
+**NOT available**: dd, tail, sed, awk, cut, find (use full path `/nix/system/profile/bin/<tool>` for profiles that install them)
 - `grep` has no `\|` alternation or `-E` extended regex — use separate grep calls
 - `sleep` is compiled in uutils — uses nanosleep syscall, works correctly
 - nanosleep syscall works correctly (kernel SYS_NANOSLEEP + scheduler wake verified 2026-03-11)
@@ -76,6 +76,17 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 - Fix: `build_proxy` now forwards ALL real redoxfs/device I/O to a dedicated worker thread that owns the pre-opened root/device handles
 - Proxy path remains: AllowList, BuildFsProxy, handler, lifecycle, allow_list builder, setup_proxy_namespace
 - Proxy still uses: mkdir_p via root fd, O_APPEND seek-to-end semantics, getdents filtering, and pre-opened `/dev/null` + `/dev/urandom`
+- `fchmod` is authorized by the path's allow-list entry, not the handle's open mode: relibc implements `chmod(path)` as `open(O_PATH)` + `fchmod`, so requiring a writable fd made every `chmod` fail EACCES inside builders
+- `O_SYMLINK` is preserved through `OpenFlags`/`FileHandle` and re-applied by the IO worker's read/write/truncate reopens; relibc `symlinkat` creates links with `O_WRONLY|O_CREAT|O_SYMLINK` and then writes the target string
+- Native builder recipes rely on both: `chmod -R u+w` after `cp -r` from read-only store sources, and `ln -s` into writable `$out` paths
+- File-backed scheme mappings of **mutable** paths (`$TMPDIR`, `$out`) are copied into private anonymous memory instead of being borrowed from RedoxFS: RedoxFS recycles tree node IDs on unlink while per-node fmap ranges can still hold frames from the previous file, so a recycled node's fmap returns another file's pages. rustc then sees a truncated/corrupt ELF object (`failed to build archive ... section header table goes past the end of the file`). Store/profile mappings stay zero-copy; writable/executable mappings stay file-backed so loader semantics are preserved
+- Regular-file reads are clamped to the file size: short reads near EOF can return zero-filled block tails, and `cp`/`fs::copy` then writes the padding into the destination (`ld.lld: truncated or malformed archive` for copied rlibs)
+- Directories created by the proxy use mode `0755`; mode `0` made `std::fs::Permissions::readonly()` true and broke `autocfg` ("output path is not a writable directory")
+- Native kernel/bootloader builders must use `cargo --offline` (not `--locked`) with `-Z build-std`; build-std needs to update the lock for the std workspace. Builder diagnostics must write under `$TMPDIR` — the sandbox allow-list denies the real `/tmp` root
+- `snix build` materializes each derivation's `.drv` in `/nix/store` and registers its pathinfo before building (`register_derivation_file`); the evaluator only keeps derivations in `KnownPaths`, so without this `builtins.pathExists drv.drvPath` fails and pathinfo `deriver` fields point at nothing
+- Reference scanning needs `refscan_needles` built from direct input outputs/sources (`direct_inputs`); passing an empty inputs map to `derivation_into_build_request` limits needles to self-references, so pathinfo `references` stays empty and graph/closure checks fail
+- `kernel-src` is pinned to `5865ec07` (2026-03-26) and `fdt-src` to `2fb1409`; later kernel master refactored paging/contiguous allocation and needs a newer nightly than the repo's `2025-10-03`, so the native rebuild patch set (`p2frame`, trampoline, LAPIC, serial) no longer applies as-is. The git archive's `rmm/` is an empty submodule, so the bundle must keep copying `rmm-src` (the in-tree-rmm rule only applied to the newer master tree)
+- unit2nix plans embed absolute `libPath`/`build` paths of the toolchain that generated them; `mkKernelPerCrate` recomputes those for `core`/`alloc`/`compiler_builtins` from the current `rustToolchain` so a relocated or GC'd plan toolchain cannot break stdlib crates
 
 ### relibc Limitations
 - `nanosleep()` works correctly (SYS_NANOSLEEP syscall 162, kernel context.wake + scheduler verified)
@@ -360,6 +371,7 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - The full suite now re-verifies `snix-compile`, `snix-binary-exists`, `snix-binary-runs`, `snix-eval-works`, `source-rebuild`, `source-rebuild-gen`, `source-rebuild-pkg`, and `source-rebuild-dry` in one run; keep this userspace baseline separate from `kernel-rebuild-test`
 - `self-hosting-test` now needs `defaultTimeout = 6000`; 4800s was enough for the older suite, but adding the rebuild-cycle proof at the end pushed the cold run past that limit even after `snix-compile` finished
 - Test order: snix-compile moved BEFORE source-rebuild (source-rebuild's activate() drops ld.lld from the live profile)
+- Native system rebuild proof (2026-10-26): 88/88 pass, capture `/var/tmp/redox-self-hosting-captures/20261026T052853-native-rebuild-test`; covers native graph build, `.drv`/pathinfo registration, generation switch, boot artifact selection, failure isolation, and rollback
 - The fixture-side lessons still stand: use bash for builders that need `HOME`; vendor missing crates; point Cargo at `vendor/source-registry-0` when using `fetchCargoVendor`; add `vendor/source-git-0` for git deps; seed source-rebuild tests from the real system manifest; and use full paths in source derivations when builder `PATH` is empty
 - `--no-sandbox` flag now threads through flake installables (previously bypassed)
 - focused test harness note: `snix-sandbox-test` originally checked `$out/bin/workspace-test`, but `workspace-build.nix` installs `$out/bin/mybin`

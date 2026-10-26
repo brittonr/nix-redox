@@ -497,7 +497,9 @@ pub fn build_flake_installable(
 
     // Evaluate `(expr).drvPath`
     let drv_path_expr = format!("({expr}).drvPath");
-    let (drv_path_str, state) = crate::eval::evaluate_with_state(&drv_path_expr)?;
+    let db =
+        crate::pathinfo::PathInfoDb::open().map_err(|e| format!("opening pathinfo db: {e}"))?;
+    let (drv_path_str, state) = crate::eval::evaluate_for_build(&drv_path_expr, &db)?;
 
     let drv_path_str = drv_path_str.trim_matches('"').to_string();
     let drv_path =
@@ -505,8 +507,6 @@ pub fn build_flake_installable(
             .map_err(|e| format!("invalid derivation path '{drv_path_str}': {e}"))?;
 
     let known_paths_ref = state.known_paths.borrow();
-    let db =
-        crate::pathinfo::PathInfoDb::open().map_err(|e| format!("opening pathinfo db: {e}"))?;
 
     let result = crate::local_build::build_needed_with_options(
         &drv_path,

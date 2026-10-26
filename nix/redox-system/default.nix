@@ -111,6 +111,7 @@ let
 
       # Standalone etc derivation (for activation symlink farm)
       etcDerivation = buildOutput.etcDerivation;
+      nativeBuildSeed = buildOutput.nativeBuildSeed;
 
       # VM configuration (from /virtualisation module, for runner scripts)
       vmConfig = buildOutput.vmConfig;

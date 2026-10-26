@@ -204,6 +204,55 @@ cargo build    # compiles natively on Redox
 
 `snix build .#ripgrep` works — Nix derivation evaluation and building, on Redox.
 
+### Native system rebuilds
+
+`systemSource` selects a guest-local system derivation instead of the Linux
+build bridge. In a self-hosting image, stage `native-system-source-bundle` at
+`/usr/src/nix-redox` and `native-kernel-rebuild-bundle` at
+`/usr/src/native-kernel-rebuild`. Both bundles are flake package outputs.
+
+```nix
+# /etc/redox-system/configuration.nix
+{
+  systemSource = "/usr/src/nix-redox/build.nix";
+  hostname = "native-redox";
+  hardware.networkDrivers = [ ];
+}
+```
+
+Run `snix system rebuild` normally. `systemSource` also applies to `--local`
+and `--source`; `packageSources` remains available for native package
+derivations. The source expression accepts `{ config, currentManifest }` and
+returns a derivation containing `manifest.json`, boot artifacts, an etc source,
+and optional `root-files` for mutable rootfs files.
+
+The staged graph builds the kernel, UEFI bootloader, initfs archive tools,
+initfs, etc tree, and generation identity on Redox, offline. Existing packages
+provide the bootstrap/toolchain; source packages join the same dependency graph.
+Initfs, PCI configuration, and init units reuse the host system renderers.
+Newly imported literal-path and `builtins.toFile` inputs are materialized in
+`/nix/store` before native builders run. Publication preserves file contents,
+executability, and symlinks, and registers source metadata for store references.
+Dry runs evaluate the graph without publishing those imported inputs.
+Evaluation failures report the innermost Nix source diagnostic instead of
+repeatedly dumping the generated manifest expression as trace frames.
+
+Only a successful graph build reaches activation. Generations retain their
+boot/identity/etc GC roots and original init-unit contents for rollback.
+
+The focused acceptance image stages the bundles and exercises native rebuild,
+failed-build isolation, real boot-artifact consumers, and rollback:
+
+```bash
+TMPDIR=/var/tmp nix run .#native-rebuild-test -- --verbose
+```
+
+This proof uses boot-default/`activate-boot`; it does not restart firmware or
+replace the EFI executable on the ESP. Init-unit files are updated, not a claim
+that every running daemon has been restarted. Captures follow
+[`docs/self-hosting/proof-artifacts.md`](docs/self-hosting/proof-artifacts.md).
+
+
 ## Requirements
 
 - Nix with flakes enabled
