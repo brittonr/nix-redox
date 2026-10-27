@@ -74,6 +74,7 @@ replacements = [
     ),
 ]
 for path, ty in replacements:
+    path.chmod(path.stat().st_mode | 0o200)
     text = path.read_text()
     old = f"""        let mut config: {ty} =
             serde_qs::from_str(url.query().unwrap_or_default())?;
