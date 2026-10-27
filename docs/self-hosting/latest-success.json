@@ -70,17 +70,17 @@
       "verdict": "pass"
     },
     "snix-compile-test": {
-      "capture_dir": "/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test",
-      "duration_seconds": 3092,
-      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/excerpt.txt",
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261027T132203-snix-compile-test",
+      "duration_seconds": 4281,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261027T132203-snix-compile-test/excerpt.txt",
       "exit_code": 0,
-      "finished_at": "2026-04-09T12:46:45-04:00",
+      "finished_at": "2026-10-27T14:33:24-04:00",
       "flow": "snix-compile-test",
-      "git_dirty": null,
-      "git_rev": "unknown",
-      "run_id": "20260409T115513-snix-compile-test",
-      "started_at": "2026-04-09T11:55:13-04:00",
-      "summary_path": "/var/tmp/redox-self-hosting-captures/20260409T115513-snix-compile-test/summary.json",
+      "git_dirty": false,
+      "git_rev": "afe9972d",
+      "run_id": "20261027T132203-snix-compile-test",
+      "started_at": "2026-10-27T13:22:03-04:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261027T132203-snix-compile-test/summary.json",
       "test_counts": {
         "fail": 0,
         "failure_lines": [],
@@ -117,5 +117,5 @@
     }
   },
   "schema_version": 1,
-  "updated_at": "2026-10-26T14:52:00-04:00"
+  "updated_at": "2026-10-27T14:33:24-04:00"
 }
