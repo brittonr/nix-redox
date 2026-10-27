@@ -159,7 +159,6 @@ default-features = false
 
 [dependencies.reqwest-middleware]
 version = "0.5"
-path = "../reqwest-middleware-0.5.1"
 
 [dependencies.tracing]
 version = "0.1.26"

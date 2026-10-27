@@ -12,7 +12,7 @@
 [package]
 edition = "2018"
 name = "reqwest-middleware"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Rodrigo Gryzinski <rodrigo.gryzinski@truelayer.com>"]
 build = false
 autolib = false

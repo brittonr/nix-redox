@@ -37,7 +37,7 @@ pub fn derive_try_from_primitive(input: TokenStream) -> TokenStream {
                      type Primitive = {repr};
                      type Error = ::num_enum::TryFromPrimitiveError<Self>;
                      const NAME: &'static str = stringify!({name});
-                     fn try_from_primitive(number: Self::Primitive) -> ::core::result::Result<Self, Self::Error> {{
+                     fn try_from_primitive(number: Self::Primitive) -> ::core::result::Result<Self, <Self as ::num_enum::TryFromPrimitive>::Error> {{
                          match number {{
                              {arms}
                              _ => ::core::result::Result::Err(::num_enum::TryFromPrimitiveError::new(number)),
@@ -47,7 +47,7 @@ pub fn derive_try_from_primitive(input: TokenStream) -> TokenStream {
                  impl ::core::convert::TryFrom<{repr}> for {name} {{
                      type Error = ::num_enum::TryFromPrimitiveError<Self>;
                      #[inline]
-                     fn try_from(number: {repr}) -> ::core::result::Result<Self, Self::Error> {{
+                     fn try_from(number: {repr}) -> ::core::result::Result<Self, <Self as ::core::convert::TryFrom<{repr}>>::Error> {{
                          ::num_enum::TryFromPrimitive::try_from_primitive(number)
                      }}
                  }}
@@ -211,7 +211,11 @@ fn parse_enum(input: TokenStream) -> Result<EnumInfo, String> {
     let repr = repr.unwrap_or_else(|| "isize".to_string());
     let body = body.ok_or_else(|| "num_enum_derive shim: enum body not found".to_string())?;
     let variants = parse_variants(body, saw_default_attr);
-    Ok(EnumInfo { name, repr, variants })
+    Ok(EnumInfo {
+        name,
+        repr,
+        variants,
+    })
 }
 
 fn first_group(stream: TokenStream) -> Option<Group> {
@@ -229,7 +233,9 @@ fn parse_variants(body: TokenStream, mut pending_default: bool) -> Vec<Variant> 
             TokenTree::Punct(p) if p.as_char() == '#' => {
                 if let Some(TokenTree::Group(g)) = iter.next() {
                     let text = g.stream().to_string();
-                    if text.contains("default") || text.contains("num_enum") && text.contains("default") {
+                    if text.contains("default")
+                        || text.contains("num_enum") && text.contains("default")
+                    {
                         pending_default = true;
                     }
                 }
@@ -246,15 +252,27 @@ fn parse_variants(body: TokenStream, mut pending_default: bool) -> Vec<Variant> 
                             match next {
                                 TokenTree::Punct(p) if p.as_char() == ',' && depth == 0 => break,
                                 TokenTree::Group(_) => {
-                                    if !expr.is_empty() { expr.push(' '); }
+                                    if !expr.is_empty() {
+                                        expr.push(' ');
+                                    }
                                     let tt = iter.next().unwrap();
                                     expr.push_str(&tt.to_string());
                                 }
-                                TokenTree::Punct(p) if "([{".contains(p.as_char()) => { depth += 1; let tt=iter.next().unwrap(); expr.push_str(&tt.to_string()); }
-                                TokenTree::Punct(p) if ")] }".contains(p.as_char()) => { depth -= 1; let tt=iter.next().unwrap(); expr.push_str(&tt.to_string()); }
+                                TokenTree::Punct(p) if "([{".contains(p.as_char()) => {
+                                    depth += 1;
+                                    let tt = iter.next().unwrap();
+                                    expr.push_str(&tt.to_string());
+                                }
+                                TokenTree::Punct(p) if ")] }".contains(p.as_char()) => {
+                                    depth -= 1;
+                                    let tt = iter.next().unwrap();
+                                    expr.push_str(&tt.to_string());
+                                }
                                 _ => {
                                     let tt = iter.next().unwrap();
-                                    if !expr.is_empty() { expr.push(' '); }
+                                    if !expr.is_empty() {
+                                        expr.push(' ');
+                                    }
                                     expr.push_str(&tt.to_string());
                                 }
                             }
@@ -266,7 +284,11 @@ fn parse_variants(body: TokenStream, mut pending_default: bool) -> Vec<Variant> 
                 if let Some(TokenTree::Group(_)) = iter.peek() {
                     iter.next();
                 }
-                variants.push(Variant { name: variant_name, value, is_default: pending_default });
+                variants.push(Variant {
+                    name: variant_name,
+                    value,
+                    is_default: pending_default,
+                });
                 pending_default = false;
             }
             _ => {}

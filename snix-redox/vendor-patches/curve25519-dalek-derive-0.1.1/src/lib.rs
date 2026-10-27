@@ -111,7 +111,10 @@ fn filter_for_target_feature(stream: TokenStream, enabled: &[String]) -> TokenSt
         if let Some(group) = attr_group(&tokens, i) {
             if attr_is_for_target_feature(group) {
                 let wanted = attr_feature(group);
-                if wanted.as_deref().is_some_and(|f| enabled.iter().any(|e| e == f)) {
+                if wanted
+                    .as_deref()
+                    .is_some_and(|f| enabled.iter().any(|e| e == f))
+                {
                     // Helper attribute is consumed; keep preceding cfg/doc attrs.
                     i += 2;
                 } else {
@@ -148,16 +151,22 @@ fn attr_group(tokens: &[TokenTree], i: usize) -> Option<&Group> {
 }
 
 fn attr_is_for_target_feature(group: &Group) -> bool {
-    group.stream().into_iter().next().is_some_and(|tt| match tt {
-        TokenTree::Ident(id) => id.to_string() == "for_target_feature",
-        _ => false,
-    })
+    group
+        .stream()
+        .into_iter()
+        .next()
+        .is_some_and(|tt| match tt {
+            TokenTree::Ident(id) => id.to_string() == "for_target_feature",
+            _ => false,
+        })
 }
 
 fn attr_feature(group: &Group) -> Option<String> {
     for tt in group.stream() {
         match tt {
-            TokenTree::Literal(lit) => return Some(strip_lit_quotes(&lit.to_string()).replace('-', "_")),
+            TokenTree::Literal(lit) => {
+                return Some(strip_lit_quotes(&lit.to_string()).replace('-', "_"))
+            }
             TokenTree::Group(g) => {
                 if let Some(s) = attr_feature(&g) {
                     return Some(s);
@@ -170,12 +179,17 @@ fn attr_feature(group: &Group) -> Option<String> {
 }
 
 fn skip_item(tokens: &[TokenTree], mut i: usize) -> usize {
+    // `use` items end at the next `;`, and their braced use-trees are groups
+    // inside that statement. Other items end at their brace body.
+    let mut is_use = false;
     while i < tokens.len() {
         match &tokens[i] {
+            TokenTree::Ident(id) if id.to_string() == "use" => is_use = true,
             TokenTree::Punct(p) if p.as_char() == ';' => return i + 1,
-            TokenTree::Group(_) => return i + 1,
-            _ => i += 1,
+            TokenTree::Group(_) if !is_use => return i + 1,
+            _ => {}
         }
+        i += 1;
     }
     i
 }
