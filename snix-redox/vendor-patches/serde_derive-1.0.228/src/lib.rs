@@ -61,8 +61,63 @@ struct ParsedItem {
     where_clause: String,
 }
 
+/// Remove line/block comments while preserving string literals. Doc comments
+/// contain words like `struct` that must not be mistaken for the item keyword.
+fn strip_comments(source: &str) -> String {
+    let bytes = source.as_bytes();
+    let mut out = String::with_capacity(source.len());
+    let mut i = 0usize;
+    let mut in_string = false;
+    let mut escaped = false;
+    while i < bytes.len() {
+        let c = bytes[i] as char;
+        if in_string {
+            out.push(c);
+            if escaped {
+                escaped = false;
+            } else if c == '\\' {
+                escaped = true;
+            } else if c == '"' {
+                in_string = false;
+            }
+            i += 1;
+            continue;
+        }
+        if c == '"' {
+            in_string = true;
+            out.push(c);
+            i += 1;
+            continue;
+        }
+        if c == '/' && bytes.get(i + 1) == Some(&b'/') {
+            i += 2;
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+            if i < bytes.len() {
+                out.push('\n');
+                i += 1;
+            }
+            continue;
+        }
+        if c == '/' && bytes.get(i + 1) == Some(&b'*') {
+            i += 2;
+            while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                i += 1;
+            }
+            i = (i + 2).min(bytes.len());
+            out.push(' ');
+            continue;
+        }
+        out.push(c);
+        i += 1;
+    }
+    out
+}
+
 fn parse_item(source: &str) -> Result<ParsedItem, String> {
-    let tokens = lex(source);
+    let source = strip_comments(source);
+    let tokens = lex(&source);
     let kind_idx = tokens
         .iter()
         .position(|token| token == "struct" || token == "enum" || token == "union")

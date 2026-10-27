@@ -50,6 +50,7 @@ fn transform_trait_method(method: &mut TraitItemFn) {
     method.sig.asyncness = None;
     method.sig.output = parse_quote!(-> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = #output> + Send + #async_lt>>);
     ensure_lifetime_params(&mut method.sig, &arg_lts);
+    push_async_lifetime(&mut method.sig, &async_lt);
     add_async_where_bounds(&mut method.sig, &async_lt, &arg_lts, true);
 
     if let Some(default) = method.default.take() {
@@ -64,11 +65,18 @@ fn transform_impl_method(method: &mut ImplItemFn) {
     method.sig.asyncness = None;
     method.sig.output = parse_quote!(-> ::core::pin::Pin<Box<dyn ::core::future::Future<Output = #output> + Send + #async_lt>>);
     ensure_lifetime_params(&mut method.sig, &arg_lts);
-    add_async_where_bounds(&mut method.sig, &async_lt, &arg_lts, false);
+    push_async_lifetime(&mut method.sig, &async_lt);
+    add_async_where_bounds(&mut method.sig, &async_lt, &arg_lts, true);
     let body = method.block.clone();
     method.block = parse_quote!({
         Box::pin(async move {
-            let __async_trait_result: #output = (async move #body).await;
+            if let ::core::option::Option::Some(__ret) =
+                ::core::option::Option::None::<#output>
+            {
+                #[allow(unreachable_code)]
+                return __ret;
+            }
+            let __async_trait_result: #output = #body;
             __async_trait_result
         })
     });
@@ -81,16 +89,21 @@ fn output_type(output: &ReturnType) -> Type {
     }
 }
 
-fn ensure_async_lifetime(sig: &mut Signature) -> Lifetime {
-    let lt = Lifetime::new("'async_trait", Span::call_site());
-    let exists = sig.generics.params.iter().any(|param| match param {
-        GenericParam::Lifetime(lp) => lp.lifetime.ident == "async_trait",
-        _ => false,
-    });
-    if !exists {
-        sig.generics.params.insert(0, GenericParam::Lifetime(LifetimeParam::new(lt.clone())));
-    }
-    lt
+fn ensure_async_lifetime(_sig: &mut Signature) -> Lifetime {
+    Lifetime::new("'async_trait", Span::call_site())
+}
+
+/// Append `'async_trait` after the existing lifetimes but before type params.
+fn push_async_lifetime(sig: &mut Signature, lt: &Lifetime) {
+    let pos = sig
+        .generics
+        .params
+        .iter()
+        .position(|param| !matches!(param, GenericParam::Lifetime(_)))
+        .unwrap_or(sig.generics.params.len());
+    sig.generics
+        .params
+        .insert(pos, GenericParam::Lifetime(LifetimeParam::new(lt.clone())));
 }
 
 fn name_elided_arg_lifetimes(sig: &mut Signature) -> Vec<Lifetime> {
@@ -111,7 +124,11 @@ fn name_elided_arg_lifetimes(sig: &mut Signature) -> Vec<Lifetime> {
             }
             FnArg::Typed(pat_ty) => {
                 let prefix = pat_ident_prefix(&pat_ty.pat).unwrap_or_else(|| "life".to_string());
-                let mut namer = RefLifetimeNamer { out: Vec::new(), next: 0, prefix };
+                let mut namer = RefLifetimeNamer {
+                    out: Vec::new(),
+                    next: 0,
+                    prefix,
+                };
                 namer.visit_type_mut(&mut pat_ty.ty);
                 out.extend(namer.out);
             }
@@ -132,13 +149,19 @@ impl VisitMut for RefLifetimeNamer {
             if lt.ident != "_" {
                 self.out.push(lt.clone());
             } else {
-                let new_lt = Lifetime::new(&format!("'{}_{}", self.prefix, self.next), Span::call_site());
+                let new_lt = Lifetime::new(
+                    &format!("'{}_{}", self.prefix, self.next),
+                    Span::call_site(),
+                );
                 self.next += 1;
                 node.lifetime = Some(new_lt.clone());
                 self.out.push(new_lt);
             }
         } else {
-            let new_lt = Lifetime::new(&format!("'{}_{}", self.prefix, self.next), Span::call_site());
+            let new_lt = Lifetime::new(
+                &format!("'{}_{}", self.prefix, self.next),
+                Span::call_site(),
+            );
             self.next += 1;
             node.lifetime = Some(new_lt.clone());
             self.out.push(new_lt);
@@ -178,7 +201,16 @@ fn dedup_lifetimes(lts: Vec<Lifetime>) -> Vec<Lifetime> {
 }
 
 fn ensure_lifetime_params(sig: &mut Signature, lts: &[Lifetime]) {
-    for lt in lts.iter().rev() {
+    // Keep existing lifetimes (including explicitly declared ones such as
+    // `'a` on impl methods) first, then add the collected argument lifetimes
+    // in collection order. Positional lifetime order must match the trait.
+    let mut pos = 0;
+    for (i, param) in sig.generics.params.iter().enumerate() {
+        if matches!(param, GenericParam::Lifetime(_)) {
+            pos = i + 1;
+        }
+    }
+    for lt in lts {
         let exists = sig.generics.params.iter().any(|param| match param {
             GenericParam::Lifetime(lp) => lp.lifetime.ident == lt.ident,
             _ => false,
@@ -186,7 +218,8 @@ fn ensure_lifetime_params(sig: &mut Signature, lts: &[Lifetime]) {
         if !exists {
             sig.generics
                 .params
-                .insert(0, GenericParam::Lifetime(LifetimeParam::new(lt.clone())));
+                .insert(pos, GenericParam::Lifetime(LifetimeParam::new(lt.clone())));
+            pos += 1;
         }
     }
 }
