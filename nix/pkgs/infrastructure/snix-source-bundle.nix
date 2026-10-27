@@ -57,6 +57,41 @@ pkgs.runCommand "snix-source-bundle" { } ''
   SNIX_BUNDLE_OUT="$out" ${pkgs.python3}/bin/python3 - <<'PY'
 import os
 from pathlib import Path
+
+# The guest serde_derive shim cannot deserialize at runtime. The default
+# in-memory redb services only need their Default config when the URL has no
+# query string; avoid invoking serde for that case so the self-built snix can
+# construct its default store services.
+bundle = Path(os.environ["SNIX_BUNDLE_OUT"])
+replacements = [
+    (
+        bundle / "upstream/castore/src/directoryservice/redb.rs",
+        "RedbDirectoryServiceConfig",
+    ),
+    (
+        bundle / "upstream/store/src/pathinfoservice/redb.rs",
+        "RedbPathInfoServiceConfig",
+    ),
+]
+for path, ty in replacements:
+    text = path.read_text()
+    old = f"""        let mut config: {ty} =
+            serde_qs::from_str(url.query().unwrap_or_default())?;
+"""
+    new = f"""        let mut config: {ty} = {{
+            let query = url.query().unwrap_or_default();
+            if query.is_empty() {{
+                {ty}::default()
+            }} else {{
+                serde_qs::from_str(query)?
+            }}
+        }};
+"""
+    if old in text:
+        path.write_text(text.replace(old, new, 1))
+PY
+import os
+from pathlib import Path
 bundle_out = Path(os.environ["SNIX_BUNDLE_OUT"])
 for crate in ("castore", "store", "build"):
     build_rs = bundle_out / "upstream" / crate / "build.rs"
