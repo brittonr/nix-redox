@@ -91,6 +91,7 @@ for path, ty in replacements:
     if old in text:
         path.write_text(text.replace(old, new, 1))
 PY
+  SNIX_BUNDLE_OUT="$out" ${pkgs.python3}/bin/python3 - <<'PY'
 import os
 from pathlib import Path
 bundle_out = Path(os.environ["SNIX_BUNDLE_OUT"])
