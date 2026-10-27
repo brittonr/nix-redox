@@ -335,7 +335,7 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 
 - `snix-redox/vendor-patches/` contains hand-written shims for proc-macro crates (async-trait, auto_impl, thiserror-impl, serde_derive, prost-derive, ...) because the guest rustc historically spun compiling the real derives. The shims are only pairwise compatible: the shim async-trait + shim auto_impl combination builds, but mixing the real async-trait with the shim auto_impl fails with E0195 lifetime mismatches.
 - `snix-castore` needs real derive semantics (`Arc<Concrete>` -> `Arc<dyn Trait>` coercions, `return` inside async bodies, `E: Debug` bounds). Shim fixes tried: adding `Self: 'async_trait` to impls, removing the nested `async move` around impl bodies, upstream's `None::<Ret>` return-coercion trick; each surfaced another shim gap (auto_impl E0195, thiserror E0277).
-- Testing the guest bundle with all shims removed (real vendored derives) is the current experiment; the focused wrapper is `nix run .#snix-compile-test -- --verbose` (9000s).
+- Removing all shims and using the real vendored derives was tested on 2026-10-26: the guest rustc stalled for ~2h on `nix-compat` (119 consecutive stalled heartbeats, rustc pid frozen in `rustc-progress`), confirming the original spin. The shims remain required until that toolchain bug is fixed; the focused wrapper is `nix run .#snix-compile-test -- --verbose` (9000s).
 
 ### What Doesn't
 - `CARGO_BUILD_JOBS > 1` had two issues: (1) lld stack overflow — fixed by `lld-wrapper` (16MB stack thread + exec); (2) cargo job manager hangs on multi-crate workspace builds — fixed by `patch-relibc-fork-lock.py` (see below)
