@@ -58,7 +58,14 @@ impl BuildFsProxy {
             BuildFsProxyError::SetupFailed(format!("spawn proxy helper '{exe}': {e}"))
         })?;
 
-        if !wait_for_ready(&ready_file, &mut child, 200) {
+        // The helper pre-scans the profile rustlib and any vendored source
+        // trees before writing the ready file. On a busy filesystem that can
+        // take many seconds, so allow a generous window. On timeout the
+        // helper is still serving its event loop: kill and reap it instead of
+        // waiting for an exit that only happens when a client closes the
+        // socket (which is the caller itself).
+        if !wait_for_ready(&ready_file, &mut child, 6000) {
+            let _ = child.kill();
             let status = child.wait().ok();
             let _ = std::fs::remove_file(&allow_list_file);
             let _ = std::fs::remove_file(&ready_file);

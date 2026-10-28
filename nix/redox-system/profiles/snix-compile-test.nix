@@ -187,6 +187,51 @@ let
                           fi
                         '
 
+                        echo "--- source-rebuild-after-compile ---"
+                        /nix/system/profile/bin/bash -c '
+                          rm -rf /tmp/snix-build-* 2>/dev/null || true
+                          CFGDIR=/tmp/sr-after-compile
+                          rm -rf "$CFGDIR"
+                          mkdir -p "$CFGDIR/generations"
+                          cat > "$CFGDIR/packages.nix" << '"'"'PKGNIX'"'"'
+{
+  hello-source = derivation {
+    name = "hello-source";
+    builder = "/nix/system/profile/bin/bash";
+    args = ["-c" "/bin/mkdir -p $out/bin; echo hello-from-source > $out/bin/hello-source"];
+    system = "x86_64-unknown-redox";
+  };
+}
+PKGNIX
+                          cat > "$CFGDIR/configuration.nix" << '"'"'CFGNIX'"'"'
+{
+  packageSources = "/tmp/sr-after-compile/packages.nix";
+}
+CFGNIX
+                          cp /etc/redox-system/manifest.json "$CFGDIR/manifest.json"
+                          /bin/snix system rebuild --source \
+                            --config "$CFGDIR/configuration.nix" \
+                            --manifest "$CFGDIR/manifest.json" \
+                            --gen-dir "$CFGDIR/generations" &
+                          PID=$!
+                          N=0
+                          while kill -0 $PID 2>/dev/null && [ $N -lt 30 ]; do sleep 10; N=$((N+1)); done
+                          if kill -0 $PID 2>/dev/null; then
+                            echo "FUNC_TEST:source-rebuild-after-compile:FAIL:hang"
+                            echo "=== sys context ==="
+                            cat /scheme/sys/context 2>/dev/null
+                            kill -9 $PID 2>/dev/null
+                          else
+                            wait $PID
+                            EXIT=$?
+                            if [ $EXIT -eq 0 ]; then
+                              echo "FUNC_TEST:source-rebuild-after-compile:PASS"
+                            else
+                              echo "FUNC_TEST:source-rebuild-after-compile:FAIL:exit=$EXIT"
+                            fi
+                          fi
+                        '
+
                         echo ""
                         echo "FUNC_TESTS_COMPLETE"
                       '';
@@ -194,7 +239,7 @@ in
 selfHosting
 // {
   "/boot" = (selfHosting."/boot" or { }) // {
-    diskSizeMB = 8192;
+    diskSizeMB = 16384;
   };
 
   "/services" = (selfHosting."/services" or { }) // {
