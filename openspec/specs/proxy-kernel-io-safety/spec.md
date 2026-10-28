@@ -1,4 +1,9 @@
-## MODIFIED Requirements
+# proxy-kernel-io-safety Specification
+
+## Purpose
+TBD - created by archiving change fix-proxy-sandbox-deadlock. Update Purpose after archive.
+
+## Requirements
 
 ### Requirement: Proxy-owned scheme threads can forward real filesystem I/O without hanging
 
