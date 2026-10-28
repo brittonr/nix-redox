@@ -531,9 +531,15 @@ CCDEPCOPY
         > /tmp/vendored/Cargo.lock
       cd /tmp/vendored
       export LD_LIBRARY_PATH="/nix/system/profile/lib:/usr/lib/rustc:/lib"
+      export CARGO_BUILD_JOBS=2
+      export RAYON_NUM_THREADS=4
+      rm -rf /tmp/cargo-vendored
+      mkdir -p /tmp/cargo-vendored
+      cp /root/.cargo/config.toml /tmp/cargo-vendored/ 2>/dev/null || true
       export CARGO_HOME=/tmp/cargo-vendored
       export CARGO_INCREMENTAL=0
       export RUSTC=/nix/system/profile/bin/rustc
+      rm -f /root/.cargo/.package-cache* "$CARGO_HOME/.package-cache"* 2>/dev/null || true
       cargo build --offline >/tmp/vendored-build-log 2>&1
       EXIT=$?
       BIN=target/x86_64-unknown-redox/debug/vendored-test
@@ -547,7 +553,52 @@ CCDEPCOPY
       else
         echo "FUNC_TEST:cargo-vendored-dep:FAIL:exit=$EXIT"
         echo "=== vendored log ===" >&2
-        head -c 2048 /tmp/vendored-build-log 2>/dev/null >&2
+        /bin/cat /tmp/vendored-build-log 2>/dev/null >&2
+      fi
+    '
+
+    # ── source-rebuild-probe: snix system rebuild --source ──
+    echo "--- source-rebuild-probe ---"
+    /nix/system/profile/bin/bash -c '
+      CFGDIR=/tmp/sr-probe
+      rm -rf "$CFGDIR"
+      mkdir -p "$CFGDIR/generations"
+      cat > "$CFGDIR/packages.nix" << '"'"'PKGNIX'"'"'
+{
+  hello-source = derivation {
+    name = "hello-source";
+    builder = "/nix/system/profile/bin/bash";
+    args = ["-c" "/bin/mkdir -p $out/bin; echo hello-from-source > $out/bin/hello-source"];
+    system = "x86_64-unknown-redox";
+  };
+}
+PKGNIX
+      cat > "$CFGDIR/configuration.nix" << '"'"'CFGNIX'"'"'
+{
+  packageSources = "/tmp/sr-probe/packages.nix";
+}
+CFGNIX
+      cp /etc/redox-system/manifest.json "$CFGDIR/manifest.json"
+      /bin/snix system rebuild --source \
+        --config "$CFGDIR/configuration.nix" \
+        --manifest "$CFGDIR/manifest.json" \
+        --gen-dir "$CFGDIR/generations" &
+      PID=$!
+      N=0
+      while kill -0 $PID 2>/dev/null && [ $N -lt 12 ]; do sleep 10; N=$((N+1)); done
+      if kill -0 $PID 2>/dev/null; then
+        echo "FUNC_TEST:source-rebuild-probe:FAIL:hang"
+        echo "=== sys context ===" >&2
+        cat /scheme/sys/context 2>/dev/null >&2
+        kill -9 $PID 2>/dev/null
+      else
+        wait $PID
+        EXIT=$?
+        if [ $EXIT -eq 0 ]; then
+          echo "FUNC_TEST:source-rebuild-probe:PASS"
+        else
+          echo "FUNC_TEST:source-rebuild-probe:FAIL:exit=$EXIT"
+        fi
       fi
     '
 
