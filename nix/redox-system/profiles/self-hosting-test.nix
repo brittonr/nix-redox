@@ -2289,7 +2289,7 @@ RSEOF
                         else
                           echo "FUNC_TEST:cargo-vendored-dep:FAIL:$(cat /tmp/vendored-result)"
                           echo "=== vendored stderr (last 2KB) ==="
-                          /nix/system/profile/bin/bash -c 'head -c 2048 /tmp/vendored-build-log 2>/dev/null'
+                          /nix/system/profile/bin/bash -c '/bin/cat /tmp/vendored-build-log 2>/dev/null'
                         end
 
                         # ── Test: Proc-macro crate ──────────────────────────────
