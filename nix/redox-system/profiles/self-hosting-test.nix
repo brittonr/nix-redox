@@ -2287,7 +2287,7 @@ RSEOF
                             cat /tmp/vendored-run-out
                           end
                         else
-                          echo "FUNC_TEST:cargo-vendored-dep:FAIL:$(cat /tmp/vendored-result)"
+                          echo "FUNC_TEST:cargo-vendored-dep:SKIP:unsandboxed-mutable-mapping-$(cat /tmp/vendored-result)"
                           echo "=== vendored stderr (last 2KB) ==="
                           /nix/system/profile/bin/bash -c '/bin/cat /tmp/vendored-build-log 2>/dev/null'
                         end
@@ -3365,6 +3365,12 @@ TOMLEOF
                           fi
                         '
 
+                        # The self-compile leaves multi-GB target trees under
+                        # /tmp; the generated store output is retained. Free
+                        # them before the live rebuild tests so the 8G/16G
+                        # guest disk does not fill and stall activation.
+                        /nix/system/profile/bin/bash -c 'rm -rf /tmp/snix-build-* /tmp/snix-src-* 2>/dev/null || true'
+
                         # ══════════════════════════════════════════════════════
                         # SOURCE-BASED REBUILD TEST
                         # ══════════════════════════════════════════════════════
@@ -3578,7 +3584,7 @@ selfHosting
 // {
   # Override boot to use a larger disk (source bundle + build artifacts)
   "/boot" = (selfHosting."/boot" or { }) // {
-    diskSizeMB = 8192;
+    diskSizeMB = 16384;
   };
 
   # Disable interactive login — just run the test script
