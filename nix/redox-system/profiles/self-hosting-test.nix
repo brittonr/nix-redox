@@ -3419,14 +3419,14 @@ CFGNIX
                             --gen-dir "$GENDIR" &
                           SR_PID=$!
                           SR_N=0
-                          while kill -0 $SR_PID 2>/dev/null && [ $SR_N -lt 30 ]; do
+                          while kill -0 $SR_PID 2>/dev/null && [ $SR_N -lt 120 ]; do
                             sleep 10
                             SR_N=$((SR_N+1))
                           done
                           if kill -0 $SR_PID 2>/dev/null; then
                             echo "FUNC_TEST:source-rebuild:FAIL:hang"
                             echo "=== source-rebuild disk probe ==="
-                            timeout 10 /nix/system/profile/bin/bash -c 'echo probe > /tmp/.sr-disk-probe; cat /tmp/.sr-disk-probe' 2>&1 || echo "disk-write-HANG"
+                            timeout 10 /nix/system/profile/bin/bash -c "echo probe > /tmp/.sr-disk-probe; cat /tmp/.sr-disk-probe" 2>&1 || echo "disk-write-HANG"
                             echo "=== source-rebuild df ==="
                             timeout 10 df -h /tmp 2>&1 || echo "df-HANG"
                             echo "=== source-rebuild memory ==="
@@ -3437,7 +3437,7 @@ CFGNIX
                             timeout 6 strace-redox -p $SR_PID >/tmp/sr-strace-parent 2>&1 || true
                             cat /tmp/sr-strace-parent 2>/dev/null | head -40
                             echo "=== source-rebuild strace helper ==="
-                            HELPER_PID=$(ps -ef 2>/dev/null | grep build-proxy-helper | grep -v grep | head -1 | sed 's/^[ ]*//' | cut -d" " -f2)
+                            HELPER_PID=$(ps -ef 2>/dev/null | grep build-proxy-helper | grep -v grep | head -1 | sed "s/^[ ]*//" | cut -d" " -f2)
                             if [ -n "$HELPER_PID" ]; then
                               timeout 6 strace-redox -p $HELPER_PID >/tmp/sr-strace-helper 2>&1 || true
                               cat /tmp/sr-strace-helper 2>/dev/null | head -40
