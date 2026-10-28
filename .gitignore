@@ -11,3 +11,5 @@ snix-redox/upstream
 /.agent
 
 .pi/
+
+snix-redox/target-host/

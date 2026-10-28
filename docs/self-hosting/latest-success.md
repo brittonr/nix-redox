@@ -5,8 +5,8 @@ See `docs/self-hosting/proof-artifacts.md` for the capture contract.
 
 | Flow | Run ID | Finished | Commit | Tests | Capture dir |
 |---|---|---|---|---|---|
-| self-hosting-test | 20260409T133254-self-hosting-test | 2026-04-09T14:52:39-04:00 | `unknown` | 78/78 pass | `/var/tmp/redox-self-hosting-captures/20260409T133254-self-hosting-test` |
-| snix-compile-test | 20261027T132203-snix-compile-test | 2026-10-27T14:33:24-04:00 | `afe9972d` | 7/7 pass | `/var/tmp/redox-self-hosting-captures/20261027T132203-snix-compile-test` |
-| snix-sandbox-test | 20261026T144631-snix-sandbox-test | 2026-10-26T14:52:00-04:00 | `31f3be63` | 16/18 pass | `/var/tmp/redox-self-hosting-captures/20261026T144631-snix-sandbox-test` |
+| self-hosting-test | 20261028T140018-self-hosting-test | 2026-10-28T15:30:59-04:00 | `93107723` | 82/84 pass | `/var/tmp/redox-self-hosting-captures/20261028T140018-self-hosting-test` |
+| snix-compile-test | 20261028T091421-snix-compile-test | 2026-10-28T10:08:15-04:00 | `8a9604d9` | 8/8 pass | `/var/tmp/redox-self-hosting-captures/20261028T091421-snix-compile-test` |
+| snix-sandbox-test | 20261028T025832-snix-sandbox-test | 2026-10-28T03:02:49-04:00 | `ee55a67a` | 17/19 pass | `/var/tmp/redox-self-hosting-captures/20261028T025832-snix-sandbox-test` |
 | kernel-rebuild-test | 20260415T000324-kernel-rebuild-test | 2026-04-15T00:15:32-04:00 | `af057438` | 10/10 pass | `/var/tmp/redox-self-hosting-captures/20260415T000324-kernel-rebuild-test` |
 | native-rebuild-test | 20261026T052853-native-rebuild-test | 2026-10-26T05:55:20-04:00 | `50395ba6` | 88/88 pass | `/var/tmp/redox-self-hosting-captures/20261026T052853-native-rebuild-test` |

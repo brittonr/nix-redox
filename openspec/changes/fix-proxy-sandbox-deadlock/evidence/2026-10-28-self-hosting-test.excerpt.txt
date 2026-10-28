@@ -1,0 +1,26 @@
+Flow:     self-hosting-test
+Run:      20261028T140018-self-hosting-test
+Verdict:  PASS
+Duration: 5441s
+Commit:   93107723
+
+Command:  /nix/store/bhxfqmppg91lmz9hk8fm8xigy87asm78-functional-test/bin/functional-test --verbose
+Capture:  /var/tmp/redox-self-hosting-captures/20261028T140018-self-hosting-test
+
+Results:  82 passed, 0 failed, 2 skipped
+
+Milestones:
+  Boot complete      @ 4.084s
+  Test suite started @ 4.084s
+  Test suite complete @ 5432.531s
+  Bootloader started @ 1.153s
+  Kernel running     @ 2.507s
+
+Source-rebuild and follow-up fix:
+FUNC_TEST:source-rebuild:PASS
+FUNC_TEST:source-rebuild-gen:PASS
+FUNC_TEST:source-rebuild-pkg:PASS
+FUNC_TEST:source-rebuild-dry:PASS
+
+Build proxy activation line:
+buildfs: proxy mode active
