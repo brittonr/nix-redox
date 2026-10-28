@@ -3416,9 +3416,40 @@ CFGNIX
                           /bin/snix system rebuild --source \
                             --config "$CFGDIR/configuration.nix" \
                             --manifest "$MANIFEST" \
-                            --gen-dir "$GENDIR" \
-                            >/tmp/source-rebuild-stdout 2>/tmp/source-rebuild-stderr
-                          EXIT=$?
+                            --gen-dir "$GENDIR" &
+                          SR_PID=$!
+                          SR_N=0
+                          while kill -0 $SR_PID 2>/dev/null && [ $SR_N -lt 30 ]; do
+                            sleep 10
+                            SR_N=$((SR_N+1))
+                          done
+                          if kill -0 $SR_PID 2>/dev/null; then
+                            echo "FUNC_TEST:source-rebuild:FAIL:hang"
+                            echo "=== source-rebuild disk probe ==="
+                            timeout 10 /nix/system/profile/bin/bash -c 'echo probe > /tmp/.sr-disk-probe; cat /tmp/.sr-disk-probe' 2>&1 || echo "disk-write-HANG"
+                            echo "=== source-rebuild df ==="
+                            timeout 10 df -h /tmp 2>&1 || echo "df-HANG"
+                            echo "=== source-rebuild memory ==="
+                            timeout 10 cat /scheme/sys/memory 2>&1 || echo "memory-HANG"
+                            echo "=== source-rebuild sys context ==="
+                            cat /scheme/sys/context 2>/dev/null
+                            echo "=== source-rebuild strace parent pid=$SR_PID ==="
+                            timeout 6 strace-redox -p $SR_PID >/tmp/sr-strace-parent 2>&1 || true
+                            cat /tmp/sr-strace-parent 2>/dev/null | head -40
+                            echo "=== source-rebuild strace helper ==="
+                            HELPER_PID=$(ps -ef 2>/dev/null | grep build-proxy-helper | grep -v grep | head -1 | sed 's/^[ ]*//' | cut -d" " -f2)
+                            if [ -n "$HELPER_PID" ]; then
+                              timeout 6 strace-redox -p $HELPER_PID >/tmp/sr-strace-helper 2>&1 || true
+                              cat /tmp/sr-strace-helper 2>/dev/null | head -40
+                            else
+                              echo "helper process not found"
+                            fi
+                            kill -9 $SR_PID 2>/dev/null
+                            EXIT=124
+                          else
+                            wait $SR_PID
+                            EXIT=$?
+                          fi
                           echo "[source-rebuild] exit=$EXIT"
 
                           if [ $EXIT -eq 0 ]; then
