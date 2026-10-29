@@ -77,3 +77,33 @@ not a firmware restart or proof that the newly built EFI binary ran from the ESP
 The 16 GiB mutable image and native build scratch need host disk space; use
 `TMPDIR=/var/tmp` when `/tmp` is memory-backed or small. Capture metadata reports
 the exact run verdict; test fixtures alone are not evidence of a successful run.
+
+## Direct rustc and environment checks
+
+The self-hosting profile's `rustc-direct-link` and `environ-diag` checks compile
+native Rust binaries through `/nix/system/profile/bin/cc`, which supplies CRT
+startup objects and libc. Standalone rustc does not inherit Cargo's linker
+configuration. Using bare `ld.lld` previously emitted binaries without `_start`;
+those binaries crashed even though compilation returned success.
+
+Both checks require a zero runtime exit status and exact expected stdout.
+`environ-diag` compiles with `DIAG_TEST_VAR=hello_from_environ`, then runs the
+same binary with `DIAG_TEST_VAR=hello_runtime`. Its output must contain the
+compile-time `env!()` value and the distinct runtime `std::env::var()` value.
+Compilation alone is not an environment-propagation PASS.
+
+The recorded 84/84 full run predates these stricter assertions and includes
+crashing diagnostic binaries. Keep that historical count separate from a
+focused verification of the corrected probes.
+
+Focused proof: `20261028T205624-runtime-environment-smoke` passes 5/5 with no
+failures or skips. The two unchanged test names pass with exit 0 and expected
+output. Three throwaway negative cases prove that direct-link and environment
+probes reject exit 7 even when stdout matches, and that the environment probe
+rejects an incorrect runtime value despite exit 0. The cases compile real Rust
+binaries in the guest; they do not substitute mocked compiler output.
+
+Capture: `/var/tmp/redox-self-hosting-captures/20261028T205624-runtime-environment-smoke/`.
+It retains `probe.nix` (the focused image expression that extracts the current
+profile probes), serial output, the runner log, and the standard summary.
+`latest-success` records this as a separate flow, not a new full-suite result.

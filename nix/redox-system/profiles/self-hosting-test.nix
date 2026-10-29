@@ -604,102 +604,68 @@ let
 
                         # ── Step 4e: rustc direct link (rustc -o binary, no cargo) ──
                         echo "--- Step 4e: rustc -o binary (direct link, no cargo) ---"
-                        rm -f /tmp/abort.log
                         echo 'fn main() { println!("direct link works!"); }' > /tmp/direct_link.rs
-                        # Full compile+link in one step — tests rustc's linker invocation
-                        # Must pass -C linker=ld.lld explicitly (cargo config only applies through cargo)
-                        rustc /tmp/direct_link.rs -o /tmp/direct_link_bin \
-                          -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld \
-                          -C link-arg=-L/usr/lib/redox-sysroot/lib \
-                          >/tmp/rustc-direct-link-stdout ^>/tmp/rustc-direct-link-stderr
-                        let direct_link_exit = $?
-                        echo "rustc -o binary exit: $direct_link_exit"
-                        echo "rustc link stdout:"
-                        cat /tmp/rustc-direct-link-stdout
-                        echo "rustc link stderr:"
-                        cat /tmp/rustc-direct-link-stderr
-                        if test $direct_link_exit = 0
-                          if exists -f /tmp/direct_link_bin
-                            /tmp/direct_link_bin > /tmp/direct-link-run-out ^>/tmp/direct-link-run-err
-                            let run_exit = $?
-                            echo "Direct link binary exit: $run_exit"
-                            echo "Output: $(cat /tmp/direct-link-run-out)"
-                            echo "FUNC_TEST:rustc-direct-link:PASS"
-                          else
-                            echo "FUNC_TEST:rustc-direct-link:FAIL:binary not created"
-                          end
-                        else
-                          # Check abort.log
-                          if exists -f /tmp/abort.log
-                            echo "abort.log:"
-                            cat /tmp/abort.log
-                          end
-                          echo "FUNC_TEST:rustc-direct-link:FAIL:exit=$direct_link_exit"
-                        end
-
-                        # ── environ-diag: trace ld_so environ injection ──
-                        echo "--- environ-diag: ld_so environ trace ---"
-
-                        # Part A: compile a program that checks runtime env::var()
-                        # This tests if the COMPILED binary can read env vars at runtime.
-                        echo 'fn main() {' > /tmp/env_runtime.rs
-                        echo '    eprintln!("=== runtime env dump ===");' >> /tmp/env_runtime.rs
-                        echo '    for (k, v) in std::env::vars() {' >> /tmp/env_runtime.rs
-                        echo '        if k.starts_with("DIAG") || k.starts_with("LD_") || k.starts_with("PATH") || k.starts_with("HOME") {' >> /tmp/env_runtime.rs
-                        echo '            eprintln!("  {}={}", k, v);' >> /tmp/env_runtime.rs
-                        echo '        }' >> /tmp/env_runtime.rs
-                        echo '    }' >> /tmp/env_runtime.rs
-                        echo '    eprintln!("  total env vars: {}", std::env::vars().count());' >> /tmp/env_runtime.rs
-                        echo '    eprintln!("=== end runtime env ===");' >> /tmp/env_runtime.rs
-                        echo '    let val = std::env::var("DIAG_TEST_VAR").unwrap_or("NOTFOUND".into());' >> /tmp/env_runtime.rs
-                        echo '    println!("RUNTIME_DIAG_TEST_VAR={}", val);' >> /tmp/env_runtime.rs
-                        echo '}' >> /tmp/env_runtime.rs
-
-                        /nix/system/profile/bin/bash -c 'rustc /tmp/env_runtime.rs --edition 2021 -o /tmp/env_runtime_bin --crate-type bin -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld -C link-arg=-L/usr/lib/redox-sysroot/lib 2>/tmp/env-runtime-stderr; echo "runtime-rustc-exit=$?"'
-                        if exists -f /tmp/env_runtime_bin
-                          /nix/system/profile/bin/bash -c 'DIAG_TEST_VAR=hello_runtime /tmp/env_runtime_bin >/tmp/env-runtime-out 2>/tmp/env-runtime-err'
-                          echo "=== runtime env test ==="
-                          cat /tmp/env-runtime-out
-                          cat /tmp/env-runtime-err
-                          echo "=== end runtime env test ==="
-                        else
-                          echo "runtime env test: compile failed"
-                          cat /tmp/env-runtime-stderr
-                        end
-
-                        # Part B: compile-time env!() assertion test
-                        # env!() FAILS compilation if the var is not set — no need to run binary
-                        echo 'fn main() { println!("{}", env!("DIAG_TEST_VAR")); }' > /tmp/env_assert.rs
-
+                        # The CC wrapper supplies CRT startup objects and libc; bare ld.lld does not.
                         /nix/system/profile/bin/bash -c '
-                          DIAG_TEST_VAR=hello_from_environ rustc /tmp/env_assert.rs --edition 2021 -o /tmp/env_assert_bin --crate-type bin -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld -C link-arg=-L/usr/lib/redox-sysroot/lib 2>/tmp/env-assert-stderr
-                          EXIT=$?
-                          echo "env-assert-exit=$EXIT"
-                          echo "=== env!() assertion stderr ==="
-                          cat /tmp/env-assert-stderr
-                          echo "=== end env!() stderr ==="
-                          if [ "$EXIT" = "0" ]; then
-                            echo "env!() compilation succeeded - var IS visible to rustc"
-                            echo "FUNC_TEST:environ-diag:PASS"
+                          if rustc /tmp/direct_link.rs -o /tmp/direct_link_bin \
+                            -C linker=/nix/system/profile/bin/cc \
+                            -C link-arg=-L/usr/lib/redox-sysroot/lib \
+                            >/tmp/rustc-direct-link-stdout 2>/tmp/rustc-direct-link-stderr; then
+                            /tmp/direct_link_bin >/tmp/direct-link-run-out 2>/tmp/direct-link-run-err
+                            EXIT=$?
+                            OUTPUT=$(cat /tmp/direct-link-run-out)
+                            echo "Direct link binary exit: $EXIT"
+                            echo "Output: $OUTPUT"
+                            if [ "$EXIT" -ne 0 ]; then
+                              echo "FUNC_TEST:rustc-direct-link:FAIL:runtime-exit=$EXIT"
+                              cat /tmp/direct-link-run-err
+                            elif [ "$OUTPUT" != "direct link works!" ]; then
+                              echo "FUNC_TEST:rustc-direct-link:FAIL:unexpected-output"
+                              cat /tmp/direct-link-run-err
+                            else
+                              echo "FUNC_TEST:rustc-direct-link:PASS"
+                            fi
                           else
-                            echo "env!() compilation FAILED - var NOT visible to rustc"
-                            echo "FUNC_TEST:environ-diag:FAIL:env-macro-failed"
+                            EXIT=$?
+                            echo "FUNC_TEST:rustc-direct-link:FAIL:compile-exit=$EXIT"
+                            cat /tmp/rustc-direct-link-stdout /tmp/rustc-direct-link-stderr
                           fi
                         '
 
-                        # Part C: option_env!() test (just for comparison)
-                        echo 'fn main() {' > /tmp/env_diag.rs
-                        echo '    match option_env!("DIAG_TEST_VAR") {' >> /tmp/env_diag.rs
-                        echo '        Some(v) => println!("COMPILE_TIME_DIAG={}", v),' >> /tmp/env_diag.rs
-                        echo '        None => println!("COMPILE_TIME_DIAG=NONE"),' >> /tmp/env_diag.rs
-                        echo '    }' >> /tmp/env_diag.rs
-                        echo '}' >> /tmp/env_diag.rs
+                        # ── environ-diag: compile-time and runtime environment propagation ──
+                        echo "--- environ-diag: compile-time and runtime environment ---"
+                        echo 'fn main() {' > /tmp/env_runtime.rs
+                        echo '    println!("COMPILE_TIME_DIAG_TEST_VAR={}", env!("DIAG_TEST_VAR"));' >> /tmp/env_runtime.rs
+                        echo '    println!("RUNTIME_DIAG_TEST_VAR={}", std::env::var("DIAG_TEST_VAR").expect("DIAG_TEST_VAR missing"));' >> /tmp/env_runtime.rs
+                        echo '}' >> /tmp/env_runtime.rs
 
-                        /nix/system/profile/bin/bash -c 'DIAG_TEST_VAR=hello_from_environ rustc /tmp/env_diag.rs --edition 2021 -o /tmp/env_diag_bin --crate-type bin -C linker=/nix/system/profile/bin/ld.lld -C linker-flavor=ld.lld -C link-arg=-L/usr/lib/redox-sysroot/lib >/tmp/env-diag-stdout 2>/tmp/env-diag-stderr; echo "rustc-exit=$?"'
-
-                        echo "=== ld_so environ-diag stderr ==="
-                        cat /tmp/env-diag-stderr
-                        echo "=== end stderr ==="
+                        /nix/system/profile/bin/bash -c '
+                          if DIAG_TEST_VAR=hello_from_environ rustc /tmp/env_runtime.rs --edition 2021 \
+                            -o /tmp/env_runtime_bin --crate-type bin \
+                            -C linker=/nix/system/profile/bin/cc \
+                            -C link-arg=-L/usr/lib/redox-sysroot/lib \
+                            >/tmp/env-runtime-compile-out 2>/tmp/env-runtime-stderr; then
+                            DIAG_TEST_VAR=hello_runtime /tmp/env_runtime_bin >/tmp/env-runtime-out 2>/tmp/env-runtime-err
+                            EXIT=$?
+                            OUTPUT=$(cat /tmp/env-runtime-out)
+                            EXPECTED=$(printf "%s\n" "COMPILE_TIME_DIAG_TEST_VAR=hello_from_environ" "RUNTIME_DIAG_TEST_VAR=hello_runtime")
+                            echo "Runtime env binary exit: $EXIT"
+                            printf "%s\n" "$OUTPUT"
+                            if [ "$EXIT" -ne 0 ]; then
+                              echo "FUNC_TEST:environ-diag:FAIL:runtime-exit=$EXIT"
+                              cat /tmp/env-runtime-err
+                            elif [ "$OUTPUT" != "$EXPECTED" ]; then
+                              echo "FUNC_TEST:environ-diag:FAIL:unexpected-environment"
+                              cat /tmp/env-runtime-err
+                            else
+                              echo "FUNC_TEST:environ-diag:PASS"
+                            fi
+                          else
+                            EXIT=$?
+                            echo "FUNC_TEST:environ-diag:FAIL:compile-exit=$EXIT"
+                            cat /tmp/env-runtime-compile-out /tmp/env-runtime-stderr
+                          fi
+                        '
 
                         # ── Cargo crash diagnostics ──
                         # Cargo build crashes when it invokes rustc as subprocess.

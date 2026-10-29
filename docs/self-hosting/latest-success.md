@@ -10,3 +10,4 @@ See `docs/self-hosting/proof-artifacts.md` for the capture contract.
 | snix-sandbox-test | 20261028T163222-snix-sandbox-test | 2026-10-28T16:39:34-04:00 | `723d825e` | 19/19 pass | `/var/tmp/redox-self-hosting-captures/20261028T163222-snix-sandbox-test` |
 | kernel-rebuild-test | 20260415T000324-kernel-rebuild-test | 2026-04-15T00:15:32-04:00 | `af057438` | 10/10 pass | `/var/tmp/redox-self-hosting-captures/20260415T000324-kernel-rebuild-test` |
 | native-rebuild-test | 20261026T052853-native-rebuild-test | 2026-10-26T05:55:20-04:00 | `50395ba6` | 88/88 pass | `/var/tmp/redox-self-hosting-captures/20261026T052853-native-rebuild-test` |
+| runtime-environment-smoke | 20261028T205624-runtime-environment-smoke | 2026-10-28T20:57:24-04:00 | `4d7b99f6` | 5/5 pass | `/var/tmp/redox-self-hosting-captures/20261028T205624-runtime-environment-smoke` |
