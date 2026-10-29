@@ -42,7 +42,7 @@ mkUserspace.mkBinary {
   binaryName = "sodium";
   cargoBuildFlags = "--no-default-features --features ansi";
 
-  vendorHash = "sha256-yuxAB+9CZHCz/bAKPD82+8LfU3vgVWU6KeTVVk1JcO8=";
+  vendorHash = "sha256-eGtdkMoJcUBj5q+MiNvvtiZDX/jZrRzOaEr2Ziteaps=";
 
   meta = with lib; {
     description = "Sodium: A vi-like text editor for Redox OS";

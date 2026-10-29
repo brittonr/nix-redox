@@ -15,7 +15,7 @@ pkgs.rustPlatform.buildRustPackage {
   version = "0.2.4";
   src = pkgar-src;
 
-  cargoHash = "sha256-QZssfZaaWTGm04pmRFi5ZCIEQiihmOBKOWyjW2fTyzw=";
+  cargoHash = "sha256-9Fz7gUC4z1h9Mr/wVC1FX753qj+mIK97MMNoD0L/Kh0=";
 
   buildAndTestSubdir = "pkgar-repo";
 

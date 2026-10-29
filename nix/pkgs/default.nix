@@ -174,7 +174,7 @@ let
         chmod -R u+w $out
         cp ${./userspace/ion-Cargo.lock} $out/Cargo.lock
       '';
-      vendorHash = "sha256-PAi0x6MB0hVqUD1v1Z/PN7bWeAAKLxgcBNnS2p6InXs=";
+      vendorHash = "sha256-6h9onMvVr0nX3nB5UUERaPv/2tdkrMu7A0CKfgpWn2g=";
       binaryName = "ion";
       preConfigure = ''
         echo "nix-build" > git_revision.txt
@@ -608,7 +608,17 @@ let
         name = "redoxfs-src-fmap-generation";
         patches = [ ../patches/redoxfs-fmap-generation.patch ];
       };
-      vendorHash = "sha256-DtkZ/gWXK0GzomTD5KspPrmRB+m4pdS7yJwj1Q2e2KA=";
+      vendorHash = "sha256-/SLqa+H8yDdVE8XPfrt6z+lfLTT3vPCgGuqtQ/MHGTs=";
+      gitSources = [
+        {
+          url = "git+https://gitlab.redox-os.org/redox-os/redox-buffer-pool.git";
+          git = "https://gitlab.redox-os.org/redox-os/redox-buffer-pool.git";
+        }
+        {
+          url = "git+https://gitlab.redox-os.org/redox-os/redox-rings.git";
+          git = "https://gitlab.redox-os.org/redox-os/redox-rings.git";
+        }
+      ];
       cargoBuildFlags = "--bin redoxfs";
       installPhase = ''
         runHook preInstall

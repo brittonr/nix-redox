@@ -1,19 +1,20 @@
 {
   "version": 1,
-  "workspaceRoot": "/tmp/tmp.QsVkv0ono4",
+  "workspaceRoot": "/var/tmp/redox-plans/ion",
   "roots": [
-    "path+file:///tmp/tmp.QsVkv0ono4#ion-shell@1.0.0-alpha",
-    "path+file:///tmp/tmp.QsVkv0ono4#ion-shell@1.0.0-alpha"
+    "path+file:///var/tmp/redox-plans/ion#ion-shell@1.0.0-alpha",
+    "path+file:///var/tmp/redox-plans/ion#ion-shell@1.0.0-alpha"
   ],
   "workspaceMembers": {
-    "builtins-proc": "path+file:///tmp/tmp.QsVkv0ono4/members/builtins-proc#0.1.0",
-    "ion-ranges": "path+file:///tmp/tmp.QsVkv0ono4/members/ranges#ion-ranges@0.1.0",
-    "ion-shell": "path+file:///tmp/tmp.QsVkv0ono4#ion-shell@1.0.0-alpha",
-    "scopes": "path+file:///tmp/tmp.QsVkv0ono4/members/scopes-rs#scopes@0.1.0",
-    "types-rs": "path+file:///tmp/tmp.QsVkv0ono4/members/types-rs#0.1.0"
+    "builtins-proc": "path+file:///var/tmp/redox-plans/ion/members/builtins-proc#0.1.0",
+    "ion-ranges": "path+file:///var/tmp/redox-plans/ion/members/ranges#ion-ranges@0.1.0",
+    "ion-shell": "path+file:///var/tmp/redox-plans/ion#ion-shell@1.0.0-alpha",
+    "scopes": "path+file:///var/tmp/redox-plans/ion/members/scopes-rs#scopes@0.1.0",
+    "types-rs": "path+file:///var/tmp/redox-plans/ion/members/types-rs#0.1.0"
   },
   "target": "x86_64-unknown-redox",
-  "cargoLockHash": "241f97112641bf5e3dd310fdb70862254183e09456dac365229da4d32e716ccb",
+  "cargoLockHash": "56095caaff93111b6fda59f534c7acc81d7a51666ac5978fd1ef9b68d4fc3ce1",
+  "inputsHash": "e1fa7f287f1108401208f30d0fd80f559a0621cd471fe519d3803de1b64b926c",
   "crates": {
     "git+https://github.com/nix-rust/nix.git?rev=ff6f8b8a#nix@0.23.1": {
       "crateName": "nix",
@@ -24,7 +25,7 @@
         "type": "git",
         "url": "https://github.com/nix-rust/nix.git",
         "rev": "ff6f8b8a26c8d61f4341e441acf405402b46a430",
-        "sha256": "0p5axzbwgwzs508mvkiar93ignzmczw1yr50hr3j59kx1fnmhqn9"
+        "sha256": "08drc1p0lhy66n3a9kn209qyaaxz8v8i526vhlaxirkamr5c9p1m"
       },
       "features": [
         "acct",
@@ -93,16 +94,16 @@
       "license": "MIT",
       "repository": "https://github.com/nix-rust/nix"
     },
-    "git+https://gitlab.redox-os.org/redox-os/calc.git?rev=d2719efb67ab38c4c33ab3590822114453960da5#calculate@0.7.0": {
+    "git+https://gitlab.redox-os.org/redox-os/calc?rev=d2719efb67ab38c4c33ab3590822114453960da5#calculate@0.7.0": {
       "crateName": "calculate",
       "version": "0.7.0",
       "edition": "2018",
       "sha256": null,
       "source": {
         "type": "git",
-        "url": "https://gitlab.redox-os.org/redox-os/calc.git",
+        "url": "https://gitlab.redox-os.org/redox-os/calc",
         "rev": "d2719efb67ab38c4c33ab3590822114453960da5",
-        "sha256": "1v7gwjkv5y49akickz5mw4dkpw9b288q6qlhx8j5nnsy6vnkw8nw"
+        "sha256": "1wznavvajrxyi0vydij6d4vk2wf5m7nfj7l94ckw71n0zrmnh726"
       },
       "features": [],
       "dependencies": [
@@ -127,7 +128,7 @@
           "externCrateName": "rand"
         },
         {
-          "packageId": "git+https://gitlab.redox-os.org/redox-os/liner.git#redox_liner@0.5.3",
+          "packageId": "git+https://gitlab.redox-os.org/redox-os/liner#redox_liner@0.5.3",
           "externCrateName": "liner"
         }
       ],
@@ -145,19 +146,19 @@
         "Hunter Goldstein <hunter.d.goldstein@gmail.com>"
       ],
       "description": "Rust library for parsing and processing arithmetic expressions",
-      "homepage": "https://gitlab.redox-os.org/redox-os/calc.git",
-      "repository": "https://gitlab.redox-os.org/redox-os/calc.git"
+      "homepage": "https://gitlab.redox-os.org/redox-os/calc",
+      "repository": "https://gitlab.redox-os.org/redox-os/calc"
     },
-    "git+https://gitlab.redox-os.org/redox-os/liner.git#redox_liner@0.5.3": {
+    "git+https://gitlab.redox-os.org/redox-os/liner#redox_liner@0.5.3": {
       "crateName": "redox_liner",
       "version": "0.5.3",
       "edition": "2018",
       "sha256": null,
       "source": {
         "type": "git",
-        "url": "https://gitlab.redox-os.org/redox-os/liner.git",
+        "url": "https://gitlab.redox-os.org/redox-os/liner",
         "rev": "f3fb3b754623026dca820cbf36231fa92772416f",
-        "sha256": "1d2gijgljmjm481kwb5h34g0wgga3lvxl38r7yrg7d47qwjnkcsr"
+        "sha256": "1sfxnppfw77wyhd4ml608ixnx7cycqnbfh5l5dq0v8bjnnj9b11n"
       },
       "features": [],
       "dependencies": [
@@ -199,20 +200,20 @@
         "Jeremy Soller <jackpot51@gmail.com>"
       ],
       "description": "A library offering readline-like functionality.",
-      "homepage": "https://gitlab.redox-os.org/redox-os/liner.git",
+      "homepage": "https://gitlab.redox-os.org/redox-os/liner",
       "license": "MIT",
-      "repository": "https://gitlab.redox-os.org/redox-os/liner.git"
+      "repository": "https://gitlab.redox-os.org/redox-os/liner"
     },
-    "git+https://gitlab.redox-os.org/redox-os/small.git#0.1.0": {
+    "git+https://gitlab.redox-os.org/redox-os/small#0.1.0": {
       "crateName": "small",
       "version": "0.1.0",
       "edition": "2015",
       "sha256": null,
       "source": {
         "type": "git",
-        "url": "https://gitlab.redox-os.org/redox-os/small.git",
+        "url": "https://gitlab.redox-os.org/redox-os/small",
         "rev": "4374ae30a2de281d686e14a1626dcb22e23ffae4",
-        "sha256": "0x37a28a20c6s656hmg75sycygzfjmfcb67zjljk241laxyc9320"
+        "sha256": "0vk4zmw2a9zygwa8gpy2ngxgsriw3105px50la99jbla66pgx6pg"
       },
       "features": [
         "default",
@@ -239,7 +240,7 @@
         "Tom Almeida <tommoa256@gmail.com>"
       ]
     },
-    "path+file:///tmp/tmp.QsVkv0ono4#ion-shell@1.0.0-alpha": {
+    "path+file:///var/tmp/redox-plans/ion#ion-shell@1.0.0-alpha": {
       "crateName": "ion-shell",
       "version": "1.0.0-alpha",
       "edition": "2018",
@@ -259,15 +260,15 @@
           "externCrateName": "auto_enums"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#buf_read_splitter@0.4.1",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#buf_read_splitter@1.1.0",
           "externCrateName": "buf_read_splitter"
         },
         {
-          "packageId": "path+file:///tmp/tmp.QsVkv0ono4/members/builtins-proc#0.1.0",
+          "packageId": "path+file:///var/tmp/redox-plans/ion/members/builtins-proc#0.1.0",
           "externCrateName": "builtins_proc"
         },
         {
-          "packageId": "git+https://gitlab.redox-os.org/redox-os/calc.git?rev=d2719efb67ab38c4c33ab3590822114453960da5#calculate@0.7.0",
+          "packageId": "git+https://gitlab.redox-os.org/redox-os/calc?rev=d2719efb67ab38c4c33ab3590822114453960da5#calculate@0.7.0",
           "externCrateName": "calc"
         },
         {
@@ -275,7 +276,7 @@
           "externCrateName": "glob"
         },
         {
-          "packageId": "path+file:///tmp/tmp.QsVkv0ono4/members/ranges#ion-ranges@0.1.0",
+          "packageId": "path+file:///var/tmp/redox-plans/ion/members/ranges#ion-ranges@0.1.0",
           "externCrateName": "ion_ranges"
         },
         {
@@ -307,7 +308,7 @@
           "externCrateName": "rand"
         },
         {
-          "packageId": "git+https://gitlab.redox-os.org/redox-os/liner.git#redox_liner@0.5.3",
+          "packageId": "git+https://gitlab.redox-os.org/redox-os/liner#redox_liner@0.5.3",
           "externCrateName": "liner"
         },
         {
@@ -319,11 +320,11 @@
           "externCrateName": "regex"
         },
         {
-          "packageId": "path+file:///tmp/tmp.QsVkv0ono4/members/scopes-rs#scopes@0.1.0",
+          "packageId": "path+file:///var/tmp/redox-plans/ion/members/scopes-rs#scopes@0.1.0",
           "externCrateName": "scopes"
         },
         {
-          "packageId": "git+https://gitlab.redox-os.org/redox-os/small.git#0.1.0",
+          "packageId": "git+https://gitlab.redox-os.org/redox-os/small#0.1.0",
           "externCrateName": "small"
         },
         {
@@ -335,7 +336,7 @@
           "externCrateName": "thiserror"
         },
         {
-          "packageId": "path+file:///tmp/tmp.QsVkv0ono4/members/types-rs#0.1.0",
+          "packageId": "path+file:///var/tmp/redox-plans/ion/members/types-rs#0.1.0",
           "externCrateName": "types_rs"
         },
         {
@@ -376,7 +377,7 @@
       "description": "The Ion Shell",
       "repository": "https://gitlab.redox-os.org/redox-os/ion"
     },
-    "path+file:///tmp/tmp.QsVkv0ono4/members/builtins-proc#0.1.0": {
+    "path+file:///var/tmp/redox-plans/ion/members/builtins-proc#0.1.0": {
       "crateName": "builtins-proc",
       "version": "0.1.0",
       "edition": "2018",
@@ -417,7 +418,7 @@
       "license": "MIT",
       "repository": "https://gitlab.redox-os.org/redox-os/ion"
     },
-    "path+file:///tmp/tmp.QsVkv0ono4/members/ranges#ion-ranges@0.1.0": {
+    "path+file:///var/tmp/redox-plans/ion/members/ranges#ion-ranges@0.1.0": {
       "crateName": "ion-ranges",
       "version": "0.1.0",
       "edition": "2018",
@@ -445,7 +446,7 @@
       "license": "MIT",
       "repository": "https://gitlab.redox-os.org/redox-os/ion"
     },
-    "path+file:///tmp/tmp.QsVkv0ono4/members/scopes-rs#scopes@0.1.0": {
+    "path+file:///var/tmp/redox-plans/ion/members/scopes-rs#scopes@0.1.0": {
       "crateName": "scopes",
       "version": "0.1.0",
       "edition": "2018",
@@ -474,7 +475,7 @@
       "license": "MIT",
       "repository": "https://gitlab.redox-os.org/redox-os/ion"
     },
-    "path+file:///tmp/tmp.QsVkv0ono4/members/types-rs#0.1.0": {
+    "path+file:///var/tmp/redox-plans/ion/members/types-rs#0.1.0": {
       "crateName": "types-rs",
       "version": "0.1.0",
       "edition": "2018",
@@ -494,7 +495,7 @@
           "externCrateName": "lexical"
         },
         {
-          "packageId": "git+https://gitlab.redox-os.org/redox-os/small.git#0.1.0",
+          "packageId": "git+https://gitlab.redox-os.org/redox-os/small#0.1.0",
           "externCrateName": "small"
         }
       ],
@@ -959,18 +960,23 @@
       "license": "MIT",
       "repository": "https://github.com/oconnor663/blake2_simd"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#buf_read_splitter@0.4.1": {
+    "registry+https://github.com/rust-lang/crates.io-index#buf_read_splitter@1.1.0": {
       "crateName": "buf_read_splitter",
-      "version": "0.4.1",
+      "version": "1.1.0",
       "edition": "2021",
-      "sha256": "4645e4b1f94aa320084c653bc616681dd8f34c8d656cdd76f7e71efde19ada10",
+      "sha256": "6a6850642203d705e11397e3e1dd46a2c4cf10c28e64bf805d492c4f69975982",
       "source": {
         "type": "crates-io"
       },
       "features": [
         "default"
       ],
-      "dependencies": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.21",
+          "externCrateName": "thiserror"
+        }
+      ],
       "buildDependencies": [],
       "procMacro": false,
       "build": null,
@@ -981,9 +987,9 @@
       ],
       "crateBin": [],
       "links": null,
-      "description": "A stream reader with ability to read a stream until a defined pattern is reached (usually an array of [u8])",
+      "description": "Split (separate) a stream reader into sub stream reader based on a trait separator",
       "license": "MIT",
-      "repository": "https://github.com/flogbl/buf_read_splitter"
+      "repository": "https://codeberg.org/flogbl/buf_read_splitter"
     },
     "registry+https://github.com/rust-lang/crates.io-index#bytecount@0.6.8": {
       "crateName": "bytecount",
@@ -1466,7 +1472,7 @@
       "authors": [
         "Alex Crichton <alex@alexcrichton.com>"
       ],
-      "description": "Fowler\u2013Noll\u2013Vo hash function",
+      "description": "Fowler–Noll–Vo hash function",
       "license": "Apache-2.0 / MIT",
       "repository": "https://github.com/servo/rust-fnv"
     },
@@ -3097,6 +3103,15 @@
         "lib"
       ],
       "crateBin": [],
+      "crateTests": [
+        {
+          "name": "debugger_visualizer",
+          "path": "tests/debugger_visualizer.rs",
+          "requiredFeatures": [
+            "debugger_visualizer"
+          ]
+        }
+      ],
       "links": null,
       "authors": [
         "The Servo Project Developers"
@@ -3324,6 +3339,53 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/dtolnay/syn"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#syn@3.0.9": {
+      "crateName": "syn",
+      "version": "3.0.9",
+      "edition": "2021",
+      "sha256": "d78c8dee4c7bf0e14673097256fed6142ce9d3b85a408189d07482442145823b",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "clone-impls",
+        "default",
+        "derive",
+        "parsing",
+        "printing",
+        "proc-macro"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.94",
+          "externCrateName": "proc_macro2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.40",
+          "externCrateName": "quote"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#unicode-ident@1.0.18",
+          "externCrateName": "unicode_ident"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "Parser for Rust source code",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/dtolnay/syn"
+    },
     "registry+https://github.com/rust-lang/crates.io-index#termion@4.0.5": {
       "crateName": "termion",
       "version": "4.0.5",
@@ -3439,6 +3501,46 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/dtolnay/thiserror"
     },
+    "registry+https://github.com/rust-lang/crates.io-index#thiserror-impl@2.0.21": {
+      "crateName": "thiserror-impl",
+      "version": "2.0.21",
+      "edition": "2021",
+      "sha256": "fe5197923287db20a58125f0bc85c062f7f2c892de97b18c356f9efb14b28524",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#proc-macro2@1.0.94",
+          "externCrateName": "proc_macro2"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#quote@1.0.40",
+          "externCrateName": "quote"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#syn@3.0.9",
+          "externCrateName": "syn"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": true,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "proc-macro"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "Implementation detail of the `thiserror` crate",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/dtolnay/thiserror"
+    },
     "registry+https://github.com/rust-lang/crates.io-index#thiserror@1.0.69": {
       "crateName": "thiserror",
       "version": "1.0.69",
@@ -3451,6 +3553,42 @@
       "dependencies": [
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror-impl@1.0.69",
+          "externCrateName": "thiserror_impl"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "David Tolnay <dtolnay@gmail.com>"
+      ],
+      "description": "derive(Error)",
+      "license": "MIT OR Apache-2.0",
+      "repository": "https://github.com/dtolnay/thiserror"
+    },
+    "registry+https://github.com/rust-lang/crates.io-index#thiserror@2.0.21": {
+      "crateName": "thiserror",
+      "version": "2.0.21",
+      "edition": "2021",
+      "sha256": "09e52cb86a36cede5cb101bf8908837b3e4c6e5e59fe7fd85c23fb56200d189e",
+      "source": {
+        "type": "crates-io"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "hostFeatures": [],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#thiserror-impl@2.0.21",
           "externCrateName": "thiserror_impl"
         }
       ],
@@ -3628,13 +3766,13 @@
         "tbu- <>",
         "Manish Goregaokar <>",
         "Aaron Turon <aturon@mozilla.com>",
-        "Adolfo Ochagav\u00eda <>",
+        "Adolfo Ochagavía <>",
         "Niko Matsakis <>",
         "Steven Fackler <>",
         "Chase Southwood <csouth3@illinois.edu>",
         "Eduard Burtescu <>",
         "Florian Wilkens <>",
-        "F\u00e9lix Raimundo <>",
+        "Félix Raimundo <>",
         "Tibor Benke <>",
         "Markus Siemens <markus@m-siemens.de>",
         "Josh Branchaud <jbranchaud@gmail.com>",

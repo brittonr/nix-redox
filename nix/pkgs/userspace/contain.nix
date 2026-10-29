@@ -39,7 +39,7 @@ mkUserspace.mkBinary {
   src = contain-src;
   binaryName = "contain";
 
-  vendorHash = "sha256-xq+3lVUy668w0shooRW6k1cajl+NnFHNwoy38Tz+PQc=";
+  vendorHash = "sha256-YwGw+m3Qo+lcGYadTIp649MeIu3I8O+ZnM2uUpZg2Qg=";
 
   meta = with lib; {
     description = "Container/namespace tool for Redox OS";

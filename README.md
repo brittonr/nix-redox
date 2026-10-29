@@ -81,7 +81,7 @@ The image is a GPT disk with a UEFI boot partition and RedoxFS root filesystem.
 Every component is a Nix derivation built from source — no binary blobs, no
 upstream Makefile/cookbook. The build has three layers:
 
-1. **Bootstrap** — relibc (14 patches), kernel, bootloader. Cross-compiled
+1. **Bootstrap** — relibc (9 patches), kernel, bootloader. Cross-compiled
    with `-Z build-std` since they ARE the standard library.
 
 2. **Userspace** — 70+ packages. Rust crates are split into per-crate

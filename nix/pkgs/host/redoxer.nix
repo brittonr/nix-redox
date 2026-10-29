@@ -15,7 +15,7 @@ pkgs.rustPlatform.buildRustPackage {
   version = "0.2.63";
   src = redoxer-src;
 
-  cargoHash = "sha256-U4tYfYlP/E/B8qBLWSpip0scbiiI7hrnNb7JDNgzqxM=";
+  cargoHash = "sha256-bTAysf9KQ7g7y9QfwSqgyLMnjp3xGLLcYcfjqGgngbo=";
 
   nativeBuildInputs = with pkgs; [
     pkg-config

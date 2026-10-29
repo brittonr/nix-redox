@@ -45,7 +45,7 @@ in
 mkUserspace.mkPackage {
   pname = "redox-buffer-pool";
   src = srcWithLock;
-  vendorHash = "sha256-EiTmgjwJ5cp0do0Uw2Z3uWx1lloVK94VCDwVQz0+7G4=";
+  vendorHash = "sha256-b8tLZAvQAT5lcZ8VgTApsWc0CVae6mq/y/Fkw/KY1Fg=";
   # Build with redox feature for scheme-based shared memory via redox_syscall.
   cargoBuildFlags = "--lib --no-default-features --features redox,spinning";
 

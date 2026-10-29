@@ -155,10 +155,7 @@ let
 
     bare-metal-gmktec = mkSystem {
       modules = [ ../redox-system/profiles/bare-metal-gmktec.nix ];
-      # Use FOD base build (has igcd) instead of basePerCrate (no igcd in plan yet)
-      extraPkgs = extraPkgs // {
-        base = modularPkgs.system.base;
-      };
+      inherit extraPkgs;
     };
   };
 

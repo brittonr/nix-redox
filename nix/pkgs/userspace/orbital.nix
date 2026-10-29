@@ -131,7 +131,7 @@ let
   orbitalVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "orbital-cargo-vendor";
     src = patchedSrc;
-    hash = "sha256-eVao4g4+FyhhM8A+yJDLFg2+aKjKStwUZtlfBq61vVY=";
+    hash = "sha256-yj0ZCnoFjEQDUBxWh52S4BHn4xemsbCLFxE1MrADCLM=";
   };
 
   # Create merged vendor directory (project + sysroot)

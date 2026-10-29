@@ -40,7 +40,7 @@ mkUserspace.mkPackage {
   src = pkgar-src;
   cargoBuildFlags = "--manifest-path pkgar/Cargo.toml --features cli";
 
-  vendorHash = "sha256-QZssfZaaWTGm04pmRFi5ZCIEQiihmOBKOWyjW2fTyzw=";
+  vendorHash = "sha256-9Fz7gUC4z1h9Mr/wVC1FX753qj+mIK97MMNoD0L/Kh0=";
 
   nativeBuildInputs = [ pkgs.perl ];
 

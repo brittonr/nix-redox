@@ -13,7 +13,7 @@ pkgs.rustPlatform.buildRustPackage {
   version = "0.2.2";
   src = kprofiling-src;
 
-  cargoHash = "sha256-wc5TDc1b7/+ctcDg6P0yuOlSgK5ukIjuer4mSGEayRc=";
+  cargoHash = "sha256-Cui3NT8/z1mMSTHYOFWQUR0CPbGXsaCwQ4dqG9pU+Vs=";
 
   meta = with lib; {
     description = "Redox kernel profiling data to perf script converter";
