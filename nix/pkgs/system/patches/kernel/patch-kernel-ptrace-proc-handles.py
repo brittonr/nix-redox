@@ -22,10 +22,8 @@ import os
 def patch_file(filepath, old, new):
     with open(filepath, "r") as f:
         content = f.read()
-    if old not in content:
-        print(f"WARNING: patch target not found in {filepath}")
-        print(f"  Looking for: {repr(old[:100])}...")
-        return False
+    if content.count(old) != 1:
+        raise SystemExit(f"{filepath}: expected exactly one ptrace patch anchor: {old[:100]!r}")
     content = content.replace(old, new, 1)
     with open(filepath, "w") as f:
         f.write(content)
@@ -49,9 +47,9 @@ def patch_context_struct(src_dir):
     patch_file(
         context_file,
         """use crate::{
-    arch::{interrupt::InterruptStack, paging::PAGE_SIZE},""",
+    arch::interrupt::InterruptStack,""",
         """use crate::{
-    arch::{interrupt::InterruptStack, paging::PAGE_SIZE},
+    arch::interrupt::InterruptStack,
     ptrace,""",
     )
 
@@ -81,39 +79,33 @@ def patch_context_switch(src_dir):
     # that reads from the context's ptrace_session field
     patch_file(
         switch_file,
-        """            /*let (ptrace_session, ptrace_flags) = if let Some((session, bp)) = ptrace::sessions()
-                .get(&next_context.pid)
-                .map(|s| (Arc::downgrade(s), s.data.lock().breakpoint))
-            {
-                (Some(session), bp.map_or(PtraceFlags::empty(), |f| f.flags))
+        """    /*let (ptrace_session, ptrace_flags) = if let Some((session, bp)) = ptrace::sessions()
+        .get(&next_context.pid)
+        .map(|s| (Arc::downgrade(s), s.data.lock().breakpoint))
+    {
+        (Some(session), bp.map_or(PtraceFlags::empty(), |f| f.flags))
+    } else {
+        (None, PtraceFlags::empty())
+    };*/
+    let ptrace_flags = PtraceFlags::empty();
+
+    //*percpu.ptrace_session.borrow_mut() = ptrace_session;
+    percpu.ptrace_flags.set(ptrace_flags);""",
+        """    // Load the incoming context's tracing session for breakpoint callbacks.
+    let (ptrace_session, ptrace_flags) = match next_context.ptrace_session {
+        Some(ref weak) => {
+            if let Some(session) = weak.upgrade() {
+                let flags = session.data.lock().breakpoint.as_ref()
+                    .map_or(PtraceFlags::empty(), |b| b.flags);
+                (Some(weak.clone()), flags)
             } else {
                 (None, PtraceFlags::empty())
-            };*/
-            let ptrace_flags = PtraceFlags::empty();
-
-            //*percpu.ptrace_session.borrow_mut() = ptrace_session;
-            percpu.ptrace_flags.set(ptrace_flags);""",
-        """            // Load ptrace session from the incoming context into percpu.
-            // This makes Session::current() work in breakpoint callbacks.
-            let (ptrace_session, ptrace_flags) = match next_context.ptrace_session {
-                Some(ref weak) => {
-                    if let Some(session) = weak.upgrade() {
-                        let bp_flags = session
-                            .data
-                            .lock()
-                            .breakpoint
-                            .as_ref()
-                            .map_or(PtraceFlags::empty(), |b| b.flags);
-                        (Some(weak.clone()), bp_flags)
-                    } else {
-                        (None, PtraceFlags::empty())
-                    }
-                }
-                None => (None, PtraceFlags::empty()),
-            };
-
-            *percpu.ptrace_session.borrow_mut() = ptrace_session;
-            percpu.ptrace_flags.set(ptrace_flags);""",
+            }
+        }
+        None => (None, PtraceFlags::empty()),
+    };
+    *percpu.ptrace_session.borrow_mut() = ptrace_session;
+    percpu.ptrace_flags.set(ptrace_flags);""",
     )
 
     print("Context switch patched: ptrace session loading restored")
@@ -127,16 +119,14 @@ def patch_proc_scheme(src_dir):
     # Add needed imports at top of file
     patch_file(
         proc_file,
-        """use crate::{
-    arch::paging::{Page, VirtualAddress},""",
-        """use crate::{
-    arch::paging::{Page, PhysicalAddress, VirtualAddress},""",
+        "    memory::{Page, VirtualAddress, PAGE_SIZE},",
+        "    memory::{Page, PhysicalAddress, RmmA, VirtualAddress, PAGE_SIZE},",
     )
 
     patch_file(
         proc_file,
-        "    ptrace,\n    scheme::{self, memory::MemoryScheme, FileHandle, KernelScheme},",
-        "    ptrace,\n    paging::{RmmA, RmmArch},\n    scheme::{self, memory::MemoryScheme, FileHandle, KernelScheme},",
+        "    mem::size_of,",
+        "    mem::{self, size_of},",
     )
 
     patch_file(
@@ -330,8 +320,8 @@ use rmm::Arch;""",
                 let mut kbuf = alloc::vec![0u8; read_len];
 
                 // Must stop the target for safe page table access
-                let total_read = try_stop_context(Arc::clone(target), token, |_target_ctx| {
-                    let guard = addrspace.acquire_read();
+                let total_read = try_stop_context(Arc::clone(target), token, |_target_ctx, lock_token| {
+                    let guard = addrspace.acquire_read(lock_token);
                     let mut total = 0usize;
                     let mut current_addr = virt_addr;
 
@@ -431,8 +421,8 @@ use rmm::Arch;""",
             let mut src_buf = alloc::vec![0u8; src_len];
             buf.copy_to_slice(&mut src_buf)?;
 
-            return try_stop_context(Arc::clone(target), token, |_target_ctx| {
-                let guard = addrspace.acquire_read();
+            return try_stop_context(Arc::clone(target), token, |_target_ctx, lock_token| {
+                let guard = addrspace.acquire_read(lock_token);
                 let mut total_written = 0usize;
                 let mut remaining = src_len;
                 let mut current_addr = virt_addr;
@@ -487,7 +477,7 @@ use rmm::Arch;""",
                             OpenTy::Auth,
                             Some(core::str::from_utf8(buf).map_err(|_| Error::new(EINVAL))?)
                                 .filter(|s| !s.is_empty()),
-                            O_RDWR | O_CLOEXEC,
+                            O_RDWR,
                             token,
                         )
                         .map(|(r, fl)| OpenResult::SchemeLocal(r, fl))
@@ -523,7 +513,7 @@ use rmm::Arch;""",
                                 .open_inner(
                                     OpenTy::Ctxt(context_lock),
                                     Some(operation).filter(|s| !s.is_empty()),
-                                    O_RDWR | O_CLOEXEC,
+                                    O_RDWR,
                                     token,
                                 )
                                 .map(|(r, fl)| OpenResult::SchemeLocal(r, fl));
@@ -534,7 +524,7 @@ use rmm::Arch;""",
                         .open_inner(
                             OpenTy::Auth,
                             Some(path).filter(|s| !s.is_empty()),
-                            O_RDWR | O_CLOEXEC,
+                            O_RDWR,
                             token,
                         )
                         .map(|(r, fl)| OpenResult::SchemeLocal(r, fl))

@@ -1,0 +1,548 @@
+--- a/redox-rt/src/lib.rs
++++ b/redox-rt/src/lib.rs
+@@ -279,15 +279,57 @@
+ 
+ #[inline]
+ pub(crate) fn static_proc_info() -> &'static StaticProcInfo {
+-    unsafe { &*STATIC_PROC_INFO.get() }
++    unsafe {
++        if (*STATIC_PROC_INFO.get()).proc_fd.is_none() && __relibc_init_proc_fd != usize::MAX {
++            if let Ok(fd) = crate::sys::dup_into_upper(__relibc_init_proc_fd, b"") {
++                let proc_fd = FdGuardUpper::new(fd);
++                if let Ok(metadata) = read_proc_meta(&proc_fd) {
++                    STATIC_PROC_INFO.get().write(StaticProcInfo {
++                        pid: metadata.pid,
++                        proc_fd: Some(proc_fd),
++                    });
++                }
++            }
++        }
++        &*STATIC_PROC_INFO.get()
++    }
+ }
+ #[inline]
+ pub fn current_proc_fd() -> &'static FdGuardUpper {
+     let info = static_proc_info();
+     info.proc_fd.as_ref().unwrap()
+ }
++// Runtime state injected before DSO constructors execute.
++#[used]
++#[unsafe(no_mangle)]
++pub static mut __relibc_init_ns_fd: usize = usize::MAX;
++
++#[used]
++#[unsafe(no_mangle)]
++pub static mut __relibc_init_proc_fd: usize = usize::MAX;
++
++#[used]
++#[unsafe(no_mangle)]
++pub static mut __relibc_init_cwd_ptr: usize = 0;
++
++#[used]
++#[unsafe(no_mangle)]
++pub static mut __relibc_init_cwd_len: usize = 0;
++
++#[used]
++#[unsafe(no_mangle)]
++pub static mut __relibc_init_cwd_fd: usize = usize::MAX;
++
++#[used]
++#[unsafe(no_mangle)]
++pub static mut __relibc_init_filetable: usize = 0;
++
+ #[inline]
+ pub fn current_namespace_fd() -> syscall::Result<usize> {
++    let injected = unsafe { __relibc_init_ns_fd };
++    if injected != usize::MAX {
++        return Ok(injected);
++    }
+     DYNAMIC_PROC_INFO
+         .lock()
+         .ns_fd
+@@ -362,5 +404,16 @@
+ 
+ #[inline]
+ pub fn current_filetable() -> crate::sync::MutexGuard<'static, FdTbl> {
+-    FILETABLE.lock()
+-}
++    // DSOs must allocate descriptors from the same userspace table, not an
++    // independent snapshot which could allocate already-occupied handles.
++    unsafe { &*(filetable_addr() as *const Mutex<FdTbl>) }.lock()
++}
++
++pub fn filetable_addr() -> usize {
++    let injected = unsafe { __relibc_init_filetable };
++    if injected == 0 {
++        core::ptr::addr_of!(FILETABLE) as usize
++    } else {
++        injected
++    }
++}
+--- a/redox-rt/src/sys.rs
++++ b/redox-rt/src/sys.rs
+@@ -14,7 +14,7 @@
+ pub use redox_path::RedoxPath;
+ 
+ use crate::{
+-    DYNAMIC_PROC_INFO, DynamicProcInfo, FILETABLE, RtTcb, Tcb,
++    DYNAMIC_PROC_INFO, DynamicProcInfo, current_filetable, RtTcb, Tcb,
+     arch::manually_enter_trampoline,
+     proc::{FdGuard, FdGuardUpper},
+     read_proc_meta,
+@@ -226,7 +226,7 @@
+         0
+     };
+ 
+-    FILETABLE.lock().bulk_insert(which, fd_slice, entry_flags)?;
++    current_filetable().bulk_insert(which, fd_slice, entry_flags)?;
+ 
+     if is_automated {
+         backup_handles.extend_from_slice(fd_slice);
+@@ -242,7 +242,7 @@
+     };
+ 
+     if res.is_err() {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         for &handle in &backup_handles {
+             let _ = guard.remove(handle);
+         }
+@@ -292,7 +292,7 @@
+     };
+ 
+     if res.is_ok() && !flags.contains(CallFlags::FD_CLONE) {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         for &handle in fd_slice {
+             let _ = guard.remove(handle);
+         }
+@@ -641,14 +641,14 @@
+     let path = path.as_ref();
+ 
+     let out = {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         guard.add_posix(flags)?
+     };
+ 
+     let res = syscall::openat_into(fd, out, path, flags, fcntl_flags);
+ 
+     if res.is_err() {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         let _ = guard.remove(out);
+         return res;
+     }
+@@ -672,7 +672,7 @@
+     let _siglock = tmp_disable_signals();
+ 
+     let out = {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         guard.add_posix(0)?
+     };
+ 
+@@ -687,7 +687,7 @@
+     };
+ 
+     if res.is_err() {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         let _ = guard.remove(out);
+         return res;
+     }
+@@ -699,7 +699,7 @@
+     let _siglock = tmp_disable_signals();
+ 
+     let prev_flags = {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         guard.get_fd_flags(fd)?;
+         guard.override_at(newfd)?
+     };
+@@ -715,7 +715,7 @@
+     };
+ 
+     if res.is_err() {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         match prev_flags {
+             Some(flags) => {
+                 let _ = guard.set_fd_flags(newfd, flags);
+@@ -799,7 +799,7 @@
+         let cloexec_flag = if cmd == F_DUPFD_CLOEXEC { O_CLOEXEC } else { 0 };
+ 
+         let out = {
+-            let mut guard = FILETABLE.lock();
++            let mut guard = current_filetable();
+             if arg & syscall::UPPER_FDTBL_TAG != 0 {
+                 guard.insert_upper(cloexec_flag)? | syscall::UPPER_FDTBL_TAG
+             } else {
+@@ -810,14 +810,14 @@
+         let res = unsafe { syscall::syscall3(syscall::SYS_FCNTL, fd, syscall::F_DUPFD, out) };
+ 
+         if res.is_err() {
+-            let mut guard = FILETABLE.lock();
++            let mut guard = current_filetable();
+             let _ = guard.remove(out);
+             return res;
+         }
+ 
+         let actual_fd = res.unwrap();
+         if actual_fd != out {
+-            let mut guard = FILETABLE.lock();
++            let mut guard = current_filetable();
+             let _ = guard.remove(out);
+             guard.override_at(actual_fd)?;
+             if cloexec_flag != 0 {
+@@ -830,7 +830,7 @@
+ 
+     if cmd == syscall::F_GETFD {
+         let _siglock = tmp_disable_signals();
+-        return FILETABLE.lock().get_fd_flags(fd);
++        return current_filetable().get_fd_flags(fd);
+     }
+ 
+     if cmd == syscall::F_SETFD {
+@@ -839,7 +839,7 @@
+         let res = unsafe { syscall::syscall3(syscall::SYS_FCNTL, fd, cmd, arg) };
+         res?;
+ 
+-        FILETABLE.lock().set_fd_flags(fd, arg)?;
++        current_filetable().set_fd_flags(fd, arg)?;
+         return Ok(0);
+     }
+ 
+@@ -856,7 +856,7 @@
+     let path = path.as_ref();
+ 
+     let out_idx = {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         guard.insert_upper(flags)?
+     };
+     let out = out_idx | syscall::UPPER_FDTBL_TAG;
+@@ -864,7 +864,7 @@
+     let res = syscall::openat_into(fd, out, path, flags, fcntl_flags);
+ 
+     if res.is_err() {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         let _ = guard.remove(out);
+         return res;
+     }
+@@ -876,7 +876,7 @@
+     let _siglock = tmp_disable_signals();
+ 
+     let out_idx = {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         guard.insert_upper(0)?
+     };
+     let out = out_idx | syscall::UPPER_FDTBL_TAG;
+@@ -892,7 +892,7 @@
+     };
+ 
+     if res.is_err() {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         let _ = guard.remove(out);
+         return res;
+     }
+@@ -902,7 +902,7 @@
+ 
+ pub fn dup_into_upper_raw(fd: usize, buf: &[u8]) -> Result<usize> {
+     let out_idx = {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         guard.insert_upper(0)?
+     };
+     let out = out_idx | syscall::UPPER_FDTBL_TAG;
+@@ -918,7 +918,7 @@
+     };
+ 
+     if res.is_err() {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         let _ = guard.remove(out);
+         return res;
+     }
+@@ -932,7 +932,7 @@
+     let res = unsafe { syscall::syscall1(syscall::SYS_CLOSE, fd) };
+ 
+     if res.is_ok() || res.err().is_some_and(|e| e.errno == EBADF) {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         let _ = guard.remove(fd);
+     }
+ 
+@@ -943,7 +943,7 @@
+     let res = unsafe { syscall::syscall1(syscall::SYS_CLOSE, fd) };
+ 
+     if res.is_ok() || res.err().is_some_and(|e| e.errno == EBADF) {
+-        let mut guard = FILETABLE.lock();
++        let mut guard = current_filetable();
+         let _ = guard.remove(fd);
+     }
+ 
+--- a/src/platform/redox/path.rs
++++ b/src/platform/redox/path.rs
+@@ -25,6 +25,7 @@
+ // POSIX states chdir is both thread-safe and signal-safe. Thus we need to synchronize access to CWD, but at the
+ // same time forbid signal handlers from running in the meantime, to avoid reentrant deadlock.
+ pub fn chdir(path: RedoxStr<'_>) -> Result<()> {
++    get_injected_cwd();
+     let _siglock = tmp_disable_signals();
+     let mut cwd_guard = CWD.write();
+     let (redox, fd) = match path {
+@@ -75,6 +76,7 @@
+ 
+ // getcwd is similarly both thread-safe and signal-safe.
+ pub fn getcwd(mut buf: Out<[u8]>) -> Result<usize> {
++    get_injected_cwd();
+     let _siglock = tmp_disable_signals();
+     let guard = CWD.read();
+     let cwd = guard.as_ref().ok_or(Error::new(ENOENT))?;
+@@ -92,6 +94,7 @@
+ 
+ // Get Cwd object
+ pub fn current_dir() -> Result<ReadGuard<'static, Option<Cwd<'static>>>> {
++    get_injected_cwd();
+     let _siglock = tmp_disable_signals();
+     let guard = CWD.read();
+ 
+@@ -126,8 +129,32 @@
+ }
+ 
+ pub fn clone_cwd() -> Option<CwdPath> {
++    get_injected_cwd();
+     let _siglock = tmp_disable_signals();
+     CWD.read().as_ref().map(|cwd| cwd.path)
++}
++
++fn get_injected_cwd() {
++    let _siglock = tmp_disable_signals();
++    let mut guard = CWD.write();
++    if guard.is_some() {
++        return;
++    }
++    let (ptr, len, fd) = unsafe { (
++        redox_rt::__relibc_init_cwd_ptr,
++        redox_rt::__relibc_init_cwd_len,
++        redox_rt::__relibc_init_cwd_fd,
++    ) };
++    if ptr == 0 || len == 0 || fd == usize::MAX {
++        return;
++    }
++    let bytes = unsafe { core::slice::from_raw_parts(ptr as *const u8, len) };
++    let Ok(s) = core::str::from_utf8(bytes) else { return };
++    let Ok(path) = to_cwd_path(s) else { return };
++    let Some(redox) = RedoxPath::from_absolute(s.to_string()) else { return };
++    if let Ok(fd) = redox_rt::sys::dup_into_upper(fd, b"") {
++        *guard = Some(Cwd { path, redox, fd: FdGuardUpper::new(fd) });
++    }
+ }
+ 
+ fn open_absolute(path: &str, flags: usize) -> Result<usize> {
+--- a/src/ld_so/dso.rs
++++ b/src/ld_so/dso.rs
+@@ -368,6 +368,19 @@
+ }
+ 
+ /// Use to represent a library as well as all the symbols that is loaded withen it.
++/// Addresses of LOCAL __relibc_init_* symbols found via .symtab scanning.
++/// Used as fallback when .dynsym lookup fails (symbols hidden by version script).
++#[derive(Default)]
++pub(super) struct LocalInitSyms {
++    pub environ: Option<usize>,
++    pub proc_fd: Option<usize>,
++    pub ns_fd: Option<usize>,
++    pub cwd_ptr: Option<usize>,
++    pub cwd_len: Option<usize>,
++    pub cwd_fd: Option<usize>,
++    pub filetable: Option<usize>,
++}
++
+ pub struct DSO {
+     pub name: String,
+     pub path_c: CString,
+@@ -392,6 +405,7 @@
+ 
+     /// Is this DSO for ld.so?
+     is_me: bool,
++    pub(super) local_init_syms: LocalInitSyms,
+ }
+ 
+ impl DSO {
+@@ -450,6 +464,7 @@
+                 pie: true,
+                 is_ready: AtomicBool::new(false),
+                 is_me: true,
++                local_init_syms: LocalInitSyms::default(),
+             },
+             tcb_master,
+         )
+@@ -490,6 +505,7 @@
+         let phnum = elf.elf_header().e_phnum(object::NativeEndian) as usize;
+         let phdrs_ptr = unsafe { mmap.as_ptr().add(phoff) }.cast();
+ 
++        let mmap_base = mmap.as_ptr() as usize;
+         let dso = DSO {
+             name,
+             path_c,
+@@ -514,6 +530,7 @@
+             scope: spin::Once::new(),
+             is_ready: AtomicBool::new(false),
+             is_me: false,
++            local_init_syms: Self::scan_symtab_for_init_syms(data, mmap_base, is_pie_enabled(&elf)),
+         };
+ 
+         Ok((dso, tcb_master, elf.elf_program_headers().to_vec()))
+@@ -543,6 +560,95 @@
+     #[inline]
+     pub fn dependencies(&self) -> &[&str] {
+         &self.dynamic.needed
++    }
++
++    /// Scan .symtab section for LOCAL __relibc_init_* symbols.
++    /// Called during DSO construction when the full ELF file data is available.
++    /// Returns runtime addresses of found symbols.
++    fn scan_symtab_for_init_syms(data: &[u8], load_base: usize, pie: bool) -> LocalInitSyms {
++        use object::read::elf::FileHeader as _;
++        use object::read::elf::SectionHeader as SH;
++        let mut result = LocalInitSyms::default();
++
++        let file_header = match shim::FileHeader::parse(data) {
++            Ok(hdr) => hdr,
++            Err(_) => return result,
++        };
++        let endian = NativeEndian;
++        let sections = match file_header.sections(endian, data) {
++            Ok(s) => s,
++            Err(_) => return result,
++        };
++
++        // Find SHT_SYMTAB section (NOT SHT_DYNSYM) by iterating section headers
++        let mut symtab_idx = None;
++        for (i, section) in sections.iter().enumerate() {
++            if section.sh_type(endian) == elf::SHT_SYMTAB {
++                symtab_idx = Some(object::SectionIndex(i));
++                break;
++            }
++        }
++        let symtab_idx = match symtab_idx {
++            Some(idx) => idx,
++            None => return result,
++        };
++        let symbols = match sections.symbol_table_by_index(endian, data, symtab_idx) {
++            Ok(st) => st,
++            Err(_) => return result,
++        };
++        let strtab_link = sections.iter().nth(symtab_idx.0)
++            .map(|s| s.sh_link(endian) as usize);
++        let strings = match strtab_link {
++            Some(link) => match sections.strings(endian, data, object::SectionIndex(link)) {
++                Ok(s) => s,
++                Err(_) => return result,
++            },
++            None => return result,
++        };
++
++        let base = if pie { load_base } else { 0 };
++
++        for sym in symbols.symbols() {
++            if sym.st_shndx(endian) == elf::SHN_UNDEF || sym.st_size(endian) == 0 {
++                continue;
++            }
++            if sym.st_type() != elf::STT_OBJECT {
++                continue;
++            }
++            let name = match sym.name(endian, strings) {
++                Ok(n) => n,
++                Err(_) => continue,
++            };
++            let addr = base + sym.st_value(endian) as usize;
++            match name {
++                b"__relibc_init_environ" => result.environ = Some(addr),
++                b"__relibc_init_proc_fd" => result.proc_fd = Some(addr),
++                b"__relibc_init_ns_fd" => result.ns_fd = Some(addr),
++                b"__relibc_init_cwd_ptr" => result.cwd_ptr = Some(addr),
++                b"__relibc_init_cwd_len" => result.cwd_len = Some(addr),
++                b"__relibc_init_cwd_fd" => result.cwd_fd = Some(addr),
++                b"__relibc_init_filetable" => result.filetable = Some(addr),
++                _ => {}
++            }
++        }
++        result
++    }
++
++    /// Runtime injection also supports relibc symbols localized by DSO version scripts.
++    pub(super) fn init_sym(&self, name: &str) -> Option<*mut u8> {
++        self.get_sym(name).map(|(symbol, _)| symbol.as_ptr().cast::<u8>()).or_else(|| {
++            let addr = match name {
++                "__relibc_init_environ" => self.local_init_syms.environ,
++                "__relibc_init_proc_fd" => self.local_init_syms.proc_fd,
++                "__relibc_init_ns_fd" => self.local_init_syms.ns_fd,
++                "__relibc_init_cwd_ptr" => self.local_init_syms.cwd_ptr,
++                "__relibc_init_cwd_len" => self.local_init_syms.cwd_len,
++                "__relibc_init_cwd_fd" => self.local_init_syms.cwd_fd,
++                "__relibc_init_filetable" => self.local_init_syms.filetable,
++                _ => None,
++            };
++            addr.map(|addr| addr as *mut u8)
++        })
+     }
+ 
+     pub fn get_sym<'a>(&self, name: &'a str) -> Option<(Symbol<'a>, SymbolBinding)> {
+--- a/src/ld_so/linker.rs
++++ b/src/ld_so/linker.rs
+@@ -1054,12 +1054,43 @@
+     fn run_init(&self, obj: &DSO) {
+         use crate::platform::{self, types::c_char};
+ 
+-        if let Some((symbol, SymbolBinding::Global)) = obj.get_sym("__relibc_init_environ") {
+-            unsafe {
+-                symbol
+-                    .as_ptr()
+-                    .cast::<*mut *mut c_char>()
+-                    .write(platform::environ);
++        if let Some(symbol) = obj.init_sym("__relibc_init_environ") {
++            unsafe { symbol.cast::<*mut *mut c_char>().write(platform::environ) };
++        }
++
++        #[cfg(target_os = "redox")]
++        {
++            // Share userspace handle allocation before the DSO can duplicate any fd.
++            if let Some(symbol) = obj.init_sym("__relibc_init_filetable") {
++                unsafe { symbol.cast::<usize>().write(redox_rt::filetable_addr()) };
++            }
++            if let Some(symbol) = obj.init_sym("__relibc_init_ns_fd") {
++                if let Ok(fd) = redox_rt::current_namespace_fd() {
++                    unsafe { symbol.cast::<usize>().write(fd) };
++                }
++            }
++            if let Some(symbol) = obj.init_sym("__relibc_init_proc_fd") {
++                let fd = redox_rt::current_proc_fd().as_raw_fd();
++                unsafe { symbol.cast::<usize>().write(fd) };
++            }
++            if let (Some(ptr), Some(len), Some(fd)) = (
++                obj.init_sym("__relibc_init_cwd_ptr"),
++                obj.init_sym("__relibc_init_cwd_len"),
++                obj.init_sym("__relibc_init_cwd_fd"),
++            ) {
++                if let Ok(guard) = crate::platform::sys::path::current_dir() {
++                    if let Some(cwd) = guard.as_ref() {
++                        if let Ok(copy_fd) = cwd.fd.dup_into_upper(b"") {
++                            // The DSO initializes CWD lazily, so retain this snapshot.
++                            let path = alloc::boxed::Box::leak(alloc::boxed::Box::new(cwd.path));
++                            unsafe {
++                                ptr.cast::<usize>().write(path.as_ptr() as usize);
++                                len.cast::<usize>().write(path.len());
++                                fd.cast::<usize>().write(copy_fd.take());
++                            }
++                        }
++                    }
++                }
+             }
+         }
+ 

@@ -40,12 +40,12 @@ def main():
 
     content = content.replace(old, new, 1)
 
-    # Now add setup_logging to the beginning of the deamon() function
-    old_deamon = """fn deamon(daemon: daemon::SchemeDaemon) -> anyhow::Result<()> {
+    # Add setup_logging at the beginning of the daemon callback.
+    old_deamon = """fn daemon(daemon: daemon::SchemeDaemon) -> anyhow::Result<()> {
     // Create the ":input" scheme.
     let socket_file = Socket::create()?;"""
 
-    new_deamon = """fn deamon(daemon: daemon::SchemeDaemon) -> anyhow::Result<()> {
+    new_deamon = """fn daemon(daemon: daemon::SchemeDaemon) -> anyhow::Result<()> {
     common::setup_logging(
         "input",
         "inputd",
@@ -58,7 +58,7 @@ def main():
     let socket_file = Socket::create()?;"""
 
     if old_deamon not in content:
-        print("WARNING: deamon() function pattern not found, skipping")
+        print("WARNING: daemon() function pattern not found, skipping")
         return
 
     content = content.replace(old_deamon, new_deamon, 1)

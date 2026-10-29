@@ -6,10 +6,8 @@
 # Source: gitlab.redox-os.org/redox-os/pkgutils (Redox-native)
 # Binary: pkg (from pkg-cli workspace member)
 #
-# Build challenge: pkgutils depends on reqwest → rustls → ring.
-# The crates.io ring tarball lacks pregenerated assembly files needed for
-# Redox. We vendor ring from the Redox git fork (redox-os/ring.git branch
-# redox-0.17.8) which has the pregenerated/ directory.
+# pkgutils uses upstream's Redox ring fork. Its assembly build needs a .git
+# marker so build/main.rs invokes the Perl generators included in the crate.
 
 {
   pkgs,
@@ -21,64 +19,10 @@
   stubLibs,
   vendor,
   pkgutils-src,
-  ring-redox-src,
   ...
 }:
 
 let
-  patchedSrc = pkgs.runCommand "pkgutils-src-patched" { nativeBuildInputs = [ pkgs.python3 ]; } ''
-    cp -r ${pkgutils-src} $out
-    chmod -R u+w $out
-
-    python - "$out/Cargo.toml" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text()
-old = """[patch.crates-io]
-# https://github.com/briansmith/ring/issues/1999
-ring = { git = "https://gitlab.redox-os.org/redox-os/ring.git", branch = "redox-0.17.8" }
-cc-11 = { git = "https://github.com/tea/cc-rs", branch="riscv-abi-arch-fix", package = "cc" }
-"""
-new = """[patch.crates-io]
-# https://github.com/briansmith/ring/issues/1999
-ring = { git = "https://gitlab.redox-os.org/redox-os/ring.git", branch = "redox-0.17.8" }
-"""
-if old not in text:
-    raise SystemExit("pkgutils: expected cc patch snippet not found")
-path.write_text(text.replace(old, new, 1))
-PY
-
-    python - "$out/Cargo.lock" <<'PY'
-from pathlib import Path
-import sys
-
-path = Path(sys.argv[1])
-text = path.read_text()
-old = """[[package]]
-name = \"cc\"
-version = \"1.1.22\"
-source = \"git+https://github.com/tea/cc-rs?branch=riscv-abi-arch-fix#588ceacb084af41415690c57688e338a32a1f1b4\"
-dependencies = [
- \"shlex\",
-]
-"""
-new = """[[package]]
-name = \"cc\"
-version = \"1.1.22\"
-source = \"registry+https://github.com/rust-lang/crates.io-index\"
-checksum = \"9540e661f81799159abee814118cc139a2004b3a3aa3ea37724a1b66530b90e0\"
-dependencies = [
- \"shlex\",
-]
-"""
-if old not in text:
-    raise SystemExit("pkgutils: expected cc lock block not found")
-path.write_text(text.replace(old, new, 1))
-PY
-  '';
-
   mkUserspace = import ./mk-userspace.nix {
     inherit
       pkgs
@@ -95,8 +39,8 @@ PY
 in
 mkUserspace.mkPackage {
   pname = "pkgutils";
-  version = "0.3.0";
-  src = patchedSrc;
+  version = "0.3.3";
+  src = pkgutils-src;
   cargoBuildFlags = "--manifest-path pkg-cli/Cargo.toml";
 
   # Perl needed by ring's build.rs to generate assembly from .pl files
@@ -106,49 +50,23 @@ mkUserspace.mkPackage {
 
   gitSources = [
     {
-      url = "git+https://gitlab.redox-os.org/redox-os/ring.git?branch=redox-0.17.8";
+      url = "git+https://gitlab.redox-os.org/redox-os/ring.git?branch=redox-0.17.16";
       git = "https://gitlab.redox-os.org/redox-os/ring.git";
-      branch = "redox-0.17.8";
+      branch = "redox-0.17.16";
     }
   ];
 
-  # Replace the crates.io ring with the Redox git fork that has
-  # pregenerated assembly files. Without these, ring's build.rs
-  # tries to run assembly generation which fails for Redox targets.
+  # Git vendoring drops .git, but this fork does not ship pregenerated asm.
+  # An empty directory selects source generation without replacing crate files.
   postConfigure = ''
-    RING_DIR=$(find vendor-combined -maxdepth 1 -name 'ring-*' -type d | head -1)
-    if [ -n "$RING_DIR" ]; then
-      echo "Replacing $RING_DIR with Redox ring fork..."
-      rm -rf "$RING_DIR"
-      cp -r ${ring-redox-src} "$RING_DIR"
-      chmod -R u+w "$RING_DIR"
-
-      # Ring's build.rs: if no .git, it expects pregenerated assembly.
-      # With .git, it generates asm from .pl files via Perl at build time.
-      mkdir -p "$RING_DIR/.git"
-
-      # Regenerate .cargo-checksum.json for the replaced crate
-      ${pkgs.python3}/bin/python3 -c "
-import json, hashlib, sys
-from pathlib import Path
-crate_dir = Path(sys.argv[1])
-checksum_file = crate_dir / '.cargo-checksum.json'
-files = {}
-for fp in sorted(crate_dir.rglob('*')):
-    if fp.is_file() and fp.name != '.cargo-checksum.json':
-        rel = str(fp.relative_to(crate_dir))
-        with open(fp, 'rb') as f:
-            files[rel] = hashlib.sha256(f.read()).hexdigest()
-with open(checksum_file, 'w') as f:
-    json.dump({'files': files}, f)
-" "$RING_DIR"
-    fi
+    find vendor-combined -maxdepth 1 -name 'ring-*' -type d \
+      -exec mkdir -p '{}/.git' \;
   '';
 
   installPhase = ''
     runHook preInstall
     mkdir -p $out/bin
-    cp target/${redoxTarget}/release/pkg $out/bin/ 2>/dev/null || true
+    cp target/${redoxTarget}/release/pkg $out/bin/
     runHook postInstall
   '';
 

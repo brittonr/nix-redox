@@ -81,6 +81,7 @@ let
   # --target is handled by crossStdenv (hostPlatform.rust.rustcTargetSpec).
   # -C panic=abort is required (no unwinding in kernel mode).
   kernelExtraOpts = [
+    "-Zjson-target-spec"
     "-C"
     "panic=abort"
     "-C"

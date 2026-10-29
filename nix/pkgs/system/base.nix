@@ -18,13 +18,10 @@
   stubLibs,
   vendor,
   base-src,
-  liblibc-src,
-  orbclient-src,
-  rustix-redox-src,
-  drm-rs-src,
   relibc-src,
   redox-log-src,
-  fdt-src,
+  orbclient-src,
+  redox-scheme-src,
   # Accept but ignore extra args from commonArgs
   craneLib ? null,
   ...
@@ -44,16 +41,12 @@ let
 
   needsBuildStd = !rustFlags.useToolchainRlibs;
 
-  # Patch for GraphicScreen to use mmap for page-aligned allocation
-  # Version: 2 - Fixed patch format
-  graphicscreenPatch = ../patches/graphicscreen-mmap.patch;
   graphicscreenPatchPy = ../patches/graphicscreen-mmap.py;
 
   # Patch driver-network to support diagnostic read path
   patchDriverNetworkDiag = ../patches/patch-driver-network-diag.py;
 
-  # Patches for virtio-netd RX buffer recycling and IRQ wakeup
-  virtioNetRxPatch = ../patches/virtio-netd-rx-recycle.patch;
+  # Keep the network scheme responsive when only the RX queue raises an IRQ.
   virtioNetIrqPatch = ../patches/virtio-netd-irq-wakeup.patch;
 
   # Patch for randd to allow reads from scheme root handles (unified diff)
@@ -70,9 +63,6 @@ let
 
   # Patch for usbhidd resilient interrupt transfer loop
   patchUsbhiddResilientLoop = ../patches/patch-usbhidd-resilient-loop.py;
-
-  # Patch for xhcid: stop+restart interrupt endpoints after each transfer
-  patchXhcidInterruptRestart = ../patches/patch-xhcid-interrupt-restart.py;
 
   # Patch for inputd daemon startup order (setup_logging after SchemeDaemon::new)
   patchInputdDaemonOrder = ../patches/patch-inputd-daemon-order.py;
@@ -114,7 +104,7 @@ let
 
   # Prepare source with patched dependencies
   patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "base-src-patched-v29"; # v29: smolnetd readiness after netcfg registration
+    name = "base-src-patched";
     src = base-src;
 
     nativeBuildInputs = [ pkgs.gnupatch ];
@@ -128,37 +118,22 @@ let
     patchPhase = ''
       runHook prePatch
 
-      # Replace git dependencies with path dependencies in Cargo.toml
-      # The [patch.crates-io] section needs to point to local paths
+      # Keep current upstream registry dependencies. Resolve only the Redox
+      # workspace git dependencies to the flake inputs used by the system.
       substituteInPlace Cargo.toml \
-        --replace-quiet 'libc = { git = "https://gitlab.redox-os.org/redox-os/liblibc.git", branch = "redox-0.2" }' \
-                       'libc = { path = "${liblibc-src}" }' \
-        --replace-quiet 'orbclient = { git = "https://gitlab.redox-os.org/redox-os/orbclient.git", version = "0.3.44" }' \
+        --replace-fail 'redox-ioctl = { git = "https://gitlab.redox-os.org/redox-os/relibc.git" }' \
+                       'redox-ioctl = { path = "${relibc-src}/redox-ioctl" }' \
+        --replace-fail 'redox-log = { git = "https://gitlab.redox-os.org/redox-os/redox-log.git" }' \
+                       'redox-log = { path = "${redox-log-src}" }' \
+        --replace-fail 'orbclient = { git = "https://gitlab.redox-os.org/redox-os/orbclient.git" }' \
                        'orbclient = { path = "${orbclient-src}" }' \
-        --replace-quiet 'rustix = { git = "https://github.com/jackpot51/rustix.git", branch = "redox-ioctl" }' \
-                       'rustix = { path = "${rustix-redox-src}" }' \
-        --replace-quiet 'drm = { git = "https://github.com/Smithay/drm-rs.git" }' \
-                       'drm = { path = "${drm-rs-src}" }' \
-        --replace-quiet 'drm-sys = { git = "https://github.com/Smithay/drm-rs.git" }' \
-                       'drm-sys = { path = "${drm-rs-src}/drm-ffi/drm-sys" }'
+        --replace-fail 'redox-scheme = { git = "https://gitlab.redox-os.org/redox-os/redox-scheme.git", default-features = false }' \
+                       'redox-scheme = { path = "${redox-scheme-src}", default-features = false }'
 
-      # Replace redox-log git dependency with local path
-      substituteInPlace Cargo.toml \
-        --replace-quiet 'redox-log = { git = "https://gitlab.redox-os.org/redox-os/redox-log.git" }' \
-                       'redox-log = { path = "${redox-log-src}" }'
-
-      # Add patch for redox-rt from relibc (used by individual crates)
-      # Append to the [patch.crates-io] section
-      echo "" >> Cargo.toml
-      echo '# Added by Nix build' >> Cargo.toml
-      echo 'redox-rt = { path = "${relibc-src}/redox-rt" }' >> Cargo.toml
-
-      # Patch all git dependencies across ALL Cargo.toml files in the workspace
-      find . -name Cargo.toml -exec sed -i \
-        -e 's|redox-rt = { git = "https://gitlab.redox-os.org/redox-os/relibc.git"[^}]*}|redox-rt = { path = "${relibc-src}/redox-rt", default-features = false }|g' \
-        -e 's|redox-log = { git = "https://gitlab.redox-os.org/redox-os/redox-log.git"[^}]*}|redox-log = { path = "${redox-log-src}" }|g' \
-        -e 's|fdt = { git = "https://github.com/repnop/fdt.git"[^}]*}|fdt = { path = "${fdt-src}" }|g' \
-        {} +
+      # Bootstrap is excluded from the workspace but also uses redox-rt.
+      substituteInPlace bootstrap/Cargo.toml \
+        --replace-fail 'redox-rt = { git = "https://gitlab.redox-os.org/redox-os/relibc.git", default-features = false }' \
+                       'redox-rt = { path = "${relibc-src}/redox-rt", default-features = false }'
 
       # smolnetd must not signal readiness until NetCfgScheme::new has
       # registered the netcfg: scheme. Otherwise init can launch netcfg-setup
@@ -209,9 +184,8 @@ let
         ${pkgs.python3}/bin/python3 ${patchXhcidDriverPaths} drivers/usb/xhcid/src/xhci/mod.rs
         echo "Done patching xhcid"
 
-        # Add timeout to usbhidd's input scheme connection via ProducerHandle.
-        # Without this, usbhidd blocks forever if inputd hasn't registered yet.
-        echo "Patching inputd ProducerHandle: adding 5s timeout..."
+        # Retry input:producer opens while inputd registers its scheme.
+        echo "Patching inputd ProducerHandle: adding startup retries..."
         ${pkgs.python3}/bin/python3 ${patchUsbhiddTimeout} drivers/inputd/src/lib.rs
         echo "Done patching inputd ProducerHandle"
 
@@ -229,65 +203,14 @@ let
         echo "Patching usbhidd: resilient transfer loop + usage 0x0 fix..."
         ${pkgs.python3}/bin/python3 ${patchUsbhiddResilientLoop} drivers/input/usbhidd/src/main.rs
         echo "Done patching usbhidd"
-
-        # Reset interrupt endpoint hardware state after each transfer.
-        # Intel N100 xHCI controllers stop generating Transfer Events after
-        # ~3 successful interrupt transfers. Issue Stop Endpoint + Set TR
-        # Dequeue Pointer between transfers to reset the hardware ring state.
-        echo "Patching xhcid: stop+restart interrupt endpoints..."
-        ${pkgs.python3}/bin/python3 ${patchXhcidInterruptRestart} drivers/usb/xhcid/src/xhci/scheme.rs
-        echo "Done patching xhcid interrupt restart"
       fi
-
-      # Add Queue::repost_buffer() to virtio-core for RX buffer recycling.
-      # Uses substituteInPlace (exact string match) rather than patch because
-      # both Queue and PendingRequest have descriptor_len() — unified diff
-      # context matching hits the wrong one.
-      echo "Patching virtio-core: adding Queue::repost_buffer()..."
-      substituteInPlace drivers/virtio-core/src/transport.rs \
-        --replace-quiet \
-          '    /// Returns the number of descriptors in the descriptor table of this queue.
-    pub fn descriptor_len(&self) -> usize {
-        self.descriptor.len()
-    }
-}' \
-          '    /// Returns the number of descriptors in the descriptor table of this queue.
-    pub fn descriptor_len(&self) -> usize {
-        self.descriptor.len()
-    }
-
-    /// Re-post a descriptor to the available ring without allocating a new one.
-    ///
-    /// The descriptor table entry must already be set up with the correct buffer
-    /// address, flags, and size (e.g. from initial queue population). This just
-    /// adds the descriptor index back to the available ring and notifies the device.
-    pub fn repost_buffer(&self, descriptor_idx: u16) {
-        use core::sync::atomic::Ordering;
-
-        let avail_idx = self.available.head_index() as usize;
-        self.available
-            .get_element_at(avail_idx)
-            .table_index
-            .store(descriptor_idx, Ordering::SeqCst);
-        self.available.set_head_idx(avail_idx as u16 + 1);
-        self.notification_bell.ring(self.queue_index);
-    }
-}'
-
-      # Fix virtio-netd RX buffer recycling and used ring tracking
-      # Bug 1: try_recv() never re-posts consumed buffers to the available ring.
-      #   After ~256 packets, all RX buffers are exhausted and inbound packets are dropped.
-      # Bug 2: try_recv() reads only the last used ring element (idx-1) and jumps recv_head
-      #   to head_index(), skipping any intermediate packets.
-      echo "Patching virtio-netd RX buffer recycling..."
-      patch -p1 --fuzz=3 < ${virtioNetRxPatch}
 
       # Fix virtio-netd main loop to wake on IRQ events
       # Without this, the main loop only wakes on scheme requests from smolnetd.
       # When smolnetd's timer goes idle (no active sockets), nobody reads incoming
       # packets from the device, causing all inbound traffic to be ignored.
       echo "Patching virtio-netd IRQ wakeup..."
-      patch -p1 --fuzz=3 < ${virtioNetIrqPatch}
+      patch -p1 --fuzz=0 < ${virtioNetIrqPatch}
 
       # Fix ihdad: use Immediate Command Interface for all HDA controllers
       #
@@ -317,7 +240,7 @@ let
       # and reads random bytes from it. But randd's read() only accepts
       # Handle::File, not Handle::SchemeRoot, returning EBADF.
       echo "Patching randd: allow reads from scheme root..."
-      patch -p1 --fuzz=3 < ${randdPatch}
+      patch -p1 --fuzz=0 < ${randdPatch}
 
       # ─── igcd: inject Intel I225/I226 network driver into workspace ───
       echo "Adding igcd network driver to workspace..."
@@ -375,58 +298,6 @@ IGCD_CARGO_EOF
       ${pkgs.python3}/bin/python3 ${./patches/bootstrap/patch-procmgr-ptrace-forward.py} .
       echo "procmgr ptrace forwarding patch applied"
 
-      # scheme-utils HandleMap::get now accepts ids by value and returns Result.
-      substituteInPlace randd/src/main.rs \
-        --replace-fail 'self.handles.get(&id).ok_or(Error::new(EBADF))?' 'self.handles.get(id)?'
-
-      # rand 0.10 exposes next_u64 through rand::Rng and keeps make_rng().
-      # Do not force the old RngCore/from_entropy API; it no longer exists.
-
-      # acpi 6.1.1 still exposes Local, Arg, Index, and Named reference kinds;
-      # leave amlserde's reference serialization mappings unchanged.
-
-      # redox-ioctl dropped wrappers/constants for legacy DRM unique/set-version
-      # ioctls and only exposes MODE_GET_FB2's struct wrapper. Keep driver-graphics
-      # compatible by handling legacy structs directly and using the DRM ADD_FB2 nr.
-      ${pkgs.python3}/bin/python3 - <<'PY'
-from pathlib import Path
-p = Path('drivers/graphics/driver-graphics/src/ioctl/mod.rs')
-s = p.read_text()
-s = s.replace('use std::mem;\n', 'use std::{cmp, mem, ptr, slice};\n')
-s = s.replace('const MODE_ADD_FB2: u64 = 0xB8;\n\n', "")
-s = s.replace('mod cursor;\n', 'const MODE_ADD_FB2: u64 = 0xB8;\n\nmod cursor;\n')
-helper = """\nfn payload_as_mut<T>(payload: &mut [u8]) -> syscall::Result<&mut T> {\n    if payload.len() < mem::size_of::<T>() {\n        return Err(Error::new(EINVAL));\n    }\n    Ok(unsafe { &mut *(payload.as_mut_ptr() as *mut T) })\n}\n\nfn get_unique<T: GraphicsAdapter>(adapter: &mut T, handle: &mut DrmHandle<T>, payload: &mut [u8]) -> syscall::Result<usize> {\n    let data = payload_as_mut::<drm_sys::drm_unique>(payload)?;\n    let unique = handle.unique.get_or_insert_with(|| adapter.get_unique());\n    let bytes = unique.as_bytes();\n    let capacity = data.unique_len as usize;\n    if !data.unique.is_null() && capacity > 0 {\n        unsafe {\n            ptr::copy_nonoverlapping(\n                bytes.as_ptr() as *const c_char,\n                data.unique,\n                cmp::min(capacity, bytes.len()),\n            );\n        }\n    }\n    data.unique_len = bytes.len() as drm_sys::__kernel_size_t;\n    Ok(0)\n}\n\nfn set_version<T: GraphicsAdapter>(adapter: &mut T, handle: &mut DrmHandle<T>, payload: &mut [u8]) -> syscall::Result<usize> {\n    let data = payload_as_mut::<drm_sys::drm_set_version>(payload)?;\n    // We only support version 1.4 currently.\n    if data.drm_di_major != 0 || data.drm_di_minor != 4 {\n        return Err(Error::new(EINVAL));\n    }\n    if data.drm_dd_major != 0 || data.drm_dd_minor != 4 {\n        return Err(Error::new(EINVAL));\n    }\n    data.drm_di_major = 1;\n    data.drm_di_minor = 4;\n    data.drm_dd_major = 1;\n    data.drm_dd_minor = 4;\n    handle.unique = Some(adapter.get_unique());\n    Ok(0)\n}\n"""
-s = s.replace('pub(crate) fn call_ioctl<T: GraphicsAdapter>(\n', helper + '\npub(crate) fn call_ioctl<T: GraphicsAdapter>(\n')
-s = s.replace("""        ipc::GET_UNIQUE => ipc::DrmUnique::with(payload, |mut data| {
-            if let Some(unique) = &handle.unique {
-                data.set_unique(unsafe { mem::transmute::<&[u8], &[c_char]>(unique.as_bytes()) });
-            } else {
-                data.set_unique_len(0);
-            }
-            Ok(0)
-        }),
-        ipc::SET_VERSION => ipc::DrmSetVersion::with(payload, |mut data| {
-            // We only support version 1.4 currently
-            if data.drm_di_major() != 0 || data.drm_di_minor() != 4 {
-                return Err(Error::new(EINVAL));
-            }
-            if data.drm_dd_major() != 0 || data.drm_dd_minor() != 4 {
-                return Err(Error::new(EINVAL));
-            }
-            data.set_drm_di_major(1);
-            data.set_drm_di_minor(4);
-            data.set_drm_dd_major(1);
-            data.set_drm_dd_minor(4);
-
-            handle.unique = Some(adapter.get_unique());
-
-            Ok(0)
-        }),""", """        0x01 => get_unique(adapter, handle, payload),
-        0x07 => set_version(adapter, handle, payload),""")
-s = s.replace('ipc::MODE_ADD_FB2 => ipc::DrmModeFbCmd2::with(payload, |data| {', 'MODE_ADD_FB2 => ipc::DrmModeFbCmd2::with(payload, |data| {')
-p.write_text(s)
-PY
-
       # pcid_interface::PciFunctionHandle::map_bar now requires a MemoryType.
       substituteInPlace drivers/net/igcd/src/main.rs \
         --replace-fail 'use pcid_interface::PciFunctionHandle;' $'use common::MemoryType;\nuse pcid_interface::PciFunctionHandle;' \
@@ -463,27 +334,6 @@ PY
       branch = "redox-6.x";
     }
     {
-      url = "git+https://github.com/repnop/fdt.git";
-      git = "https://github.com/repnop/fdt.git";
-    }
-    {
-      url = "git+https://github.com/Smithay/drm-rs.git";
-      git = "https://github.com/Smithay/drm-rs.git";
-    }
-    {
-      url = "git+https://gitlab.redox-os.org/redox-os/liblibc.git?branch=redox-0.2";
-      git = "https://gitlab.redox-os.org/redox-os/liblibc.git";
-      branch = "redox-0.2";
-    }
-    {
-      url = "git+https://gitlab.redox-os.org/redox-os/relibc.git";
-      git = "https://gitlab.redox-os.org/redox-os/relibc.git";
-    }
-    {
-      url = "git+https://gitlab.redox-os.org/redox-os/orbclient.git";
-      git = "https://gitlab.redox-os.org/redox-os/orbclient.git";
-    }
-    {
       url = "git+https://gitlab.redox-os.org/redox-os/rehid.git";
       git = "https://gitlab.redox-os.org/redox-os/rehid.git";
     }
@@ -492,13 +342,17 @@ PY
       git = "https://github.com/jackpot51/range-alloc.git";
     }
     {
-      url = "git+https://github.com/jackpot51/rustix.git?branch=redox-ioctl";
-      git = "https://github.com/jackpot51/rustix.git";
-      branch = "redox-ioctl";
-    }
-    {
       url = "git+https://github.com/jackpot51/hidreport";
       git = "https://github.com/jackpot51/hidreport";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/redox-rings.git";
+      git = "https://gitlab.redox-os.org/redox-os/redox-rings.git";
+    }
+    {
+      url = "git+https://github.com/repnop/fdt.git?rev=059bb23";
+      git = "https://github.com/repnop/fdt.git";
+      rev = "059bb23";
     }
   ];
 

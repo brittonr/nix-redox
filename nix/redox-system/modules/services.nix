@@ -61,8 +61,8 @@ let
 
   gettyServiceType = t.struct "GettyService" {
     # Master switch — when false, no getty service is generated.
-    # NOTE: getty requires the userutils package. The build module
-    # auto-enables this when userutils is in systemPackages, but
+    # getty comes from base; login/authentication requires userutils. The build
+    # module auto-enables this when userutils is in systemPackages, but
     # this option lets profiles override that behavior.
     enable = t.enum "GettyEnable" [
       "auto"
@@ -135,7 +135,7 @@ in
         # Core services (always on)
         {
           ipcd = {
-            description = "Inter-process communication daemon";
+            description = "Channel and shared-memory IPC daemon";
             command = "/bin/ipcd";
             type = "daemon";
             args = "";
@@ -339,7 +339,7 @@ in
         device = "/scheme/debug/no-preserve";
         extraArgs = "-J";
       };
-      description = "Serial console login via getty — requires userutils package";
+      description = "Serial console login via base getty — requires userutils login/authentication";
     };
 
     exampled = {

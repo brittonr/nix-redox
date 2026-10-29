@@ -67,7 +67,9 @@ def main():
 
     //TODO: dynamically create good values, fix xhcid so it does not block on each request
     // This sets all reports to a duration of 4ms
-    reqs::set_idle(&handle, 1, 0, interface_num as u16).context("Failed to set idle")?;"""
+    if let Err(err) = reqs::set_idle(&handle, 1, 0, interface_num as u16) {
+        log::warn!("failed to set idle: {}", err);
+    }"""
 
     new_set_idle_call = """\
     // Skip non-keyboard interfaces to avoid blocking xhcid's single-threaded
@@ -83,12 +85,8 @@ def main():
 
     //TODO: dynamically create good values, fix xhcid so it does not block on each request
     // This sets all reports to a duration of 4ms
-    eprintln!("usbhidd[{}]: set_idle...", interface_num);
-    match reqs::set_idle(&handle, 1, 0, interface_num as u16) {
-        Ok(()) => eprintln!("usbhidd[{}]: set_idle OK", interface_num),
-        Err(e) => {
-            eprintln!("usbhidd[{}]: set_idle failed: {}, continuing anyway", interface_num, e);
-        }
+    if let Err(err) = reqs::set_idle(&handle, 1, 0, interface_num as u16) {
+        log::warn!("failed to set idle: {}", err);
     }"""
 
     if old_set_idle_call not in content:
@@ -114,14 +112,14 @@ def main():
 
     # 2c. Save endpoint number for reopen + diagnostic
     old_endpoint_opt = """\
-    let mut endpoint_opt = match endp_desc_opt {
+    let mut endpoint_opt = match endp_int_in_opt {
         Some((endp_num, _endp_desc)) => match handle.open_endpoint(endp_num as u8) {
             Ok(ok) => Some(ok),"""
 
     new_endpoint_opt = """\
     eprintln!("usbhidd[{}]: opening endpoint...", interface_num);
     let mut reopen_ep: u8 = 0;
-    let mut endpoint_opt = match endp_desc_opt {
+    let mut endpoint_opt = match endp_int_in_opt {
         Some((endp_num, _endp_desc)) => {
             reopen_ep = endp_num as u8;
             match handle.open_endpoint(endp_num as u8) {

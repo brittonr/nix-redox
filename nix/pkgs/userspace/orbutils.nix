@@ -4,7 +4,6 @@
 # - orblogin: Graphical login manager
 # - background: Desktop background manager
 # - viewer: Image viewer
-# - calendar: Calendar application
 #
 # orblogin is the key component - it provides graphical authentication
 # for Orbital, replacing the text-based /bin/login workaround.
@@ -25,8 +24,6 @@
   stubLibs,
   vendor,
   orbutils-src,
-  # Git dependencies that need path conversion
-  calc-src ? null, # calculate crate
   ...
 }:
 
@@ -42,73 +39,10 @@ let
       ;
   };
 
-  # Create patched source with git dependencies converted to paths
-  patchedSrc = pkgs.stdenv.mkDerivation {
-    name = "orbutils-src-patched";
-    src = orbutils-src;
-
-    nativeBuildInputs = [ pkgs.perl ];
-
-    phases = [
-      "unpackPhase"
-      "patchPhase"
-      "installPhase"
-    ];
-
-    patchPhase = ''
-      runHook prePatch
-
-      # The orbutils package has git dependencies that need patching:
-      # - calculate = { git = "https://gitlab.redox-os.org/redox-os/calc.git" }
-      # - softbuffer (patched in workspace Cargo.toml)
-      # - winit (patched in workspace Cargo.toml)
-      #
-      # For orblogin specifically, we only need:
-      # - orbclient, orbfont, orbimage (from crates.io)
-      # - redox_users (from crates.io)
-      # - libredox (from crates.io)
-      #
-      # The calculate dependency is only used by the calendar app, not orblogin.
-      # We remove it entirely along with the calendar binary.
-
-      # Remove calculator and launcher from workspace members
-      substituteInPlace Cargo.toml \
-        --replace-quiet '"calculator",' "" \
-        --replace-quiet '"launcher",' ""
-
-      # Remove the [patch.crates-io] section as we'll use crates.io versions
-      sed -i '/\[patch.crates-io\]/,/^$/d' Cargo.toml
-
-      # Remove calculate dependency from orbutils crate (only used by calendar)
-      sed -i '/^calculate = /d' orbutils/Cargo.toml
-
-      # Remove the calendar [[bin]] section (3 lines: [[bin]], name, path)
-      # Using perl for precise multi-line matching
-      perl -0777 -i -pe 's/\[\[bin\]\]\nname = "calendar"\npath = "src\/calendar\/main\.rs"\n\n?//g' orbutils/Cargo.toml
-
-      # Note: We keep Cargo.lock for vendoring (fetchCargoVendor needs it)
-      # The calculate crate will be vendored but not compiled since we removed
-      # the dependency from Cargo.toml
-
-      # Update orbclient to 0.3.49 to match orbital's version
-      # This prevents protocol mismatches between orbclient and orbital
-      # Original: 0.3.48 checksum ba0b26cec2e24f08ed8bb31519a9333140a6599b867dac464bb150bdb796fd43
-      # New: 0.3.49 checksum 247ad146e19b9437f8604c21f8652423595cf710ad108af40e77d3ae6e96b827
-      sed -i '/name = "orbclient"/{n;s/version = "0.3.48"/version = "0.3.49"/}' Cargo.lock
-      sed -i 's/checksum = "ba0b26cec2e24f08ed8bb31519a9333140a6599b867dac464bb150bdb796fd43"/checksum = "247ad146e19b9437f8604c21f8652423595cf710ad108af40e77d3ae6e96b827"/' Cargo.lock
-
-      runHook postPatch
-    '';
-
-    installPhase = ''
-      cp -r . $out
-    '';
-  };
-
   # Vendor orbutils dependencies
   orbutilsVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "orbutils-cargo-vendor";
-    src = patchedSrc;
+    src = orbutils-src;
     hash = "sha256-UiSZI+3VHqR7EPbVjmicCDPbcLCWtw6TFO0YSvUjQe0=";
   };
 
@@ -141,7 +75,7 @@ pkgs.stdenv.mkDerivation {
   configurePhase = ''
     runHook preConfigure
 
-    cp -r ${patchedSrc}/* .
+    cp -r ${orbutils-src}/* .
     chmod -R u+w .
 
     # Use pre-merged vendor directory
@@ -151,7 +85,16 @@ pkgs.stdenv.mkDerivation {
     mkdir -p .cargo
     cat > .cargo/config.toml << 'CARGOCONF'
     ${vendor.mkCargoConfig {
-      gitSources = [ ]; # No git deps after patching
+      gitSources = [
+        {
+          url = "git+https://github.com/rust-windowing/winit.git";
+          git = "https://github.com/rust-windowing/winit.git";
+        }
+        {
+          url = "git+https://github.com/rust-windowing/softbuffer";
+          git = "https://github.com/rust-windowing/softbuffer";
+        }
+      ];
       target = redoxTarget;
       linker = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
       panic = "abort";

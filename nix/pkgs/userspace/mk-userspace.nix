@@ -194,6 +194,8 @@ rec {
       '';
 
       inherit installPhase meta;
+
+      passthru = { inherit src; };
     };
 
   # Simplified helper for packages that just install a single binary

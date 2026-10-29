@@ -28,7 +28,7 @@
   sysrootVendor,
   redoxTarget,
   kernel-src,
-  rmm-src,
+  kernel-fdt-src,
   redox-path-src,
   fdt-src,
   bootloader-src,
@@ -51,29 +51,24 @@ let
     nativeBuildInputs = [ pkgs.python3 pkgs.nasm ];
 
     postUnpack = ''
-      rm -rf $sourceRoot/rmm
-      cp -r ${rmm-src} $sourceRoot/rmm
-      chmod -R u+w $sourceRoot/rmm
-
       rm -rf $sourceRoot/redox-path
       cp -r ${redox-path-src} $sourceRoot/redox-path
       chmod -R u+w $sourceRoot/redox-path
 
       rm -rf $sourceRoot/fdt
-      cp -r ${fdt-src} $sourceRoot/fdt
+      cp -r ${kernel-fdt-src} $sourceRoot/fdt
       chmod -R u+w $sourceRoot/fdt
     '';
 
     postPatch = ''
       if grep -q 'fdt = { git = "https://github.com/repnop/fdt.git"' Cargo.toml; then
         substituteInPlace Cargo.toml \
-          --replace-fail 'fdt = { git = "https://github.com/repnop/fdt.git", rev = "2fb1409edd1877c714a0aa36b6a7c5351004be54" }' \
-                         'fdt = { path = "fdt" }'
+          --replace-fail 'fdt = { git = "https://github.com/repnop/fdt.git", rev = "8fa4388e056e48826e8898557a1c8600f9ee5d6a", features = ["pretty-printing"] }' \
+                         'fdt = { path = "fdt", features = ["pretty-printing"] }'
         sed -i '/^name = "fdt"/,/^$/{/^source = "git+/d}' Cargo.lock
       fi
 
       python3 ${../system/patches/kernel/patch-kernel-ptrace-proc-handles.py} .
-      python3 ${../system/patches/kernel/patch-kernel-lapic-timer.py} .
       python3 ${../system/patches/kernel/patch-kernel-trampoline-fallback.py} .
       nasm -f bin -o src/asm/x86/trampoline.bin src/asm/x86/trampoline.asm
       nasm -f bin -o src/asm/x86_64/trampoline.bin src/asm/x86_64/trampoline.asm
@@ -233,9 +228,8 @@ pkgs.runCommand "native-kernel-rebuild-bundle" { nativeBuildInputs = [ pkgs.pyth
     "bundle_root": "/usr/src/native-kernel-rebuild",
     "kernel": {
       "source_store": "${kernel-src}",
-      "rmm_store": "${rmm-src}",
       "redox_path_store": "${redox-path-src}",
-      "fdt_store": "${fdt-src}",
+      "fdt_store": "${kernel-fdt-src}",
       "guest_dir": "kernel",
       "target": "targets/${targetArch}-unknown-kernel.json",
       "build_file": "kernel/build.nix",

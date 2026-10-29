@@ -142,15 +142,15 @@ struct Handle {
     dir_entries: Option<Vec<DirEntry>>,
 }
 
-pub struct VirtioFsScheme<'a> {
-    session: FuseSession<'a>,
+pub struct VirtioFsScheme {
+    session: FuseSession,
     scheme_name: String,
     next_id: usize,
     handles: BTreeMap<usize, Handle>,
 }
 
-impl<'a> VirtioFsScheme<'a> {
-    pub fn new(session: FuseSession<'a>, scheme_name: String) -> Self {
+impl VirtioFsScheme {
+    pub fn new(session: FuseSession, scheme_name: String) -> Self {
         Self {
             session,
             scheme_name,
@@ -276,7 +276,7 @@ impl<'a> VirtioFsScheme<'a> {
     }
 }
 
-impl<'a> SchemeSync for VirtioFsScheme<'a> {
+impl SchemeSync for VirtioFsScheme {
     fn scheme_root(&mut self) -> Result<usize> {
         // Open the root directory
         let attr_out = self

@@ -460,7 +460,7 @@ let
     inherit (redoxLib) vendor;
     inherit (inputs)
       kernel-src
-      rmm-src
+      kernel-fdt-src
       redox-path-src
       fdt-src
       bootloader-src

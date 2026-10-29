@@ -24,15 +24,17 @@
 //!
 //! ### Kernel bug: non-power-of-two phys_contiguous deallocation (FIXED)
 //!
-//! **Status:** Fixed in kernel via `patch-kernel-p2frame-init.py`. The kernel
-//! now initializes ALL 2^order frames and uses bulk `deallocate_p2frame` on
-//! free. The `round_to_p2_pages` workaround below is retained as defense in
-//! depth — drivers should not depend on kernel correctness for DMA safety.
+//! **Status:** Fixed upstream: `allocate_frames` returns excess buddy frames
+//! immediately, and `deallocate_contiguous` frees exact ranges as buddy blocks.
+//! `round_to_p2_pages` is retained as defense in depth — drivers should not
+//! depend on kernel correctness for DMA safety.
 //!
 //! The original bug: `zeroed_phys_contiguous` allocated 2^order pages via
 //! `allocate_p2frame(order)` but only initialized `span.count` pages with
 //! `RC_USED_NOT_FREE` refcount. Excess pages retained zeroed PageInfo,
 //! causing buddy allocator corruption during merge on deallocation.
+
+use std::sync::Arc;
 
 use common::dma::Dma;
 use virtio_core::spec::{Buffer, ChainBuilder, DescriptorFlags};
@@ -54,23 +56,17 @@ pub const MAX_IO_SIZE: usize = 1024 * 1024;
 
 /// Round a byte size up to a power-of-two number of pages.
 ///
-/// This is critical for DMA allocations on Redox: the kernel's
-/// `zeroed_phys_contiguous` allocates 2^order pages but only initializes
-/// `ceil(size / PAGE_SIZE)` of them. If that count isn't a power of two,
-/// excess pages have uninitialized PageInfo that corrupts the buddy
-/// allocator on deallocation. Rounding up ensures all allocated pages
-/// are properly initialized.
+/// Retained as defense in depth against the fixed kernel buddy allocator bug
+/// described above, so the DMA allocation never depends on excess-page handling.
 fn round_to_p2_pages(size: usize) -> usize {
     let pages = (size + PAGE_SIZE - 1) / PAGE_SIZE;
     pages.next_power_of_two() * PAGE_SIZE
 }
 
-/// Allocate a DMA buffer with power-of-two page alignment.
+/// Allocate a DMA buffer with a power-of-two page count.
 ///
-/// The buffer is sized to the next power-of-two page count above `size`,
-/// ensuring safe deallocation (see module-level docs on the kernel bug).
 /// The actual usable capacity may be larger than `size`.
-pub fn alloc_dma_buffer(size: usize) -> Result<Dma<[u8]>, FuseTransportError> {
+fn alloc_dma_buffer(size: usize) -> Result<Dma<[u8]>, FuseTransportError> {
     let aligned_size = round_to_p2_pages(size);
     let buf = unsafe {
         Dma::<[u8]>::zeroed_slice(aligned_size)
@@ -80,40 +76,68 @@ pub fn alloc_dma_buffer(size: usize) -> Result<Dma<[u8]>, FuseTransportError> {
     Ok(buf)
 }
 
-/// Send a FUSE request using pre-allocated DMA buffers.
+/// Sequential request queue with two reusable DMA owners.
 ///
-/// The request data must already be copied into `req_buf[..req_len]`.
-/// `resp_len` controls the response descriptor size seen by virtiofsd —
-/// critical for FUSE_READ where virtiofsd reads exactly descriptor-size
-/// bytes from the host file.
-///
-/// Both buffers must be large enough: `req_buf.len() >= req_len` and
-/// `resp_buf.len() >= resp_len`. No DMA allocation or deallocation occurs.
-pub fn fuse_exchange(
-    queue: &Queue<'_>,
-    req_buf: &Dma<[u8]>,
-    req_len: usize,
-    resp_buf: &Dma<[u8]>,
-    resp_len: usize,
-) -> Result<Vec<u8>, FuseTransportError> {
-    debug_assert!(req_len <= req_buf.len());
-    debug_assert!(resp_len <= resp_buf.len());
+/// The pair is absent only while the queue owns it. Each completion returns the
+/// same allocations, before response validation can fail or another request runs.
+pub struct FuseTransport {
+    queue: Arc<Queue>,
+    buffers: Option<(Dma<[u8]>, Dma<[u8]>)>,
+}
 
-    let chain = ChainBuilder::new()
-        .chain(Buffer::new_sized(req_buf, req_len))
-        .chain(Buffer::new_sized(resp_buf, resp_len).flags(DescriptorFlags::WRITE_ONLY))
-        .build();
-
-    let written = futures::executor::block_on(queue.send(chain)) as usize;
-
-    if written < core::mem::size_of::<FuseOutHeader>() {
-        return Err(FuseTransportError::ShortResponse(written));
+impl FuseTransport {
+    pub fn new(
+        queue: Arc<Queue>,
+        req_capacity: usize,
+        resp_capacity: usize,
+    ) -> Result<Self, FuseTransportError> {
+        Ok(Self {
+            queue,
+            buffers: Some((
+                alloc_dma_buffer(req_capacity)?,
+                alloc_dma_buffer(resp_capacity)?,
+            )),
+        })
     }
 
-    let mut result = vec![0u8; written];
-    result.copy_from_slice(&resp_buf[..written]);
+    /// Send a request without allocating or copying additional DMA storage.
+    /// `resp_len` is the exact writable descriptor size, including FuseOutHeader.
+    pub fn exchange(
+        &mut self,
+        req: &[u8],
+        resp_len: usize,
+    ) -> Result<Vec<u8>, FuseTransportError> {
+        let (req_buf, resp_buf) = self.buffers.as_mut().expect("DMA buffers in flight");
+        if req.len() > req_buf.len() {
+            return Err(FuseTransportError::RequestTooLarge(req.len()));
+        }
+        if resp_len > resp_buf.len() {
+            return Err(FuseTransportError::RequestTooLarge(resp_len));
+        }
+        req_buf[..req.len()].copy_from_slice(req);
 
-    Ok(result)
+        let (req_buf, resp_buf) = self.buffers.take().expect("DMA buffers in flight");
+        let chain = ChainBuilder::new()
+            .chain(Buffer::new_sized(req_buf, req.len()))
+            .chain(Buffer::new_sized(resp_buf, resp_len).flags(DescriptorFlags::WRITE_ONLY))
+            .build();
+
+        let (written, [req_buf, resp_buf]) =
+            futures::executor::block_on(self.queue.send(chain)).into_parts();
+        // Retirement proves the device no longer accesses either allocation.
+        // Restore both owners even when the completion reports malformed data.
+        self.buffers = Some((req_buf.into_inner(), resp_buf.into_inner()));
+        let written = written as usize;
+        if written > resp_len {
+            return Err(FuseTransportError::UnexpectedSize);
+        }
+        if written < core::mem::size_of::<FuseOutHeader>() {
+            return Err(FuseTransportError::ShortResponse(written));
+        }
+
+        let (_, resp_buf) = self.buffers.as_ref().expect("DMA buffers not retired");
+        Ok(resp_buf[..written].to_vec())
+    }
 }
 
 /// Build a FUSE request with typed args struct AND trailing data (for FUSE_WRITE).

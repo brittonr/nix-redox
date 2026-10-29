@@ -6,7 +6,7 @@
 # - CRT startup files (crt0.o, crti.o, crtn.o)
 #
 # The build process:
-# 1. Copies dlmalloc-rs fork submodule (provides DlmallocCApi with c_api feature)
+# 1. Copies the exact upstream openlibm and dlmalloc-rs submodules
 # 2. Merges project vendor with sysroot vendor for -Z build-std
 # 3. Builds with LLVM/Clang cross-compilation toolchain
 
@@ -19,21 +19,27 @@
   redoxTarget,
   relibc-src,
   openlibm-src,
-  compiler-builtins-src,
   dlmalloc-rs-src,
-  redox-syscall-src,
-  object-src,
   vendor,
   ...
 }:
-
 let
+  # Upstream now links libc.so through CC, not LD. Use a target-aware driver
+  # without Nix's Linux wrapper flags, and do not pull in host libgcc.
+  llvmMakeFlags = lib.escapeShellArgs [
+    "CC=${pkgs.llvmPackages.clang-unwrapped}/bin/clang --target=${redoxTarget}"
+    "LD=ld.lld"
+    "AR=llvm-ar"
+    "NM=llvm-nm"
+    "OBJCOPY=llvm-objcopy"
+    "LINKFLAGS=-fuse-ld=lld"
+  ];
+
+
   # Prepare source with git submodules and patches
   patchedSrc = pkgs.stdenv.mkDerivation {
     name = "relibc-src-patched";
     src = relibc-src;
-
-    nativeBuildInputs = [ pkgs.python3 ];
 
     phases = [
       "unpackPhase"
@@ -42,16 +48,10 @@ let
     ];
 
     patches = [
-      # DSO namespace fd injection — each DSO gets its own DYNAMIC_PROC_INFO copy,
-      # only ld_so initializes from auxv. Without injection, DSOs get ns_fd=None
-      # causing EBADF on scheme access (e.g., File::open("/scheme/rand")).
-      ./patches/relibc/patch-relibc-ns-fd.patch
-      ./patches/relibc/patch-relibc-run-init.patch
-      # CWD injection for DSOs via ld_so run_init()
-      ./patches/relibc/patch-relibc-ld-so-cwd.patch
-      # DSO environ propagation — getenv() self-initializes from __relibc_init_environ
+      # Embedded relibc copies in DSOs need process, namespace, CWD and shared
+      # userspace filetable state before constructors, including LOCAL symbols.
+      ./patches/relibc/patch-relibc-dso-runtime.patch
       ./patches/relibc/patch-relibc-dso-environ.patch
-      # Broadcast environ to __relibc_init_environ after relibc_start_v1
       ./patches/relibc/patch-relibc-environ-dso-init.patch
       # Pre-fault thread stack pages after mmap
       ./patches/relibc/patch-relibc-prefault-stack.patch
@@ -59,8 +59,6 @@ let
       ./patches/relibc/patch-relibc-grow-main-stack.patch
       # abort() uses _exit(134) instead of ud2 instruction
       ./patches/relibc/patch-relibc-abort-dso.patch
-      # Guard p_align=0 in PT_GNU_STACK (prevents division by zero)
-      ./patches/relibc/patch-relibc-ld-so-align.patch
       # Add execvpe() for PATH search with explicit envp
       ./patches/relibc/patch-relibc-execvpe.patch
       # ld_so argv UTF-8: to_string_lossy() instead of _exit(1)
@@ -75,10 +73,6 @@ let
       cp -r ${openlibm-src} $sourceRoot/openlibm
       chmod -R u+w $sourceRoot/openlibm
 
-      rm -rf $sourceRoot/compiler-builtins
-      cp -r ${compiler-builtins-src} $sourceRoot/compiler-builtins
-      chmod -R u+w $sourceRoot/compiler-builtins
-
       rm -rf $sourceRoot/dlmalloc-rs
       cp -r ${dlmalloc-rs-src} $sourceRoot/dlmalloc-rs
       chmod -R u+w $sourceRoot/dlmalloc-rs
@@ -88,56 +82,8 @@ let
       # Fix shell script interpreters for Nix sandbox
       patchShebangs .
 
-      # Patch ld_so to search .symtab for LOCAL __relibc_init_* symbols
-      # (pre-built DSOs like librustc_driver.so hide these with version scripts)
-      python3 ${./patches/relibc/patch-relibc-symtab-fallback.py} .
-
-      # Use LLVM tools instead of target-prefixed GNU tools
-      sed -i 's/export CC=x86_64-unknown-redox-gcc/export CC=clang/g' config.mk
-      sed -i 's/export LD=x86_64-unknown-redox-ld/export LD=ld.lld/g' config.mk
-      sed -i 's/export AR=x86_64-unknown-redox-ar/export AR=llvm-ar/g' config.mk
-      sed -i 's/export NM=x86_64-unknown-redox-nm/export NM=llvm-nm/g' config.mk
-      sed -i 's/export OBJCOPY=x86_64-unknown-redox-objcopy/export OBJCOPY=llvm-objcopy/g' config.mk
-
-      # Canonicalize redirected git dependency URLs in the relibc source too.
-      substituteInPlace Cargo.toml Cargo.lock \
-        --replace-fail 'https://gitlab.redox-os.org/andypython/object' 'https://gitlab.redox-os.org/andypython/object.git'
-
-      python3 - <<'PY'
-from pathlib import Path
-
-cargo_toml = Path('Cargo.toml')
-text = cargo_toml.read_text()
-old = """[patch.crates-io]
-cc-11 = { git = "https://github.com/tea/cc-rs", branch = "riscv-abi-arch-fix", package = "cc" }
-"""
-if old not in text:
-    raise SystemExit('relibc: expected cc patch snippet not found')
-cargo_toml.write_text(text.replace(old, "", 1))
-
-cargo_lock = Path('Cargo.lock')
-text = cargo_lock.read_text()
-old = """[[package]]
-name = \"cc\"
-version = \"1.1.22\"
-source = \"git+https://github.com/tea/cc-rs?branch=riscv-abi-arch-fix#588ceacb084af41415690c57688e338a32a1f1b4\"
-dependencies = [
- \"shlex\",
-]
-"""
-new = """[[package]]
-name = \"cc\"
-version = \"1.1.22\"
-source = \"registry+https://github.com/rust-lang/crates.io-index\"
-checksum = \"9540e661f81799159abee814118cc139a2004b3a3aa3ea37724a1b66530b90e0\"
-dependencies = [
- \"shlex\",
-]
-"""
-if old not in text:
-    raise SystemExit('relibc: expected cc lock block not found')
-cargo_lock.write_text(text.replace(old, new, 1))
-PY
+      # Keep upstream Cargo.toml/Cargo.lock unchanged: cc is now from crates.io,
+      # object uses branch=new, and syscall comes from the kernel workspace.
     '';
 
     installPhase = ''
@@ -161,13 +107,21 @@ PY
   # Git source mappings for cargo config
   gitSources = [
     {
-      url = "https://gitlab.redox-os.org/andypython/object.git";
-      git = "https://gitlab.redox-os.org/andypython/object.git";
+      url = "git+https://gitlab.redox-os.org/andypython/object?branch=new";
+      git = "https://gitlab.redox-os.org/andypython/object";
+      branch = "new";
     }
     {
-      url = "https://gitlab.redox-os.org/redox-os/syscall.git?branch=master";
-      git = "https://gitlab.redox-os.org/redox-os/syscall.git";
-      branch = "master";
+      url = "git+https://gitlab.redox-os.org/redox-os/kernel/";
+      git = "https://gitlab.redox-os.org/redox-os/kernel/";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/redox-rings.git";
+      git = "https://gitlab.redox-os.org/redox-os/redox-rings.git";
+    }
+    {
+      url = "git+https://gitlab.redox-os.org/redox-os/redox-buffer-pool.git";
+      git = "https://gitlab.redox-os.org/redox-os/redox-buffer-pool.git";
     }
   ];
 
@@ -207,10 +161,6 @@ pkgs.stdenv.mkDerivation {
       ${vendor.mkCargoConfig { inherit gitSources; }}
     EOF
 
-      substituteInPlace Makefile \
-        --replace-quiet 'git submodule sync --recursive' 'true' \
-        --replace-quiet 'git submodule update --init --recursive' 'true'
-
       runHook postConfigure
   '';
 
@@ -220,7 +170,7 @@ pkgs.stdenv.mkDerivation {
     export CARGO="cargo"
     export HOME=$(mktemp -d)
 
-    make -j$NIX_BUILD_CORES all
+    make -j$NIX_BUILD_CORES ${llvmMakeFlags} all
 
     runHook postBuild
   '';
@@ -232,7 +182,7 @@ pkgs.stdenv.mkDerivation {
     mkdir -p $out/${redoxTarget}/include
     mkdir -p $out/${redoxTarget}/lib/rustlib/${redoxTarget}/lib
 
-    make DESTDIR=$out/${redoxTarget} PREFIX="" install
+    make ${llvmMakeFlags} DESTDIR=$out/${redoxTarget} PREFIX="" install
     cp -r target/${redoxTarget}/include/* $out/${redoxTarget}/include/ 2>/dev/null || true
     cp target/${redoxTarget}/release/deps/*.rlib $out/${redoxTarget}/lib/rustlib/${redoxTarget}/lib/ 2>/dev/null || true
 

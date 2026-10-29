@@ -1,6 +1,5 @@
-diff -ruN a/src/header/stdlib/mod.rs b/src/header/stdlib/mod.rs
---- a/src/header/stdlib/mod.rs	2026-03-13 12:36:26.879218743 -0400
-+++ b/src/header/stdlib/mod.rs	2026-03-13 12:36:26.932296919 -0400
+--- a/src/header/stdlib/mod.rs
++++ b/src/header/stdlib/mod.rs
 @@ -2,7 +2,7 @@
  //!
  //! See <https://pubs.opengroup.org/onlinepubs/9799919799/basedefs/stdlib.h.html>.
@@ -8,9 +7,9 @@ diff -ruN a/src/header/stdlib/mod.rs b/src/header/stdlib/mod.rs
 -use core::{convert::TryFrom, intrinsics, iter, mem, ptr, slice};
 +use core::{convert::TryFrom, iter, mem, ptr, slice};
  use rand::{
-     Rng, SeedableRng,
-     distributions::{Alphanumeric, Distribution, Uniform},
-@@ -116,8 +116,12 @@
+     RngExt, SeedableRng,
+     distr::{Alphanumeric, Distribution, Uniform},
+@@ -118,8 +118,12 @@
  /// See <https://pubs.opengroup.org/onlinepubs/9799919799/functions/abort.html>.
  #[unsafe(no_mangle)]
  pub unsafe extern "C" fn abort() -> ! {

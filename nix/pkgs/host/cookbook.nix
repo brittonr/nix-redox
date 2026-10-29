@@ -19,15 +19,6 @@ craneLib.buildPackage {
 
   cargoExtraArgs = "--locked";
 
-  nativeBuildInputs = with pkgs; [
-    pkg-config
-  ];
-
-  buildInputs = with pkgs; [
-    openssl
-    fuse
-  ];
-
   # Enable unit tests only (cookbook may have network-dependent tests)
   doCheck = true;
   cargoTestExtraArgs = "--lib";

@@ -4,7 +4,7 @@
 # Required by: LLVM, Clang, LLD, cmake (all written in C++)
 #
 # Source: Redox fork of LLVM at gitlab.redox-os.org/redox-os/llvm-project
-# Branch: redox-2025-10-03 (based on llvmorg-21.1.2)
+# Branch: redox-2025-10-03, latest upstream fork commit 9c9daa44 (LLVM 21.1.2).
 #
 # Uses the unified runtimes build (cmake -S runtimes) with Makefiles
 # (Ninja has duplicate target conflicts with libc++abi.a).
@@ -34,18 +34,21 @@ let
 
   src = pkgs.fetchgit {
     url = "https://gitlab.redox-os.org/redox-os/llvm-project.git";
-    rev = "250d0b022e5ae323f57659a1063bb40728f3629c";
-    hash = "sha256-6xgLcStJRJGluK8SZvGndacqQp6YKmjoPGk3Zg/mBc0=";
+    rev = "9c9daa44c511740a37eff408c46c2553885625ca";
+    hash = "sha256-LtdjcUWLJCEcuBOCy+a/ybtZzBPRdqNeJ2NyXfcxNo4=";
     fetchSubmodules = false;
+    # Identical checkout to llvm-redox: reuse the same fixed-output source.
     sparseCheckout = [
+      "llvm"
+      "clang"
+      "lld"
+      "cmake"
+      "third-party"
       "libcxx"
       "libcxxabi"
       "libunwind"
       "libc"
       "runtimes"
-      "cmake"
-      "llvm/cmake"
-      "llvm/utils/llvm-lit"
     ];
   };
 

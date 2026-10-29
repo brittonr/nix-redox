@@ -13,7 +13,7 @@
 
 craneLib.buildPackage {
   pname = "redoxfs";
-  version = "unstable";
+  version = "0.9.1";
 
   src = pkgs.applyPatches {
     inherit src;

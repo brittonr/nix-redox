@@ -419,6 +419,17 @@ let
       type = { scheme = "rand" }
     '';
 
+    "00_udsd.service" = ''
+      [unit]
+      description = "Unix domain sockets"
+      default_dependencies = false
+      requires_weak = ["00_randd.service"]
+
+      [service]
+      cmd = "udsd"
+      type = "notify"
+    '';
+
     "00_rtcd.service" = ''
       [unit]
       description = "RTC"
@@ -593,6 +604,7 @@ let
     "00_zerod.service"
     "00_randd.service"
     "00_rtcd.service"
+    "00_udsd.service"
     "ramfs@logging.service"
   ];
 

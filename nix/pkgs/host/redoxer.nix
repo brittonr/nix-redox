@@ -4,8 +4,7 @@
 # Downloads/manages a Redox disk image and runs programs inside it via KVM.
 # Runs on the host (Linux), not on Redox.
 #
-# Dependencies: redox_installer, redoxfs, redox_syscall, redox-pkg,
-#   tempfile, proc-mounts, toml (all from crates.io)
+# Includes the upstream cli-pkg and cli-exec features, with fuser/libc for FUSE.
 #
 # Source: gitlab.redox-os.org/redox-os/redoxer
 
