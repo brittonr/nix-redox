@@ -1,0 +1,293 @@
+diff --git a/src/mount/redox/resource.rs b/src/mount/redox/resource.rs
+index edb3099..a9374c7 100644
+--- a/src/mount/redox/resource.rs
++++ b/src/mount/redox/resource.rs
+@@ -16,13 +16,19 @@ use syscall::{EBADFD, ENOENT, PAGE_SIZE};
+
+ use crate::{Disk, Node, Transaction, TreePtr, BLOCK_SIZE};
+
+-pub type Fmaps = BTreeMap<u32, FileMmapInfo>;
++pub type Fmaps = BTreeMap<u64, FileMmapInfo>;
+
+ pub trait Resource<D: Disk> {
+     fn parent_ptr_opt(&self) -> Option<TreePtr<Node>>;
+
+     fn node_ptr(&self) -> TreePtr<Node>;
+
++    /// Key of this inode instance's fmap entry. Node ids are recycled after
++    /// unlink, so this must not be the node id itself.
++    fn fmap_id(&self) -> u64;
++
++    fn set_fmap_id(&mut self, id: u64);
++
+     fn uid(&self) -> u32;
+
+     fn set_path(&mut self, path: &str);
+@@ -168,6 +174,7 @@ pub struct DirResource {
+     node_ptr: TreePtr<Node>,
+     data: Option<Vec<Entry>>,
+     uid: u32,
++    fmap_id: u64,
+ }
+
+ impl DirResource {
+@@ -184,6 +191,7 @@ impl DirResource {
+             node_ptr,
+             data,
+             uid,
++            fmap_id: 0,
+         }
+     }
+ }
+@@ -197,6 +205,14 @@ impl<D: Disk> Resource<D> for DirResource {
+         self.node_ptr
+     }
+
++    fn fmap_id(&self) -> u64 {
++        self.fmap_id
++    }
++
++    fn set_fmap_id(&mut self, id: u64) {
++        self.fmap_id = id;
++    }
++
+     fn uid(&self) -> u32 {
+         self.uid
+     }
+@@ -415,6 +431,7 @@ pub struct FileResource {
+     node_ptr: TreePtr<Node>,
+     flags: usize,
+     uid: u32,
++    fmap_id: u64,
+ }
+
+ #[derive(Debug)]
+@@ -454,6 +471,10 @@ impl Drop for FileMmapInfo {
+     fn drop(&mut self) {
+         if self.in_use() {
+             log::error!("FileMmapInfo dropped while in use");
++        } else if !self.base.is_null() {
++            if let Err(e) = unsafe { libredox::call::munmap(self.base as *mut _, self.size) } {
++                log::error!("Munmap error {e}");
++            }
+         }
+     }
+ }
+@@ -472,6 +493,7 @@ impl FileResource {
+             node_ptr,
+             flags,
+             uid,
++            fmap_id: 0,
+         }
+     }
+ }
+@@ -485,6 +507,14 @@ impl<D: Disk> Resource<D> for FileResource {
+         self.node_ptr
+     }
+
++    fn fmap_id(&self) -> u64 {
++        self.fmap_id
++    }
++
++    fn set_fmap_id(&mut self, id: u64) {
++        self.fmap_id = id;
++    }
++
+     fn uid(&self) -> u32 {
+         self.uid
+     }
+@@ -503,7 +533,7 @@ impl<D: Disk> Resource<D> for FileResource {
+         if self.flags & O_ACCMODE != O_RDWR && self.flags & O_ACCMODE != O_RDONLY {
+             return Err(Error::new(EBADF));
+         }
+-        if let Some(fmap_info) = fmaps.get_mut(&self.node_ptr.id()) {
++        if let Some(fmap_info) = fmaps.get_mut(&self.fmap_id) {
+             if !fmap_info.base.is_null() {
+                 let requested_end = offset + buf.len() as u64;
+                 let mut next_offset = offset;
+@@ -557,7 +587,7 @@ impl<D: Disk> Resource<D> for FileResource {
+         } else {
+             offset
+         };
+-        if let Some(fmap_info) = fmaps.get_mut(&self.node_ptr.id()) {
++        if let Some(fmap_info) = fmaps.get_mut(&self.fmap_id) {
+             fmap_info.version += 1;
+         }
+         let mtime = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+@@ -601,7 +631,7 @@ impl<D: Disk> Resource<D> for FileResource {
+         // TODO: Pass entry directory to Resource trait functions, since the node_ptr can be
+         // obtained by the caller.
+         let fmap_info = fmaps
+-            .get_mut(&self.node_ptr.id())
++            .get_mut(&self.fmap_id)
+             .ok_or(Error::new(EBADFD))?;
+
+         if !fmap_info.in_use() {
+@@ -682,7 +712,7 @@ impl<D: Disk> Resource<D> for FileResource {
+         tx: &mut Transaction<D>,
+     ) -> Result<()> {
+         let fmap_info = fmaps
+-            .get_mut(&self.node_ptr.id())
++            .get_mut(&self.fmap_id)
+             .ok_or(Error::new(EBADFD))?;
+
+         //dbg!(&self.fmaps);
+@@ -718,13 +748,10 @@ impl<D: Disk> Resource<D> for FileResource {
+
+             // if this fmap version is outdated it's no use
+             if fmap_info.stale() {
+-                let fmap = fmaps
+-                    .remove(&self.node_ptr.id())
++                let _fmap = fmaps
++                    .remove(&self.fmap_id)
+                     .expect("fmap_info must exist");
+-
+-                if let Err(e) = unsafe { libredox::call::munmap(fmap.base as *mut _, fmap.size) } {
+-                    log::error!("Munmap error {e}");
+-                }
++                // FileMmapInfo::drop unmaps the anonymous base.
+             }
+         }
+
+@@ -747,7 +774,7 @@ impl<D: Disk> Resource<D> for FileResource {
+     }
+
+     fn sync(&mut self, fmaps: &mut Fmaps, tx: &mut Transaction<D>) -> Result<()> {
+-        if let Some(fmap_info) = fmaps.get_mut(&self.node_ptr.id()) {
++        if let Some(fmap_info) = fmaps.get_mut(&self.fmap_id) {
+             for (range, fmap) in fmap_info.ranges.iter_mut() {
+                 unsafe {
+                     fmap.sync(
+diff --git a/src/mount/redox/scheme.rs b/src/mount/redox/scheme.rs
+index c88dffd..1c312c1 100644
+--- a/src/mount/redox/scheme.rs
++++ b/src/mount/redox/scheme.rs
+@@ -43,6 +43,11 @@ pub struct FileScheme<'sock, D: Disk> {
+     next_id: AtomicUsize,
+     handles: BTreeMap<usize, Handle<D>>,
+     fmap: super::resource::Fmaps,
++    /// Current fmap entry key per node id. Node ids are recycled by RedoxFS
++    /// after unlink; removing the entry here makes a recycled id use a fresh
++    /// anonymous base instead of the previous file's pages.
++    node_fmap_ids: BTreeMap<u32, u64>,
++    next_fmap_id: u64,
+
+     // Map of file id to other scheme's file descriptor.
+     other_scheme_fd_map: BTreeMap<u32, Fd>,
+@@ -65,6 +70,8 @@ impl<'sock, D: Disk> FileScheme<'sock, D> {
+             next_id: AtomicUsize::new(1),
+             handles: BTreeMap::new(),
+             fmap: BTreeMap::new(),
++            node_fmap_ids: BTreeMap::new(),
++            next_fmap_id: 1,
+             other_scheme_fd_map: BTreeMap::new(),
+             proc_creds_capability: {
+                 libredox::Fd::open(
+@@ -76,6 +83,16 @@ impl<'sock, D: Disk> FileScheme<'sock, D> {
+         })
+     }
+
++    fn fmap_id_for(&mut self, node_id: u32) -> u64 {
++        if let Some(&id) = self.node_fmap_ids.get(&node_id) {
++            return id;
++        }
++        let id = self.next_fmap_id;
++        self.next_fmap_id += 1;
++        self.node_fmap_ids.insert(node_id, id);
++        id
++    }
++
+     fn resolve_symlink(
+         scheme_name: &str,
+         tx: &mut Transaction<D>,
+@@ -178,7 +195,7 @@ impl<'sock, D: Disk> FileScheme<'sock, D> {
+             .fs
+             .tx(|tx| Self::path_nodes(scheme_name, tx, start_ptr, path, uid, gid, &mut nodes))?;
+         let parent_ptr_opt = nodes.last().map(|x| x.0.ptr());
+-        let resource: Box<dyn Resource<D>> = match node_opt {
++        let mut resource: Box<dyn Resource<D>> = match node_opt {
+             Some((node, _node_name)) => {
+                 if flags & (O_CREAT | O_EXCL) == O_CREAT | O_EXCL {
+                     return Err(Error::new(EEXIST));
+@@ -357,10 +374,12 @@ impl<'sock, D: Disk> FileScheme<'sock, D> {
+         };
+
+         let node_ptr = resource.node_ptr();
++        let fmap_id = self.fmap_id_for(node_ptr.id());
++        resource.set_fmap_id(fmap_id);
+         {
+             let fmap_info = self
+                 .fmap
+-                .entry(node_ptr.id())
++                .entry(fmap_id)
+                 .or_insert_with(FileMmapInfo::new);
+             if !fmap_info.in_use() {
+                 // Notify filesystem of open
+@@ -445,6 +464,9 @@ impl<'sock, D: Disk> FileScheme<'sock, D> {
+         };
+
+         let _ = self.other_scheme_fd_map.remove(&node_id);
++        // The node id is now free for reuse; the current mappings keep their
++        // own fmap entry via FileResource::fmap_id.
++        self.node_fmap_ids.remove(&node_id);
+
+         Ok(())
+     }
+@@ -1028,7 +1050,8 @@ impl<'sock, D: Disk> SchemeSync for FileScheme<'sock, D> {
+             return;
+         };
+         let node_ptr = file.node_ptr();
+-        let Some(file_info) = self.fmap.get_mut(&node_ptr.id()) else {
++        let fmap_id = file.fmap_id();
++        let Some(file_info) = self.fmap.get_mut(&fmap_id) else {
+             return;
+         };
+
+@@ -1037,17 +1060,19 @@ impl<'sock, D: Disk> SchemeSync for FileScheme<'sock, D> {
+             .checked_sub(1)
+             .expect("open_fds not tracked correctly");
+
++        let unused = !file_info.in_use();
+         // Check if node no longer in use
+-        if !file_info.in_use() {
++        if unused {
+             // Notify filesystem of close
+             if let Err(err) = self.fs.tx(|tx| tx.on_close_node(node_ptr)) {
+                 log::error!("failed to close node {}: {}", node_ptr.id(), err);
+             }
+
+-            /*TODO: leaks memory, but why?
+-            // Remove from fmap list
+-            self.fmap.remove(&node_ptr.id());
+-            */
++            // Release the anonymous base; FileMmapInfo::drop unmaps it.
++            self.fmap.remove(&fmap_id);
++            if self.node_fmap_ids.get(&node_ptr.id()).copied() == Some(fmap_id) {
++                self.node_fmap_ids.remove(&node_ptr.id());
++            }
+         }
+     }
+
+@@ -1096,7 +1121,7 @@ impl<'sock, D: Disk> SchemeSync for FileScheme<'sock, D> {
+             }
+         }
+
+-        let (resource, node_id): (Box<dyn Resource<D>>, u32) = if !last_part.is_empty() {
++        let (mut resource, node_id): (Box<dyn Resource<D>>, u32) = if !last_part.is_empty() {
+             let stat = other_scheme_fd.stat()?;
+             let mode_type = stat.st_mode as u16 & Node::MODE_TYPE;
+
+@@ -1142,10 +1167,12 @@ impl<'sock, D: Disk> SchemeSync for FileScheme<'sock, D> {
+         };
+
+         let node_ptr = resource.node_ptr();
++        let fmap_id = self.fmap_id_for(node_ptr.id());
++        resource.set_fmap_id(fmap_id);
+         {
+             let fmap_info = self
+                 .fmap
+-                .entry(node_ptr.id())
++                .entry(fmap_id)
+                 .or_insert_with(FileMmapInfo::new);
+             if !fmap_info.in_use() {
+                 // Notify filesystem of open
