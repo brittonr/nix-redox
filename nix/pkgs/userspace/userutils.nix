@@ -1,9 +1,9 @@
 # Userutils - User management utilities for Redox OS
 #
-# Provides: getty, login, passwd, su, sudo, id, useradd, userdel, usermod,
+# Provides: login, passwd, su, sudo, id, useradd, userdel, usermod,
 #           groupadd, groupdel, groupmod
 #
-# getty is critical for terminal login - it opens and initializes TTY lines
+# Getty is now provided by the base workspace.
 #
 # This package uses crane vendoring for the userutils source, with git
 # dependencies handled via cargo config source replacement.
@@ -19,9 +19,6 @@
   stubLibs,
   vendor,
   userutils-src,
-  termion-src,
-  orbclient-src,
-  libredox-src,
   ...
 }:
 
@@ -37,53 +34,10 @@ let
       ;
   };
 
-  # Python script to clean Cargo.lock (stored as separate file to avoid Nix escaping issues)
-  cleanLockScript = pkgs.writeText "clean-cargo-lock.py" ''
-    import re
-    import sys
-
-    with open(sys.argv[1], 'r') as f:
-        content = f.read()
-
-    # Remove the redox-rt package entry (matches [[package]] block with name = "redox-rt")
-    pattern = r'\[\[package\]\]\s*\n(?:(?!\[\[).*\n)*?name = "redox-rt"(?:(?!\[\[).*\n)*'
-    content = re.sub(pattern, "", content)
-
-    # Also remove generic-rt (part of relibc)
-    pattern = r'\[\[package\]\]\s*\n(?:(?!\[\[).*\n)*?name = "generic-rt"(?:(?!\[\[).*\n)*'
-    content = re.sub(pattern, "", content)
-
-    # DON'T remove checksums - crane needs them for crates.io packages
-
-    with open(sys.argv[1], 'w') as f:
-        f.write(content)
-  '';
-
-  # Patch userutils source to remove problematic git dependencies
-  # The redox-rt dependency causes vendoring issues (relative path includes)
-  # We use -Z build-std which provides the runtime
-  patchedUserutilsSrc =
-    pkgs.runCommand "userutils-patched"
-      {
-        nativeBuildInputs = [ pkgs.python3 ];
-      }
-      ''
-        cp -r ${userutils-src} $out
-        chmod -R u+w $out
-
-        # Remove the redox-rt target dependency (provided by -Z build-std)
-        sed -i '/\[target.*cfg.*redox.*dependencies\]/,/^\[/{ /redox-rt/d }' $out/Cargo.toml
-
-        # Remove the [patch.crates-io] section entirely - we use vendored syscall
-        sed -i '/\[patch\.crates-io\]/,$d' $out/Cargo.toml
-
-        # Use Python to properly remove redox-rt package from Cargo.lock
-        python3 ${cleanLockScript} $out/Cargo.lock
-      '';
 
   # Vendor using crane (handles complex git deps)
   userutilsVendor = craneLib.vendorCargoDeps {
-    src = patchedUserutilsSrc;
+    src = userutils-src;
   };
 
   # Create merged vendor directory (cached as separate derivation)
@@ -94,35 +48,16 @@ let
     useCrane = true;
   };
 
-  # Git source mappings for cargo config
+  # Match the git source identities in upstream Cargo.lock, including the
+  # syscall revision carried by upstream's kernel patch.
   gitSources = [
-    {
-      url = "git+https://gitlab.redox-os.org/redox-os/libredox.git";
-      git = "https://gitlab.redox-os.org/redox-os/libredox.git";
-    }
-    {
-      url = "git+https://gitlab.redox-os.org/redox-os/termion.git";
-      git = "https://gitlab.redox-os.org/redox-os/termion.git";
-    }
-    {
-      url = "git+https://gitlab.redox-os.org/redox-os/orbclient.git";
-      git = "https://gitlab.redox-os.org/redox-os/orbclient.git";
-    }
-    {
-      url = "git+https://gitlab.redox-os.org/redox-os/users.git";
-      git = "https://gitlab.redox-os.org/redox-os/users.git";
-    }
     {
       url = "git+https://gitlab.redox-os.org/redox-os/libextra.git";
       git = "https://gitlab.redox-os.org/redox-os/libextra.git";
     }
     {
-      url = "git+https://gitlab.redox-os.org/redox-os/liner.git";
-      git = "https://gitlab.redox-os.org/redox-os/liner.git";
-    }
-    {
-      url = "git+https://gitlab.redox-os.org/redox-os/redox-scheme.git";
-      git = "https://gitlab.redox-os.org/redox-os/redox-scheme.git";
+      url = "git+https://gitlab.redox-os.org/redox-os/kernel.git";
+      git = "https://gitlab.redox-os.org/redox-os/kernel.git";
     }
   ];
 
@@ -148,7 +83,7 @@ pkgs.stdenv.mkDerivation {
   configurePhase = ''
     runHook preConfigure
 
-    cp -r ${patchedUserutilsSrc}/* .
+    cp -r ${userutils-src}/* .
     chmod -R u+w .
 
     # Use pre-merged vendor directory
@@ -176,15 +111,13 @@ pkgs.stdenv.mkDerivation {
     export ${rustFlags.cargoEnvVar}="${rustFlags.userRustFlags} -L ${stubLibs}/lib"
 
     # Build userutils binaries individually (cargo build --bin).
-    # su and sudo get redox-rt symbols through relibc static linkage,
-    # not as a Cargo dependency (which is stripped for vendoring).
-    for bin in getty login passwd id su sudo useradd userdel usermod groupadd groupdel groupmod; do
+    for bin in login passwd id su sudo useradd userdel usermod groupadd groupdel groupmod; do
       echo "Building $bin..."
       cargo build \
         --target ${redoxTarget} \
         --release \
         --bin $bin \
-        ${lib.concatStringsSep " \\\n        " rustFlags.buildStdArgs} || echo "Warning: $bin failed to build"
+        ${lib.concatStringsSep " \\\n        " rustFlags.buildStdArgs}
     done
 
     runHook postBuild
@@ -200,7 +133,7 @@ pkgs.stdenv.mkDerivation {
   '';
 
   meta = with lib; {
-    description = "User management utilities (getty, login, passwd, su, sudo) for Redox OS";
+    description = "User management utilities (login, passwd, su, sudo) for Redox OS";
     homepage = "https://gitlab.redox-os.org/redox-os/userutils";
     license = licenses.mit;
   };

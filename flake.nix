@@ -52,7 +52,7 @@
     };
 
     kernel-src = {
-      url = "gitlab:redox-os/kernel/5865ec079006185f70e5a6480663aa1319ffb733?host=gitlab.redox-os.org";
+      url = "gitlab:redox-os/kernel/master?host=gitlab.redox-os.org";
       flake = false;
     };
 
@@ -93,24 +93,8 @@
       flake = false;
     };
 
-    compiler-builtins-src = {
-      url = "gitlab:redox-os/compiler-builtins/relibc_fix_dup_symbols?host=gitlab.redox-os.org";
-      flake = false;
-    };
-
     dlmalloc-rs-src = {
       url = "gitlab:redox-os/dlmalloc-rs/main?host=gitlab.redox-os.org";
-      flake = false;
-    };
-
-    # relibc cargo patches
-    cc-rs-src = {
-      url = "github:tea/cc-rs/riscv-abi-arch-fix";
-      flake = false;
-    };
-
-    redox-syscall-src = {
-      url = "gitlab:redox-os/syscall/master?host=gitlab.redox-os.org";
       flake = false;
     };
 
@@ -122,21 +106,15 @@
       flake = false;
     };
 
-    # kernel git dependency (for aarch64/riscv64)
+    # Bootloader/base device-tree dependency.
     fdt-src = {
       url = "github:repnop/fdt/2fb1409edd1877c714a0aa36b6a7c5351004be54";
       flake = false;
     };
 
-    # relibc object dependency
-    object-src = {
-      url = "gitlab:andypython/object/master?host=gitlab.redox-os.org";
-      flake = false;
-    };
-
-    # kernel submodules
-    rmm-src = {
-      url = "gitlab:redox-os/rmm/master?host=gitlab.redox-os.org";
+    # The current kernel requires the newer fdt pretty-printing API.
+    kernel-fdt-src = {
+      url = "github:repnop/fdt/8fa4388e056e48826e8898557a1c8600f9ee5d6a";
       flake = false;
     };
 
@@ -163,17 +141,9 @@
       flake = false;
     };
 
-    # base pinned to the commit orbital's Cargo.lock references. Orbital's
-    # graphics-ipc/inputd API (first_display returns a connector Handle, root
-    # re-exports) matches exactly this rev.
+    # Keep graphics-ipc/inputd at the exact base revision in Orbital's Cargo.lock.
     base-orbital-src = {
-      url = "gitlab:redox-os/base/698f90a064dc9921332b9ab84a7df1d79ff33b93?host=gitlab.redox-os.org";
-      flake = false;
-    };
-
-    # base git dependencies
-    liblibc-src = {
-      url = "gitlab:redox-os/liblibc/redox-0.2?host=gitlab.redox-os.org";
+      url = "gitlab:redox-os/base/c4f68cdce365713a9557c84a98642226ae62b073?host=gitlab.redox-os.org";
       flake = false;
     };
 
@@ -184,11 +154,6 @@
 
     rustix-redox-src = {
       url = "github:jackpot51/rustix/redox-ioctl";
-      flake = false;
-    };
-
-    drm-rs-src = {
-      url = "github:Smithay/drm-rs";
       flake = false;
     };
 
@@ -364,12 +329,6 @@
     # pkgar - package archive tool (Redox-native)
     pkgar-src = {
       url = "gitlab:redox-os/pkgar/master?host=gitlab.redox-os.org";
-      flake = false;
-    };
-
-    # ring - Redox fork with pregenerated assembly (needed by pkgutils, pkgar-repo)
-    ring-redox-src = {
-      url = "gitlab:redox-os/ring/redox-0.17.8?host=gitlab.redox-os.org";
       flake = false;
     };
 

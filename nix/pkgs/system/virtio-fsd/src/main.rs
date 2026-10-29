@@ -101,13 +101,8 @@ fn run_daemon(
     // Set up virtqueues:
     //   Queue 0: hiprio (high-priority, for FORGET etc.)
     //   Queue 1: request queue (normal FUSE operations)
-    let _hiprio_queue = device
-        .transport
-        .setup_queue(virtio_core::MSIX_PRIMARY_VECTOR, &device.irq_handle)?;
-
-    let request_queue = device
-        .transport
-        .setup_queue(virtio_core::MSIX_PRIMARY_VECTOR, &device.irq_handle)?;
+    let _hiprio_queue = device.setup_queue()?;
+    let request_queue = device.setup_queue()?;
 
     // Device is alive
     device.transport.run_device();

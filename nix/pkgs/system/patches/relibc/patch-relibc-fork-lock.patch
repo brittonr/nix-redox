@@ -1,87 +1,60 @@
---- a/src/platform/redox/mod.rs	2026-03-27 15:36:52.684966644 -0400
-+++ b/src/platform/redox/mod.rs	2026-03-27 15:37:13.698390360 -0400
-@@ -57,7 +57,7 @@
-     ld_so::tcb::OsSpecific,
-     out::Out,
-     platform::sys::timer::{timer_routine, timer_update_wake_time},
--    sync::{Mutex, rwlock::RwLock},
-+    sync::Mutex,
+--- a/src/platform/redox/mod.rs
++++ b/src/platform/redox/mod.rs
+@@ -64,7 +64,6 @@
+         },
+     },
+     pthread,
+-    sync::rwlock::RwLock,
  };
  
  pub use redox_rt::proc::FdGuard;
-@@ -105,7 +105,12 @@
-     }};
+@@ -98,7 +97,9 @@
+     Ok(Some(id.try_into().map_err(|_| Errno(EINVAL))?))
  }
  
 -static CLONE_LOCK: RwLock<()> = RwLock::new(());
-+// Yield-based RW lock for fork/clone serialization.
-+// Replaces futex-based RwLock which has a lost-wake bug on Redox:
-+// CoW address space duplication during fork copies futex_wait kernel
-+// state, causing futex_wake to target the wrong physical page.
-+// Values: 0 = unlocked, >0 = reader count, -1 = exclusive (fork)
++// Avoid futex waiters being copied across CoW during fork.
++// 0 = unlocked, positive = clone readers, -1 = exclusive fork.
 +static FORK_CLONE_LOCK: core::sync::atomic::AtomicI32 = core::sync::atomic::AtomicI32::new(0);
  
- /// Redox syscall implementation of the platform abstraction layer.
+ /// Redox syscall implementation of [`Pal`].
  pub struct Sys;
-@@ -432,10 +436,29 @@
+@@ -465,10 +466,15 @@
      }
  
      unsafe fn fork() -> Result<pid_t> {
 -        // TODO: Find way to avoid lock.
 -        let _guard = CLONE_LOCK.write();
-+        use core::sync::atomic::Ordering as AtomOrd;
- 
--        Ok(redox_rt::proc::fork_impl(&redox_rt::proc::ForkArgs::Managed)? as pid_t)
-+        // Acquire exclusive lock (writers block readers and other writers)
-+        loop {
-+            match FORK_CLONE_LOCK.compare_exchange_weak(
-+                0, -1, AtomOrd::Acquire, AtomOrd::Relaxed
-+            ) {
-+                Ok(_) => break,
-+                Err(_) => { let _ = syscall::sched_yield(); }
-+            }
+-
++        use core::sync::atomic::Ordering;
++        while FORK_CLONE_LOCK.compare_exchange_weak(
++            0, -1, Ordering::Acquire, Ordering::Relaxed,
++        ).is_err() {
++            let _ = syscall::sched_yield();
 +        }
-+
-+        let pid = redox_rt::proc::fork_impl(&redox_rt::proc::ForkArgs::Managed)? as pid_t;
-+
-+        if pid == 0 {
-+            // Child: only one thread, reset lock directly
-+            FORK_CLONE_LOCK.store(0, AtomOrd::Release);
-+        }
-+
-+        // Release exclusive lock
-+        FORK_CLONE_LOCK.store(0, AtomOrd::Release);
-+
-+        Ok(pid)
-     }
+         let r = redox_rt::proc::fork_impl(&redox_rt::proc::ForkArgs::Managed);
++        // Release in both processes, including the parent's error path.
++        FORK_CLONE_LOCK.store(0, Ordering::Release);
  
-     fn fstat(fildes: c_int, mut buf: Out<stat>) -> Result<()> {
-@@ -1046,9 +1069,27 @@
+         #[cfg(not(feature = "no_trace"))]
+         if !matches!(r, Ok(0)) {
+@@ -1060,8 +1066,18 @@
          stack: *mut usize,
          os_specific: &mut OsSpecific,
      ) -> Result<crate::pthread::OsTid> {
 -        let _guard = CLONE_LOCK.read();
-+        use core::sync::atomic::Ordering as AtomOrd;
-+
-+        // Acquire shared lock (readers block writers but not other readers)
++        use core::sync::atomic::Ordering;
 +        loop {
-+            let cur = FORK_CLONE_LOCK.load(AtomOrd::Relaxed);
-+            if cur >= 0 {
-+                match FORK_CLONE_LOCK.compare_exchange_weak(
-+                    cur, cur + 1, AtomOrd::Acquire, AtomOrd::Relaxed
-+                ) {
-+                    Ok(_) => break,
-+                    Err(_) => continue,
-+                }
++            let readers = FORK_CLONE_LOCK.load(Ordering::Relaxed);
++            if readers >= 0 && FORK_CLONE_LOCK.compare_exchange_weak(
++                readers, readers + 1, Ordering::Acquire, Ordering::Relaxed,
++            ).is_ok() {
++                break;
 +            }
 +            let _ = syscall::sched_yield();
 +        }
-+
          let res = unsafe { redox_rt::thread::rlct_clone_impl(stack, os_specific) };
++        FORK_CLONE_LOCK.fetch_sub(1, Ordering::Release);
  
-+        // Release shared lock
-+        FORK_CLONE_LOCK.fetch_sub(1, AtomOrd::Release);
-+
          res.map(|thread_fd| crate::pthread::OsTid { thread_fd })
              .map_err(|error| Errno(error.errno))
-     }

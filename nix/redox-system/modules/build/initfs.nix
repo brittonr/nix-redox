@@ -32,9 +32,7 @@ hostPkgs.stdenv.mkDerivation {
     ''}
 
     ${lib.optionalString (pkgs ? userutils) ''
-      for bin in getty login; do
-        [ -f ${pkgs.userutils}/bin/$bin ] && cp ${pkgs.userutils}/bin/$bin initfs/bin/
-      done
+      [ -f ${pkgs.userutils}/bin/login ] && cp ${pkgs.userutils}/bin/login initfs/bin/
     ''}
 
     ${lib.concatStringsSep "\n" (

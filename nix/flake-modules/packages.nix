@@ -165,7 +165,7 @@ let
   sodium = import ../pkgs/userspace/sodium.nix (
     standaloneCommon
     // {
-      inherit (inputs) sodium-src orbclient-src;
+      inherit (inputs) sodium-src;
     }
   );
 
@@ -180,17 +180,8 @@ let
       inherit craneLib;
       inherit (inputs)
         orbital-src
-        orbclient-src
-        orbfont-src
-        orbimage-src
-        libredox-src
-        relibc-src
-        liblibc-src
         rustix-redox-src
-        drm-rs-src
         redox-log-src
-        redox-syscall-src
-        redox-scheme-src
         base-orbital-src
         ;
     }
@@ -199,14 +190,7 @@ let
   orbterm = import ../pkgs/userspace/orbterm.nix (
     standaloneCommon
     // {
-      inherit (inputs)
-        orbterm-src
-        orbclient-src
-        orbfont-src
-        orbimage-src
-        libredox-src
-        relibc-src
-        ;
+      inherit (inputs) orbterm-src;
     }
   );
 
@@ -221,12 +205,7 @@ let
     standaloneCommon
     // {
       inherit craneLib;
-      inherit (inputs)
-        userutils-src
-        termion-src
-        orbclient-src
-        libredox-src
-        ;
+      inherit (inputs) userutils-src;
     }
   );
 
@@ -479,32 +458,17 @@ let
       # absolute /nix/store paths. Pure evaluation can't resolve those from
       # the JSON, so we override src per crate to point to flake inputs.
       externalSrcOverrides = {
-        fdt = _: {
-          src = inputs.fdt-src;
+        redox-ioctl = _: {
+          src = inputs.relibc-src + "/redox-ioctl";
+        };
+        orbclient = _: {
+          src = inputs.orbclient-src;
+        };
+        redox-scheme = _: {
+          src = inputs.redox-scheme-src;
         };
         redox-log = _: {
           src = inputs.redox-log-src;
-        };
-        drm = _: {
-          src = inputs.drm-rs-src;
-        };
-        drm-ffi = _: {
-          src = inputs.drm-rs-src + "/drm-ffi";
-        };
-        drm-sys = _: {
-          src = inputs.drm-rs-src + "/drm-ffi/drm-sys";
-        };
-        # redox-rt uses `#[path = "../../src/platform/auxv_defs.rs"]` so it
-        # needs the full relibc source tree, not just its subdirectory.
-        # buildRustCrate unpacks into a flat dir and compiles from there,
-        # so we give it the whole tree and set workspace_member to navigate.
-        generic-rt = _: {
-          src = inputs.relibc-src;
-          workspace_member = "generic-rt";
-        };
-        redox-rt = _: {
-          src = inputs.relibc-src;
-          workspace_member = "redox-rt";
         };
         # xhcid sub-driver paths handled by patch-xhcid-driver-paths.py in base-src patching.
         # acpi: Full Match opcode implementation for Intel N100 DSDT tables.
@@ -513,42 +477,6 @@ let
         acpi = _: {
           postPatch = ''
             ${pkgs.python3}/bin/python3 ${../pkgs/patches/patch-acpi-match-opcode.py} .
-          '';
-        };
-        # The per-crate graph uses the newer acpi git source from the generated
-        # build plan. That source collapsed Local/Arg/Index/Named into
-        # LocalOrArg/RefOf, while the monolithic fallback still builds against
-        # the older redox-6.x API. Keep this compatibility shim per-crate only.
-        amlserde = _: {
-          postPatch = ''
-            sed -i \
-              -e 's/ReferenceKind::Local => AmlSerdeReferenceKind::Local,/ReferenceKind::LocalOrArg => AmlSerdeReferenceKind::Local,/' \
-              -e '/ReferenceKind::Arg => AmlSerdeReferenceKind::Arg,/d' \
-              -e '/ReferenceKind::Index => AmlSerdeReferenceKind::Index,/d' \
-              -e '/ReferenceKind::Named => AmlSerdeReferenceKind::Named,/d' \
-              -e 's/AmlSerdeReferenceKind::Local => ReferenceKind::Local,/AmlSerdeReferenceKind::Local | AmlSerdeReferenceKind::Arg => ReferenceKind::LocalOrArg,/' \
-              -e '/AmlSerdeReferenceKind::Arg => ReferenceKind::Arg,/d' \
-              -e 's/AmlSerdeReferenceKind::Index => ReferenceKind::Index,/AmlSerdeReferenceKind::Index | AmlSerdeReferenceKind::Named => ReferenceKind::RefOf,/' \
-              -e '/AmlSerdeReferenceKind::Named => ReferenceKind::Named,/d' \
-              src/lib.rs
-            grep -q 'ReferenceKind::LocalOrArg' src/lib.rs
-            if grep -q 'ReferenceKind::Local =>' src/lib.rs; then
-              echo 'amlserde still references old ReferenceKind::Local' >&2
-              exit 1
-            fi
-          '';
-        };
-        # The per-crate graph resolves ipcd against rand 0.8, where make_rng()
-        # is absent and next_u64() is provided by RngCore. The monolithic
-        # fallback currently resolves rand 0.10, so keep this shim per-crate.
-        ipcd = _: {
-          postPatch = ''
-            substituteInPlace src/uds/dgram.rs \
-              --replace-fail 'use rand::Rng;' 'use rand::{Rng, RngCore, SeedableRng};' \
-              --replace-fail 'rng: rand::make_rng(),' 'rng: SmallRng::from_entropy(),'
-            sed -i '/use rand::prelude::\*/a use rand::SeedableRng;' src/uds/stream.rs
-            substituteInPlace src/uds/stream.rs \
-              --replace-fail 'rng: rand::make_rng(),' 'rng: SmallRng::from_entropy(),'
           '';
         };
       };
@@ -573,8 +501,10 @@ let
         "bcm2835-sdhcid"
         "e1000d"
         "fbbootlogd"
+        "drawbench"
         "fbcond"
         "hwd"
+        "getty"
         "ided"
         "ihdad"
         "ihdgd"
@@ -585,6 +515,7 @@ let
         "lived"
         "logd"
         "nvmed"
+        "nbdd"
         "pcid"
         "pcid-spawner"
         "ps2d"
@@ -598,6 +529,7 @@ let
         "rtl8139d"
         "rtl8168d"
         "sb16d"
+        "udsd"
         "usbctl"
         "usbhidd"
         "usbhubd"
@@ -1252,7 +1184,7 @@ let
   # === Per-crate ion build (unit2nix) ===
   ionPerCrate = mkCrossPackage {
     pname = "ion-shell";
-    src = inputs.ion-src;
+    src = modularPkgs.userspace.ion.src;
     plan = ../pkgs/userspace/ion-build-plan.json;
     member = "ion-shell";
     extraCrateOverrides = {
@@ -1304,36 +1236,12 @@ let
 
   # === Per-crate userutils build (unit2nix) ===
   #
-  # 12 binaries (getty, login, passwd, sudo, etc.)
-  # userutils has generic-rt and redox-rt from relibc as git deps — they're
-  # prefetched by unit2nix so no source overrides needed.
+  # Login and authentication utilities; getty belongs to base.
   userutilsPerCrate = mkCrossPackage {
     pname = "userutils";
     src = inputs.userutils-src;
     plan = ../pkgs/userspace/userutils-build-plan.json;
     member = "userutils";
-    extraCrateOverrides = {
-      # redox-rt uses #[path = "../../src/platform/auxv_defs.rs"] —
-      # needs full relibc source tree, not just the subDir.
-      redox-rt = _: {
-        src = inputs.relibc-src;
-        workspace_member = "redox-rt";
-      };
-      generic-rt = _: {
-        src = inputs.relibc-src;
-        workspace_member = "generic-rt";
-      };
-      # Upstream userutils hasn't been updated for the relibc API change
-      # where redox_rt::protocol was moved to redox_protocols (libredox).
-      # ProcCall now lives in libredox::protocol instead of redox_rt::protocol.
-      userutils = _: {
-        postPatch = ''
-          if [ -f src/bin/sudo.rs ]; then
-            sed -i 's|use redox_rt::protocol::ProcCall;|use libredox::protocol::ProcCall;|' src/bin/sudo.rs
-          fi
-        '';
-      };
-    };
   };
 
   # === Per-crate bootloader build (unit2nix) ===
@@ -1379,7 +1287,7 @@ let
   pkgutils = import ../pkgs/userspace/pkgutils.nix (
     standaloneCommon
     // {
-      inherit (inputs) pkgutils-src ring-redox-src;
+      inherit (inputs) pkgutils-src;
     }
   );
 
@@ -1416,7 +1324,7 @@ let
   };
 
   redox-kprofiling = import ../pkgs/host/kprofiling.nix {
-    inherit pkgs lib rustToolchain;
+    inherit pkgs lib;
     inherit (inputs) kprofiling-src;
   };
 

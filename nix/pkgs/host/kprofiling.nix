@@ -2,21 +2,15 @@
 #
 # Converts Redox kernel profiling data into perf script format.
 # Runs on the host (Linux), not on Redox.
-# Only dependency is anyhow. Requires nightly (#![feature(iter_next_chunk)]).
+# Builds the upstream profiling and binary size analysis tools.
 #
 # Source: gitlab.redox-os.org/redox-os/kprofiling
 
-{ pkgs, lib, kprofiling-src, rustToolchain, ... }:
+{ pkgs, lib, kprofiling-src, ... }:
 
-let
-  rustPlatform = pkgs.makeRustPlatform {
-    rustc = rustToolchain;
-    cargo = rustToolchain;
-  };
-in
-rustPlatform.buildRustPackage {
+pkgs.rustPlatform.buildRustPackage {
   pname = "redox-kprofiling";
-  version = "0.1.0";
+  version = "0.2.2";
   src = kprofiling-src;
 
   cargoHash = "sha256-wc5TDc1b7/+ctcDg6P0yuOlSgK5ukIjuer4mSGEayRc=";

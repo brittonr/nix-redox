@@ -9,10 +9,10 @@
 # regenerate bootstrap-Cargo.lock:
 #   1. Copy base-src bootstrap/ and initfs/ to a temp dir
 #   2. Patch bootstrap/Cargo.toml: replace redox-rt git dep with path to relibc-src/redox-rt
-#   3. Fix initfs workspace deps: plain.workspace=true → plain="0.2", remove [lints] workspace
-#   4. Run `cargo generate-lockfile` in the bootstrap dir
-#   5. Copy resulting Cargo.lock to nix/pkgs/infrastructure/bootstrap-Cargo.lock
-#   6. Update the vendor hash below (set dummy, build, get real hash from error)
+#   3. Replace initfs workspace dependencies with explicit versions; remove workspace lints
+#   4. Start from upstream bootstrap/Cargo.lock, dropping git sources for local redox-rt/generic-rt
+#   5. Resolve with Cargo, preserving upstream's locked kernel syscall revision
+#   6. Copy Cargo.lock here and refresh the vendor hash from the build's mismatch error
 # This avoids Nix FOD reference checks that fail when store paths appear in source.
 
 {
@@ -43,7 +43,7 @@ let
 
       # Patch redox-rt git dependency to use our relibc source
       substituteInPlace bootstrap/Cargo.toml \
-        --replace-quiet 'redox-rt = { git = "https://gitlab.redox-os.org/redox-os/relibc.git", default-features = false }' \
+        --replace-fail 'redox-rt = { git = "https://gitlab.redox-os.org/redox-os/relibc.git", default-features = false }' \
                        'redox-rt = { path = "${relibc-src}/redox-rt", default-features = false }'
 
       # Replace workspace-inherited dependencies with explicit versions.
@@ -57,61 +57,6 @@ let
 
       # Remove workspace lints inherited from base root (not available standalone)
       find initfs -name Cargo.toml -exec sed -i '/^\[lints\]$/,/^workspace = true$/d' {} +
-
-      # Fix linker script for page alignment (mprotect requires aligned addresses)
-      cat > bootstrap/src/x86_64.ld << 'LINKERSCRIPT'
-      ENTRY(_start)
-      OUTPUT_FORMAT(elf64-x86-64)
-
-      SECTIONS {
-        . = 4096 + 4096; /* Reserved for null page and initfs header */
-        __initfs_header = . - 4096;
-        . += SIZEOF_HEADERS;
-        . = ALIGN(4096);
-
-        .text : {
-          __text_start = .;
-          *(.text*)
-          . = ALIGN(4096);
-          __text_end = .;
-        }
-
-        . = ALIGN(4096);
-        .rodata : {
-          __rodata_start = .;
-          *(.rodata*)
-          *(.interp*)
-          . = ALIGN(4096);
-          __rodata_end = .;
-        }
-
-        . = ALIGN(4096);
-        .data : {
-          __data_start = .;
-          *(.got*)
-          *(.data*)
-          . = ALIGN(4096);
-
-          *(.tbss*)
-          . = ALIGN(4096);
-          *(.tdata*)
-          . = ALIGN(4096);
-
-          __bss_start = .;
-          *(.bss*)
-          . = ALIGN(4096);
-          __bss_end = .;
-        }
-
-        /DISCARD/ : {
-            *(.comment*)
-            *(.eh_frame*)
-            *(.gcc_except_table*)
-            *(.note*)
-            *(.rel.eh_frame*)
-        }
-      }
-    LINKERSCRIPT
 
       # Forward ptrace handle opens (trace, mem) from procmgr to kernel
       ${pkgs.python3}/bin/python3 ${../system/patches/bootstrap/patch-procmgr-ptrace-forward.py} .
@@ -189,6 +134,12 @@ pkgs.stdenv.mkDerivation {
     mkdir -p .cargo
     cat > .cargo/config.toml << 'CARGOCONF'
     ${vendor.mkCargoConfig {
+      gitSources = [
+        {
+          url = "git+https://gitlab.redox-os.org/redox-os/kernel/";
+          git = "https://gitlab.redox-os.org/redox-os/kernel/";
+        }
+      ];
       target = redoxTarget;
       linker = "ld.lld";
       panic = "abort";

@@ -18,9 +18,8 @@
   sysrootVendor,
   redoxTarget,
   kernel-src,
-  rmm-src,
   redox-path-src,
-  fdt-src,
+  kernel-fdt-src,
   vendor,
   ...
 }:
@@ -40,19 +39,9 @@ let
       "installPhase"
     ];
 
-    # Fix zeroed_phys_contiguous: initialize ALL 2^order frames and
-    # use bulk deallocate_p2frame on free (prevents buddy allocator corruption)
-    patches = [
-      ./patches/kernel/patch-kernel-p2frame-init.patch
-    ];
-
     nativeBuildInputs = [ pkgs.python3 pkgs.nasm ];
 
     postUnpack = ''
-      rm -rf $sourceRoot/rmm
-      cp -r ${rmm-src} $sourceRoot/rmm
-      chmod -R u+w $sourceRoot/rmm
-
       rm -rf $sourceRoot/redox-path
       cp -r ${redox-path-src} $sourceRoot/redox-path
       chmod -R u+w $sourceRoot/redox-path
@@ -62,8 +51,8 @@ let
       # Replace fdt git dependency with path (both Cargo.toml and Cargo.lock)
       if grep -q 'fdt = { git = "https://github.com/repnop/fdt.git"' Cargo.toml; then
         substituteInPlace Cargo.toml \
-          --replace-fail 'fdt = { git = "https://github.com/repnop/fdt.git", rev = "2fb1409edd1877c714a0aa36b6a7c5351004be54" }' \
-                         'fdt = { path = "${fdt-src}" }'
+          --replace-fail 'fdt = { git = "https://github.com/repnop/fdt.git", rev = "8fa4388e056e48826e8898557a1c8600f9ee5d6a", features = ["pretty-printing"] }' \
+                         'fdt = { path = "${kernel-fdt-src}", features = ["pretty-printing"] }'
         # Also fix Cargo.lock so cargo doesn't need to re-lock at build time
         # (the "Locking 1 package" step modifies Cargo.lock, changing mtimes
         # and invalidating cargo fingerprints in the two-phase build)
@@ -72,10 +61,6 @@ let
 
       # Restore ptrace proc: scheme handles (trace + mem)
       python3 ${./patches/kernel/patch-kernel-ptrace-proc-handles.py} .
-
-      # LAPIC timer for scheduling on KVM — Cloud Hypervisor doesn't
-      # deliver PIT interrupts when all CPUs are in HLT
-      python3 ${./patches/kernel/patch-kernel-lapic-timer.py} .
 
       # Native guest kernel rebuilds may not have a working nasm package.
       # Pre-generate trampoline blobs now and teach build.rs to use them when
@@ -148,6 +133,7 @@ let
       --target ${targetSpec} \
       --release \
       -Z build-std=core,alloc -Zbuild-std-features=compiler-builtins-mem \
+      -Z json-target-spec \
       -- \
       -C link-arg=-T -Clink-arg=linkers/${targetArch}.ld \
       -C link-arg=-z -Clink-arg=max-page-size=0x1000 \

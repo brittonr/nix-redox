@@ -25,7 +25,7 @@
 let
   # === Configuration (was config.nix) ===
   config = {
-    rustNightlyDate = "2025-10-03";
+    rustNightlyDate = "2026-05-24";
     targetArch = "x86_64";
     diskImageSize = 512;
     espSize = 200;
@@ -92,21 +92,14 @@ let
       installer-src
       redox-src
       openlibm-src
-      compiler-builtins-src
       dlmalloc-rs-src
-      cc-rs-src
-      redox-syscall-src
       redox-scheme-src
-      object-src
-      rmm-src
+      kernel-fdt-src
       redox-path-src
       fdt-src
       bootloader-src
       uefi-src
-      liblibc-src
       orbclient-src
-      rustix-redox-src
-      drm-rs-src
       redox-log-src
       ion-src
       helix-src

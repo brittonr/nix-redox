@@ -5,15 +5,13 @@
 # and applies the Redox fork's patches on top.
 #
 # Bootstrap stages:
-#   Stage 0: Host rustc (nightly-2025-10-03 from nixpkgs)
+#   Stage 0: explicitly supplied rustToolchain (nightly-2026-05-24)
 #   Stage 1: Built by stage 0, runs on host, can target Redox
 #   Stage 2: Built by stage 1, runs ON Redox, targets Redox
 #
-# Patches from: gitlab.redox-os.org/redox-os/rust branch redox-2025-10-03
-#   - available_parallelism: use sysconf(_SC_NPROCESSORS_ONLN) on Redox
-#   - Sysroot fallback to / (instead of panic when sysroot not found)
-#   - crt_static_allows_dylibs: true (upstream already correct, no patch needed)
-#   - CMAKE_SYSTEM_NAME for Redox as UnixPaths
+# Redox upstream: redox-2026-05-24, c879a53564d06bd0451d2ae767ccc5467bfffe7a.
+# Its LLVM submodule is 22.1, but bootstrap explicitly supports external LLVM >=21.
+# Use the latest real Redox LLVM 21.1.2 fork for both bootstrap hosts.
 #
 # LLVM: cross-compiled LLVM from llvm-redox.nix for stage 2,
 # host LLVM for stage 1. A wrapper script mimics llvm-config.
@@ -38,8 +36,7 @@ let
   sysroot = "${relibc}/${redoxTarget}";
 
   # Host LLVM (for stage 1 — builds run on the host)
-  hostLlvmDev = pkgs.llvmPackages.llvm.dev;
-  hostLlvmLib = pkgs.llvmPackages.llvm.lib;
+  hostLlvmDev = pkgs.llvmPackages_21.llvm.dev;
 
   # Cross compilation tools
   cc = "${pkgs.llvmPackages.clang-unwrapped}/bin/clang";
@@ -73,7 +70,7 @@ let
       # Intercept Rust's version script to add __relibc_init_ns_fd to exported
       # symbols. Without this, the version script's "local: *;" hides the symbol,
       # preventing ld_so from injecting the process namespace fd into .so files.
-      for arg in "''${ARGS[@]}"; do
+      for arg in "$@"; do
         case "$arg" in
           -Wl,--version-script=*)
             vs="''${arg#-Wl,--version-script=}"
@@ -188,28 +185,6 @@ let
       -fuse-ld=lld
   '';
 
-  # Pre-fetch ALL artifacts the bootstrap tries to download.
-  # The Nix sandbox has no network access, so these must be provided.
-  # Date 2025-09-27 comes from the stage0 manifest in the source tarball.
-  stage0Date = "2025-09-27";
-  stage0Artifacts = {
-    rustfmt = pkgs.fetchurl {
-      url = "https://static.rust-lang.org/dist/2025-09-27/rustfmt-nightly-x86_64-unknown-linux-gnu.tar.xz";
-      hash = "sha256-zZTiC0mFlkRCsIBFTCtii8tDWJjlC8LeVXmcxRzXXxY=";
-    };
-    rustc = pkgs.fetchurl {
-      url = "https://static.rust-lang.org/dist/2025-09-27/rustc-nightly-x86_64-unknown-linux-gnu.tar.xz";
-      hash = "sha256-KrF2BXg1+r1V5uI3KwNsJFvkTAcFGYVX7yoW0YfqlFc=";
-    };
-    rust-std = pkgs.fetchurl {
-      url = "https://static.rust-lang.org/dist/2025-09-27/rust-std-nightly-x86_64-unknown-linux-gnu.tar.xz";
-      hash = "sha256-Zy7GDtUOu/MLHhrdVnOBPSvRwwbz5BXv07Y20yHIUUs=";
-    };
-    cargo = pkgs.fetchurl {
-      url = "https://static.rust-lang.org/dist/2025-09-27/cargo-nightly-x86_64-unknown-linux-gnu.tar.xz";
-      hash = "sha256-5yHeY7rp+iIO+J8HqJ//ZUPVZF48JK93GpbV7i9wqUU=";
-    };
-  };
 
   # Fake llvm-config for the cross-compiled LLVM.
   # The Rust bootstrap calls llvm-config to get library/include paths.
@@ -219,6 +194,7 @@ let
     ARGS="$*"
 
     case "$ARGS" in
+      *--help*)      echo "Usage: llvm-config [--version --components --libs --cxxflags]" >&2 ;;
       *--version*)   echo "21.1.2" ;;
       *--prefix*)    echo "${redox-llvm}" ;;
       *--bindir*)    echo "${redox-llvm}/bin" ;;
@@ -229,7 +205,7 @@ let
       *--ldflags*)   echo "-L${redox-llvm}/lib" ;;
       *--system-libs*) echo "-L${redox-libcxx}/lib -lc++ -lc++abi -lunwind -lm -lpthread" ;;
       *--shared-mode*) echo "static" ;;
-      *--has-rtti*)  echo "NO" ;;
+      *--has-rtti*)  echo "YES" ;;
       *--assertion-mode*) echo "OFF" ;;
       *--build-mode*) echo "Release" ;;
       *--targets-built*) echo "X86" ;;
@@ -274,6 +250,7 @@ let
     target = ["x86_64-unknown-redox"]
     cargo = "${rustToolchain}/bin/cargo"
     rustc = "${rustToolchain}/bin/rustc"
+    rustfmt = "${rustToolchain}/bin/rustfmt"
     extended = true
     tools = ["cargo", "rustdoc"]
     submodules = false
@@ -319,12 +296,12 @@ let
 in
 pkgs.stdenv.mkDerivation {
   pname = "rustc-redox";
-  version = "nightly-2025-10-03";
+  version = "nightly-2026-05-24";
 
   # Official Rust nightly source tarball — includes vendored deps
   src = pkgs.fetchurl {
-    url = "https://static.rust-lang.org/dist/2025-10-03/rustc-nightly-src.tar.xz";
-    hash = "sha256-iKRQKhDquTdLzivsaTHfizmzFxEMh6twn67oAMBH5Po=";
+    url = "https://static.rust-lang.org/dist/2026-05-24/rustc-nightly-src.tar.xz";
+    hash = "sha256-5fLp0DIjgEx80B/Wtx3H6dw6kJcwUnq/QQbTeKHvRw0=";
   };
 
   dontFixup = true;
@@ -338,8 +315,8 @@ pkgs.stdenv.mkDerivation {
     llvmPackages.clang
     llvmPackages.bintools
     llvmPackages.lld
-    llvmPackages.llvm.dev
-    llvmPackages.llvm.lib
+    llvmPackages_21.llvm.dev
+    llvmPackages_21.llvm.lib
     gnumake
     file
     # Host libraries needed for stage 1 linking (via host LLVM)
@@ -356,15 +333,6 @@ pkgs.stdenv.mkDerivation {
     cd rustc-nightly-src
     export SRCDIR=$(pwd)
 
-    # Pre-populate bootstrap download cache so it doesn't need network.
-    # The bootstrap checks build/cache/{date}/ for artifacts before downloading.
-    mkdir -p build/cache/${stage0Date}
-    cp ${stage0Artifacts.rustfmt} build/cache/${stage0Date}/rustfmt-nightly-x86_64-unknown-linux-gnu.tar.xz
-    cp ${stage0Artifacts.rustc} build/cache/${stage0Date}/rustc-nightly-x86_64-unknown-linux-gnu.tar.xz
-    cp ${stage0Artifacts.rust-std} build/cache/${stage0Date}/rust-std-nightly-x86_64-unknown-linux-gnu.tar.xz
-    cp ${stage0Artifacts.cargo} build/cache/${stage0Date}/cargo-nightly-x86_64-unknown-linux-gnu.tar.xz
-    echo "=== Stage 0 cache populated ==="
-    ls -la build/cache/${stage0Date}/
   '';
 
   patches = [

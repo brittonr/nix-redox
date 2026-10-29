@@ -1,7 +1,7 @@
 # LLVM + Clang + LLD — C/C++ compiler toolchain for Redox OS
 #
 # Cross-compiles the complete LLVM toolchain for x86_64-unknown-redox.
-# Uses the Redox fork of LLVM (7 patches on top of llvmorg-21.1.2).
+# Uses the latest Redox LLVM 21.1.2 fork (including its native Clang driver).
 #
 # Build approach:
 #   - Monolithic cmake build: LLVM + Clang + LLD in one invocation
@@ -10,7 +10,8 @@
 #   - Links against libc++ (from libcxx-redox) for C++ runtime
 #   - X86 target only
 #
-# Source: gitlab.redox-os.org/redox-os/llvm-project branch redox-2025-10-03
+# Source: redox-2025-10-03 at 9c9daa44c511740a37eff408c46c2553885625ca.
+# Rust nightly-2026-05-24 supports external LLVM >=21; there is no Redox LLVM22 branch.
 #
 # Output: clang, clang++, lld, ld.lld, llvm-ar, llvm-nm, llvm-objcopy, llvm-strip
 
@@ -38,16 +39,21 @@ let
 
   src = pkgs.fetchgit {
     url = "https://gitlab.redox-os.org/redox-os/llvm-project.git";
-    rev = "250d0b022e5ae323f57659a1063bb40728f3629c";
-    hash = "sha256-hTjPpIoG2SvUqlnWAuDqFbINLlTvMTfmN6xqPygoz1g=";
+    rev = "9c9daa44c511740a37eff408c46c2553885625ca";
+    hash = "sha256-LtdjcUWLJCEcuBOCy+a/ybtZzBPRdqNeJ2NyXfcxNo4=";
     fetchSubmodules = false;
-    # Full checkout needed for LLVM + Clang + LLD build
+    # Identical checkout to libcxx-redox: one pinned compiler/runtime source.
     sparseCheckout = [
       "llvm"
       "clang"
       "lld"
       "cmake"
       "third-party"
+      "libcxx"
+      "libcxxabi"
+      "libunwind"
+      "libc"
+      "runtimes"
     ];
   };
 

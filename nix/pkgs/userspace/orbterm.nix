@@ -24,12 +24,6 @@
   stubLibs,
   vendor,
   orbterm-src,
-  # Optional/unused inputs accepted for compatibility
-  orbclient-src ? null,
-  orbfont-src ? null,
-  orbimage-src ? null,
-  libredox-src ? null,
-  relibc-src ? null,
   ...
 }:
 

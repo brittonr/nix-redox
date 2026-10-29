@@ -24,11 +24,11 @@ def main() -> None:
     if args.component == "kernel":
         replace_once(
             args.source / "src/arch/x86_shared/start.rs",
-            '            info!("Redox OS starting...");\n',
-            '            if let Some(identity) = option_env!("REDOX_BOOT_PROOF_ID") {\n'
-            '                println!("BOOT_PROOF:kernel:{}", identity);\n'
-            '            }\n'
-            '            info!("Redox OS starting...");\n',
+            '        info!("Redox OS starting...");\n',
+            '        if let Some(identity) = option_env!("REDOX_BOOT_PROOF_ID") {\n'
+            '            println!("BOOT_PROOF:kernel:{}", identity);\n'
+            '        }\n'
+            '        info!("Redox OS starting...");\n',
         )
     else:
         replace_once(

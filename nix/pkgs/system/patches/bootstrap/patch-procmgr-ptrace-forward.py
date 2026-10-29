@@ -6,11 +6,10 @@ manager routes through procmgr (the userspace proc: scheme handler).
 Procmgr needs to forward these to the kernel's proc scheme, which has
 the actual Trace and Memory handle implementations.
 
-The fix adds PID/operation path parsing to procmgr's openat handler.
-For operations that should be handled by the kernel (trace, mem, regs/*,
-etc.), procmgr looks up the process, gets a thread's kernel fd, and
-dups the operation on it. The kernel's kdup handler for OpenViaDup
-dispatches to openat_context which handles "trace", "mem", etc.
+The fix adds root-only PID/operation parsing to procmgr's scheme-root
+openat handler. Only trace, mem, regs/int and regs/float are forwarded,
+matching strace-redox and gdbstub consumers. Never expose arbitrary dup
+operations through procmgr's privileged thread descriptor.
 """
 
 import sys
@@ -20,10 +19,8 @@ import os
 def patch_file(filepath, old, new):
     with open(filepath, "r") as f:
         content = f.read()
-    if old not in content:
-        print(f"WARNING: patch target not found in {filepath}")
-        print(f"  Looking for: {repr(old[:100])}...")
-        return False
+    if content.count(old) != 1:
+        raise SystemExit(f"ptrace forwarding patch: expected one target in {filepath}")
     content = content.replace(old, new, 1)
     with open(filepath, "w") as f:
         f.write(content)
@@ -32,43 +29,39 @@ def patch_file(filepath, old, new):
 
 
 def patch_procmgr(src_dir):
-    """Add PID/operation forwarding to procmgr's openat handler."""
-
+    """Add PID/operation forwarding to the scheme-root openat handler."""
     procmgr_file = os.path.join(src_dir, "bootstrap/src/procmgr.rs")
-
-    # Replace the catch-all ENOENT in openat with PID/operation forwarding
     patch_file(
         procmgr_file,
-        """            _ => return Err(Error::new(ENOENT)),
-        })
-    }
-    fn read_process_metadata""",
-        """            _ => {
-                // Try parsing as "<pid>/<operation>" for kernel-forwarded operations.
-                // Operations like "trace", "mem", "regs/int", "regs/float" are handled
-                // by the kernel's proc scheme. We find the process, get a thread's
-                // kernel fd, and dup the operation path on it.
-                if let Some(slash_pos) = path.find('/') {
-                    let pid_str = &path[..slash_pos];
-                    let operation = &path[slash_pos + 1..];
-                    if let Ok(pid_num) = pid_str.parse::<usize>() {
-                        let pid = ProcessId(pid_num);
-                        let proc_rc = self.processes.get(&pid).ok_or(Error::new(ESRCH))?;
-                        let process = proc_rc.borrow();
-                        let thread = process.threads.first().ok_or(Error::new(ESRCH))?;
-                        let thread = thread.borrow();
-                        // Forward to the kernel's proc scheme via the thread's kernel fd
-                        let fd = thread.fd.dup(operation.as_bytes())?.take();
-                        return Ok(OpenResult::OtherScheme { fd });
+        """                    _ => Err(Error::new(ENOENT)),
+                }
+            }
+            Handle::Proc(pid) => {""",
+        """                    _ => {
+                        // Forward PID/operation paths to the kernel proc scheme.
+                        if let Some((pid, operation)) = path.split_once('/') {
+                            if let Ok(pid) = pid.parse::<usize>() {
+                                if !matches!(operation, "trace" | "mem" | "regs/int" | "regs/float") {
+                                    return Err(Error::new(ENOENT));
+                                }
+                                if ctx.uid != 0 {
+                                    return Err(Error::new(EACCES));
+                                }
+                                let proc_rc = self.processes.get(&ProcessId(pid))
+                                    .ok_or(Error::new(ESRCH))?;
+                                let process = proc_rc.borrow();
+                                let thread = process.threads.first().ok_or(Error::new(ESRCH))?;
+                                let thread = thread.borrow();
+                                let fd = thread.fd.dup(operation.as_bytes())?.take();
+                                return Ok(OpenResult::OtherScheme { fd });
+                            }
+                        }
+                        Err(Error::new(ENOENT))
                     }
                 }
-                return Err(Error::new(ENOENT));
             }
-        })
-    }
-    fn read_process_metadata""",
+            Handle::Proc(pid) => {""",
     )
-
     print("procmgr patched: PID/operation forwarding to kernel added")
 
 

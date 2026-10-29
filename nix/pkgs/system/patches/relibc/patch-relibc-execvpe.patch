@@ -1,7 +1,6 @@
-diff -ruN a/src/header/unistd/mod.rs b/src/header/unistd/mod.rs
---- a/src/header/unistd/mod.rs	2026-03-13 12:36:27.030148600 -0400
-+++ b/src/header/unistd/mod.rs	2026-03-13 12:36:27.084363417 -0400
-@@ -403,6 +403,83 @@
+--- a/src/header/unistd/mod.rs
++++ b/src/header/unistd/mod.rs
+@@ -411,6 +411,73 @@
      }
  }
  
@@ -29,20 +28,10 @@ diff -ruN a/src/header/unistd/mod.rs b/src/header/unistd/mod.rs
 +
 +        // Search PATH for the executable. Use the envp array to find PATH,
 +        // not the global environ (which may be stale).
-+        let path_val = unsafe { find_in_envp(envp, b"PATH") };
-+        if let Some(path_env) = path_val {
-+            for path in path_env.split(|b| *b == PATH_SEPARATOR) {
-+                let file_bytes = file.to_bytes();
-+                let length = file_bytes.len() + path.len() + 2;
-+                let mut program = alloc::vec::Vec::with_capacity(length);
-+                program.extend_from_slice(path);
-+                program.push(b'/');
-+                program.extend_from_slice(file_bytes);
-+                program.push(b'\0');
-+
-+                let program_c = CStr::from_bytes_with_nul(&program).unwrap();
++        if let Some(path_env) = unsafe { find_in_envp(envp, b"PATH") } {
++            for program in PathSearchIter::new(file.to_bytes(), &path_env) {
++                let program_c = unsafe { CStr::from_bytes_with_nul_unchecked(program.as_slice()) };
 +                unsafe { execve(program_c.as_ptr(), argv, envp) };
-+
 +                match platform::ERRNO.get() {
 +                    errno::ENOENT => (),
 +                    other => error = other,
@@ -57,7 +46,7 @@ diff -ruN a/src/header/unistd/mod.rs b/src/header/unistd/mod.rs
 +
 +/// Search an envp array for a variable by name. Returns a slice of the
 +/// value (after the '=') or None if not found.
-+unsafe fn find_in_envp<'a>(envp: *const *mut c_char, name: &[u8]) -> Option<&'a [u8]> {
++unsafe fn find_in_envp<'a>(envp: *const *mut c_char, name: &[u8]) -> Option<CStr<'a>> {
 +    if envp.is_null() {
 +        return None;
 +    }
@@ -75,7 +64,7 @@ diff -ruN a/src/header/unistd/mod.rs b/src/header/unistd/mod.rs
 +            && entry_bytes[..name.len()] == *name
 +            && entry_bytes[name.len()] == b'='
 +        {
-+            return Some(&entry_bytes[name.len() + 1..]);
++            return Some(unsafe { CStr::from_ptr(entry.add(name.len() + 1).cast()) });
 +        }
 +        ptr = unsafe { ptr.add(1) };
 +    }

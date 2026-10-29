@@ -41,17 +41,6 @@ mkUserspace.mkBinary {
 
   vendorHash = "sha256-xq+3lVUy668w0shooRW6k1cajl+NnFHNwoy38Tz+PQc=";
 
-  gitSources = [
-    {
-      url = "git+https://gitlab.redox-os.org/redox-os/event.git";
-      git = "https://gitlab.redox-os.org/redox-os/event.git";
-    }
-    {
-      url = "git+https://gitlab.redox-os.org/redox-os/redox-scheme.git";
-      git = "https://gitlab.redox-os.org/redox-os/redox-scheme.git";
-    }
-  ];
-
   meta = with lib; {
     description = "Container/namespace tool for Redox OS";
     homepage = "https://gitlab.redox-os.org/redox-os/contain";

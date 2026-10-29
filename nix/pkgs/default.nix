@@ -103,10 +103,8 @@ let
           inherit (inputs)
             relibc-src
             openlibm-src
-            compiler-builtins-src
             dlmalloc-rs-src
             ;
-          inherit (inputs) cc-rs-src redox-syscall-src object-src;
         }
       );
 
@@ -119,9 +117,8 @@ let
       // {
         inherit (inputs)
           kernel-src
-          rmm-src
           redox-path-src
-          fdt-src
+          kernel-fdt-src
           ;
       }
     );
@@ -148,13 +145,10 @@ let
         inherit relibc;
         inherit (inputs)
           base-src
-          liblibc-src
           orbclient-src
-          rustix-redox-src
-          drm-rs-src
           relibc-src
           redox-log-src
-          fdt-src
+          redox-scheme-src
           ;
       }
     );
@@ -175,7 +169,11 @@ let
   userspace = {
     ion = mkUserspace.mkBinary {
       pname = "ion-shell";
-      src = inputs.ion-src;
+      src = pkgs.runCommand "ion-src-with-lock" { } ''
+        cp -r ${inputs.ion-src} $out
+        chmod -R u+w $out
+        cp ${./userspace/ion-Cargo.lock} $out/Cargo.lock
+      '';
       vendorHash = "sha256-PAi0x6MB0hVqUD1v1Z/PN7bWeAAKLxgcBNnS2p6InXs=";
       binaryName = "ion";
       preConfigure = ''
@@ -277,32 +275,9 @@ let
       };
     };
 
-    sodium = mkUserspace.mkPackage {
-      pname = "sodium";
-      src = inputs.sodium-src;
-      vendorHash = "sha256-yuxAB+9CZHCz/bAKPD82+8LfU3vgVWU6KeTVVk1JcO8=";
-      cargoBuildFlags = "--bin sodium --no-default-features --features ansi";
-      preConfigure = ''
-        # Patch orbclient to remove SDL dependency
-        mkdir -p orbclient-patched
-        cp -r ${inputs.orbclient-src}/* orbclient-patched/
-        chmod -R u+w orbclient-patched/
-        sed -i '/\[patch\.crates-io\]/,$d' orbclient-patched/Cargo.toml
-        substituteInPlace Cargo.toml \
-          --replace-fail 'orbclient = "0.3"' 'orbclient = { path = "orbclient-patched", default-features = false }'
-      '';
-      installPhase = ''
-        runHook preInstall
-        mkdir -p $out/bin
-        cp target/${redoxTarget}/release/sodium $out/bin/
-        runHook postInstall
-      '';
-      meta = {
-        description = "Sodium: A vi-like text editor for Redox OS";
-        homepage = "https://gitlab.redox-os.org/redox-os/sodium";
-        license = lib.licenses.mit;
-      };
-    };
+    sodium = import ./userspace/sodium.nix (
+      userspaceArgs // { inherit (inputs) sodium-src; }
+    );
 
     netutils = mkUserspace.mkPackage {
       pname = "netutils";
@@ -652,7 +627,7 @@ let
     extrautils = import ./userspace/extrautils.nix (
       userspaceArgs
       // {
-        inherit (inputs) extrautils-src filetime-src cc-rs-src;
+        inherit (inputs) extrautils-src;
       }
     );
 

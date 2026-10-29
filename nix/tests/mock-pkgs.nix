@@ -63,6 +63,7 @@ rec {
     binaries = [
       # Core daemons (required by initfs)
       "init"
+      "getty"
       "logd"
       "ramfs"
       "randd"
@@ -76,6 +77,7 @@ rec {
       "rtcd"
       "ptyd"
       "ipcd"
+      "udsd"
       # Storage drivers
       "ahcid"
       "nvmed"
@@ -250,7 +252,6 @@ rec {
     pname = "userutils";
     binaries = [
       "login"
-      "getty"
       "passwd"
       "su"
       "sudo"
@@ -354,33 +355,28 @@ rec {
   };
 
   # Orbital data (fonts, icons, cursors, config)
-  # Real orbdata has ui/ at the top level, which must be copied to /ui/ on the rootfs.
+  # Upstream assets live under usr/share/{ui,fonts,icons,applications}.
   orbdata =
     (pkgs.runCommand "mock-orbdata" { } ''
-      # ui/ tree — Orbital looks for /ui/orbital.toml, /ui/fonts/, etc.
-      mkdir -p $out/ui/fonts/Mono/Fira $out/ui/fonts/Sans/Fira $out/ui/icons/apps
-      cat > $out/ui/orbital.toml << 'EOF'
-      cursor = "/ui/left_ptr.png"
-      bottom_left_corner = "/ui/bottom_left_corner.png"
-      bottom_right_corner = "/ui/bottom_right_corner.png"
-      bottom_side = "/ui/bottom_side.png"
-      left_side = "/ui/left_side.png"
-      right_side = "/ui/right_side.png"
-      window_max = "/ui/window_max.png"
-      window_max_unfocused = "/ui/window_max_unfocused.png"
-      window_close = "/ui/window_close.png"
-      window_close_unfocused = "/ui/window_close_unfocused.png"
+      mkdir -p $out/usr/share/ui $out/usr/share/fonts/Mono/Fira \
+        $out/usr/share/fonts/Sans/Fira $out/usr/share/icons/apps $out/usr/share/applications
+      cat > $out/usr/share/ui/orbital.toml << 'EOF'
+      cursor = "/usr/share/ui/left_ptr.png"
+      bottom_left_corner = "/usr/share/ui/bottom_left_corner.png"
+      bottom_right_corner = "/usr/share/ui/bottom_right_corner.png"
+      bottom_side = "/usr/share/ui/bottom_side.png"
+      left_side = "/usr/share/ui/left_side.png"
+      right_side = "/usr/share/ui/right_side.png"
+      window_max = "/usr/share/ui/window_max.png"
+      window_max_unfocused = "/usr/share/ui/window_max_unfocused.png"
+      window_close = "/usr/share/ui/window_close.png"
+      window_close_unfocused = "/usr/share/ui/window_close_unfocused.png"
       EOF
-      echo "mock cursor" > $out/ui/left_ptr.png
-      echo "mock background" > $out/ui/background.jpg
-      echo "mock font" > $out/ui/fonts/Mono/Fira/Regular.ttf
-      echo "mock font" > $out/ui/fonts/Sans/Fira/Regular.ttf
-      echo "mock icon" > $out/ui/icons/apps/utilities-terminal.png
-
-      # usr/ tree — also present in upstream orbdata
-      mkdir -p $out/usr/share/fonts $out/usr/share/icons $out/usr/share/applications
-      echo "mock font" > $out/usr/share/fonts/Regular.ttf
-      echo "mock icon" > $out/usr/share/icons/terminal.png
+      echo "mock cursor" > $out/usr/share/ui/left_ptr.png
+      echo "mock background" > $out/usr/share/ui/background.jpg
+      echo "mock font" > $out/usr/share/fonts/Mono/Fira/Regular.ttf
+      echo "mock font" > $out/usr/share/fonts/Sans/Fira/Regular.ttf
+      echo "mock icon" > $out/usr/share/icons/apps/utilities-terminal.png
       echo "mock mimeapps" > $out/usr/share/applications/mimeapps.list
     '')
     // {

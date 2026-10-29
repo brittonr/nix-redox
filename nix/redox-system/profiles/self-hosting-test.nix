@@ -673,6 +673,7 @@ let
 
                         # Write the wrapper source (uses Ion echo to avoid Nix escaping)
                         # Spy mode 1: just log and exit 0 (capture what cargo passes)
+                        rustc -vV > /tmp/rustc-real-version
                         echo 'use std::io::Write;' > /tmp/rustc_spy.rs
                         echo 'fn main() {' >> /tmp/rustc_spy.rs
                         echo '    let args: Vec<String> = std::env::args().collect();' >> /tmp/rustc_spy.rs
@@ -689,15 +690,9 @@ let
                         echo '        }' >> /tmp/rustc_spy.rs
                         echo '        let _ = f.flush();' >> /tmp/rustc_spy.rs
                         echo '    }' >> /tmp/rustc_spy.rs
-                        echo '    // If cargo asks for -vV, fake the version output' >> /tmp/rustc_spy.rs
+                        echo '    // Return the actual compiler metadata for Cargo probes.' >> /tmp/rustc_spy.rs
                         echo '    if args.iter().any(|a| a == "-vV") {' >> /tmp/rustc_spy.rs
-                        echo '        println!("rustc 1.92.0-nightly (5c7ae0c7e 2025-10-02)");' >> /tmp/rustc_spy.rs
-                        echo '        println!("binary: rustc");' >> /tmp/rustc_spy.rs
-                        echo '        println!("commit-hash: 5c7ae0c7ed184c603e5224604a9f33ca0e8e0b36");' >> /tmp/rustc_spy.rs
-                        echo '        println!("commit-date: 2025-10-02");' >> /tmp/rustc_spy.rs
-                        echo '        println!("host: x86_64-unknown-redox");' >> /tmp/rustc_spy.rs
-                        echo '        println!("release: 1.92.0-nightly");' >> /tmp/rustc_spy.rs
-                        echo '        println!("LLVM version: 21.1.2");' >> /tmp/rustc_spy.rs
+                        echo '        print!("{}", include_str!("/tmp/rustc-real-version"));' >> /tmp/rustc_spy.rs
                         echo '    }' >> /tmp/rustc_spy.rs
                         echo '    // For everything else, exit 1 so cargo stops' >> /tmp/rustc_spy.rs
                         echo '    if !args.iter().any(|a| a == "-vV") {' >> /tmp/rustc_spy.rs

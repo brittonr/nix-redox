@@ -120,6 +120,7 @@ let
   # Core daemons for initfs
   coreDaemons = [
     "init"
+    "getty"
     "logd"
     "ramfs"
     "randd"
@@ -132,6 +133,7 @@ let
     "rtcd"
     "ptyd"
     "ipcd"
+    "udsd"
   ]
   ++ lib.optional initfsEnableGraphics "ps2d"
   ++ lib.optional networkingEnabled "smolnetd";
@@ -232,7 +234,7 @@ let
   # All packages: union of boot + managed (used for store population and manifest).
   allPackages = lib.unique (bootPackages ++ managedPackages);
 
-  # Check if userutils (getty, login) is installed on rootFS
+  # Check if userutils login/authentication tools are installed on rootFS.
   # When present, startup.sh runs a login loop for serial console
   # authentication. When absent, startup.sh runs ion directly.
   userutilsInstalled =

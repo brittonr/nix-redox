@@ -152,6 +152,7 @@ if ! cargo rustc \
   --release \
   -Z build-std=core,alloc \
   -Z build-std-features=compiler-builtins-mem \
+  -Z json-target-spec \
   -- \
   -C linker="$kernel_linker" \
   -C link-arg=-T \
