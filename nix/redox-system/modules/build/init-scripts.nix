@@ -600,7 +600,8 @@ let
     "50_redoxfs.service"
   ]
   ++ lib.optional cfg.initfsEnableGraphics "20_graphics.target"
-  ++ lib.optional (cfg.usbEnabled && !cfg.initfsEnableGraphics) "19_inputd.service";
+  ++ lib.optional (cfg.usbEnabled && !cfg.initfsEnableGraphics) "19_inputd.service"
+  ++ lib.optional (cfg.bootProof or false) "01_boot_proof.service";
 
   targetFiles = {
     "00_runtime.target" = ''

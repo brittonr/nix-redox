@@ -24,25 +24,102 @@
       "verdict": "pass"
     },
     "native-rebuild-test": {
-      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261026T052853-native-rebuild-test",
-      "duration_seconds": 1587,
-      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261026T052853-native-rebuild-test/excerpt.txt",
+      "boot_cycles": [
+        {
+          "identities": {
+            "bootloader": [
+              "/nix/store/y7j72087c4sfl64w3ck640cazbgqp69h-redox-bootloader-native-boot-proof-unstable"
+            ],
+            "initfs": [
+              "/nix/store/mi2pn1wmzbcmma0kcaf0033lrjanm1ak-redox-initfs-unstable"
+            ],
+            "kernel": [
+              "/nix/store/kdxpkjkgjmlgxqpmddwmgnwya8kd641n-redox-kernel-native-boot-proof-unstable"
+            ]
+          },
+          "index": 0,
+          "phase": "seed",
+          "serial_log": {
+            "path": "/var/tmp/redox-self-hosting-captures/20261029T000233-native-rebuild-test/boot-0-seed.serial.log",
+            "present": true,
+            "size_bytes": 12601
+          },
+          "vmm_log": {
+            "path": "/var/tmp/redox-self-hosting-captures/20261029T000233-native-rebuild-test/boot-0-seed.vmm.log",
+            "present": true,
+            "size_bytes": 681
+          }
+        },
+        {
+          "identities": {
+            "bootloader": [
+              "/nix/store/ncd1b4gfdhvbqk0pdxccmp5g3h9ixbqz-redox-bootloader-native-rebuild"
+            ],
+            "initfs": [
+              "/nix/store/07yfbqz32pp077sisdqxynsni5694lk5-redox-initfs-native"
+            ],
+            "kernel": [
+              "/nix/store/qwx57faqys1bgyxafbay74si2xgrl2k5-redox-kernel-native-rebuild"
+            ]
+          },
+          "index": 1,
+          "phase": "native",
+          "serial_log": {
+            "path": "/var/tmp/redox-self-hosting-captures/20261029T000233-native-rebuild-test/boot-1-native.serial.log",
+            "present": true,
+            "size_bytes": 4557
+          },
+          "vmm_log": {
+            "path": "/var/tmp/redox-self-hosting-captures/20261029T000233-native-rebuild-test/boot-1-native.vmm.log",
+            "present": true,
+            "size_bytes": 681
+          }
+        },
+        {
+          "identities": {
+            "bootloader": [
+              "/nix/store/y7j72087c4sfl64w3ck640cazbgqp69h-redox-bootloader-native-boot-proof-unstable"
+            ],
+            "initfs": [
+              "/nix/store/mi2pn1wmzbcmma0kcaf0033lrjanm1ak-redox-initfs-unstable"
+            ],
+            "kernel": [
+              "/nix/store/kdxpkjkgjmlgxqpmddwmgnwya8kd641n-redox-kernel-native-boot-proof-unstable"
+            ]
+          },
+          "index": 2,
+          "phase": "rollback",
+          "serial_log": {
+            "path": "/var/tmp/redox-self-hosting-captures/20261029T000233-native-rebuild-test/boot-2-rollback.serial.log",
+            "present": true,
+            "size_bytes": 4339
+          },
+          "vmm_log": {
+            "path": "/var/tmp/redox-self-hosting-captures/20261029T000233-native-rebuild-test/boot-2-rollback.vmm.log",
+            "present": true,
+            "size_bytes": 681
+          }
+        }
+      ],
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261029T000233-native-rebuild-test",
+      "duration_seconds": 1799,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261029T000233-native-rebuild-test/excerpt.txt",
       "exit_code": 0,
-      "finished_at": "2026-10-26T05:55:20-04:00",
+      "finished_at": "2026-10-29T00:32:32-04:00",
       "flow": "native-rebuild-test",
       "git_dirty": true,
-      "git_rev": "50395ba6",
-      "run_id": "20261026T052853-native-rebuild-test",
-      "started_at": "2026-10-26T05:28:53-04:00",
-      "summary_path": "/var/tmp/redox-self-hosting-captures/20261026T052853-native-rebuild-test/summary.json",
+      "git_rev": "b5da985d",
+      "run_id": "20261029T000233-native-rebuild-test",
+      "started_at": "2026-10-29T00:02:33-04:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261029T000233-native-rebuild-test/summary.json",
       "test_counts": {
         "fail": 0,
         "failure_lines": [],
-        "pass": 88,
+        "pass": 135,
         "skip": 0,
         "tests_complete": true,
         "tests_started": true,
-        "total": 88
+        "total": 135
       },
       "verdict": "pass"
     },
@@ -70,17 +147,17 @@
       "verdict": "pass"
     },
     "self-hosting-test": {
-      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261028T164427-self-hosting-test",
-      "duration_seconds": 8575,
-      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261028T164427-self-hosting-test/excerpt.txt",
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261028T211136-self-hosting-test",
+      "duration_seconds": 6827,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261028T211136-self-hosting-test/excerpt.txt",
       "exit_code": 0,
-      "finished_at": "2026-10-28T19:07:22-04:00",
+      "finished_at": "2026-10-28T23:05:23-04:00",
       "flow": "self-hosting-test",
       "git_dirty": true,
-      "git_rev": "723d825e",
-      "run_id": "20261028T164427-self-hosting-test",
-      "started_at": "2026-10-28T16:44:27-04:00",
-      "summary_path": "/var/tmp/redox-self-hosting-captures/20261028T164427-self-hosting-test/summary.json",
+      "git_rev": "b5da985d",
+      "run_id": "20261028T211136-self-hosting-test",
+      "started_at": "2026-10-28T21:11:36-04:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261028T211136-self-hosting-test/summary.json",
       "test_counts": {
         "fail": 0,
         "failure_lines": [],
@@ -140,5 +217,5 @@
     }
   },
   "schema_version": 1,
-  "updated_at": "2026-10-28T20:57:24-04:00"
+  "updated_at": "2026-10-29T00:32:32-04:00"
 }

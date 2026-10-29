@@ -141,6 +141,9 @@ pub struct BootConfig {
     pub disk_size_mb: u32,
     #[serde(default, rename = "espSizeMB")]
     pub esp_size_mb: u32,
+    /// Preserve executing-initfs instrumentation across native system rebuilds.
+    #[serde(default, rename = "bootProof")]
+    pub boot_proof: bool,
 }
 
 /// Boot component store paths tracked per generation.
@@ -2371,6 +2374,7 @@ mod tests {
                 boot: BootConfig {
                     disk_size_mb: 512,
                     esp_size_mb: 200,
+                    boot_proof: false,
                 },
                 hardware: HardwareConfig {
                     storage_drivers: vec!["virtio-blkd".to_string()],

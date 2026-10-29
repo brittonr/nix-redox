@@ -60,9 +60,14 @@ let
       fi
       if [ -n "''${REDOX_VM_MONITOR_DIR:-}" ]; then
         mkdir -p "$REDOX_VM_MONITOR_DIR"
-        if [ -e "$SERIAL_LOG" ]; then
-          cp "$SERIAL_LOG" "$REDOX_VM_MONITOR_DIR/serial.log"
+        if [ -e "''${CAPTURE_LOG:-$SERIAL_LOG}" ]; then
+          cp "''${CAPTURE_LOG:-$SERIAL_LOG}" "$REDOX_VM_MONITOR_DIR/serial.log"
         fi
+        for capture in "$WORK_DIR"/boot-*.serial.log "$WORK_DIR"/boot-*.vmm.log "$WORK_DIR"/expected-identities.log; do
+          if [ -f "$capture" ]; then
+            cp "$capture" "$REDOX_VM_MONITOR_DIR/"
+          fi
+        done
         if [ -e "$WORK_DIR/vmm.log" ]; then
           cp "$WORK_DIR/vmm.log" "$REDOX_VM_MONITOR_DIR/vmm.log"
         fi
@@ -98,7 +103,7 @@ let
           sleep 60
         done
         echo "[$(date --iso-8601=seconds)] process exited"
-      } > "$MONITOR_LOG" &
+      } >> "$MONITOR_LOG" &
       MONITOR_PID=$!
     }
 
@@ -241,6 +246,7 @@ let
       memoryMB ? 1024,
       cpus ? 2,
       extraArgs ? "",
+      diskOnly ? false,
     }:
     ''
       OVMF="$WORK_DIR/OVMF.fd"
@@ -263,7 +269,7 @@ let
         -serial file:"$SERIAL_LOG" \
         -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
         -bios "$OVMF" \
-        -kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI \
+        ${lib.optionalString (!diskOnly) "-kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI"} \
         -drive file="$IMAGE",format=raw,if=none,id=disk0 \
         -device virtio-blk-pci,drive=disk0 \
         -display none \
@@ -338,6 +344,9 @@ in
       trackShell ? false,
       extraPolling ? "",
       customReport ? null,
+      # Three firmware boots on the same mutable disk; null keeps ordinary tests unchanged.
+      # { redoxfs; seedIdentities = { bootloader; kernel; initfs; }; }
+      nativeBootProof ? null,
       # Minimum timeout floor for QEMU TCG fallback (no KVM).
       # Pulled from virtualisation.chMinTimeout when available.
       chMinTimeout ? 180,
@@ -438,7 +447,7 @@ in
 
       # === Setup ===
       IMAGE="$WORK_DIR/redox.img"
-      cp ${diskImage}/redox.img "$IMAGE"
+      cp ${lib.optionalString (nativeBootProof != null) "--sparse=always"} ${diskImage}/redox.img "$IMAGE"
       chmod +w "$IMAGE"
 
       echo ""
@@ -449,21 +458,38 @@ in
       echo "  Image:   $(du -h "$IMAGE" | cut -f1)"
       echo ""
 
-      # === Launch VM ===
+      # === Launch VM (also reused by each cold firmware restart) ===
+      launch_vm() {
       ${
         if enableCH && enableQemu then
           ''
             if [ "$MODE" = "ch" ]; then
               ${launchCH { inherit memoryMB cpus; extraArgs = chExtraArgs; }}
             else
-              ${launchQemu { inherit bootloader memoryMB cpus; extraArgs = qemuExtraArgs; }}
+              ${launchQemu { inherit bootloader memoryMB cpus; diskOnly = nativeBootProof != null; extraArgs = qemuExtraArgs; }}
             fi
           ''
         else if enableCH then
           launchCH { inherit memoryMB cpus; extraArgs = chExtraArgs; }
         else
-          launchQemu { inherit bootloader memoryMB cpus; extraArgs = qemuExtraArgs; }
+          launchQemu { inherit bootloader memoryMB cpus; diskOnly = nativeBootProof != null; extraArgs = qemuExtraArgs; }
       }
+      }
+
+      ${lib.optionalString (nativeBootProof != null) ''
+        PROOF_SEED_BOOTLOADER=${lib.escapeShellArg nativeBootProof.seedIdentities.bootloader}
+        PROOF_SEED_KERNEL=${lib.escapeShellArg nativeBootProof.seedIdentities.kernel}
+        PROOF_SEED_INITFS=${lib.escapeShellArg nativeBootProof.seedIdentities.initfs}
+        PROOF_EXTRACT=${nativeBootProof.redoxfs}/bin/redoxfs-extract
+        PROOF_MCOPY=${pkgs.mtools}/bin/mcopy
+        PROOF_SFDISK=${pkgs.util-linux}/bin/sfdisk
+        PROOF_JQ=${pkgs.jq}/bin/jq
+        PROOF_GREP=${grep}
+        PROOF_PYTHON=${pkgs.python3}/bin/python3
+        ${builtins.readFile ./native-boot-proof-runner.sh}
+      ''}
+
+      launch_vm
 
       echo "  VM started (PID: $VM_PID)"
       if [ -n "''${REDOX_VM_MONITOR_DIR:-}" ]; then

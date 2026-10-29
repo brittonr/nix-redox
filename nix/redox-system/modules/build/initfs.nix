@@ -69,6 +69,20 @@ INIT_SCRIPT_EOF
       '') (lib.filterAttrs (_: content: content != "") initScriptFiles)
     )}
 
+    ${lib.optionalString (cfg.bootProof or false) ''
+      # This unit exists only in the loaded initfs and is required by its target.
+      # Embed this derivation's own output root, not a rootfs-provided identity.
+      cat > initfs/etc/init.d/01_boot_proof.service << BOOT_PROOF_EOF
+      [unit]
+      description = "Loaded initfs runtime identity"
+
+      [service]
+      cmd = "ion"
+      args = ["-c", "echo BOOT_PROOF:initfs:$out > /scheme/debug/no-preserve"]
+      type = "oneshot"
+      BOOT_PROOF_EOF
+    ''}
+
     # Ion shell configuration
     echo 'let PROMPT = "${cfg.initfsPrompt}"' > initfs/etc/ion/initrc
 
@@ -89,6 +103,9 @@ INIT_SCRIPT_EOF
     runHook preInstall
     mkdir -p $out/boot
     cp initfs.img $out/boot/initfs
+    ${lib.optionalString (cfg.bootProof or false) ''
+      printf '%s\n' "$out" > "$out/boot-proof-id"
+    ''}
     runHook postInstall
   '';
 }

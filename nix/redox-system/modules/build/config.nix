@@ -42,6 +42,7 @@ let
 
   # /boot
   initfsPrompt = inputs.boot.initfsPrompt;
+  bootProof = inputs.boot.bootProof;
   rustBacktrace = inputs.boot.rustBacktrace;
   bootExtraEssentialPackages = inputs.boot.essentialPackages;
   bootBanner = inputs.boot.banner;
@@ -375,6 +376,7 @@ in
     initfsEnableGraphics
     initfsSizeMB
     initfsPrompt
+    bootProof
     rustBacktrace
     bootBanner
     initfsExcludeDaemons

@@ -55,6 +55,8 @@ export RUST_SRC_PATH="${rustSource:-/usr/src/native-kernel-rebuild/rust-src}/lib
 export CARGO_TERM_PROGRESS_WHEN="${CARGO_TERM_PROGRESS_WHEN:-always}"
 export CARGO_TERM_PROGRESS_WIDTH="${CARGO_TERM_PROGRESS_WIDTH:-80}"
 export CARGO_TARGET_X86_64_UNKNOWN_UEFI_RUSTFLAGS="--cfg aes_force_soft"
+# The source bundle prints this compile-time ID from the executing EFI.
+export REDOX_BOOT_PROOF_ID="$out"
 
 bootloader_source="${source:-/usr/src/native-kernel-rebuild/bootloader}"
 bootloader_dir="$TMPDIR/bootloader"
@@ -185,3 +187,4 @@ if [ -z "$bootloader_bin" ] || [ ! -f "$bootloader_bin" ]; then
 fi
 
 cp "$bootloader_bin" "$out/boot/EFI/BOOT/BOOTX64.EFI"
+printf '%s\n' "$out" > "$out/boot-proof-id"

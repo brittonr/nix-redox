@@ -23,7 +23,19 @@ craneLib.buildPackage {
       # This is needed for Nix sandbox builds where files are not owned by root
       ../../patches/redoxfs-uid-gid-override.patch
     ];
+    # Include the bin in the source before Crane generates its dummy sources.
+    postPatch = ''
+      cp ${./redoxfs-extract.rs} src/bin/extract.rs
+      cat >> Cargo.toml <<'EOF'
+
+      [[bin]]
+      name = "redoxfs-extract"
+      path = "src/bin/extract.rs"
+      required-features = ["std"]
+      EOF
+    '';
   };
+
 
   cargoExtraArgs = "--locked";
 

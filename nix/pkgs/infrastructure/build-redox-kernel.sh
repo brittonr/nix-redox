@@ -53,6 +53,8 @@ export AR=/nix/system/profile/bin/llvm-ar
 export CC=/nix/system/profile/bin/cc
 export RUST_SRC_PATH="${rustSource:-/usr/src/native-kernel-rebuild/rust-src}/library"
 export REDOX_KERNEL_USE_PREBUILT_TRAMPOLINE=1
+# The source bundle prints this compile-time ID from the executing kernel.
+export REDOX_BOOT_PROOF_ID="$out"
 export CARGO_TERM_PROGRESS_WHEN="${CARGO_TERM_PROGRESS_WHEN:-always}"
 export CARGO_TERM_PROGRESS_WIDTH="${CARGO_TERM_PROGRESS_WIDTH:-80}"
 
@@ -185,3 +187,4 @@ fi
 
 /nix/system/profile/bin/llvm-objcopy --strip-debug "$kernel_bin" "$out/boot/kernel"
 /nix/system/profile/bin/llvm-objcopy --only-keep-debug "$kernel_bin" "$out/boot/kernel.sym"
+printf '%s\n' "$out" > "$out/boot-proof-id"

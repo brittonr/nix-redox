@@ -31,6 +31,7 @@
   defaultMode ? null,
   enableQemu ? true,
   enableCH ? true,
+  nativeBootProof ? null,
 }:
 
 let
@@ -42,7 +43,7 @@ in
 vmTest.mkVmTest {
   name = "functional-test";
   title = "Redox OS Functional Test Suite";
-  inherit diskImage bootloader defaultTimeout;
+  inherit diskImage bootloader defaultTimeout nativeBootProof;
   memoryMB = effectiveMemory;
   cpus = effectiveCpus;
   chMinTimeout = vmConfig.chMinTimeout or 180;

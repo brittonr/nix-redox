@@ -153,6 +153,27 @@ def parse_artifacts(serial_text: str) -> dict[str, str]:
     return artifacts
 
 
+def parse_boot_cycles(run_dir: Path) -> list[dict[str, Any]]:
+    """Retain executing-artifact identities and logs for each cold boot."""
+    cycles: list[dict[str, Any]] = []
+    for serial_path in sorted(run_dir.glob("boot-*-*.serial.log")):
+        match = re.fullmatch(r"boot-(\d+)-(seed|native|rollback)\.serial\.log", serial_path.name)
+        if match is None:
+            continue
+        identities: dict[str, list[str]] = {name: [] for name in ("bootloader", "kernel", "initfs")}
+        serial_text = read_text(serial_path).replace("\0", "").replace("\r", "")
+        for marker in re.finditer(r"BOOT_PROOF:(bootloader|kernel|initfs):(\S+)", serial_text):
+            identities[marker.group(1)].append(marker.group(2))
+        cycles.append({
+            "index": int(match.group(1)),
+            "phase": match.group(2),
+            "identities": identities,
+            "serial_log": file_info(serial_path),
+            "vmm_log": file_info(serial_path.with_name(serial_path.name.replace(".serial.log", ".vmm.log"))),
+        })
+    return sorted(cycles, key=lambda cycle: cycle["index"])
+
+
 def parse_runner_metadata(runner_text: str) -> dict[str, Any]:
     meta: dict[str, Any] = {
         "vmm": None,
@@ -223,6 +244,15 @@ def make_excerpt(summary: dict[str, Any]) -> str:
             if name in {"Boot complete", "Test suite started", "Test suite complete"}:
                 continue
             lines.append(f"  {name:<18} @ {value}")
+
+    cycles = summary.get("boot_cycles") or []
+    if cycles:
+        lines.append("")
+        lines.append("Cold firmware boots:")
+        for cycle in cycles:
+            lines.append(f"  {cycle['index']}: {cycle['phase']}")
+            for component, identities in cycle["identities"].items():
+                lines.append(f"    {component}: {', '.join(identities) or '(missing)'}")
 
     artifacts = summary.get("artifacts") or {}
     if artifacts:
@@ -418,6 +448,7 @@ def cmd_finalize(args: argparse.Namespace) -> int:
         **git_metadata(repo_root),
         "test_counts": tests,
         "artifacts": artifacts,
+        "boot_cycles": parse_boot_cycles(run_dir),
         "runner": runner,
         "files": {
             "meta_txt": file_info(meta_path),
@@ -511,6 +542,7 @@ def cmd_finalize(args: argparse.Namespace) -> int:
             "git_dirty": summary["git_dirty"],
             "test_counts": summary["test_counts"],
             "summary_path": str(summary_path),
+            "boot_cycles": summary["boot_cycles"],
             "excerpt_path": str(excerpt_path),
         }
         index["updated_at"] = finished_at

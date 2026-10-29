@@ -78,6 +78,7 @@ let
       nasm -f bin -o src/asm/x86/trampoline.bin src/asm/x86/trampoline.asm
       nasm -f bin -o src/asm/x86_64/trampoline.bin src/asm/x86_64/trampoline.asm
       python3 ${../patches/patch-kernel-serial-no-loopback.py} src/devices/uart_16550.rs
+      python3 ${./patch-native-boot-proof.py} kernel .
     '';
 
     installPhase = ''
@@ -128,6 +129,7 @@ let
       sed -i '/^name = "redox_uefi"/,/^$/{/^source = "git+/d}' Cargo.lock || true
       sed -i '/^name = "redox_uefi_std"/,/^$/{/^source = "git+/d}' Cargo.lock || true
       sed -i '/^name = "fdt"/,/^$/{/^source = "git+/d}' Cargo.lock || true
+      python3 ${./patch-native-boot-proof.py} bootloader .
     '';
 
     installPhase = ''

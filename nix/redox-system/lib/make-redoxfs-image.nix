@@ -67,20 +67,20 @@ hostPkgs.runCommand "redox-redoxfs"
     # /tmp must be world-writable with sticky bit (like any Unix system)
     chmod 1777 root/tmp
 
-    # Install boot components as store paths (for generation tracking)
-    # These are the authoritative copies — /boot/ files are for bootloader compat.
+    # Keep complete boot outputs at their manifest store paths, including
+    # package metadata needed to identify and restore the seed generation.
     kernelStore="root/nix/store/${builtins.baseNameOf (toString kernel)}"
-    mkdir -p "$kernelStore/boot"
-    cp ${kernel}/boot/kernel "$kernelStore/boot/kernel"
+    mkdir -p "$kernelStore"
+    cp -r ${kernel}/. "$kernelStore/"
 
     initfsStore="root/nix/store/${builtins.baseNameOf (toString initfs)}"
-    mkdir -p "$initfsStore/boot"
-    cp ${initfs}/boot/initfs "$initfsStore/boot/initfs"
+    mkdir -p "$initfsStore"
+    cp -r ${initfs}/. "$initfsStore/"
 
     ${lib.optionalString (bootloader != null) ''
       blStore="root/nix/store/${builtins.baseNameOf (toString bootloader)}"
-      mkdir -p "$blStore/boot/EFI/BOOT"
-      cp ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI "$blStore/boot/EFI/BOOT/BOOTX64.EFI"
+      mkdir -p "$blStore"
+      cp -r ${bootloader}/. "$blStore/"
     ''}
 
     # /usr/lib/boot/ copies for bootloader compatibility

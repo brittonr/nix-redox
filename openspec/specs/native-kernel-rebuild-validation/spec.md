@@ -40,3 +40,29 @@ The validation harness SHALL prove that guest-produced kernel and bootloader art
 - **WHEN** the focused validation selects the guest-produced kernel artifact for the next boot flow
 - **THEN** the system accepts the artifact path without requiring a host rebuild
 - **AND** the validation records that the produced store path is consumable by boot management
+
+### Requirement: Native system validation executes a three-boot rebuild and rollback
+
+The `native-rebuild-test` workflow SHALL perform exactly three cold firmware boots on one mutable disk: the seed system, the guest-built native system, and the exact previous seed generation. Staged files alone SHALL NOT satisfy this workflow.
+
+#### Scenario: Firmware executes the guest-built artifacts
+- **WHEN** the seed guest completes its ordinary offline native system rebuild and boot selection
+- **THEN** the harness freezes the seed and native bootloader, kernel, and initfs identities before restarting
+- **AND** it stops and waits for the VMM, extracts the selected guest-produced EFI from that same disk's RedoxFS, and installs those bytes into that disk's ESP
+- **AND** the next launch starts firmware from the disk rather than injecting a seed bootloader
+- **AND** the executing bootloader, kernel, and initfs each emit exactly one identity matching the frozen native artifact identity and differing from the seed identity
+- **AND** the running system verifies the selected native generation, hostname, services, drivers, and boot artifacts
+
+#### Scenario: Firmware executes the exact previous generation after rollback
+- **WHEN** the native guest exercises rollback and selects the original generation for the next boot
+- **THEN** the harness restarts the same disk from the selected seed EFI
+- **AND** the third boot emits the original bootloader, kernel, and initfs identities
+- **AND** the guest verifies the exact original generation, restored configuration and services, original kernel/initfs bytes, and retained native generation GC roots
+- **AND** only this final boot may report successful suite completion
+
+#### Scenario: Invalid boot evidence cannot pass
+- **WHEN** a guest assertion fails, completion arrives before the third boot, a restart is missing or out of order, or an executing-artifact identity is missing, duplicated, or incorrect
+- **THEN** the workflow fails rather than treating staging or a narrower test filter as successful boot proof
+- **AND** the capture retains separate per-boot logs and the combined guest/host assertions
+
+This workflow proves orderly stop/restart durability. Host-assisted ESP installation is part of the test harness, not a production guest ESP installer or a sudden-power-loss guarantee.

@@ -48,3 +48,15 @@ The repo SHALL maintain an index of the latest successful capture for each major
 #### Scenario: Focused and full wrappers emit the same summary fields
 - **WHEN** a focused proof run and a full proof run both produce summary JSON
 - **THEN** both summaries use the same required field names for flow name, run identifier, timing, verdict, and capture directory path
+
+### Requirement: Multi-boot native proof retains executing-artifact provenance
+
+The native rebuilt-system proof SHALL retain separate seed, native, and rollback firmware-boot logs, as well as a combined result log containing guest assertions and host identity/restart assertions.
+
+#### Scenario: Three-boot capture is auditable
+- **WHEN** a native three-boot proof finishes
+- **THEN** its capture retains `boot-0-seed.serial.log`, `boot-1-native.serial.log`, and `boot-2-rollback.serial.log` for the launches that occurred, with corresponding VMM logs
+- **AND** `expected-identities.log` records the first-boot seed/native expectations frozen before restarting
+- **AND** `summary.json` records an ordered `boot_cycles` list with phase, observed executing bootloader/kernel/initfs identities, and per-boot log metadata
+- **AND** missing identities remain missing and duplicate markers remain visible rather than being overwritten
+- **AND** successful index records retain this per-boot provenance without replacing unrelated flow results

@@ -10,10 +10,11 @@ export RUST_BACKTRACE=1
 # bootstrap execution using the existing SNIX_NO_SANDBOX=1 escape hatch.
 
 SNIX=/bin/snix
-work=/tmp/native-system-proof
+work=/var/lib/redox-native-proof
 manifest=/etc/redox-system/manifest.json
 failures=0
 phase=preflight
+restart_requested=0
 
 pass() { printf 'FUNC_TEST:%s:PASS\n' "$1"; }
 fail() {
@@ -44,12 +45,15 @@ link_target() {
   printf '%s' "${metadata##* -> }"
 }
 trap 'rc=$?; trap - ERR; fatal "$phase-unexpected-error" "exit=$rc line=$LINENO"' ERR
-trap 'printf "FUNC_TESTS_COMPLETE\n"' EXIT
+# A cold-restart request is not suite completion. Errors still terminate the
+# suite immediately, including errors while persisting the next boot phase.
+trap 'if [[ $restart_requested == 0 ]]; then printf "FUNC_TESTS_COMPLETE\n"; fi' EXIT
 printf 'FUNC_TESTS_START\n'
 printf 'Native system bootstrap isolation: SNIX_NO_SANDBOX=%s\n' "${SNIX_NO_SANDBOX:-unset}"
 
 # Pin external commands to immutable package paths before activation swaps the
 # profile. All parsing, assertions and loop control stay in this running Bash.
+if [[ -f $work/tools.sh ]]; then source "$work/tools.sh"; fi
 for cmd in ls mkdir cp cmp cat sleep llvm-readobj; do
   resolved=$(command -v "$cmd") || fatal preflight-tools "missing $cmd"
   while [[ -L $resolved ]]; do
@@ -63,13 +67,6 @@ for cmd in ls mkdir cp cmp cat sleep llvm-readobj; do
   hash -p "$resolved" "$cmd"
 done
 mkdir -p "$work"
-require native-inputs test -f /usr/src/nix-redox/build.nix
-require no-build-bridge test ! -d /scheme/shared
-require original-manifest test -f "$manifest"
-cp "$manifest" "$work/original.json"
-cp /usr/lib/boot/kernel "$work/original-kernel"
-cp /usr/lib/boot/initfs "$work/original-initfs"
-
 # Use Snix's JSON parser, not line-oriented extraction of nested manifest JSON.
 eval_raw() { "$SNIX" eval --raw --expr "$1"; }
 json_value() {
@@ -111,13 +108,6 @@ generation_dirs() {
   done
   return 0
 }
-
-original_id=$(json_value "$work/original.json" m.generation.id)
-original_hostname=$(</etc/hostname)
-# Older bootstrap manifests have no toplevel; activation deliberately uses
-# /etc/redox-system as their identity rather than leaving a native identity.
-original_identity=$(json_value "$work/original.json" 'if (m.toplevel or null) == null then "/etc/redox-system" else m.toplevel')
-original_etc=$(json_value "$work/original.json" m.etcSource)
 unit_with_marker() {
   local marker=$1 directory=$2 file text
   for file in "$directory"/*.service; do
@@ -129,6 +119,51 @@ unit_with_marker() {
     fi
   done
 }
+
+
+seed_phase() {
+# Redox uutils does not provide sync. Use the real filesystem fsync operation,
+# compiled with the same offline guest toolchain as the native rebuild.
+cat >"$work/flush.rs" <<'RUST'
+use std::{env, fs, io, path::Path};
+fn flush(path: &Path) -> io::Result<()> {
+    let metadata = fs::symlink_metadata(path)?;
+    if metadata.is_dir() {
+        for entry in fs::read_dir(path)? {
+            flush(&entry?.path())?;
+        }
+    } else if metadata.is_file() {
+        fs::File::open(path)?.sync_all()?;
+    }
+    Ok(())
+}
+fn main() -> io::Result<()> {
+    for path in env::args_os().skip(1) {
+        flush(Path::new(&path))?;
+    }
+    Ok(())
+}
+RUST
+if rustc "$work/flush.rs" --edition=2021 -o "$work/flush" \
+  -C linker=/nix/system/profile/bin/cc \
+  -C link-arg=-L/usr/lib/redox-sysroot/lib >"$work/flush-build.out" 2>"$work/flush-build.err"; then
+  pass durable-flush-helper-built
+else
+  cat "$work/flush-build.out" "$work/flush-build.err"
+  fatal durable-flush-helper-built 'offline guest fsync helper compilation failed'
+fi
+require native-inputs test -f /usr/src/nix-redox/build.nix
+require no-build-bridge test ! -d /scheme/shared
+require original-manifest test -f "$manifest"
+cp "$manifest" "$work/original.json"
+cp /usr/lib/boot/kernel "$work/original-kernel"
+cp /usr/lib/boot/initfs "$work/original-initfs"
+original_id=$(json_value "$work/original.json" m.generation.id)
+original_hostname=$(</etc/hostname)
+# Older bootstrap manifests have no toplevel; activation deliberately uses
+# /etc/redox-system as their identity rather than leaving a native identity.
+original_identity=$(json_value "$work/original.json" 'if (m.toplevel or null) == null then "/etc/redox-system" else m.toplevel')
+original_etc=$(json_value "$work/original.json" m.etcSource)
 original_removed_unit=$(unit_with_marker native-proof-remove-marker /usr/lib/init.d)
 original_retained_unit=$(unit_with_marker native-proof-retain-marker /usr/lib/init.d)
 require initial-removal-service test -n "$original_removed_unit"
@@ -149,7 +184,7 @@ cp "$original_retained_unit" "$work/original-retained.service"
     hardware = { networkDrivers = []; usbEnabled = false; };
   }
 " >"$work/config.json"
-nix_check service-fixtures 'm.services.declared ? native-proof-remove && m.services.declared ? native-proof-retain'
+nix_check service-fixtures 'm.services.declared ? native-proof-remove && m.services.declared ? native-proof-retain && m.services.declared ? native-proof-runner'
 nix_check driver-fixture 'builtins.elem "e1000d" m.configuration.hardware.networkDrivers && m.configuration.hardware.usbEnabled'
 [[ $failures == 0 ]] || exit 1
 
@@ -206,7 +241,7 @@ check current-generation same_link /nix/system/current "/etc/redox-system/genera
 check saved-manifest cmp -s "$manifest" "/etc/redox-system/generations/$native_id/manifest.json"
 nix_check native-output-manifest "let built = builtins.fromJSON (builtins.readFile ($expected + \"/manifest.json\")); in built.boot == m.boot && built.etcSource == m.etcSource && built.packages == m.packages"
 nix_check package-toolchain-retained 'builtins.all (p: builtins.elem p m.packages) original.packages'
-nix_check native-services-and-drivers '!(m.services.declared ? native-proof-remove) && m.services.declared ? native-proof-retain && m.configuration.hardware.networkDrivers == [] && !m.configuration.hardware.usbEnabled && m.configuration.hardware.storageDrivers == original.configuration.hardware.storageDrivers && !(builtins.elem "e1000d" m.drivers.all) && !(builtins.elem "xhcid" m.drivers.all)'
+nix_check native-services-and-drivers '!(m.services.declared ? native-proof-remove) && m.services.declared ? native-proof-retain && m.services.declared ? native-proof-runner && m.configuration.hardware.networkDrivers == [] && !m.configuration.hardware.usbEnabled && m.configuration.hardware.storageDrivers == original.configuration.hardware.storageDrivers && !(builtins.elem "e1000d" m.drivers.all) && !(builtins.elem "xhcid" m.drivers.all)'
 check hostname-generated test "$(</etc/hostname)" = native-system-proof
 check timezone-generated test "$(</etc/timezone)" = Etc/UTC
 check etc-generation-identity same_link /etc/static "$native_etc"
@@ -343,7 +378,7 @@ check failure-active-service cmp -s "$retained_unit" "$expected/root-files$retai
 check failure-removed-service-stays-absent test -z "$(unit_with_marker native-proof-remove-marker /usr/lib/init.d)"
 check failure-pci-config cmp -s /etc/pcid.d/initfs.toml "$native_etc/etc/pcid.d/initfs.toml"
 
-# Exercise the actual boot-generation consumer, not a claimed physical reboot.
+# Retain the boot-default consumer coverage before asking firmware to restart.
 phase=boot-selection
 if "$SNIX" system boot "$native_id" >"$work/boot.out" 2>"$work/boot.err" &&
   "$SNIX" system activate-boot --generation "$original_id" >"$work/activate-original.out" 2>"$work/activate-original.err" &&
@@ -352,12 +387,49 @@ if "$SNIX" system boot "$native_id" >"$work/boot.out" 2>"$work/boot.err" &&
 else
   fail boot-default-consumer 'generation boot selection failed'
 fi
+[[ $failures == 0 ]] || exit 1
+cp "$manifest" "$work/native.json"
+: >"$work/expected-identities"
+original_bootloader=$(json_value "$work/original.json" m.boot.bootloader)
+for component in bootloader kernel initfs; do
+  seed_path=$(json_value "$work/original.json" "m.boot.$component")
+  native_path=$(json_value "$work/native.json" "m.boot.$component")
+  seed_identity=$(store_dir "$seed_path")
+  native_identity=$(store_dir "$native_path")
+  require "$component-proof-distinct" test "$seed_identity" != "$native_identity"
+  require "$component-seed-proof-metadata" test "$(<"$seed_identity/boot-proof-id")" = "$seed_identity"
+  require "$component-native-proof-metadata" test "$(<"$native_identity/boot-proof-id")" = "$native_identity"
+  printf 'FUNC_EXPECT:seed:%s:%s\n' "$component" "$seed_identity" >>"$work/expected-identities"
+  printf 'FUNC_EXPECT:native:%s:%s\n' "$component" "$native_identity" >>"$work/expected-identities"
+done
+save_state
+cat "$work/expected-identities"
+request_restart native "$bootloader"
+}
+
+native_phase() {
+phase=native-boot
+# Runtime BOOT_PROOF lines come only from the loaded bootloader, kernel and
+# initfs. The host checks all three against the persisted first-boot declarations.
+require native-boot-generation test "$(json_value "$manifest" m.generation.id)" = "$native_id"
+require native-boot-manifest cmp -s "$manifest" "$work/native.json"
+require native-boot-default test "$(</etc/redox-system/boot-default)" = "$native_id"
+require native-boot-current-generation same_link /nix/system/current "/etc/redox-system/generations/$native_id"
 check boot-selected-native-identity same_link /run/current-system "$expected"
 check boot-selected-native-hostname test "$(</etc/hostname)" = native-system-proof
 check boot-selected-kernel cmp -s "$kernel" /usr/lib/boot/kernel
 check boot-selected-initfs cmp -s "$initfs" /usr/lib/boot/initfs
 check boot-selection-no-generation test "$(generation_dirs)" = "$pre_dirs"
-printf 'Native reboot scope: activate-boot consumed boot-default; no firmware restart or ESP write is claimed.\n'
+check native-boot-timezone test "$(</etc/timezone)" = Etc/UTC
+check native-boot-etc same_link /etc/static "$native_etc"
+check native-boot-removed-service test -z "$(unit_with_marker native-proof-remove-marker /usr/lib/init.d)"
+retained_unit=$(unit_with_marker native-proof-retain-marker /usr/lib/init.d)
+require native-boot-retained-service test -n "$retained_unit"
+check native-boot-retained-bytes cmp -s "$retained_unit" "$expected/root-files$retained_unit"
+check native-boot-pci-config cmp -s /etc/pcid.d/initfs.toml "$native_etc/etc/pcid.d/initfs.toml"
+check native-boot-network-driver-removed absent /etc/pcid.d/initfs.toml e1000d
+check native-boot-usb-driver-removed absent /etc/pcid.d/initfs.toml xhcid
+[[ $failures == 0 ]] || exit 1
 
 phase=rollback
 if "$SNIX" system rollback --generation "$original_id" >"$work/rollback.out" 2>"$work/rollback.err"; then
@@ -366,6 +438,21 @@ else
   cat "$work/rollback.out" "$work/rollback.err"
   fatal native-system-rollback 'rollback failed'
 fi
+# rollback deliberately records a new generation. Select the exact previous
+# generation afterwards, rather than claiming its replacement has the old ID.
+require rollback-select-previous "$SNIX" system switch-generation "$original_id"
+require rollback-boot-previous "$SNIX" system boot "$original_id"
+require rollback-selected-generation test "$(json_value "$manifest" m.generation.id)" = "$original_id"
+require rollback-selected-efi test "$(json_value "$manifest" m.boot.bootloader)" = "$original_bootloader"
+save_state
+request_restart rollback "$original_bootloader"
+}
+
+rollback_phase() {
+phase=rollback-boot
+require rollback-running-generation test "$(json_value "$manifest" m.generation.id)" = "$original_id"
+require rollback-current-generation same_link /nix/system/current "/etc/redox-system/generations/$original_id"
+require rollback-boot-default test "$(</etc/redox-system/boot-default)" = "$original_id"
 nix_check rollback-manifest 'm.boot == original.boot && m.packages == original.packages && m.services == original.services && m.configuration == original.configuration && m.drivers == original.drivers && (m.toplevel or null) == (original.toplevel or null) && m.etcSource == original.etcSource'
 check rollback-hostname test "$(</etc/hostname)" = "$original_hostname"
 check rollback-kernel-bytes cmp -s /usr/lib/boot/kernel "$work/original-kernel"
@@ -379,3 +466,41 @@ check no-build-bridge-after-rebuild test ! -d /scheme/shared
 artifact native-generation "/etc/redox-system/generations/$native_id/manifest.json"
 artifact rollback-log "$work/rollback.out"
 if [[ $failures != 0 ]]; then exit 1; fi
+printf 'complete\n' >"$work/phase"
+"$work/flush" "$work"
+}
+
+save_state() {
+  declare -p original_id original_hostname original_identity original_etc \
+    original_removed_unit original_retained_unit original_bootloader \
+    expected native_id native_etc kernel initfs bootloader pre_dirs >"$work/state.sh"
+  hash -l >"$work/tools.sh"
+}
+
+request_restart() {
+  local next=$1 efi=$2
+  [[ $failures == 0 ]] || exit 1
+  require "$next-restart-efi" test -f "$efi"
+  printf '%s\n' "$next" >"$work/phase"
+  # The host installs this exact stored EFI into the existing disk's ESP; this
+  # is not a claim that production guest activation includes an ESP installer.
+  # The seed keeps PCI configuration inside initfs; only the native generation
+  # also materializes it under /etc. Flush the active tree, not optional leaves.
+  "$work/flush" "$work" /etc /usr/lib/boot /usr/lib/init.d "$efi"
+  restart_requested=1
+  printf 'FUNC_REBOOT:%s:%s\n' "$next" "$efi"
+}
+
+boot_phase=seed
+if [[ -f $work/phase ]]; then
+  boot_phase=$(<"$work/phase")
+  require persisted-boot-state test -f "$work/state.sh"
+  source "$work/state.sh"
+fi
+printf 'Native proof boot phase: %s\n' "$boot_phase"
+case $boot_phase in
+seed) seed_phase ;;
+native) native_phase ;;
+rollback) rollback_phase ;;
+*) fatal boot-phase "unexpected persisted phase: $boot_phase" ;;
+esac
