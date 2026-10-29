@@ -2287,7 +2287,7 @@ RSEOF
                             cat /tmp/vendored-run-out
                           end
                         else
-                          echo "FUNC_TEST:cargo-vendored-dep:SKIP:unsandboxed-mutable-mapping-$(cat /tmp/vendored-result)"
+                          echo "FUNC_TEST:cargo-vendored-dep:FAIL:$(cat /tmp/vendored-result)"
                           echo "=== vendored stderr (last 2KB) ==="
                           /nix/system/profile/bin/bash -c '/bin/cat /tmp/vendored-build-log 2>/dev/null'
                         end
@@ -2908,11 +2908,13 @@ HELLONIX
                               echo "FUNC_TEST:direct-cc-dep-script:FAIL:output=$RUN"
                             fi
                           else
-                            echo "FUNC_TEST:direct-cc-dep-script:SKIP:unsandboxed-mutable-mapping-exit=$EXIT"
+                            echo "FUNC_TEST:direct-cc-dep-script:FAIL:build-exit=$EXIT"
                             echo "=== direct cc-dep stderr ===" >&2
                             cat /tmp/direct-cc-dep-stderr 2>/dev/null >&2
                             echo "=== direct cc-dep stdout ===" >&2
                             cat /tmp/direct-cc-dep-stdout 2>/dev/null | head -60 >&2
+                            echo "=== direct cc-dep cargo stderr ===" >&2
+                            cat /tmp/direct-cc-dep-tmp/cargo.stderr 2>/dev/null | head -60 >&2
                           fi
                         '
 

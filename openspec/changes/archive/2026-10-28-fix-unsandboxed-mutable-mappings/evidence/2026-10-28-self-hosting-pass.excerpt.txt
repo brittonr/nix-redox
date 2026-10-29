@@ -1,0 +1,63 @@
+Flow:     self-hosting-test
+Run:      20261028T164427-self-hosting-test
+Verdict:  PASS
+Duration: 8575s (capture summary); 8572.833s (runner)
+Base:     723d825e (git_dirty=true; includes the generation-keyed fmap patch)
+Patch:    nix/patches/redoxfs-fmap-generation.patch
+
+Invocation: env TMPDIR=/var/tmp nix --builders "" run .#self-hosting-test -- --verbose
+Runner: /nix/store/16g5kbry3n8mhab820g13phgfqhhpk14-functional-test/bin/functional-test --verbose
+Capture: /var/tmp/redox-self-hosting-captures/20261028T164427-self-hosting-test
+Sources: summary.json, meta.txt, runner.log in that capture directory
+Exit code: 0
+
+Formerly skipped and related build results (runner.log):
+  826:[vendored] cargo exit=0
+  829:VENDORED_OK
+  830:vendored result: vendored=0
+  831:FUNC_TEST:cargo-vendored-dep:PASS
+  922:FUNC_TEST:direct-cc-dep-script:PASS
+  928:FUNC_TEST:cc-dep-build:PASS
+  939:FUNC_TEST:workspace-build:PASS
+  960:rg-build-exit=0
+  962:FUNC_TEST:rg-build:PASS
+  964:FUNC_TEST:rg-version:PASS
+  965:  version output: ripgrep 14.1.1
+  966:FUNC_TEST:rg-search:PASS
+  967:  search result: hello world
+  968:hello redox
+  977:FUNC_TEST:parallel-jobs2:PASS
+
+Self-compiled snix and rebuild results (runner.log):
+  1337:snix-compile-exit=0
+  1338:snix-compile-output=/nix/store/60xyyh44kdx92dfl37hc9xsf11952knk-snix-self-compiled
+  1339:FUNC_TEST:snix-compile:PASS
+  1342:FUNC_TEST:snix-binary-exists:PASS
+  1345:FUNC_TEST:snix-binary-runs:PASS
+  1346:snix 0.4.0
+  1348:FUNC_TEST:snix-eval-works:PASS
+  1394:[source-rebuild] exit=0
+  1395:FUNC_TEST:source-rebuild:PASS
+  1397:FUNC_TEST:source-rebuild-gen:PASS
+  1403:FUNC_TEST:source-rebuild-dry:PASS
+  1406:FUNC_TEST:rebuild-hostname:PASS
+  1408:FUNC_TEST:rebuild-etc-file:PASS
+  1410:FUNC_TEST:rebuild-generation:PASS
+  1411:FUNC_TESTS_COMPLETE
+
+Final runner results:
+  Passed:  84
+  Failed:  0
+  Skipped: 0
+  Total:   84
+  FUNCTIONAL TEST PASSED
+
+Scope caveat: these are the runner's 84 counted tests. An earlier ad hoc
+runtime-environment diagnostic crashes and is not included in those counts:
+  405:kernel::context::signal:INFO -- UNHANDLED EXCEPTION, CPU #0, PID 127, NAME /tmp/env_runtime_bin, CONTEXT 0xffffff7f80130e30
+  422:FUNC_TEST:environ-diag:PASS
+The profile's environ-diag PASS checks a separate env!() compilation, not
+that runtime binary. No claim is made here that every diagnostic succeeded.
+
+Companion proof: 2026-10-28-sandbox-pass.excerpt.txt records 19/19 sandbox
+checks, including successful direct unsandboxed cc-dep and ripgrep builds.

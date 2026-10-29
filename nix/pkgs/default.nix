@@ -628,7 +628,11 @@ let
     # redoxfs compiled for Redox target (goes into initfs)
     redoxfsTarget = mkUserspace.mkPackage {
       pname = "redoxfs-target";
-      src = inputs.redoxfs-src;
+      src = pkgs.applyPatches {
+        src = inputs.redoxfs-src;
+        name = "redoxfs-src-fmap-generation";
+        patches = [ ../patches/redoxfs-fmap-generation.patch ];
+      };
       vendorHash = "sha256-DtkZ/gWXK0GzomTD5KspPrmRB+m4pdS7yJwj1Q2e2KA=";
       cargoBuildFlags = "--bin redoxfs";
       installPhase = ''

@@ -246,6 +246,9 @@ TMPNIX
       echo "diag-env: out=$out TMPDIR=$TMPDIR"
       out=/tmp/direct-cc-dep-out TMPDIR=/tmp/direct-cc-dep-tmp /nix/system/profile/bin/bash --noprofile --norc /usr/src/cc-dep-test/build-cc-dep.sh >/tmp/direct-cc-dep-stdout 2>/tmp/direct-cc-dep-stderr
       EXIT=$?
+      echo "direct-cc-dep-exit=$EXIT"
+      ls -l /tmp/direct-cc-dep-tmp 2>&1 || true
+      for f in /tmp/direct-cc-dep-tmp/cargo.stdout /tmp/direct-cc-dep-tmp/cargo.stderr; do echo "--- $f ($(wc -c < "$f" 2>/dev/null) bytes) ---"; cat "$f" 2>/dev/null | head -40; done
       if [ $EXIT -eq 0 ] && [ -x /tmp/direct-cc-dep-out/bin/cc-dep-test ]; then
         RUN=$(/tmp/direct-cc-dep-out/bin/cc-dep-test 2>&1)
         if echo "$RUN" | grep -q "CC_DEP_OK"; then
@@ -254,7 +257,17 @@ TMPNIX
           echo "FUNC_TEST:direct-cc-dep-script:FAIL:output=$RUN"
         fi
       else
-        echo "FUNC_TEST:direct-cc-dep-script:SKIP:unsandboxed-mutable-mapping-exit=$EXIT"
+        echo "FUNC_TEST:direct-cc-dep-script:FAIL:build-exit=$EXIT"
+        for o in /tmp/direct-cc-dep-tmp/target/debug/build/*/build_script_build-*.rcgu.o; do
+          [ -e "$o" ] || continue
+          echo "obj=$o read_size=$(wc -c < "$o")"
+          cp "$o" /tmp/obj-copy.rcgu.o
+          echo "copy_size=$(wc -c < /tmp/obj-copy.rcgu.o)"
+          echo "--- readobj on original (mmap) ---"
+          /nix/system/profile/bin/llvm-readobj --file-headers "$o" 2>&1 | head -20
+          echo "--- readobj on read-copy ---"
+          /nix/system/profile/bin/llvm-readobj --file-headers /tmp/obj-copy.rcgu.o 2>&1 | head -20
+        done
         echo "=== direct cc-dep stderr ===" >&2
         cat /tmp/direct-cc-dep-stderr 2>/dev/null >&2
         echo "=== direct cc-dep stdout ===" >&2
@@ -438,6 +451,9 @@ CCDEPCOPY
       mkdir -p /tmp/direct-rg-tmp
       out=/tmp/direct-rg-out TMPDIR=/tmp/direct-rg-tmp /nix/system/profile/bin/bash --noprofile --norc /usr/src/ripgrep/build-ripgrep.sh >/tmp/direct-rg-stdout 2>/tmp/direct-rg-stderr
       EXIT=$?
+      echo "direct-rg-exit=$EXIT"
+      ls -l /tmp/direct-rg-tmp 2>&1 || true
+      for f in /tmp/direct-rg-tmp/cargo.stdout /tmp/direct-rg-tmp/cargo.stderr; do echo "--- $f ($(wc -c < "$f" 2>/dev/null) bytes) ---"; cat "$f" 2>/dev/null | head -40; done
       if [ $EXIT -eq 0 ] && [ -x /tmp/direct-rg-out/bin/rg ]; then
         VER=$(/tmp/direct-rg-out/bin/rg --version 2>&1 | head -1)
         if echo "$VER" | grep -q "ripgrep"; then
@@ -446,7 +462,7 @@ CCDEPCOPY
           echo "FUNC_TEST:direct-rg-script:FAIL:version=$VER"
         fi
       else
-        echo "FUNC_TEST:direct-rg-script:SKIP:unsandboxed-mutable-mapping-exit=$EXIT"
+        echo "FUNC_TEST:direct-rg-script:FAIL:build-exit=$EXIT"
         echo "=== direct rg stderr ===" >&2
         cat /tmp/direct-rg-stderr 2>/dev/null >&2
         echo "=== direct rg stdout ===" >&2

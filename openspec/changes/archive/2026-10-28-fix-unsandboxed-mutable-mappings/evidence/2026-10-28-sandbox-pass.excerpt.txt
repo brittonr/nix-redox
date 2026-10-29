@@ -1,0 +1,20 @@
+Capture: /var/tmp/redox-self-hosting-captures/20261028T163222-snix-sandbox-test
+Run: 20261028T163222-snix-sandbox-test
+Patch: nix/patches/redoxfs-fmap-generation.patch
+
+direct-cc-dep-exit=0
+FUNC_TEST:direct-cc-dep-script:PASS
+direct-rg-exit=0
+FUNC_TEST:direct-rg-script:PASS
+    Passed:  19
+    Failed:  0
+    Skipped: 0
+    Total:   19
+  ║       FUNCTIONAL TEST PASSED
+
+Direct cc-dep build reads:
+98:direct-cc-dep-exit=0
+146:FUNC_TEST:direct-cc-dep-script:PASS
+Direct rg build reads:
+329:direct-rg-exit=0
+377:FUNC_TEST:direct-rg-script:PASS

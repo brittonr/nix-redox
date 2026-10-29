@@ -12,11 +12,15 @@ plain `file:` scheme and hits the corruption.
 
 ## What Changes
 
-- Make mutable-path mappings private/anonymous at the scheme or kernel layer
-  so every file-backed mapping of a writable inode is isolated from node-ID
-  recycling, not only mappings that pass through the build proxy.
-- Add a focused regression that builds the cc-dep and ripgrep fixtures with
-  `--no-sandbox` and runs the binaries.
+- Key RedoxFS scheme fmap entries by a non-recycled generation ID instead of
+  the filesystem node ID. Retire the node-to-generation association on final
+  unlink; old mappings retain their original entry, while a recycled node
+  receives a fresh anonymous base. Release unused entries and their bases.
+- Require the direct unsandboxed cc-dep and ripgrep fixture builds to pass.
+  These probes invoke the fixture scripts outside snix and exercise the
+  plain `file:` scheme used by `snix build --no-sandbox`; the captures do not
+  claim a separate literal `--no-sandbox` invocation. Retain the sandboxed
+  snix build-and-run coverage.
 - Once fixed, turn the `SKIP:unsandboxed-mutable-mapping` probes in
   `snix-sandbox-test.nix` and `self-hosting-test.nix` back into PASS checks.
 - Keep the proxy copy path as defence in depth or remove it after the

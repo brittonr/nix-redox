@@ -1,0 +1,32 @@
+Capture: /var/tmp/redox-self-hosting-captures/20261028T155026-snix-sandbox-test
+Run: 20261028T155026-snix-sandbox-test
+
+--- direct-cc-dep-script ---
+    ✓ file-build-multiarg-usrsrc-probe
+ccdep-diag: dr-xr-xr-x 1 root 0 4096 Oct 28 19:47 /usr/src/cc-dep-test
+-r--r--r-- 1 root 0  840 Oct 28 19:47 /usr/src/cc-dep-test/build-cc-dep.sh
+dr-xr-xr-x 1 root 0 4096 Oct 28 19:47 /usr/src/ripgrep
+-r--r--r-- 1 root 0 1044 Oct 28 19:47 /usr/src/ripgrep/build-ripgrep.sh
+[bash@relibc::platform::sys:746 INFO] TODO: getrlimit(7, 0xe4cd88): not implemented
+ccdep-parse-rc=0
+[bash@relibc::platform::sys:746 INFO] TODO: getrlimit(7, 0xe4cd88): not implemented
+rg-parse-rc=0
+diag-env: out= TMPDIR=
+direct-cc-dep-exit=1
+total 36
+drwxr-xr-x 1 root 0 4096 Oct 28 19:51 cargo-home
+-rw-r--r-- 1 root 0 4492 Oct 28 19:51 cargo.stderr
+-rw-r--r-- 1 root 0    0 Oct 28 19:51 cargo.stdout
+drwxr-xr-x 1 root 0 4096 Oct 28 19:51 rustcWRyPJ6
+drwxr-xr-x 1 root 0 4096 Oct 28 19:51 target
+--- /tmp/direct-cc-dep-tmp/cargo.stdout (0 bytes) ---
+--- /tmp/direct-cc-dep-tmp/cargo.stderr (4492 bytes) ---
+   Compiling shlex v1.3.0
+   Compiling cc v1.2.21
+   Compiling cc-dep-test v0.1.0 (file:/usr/src/cc-dep-test)
+[bash@relibc::platform::sys:746 INFO] TODO: getrlimit(7, 0xe4cd88): not implemented
+ld.lld: error: /tmp/direct-cc-dep-tmp/target/debug/build/cc-dep-test-c1fd252a5c67c7ca/build_script_build-c1fd252a5c67c7ca.build_script_build.2651b5fe27628bc6-cgu.0.rcgu.o: section table goes past the end of file
+error: linking with `/nix/system/profile/bin/cc` failed: exit status: 1
+  |
+  = note:  "/nix/system/profile/bin/cc" "-m64" "/tmp/direct-cc-dep-tmp/rustcWRyPJ6/symbols.o" "<2 object files omitted>" "-Wl,--as-needed" "-Wl,-Bstatic" "/tmp/direct-cc-dep-tmp/target/debug/deps/{libcc-c58dd6c0c6754395,libshlex-93f2d5a701dc53b3}.rlib" "<sysroot>/lib/rustlib/x86_64-unknown-redox/lib/{libstd-*,libpanic_unwind-*,libcfg_if-*,librustc_demangle-*,libstd_detect-*,libhashbrown-*,librustc_std_workspace_alloc-*,libunwind-*}.rlib" "-lgcc_eh" "<sysroot>/lib/rustlib/x86_64-unknown-redox/lib/liblibc-*.rlib" "-lc" "<sysroot>/lib/rustlib/x86_64-unknown-redox/lib/{librustc_std_workspace_core-*,liballoc-*,libcore-*,libcompiler_builtins-*}.rlib" "-L" "/tmp/direct-cc-dep-tmp/rustcWRyPJ6/raw-dylibs" "-Wl,-Bdynamic" "-lgcc" "-Wl,--eh-frame-hdr" "-Wl,-z,noexecstack" "-o" "/tmp/direct-cc-dep-tmp/target/debug/build/cc-dep-test-c1fd252a5c67c7ca/build_script_build-c1fd252a5c67c7ca" "-Wl,--gc-sections" "-static" "-no-pie" "-Wl,-z,relro,-z,now" "-Wl,--strip-debug" "-nodefaultlibs"
+  = note: some arguments are omitted. use `--verbose` to show all linker arguments
