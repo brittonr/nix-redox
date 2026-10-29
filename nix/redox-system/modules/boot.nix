@@ -34,6 +34,11 @@ in
           inputs.pkgs.pkgs.bootloader or { };
       description = "Bootloader package. Auto-selects autoboot variant when liveMode is true.";
     };
+    bootProof = {
+      type = t.bool;
+      default = false;
+      description = "Emit executing initfs identity before switchroot for the native cold-boot proof";
+    };
     initfsExtraBinaries = {
       type = t.listOf t.string;
       default = [ ];

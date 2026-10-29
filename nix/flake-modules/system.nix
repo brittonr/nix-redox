@@ -793,11 +793,19 @@ let
     auditCommand = "${auditNativeKernelRebuildBundle}/bin/audit-native-kernel-rebuild-bundle ${nativeKernelRebuildBundle}";
   };
 
+  nativeBootProofArtifacts = import ../pkgs/infrastructure/native-boot-proof-artifacts.nix {
+    inherit pkgs;
+    kernel = modularPkgs.system.kernel;
+    bootloader = modularPkgs.system.bootloader;
+  };
+
   nativeRebuildTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/native-rebuild-test.nix ];
     extraPkgs = extraPkgs // {
       native-system-bundle = nativeSystemBundle;
       native-kernel-rebuild-bundle = nativeKernelRebuildBundle;
+      native-boot-proof-kernel = nativeBootProofArtifacts.kernel;
+      native-boot-proof-bootloader = nativeBootProofArtifacts.bootloader;
     };
   };
   nativeRebuildTestRaw = mkFunctionalTest {
@@ -806,6 +814,14 @@ let
     memoryMB = 8192;
     cpus = 4;
     defaultTimeout = 14400;
+    nativeBootProof = {
+      redoxfs = modularPkgs.host.redoxfs;
+      seedIdentities = {
+        kernel = toString nativeBootProofArtifacts.kernel;
+        bootloader = toString nativeBootProofArtifacts.bootloader;
+        initfs = toString nativeRebuildTestSystem.initfs;
+      };
+    };
   };
   nativeRebuildTest = wrapFunctionalTest {
     base = nativeRebuildTestRaw;

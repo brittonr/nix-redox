@@ -240,17 +240,20 @@ repeatedly dumping the generated manifest expression as trace frames.
 Only a successful graph build reaches activation. Generations retain their
 boot/identity/etc GC roots and original init-unit contents for rollback.
 
-The focused acceptance image stages the bundles and exercises native rebuild,
-failed-build isolation, real boot-artifact consumers, and rollback:
+The focused acceptance image exercises offline native rebuild, failed-build
+isolation, then three firmware boots on one disk: seed → native → exact previous
+generation.
 
 ```bash
 TMPDIR=/var/tmp nix run .#native-rebuild-test -- --verbose
 ```
 
-This proof uses boot-default/`activate-boot`; it does not restart firmware or
-replace the EFI executable on the ESP. Init-unit files are updated, not a claim
-that every running daemon has been restarted. Captures follow
-[`docs/self-hosting/proof-artifacts.md`](docs/self-hosting/proof-artifacts.md).
+The host harness installs the selected EFI bytes extracted from that guest disk
+into its ESP before each restart; this is not a production guest ESP installer.
+Executing bootloader/kernel/initfs identities must match the selected generation
+after both restarts. Rollback checks restored configuration, service units, boot
+bytes, and native GC roots. Captures retain all three boot logs and identities;
+see [`docs/self-hosting/proof-artifacts.md`](docs/self-hosting/proof-artifacts.md).
 
 
 ## Requirements

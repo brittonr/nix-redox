@@ -5,9 +5,9 @@ See `docs/self-hosting/proof-artifacts.md` for the capture contract.
 
 | Flow | Run ID | Finished | Commit | Tests | Capture dir |
 |---|---|---|---|---|---|
-| self-hosting-test | 20261028T164427-self-hosting-test | 2026-10-28T19:07:22-04:00 | `723d825e` | 84/84 pass | `/var/tmp/redox-self-hosting-captures/20261028T164427-self-hosting-test` |
+| self-hosting-test | 20261028T211136-self-hosting-test | 2026-10-28T23:05:23-04:00 | `b5da985d` | 84/84 pass | `/var/tmp/redox-self-hosting-captures/20261028T211136-self-hosting-test` |
 | snix-compile-test | 20261028T091421-snix-compile-test | 2026-10-28T10:08:15-04:00 | `8a9604d9` | 8/8 pass | `/var/tmp/redox-self-hosting-captures/20261028T091421-snix-compile-test` |
 | snix-sandbox-test | 20261028T163222-snix-sandbox-test | 2026-10-28T16:39:34-04:00 | `723d825e` | 19/19 pass | `/var/tmp/redox-self-hosting-captures/20261028T163222-snix-sandbox-test` |
 | kernel-rebuild-test | 20260415T000324-kernel-rebuild-test | 2026-04-15T00:15:32-04:00 | `af057438` | 10/10 pass | `/var/tmp/redox-self-hosting-captures/20260415T000324-kernel-rebuild-test` |
-| native-rebuild-test | 20261026T052853-native-rebuild-test | 2026-10-26T05:55:20-04:00 | `50395ba6` | 88/88 pass | `/var/tmp/redox-self-hosting-captures/20261026T052853-native-rebuild-test` |
+| native-rebuild-test | 20261029T000233-native-rebuild-test | 2026-10-29T00:32:32-04:00 | `b5da985d` | 135/135 pass | `/var/tmp/redox-self-hosting-captures/20261029T000233-native-rebuild-test` |
 | runtime-environment-smoke | 20261028T205624-runtime-environment-smoke | 2026-10-28T20:57:24-04:00 | `4d7b99f6` | 5/5 pass | `/var/tmp/redox-self-hosting-captures/20261028T205624-runtime-environment-smoke` |

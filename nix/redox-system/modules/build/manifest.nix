@@ -62,6 +62,7 @@ let
     configuration = {
       boot = {
         inherit (cfg) diskSizeMB espSizeMB;
+        inherit (cfg) bootProof;
       };
       hardware = {
         storageDrivers = inputs.hardware.storageDrivers;

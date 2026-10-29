@@ -264,6 +264,7 @@ adios:
           "coreDaemons"
           "initfsDaemons"
           "initfsPrompt"
+          "bootProof"
           "initDebug"
           "initSkip"
           "graphicsEnabled"

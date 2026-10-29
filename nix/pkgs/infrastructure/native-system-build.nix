@@ -36,6 +36,7 @@ let
   ) seed.cfg.allDaemons;
   cfg = seed.cfg // {
     inherit usbEnabled initfsEnableGraphics graphicsEnabled allDrivers coreDaemons initfsDaemons;
+    bootProof = currentManifest.configuration.boot.bootProof or (seed.cfg.bootProof or false);
     allDaemons = lib.unique (builtins.filter (name:
       !(builtins.elem name (seed.cfg.initfsExcludeDaemons or [ ]))
     ) (coreDaemons ++ initfsDaemons ++ extraDaemons));

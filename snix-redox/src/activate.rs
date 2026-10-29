@@ -1578,6 +1578,7 @@ mod tests {
                 boot: BootConfig {
                     disk_size_mb: 512,
                     esp_size_mb: 200,
+                    boot_proof: false,
                 },
                 hardware: HardwareConfig {
                     storage_drivers: vec!["virtio-blkd".to_string()],

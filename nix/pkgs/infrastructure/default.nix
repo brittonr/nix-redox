@@ -131,6 +131,7 @@ in
       defaultMode ? null,
       enableQemu ? true,
       enableCH ? true,
+      nativeBootProof ? null,
     }:
     import ./functional-test.nix {
       inherit
@@ -145,6 +146,7 @@ in
         defaultMode
         enableQemu
         enableCH
+        nativeBootProof
         ;
     };
 
