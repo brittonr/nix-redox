@@ -1,6 +1,6 @@
 --- a/redox-rt/src/lib.rs
 +++ b/redox-rt/src/lib.rs
-@@ -279,15 +279,57 @@
+@@ -279,15 +279,58 @@
  
  #[inline]
  pub(crate) fn static_proc_info() -> &'static StaticProcInfo {
@@ -8,12 +8,13 @@
 +    unsafe {
 +        if (*STATIC_PROC_INFO.get()).proc_fd.is_none() && __relibc_init_proc_fd != usize::MAX {
 +            if let Ok(fd) = crate::sys::dup_into_upper(__relibc_init_proc_fd, b"") {
-+                let proc_fd = FdGuardUpper::new(fd);
-+                if let Ok(metadata) = read_proc_meta(&proc_fd) {
-+                    STATIC_PROC_INFO.get().write(StaticProcInfo {
-+                        pid: metadata.pid,
-+                        proc_fd: Some(proc_fd),
-+                    });
++                if let Ok(proc_fd) = FdGuard::new(fd).to_upper() {
++                    if let Ok(metadata) = read_proc_meta(&proc_fd) {
++                        STATIC_PROC_INFO.get().write(StaticProcInfo {
++                            pid: metadata.pid,
++                            proc_fd: Some(proc_fd),
++                        });
++                    }
 +                }
 +            }
 +        }
@@ -59,7 +60,7 @@
      DYNAMIC_PROC_INFO
          .lock()
          .ns_fd
-@@ -362,5 +404,16 @@
+@@ -362,5 +405,16 @@
  
  #[inline]
  pub fn current_filetable() -> crate::sync::MutexGuard<'static, FdTbl> {
@@ -311,7 +312,7 @@
      let _siglock = tmp_disable_signals();
      let guard = CWD.read();
  
-@@ -126,8 +129,32 @@
+@@ -126,8 +129,34 @@
  }
  
  pub fn clone_cwd() -> Option<CwdPath> {
@@ -339,7 +340,9 @@
 +    let Ok(path) = to_cwd_path(s) else { return };
 +    let Some(redox) = RedoxPath::from_absolute(s.to_string()) else { return };
 +    if let Ok(fd) = redox_rt::sys::dup_into_upper(fd, b"") {
-+        *guard = Some(Cwd { path, redox, fd: FdGuardUpper::new(fd) });
++        if let Ok(fd) = FdGuard::new(fd).to_upper() {
++            *guard = Some(Cwd { path, redox, fd });
++        }
 +    }
  }
  

@@ -85,7 +85,7 @@ let
     name = "bootstrap-cargo-vendor";
     src = patchedSrc;
     sourceRoot = "bootstrap-src-patched/bootstrap";
-    hash = "sha256-TxBagMJMUgo1JrodBitBUn+AATycZTLgkvcack9Od4g=";
+    hash = "sha256-ykxYOhkKxAj9cXFnrilS4aeaUlxuNu97xrQPhG8wkD0=";
   };
 
   # Create merged vendor directory (cached as separate derivation)

@@ -51,7 +51,7 @@ rec {
   vendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "rust-sysroot-vendor";
     src = sysrootSrc;
-    hash = "sha256-wlOI8bZRUmc18GN4Bpx74eYlUQODJzxBk5Ia5IwXm14=";
+    hash = "sha256-hU9x09KB7TacKV9lQBCGwbE9SO7lHfPDi8JMjRXE1qk=";
   };
 
   # Create a combined sysroot with relibc

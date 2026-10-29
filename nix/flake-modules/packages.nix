@@ -287,7 +287,7 @@ let
         skipTargetCheck = true;
         inherit rustSrcPath;
         extraCrateOverrides = {
-          # Rust 1.92 core includes stdarch via #[path = "../../stdarch/..."];
+          # Rust core includes stdarch via #[path = "../../stdarch/..."];
           # buildRustCrate must unpack the whole library source tree, not just
           # library/core, or core_arch is missing during kernel build-std.
           #
@@ -307,6 +307,13 @@ let
           compiler_builtins = attrs: {
             libPath = "${attrs.src}/src/lib.rs";
             build = "${attrs.src}/build.rs";
+          };
+
+          # kernel.nix rewrites the fdt git dependency to this flake input, so
+          # the plan records an absolute store path that pure evaluation cannot
+          # resolve on its own.
+          fdt = _: {
+            src = inputs.kernel-fdt-src;
           };
 
           # The kernel crate needs nasm for build.rs and linker script args.
@@ -491,7 +498,7 @@ let
         extraCrateOverrides = externalSrcOverrides;
       };
 
-      # Workspace members that produce binaries (46 total).
+      # Workspace members that produce binaries (50 total).
       # Lib-only members (common, config, daemon, etc.) are internal deps.
       binMembers = [
         "ac97d"
@@ -499,6 +506,7 @@ let
         "ahcid"
         "audiod"
         "bcm2835-sdhcid"
+        "dhcpd"
         "e1000d"
         "fbbootlogd"
         "drawbench"
@@ -506,6 +514,7 @@ let
         "hwd"
         "getty"
         "ided"
+        "igcd"
         "ihdad"
         "ihdgd"
         "init"
@@ -523,7 +532,7 @@ let
         "ramfs"
         "randd"
         "redox-initfs-tools"
-        "redox_netstack"
+        "netstack"
         "redoxerd"
         "rtcd"
         "rtl8139d"

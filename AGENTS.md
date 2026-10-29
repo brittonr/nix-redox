@@ -88,7 +88,7 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 - Native kernel/bootloader builders must use `cargo --offline` (not `--locked`) with `-Z build-std`; build-std needs to update the lock for the std workspace. Builder diagnostics must write under `$TMPDIR` — the sandbox allow-list denies the real `/tmp` root
 - `snix build` materializes each derivation's `.drv` in `/nix/store` and registers its pathinfo before building (`register_derivation_file`); the evaluator only keeps derivations in `KnownPaths`, so without this `builtins.pathExists drv.drvPath` fails and pathinfo `deriver` fields point at nothing
 - Reference scanning needs `refscan_needles` built from direct input outputs/sources (`direct_inputs`); passing an empty inputs map to `derivation_into_build_request` limits needles to self-references, so pathinfo `references` stays empty and graph/closure checks fail
-- `kernel-src` is pinned to `5865ec07` (2026-03-26) and `fdt-src` to `2fb1409`; later kernel master refactored paging/contiguous allocation and needs a newer nightly than the repo's `2025-10-03`, so the native rebuild patch set (`p2frame`, trampoline, LAPIC, serial) no longer applies as-is. The git archive's `rmm/` is an empty submodule, so the bundle must keep copying `rmm-src` (the in-tree-rmm rule only applied to the newer master tree)
+- `kernel-src` is pinned to `7b1f8e01` (nightly-2026-05-24 era). The kernel now ships `rmm` and `syscall` as in-tree workspace members (there is no `rmm-src` input) and takes `fdt` from `kernel-fdt-src` (`8fa4388e`), which `kernel.nix` path-rewrites and `mkKernelPerCrate` maps through an `fdt` source override. The native rebuild carry set is: trampoline pre-generation, serial loopback bypass (`patch-kernel-serial-no-loopback.py`, rebased onto the refreshed `uart_16550.rs`) and ptrace proc handles
 - unit2nix plans embed absolute `libPath`/`build` paths of the toolchain that generated them; `mkKernelPerCrate` recomputes those for `core`/`alloc`/`compiler_builtins` from the current `rustToolchain` so a relocated or GC'd plan toolchain cannot break stdlib crates
 
 ### relibc Limitations
@@ -98,7 +98,7 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 - `Mutex` is non-reentrant — child inherits locked state after `fork()` → deadlock
 - `abort()` uses `ud2` instruction → opaque kernel register dump. Patched to `_exit(134)`.
 - `flock()` is a no-op in upstream relibc (returns Ok(()) immediately)
-- Foreground process execution fixed — LAPIC timer patch (`patch-kernel-lapic-timer.py`) provides reliable scheduling on KVM when all CPUs are in HLT
+- Foreground process scheduling: `patch-kernel-lapic-timer.py` was dropped when the kernel was refreshed to `7b1f8e01`; if foreground processes stall on KVM when all CPUs are in HLT, restore a rebased LAPIC timer carry
 - `fcntl` F_SETLK/F_SETLKW patched to no-op (return Ok(0))
 - `exec()` env propagation fixed for DSO-linked binaries (DSO environ patches)
 - `execvpe()` added to relibc; DSO environ fix (patch-relibc-environ-dso-init.py) broadcasts environ to __relibc_init_environ after relibc_start_v1
@@ -121,18 +121,19 @@ Upstream Redox source cloned in `~/git/pi-repos/` for code-level reference:
 ### Dynamic Linking — .symtab Fallback for LOCAL Symbols
 - Pre-built DSOs (librustc_driver.so) have `__relibc_init_*` as LOCAL in `.symtab` due to Rust `local: *;` version scripts
 - ld_so's `get_sym()` only searches `.dynsym` hash table — misses LOCAL symbols entirely
-- Fix: `patch-relibc-symtab-fallback.py` scans `.symtab` during DSO construction via `FileHeader::sections()` + `symbol_table_by_index()`
+- Fix: `patch-relibc-dso-runtime.patch` scans `.symtab` during DSO construction via `FileHeader::sections()` + `symbol_table_by_index()` (replaces the former `patch-relibc-symtab-fallback.py`)
 - Stores addresses in `LocalInitSyms` struct on DSO; `run_init` uses them as fallback when `get_sym` returns None
-- Covers all 6 init symbols: `environ`, `proc_fd`, `ns_fd`, `cwd_ptr`, `cwd_len`, `cwd_fd`
+- Covers all 7 init symbols: `environ`, `proc_fd`, `ns_fd`, `cwd_ptr`, `cwd_len`, `cwd_fd`, `filetable`
 - The `object` crate with `["elf", "read_core"]` features does NOT have `SectionTable::symbol_table()` — must iterate sections manually to find `SHT_SYMTAB`, then call `symbol_table_by_index()`
 - `Object` trait's `symbol_table()` returns `Option<ElfSymbolTable>` (not `Result`), but `ElfSymbolTable` methods differ from raw `SymbolTable` — use raw `FileHeader` API instead
-- `current_namespace_fd()` returns `Result<usize>` (not plain `usize`) after `patch-relibc-ns-fd.patch`
+- `current_namespace_fd()` returns `Result<usize>` (not plain `usize`); `patch-relibc-dso-runtime.patch` short-circuits it through `__relibc_init_ns_fd` in DSO copies
+- `FdGuard::new` only exists for the lower fd table; build an upper guard from a raw tagged fd with `FdGuard::new(fd).to_upper()` (there is no `FdGuardUpper::new`)
 - `std::env::set_var` is unsafe in Rust edition 2024
 
 ### Dynamic Linking
 - Each DSO gets its own copy of relibc statics (CWD, ns_fd, proc_fd, environ)
-- `ld_so run_init()` injects ns_fd, proc_fd, CWD, environ into DSOs via `__relibc_init_*` symbols
-- Version scripts must include `__relibc_init_ns_fd`, `__relibc_init_proc_fd`, `__relibc_init_cwd_ptr`, `__relibc_init_cwd_len`, `__relibc_init_environ`
+- `ld_so run_init()` injects ns_fd, proc_fd, CWD, the shared userspace filetable, and environ into DSOs via `__relibc_init_*` symbols
+- Version scripts must include `__relibc_init_ns_fd`, `__relibc_init_proc_fd`, `__relibc_init_cwd_ptr`, `__relibc_init_cwd_len`, `__relibc_init_cwd_fd`, `__relibc_init_filetable`, `__relibc_init_environ`
 - Rust generates `local: *;` version scripts that hide these symbols — must inject into global section
 - PT_GNU_STACK has `p_align=0` → guard with `core::cmp::max(p_align, 1)` to prevent division by zero
 - `libstdcxx-shim.so` provides libstdc++.so.6 symbols from libc++.a (rustc's LLVM needs it)
@@ -404,10 +405,13 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - focused test harness note: `snix-sandbox-test` originally checked `$out/bin/workspace-test`, but `workspace-build.nix` installs `$out/bin/mybin`
 
 ### Key Patches (all still required)
-**relibc** (13 patches): abort-dso, chdir-cwd, dso-environ, environ-dso-init, execvpe, fcntl-lock, fork-lock,
-ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-read
-**cargo** (3 patches): read2-pipes, redox-paths, blake3-redox (in vendor)
-**rustc** (4 patches): execvpe, read2-pipes, rustc-flags, allocator-shim
+**relibc** (9 patches): dso-runtime, dso-environ, environ-dso-init, prefault-stack, grow-main-stack, abort-dso,
+execvpe, ld-so-argv-utf8, fork-lock. The cwd, ns-fd, run-init, symtab-fallback, ld-so-align, pipe-cloexec,
+fcntl-lock and randd-read carries were dropped or folded into dso-runtime by the upstream alignment.
+**rustc tree** (12 patches, nightly-2026-05-24): sysroot, cmake, arange, bootstrap-force-link, main-stack,
+linker-pipes, read2-pipes, cargo-read2-pipes, jobserver-poll, cargo-heartbeat, execvpe, cargo-irwxu.
+Dropped because relibc now covers them: spawn-pipes (CLOEXEC exec error pipe) and the std/cargo `file:` path
+stripping. Restore them if guest `Command` spawn errors or `file:` paths reappear.
 
 ### Fork Thread Safety (CLONE_LOCK)
 - CLONE_LOCK (RwLock) serializes fork (write) and thread creation (read)
@@ -427,7 +431,7 @@ ld-so-align, ld-so-argv-utf8, ld-so-cwd, ld-so-dso-init, pipe-cloexec, randd-rea
 
 ### virtio-fsd
 - Response buffers MUST be `sizeof(FuseOutHeader) + requested_size` (virtiofsd uses descriptor size for preadv2 length)
-- Non-power-of-two phys_contiguous bug FIXED via `patch-kernel-p2frame-init.py` — kernel now initializes all 2^order frames and uses bulk `deallocate_p2frame` on free
+- `patch-kernel-p2frame-init.patch` was dropped with the kernel refresh to `7b1f8e01`; verify non-power-of-two phys_contiguous frees on the new kernel if DMA corruption reappears
 - `round_to_p2_pages()` retained as defense in depth (drivers should not depend on kernel correctness for DMA safety)
 - Redox open flags must be translated to Linux FUSE flags via `redox_to_fuse_flags()`
 - `--cache=never` on virtiofsd for live push detection (otherwise dir entries cached)

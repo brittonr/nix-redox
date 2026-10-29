@@ -75,7 +75,7 @@ let
           -Wl,--version-script=*)
             vs="''${arg#-Wl,--version-script=}"
             if [ -f "$vs" ]; then
-              ${pkgs.gnused}/bin/sed -i '/^[[:space:]]*local:/i\    __relibc_init_ns_fd;\n    __relibc_init_proc_fd;\n    __relibc_init_cwd_ptr;\n    __relibc_init_cwd_len;\n    __relibc_init_environ;' "$vs"
+              ${pkgs.gnused}/bin/sed -i '/^[[:space:]]*local:/i\    __relibc_init_ns_fd;\n    __relibc_init_proc_fd;\n    __relibc_init_cwd_ptr;\n    __relibc_init_cwd_len;\n    __relibc_init_cwd_fd;\n    __relibc_init_filetable;\n    __relibc_init_environ;' "$vs"
             fi
             ;;
         esac
@@ -272,6 +272,8 @@ let
     channel = "nightly"
     jemalloc = false
     download-rustc = false
+    # Redox-specific carries leave cfg-gated imports unused on this target.
+    deny-warnings = false
 
     [target.x86_64-unknown-redox]
     cc = "${ccWrapper}"
@@ -348,9 +350,7 @@ pkgs.stdenv.mkDerivation {
     ./patches/patch-rustc-main-stack.patch
     # Avoid piped linker output (Redox poll() crash)
     ./patches/patch-rustc-linker-pipes.patch
-    # Skip CLOEXEC error pipe reading in spawn() (crashes on Redox)
-    ./patches/patch-rustc-spawn-pipes.patch
-    # Replace poll()-based read2() with sequential reads (poll() crashes)
+    # Replace poll()-based read2 in std's Command::output with a helper thread (poll() crashes)
     ./patches/patch-rustc-read2-pipes.patch
     # Replace poll()-based read2() in cargo-util (poll() hangs build scripts)
     ./patches/patch-cargo-read2-pipes.patch
@@ -362,9 +362,8 @@ pkgs.stdenv.mkDerivation {
     ./patches/patch-rustc-execvpe.patch
     # cargo-util S_IRWXU type mismatch (i32 vs u32 on Redox)
     ./patches/patch-cargo-irwxu.patch
-    # Strip "file:" URL scheme prefix from OS-returned paths (std + cargo)
-    ./patches/patch-std-redox-paths.patch
-    ./patches/patch-cargo-redox-paths.patch
+    # relibc now returns standard paths, so std and cargo need no "file:" stripping, and
+    # pipe2/CLOEXEC works, so spawn() keeps its exec error pipe.
   ];
 
   configurePhase = ''

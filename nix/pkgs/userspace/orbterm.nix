@@ -43,7 +43,7 @@ let
   orbtermVendor = pkgs.rustPlatform.fetchCargoVendor {
     name = "orbterm-cargo-vendor";
     src = orbterm-src;
-    hash = "sha256-/ZLt7HMD3wXQsXSiaNEFwURJYBYOwj9TNcR8CUUjB5k=";
+    hash = "sha256-G7hnGJDsbxlpxG8L6yRAIrLqAe6xFhCfzqqK3GqTupg=";
   };
 
   # Create merged vendor directory (project + sysroot)

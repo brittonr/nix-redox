@@ -27,17 +27,28 @@ def main():
 
     old_loopback = """\
             // Enable loopback
-            (*addr_of_mut!(self.modem_ctrl)).write(0x10.into());
+            self.modem_ctrl.write(0x1E.into());
             // Perform loopback test with even/odd pattern
             for &byte in &[0x55, 0xAA] {
-                (*addr_of_mut!(self.data)).write(byte.into());
-                if (*addr_of_mut!(self.data)).read() != byte.into() {
+                // Write loopback byte
+                self.data.write(byte.into());
+
+                // Wait for INPUT_FULL flag
+                for _ in 0..1_000 {
+                    if self.line_sts().contains(LineStsFlags::INPUT_FULL) {
+                        break;
+                    }
+                }
+
+                // Read loopback byte
+                let loopback = self.data.read();
+                if loopback != byte.into() {
                     return Err(());
                 }
             }
 
             // Enable DTR, RTS, OUT1, and OUT2, disable loopback
-            (*addr_of_mut!(self.modem_ctrl)).write(0x0F.into());"""
+            self.modem_ctrl.write(0x0F.into());"""
 
     new_loopback = """\
             // Check for absent UART: line status register reads 0xFF
@@ -45,14 +56,14 @@ def main():
             // Skip the loopback self-test which fails on Intel LPSS/HSUART
             // mapped to legacy I/O ports (e.g., N100 "COM0" at 0x3F8).
             {
-                let lsr = (*addr_of!(self.line_sts)).read();
-                if lsr == 0xFF.into() {
+                let lsr: u8 = (self.line_sts.read() & 0xFF.into()).try_into().unwrap_or(0);
+                if lsr == 0xFF {
                     return Err(());
                 }
             }
 
             // Enable DTR, RTS, OUT1, and OUT2
-            (*addr_of_mut!(self.modem_ctrl)).write(0x0F.into());"""
+            self.modem_ctrl.write(0x0F.into());"""
 
     if old_loopback not in content:
         print("ERROR: loopback test pattern not found in uart_16550.rs")

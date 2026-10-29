@@ -1,8 +1,7 @@
 diff --git a/src/mount/redox/resource.rs b/src/mount/redox/resource.rs
-index edb3099..a9374c7 100644
 --- a/src/mount/redox/resource.rs
 +++ b/src/mount/redox/resource.rs
-@@ -16,13 +16,19 @@ use syscall::{EBADFD, ENOENT, PAGE_SIZE};
+@@ -16,12 +16,18 @@
 
  use crate::{Disk, Node, Transaction, TreePtr, BLOCK_SIZE};
 
@@ -13,17 +12,16 @@ index edb3099..a9374c7 100644
      fn parent_ptr_opt(&self) -> Option<TreePtr<Node>>;
 
      fn node_ptr(&self) -> TreePtr<Node>;
-
++
 +    /// Key of this inode instance's fmap entry. Node ids are recycled after
 +    /// unlink, so this must not be the node id itself.
 +    fn fmap_id(&self) -> u64;
 +
 +    fn set_fmap_id(&mut self, id: u64);
-+
+
      fn uid(&self) -> u32;
 
-     fn set_path(&mut self, path: &str);
-@@ -168,6 +174,7 @@ pub struct DirResource {
+@@ -173,6 +179,7 @@
      node_ptr: TreePtr<Node>,
      data: Option<Vec<Entry>>,
      uid: u32,
@@ -31,7 +29,7 @@ index edb3099..a9374c7 100644
  }
 
  impl DirResource {
-@@ -184,6 +191,7 @@ impl DirResource {
+@@ -189,6 +196,7 @@
              node_ptr,
              data,
              uid,
@@ -39,22 +37,22 @@ index edb3099..a9374c7 100644
          }
      }
  }
-@@ -197,6 +205,14 @@ impl<D: Disk> Resource<D> for DirResource {
-         self.node_ptr
-     }
+@@ -200,6 +208,14 @@
 
+     fn node_ptr(&self) -> TreePtr<Node> {
+         self.node_ptr
++    }
++
 +    fn fmap_id(&self) -> u64 {
 +        self.fmap_id
 +    }
 +
 +    fn set_fmap_id(&mut self, id: u64) {
 +        self.fmap_id = id;
-+    }
-+
-     fn uid(&self) -> u32 {
-         self.uid
      }
-@@ -415,6 +431,7 @@ pub struct FileResource {
+
+     fn uid(&self) -> u32 {
+@@ -420,6 +436,7 @@
      node_ptr: TreePtr<Node>,
      flags: usize,
      uid: u32,
@@ -62,7 +60,7 @@ index edb3099..a9374c7 100644
  }
 
  #[derive(Debug)]
-@@ -454,6 +471,10 @@ impl Drop for FileMmapInfo {
+@@ -459,6 +476,10 @@
      fn drop(&mut self) {
          if self.in_use() {
              log::error!("FileMmapInfo dropped while in use");
@@ -73,7 +71,7 @@ index edb3099..a9374c7 100644
          }
      }
  }
-@@ -472,6 +493,7 @@ impl FileResource {
+@@ -477,6 +498,7 @@
              node_ptr,
              flags,
              uid,
@@ -81,7 +79,7 @@ index edb3099..a9374c7 100644
          }
      }
  }
-@@ -485,6 +507,14 @@ impl<D: Disk> Resource<D> for FileResource {
+@@ -490,6 +512,14 @@
          self.node_ptr
      }
 
@@ -96,7 +94,7 @@ index edb3099..a9374c7 100644
      fn uid(&self) -> u32 {
          self.uid
      }
-@@ -503,7 +533,7 @@ impl<D: Disk> Resource<D> for FileResource {
+@@ -508,7 +538,7 @@
          if self.flags & O_ACCMODE != O_RDWR && self.flags & O_ACCMODE != O_RDONLY {
              return Err(Error::new(EBADF));
          }
@@ -105,7 +103,7 @@ index edb3099..a9374c7 100644
              if !fmap_info.base.is_null() {
                  let requested_end = offset + buf.len() as u64;
                  let mut next_offset = offset;
-@@ -557,7 +587,7 @@ impl<D: Disk> Resource<D> for FileResource {
+@@ -562,7 +592,7 @@
          } else {
              offset
          };
@@ -114,7 +112,7 @@ index edb3099..a9374c7 100644
              fmap_info.version += 1;
          }
          let mtime = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-@@ -601,7 +631,7 @@ impl<D: Disk> Resource<D> for FileResource {
+@@ -606,7 +636,7 @@
          // TODO: Pass entry directory to Resource trait functions, since the node_ptr can be
          // obtained by the caller.
          let fmap_info = fmaps
@@ -123,7 +121,7 @@ index edb3099..a9374c7 100644
              .ok_or(Error::new(EBADFD))?;
 
          if !fmap_info.in_use() {
-@@ -682,7 +712,7 @@ impl<D: Disk> Resource<D> for FileResource {
+@@ -687,7 +717,7 @@
          tx: &mut Transaction<D>,
      ) -> Result<()> {
          let fmap_info = fmaps
@@ -132,7 +130,7 @@ index edb3099..a9374c7 100644
              .ok_or(Error::new(EBADFD))?;
 
          //dbg!(&self.fmaps);
-@@ -718,13 +748,10 @@ impl<D: Disk> Resource<D> for FileResource {
+@@ -723,13 +753,10 @@
 
              // if this fmap version is outdated it's no use
              if fmap_info.stale() {
@@ -149,7 +147,7 @@ index edb3099..a9374c7 100644
              }
          }
 
-@@ -747,7 +774,7 @@ impl<D: Disk> Resource<D> for FileResource {
+@@ -752,7 +779,7 @@
      }
 
      fn sync(&mut self, fmaps: &mut Fmaps, tx: &mut Transaction<D>) -> Result<()> {
@@ -159,10 +157,9 @@ index edb3099..a9374c7 100644
                  unsafe {
                      fmap.sync(
 diff --git a/src/mount/redox/scheme.rs b/src/mount/redox/scheme.rs
-index c88dffd..1c312c1 100644
 --- a/src/mount/redox/scheme.rs
 +++ b/src/mount/redox/scheme.rs
-@@ -43,6 +43,11 @@ pub struct FileScheme<'sock, D: Disk> {
+@@ -93,6 +93,11 @@
      next_id: AtomicUsize,
      handles: BTreeMap<usize, Handle<D>>,
      fmap: super::resource::Fmaps,
@@ -174,7 +171,7 @@ index c88dffd..1c312c1 100644
 
      // Map of file id to other scheme's file descriptor.
      other_scheme_fd_map: BTreeMap<u32, Fd>,
-@@ -65,6 +70,8 @@ impl<'sock, D: Disk> FileScheme<'sock, D> {
+@@ -116,6 +121,8 @@
              next_id: AtomicUsize::new(1),
              handles: BTreeMap::new(),
              fmap: BTreeMap::new(),
@@ -183,10 +180,12 @@ index c88dffd..1c312c1 100644
              other_scheme_fd_map: BTreeMap::new(),
              proc_creds_capability: {
                  libredox::Fd::open(
-@@ -76,6 +83,16 @@ impl<'sock, D: Disk> FileScheme<'sock, D> {
+@@ -125,6 +132,16 @@
+                 )?
+             },
          })
-     }
-
++    }
++
 +    fn fmap_id_for(&mut self, node_id: u32) -> u64 {
 +        if let Some(&id) = self.node_fmap_ids.get(&node_id) {
 +            return id;
@@ -195,26 +194,24 @@ index c88dffd..1c312c1 100644
 +        self.next_fmap_id += 1;
 +        self.node_fmap_ids.insert(node_id, id);
 +        id
-+    }
-+
-     fn resolve_symlink(
-         scheme_name: &str,
-         tx: &mut Transaction<D>,
-@@ -178,7 +195,7 @@ impl<'sock, D: Disk> FileScheme<'sock, D> {
+     }
+
+     /// Resolve a symbolic link of given `node`. `full_path` must be non-canonicalized path from root node.
+@@ -239,7 +256,7 @@
              .fs
-             .tx(|tx| Self::path_nodes(scheme_name, tx, start_ptr, path, uid, gid, &mut nodes))?;
+             .tx(|tx| Self::path_nodes(scheme_name, tx, start_ptr, &path, uid, gid, &mut nodes))?;
          let parent_ptr_opt = nodes.last().map(|x| x.0.ptr());
--        let resource: Box<dyn Resource<D>> = match node_opt {
-+        let mut resource: Box<dyn Resource<D>> = match node_opt {
-             Some((node, _node_name)) => {
+-        let handle: Handle<D> = match node_opt {
++        let mut handle: Handle<D> = match node_opt {
+             ResolveResult::External(path) => return self.open_external(path, flags),
+             ResolveResult::Normal(Some((node, _node_name))) => {
                  if flags & (O_CREAT | O_EXCL) == O_CREAT | O_EXCL {
-                     return Err(Error::new(EEXIST));
-@@ -357,10 +374,12 @@ impl<'sock, D: Disk> FileScheme<'sock, D> {
+@@ -425,10 +442,12 @@
          };
 
-         let node_ptr = resource.node_ptr();
+         let node_ptr = handle.resource().unwrap().node_ptr();
 +        let fmap_id = self.fmap_id_for(node_ptr.id());
-+        resource.set_fmap_id(fmap_id);
++        handle.resource_mut().unwrap().set_fmap_id(fmap_id);
          {
              let fmap_info = self
                  .fmap
@@ -223,7 +220,7 @@ index c88dffd..1c312c1 100644
                  .or_insert_with(FileMmapInfo::new);
              if !fmap_info.in_use() {
                  // Notify filesystem of open
-@@ -445,6 +464,9 @@ impl<'sock, D: Disk> FileScheme<'sock, D> {
+@@ -532,6 +551,9 @@
          };
 
          let _ = self.other_scheme_fd_map.remove(&node_id);
@@ -233,17 +230,17 @@ index c88dffd..1c312c1 100644
 
          Ok(())
      }
-@@ -1028,7 +1050,8 @@ impl<'sock, D: Disk> SchemeSync for FileScheme<'sock, D> {
+@@ -1149,7 +1171,8 @@
              return;
          };
-         let node_ptr = file.node_ptr();
+         let node_ptr = resource.node_ptr();
 -        let Some(file_info) = self.fmap.get_mut(&node_ptr.id()) else {
-+        let fmap_id = file.fmap_id();
++        let fmap_id = resource.fmap_id();
 +        let Some(file_info) = self.fmap.get_mut(&fmap_id) else {
              return;
          };
 
-@@ -1037,17 +1060,19 @@ impl<'sock, D: Disk> SchemeSync for FileScheme<'sock, D> {
+@@ -1158,17 +1181,19 @@
              .checked_sub(1)
              .expect("open_fds not tracked correctly");
 
@@ -268,21 +265,21 @@ index c88dffd..1c312c1 100644
          }
      }
 
-@@ -1096,7 +1121,7 @@ impl<'sock, D: Disk> SchemeSync for FileScheme<'sock, D> {
-             }
-         }
+@@ -1209,7 +1234,7 @@
+             return Err(Error::new(EINVAL));
+         };
 
--        let (resource, node_id): (Box<dyn Resource<D>>, u32) = if !last_part.is_empty() {
-+        let (mut resource, node_id): (Box<dyn Resource<D>>, u32) = if !last_part.is_empty() {
+-        let (resource, node_id) = {
++        let (mut resource, node_id) = {
              let stat = other_scheme_fd.stat()?;
              let mode_type = stat.st_mode as u16 & Node::MODE_TYPE;
 
-@@ -1142,10 +1167,12 @@ impl<'sock, D: Disk> SchemeSync for FileScheme<'sock, D> {
+@@ -1250,10 +1275,12 @@
          };
 
-         let node_ptr = resource.node_ptr();
+         let node_ptr = (&resource as &'_ dyn Resource<D>).node_ptr();
 +        let fmap_id = self.fmap_id_for(node_ptr.id());
-+        resource.set_fmap_id(fmap_id);
++        (&mut resource as &'_ mut dyn Resource<D>).set_fmap_id(fmap_id);
          {
              let fmap_info = self
                  .fmap
