@@ -162,6 +162,12 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - Kernel/bootloader STILL need `-Z build-std` (different target triples)
 - `--allow-multiple-definition` needed (relibc bundles core/alloc)
 
+### Host nix-daemon lock deadlock
+- Symptom: every `nix build`/`nix store add-*` prints `waiting for the big garbage collector lock...` and hangs, while `nix eval` and `nix path-info` still work
+- Cause: a leaked `nix-daemon` worker keeps a shared `FLOCK` on `/nix/var/nix/db/big-lock`; an auto-GC worker takes `/nix/var/nix/gc.lock` exclusively and then waits forever for the exclusive db lock
+- Inspect with `/proc/locks` (match the inodes of `gc.lock` and `db/big-lock`) and `ps -o pid,etime,stat -C nix-daemon`; the leaked workers show multi-hour elapsed times with dead client pids
+- Only root can clear it: `sudo systemctl restart nix-daemon`. `--option min-free 0 --option max-free 0` stops new auto-GCs but does not let store writes through while the leaked read lock is held
+
 ### Vendor Management
 - `fetchCargoVendor` ONLY works when Cargo.lock exists
 - NEVER resolve a lockfile at build time (`cargo generate-lockfile` inside a fixed-output derivation): it picks the newest semver-compatible crates on every run, so the hash changes whenever crates.io publishes and the build needs network. Commit the lockfile (`nix/pkgs/infrastructure/initfs-tools-Cargo.lock`, `nix/pkgs/infrastructure/bootstrap-Cargo.lock`, `nix/pkgs/userspace/orbital-Cargo.lock`) and regenerate it only when the pinned source's manifests change
