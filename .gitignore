@@ -13,3 +13,7 @@ snix-redox/upstream
 .pi/
 
 snix-redox/target-host/
+
+# direnv
+.direnv/
+.envrc

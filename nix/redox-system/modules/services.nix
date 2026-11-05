@@ -102,7 +102,7 @@ in
     initScripts = {
       type = t.attrsOf initScriptType;
       default = { };
-      description = "Raw init scripts to run during boot (legacy format). Core daemons (ipcd, ptyd) are managed as structured services — no raw 00_base needed.";
+      description = "Raw init scripts to run during boot (legacy format). ptyd is a structured service; ipcd and the other runtime daemons start from the initfs — no raw 00_base needed.";
     };
     services = {
       type = t.attrsOf serviceType;
@@ -134,17 +134,6 @@ in
         in
         # Core services (always on)
         {
-          ipcd = {
-            description = "Channel and shared-memory IPC daemon";
-            command = "/bin/ipcd";
-            type = "daemon";
-            args = "";
-            wantedBy = "rootfs";
-            enable = true;
-            after = [ ];
-            environment = { };
-            priority = 10;
-          };
           ptyd = {
             description = "Pseudo-terminal daemon";
             command = "/bin/ptyd";
@@ -152,7 +141,7 @@ in
             args = "";
             wantedBy = "rootfs";
             enable = true;
-            after = [ "ipcd" ];
+            after = [ ];
             environment = { };
             priority = 11;
           };
@@ -268,7 +257,7 @@ in
                 args = "/var/log/boot.log";
                 wantedBy = "rootfs";
                 enable = true;
-                after = [ "ipcd" ];
+                after = [ ];
                 environment = { };
                 priority = 12;
               };

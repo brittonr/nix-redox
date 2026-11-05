@@ -136,7 +136,7 @@ let
     "udsd"
   ]
   ++ lib.optional initfsEnableGraphics "ps2d"
-  ++ lib.optional networkingEnabled "smolnetd";
+  ++ lib.optional networkingEnabled "netstack";
 
   initfsDaemons =
     (lib.optionals initfsEnableGraphics [
@@ -339,7 +339,10 @@ let
   sysrootPkg = pkgs.redox-sysroot or null;
   rustcPkg = pkgs.redox-rustc or null;
   libstdcxxShimPkg = pkgs.redox-libstdcxx-shim or null;
-  hasSelfHosting = rustcPkg != null && sysrootPkg != null;
+  # Only wire up the toolchain paths when the profile actually installs rustc;
+  # otherwise every image would depend on building LLVM and rustc.
+  hasSelfHosting =
+    rustcPkg != null && sysrootPkg != null && builtins.any (p: samePackage p rustcPkg) allPackages;
   hasBash = (pkgs.redox-bash or null) != null && builtins.any (p: p == pkgs.redox-bash) allPackages;
 
   # ===== BINARY CACHE =====

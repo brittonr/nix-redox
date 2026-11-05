@@ -80,11 +80,11 @@ The `/iroh` module SHALL declare a `services` option with a `defaultFunc` that c
 - **THEN** `iroh.services` is empty
 
 ### Requirement: Services module owns core and typed services
-The `/services` module SHALL have a `/pkgs` input and its `services` option `defaultFunc` SHALL generate core services (ipcd, ptyd), typed service module entries (ssh, httpd, getty, exampled), and sudod.
+The `/services` module SHALL have a `/pkgs` input and its `services` option `defaultFunc` SHALL generate the core ptyd service, typed service module entries (ssh, httpd, getty, exampled), and sudod. ipcd is not a rootfs service: it starts from the initfs runtime target because relibc and ramfs need `shm:` before the rootfs exists.
 
 #### Scenario: Core services always present
 - **WHEN** any configuration is evaluated
-- **THEN** `services.services` contains `ipcd` (daemon, priority 10) and `ptyd` (daemon, priority 11, after ipcd)
+- **THEN** `services.services` contains `ptyd` (daemon, priority 11) and does not contain `ipcd`
 
 #### Scenario: Getty auto resolves to enabled
 - **WHEN** `services.getty.enable = "auto"` and userutils is in system packages

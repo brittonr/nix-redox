@@ -384,7 +384,9 @@ use rmm::Arch;""",
                 if buf.len() < mem::size_of::<u64>() {
                     return Err(Error::new(EINVAL));
                 }
-                let bits = buf.read_u64()?;
+                let mut raw_bits = [0_u8; 8];
+                buf.limit(8).ok_or(Error::new(EINVAL))?.copy_to_slice(&mut raw_bits)?;
+                let bits = u64::from_ne_bytes(raw_bits);
                 let flags = PtraceFlags::from_bits_truncate(bits);
                 let mut data = session.data.lock();
                 data.set_breakpoint(Some(flags));
@@ -496,9 +498,9 @@ use rmm::Arch;""",
                         if let Ok(pid) = pid_str.parse::<usize>() {
                             // Find context by PID
                             let context_lock = {
-                                let all_ctx: alloc::vec::Vec<Arc<ContextLock>> = context::contexts(token.token())
+                                let all_ctx: alloc::vec::Vec<Arc<ContextLock>> = context::contexts(token.downgrade())
                                     .iter()
-                                    .filter_map(|ctx_ref| ctx_ref.upgrade())
+                                    .map(|ctx_ref| Arc::clone(&ctx_ref.0))
                                     .collect();
                                 let mut found = None;
                                 for ctx_lock in all_ctx {
@@ -566,9 +568,9 @@ use rmm::Arch;""",
                 let pid: usize = pid_str.parse().map_err(|_| Error::new(ENOENT))?;
 
                 let context_lock = {
-                    let all_ctx: alloc::vec::Vec<Arc<ContextLock>> = context::contexts(token.token())
+                    let all_ctx: alloc::vec::Vec<Arc<ContextLock>> = context::contexts(token.downgrade())
                         .iter()
-                        .filter_map(|ctx_ref| ctx_ref.upgrade())
+                        .map(|ctx_ref| Arc::clone(&ctx_ref.0))
                         .collect();
                     let mut found = None;
                     for ctx_lock in all_ctx {

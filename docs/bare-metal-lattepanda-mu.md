@@ -139,10 +139,6 @@ JetKVM USB HID → xhcid (xHCI host controller driver)
 5. **inputd daemon order** (`patch-inputd-daemon-order.py`): Move
    setup_logging inside daemon callback.
 
-6. **xhcid interrupt diagnostics** (`patch-xhcid-interrupt-restart.py`):
-   eprintln! logging for interrupt endpoint transfers (pre/post with
-   completion codes).
-
 ### Failed Approach: Stop Endpoint + Set TR Dequeue Pointer
 
 Attempted to issue xHCI Stop Endpoint Command + Set TR Dequeue Pointer

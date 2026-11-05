@@ -32,7 +32,7 @@
         "url": "https://gitlab.redox-os.org/redox-os/kernel.git",
         "rev": "260f55f076d2fe62c03ec30c1378ca7546336c73",
         "subDir": "syscall",
-        "sha256": "1xmx9z0hqgqm3n0yw1baydj9f0skr2qdlqg3c0zrianvlhilvs5m"
+        "sha256": "06nwl8h9ddpwiayxzb768swi5jdhmny9wfjz6marj1im4fcll2mm"
       },
       "features": [
         "default",
@@ -70,7 +70,7 @@
         "type": "git",
         "url": "https://gitlab.redox-os.org/redox-os/libextra.git",
         "rev": "cf213969493db8667052a591e32a1e26d43c4234",
-        "sha256": "0j8c0n4q0b89hsmb8zwxighv6labhf1xwhqsk0yh5kfkmp7y8r5j"
+        "sha256": "09f498271llvlih7xy231q0bfnxvkanrywp2vza221h3ykr0rs1m"
       },
       "features": [],
       "dependencies": [],

@@ -150,7 +150,7 @@ let
 
   # Assign numbers 15-79 based on topo sort position.
   # Range 10-14 is reserved for core daemons with explicit priorities
-  # (ipcd=10, ptyd=11) so they always start before auto-numbered services.
+  # (ptyd=11) so they always start before auto-numbered services.
   # Services with explicit priority (!= 50) use their priority directly.
   autoNumbered =
     let
@@ -294,13 +294,14 @@ let
   # Raw initScripts (legacy, from profiles)
   # ═══════════════════════════════════════════════════════════════════
   # These keep their explicit numbered names and are not auto-numbered.
-  # The 00_base default is removed — ptyd/ipcd are now structured services.
+  # The 00_base default is removed — ptyd is now a structured service and
+  # ipcd starts from the initfs runtime target.
 
   rawInitScripts =
     let
       profileScripts = inputs.services.initScripts;
-      # Strip 00_base if any old profile still declares it — ipcd/ptyd
-      # are structured services with explicit priority 10/11.
+      # Strip 00_base if any old profile still declares it — ptyd is a
+      # structured service with explicit priority 11.
       cleaned = builtins.removeAttrs profileScripts [ "00_base" ];
     in
     cleaned;
@@ -381,11 +382,34 @@ let
   # files. The init binary loads 00_runtime.target and 90_initfs.target,
   # recursively resolving requires_weak dependencies.
   #
-  # logd and stdio redirection are handled by init between SwitchRoot
-  # calls — no unit file needed.
+  # init starts 00_logd.service first and then switches stdio to /scheme/log,
+  # so logd needs a unit file like the other runtime services.
 
   # --- Runtime services (default_dependencies = false) ---
   runtimeServices = {
+    "00_logd.service" = ''
+      [unit]
+      description = "Logger"
+      default_dependencies = false
+
+      [service]
+      cmd = "logd"
+      type = { scheme = "log" }
+    '';
+
+    # relibc needs shm: (ramfs opens /scheme/shm/<name>) and chan: from ipcd
+    # before anything else, so it lives in the initfs like upstream.
+    "00_ipcd.service" = ''
+      [unit]
+      description = "IPC daemon"
+      default_dependencies = false
+      requires_weak = ["00_randd.service"]
+
+      [service]
+      cmd = "ipcd"
+      type = "notify"
+    '';
+
     "00_nulld.service" = ''
       [unit]
       description = "/dev/null"
@@ -444,7 +468,7 @@ let
       [unit]
       description = "$INSTANCE ramfs"
       default_dependencies = false
-      requires_weak = ["00_randd.service"]
+      requires_weak = ["00_ipcd.service", "00_randd.service"]
 
       [service]
       cmd = "ramfs"
@@ -600,6 +624,8 @@ let
 
   # --- Targets ---
   runtimeTargetReqs = [
+    "00_ipcd.service"
+    "00_logd.service"
     "00_nulld.service"
     "00_zerod.service"
     "00_randd.service"

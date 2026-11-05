@@ -87,7 +87,7 @@ rec {
       "e1000d"
       "igcd"
       "virtio-netd"
-      "smolnetd"
+      "netstack"
       # Graphics drivers
       "vesad"
       "inputd"

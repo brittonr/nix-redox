@@ -52,7 +52,7 @@ def patch_exec(src_dir):
         exec_file,
         '    const CWD: &[u8] = b"/scheme/initfs";',
         '    // Read optional init env file for INIT_LOG_LEVEL, INIT_SKIP etc.\n'
-        '    let init_env_len = match syscall::openat(\n'
+        '    let init_env_len = match redox_rt::sys::openat(\n'
         '        initns_fd.as_raw_fd(),\n'
         '        "/scheme/initfs/etc/init.env",\n'
         '        O_RDONLY | O_CLOEXEC,\n'

@@ -153,7 +153,7 @@
         "type": "git",
         "url": "https://github.com/jackpot51/hidreport",
         "rev": "1cf47ffcd30f1b18b636d699de8ed76a45a813e3",
-        "sha256": "0q8jr4vpn48aiq3ppbgrnrajq6lbzzfghswc73h9iwbykqnn5j6h"
+        "sha256": "0z7n58qx8mz814m678jf65irhky08fj0n0wnqmrjc5m6pn64x6bq"
       },
       "features": [],
       "dependencies": [
@@ -186,7 +186,7 @@
         "type": "git",
         "url": "https://github.com/jackpot51/range-alloc.git",
         "rev": "23493c401729c9617355804d4ef6bd0ffafb0465",
-        "sha256": "1ah2w406xhxpd40wqmlrzmsh6wj9zvd6k3kc44zk11h708m68gx8"
+        "sha256": "0mcwnqxf5vn35za72bhggp94d79kkcmgh4lpznpa6kchnh2v7ip2"
       },
       "features": [],
       "dependencies": [],
@@ -217,7 +217,7 @@
         "type": "git",
         "url": "https://github.com/repnop/fdt.git",
         "rev": "059bb2383873f8001959456e36ec123228f67642",
-        "sha256": "0l91nmmdzfacssg16zqpyafj8jwjfzyh5cfxrgllqdcm2g1ijmir"
+        "sha256": "0wa7272vwbcnac4gl2mqnyr1mdzzj0rnrk2lz6f8wyn1bb1zxj1c"
       },
       "features": [],
       "dependencies": [],
@@ -247,7 +247,7 @@
         "type": "git",
         "url": "https://gitlab.redox-os.org/redox-os/acpi.git",
         "rev": "90cbe88e13468c7cc80a68c801a3dd2ea8f51d02",
-        "sha256": "08bljcq01knqp3hm2aq3gmk4ibf10imyb73528axlj8p7rnj4gh7"
+        "sha256": "1vp8kmpbjp4xnqv1l3ifccxgdmgp2qhdwpf83nl852qji5s60jn0"
       },
       "features": [
         "alloc",
@@ -306,7 +306,7 @@
         "type": "git",
         "url": "https://gitlab.redox-os.org/redox-os/redox-rings.git",
         "rev": "d787c28c2dba79b9325d2a5a3e8c96dce4ebb2eb",
-        "sha256": "0qhjbfzvj0qx6acmqjag7p6apd9w3wispr43pwxzhvfsn6cwkgza"
+        "sha256": "1cqcwlqgqmiy5x2l33js15km16g1n4nlkiw8p9s3lp6z84f6bafn"
       },
       "features": [
         "default",
@@ -353,7 +353,7 @@
         "type": "git",
         "url": "https://gitlab.redox-os.org/redox-os/rehid.git",
         "rev": "da987bc6d0f043bb025ece0d35804da2b250fab3",
-        "sha256": "16rz6vbsl39gwzqx82kphnl2mfy9d48jf464fcrnlsx434x5xb2a"
+        "sha256": "06dsasgvvvwzgn2zfwh2ccyk32zr0m96jjw25bma62z56qv37sg0"
       },
       "features": [],
       "dependencies": [

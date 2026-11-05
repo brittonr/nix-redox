@@ -25,7 +25,7 @@
         "type": "git",
         "url": "https://github.com/nix-rust/nix.git",
         "rev": "ff6f8b8a26c8d61f4341e441acf405402b46a430",
-        "sha256": "08drc1p0lhy66n3a9kn209qyaaxz8v8i526vhlaxirkamr5c9p1m"
+        "sha256": "0p5axzbwgwzs508mvkiar93ignzmczw1yr50hr3j59kx1fnmhqn9"
       },
       "features": [
         "acct",
@@ -103,7 +103,7 @@
         "type": "git",
         "url": "https://gitlab.redox-os.org/redox-os/calc",
         "rev": "d2719efb67ab38c4c33ab3590822114453960da5",
-        "sha256": "1wznavvajrxyi0vydij6d4vk2wf5m7nfj7l94ckw71n0zrmnh726"
+        "sha256": "1v7gwjkv5y49akickz5mw4dkpw9b288q6qlhx8j5nnsy6vnkw8nw"
       },
       "features": [],
       "dependencies": [
@@ -158,7 +158,7 @@
         "type": "git",
         "url": "https://gitlab.redox-os.org/redox-os/liner",
         "rev": "f3fb3b754623026dca820cbf36231fa92772416f",
-        "sha256": "1sfxnppfw77wyhd4ml608ixnx7cycqnbfh5l5dq0v8bjnnj9b11n"
+        "sha256": "1d2gijgljmjm481kwb5h34g0wgga3lvxl38r7yrg7d47qwjnkcsr"
       },
       "features": [],
       "dependencies": [
@@ -213,7 +213,7 @@
         "type": "git",
         "url": "https://gitlab.redox-os.org/redox-os/small",
         "rev": "4374ae30a2de281d686e14a1626dcb22e23ffae4",
-        "sha256": "0vk4zmw2a9zygwa8gpy2ngxgsriw3105px50la99jbla66pgx6pg"
+        "sha256": "0x37a28a20c6s656hmg75sycygzfjmfcb67zjljk241laxyc9320"
       },
       "features": [
         "default",

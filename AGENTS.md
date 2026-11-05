@@ -238,6 +238,7 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 ### snix unit2nix build plans
 - Changing `snix-redox/Cargo.toml` or `Cargo.lock` is NOT enough for `nix build` / VM image builds — the cross build uses `nix/pkgs/userspace/snix-build-plan.json`, and host-side unit2nix checks use `snix-redox/build-plan.json`
 - After snix dependency changes, run `snix-redox/regenerate-build-plan.sh` to refresh BOTH plan files; otherwise mkCrossPackage can omit new `--extern` deps (for example `minreq`) even when plain host `cargo test` passes
+- Plan `source.sha256` for git crates must be a plain `nix-prefetch-git --fetch-submodules` hash (no `--leave-dotGit`): `pkgs.fetchgit` strips `.git`, and `.git` content also varies with the git binary. If the unit2nix CLI regenerated a plan, its prefetch uses `--leave-dotGit`, so every git source will fail its fixed-output hash; recompute with `nix-prefetch-git --url … --rev … --fetch-submodules` + `nix hash path` and update the plan
 
 ### Dotfiles in Copy Operations
 - `cp -r dir/*` does NOT match dotfiles (`.cargo/`, `.config/`, etc.) — bash glob skips them
@@ -405,9 +406,13 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - focused test harness note: `snix-sandbox-test` originally checked `$out/bin/workspace-test`, but `workspace-build.nix` installs `$out/bin/mybin`
 
 ### Key Patches (all still required)
-**relibc** (9 patches): dso-runtime, dso-environ, environ-dso-init, prefault-stack, grow-main-stack, abort-dso,
-execvpe, ld-so-argv-utf8, fork-lock. The cwd, ns-fd, run-init, symtab-fallback, ld-so-align, pipe-cloexec,
-fcntl-lock and randd-read carries were dropped or folded into dso-runtime by the upstream alignment.
+**relibc** (10 patches): dso-runtime, dso-environ, environ-dso-init, prefault-stack, grow-main-stack, abort-dso,
+execvpe, ld-so-argv-utf8, fork-lock, fork-scratchpad. The cwd, ns-fd, run-init, symtab-fallback, ld-so-align,
+pipe-cloexec, fcntl-lock and randd-read carries were dropped or folded into dso-runtime by the upstream alignment.
+`fork-scratchpad`: upstream `child_hook` reads its `&ForkScratchpad` (a local in `fork_inner`'s dead frame, just
+below the child's `rsp`) AFTER calling `sys::close()`; the `call` pushes its return address over `new_filetable_fd`,
+so `to_upper()` gets a garbage fd and init dies with `RELIBC PANIC ... x86_64.rs:124 ... Bad file number`. Whether a
+build is hit depends on `fork_inner`'s frame layout; the patch snapshots the struct with `read_volatile` first.
 **rustc tree** (12 patches, nightly-2026-05-24): sysroot, cmake, arange, bootstrap-force-link, main-stack,
 linker-pipes, read2-pipes, cargo-read2-pipes, jobserver-poll, cargo-heartbeat, execvpe, cargo-irwxu.
 Dropped because relibc now covers them: spawn-pipes (CLOEXEC exec error pipe) and the std/cargo `file:` path
@@ -465,6 +470,10 @@ stripping. Restore them if guest `Command` spawn errors or `file:` paths reappea
 - Confirmed working on: GMKtec NucBoxG3 Plus (N150), LattePanda Mu (N100, no workaround needed)
 
 ### Init Scripts
+- Device nodes are symlinks the root tree must create (`filesystem.devSymlinks`). Mirror base's `make install`
+  set: `null`, `ptmx`, `random`, `urandom`, `zero`, `tty`, `stdin`, `stdout`, `stderr`. A missing `/dev/ptmx`
+  is silent: getty opens it with `O_CREAT`, so the kernel creates a regular file, `TIOCSWINSZ`/`TIOCGPTN`
+  return EINVAL, and `mio` registration panics with `failed to fevent master PTY: EPERM`
 - After rootfs switchroot, init PATH = `/usr/bin` (from `prefix: "/usr"`)
 - Rootfs service binaries at `/bin/` or `/nix/system/profile/bin/` are NOT in init's PATH
 - `renderServiceToml` uses `baseNameOf` on command — strips `/bin/` prefix by default
