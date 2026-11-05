@@ -83,8 +83,9 @@ dev
   };
 
   # Custom init script
-  # Note: ipcd and ptyd are started automatically as structured services
-  # with guaranteed early priority (10/11). No need for a raw 00_base script.
+  # Note: ptyd is started automatically as a structured service with
+  # guaranteed early priority (11); ipcd starts from the initfs. No need
+  # for a raw 00_base script.
   "/services" = {
     initScripts = {
       "30_custom" = {

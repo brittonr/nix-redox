@@ -303,7 +303,7 @@ in
       # check directory content rather than hardcoded filenames.
       {
         file = "usr/lib/init.d";
-        dirContains = "cmd = \"/bin/smolnetd\"";
+        dirContains = "cmd = \"/bin/netstack\"";
       }
       {
         file = "usr/lib/init.d";
@@ -1137,6 +1137,41 @@ in
         touch $out
       '';
 
+  # Test: /dev/ptmx symlink exists and points at the pty scheme
+  # getty opens /dev/ptmx with O_CREAT, so a missing symlink silently creates a
+  # regular file and every tty ioctl/fevent on it fails (serial login breaks).
+  rootTree-dev-ptmx-symlink =
+    let
+      system = redoxSystemFactory.redoxSystem {
+        modules = [ ../redox-system/profiles/development.nix ];
+        pkgs = mockPkgs.all;
+        hostPkgs = pkgs;
+      };
+    in
+    pkgs.runCommand "test-artifact-rootTree-dev-ptmx-symlink"
+      {
+        preferLocalBuild = true;
+        rootTree = system.rootTree;
+      }
+      ''
+        set -euo pipefail
+        echo "Checking /dev/ptmx symlink"
+        if [ -L "$rootTree/dev/ptmx" ]; then
+          target=$(readlink "$rootTree/dev/ptmx")
+          echo "  ✓ /dev/ptmx -> $target"
+          if [ "$target" != "/scheme/pty/ptmx" ]; then
+            echo "  ✗ unexpected target: $target"
+            exit 1
+          fi
+        else
+          echo "  ✗ /dev/ptmx symlink missing"
+          ls -la "$rootTree/dev/" 2>/dev/null | head -20
+          exit 1
+        fi
+        echo "Test PASSED"
+        touch $out
+      '';
+
   # Test: Development profile has home directory
   rootTree-dev-home-dir = mkArtifactTest {
     name = "rootTree-dev-home-dir";
@@ -1618,8 +1653,8 @@ in
       { file = "bin/ptyd"; }
       # Ion shell — init scripts are Ion
       { file = "bin/ion"; }
-      # Networking — init scripts reference /bin/smolnetd, /bin/dhcpd-quiet
-      { file = "bin/smolnetd"; }
+      # Networking — init scripts reference /bin/netstack, /bin/dhcpd-quiet
+      { file = "bin/netstack"; }
       # User management — getty/login for serial console
       { file = "bin/getty"; }
       { file = "bin/login"; }

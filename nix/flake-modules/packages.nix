@@ -633,6 +633,18 @@ let
             "-isystem ${modularPkgs.system.relibc}/${redoxTarget}/include"
           ];
         };
+        # liblzma-sys: the nixpkgs xz only ships a Linux .so, which cannot be
+        # linked statically into a Redox binary. Build the crate's bundled xz
+        # for the Redox target instead, like zstd-sys above.
+        liblzma-sys = _: {
+          LZMA_API_STATIC = "1";
+          CC_x86_64_unknown_redox = "${hostPkgs.llvmPackages.clang-unwrapped}/bin/clang";
+          CFLAGS_x86_64_unknown_redox = builtins.concatStringsSep " " [
+            "--target=x86_64-unknown-redox"
+            "--sysroot=${modularPkgs.system.relibc}/${redoxTarget}"
+            "-isystem ${modularPkgs.system.relibc}/${redoxTarget}/include"
+          ];
+        };
       };
     };
 

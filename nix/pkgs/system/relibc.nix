@@ -65,6 +65,9 @@ let
       ./patches/relibc/patch-relibc-ld-so-argv-utf8.patch
       # Replace futex-based CLONE_LOCK with AtomicI32 + sched_yield()
       ./patches/relibc/patch-relibc-fork-lock.patch
+      # child_hook reads fork_inner's stack-resident scratchpad after calling
+      # close(), whose return address overwrites new_filetable_fd; snapshot first
+      ./patches/relibc/patch-relibc-fork-scratchpad.patch
     ];
 
     postUnpack = ''

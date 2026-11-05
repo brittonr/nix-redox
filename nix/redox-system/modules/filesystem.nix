@@ -47,6 +47,14 @@ in
         null = "/scheme/null";
         zero = "/scheme/zero";
         full = "/scheme/zero";
+        # Mirrors base's `make install` device symlinks. getty opens
+        # /dev/ptmx with O_CREAT, so a missing symlink silently creates a
+        # regular file and every tty ioctl/fevent on it fails.
+        ptmx = "/scheme/pty/ptmx";
+        tty = "/scheme/libc/tty";
+        stdin = "/scheme/libc/stdin";
+        stdout = "/scheme/libc/stdout";
+        stderr = "/scheme/libc/stderr";
       };
       description = "/dev symlinks (name → target)";
     };

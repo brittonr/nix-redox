@@ -75,10 +75,7 @@ in
               args = loginCmd;
               wantedBy = "rootfs";
               enable = true;
-              after = [
-                "ptyd"
-                "ipcd"
-              ];
+              after = [ "ptyd" ];
               environment = {
                 VT = toString options.virtualTerminal;
               };

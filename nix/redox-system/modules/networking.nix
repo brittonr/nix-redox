@@ -102,7 +102,7 @@ in
           {
             smolnetd = {
               description = "Network stack daemon";
-              command = "/bin/smolnetd";
+              command = "/bin/netstack";
               type = "daemon";
               args = "";
               wantedBy = "rootfs";

@@ -26,8 +26,8 @@ let
     ++ lib.optional usbEnabled "xhcid"
     ++ (seed.cfg.initfsExtraDrivers or [ ])
   );
-  coreDaemons = builtins.filter (n: n != "smolnetd" && n != "ps2d") seed.cfg.coreDaemons
-    ++ lib.optional networkingEnabled "smolnetd"
+  coreDaemons = builtins.filter (n: n != "smolnetd" && n != "netstack" && n != "ps2d") seed.cfg.coreDaemons
+    ++ lib.optional networkingEnabled "netstack"
     ++ lib.optional initfsEnableGraphics "ps2d";
   initfsDaemons = lib.optionals initfsEnableGraphics [ "vesad" "inputd" "fbbootlogd" "fbcond" ]
     ++ lib.optionals usbEnabled [ "xhcid" "usbhubd" "usbhidd" "inputd" ];
