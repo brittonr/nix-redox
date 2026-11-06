@@ -1,0 +1,76 @@
+--- a/src/ld_so/start.rs
++++ b/src/ld_so/start.rs
+@@ -11,7 +11,7 @@
+ };
+ use object::{
+     NativeEndian, elf,
+-    read::elf::{Dyn as _, FileHeader as _, ProgramHeader as _},
++    read::elf::{Dyn as _, FileHeader as _, ProgramHeader as _, Sym as _},
+ };
+ 
+ use crate::{
+@@ -23,7 +23,7 @@
+     ld_so::{
+         dso::{
+             DT_RELR, DT_RELRENT, DT_RELRSZ, Dyn, FileHeader, ProgramHeader, Rel, Rela, Relocation,
+-            RelocationKind, Relr, apply_relr,
++            RelocationKind, Relr, Sym, apply_relr,
+         },
+         linker::{DebugFlags, Me},
+     },
+@@ -238,6 +238,7 @@
+     let mut relr_len = None;
+     let mut rel_ptr = None;
+     let mut rel_len = None;
++    let mut symtab = None;
+     loop {
+         let entry = unsafe { &*dynamic.add(i) };
+         let val = usize::try_from(entry.d_val(NativeEndian)).expect("within bounds");
+@@ -248,6 +249,7 @@
+         let d_tag = entry.d_tag(NativeEndian) as u32;
+         match d_tag {
+             elf::DT_NULL => break,
++            elf::DT_SYMTAB => symtab = Some((self_base + val) as *const Sym),
+             elf::DT_RELA => rela_ptr = Some(ptr.cast::<Rela>()),
+             elf::DT_RELASZ => rela_len = Some(val / size_of::<Rela>()),
+             elf::DT_RELAENT => {
+@@ -319,7 +321,7 @@
+         }
+     }
+ 
+-    fn do_relocs<'a, T>(relocs: &'a [T], self_base: usize)
++    fn do_relocs<'a, T>(relocs: &'a [T], self_base: usize, symtab: Option<*const Sym>)
+     where
+         Relocation: From<&'a T>,
+     {
+@@ -328,6 +330,19 @@
+             let ptr = (reloc.offset + self_base) as *mut usize;
+             if reloc.kind == RelocationKind::RELATIVE {
+                 unsafe { *ptr = self_base + reloc.addend.unwrap_or_default() };
++            } else if reloc.kind == RelocationKind::GOT {
++                // The interpreter also runs programs that embed libc and never load
++                // libc.so. Bootstrap its own data GOT slots before stage2 can use
++                // environ/stdout/etc. Normal symbol lookup may interpose them later.
++                let Some(symtab) = symtab else { continue };
++                let symbol = unsafe { &*symtab.add(reloc.sym.0) };
++                let section = symbol.st_shndx(NativeEndian);
++                if section != elf::SHN_UNDEF {
++                    let base = if section == elf::SHN_ABS { 0 } else { self_base };
++                    let value = usize::try_from(symbol.st_value(NativeEndian))
++                        .expect("always within bounds");
++                    unsafe { *ptr = base + value };
++                }
+             }
+         }
+     }
+@@ -340,8 +355,8 @@
+         set_mprotect(my_phdrs, self_base, true);
+     }
+ 
+-    do_relocs(rela, self_base);
+-    do_relocs(rel, self_base);
++    do_relocs(rela, self_base, symtab);
++    do_relocs(rel, self_base, symtab);
+ 
+     unsafe {
+         let relr = get_array(relr_ptr, relr_len, self_base);

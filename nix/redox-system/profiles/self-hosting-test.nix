@@ -14,7 +14,7 @@
 let
   opt = name: if pkgs ? ${name} then [ pkgs.${name} ] else [ ];
 
-  # No external test source files needed — written inline via Ion echo
+  # Rust fixtures are written inline; the signal ABI regression uses inline C assembly.
 
   testScript = ''
                         # Ensure /nix/system/profile/bin is in PATH for bare rustc/cargo calls
@@ -629,6 +629,24 @@ let
                             EXIT=$?
                             echo "FUNC_TEST:rustc-direct-link:FAIL:compile-exit=$EXIT"
                             cat /tmp/rustc-direct-link-stdout /tmp/rustc-direct-link-stderr
+                          fi
+                        '
+
+                        # A handled signal must not replace the interrupted memcpy loop bound.
+                        /nix/system/profile/bin/bash -c '
+                          if cc /usr/src/signal-registers.c -pthread -o /tmp/signal-registers \
+                              >/tmp/signal-registers-build-out 2>/tmp/signal-registers-build-err; then
+                            OUTPUT=$(/tmp/signal-registers 2>/tmp/signal-registers-run-err)
+                            EXIT=$?
+                            if [ "$EXIT" -eq 0 ] && [ "$OUTPUT" = "signal registers preserved" ]; then
+                              echo "FUNC_TEST:signal-registers:PASS"
+                            else
+                              echo "FUNC_TEST:signal-registers:FAIL:runtime-exit=$EXIT"
+                              cat /tmp/signal-registers-run-err
+                            fi
+                          else
+                            echo "FUNC_TEST:signal-registers:FAIL:compile"
+                            cat /tmp/signal-registers-build-out /tmp/signal-registers-build-err
                           fi
                         '
 
@@ -3604,6 +3622,12 @@ selfHosting
         else
           [ ]
       )
+      ++ [
+        {
+          source = ../test-scripts/signal-registers.c;
+          target = "usr/src/signal-registers.c";
+        }
+      ]
       ++ (
         if pkgs ? snix-source-bundle then
           [

@@ -68,6 +68,10 @@ let
       # child_hook reads fork_inner's stack-resident scratchpad after calling
       # close(), whose return address overwrites new_filetable_fd; snapshot first
       ./patches/relibc/patch-relibc-fork-scratchpad.patch
+      # Preserve the interrupted copy loop's RCX across signal selection.
+      ./patches/relibc/patch-relibc-signal-rcx.patch
+      # Bootstrap local data GOT slots even without a libc.so dependency.
+      ./patches/relibc/patch-relibc-ld-so-self-got.patch
     ];
 
     postUnpack = ''
