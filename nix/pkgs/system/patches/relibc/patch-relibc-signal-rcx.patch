@@ -1,0 +1,20 @@
+--- a/redox-rt/src/arch/x86_64.rs
++++ b/redox-rt/src/arch/x86_64.rs
+@@ -338,6 +338,8 @@
+     // skip the sigaltstack logic.
+     lea rdx, [rip + {pctl} + {pctl_off_actions}]
+ 
++    // Signal selection below reuses RCX; retain the interrupted value first.
++    mov fs:[{tcb_sa_off} + {sa_tmp_rcx}], rcx
+     mov ecx, eax
+     and ecx, 63
+ 
+@@ -371,7 +373,7 @@
+     push fs:[{tcb_sa_off} + {sa_tmp_rdi}]
+     push fs:[{tcb_sa_off} + {sa_tmp_rsi}]
+     push fs:[{tcb_sa_off} + {sa_tmp_rdx}]
+-    push rcx
++    push fs:[{tcb_sa_off} + {sa_tmp_rcx}]
+     push fs:[{tcb_sa_off} + {sa_tmp_rax}]
+     push fs:[{tcb_sa_off} + {sa_tmp_r8}]
+     push r9

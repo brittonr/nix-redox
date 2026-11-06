@@ -413,13 +413,25 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - focused test harness note: `snix-sandbox-test` originally checked `$out/bin/workspace-test`, but `workspace-build.nix` installs `$out/bin/mybin`
 
 ### Key Patches (all still required)
-**relibc** (10 patches): dso-runtime, dso-environ, environ-dso-init, prefault-stack, grow-main-stack, abort-dso,
-execvpe, ld-so-argv-utf8, fork-lock, fork-scratchpad. The cwd, ns-fd, run-init, symtab-fallback, ld-so-align,
+**relibc** (12 patches): dso-runtime, dso-environ, environ-dso-init, prefault-stack, grow-main-stack, abort-dso,
+execvpe, ld-so-argv-utf8, fork-lock, fork-scratchpad, signal-rcx, ld-so-self-got. The cwd, ns-fd, run-init, symtab-fallback, ld-so-align,
 pipe-cloexec, fcntl-lock and randd-read carries were dropped or folded into dso-runtime by the upstream alignment.
 `fork-scratchpad`: upstream `child_hook` reads its `&ForkScratchpad` (a local in `fork_inner`'s dead frame, just
 below the child's `rsp`) AFTER calling `sys::close()`; the `call` pushes its return address over `new_filetable_fd`,
 so `to_upper()` gets a garbage fd and init dies with `RELIBC PANIC ... x86_64.rs:124 ... Bad file number`. Whether a
 build is hit depends on `fork_inner`'s frame layout; the patch snapshots the struct with `read_volatile` first.
+`signal-rcx`: x86_64 signal selection uses `ecx` to index the action table before building the interrupted
+register frame. Save RCX in the existing signal-area slot first, then push that saved value. Without it,
+a signal during ld.so memcpy changes its loop limit to the signal index (observed `17`) and it copies past
+the DSO mapping. The `signal-registers` guest regression checks standard and realtime delivery against a
+64-bit sentinel; the old libc returned `9` for SIGUSR1, while the patched libc preserves the sentinel.
+`ld-so-self-got`: stage-one relocation must bootstrap defined data GLOB_DAT/GOT entries as well as
+RELATIVE/RELR. Statically embedded libc in rustc does not pull in libc.so, so ld.so never gets the normal
+dependency relocation pass; its environ GOT slot otherwise stays null and constructor-state injection
+faults. Initialize these slots to the interpreter's own definitions without allocation; later normal
+symbol lookup still permits interposition. Guest proof with the repaired interpreter: rustc --version,
+--print cfg, and compile/link/run of a println program all pass. Increasing rustc's stack or enabling
+its frame pointers cannot diagnose this pre-entry loader failure.
 **rustc tree** (15 patches, nightly-2026-05-24): sysroot, cmake, arange, bootstrap-force-link, main-stack,
 linker-pipes, read2-pipes, cargo-read2-pipes, jobserver-poll, cargo-heartbeat, execvpe, cargo-irwxu,
 redox-crt-static-dylibs, nix-redox-sigaction, ctrlc-redox-sema.
