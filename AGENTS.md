@@ -319,6 +319,7 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 ## Self-Hosting (Rust Toolchain on Redox)
 
 ### What Works
+- **Toolchain OpenSSL**: rustc's stage2-tools cargo bundles curl 8.20 (`curl-sys 0.4.88`), which requires OpenSSL ≥3.0 (`TLS1_3_VERSION`, `EVP_sha512_256`, `SSL_CTX_set_ciphersuites`). `redox-openssl` 1.1.1 fails to compile the bundled curl. Point `X86_64_UNKNOWN_REDOX_OPENSSL_DIR` at `redox-openssl3`, and use the `withCompression = false` variant: the zlib/zstd-enabled `libssl.a` references `ZSTD_*`/zlib symbols that cargo's link line does not provide
 - `rustc` compilation (single files, multi-file, proc-macros)
 - `cargo build` (hello world, dependencies, vendored deps, path deps, build scripts)
 - `snix build --expr/--file` (Nix derivations built on Redox)
@@ -419,8 +420,15 @@ pipe-cloexec, fcntl-lock and randd-read carries were dropped or folded into dso-
 below the child's `rsp`) AFTER calling `sys::close()`; the `call` pushes its return address over `new_filetable_fd`,
 so `to_upper()` gets a garbage fd and init dies with `RELIBC PANIC ... x86_64.rs:124 ... Bad file number`. Whether a
 build is hit depends on `fork_inner`'s frame layout; the patch snapshots the struct with `read_volatile` first.
-**rustc tree** (12 patches, nightly-2026-05-24): sysroot, cmake, arange, bootstrap-force-link, main-stack,
-linker-pipes, read2-pipes, cargo-read2-pipes, jobserver-poll, cargo-heartbeat, execvpe, cargo-irwxu.
+**rustc tree** (15 patches, nightly-2026-05-24): sysroot, cmake, arange, bootstrap-force-link, main-stack,
+linker-pipes, read2-pipes, cargo-read2-pipes, jobserver-poll, cargo-heartbeat, execvpe, cargo-irwxu,
+redox-crt-static-dylibs, nix-redox-sigaction, ctrlc-redox-sema.
+`redox-crt-static-dylibs` sets `crt_static_allows_dylibs` in the x86_64 Redox target spec: since 1.98 the
+compiler drops `proc-macro`/`cdylib` outputs when `crt-static` is on, which breaks the cross-built stage2
+compiler's proc-macro deps. `nix-redox-sigaction` fixes the vendored `nix 0.30.1` for libc's Redox
+`sigaction.sa_flags: i32` (u64 bitflags conversions) and updates its `.cargo-checksum.json`.
+`ctrlc-redox-sema` replaces the vendored `ctrlc 3.5.1` POSIX semaphore (absent from relibc) with an
+atomic-flag wait for Redox.
 Dropped because relibc now covers them: spawn-pipes (CLOEXEC exec error pipe) and the std/cargo `file:` path
 stripping. Restore them if guest `Command` spawn errors or `file:` paths reappear.
 
