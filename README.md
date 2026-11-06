@@ -81,7 +81,7 @@ The image is a GPT disk with a UEFI boot partition and RedoxFS root filesystem.
 Every component is a Nix derivation built from source — no binary blobs, no
 upstream Makefile/cookbook. The build has three layers:
 
-1. **Bootstrap** — relibc (12 patches), kernel, bootloader. Cross-compiled
+1. **Bootstrap** — relibc (13 patches), kernel, bootloader. Cross-compiled
    with `-Z build-std` since they ARE the standard library.
 
 2. **Userspace** — 70+ packages. Rust crates are split into per-crate
@@ -208,6 +208,8 @@ The self-hosting regression suite checks that standard and realtime signals pres
 the interrupted register state. The loader also initializes its own data GOT slots
 before loading compilers that embed libc; otherwise compiler startup can fault before
 `main`, even for `rustc --version`.
+Embedded libc constructors also preserve an existing worker's pthread state when
+loading proc-macros, so worker teardown cannot unmap the original main stack.
 
 ### Native system rebuilds
 
