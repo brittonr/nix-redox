@@ -54,6 +54,9 @@ let
 
   # Common setup: port discovery, work dir, image copy
   commonSetup = ''
+    # Keep host audio/GUI library overrides out of the pinned QEMU closure.
+    unset LD_LIBRARY_PATH
+
     ${portFinder}
 
     SSH_PORT=$(find_available_port "''${REDOX_SSH_PORT:-${defaultHostSshPort}}")
@@ -77,6 +80,7 @@ in
   # Use the pc machine's PS/2 keyboard and absolute vmmouse input. Redundant
   # USB HID devices can stall early boot while xhcid services transfers.
   graphical = pkgs.writeShellScriptBin "run-redox-graphical" ''
+    set -e
     ${commonSetup}
 
     LOG_FILE="$WORK_DIR/redox-serial.log"
@@ -92,6 +96,7 @@ in
     echo "Close the QEMU window to quit."
     echo ""
 
+    status=0
     ${pkgs.expect}/bin/expect -c "
       log_file -a $LOG_FILE
       set timeout ${expectTimeout}
@@ -105,16 +110,27 @@ in
         -device hda-duplex \
         -serial mon:stdio
 
+      set exited 0
       expect {
         \"Arrow keys and enter select mode\" {
           sleep 2
           send \"\r\"
         }
+        eof {
+          set exited 1
+        }
         timeout {
         }
       }
-      interact
-    "
+      if {!\$exited} {
+        interact
+      }
+      set result [wait]
+      if {[lindex \$result 2] != 0 || [llength \$result] > 4} {
+        exit 1
+      }
+      exit [lindex \$result 3]
+    " || status=$?
 
     echo ""
     echo "Network: ${nicModel} with user-mode NAT (ports: $SSH_PORT->22, $HTTP_PORT->80)"
@@ -123,6 +139,7 @@ in
     echo "----------------------------------------"
     tail -n 50 "$LOG_FILE" 2>/dev/null || echo "(no log available)"
     echo "----------------------------------------"
+    exit "$status"
   '';
 
   # Headless QEMU runner with serial console

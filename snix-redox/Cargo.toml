@@ -245,9 +245,9 @@ genawaiter = { version = "0.99.1", default-features = false }
 
 # Redox-only: scheme daemon support (stored, profiled) and sandboxing.
 [target.'cfg(target_os = "redox")'.dependencies]
-redox-scheme = "0.11"
-redox_syscall = { version = "0.7", features = ["std"] }
-libredox = { version = "0.1", features = ["mkns"] }
+redox-scheme = { git = "https://gitlab.redox-os.org/redox-os/redox-scheme.git", rev = "3514d5696fb8cbbe7d517d37d3074d7cd5cfdded" }
+redox_syscall = { version = "0.9.5", features = ["std"] }
+libredox = { version = "0.2.0", features = ["mkns"] }
 ioslice = "0.6"
 
 [dev-dependencies]

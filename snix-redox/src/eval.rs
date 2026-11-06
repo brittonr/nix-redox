@@ -9,7 +9,7 @@ use std::fs;
 use std::io::{self, BufRead, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -25,19 +25,29 @@ use snix_store::utils::{construct_services, ServiceUrlsMemory};
 
 use crate::pathinfo::{PathInfo, PathInfoDb};
 
+/// Load CLI input while retaining the file location for relative Nix paths.
+pub(crate) fn read_source(
+    expr: Option<String>,
+    file: Option<String>,
+) -> Result<(String, Option<PathBuf>), Box<dyn std::error::Error>> {
+    match (expr, file) {
+        (Some(expr), _) => Ok((expr, None)),
+        (_, Some(file)) => {
+            let path = PathBuf::from(file);
+            Ok((fs::read_to_string(&path)?, Some(path)))
+        }
+        _ => Err("provide --expr or --file".into()),
+    }
+}
+
 /// Evaluate a Nix expression from --expr or --file
 pub fn run(
     expr: Option<String>,
     file: Option<String>,
     raw: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let source = match (expr, file) {
-        (Some(e), _) => e,
-        (_, Some(f)) => std::fs::read_to_string(&f)?,
-        _ => return Err("provide --expr or --file".into()),
-    };
-
-    let result = evaluate(&source)?;
+    let (source, location) = read_source(expr, file)?;
+    let (result, _io) = evaluate_source(&source, location, None)?;
     if raw {
         let s = result.to_string();
         if s.starts_with('"') && s.ends_with('"') && s.len() >= 2 {
@@ -126,7 +136,7 @@ fn evaluate(expr: &str) -> Result<String, Box<dyn std::error::Error>> {
 pub fn evaluate_with_state(
     expr: &str,
 ) -> Result<(String, Rc<SnixStoreIO>), Box<dyn std::error::Error>> {
-    evaluate_with_state_impl(expr, None)
+    evaluate_source(expr, None, None)
 }
 
 /// Evaluate a build graph and publish its imported sources before executing builders.
@@ -135,14 +145,25 @@ pub fn evaluate_for_build(
     expr: &str,
     db: &PathInfoDb,
 ) -> Result<(String, Rc<SnixStoreIO>), Box<dyn std::error::Error>> {
+    evaluate_source(expr, None, Some(db))
+}
+
+/// Evaluate CLI source at its original location, optionally publishing build inputs.
+pub(crate) fn evaluate_source(
+    expr: &str,
+    location: Option<PathBuf>,
+    db: Option<&PathInfoDb>,
+) -> Result<(String, Rc<SnixStoreIO>), Box<dyn std::error::Error>> {
     evaluate_with_state_impl(
         expr,
-        Some((db, Path::new(nix_compat::store_path::STORE_DIR))),
+        location,
+        db.map(|db| (db, Path::new(nix_compat::store_path::STORE_DIR))),
     )
 }
 
 fn evaluate_with_state_impl(
     expr: &str,
+    location: Option<PathBuf>,
     store: Option<(&PathInfoDb, &Path)>,
 ) -> Result<(String, Rc<SnixStoreIO>), Box<dyn std::error::Error>> {
     // Install ring as the default rustls crypto provider. Required because
@@ -195,7 +216,7 @@ fn evaluate_with_state_impl(
 
     let eval = eval_builder.build();
 
-    let result = eval.evaluate(expr, None);
+    let result = eval.evaluate(expr, location);
 
     if !result.errors.is_empty() {
         let errors: Vec<String> = result
@@ -504,6 +525,48 @@ mod tests {
     use super::*;
 
     #[test]
+    fn file_source_resolves_parent_reads_and_nested_imports() {
+        let tmp = tempfile::tempdir().unwrap();
+        let nested = tmp.path().join("nested");
+        fs::create_dir(&nested).unwrap();
+        fs::write(tmp.path().join("manifest.json"), "file-context").unwrap();
+        fs::write(nested.join("value.nix"), "builtins.readFile ../manifest.json").unwrap();
+        let file = nested.join("default.nix");
+        fs::write(&file, "import ./value.nix").unwrap();
+        let (source, location) = read_source(None, Some(file.to_str().unwrap().into())).unwrap();
+        assert_eq!(location.as_deref(), Some(file.as_path()));
+        assert_eq!(evaluate_source(&source, location, None).unwrap().0, "\"file-context\"");
+    }
+
+    #[test]
+    fn file_source_build_graph_uses_original_location() {
+        let tmp = tempfile::tempdir().unwrap();
+        let nested = tmp.path().join("nested");
+        fs::create_dir(&nested).unwrap();
+        fs::write(tmp.path().join("manifest.json"), "build-context").unwrap();
+        let file = nested.join("build.nix");
+        fs::write(&file, r#"derivation { name = "file-context"; system = "x86_64-linux"; builder = "/bin/sh"; bootstrapInputs = builtins.readFile ../manifest.json; }"#).unwrap();
+        let (source, location) = read_source(None, Some(file.to_str().unwrap().into())).unwrap();
+        let (_, state) = evaluate_source(&format!("({source}).drvPath"), location, None).unwrap();
+        let known = state.known_paths.borrow();
+        let (_, drv) = known.get_derivations().next().unwrap();
+        assert_eq!(drv.environment.get("bootstrapInputs").unwrap(), "build-context");
+    }
+
+    #[test]
+    fn file_source_rejects_missing_sibling_and_keeps_expr_precedence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let file = tmp.path().join("default.nix");
+        fs::write(&file, "builtins.readFile ./missing-manifest.json").unwrap();
+        let (source, location) = read_source(None, Some(file.to_str().unwrap().into())).unwrap();
+        assert!(evaluate_source(&source, location, None).is_err());
+        let (source, location) = read_source(Some("42".into()), Some("missing.nix".into())).unwrap();
+        assert!(location.is_none());
+        assert_eq!(evaluate_source(&source, location, None).unwrap().0, "42");
+        assert!(read_source(None, Some("missing.nix".into())).is_err());
+    }
+
+    #[test]
     fn manifest_json_can_be_read_and_decoded() {
         let tmp = tempfile::tempdir().unwrap();
         let manifest = tmp.path().join("manifest.json");
@@ -532,7 +595,7 @@ mod tests {
         );
         let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
         let store = tmp.path().join("store");
-        let (_, state) = evaluate_with_state_impl(&expression, Some((&db, &store))).unwrap();
+        let (_, state) = evaluate_with_state_impl(&expression, None, Some((&db, &store))).unwrap();
         fs::remove_dir_all(&original).unwrap();
         fs::remove_file(&file_input).unwrap();
 

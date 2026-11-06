@@ -20,8 +20,8 @@
     "snix-store": "path+file:///home/brittonr/git/redox/snix-redox/upstream/store#snix-store@0.1.0",
     "snix-tracing": "path+file:///home/brittonr/git/redox/snix-redox/upstream/tracing#snix-tracing@0.1.0"
   },
-  "cargoLockHash": "86c4c9864ec022f1e7e4b8567a446ef3f01e581d03ac9f45f3c610f31b2bfc62",
-  "inputsHash": "1bebe27534dfed944c8d637fcf1db5b5c221306b8829d814334839ab796f226e",
+  "cargoLockHash": "5a3d57140e1de3e9751a86ac78257890a9a1def3fabeb79174760f576051087f",
+  "inputsHash": "dc80a3119448da11cc6d0f59b2eaf95ee8a5036215da35884c72a9f054a78d36",
   "crates": {
     "git+https://github.com/tvlfyi/wu-manber.git#wu-manber@0.1.0": {
       "crateName": "wu-manber",

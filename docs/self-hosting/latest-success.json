@@ -1,5 +1,29 @@
 {
   "flows": {
+    "file-source-context-smoke": {
+      "boot_cycles": [],
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261106-file-context-smoke-295c2479-3",
+      "duration_seconds": 5,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261106-file-context-smoke-295c2479-3/excerpt.txt",
+      "exit_code": 0,
+      "finished_at": "2026-11-06T15:29:43-05:00",
+      "flow": "file-source-context-smoke",
+      "git_dirty": true,
+      "git_rev": "295c2479",
+      "run_id": "20261106T152938-file-source-context-smoke",
+      "started_at": "2026-11-06T15:29:38-05:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261106-file-context-smoke-295c2479-3/summary.json",
+      "test_counts": {
+        "fail": 0,
+        "failure_lines": [],
+        "pass": 6,
+        "skip": 0,
+        "tests_complete": true,
+        "tests_started": true,
+        "total": 6
+      },
+      "verdict": "pass"
+    },
     "kernel-rebuild-test": {
       "capture_dir": "/var/tmp/redox-self-hosting-captures/20260415T000324-kernel-rebuild-test",
       "duration_seconds": 728,
@@ -20,6 +44,30 @@
         "tests_complete": true,
         "tests_started": true,
         "total": 10
+      },
+      "verdict": "pass"
+    },
+    "native-cc-probe": {
+      "boot_cycles": [],
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261106-native-cc-stdin-n5inr",
+      "duration_seconds": 31,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261106-native-cc-stdin-n5inr/excerpt.txt",
+      "exit_code": 0,
+      "finished_at": "2026-11-06T17:24:29-05:00",
+      "flow": "native-cc-probe",
+      "git_dirty": true,
+      "git_rev": "295c2479",
+      "run_id": "20261106T172358-native-cc-probe",
+      "started_at": "2026-11-06T17:23:58-05:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261106-native-cc-stdin-n5inr/summary.json",
+      "test_counts": {
+        "fail": 0,
+        "failure_lines": [],
+        "pass": 3,
+        "skip": 0,
+        "tests_complete": true,
+        "tests_started": true,
+        "total": 3
       },
       "verdict": "pass"
     },
@@ -123,6 +171,78 @@
       },
       "verdict": "pass"
     },
+    "native-std-path-probe": {
+      "boot_cycles": [],
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261106-native-std-path-probe-n5inr-absolute",
+      "duration_seconds": 7,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261106-native-std-path-probe-n5inr-absolute/excerpt.txt",
+      "exit_code": 0,
+      "finished_at": "2026-11-06T16:48:11-05:00",
+      "flow": "native-std-path-probe",
+      "git_dirty": true,
+      "git_rev": "295c2479",
+      "run_id": "20261106T164804-native-std-path-probe",
+      "started_at": "2026-11-06T16:48:04-05:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261106-native-std-path-probe-n5inr-absolute/summary.json",
+      "test_counts": {
+        "fail": 0,
+        "failure_lines": [],
+        "pass": 2,
+        "skip": 0,
+        "tests_complete": true,
+        "tests_started": true,
+        "total": 2
+      },
+      "verdict": "pass"
+    },
+    "native-url-path-probe": {
+      "boot_cycles": [],
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261106-native-url-path-probe-7w5n-locked",
+      "duration_seconds": 107,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261106-native-url-path-probe-7w5n-locked/excerpt.txt",
+      "exit_code": 0,
+      "finished_at": "2026-11-06T18:42:44-05:00",
+      "flow": "native-url-path-probe",
+      "git_dirty": true,
+      "git_rev": "295c2479",
+      "run_id": "20261106T184057-native-url-path-probe",
+      "started_at": "2026-11-06T18:40:57-05:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261106-native-url-path-probe-7w5n-locked/summary.json",
+      "test_counts": {
+        "fail": 0,
+        "failure_lines": [],
+        "pass": 2,
+        "skip": 0,
+        "tests_complete": true,
+        "tests_started": true,
+        "total": 2
+      },
+      "verdict": "pass"
+    },
+    "proxy-abi-initial-namespace": {
+      "boot_cycles": [],
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261106-proxy-abi-initial-namespace-295c2479-4",
+      "duration_seconds": 10,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261106-proxy-abi-initial-namespace-295c2479-4/excerpt.txt",
+      "exit_code": 0,
+      "finished_at": "2026-11-06T15:45:38-05:00",
+      "flow": "proxy-abi-initial-namespace",
+      "git_dirty": true,
+      "git_rev": "295c2479",
+      "run_id": "20261106T154528-proxy-abi-initial-namespace",
+      "started_at": "2026-11-06T15:45:28-05:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261106-proxy-abi-initial-namespace-295c2479-4/summary.json",
+      "test_counts": {
+        "fail": 0,
+        "failure_lines": [],
+        "pass": 9,
+        "skip": 0,
+        "tests_complete": true,
+        "tests_started": true,
+        "total": 9
+      },
+      "verdict": "pass"
+    },
     "runtime-environment-smoke": {
       "capture_dir": "/var/tmp/redox-self-hosting-captures/20261028T205624-runtime-environment-smoke",
       "duration_seconds": 60,
@@ -217,5 +337,5 @@
     }
   },
   "schema_version": 1,
-  "updated_at": "2026-10-29T00:32:32-04:00"
+  "updated_at": "2026-11-06T18:42:44-05:00"
 }

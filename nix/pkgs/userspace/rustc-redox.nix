@@ -369,7 +369,11 @@ pkgs.stdenv.mkDerivation {
     ./patches/patch-rustc-nix-redox-sigaction.patch
     # relibc has no POSIX semaphores; ctrlc 3.5.1 needs a Redox fallback
     ./patches/patch-rustc-ctrlc-redox-sema.patch
-    # relibc now returns standard paths, so std and cargo need no "file:" stripping, and
+    # Normalize relibc's file:/ paths at std's filesystem boundaries.
+    ./patches/patch-std-redox-paths.patch
+    # url::to_file_path independently adds file: on Redox, bypassing std's
+    # canonicalize/current_dir. Cargo consumes these paths through SourceId.
+    ./patches/patch-url-redox-file-paths.patch
     # pipe2/CLOEXEC works, so spawn() keeps its exec error pipe.
   ];
 

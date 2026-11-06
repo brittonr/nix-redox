@@ -20,8 +20,8 @@
     "snix-store": "path+file:///home/brittonr/git/redox/snix-redox/upstream/store#snix-store@0.1.0",
     "snix-tracing": "path+file:///home/brittonr/git/redox/snix-redox/upstream/tracing#snix-tracing@0.1.0"
   },
-  "cargoLockHash": "86c4c9864ec022f1e7e4b8567a446ef3f01e581d03ac9f45f3c610f31b2bfc62",
-  "inputsHash": "108798f8c906305e97eb95216c314e39774c41ddc607de3f2beb8438d2eef295",
+  "cargoLockHash": "5a3d57140e1de3e9751a86ac78257890a9a1def3fabeb79174760f576051087f",
+  "inputsHash": "329500c1538cd6963aec84facddf449a7a42f134c10b550ab9dc7a9c147e6bec",
   "crates": {
     "git+https://github.com/tvlfyi/wu-manber.git#wu-manber@0.1.0": {
       "crateName": "wu-manber",
@@ -49,6 +49,48 @@
       "authors": [
         "Joe Neeman <joeneeman@gmail.com>"
       ]
+    },
+    "git+https://gitlab.redox-os.org/redox-os/redox-scheme.git?rev=3514d5696fb8cbbe7d517d37d3074d7cd5cfdded#redox-scheme@0.13.0": {
+      "crateName": "redox-scheme",
+      "version": "0.13.0",
+      "edition": "2024",
+      "sha256": null,
+      "source": {
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redox-scheme.git",
+        "rev": "3514d5696fb8cbbe7d517d37d3074d7cd5cfdded",
+        "sha256": "12bi2ghw3f4syprlpfgc7rlh6n3aab64dpcgzg9d7ssrrypbnjvb"
+      },
+      "features": [
+        "default",
+        "std"
+      ],
+      "dependencies": [
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.2.0",
+          "externCrateName": "libredox"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.9.5",
+          "externCrateName": "syscall"
+        }
+      ],
+      "buildDependencies": [],
+      "procMacro": false,
+      "build": null,
+      "libPath": null,
+      "libName": null,
+      "libCrateTypes": [
+        "lib"
+      ],
+      "crateBin": [],
+      "links": null,
+      "authors": [
+        "4lDO2 <4lDO2@protonmail.com>"
+      ],
+      "description": "Library for writing Redox scheme daemons",
+      "license": "MIT",
+      "repository": "https://gitlab.redox-os.org/redox-os/redox-scheme"
     },
     "path+file:///home/brittonr/git/redox/snix-redox#0.4.0": {
       "crateName": "snix-redox",
@@ -98,7 +140,7 @@
           "externCrateName": "ioslice"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.16",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.2.0",
           "externCrateName": "libredox"
         },
         {
@@ -114,11 +156,11 @@
           "externCrateName": "nix_compat"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox-scheme@0.11.0",
+          "packageId": "git+https://gitlab.redox-os.org/redox-os/redox-scheme.git?rev=3514d5696fb8cbbe7d517d37d3074d7cd5cfdded#redox-scheme@0.13.0",
           "externCrateName": "redox_scheme"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.5",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.9.5",
           "externCrateName": "syscall"
         },
         {
@@ -7280,11 +7322,11 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/portable-network-archive/liblzma-rs"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.16": {
+    "registry+https://github.com/rust-lang/crates.io-index#libredox@0.2.0": {
       "crateName": "libredox",
-      "version": "0.1.16",
+      "version": "0.2.0",
       "edition": "2021",
-      "sha256": "e02f3bb43d335493c96bf3fd3a321600bf6bd07ed34bc64118e9293bdffea46c",
+      "sha256": "482919959e69f0d67493e9220edb433ffc42ae98e59ceba4ed58697eb49b9bf8",
       "source": {
         "type": "crates-io"
       },
@@ -7296,6 +7338,7 @@
         "ioslice",
         "libc",
         "mkns",
+        "numa",
         "plain",
         "protocol",
         "redox_syscall",
@@ -7319,7 +7362,7 @@
           "externCrateName": "plain"
         },
         {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.5",
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.9.5",
           "externCrateName": "syscall"
         }
       ],
@@ -9326,45 +9369,6 @@
       "license": "MIT OR Apache-2.0",
       "repository": "https://github.com/cberner/redb"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#redox-scheme@0.11.0": {
-      "crateName": "redox-scheme",
-      "version": "0.11.0",
-      "edition": "2024",
-      "sha256": "e58cb7dee1058575f320f9bfa32c7c0eda857e285c2a163a0eb595d37add09cd",
-      "source": {
-        "type": "crates-io"
-      },
-      "features": [
-        "default",
-        "std"
-      ],
-      "dependencies": [
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#libredox@0.1.16",
-          "externCrateName": "libredox"
-        },
-        {
-          "packageId": "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.5",
-          "externCrateName": "syscall"
-        }
-      ],
-      "buildDependencies": [],
-      "procMacro": false,
-      "build": null,
-      "libPath": null,
-      "libName": null,
-      "libCrateTypes": [
-        "lib"
-      ],
-      "crateBin": [],
-      "links": null,
-      "authors": [
-        "4lDO2 <4lDO2@protonmail.com>"
-      ],
-      "description": "Library for writing Redox scheme daemons",
-      "license": "MIT",
-      "repository": "https://gitlab.redox-os.org/redox-os/redox-scheme"
-    },
     "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.5.18": {
       "crateName": "redox_syscall",
       "version": "0.5.18",
@@ -9400,11 +9404,11 @@
       "license": "MIT",
       "repository": "https://gitlab.redox-os.org/redox-os/syscall"
     },
-    "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.7.5": {
+    "registry+https://github.com/rust-lang/crates.io-index#redox_syscall@0.9.5": {
       "crateName": "redox_syscall",
-      "version": "0.7.5",
+      "version": "0.9.5",
       "edition": "2021",
-      "sha256": "4666a1a60d8412eab19d94f6d13dcc9cea0a5ef4fdf6a5db306537413c661b1b",
+      "sha256": "580c875845b41ecb1564ad1ae4703044cef774145e3d7a94dc2b3fa7c97868fd",
       "source": {
         "type": "crates-io"
       },
@@ -9434,7 +9438,7 @@
       ],
       "description": "A Rust library to access raw Redox system calls",
       "license": "MIT",
-      "repository": "https://gitlab.redox-os.org/redox-os/syscall"
+      "repository": "https://gitlab.redox-os.org/redox-os/kernel"
     },
     "registry+https://github.com/rust-lang/crates.io-index#regex-automata@0.4.14": {
       "crateName": "regex-automata",

@@ -211,22 +211,13 @@ fn extract_node_with_sink<S: ExtractSink>(
 fn raw_openat(root_fd: usize, path: &Path, flags: usize) -> io::Result<usize> {
     let clean = path_to_relative_string(path)?;
     let fcntl_flags = flags & syscall::O_FCNTL_MASK;
-    unsafe {
-        syscall::syscall5(
-            syscall::SYS_OPENAT,
-            root_fd,
-            clean.as_ptr() as usize,
-            clean.len(),
-            flags,
-            fcntl_flags,
-        )
-    }
-    .map_err(|e| io::Error::new(io::ErrorKind::NotFound, format!("SYS_OPENAT: {e}")))
+    libredox::call::openat(root_fd, clean.as_bytes(), flags as i32, fcntl_flags as u32)
+        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, format!("SYS_OPENAT: {e}")))
 }
 
 #[cfg(target_os = "redox")]
 fn raw_fchmod(fd: usize, mode: u16) -> io::Result<()> {
-    unsafe { syscall::syscall2(syscall::SYS_FCHMOD, fd, mode as usize) }
+    libredox::call::fchmod(fd, mode)
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("SYS_FCHMOD: {e}")))?;
     Ok(())
 }
@@ -244,18 +235,14 @@ fn raw_mkdir_p(root_fd: usize, path: &Path) -> io::Result<()> {
         }
         built.push_str(component);
         let flags = syscall::O_CREAT | syscall::O_DIRECTORY;
-        let fd = unsafe {
-            syscall::syscall5(
-                syscall::SYS_OPENAT,
-                root_fd,
-                built.as_ptr() as usize,
-                built.len(),
-                flags,
-                flags & syscall::O_FCNTL_MASK,
-            )
-        }
+        let fd = libredox::call::openat(
+            root_fd,
+            built.as_bytes(),
+            flags as i32,
+            (flags & syscall::O_FCNTL_MASK) as u32,
+        )
         .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("mkdir {built}: {e}")))?;
-        let _ = syscall::close(fd);
+        let _ = libredox::call::close(fd);
     }
     Ok(())
 }

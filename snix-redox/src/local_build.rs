@@ -396,7 +396,7 @@ fn build_derivation_inner(
                     unsafe {
                         cmd.pre_exec(move || {
                             if let Some(fd) = socket_fd {
-                                let _ = syscall::close(fd);
+                                let _ = libredox::call::close(fd);
                             }
                             libredox::call::setns(child_ns_fd).map_err(|e| {
                                 std::io::Error::new(
@@ -451,7 +451,7 @@ fn build_derivation_inner(
             .map_err(|e| BuildError::Io(format!("executing builder '{}': {e}", drv.builder)))?;
         #[cfg(target_os = "redox")]
         if let Some(fd) = child_ns_fd_to_close.take() {
-            let _ = syscall::close(fd);
+            let _ = libredox::call::close(fd);
         }
 
         // Take ownership of the pipe read-ends. The child holds the
@@ -569,7 +569,7 @@ fn build_derivation_inner(
 
     // ── 6. Verify outputs exist ────────────────────────────────────────
     //
-    // On Redox with sandbox, use raw SYS_OPENAT via the pre-opened root
+    // On Redox with sandbox, open directly through the pre-opened root
     // fd to bypass initnsmgr. The detached proxy thread may still be
     // blocking on a scheme socket read, which can deadlock initnsmgr if
     // we use normal file: I/O (Path::exists() → stat → initnsmgr).
@@ -580,20 +580,11 @@ fn build_derivation_inner(
             #[cfg(target_os = "redox")]
             let output_exists = if let Some(rfd) = verify_root_fd {
                 let clean = abs.trim_start_matches('/');
-                let fcntl_flags =
-                    (syscall::flag::O_RDONLY | syscall::flag::O_STAT) & syscall::O_FCNTL_MASK;
-                match unsafe {
-                    syscall::syscall5(
-                        syscall::SYS_OPENAT,
-                        rfd,
-                        clean.as_ptr() as usize,
-                        clean.len(),
-                        syscall::flag::O_RDONLY | syscall::flag::O_STAT,
-                        fcntl_flags,
-                    )
-                } {
+                let flags = syscall::flag::O_RDONLY | syscall::flag::O_STAT;
+                let fcntl_flags = (flags & syscall::O_FCNTL_MASK) as u32;
+                match libredox::call::openat(rfd, clean, flags as i32, fcntl_flags) {
                     Ok(fd) => {
-                        let _ = syscall::close(fd);
+                        let _ = libredox::call::close(fd);
                         true
                     }
                     Err(e) => false,
@@ -654,7 +645,7 @@ fn build_derivation_inner(
     // Close verify_root_fd (raw fd from into_raw_fd, not auto-closed).
     #[cfg(target_os = "redox")]
     if let Some(rfd) = verify_root_fd {
-        let _ = syscall::close(rfd);
+        let _ = libredox::call::close(rfd);
     }
 
     Ok(BuildResult {
@@ -1178,7 +1169,7 @@ fn debug_stderr(message: &str) {
     if std::env::var("SNIX_DEBUG_STDERR").ok().as_deref() == Some("1") {
         #[cfg(target_os = "redox")]
         {
-            let _ = syscall::write(2, line.as_bytes());
+            let _ = libredox::call::write(2, line.as_bytes());
         }
         #[cfg(not(target_os = "redox"))]
         {
@@ -1227,16 +1218,7 @@ pub fn run_with_options(
         no_sandbox
     ));
 
-    let source = match (expr, file) {
-        (Some(e), _) => e,
-        (_, Some(f)) => {
-            debug_stderr(&format!("snix: reading {f}"));
-            let s = std::fs::read_to_string(&f)?;
-            debug_stderr(&format!("snix: read {} bytes from {f}", s.len()));
-            s
-        }
-        _ => return Err("provide --expr or --file".into()),
-    };
+    let (source, location) = crate::eval::read_source(expr, file)?;
 
     // Evaluate `(expr).drvPath` to get the derivation path, keeping state
     // so we can access KnownPaths for the build.
@@ -1247,7 +1229,7 @@ pub fn run_with_options(
     ));
     debug_stderr("snix: opening pathinfo db");
     let db = PathInfoDb::open().map_err(|e| format!("opening pathinfo db: {e}"))?;
-    let (drv_path_str, state) = crate::eval::evaluate_for_build(&drv_path_expr, &db)?;
+    let (drv_path_str, state) = crate::eval::evaluate_source(&drv_path_expr, location, Some(&db))?;
     debug_stderr(&format!("snix: drvPath eval result = {drv_path_str}"));
 
     // Strip surrounding quotes from the evaluated string

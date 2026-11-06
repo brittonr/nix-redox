@@ -26,6 +26,9 @@ use cached artifacts.
 From a local checkout, run `nix run .`. The graphical launcher requires an
 `x86_64-linux` host with access to `/dev/kvm` and an X11 or Wayland display.
 Use `nix run .#headless` when no graphical display is available.
+The QEMU launchers discard inherited `LD_LIBRARY_PATH` overrides so their pinned
+host libraries stay consistent, and the graphical launcher propagates emulator
+startup and runtime failures instead of reporting a successful exit.
 
 To use `nix run redox` from any directory, register this checkout once:
 

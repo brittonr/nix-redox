@@ -67,6 +67,8 @@ For tracing only specific programs, use the `mkKernelSyscallDebug` builder:
 
 Process names are matched with `contains()` — `"cargo"` matches `/bin/cargo`, `/usr/bin/cargo`, etc. Be careful with short names like `"ls"` which match `"false"` too. Use longer paths like `"/bin/ls"` when needed.
 
+An empty list traces every process; multiple names are ORed against the same process name. The builder replaces the pinned kernel's complete process guard and fails if that guard changes. It does not fall back to tracing only early-boot services when a filter cannot be applied.
+
 ### Reading the output
 
 Kernel syscall traces go to serial console output:

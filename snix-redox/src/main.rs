@@ -651,7 +651,7 @@ fn debug_log(message: &str) {
     if std::env::var("SNIX_DEBUG_STDERR").ok().as_deref() == Some("1") {
         #[cfg(target_os = "redox")]
         {
-            let _ = syscall::write(2, line.as_bytes());
+            let _ = libredox::call::write(2, line.as_bytes());
         }
         #[cfg(not(target_os = "redox"))]
         {
@@ -674,7 +674,7 @@ fn main() {
         let msg = format!("snix panic: {info}\n");
         #[cfg(target_os = "redox")]
         {
-            let _ = syscall::write(2, msg.as_bytes());
+            let _ = libredox::call::write(2, msg.as_bytes());
         }
         #[cfg(not(target_os = "redox"))]
         {
@@ -1062,7 +1062,7 @@ fn main() {
         let msg = format!("error: {e}\n");
         #[cfg(target_os = "redox")]
         {
-            let _ = syscall::write(2, msg.as_bytes());
+            let _ = libredox::call::write(2, msg.as_bytes());
         }
         #[cfg(not(target_os = "redox"))]
         {

@@ -14,6 +14,13 @@ These host-side wrappers create capture artifacts automatically:
 
 Each wrapper creates a timestamped run directory under `/var/tmp/redox-self-hosting-captures/` unless `REDOX_CAPTURE_DIR` overrides it.
 
+Guest `snix eval --file`, local `snix build --file`, and bridge builds retain the
+input file's source location. Relative path literals, imports, and
+`builtins.readFile` therefore resolve beside that file, not against the launching
+shell's directory. Expression-only evaluation retains its current-directory
+semantics. The kernel proof intentionally uses relative source, builder, and
+bootstrap-manifest paths.
+
 ## Capture layout
 
 Each run directory uses this layout:
@@ -183,3 +190,16 @@ rebuild cycle.
 
 Capture: `/var/tmp/redox-self-hosting-captures/20261028T211136-self-hosting-test/`.
 `latest-success` now records this strict run under `self-hosting-test`.
+
+## Native C signal-register check
+
+`signal-registers` compiles and runs the C regression for interrupted register
+preservation. Its noninteractive shell uses `/dev/null` as stdin: boot-time
+`debug:` input returns `EOPNOTSUPP` for `fstat(0)`, which makes Clang's standard
+descriptor check exit before compilation without emitting a diagnostic.
+
+Focused capture `20261106-native-cc-stdin-n5inr` passes **3/3** with the unchanged
+native Clang 21 toolchain: direct frontend compile/link/runtime, integrated-driver
+compilation, and signal-register compile/link/runtime. The signal binary exits
+zero and prints `signal registers preserved`. This focused result does not
+replace a complete self-hosting suite result.

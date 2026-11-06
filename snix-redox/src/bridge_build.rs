@@ -206,15 +206,11 @@ pub fn run(
     }
 
     // Evaluate expression locally, then send derivation to host
-    let source = match (expr, file) {
-        (Some(e), _) => e,
-        (_, Some(f)) => std::fs::read_to_string(&f)?,
-        _ => return Err("provide --expr, --file, or --attr".into()),
-    };
+    let (source, location) = crate::eval::read_source(expr, file)?;
 
     // Evaluate to get derivation path
     let drv_path_expr = format!("({source}).drvPath");
-    let (drv_path_str, state) = crate::eval::evaluate_with_state(&drv_path_expr)?;
+    let (drv_path_str, state) = crate::eval::evaluate_source(&drv_path_expr, location, None)?;
 
     let drv_path_str = drv_path_str.trim_matches('"').to_string();
     let drv_path =

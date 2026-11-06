@@ -514,7 +514,7 @@ pub fn run_daemon(config: StoredConfig) -> Result<(), Box<dyn std::error::Error>
 
     // Pre-open "/" to get a direct fd to redoxfs. Must be done BEFORE
     // setrens(0, 0) — after that, std::fs operations fail. The root_fd
-    // allows the FileIoWorker to continue reading files via SYS_OPENAT.
+    // allows the FileIoWorker to continue reading files via libredox openat.
     eprintln!("stored: pre-opening /");
     let root_file =
         std::fs::File::open("/").map_err(|e| format!("stored: failed to open /: {e}"))?;

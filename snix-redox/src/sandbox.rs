@@ -254,8 +254,13 @@ pub fn setup_proxy_namespace(
     })?;
 
     // Start the proxy and register it as file: in the child namespace.
-    let proxy = crate::build_proxy::BuildFsProxy::start(child_ns_fd, allow_list)
-        .map_err(|e| SandboxError::SyscallFailed(format!("proxy start: {e}")))?;
+    let proxy = match crate::build_proxy::BuildFsProxy::start(child_ns_fd, allow_list) {
+        Ok(proxy) => proxy,
+        Err(e) => {
+            let _ = libredox::call::close(child_ns_fd);
+            return Err(SandboxError::SyscallFailed(format!("proxy start: {e}")));
+        }
+    };
 
     Ok((child_ns_fd, proxy))
 }

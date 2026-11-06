@@ -634,10 +634,17 @@ let
 
                         # A handled signal must not replace the interrupted memcpy loop bound.
                         /nix/system/profile/bin/bash -c '
-                          if cc -c /usr/src/signal-registers.c -o /tmp/signal-registers.o \
-                              >/tmp/signal-registers-build-out 2>/tmp/signal-registers-build-err && \
-                              cc /tmp/signal-registers.o -o /tmp/signal-registers \
-                              >>/tmp/signal-registers-build-out 2>>/tmp/signal-registers-build-err; then
+                          # Boot-time debug: stdin cannot be fstat-ed by Clang.
+                          exec </dev/null
+                          COMPILE_EXIT=0
+                          LINK_EXIT=0
+                          cc -c /usr/src/signal-registers.c -o /tmp/signal-registers.o \
+                              >/tmp/signal-registers-build-out 2>/tmp/signal-registers-build-err || COMPILE_EXIT=$?
+                          if [ "$COMPILE_EXIT" -eq 0 ]; then
+                            cc /tmp/signal-registers.o -o /tmp/signal-registers \
+                                >>/tmp/signal-registers-build-out 2>>/tmp/signal-registers-build-err || LINK_EXIT=$?
+                          fi
+                          if [ "$COMPILE_EXIT" -eq 0 ] && [ "$LINK_EXIT" -eq 0 ]; then
                             OUTPUT=$(/tmp/signal-registers 2>/tmp/signal-registers-run-err)
                             EXIT=$?
                             if [ "$EXIT" -eq 0 ] && [ "$OUTPUT" = "signal registers preserved" ]; then
@@ -647,7 +654,7 @@ let
                               cat /tmp/signal-registers-run-err
                             fi
                           else
-                            echo "FUNC_TEST:signal-registers:FAIL:compile"
+                            echo "FUNC_TEST:signal-registers:FAIL:compile-exit=$COMPILE_EXIT:link-exit=$LINK_EXIT"
                             cat /tmp/signal-registers-build-out /tmp/signal-registers-build-err
                           fi
                         '
@@ -2756,7 +2763,7 @@ cd "$SRCDIR"
 cargo build --offline -j2
 cp "$SRCDIR/target/x86_64-unknown-redox/debug/hello" "$out/bin/hello"
 BUILDEOF
-                          /nix/system/profile/bin/chmod +x /tmp/build-hello-cargo.sh
+                          /bin/chmod +x /tmp/build-hello-cargo.sh
 
                           cat > /tmp/hello-cargo.nix << '"'"'HELLONIX'"'"'
         derivation {

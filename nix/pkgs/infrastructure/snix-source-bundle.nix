@@ -21,9 +21,8 @@ let
   vendoredDeps = pkgs.rustPlatform.fetchCargoVendor {
     name = "snix-redox-vendor";
     src = combinedSrc;
-    # Dummy hash — replace after first build attempt reveals the real hash.
-    # Run: nix build .#snix-source-bundle 2>&1 | grep "got:"
-    hash = "sha256-FY3tf0r8XIFqCtlUHHHEtg9kObU0YWXeDYlIT4WP1Jg=";
+    # Includes the scheme ABI revision shared with the refreshed base daemons.
+    hash = "sha256-imN+8Jg1BN4VKOTf7CdR0Vpmbtv2gvUSMp/Eh74LaEg=";
   };
 in
 pkgs.runCommand "snix-source-bundle" { } ''
@@ -144,22 +143,11 @@ PY
   cp ${./build-snix.sh} $out/build-snix.sh
   cp ${./build-snix.nix} $out/build.nix
 
-  # Cargo config for offline vendored builds.
-  # fetchCargoVendor lays crates out under vendor/source-registry-0/
-  # and git deps under vendor/source-git-0/.
-  cat > $out/.cargo/config.toml <<'EOF'
-[source.crates-io]
-replace-with = "vendored-source-registry-0"
-
-[source.vendored-source-registry-0]
-directory = "vendor/source-registry-0"
-
-[source."git+https://github.com/tvlfyi/wu-manber.git"]
-git = "https://github.com/tvlfyi/wu-manber.git"
-replace-with = "vendored-source-git-0"
-
-[source.vendored-source-git-0]
-directory = "vendor/source-git-0"
+  # Reuse fetchCargoVendor's exact registry/git ordering and revision pins.
+  # A new git dependency can renumber source-git-N directories.
+  substitute ${vendoredDeps}/.cargo/config.toml $out/.cargo/config.toml \
+    --replace-fail '@vendor@' 'vendor'
+  cat >> $out/.cargo/config.toml <<'EOF'
 
 [build]
 jobs = 1

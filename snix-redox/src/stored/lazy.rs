@@ -288,7 +288,7 @@ fn path_exists(path: &Path, root_fd: Option<usize>) -> Result<bool, ExtractError
     if let Some(rfd) = root_fd {
         return match raw_openat(path, rfd, syscall::O_STAT) {
             Ok(fd) => {
-                let _ = syscall::close(fd);
+                let _ = libredox::call::close(fd);
                 Ok(true)
             }
             Err(_) => Ok(false),
@@ -382,19 +382,11 @@ impl<R: std::io::Read> std::io::Read for HashingExtractReader<R> {
 
 #[cfg(target_os = "redox")]
 fn raw_openat(path: &Path, root_fd: usize, flags: usize) -> std::io::Result<usize> {
-    let clean = path.to_string_lossy().trim_start_matches('/').to_string();
+    let path_str = path.to_string_lossy();
+    let clean = path_str.trim_start_matches('/');
     let fcntl_flags = flags & syscall::O_FCNTL_MASK;
-    unsafe {
-        syscall::syscall5(
-            syscall::SYS_OPENAT,
-            root_fd,
-            clean.as_ptr() as usize,
-            clean.len(),
-            flags,
-            fcntl_flags,
-        )
-    }
-    .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, format!("SYS_OPENAT: {e}")))
+    libredox::call::openat(root_fd, clean, flags as i32, fcntl_flags as u32)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::NotFound, format!("openat: {e}")))
 }
 
 #[cfg(target_os = "redox")]
@@ -410,20 +402,16 @@ fn raw_mkdir_p(path: &Path, root_fd: usize) -> std::io::Result<()> {
         }
         built.push_str(component);
         let flags = syscall::O_CREAT | syscall::O_DIRECTORY;
-        let fd = unsafe {
-            syscall::syscall5(
-                syscall::SYS_OPENAT,
-                root_fd,
-                built.as_ptr() as usize,
-                built.len(),
-                flags,
-                flags & syscall::O_FCNTL_MASK,
-            )
-        }
+        let fd = libredox::call::openat(
+            root_fd,
+            &built,
+            flags as i32,
+            (flags & syscall::O_FCNTL_MASK) as u32,
+        )
         .map_err(|e| {
             std::io::Error::new(std::io::ErrorKind::Other, format!("mkdir {built}: {e}"))
         })?;
-        let _ = syscall::close(fd);
+        let _ = libredox::call::close(fd);
     }
     Ok(())
 }
@@ -442,11 +430,11 @@ fn remove_tree_via_manifest(
         } else {
             0
         };
-        let _ = syscall::unlinkat(root_fd, &clean, flags);
+        let _ = crate::file_io_worker::unlink_via_root_fd(root_fd, &clean, flags);
     }
 
     let clean_root = abs_store_path.trim_start_matches('/');
-    let _ = syscall::unlinkat(root_fd, clean_root, syscall::AT_REMOVEDIR);
+    let _ = crate::file_io_worker::unlink_via_root_fd(root_fd, clean_root, syscall::AT_REMOVEDIR);
     Ok(())
 }
 

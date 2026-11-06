@@ -33,7 +33,7 @@ use syscall::data::{Stat, StatVfs, TimeSpec};
 use syscall::dirent::{DirEntry as RedoxDirEntry, DirentBuf, DirentKind};
 use syscall::error::{Error, Result, EACCES, EBADF, EIO, EISDIR, ENOENT, ENOTDIR, EOPNOTSUPP};
 use syscall::flag::{
-    MapFlags, MunmapFlags, AT_REMOVEDIR, F_DUPFD, F_DUPFD_CLOEXEC, F_GETFD, F_GETFL, F_SETFD,
+    MapFlags, MunmapFlags, AT_REMOVEDIR, F_DUPFD, F_GETFD, F_GETFL, F_SETFD,
     F_SETFL, MODE_PERM, O_ACCMODE, O_APPEND, O_CREAT, O_DIRECTORY, O_EXCL, O_RDONLY, O_RDWR,
     O_SYMLINK, O_TRUNC, O_WRONLY,
 };
@@ -222,80 +222,6 @@ struct ActiveMapKey {
     size: usize,
 }
 
-// ── Raw filesystem ops (bypass initnsmgr) ──────────────────────────────────
-
-/// Open a path relative to a raw root fd, bypassing initnsmgr.
-///
-/// Uses `SYS_OPENAT(root_fd, path, flags)` which routes directly to
-/// redoxfs through the kernel — no namespace manager involved.
-fn raw_openat(root_fd: usize, path: &str, flags: usize) -> Result<usize> {
-    // Strip leading '/' — openat paths are relative to the root fd.
-    let clean = path.trim_start_matches('/');
-    let fcntl_flags = flags & syscall::O_FCNTL_MASK;
-    unsafe {
-        syscall::syscall5(
-            syscall::SYS_OPENAT,
-            root_fd,
-            clean.as_ptr() as usize,
-            clean.len(),
-            flags,
-            fcntl_flags,
-        )
-    }
-}
-
-/// Stat a raw fd.
-fn raw_fstat(fd: usize) -> Result<Stat> {
-    let mut stat = Stat::default();
-    let stat_ptr = &mut stat as *mut Stat as usize;
-    let stat_size = core::mem::size_of::<Stat>();
-    unsafe {
-        syscall::syscall3(syscall::SYS_FSTAT, fd, stat_ptr, stat_size)?;
-    }
-    Ok(stat)
-}
-
-/// Close a raw fd.
-fn raw_close(fd: usize) {
-    let _ = syscall::close(fd);
-}
-
-/// Create a directory relative to root_fd, bypassing initnsmgr.
-///
-/// Uses `SYS_OPENAT` with `O_CREAT | O_DIRECTORY`. On redoxfs, opening
-/// with both flags creates the directory if it does not exist.
-fn raw_mkdir(root_fd: usize, path: &str) -> Result<()> {
-    let clean = path.trim_start_matches('/');
-    // Include a normal mode: callers such as autocfg inspect the resulting
-    // directory permissions, and a mode of 0 looks read-only to them.
-    let flags = O_CREAT | O_DIRECTORY | 0o755;
-    let fd = raw_openat(root_fd, clean, flags)?;
-    raw_close(fd);
-    Ok(())
-}
-
-/// Recursively create directories for `path` via root_fd.
-///
-/// Walks each component of `path` and calls `raw_mkdir` for each
-/// intermediate directory. Only called for paths under writable
-/// prefixes ($out, $TMPDIR) — never for read-only paths.
-fn mkdir_p_via_root_fd(root_fd: usize, path: &str) {
-    let clean = path.trim_start_matches('/');
-    let mut built = String::new();
-    for component in clean.split('/') {
-        if component.is_empty() {
-            continue;
-        }
-        if !built.is_empty() {
-            built.push('/');
-        }
-        built.push_str(component);
-        // Ignore errors — the dir may already exist, or we may lack
-        // permission (which will surface when the actual open happens).
-        let _ = raw_mkdir(root_fd, &built);
-    }
-}
-
 // ── Scheme Handler ─────────────────────────────────────────────────────────
 
 /// The build filesystem proxy scheme handler.
@@ -411,9 +337,27 @@ impl BuildFsHandler {
     ///
     /// Cannot use `fs::canonicalize()` — that goes through initnsmgr.
     /// We check the literal path only. Symlinks are followed by redoxfs
-    /// when we open via `raw_openat`.
+    /// when the I/O worker opens relative to its pre-opened root fd.
     fn check_with_symlink_resolution(&self, path: &Path) -> Permission {
         self.allow_list.check(path)
+    }
+
+    fn rename_paths(
+        &mut self,
+        old_path: &Path,
+        target_path: &Path,
+        old_scheme_path: &str,
+        new_scheme_path: &str,
+        flags: u32,
+    ) -> Result<usize> {
+        if self.check_with_symlink_resolution(old_path) != Permission::ReadWrite
+            || self.check_with_symlink_resolution(target_path) != Permission::ReadWrite
+        {
+            return Err(Error::new(EACCES));
+        }
+        self.io_worker.rename_path(old_path, target_path, flags)?;
+        self.rewrite_open_handle_paths(old_path, target_path, old_scheme_path, new_scheme_path);
+        Ok(0)
     }
 
     /// Apply the builder's open flags on the real filesystem via the
@@ -705,40 +649,59 @@ impl SchemeSync for BuildFsHandler {
         Ok(len)
     }
 
-    fn flink(&mut self, id: usize, path: &str, _ctx: &CallerCtx) -> Result<usize> {
-        let target_path = self.resolve_path(path);
-        if self.check_with_symlink_resolution(&target_path) != Permission::ReadWrite {
-            return Err(Error::new(EACCES));
-        }
+    // The pinned relibc emits Flink/Frename, while directory-relative callers
+    // use Flinkat/Frenameat. Both are active scheme 0.13 protocol operations.
+    fn flink(&mut self, id: usize, path: &str, ctx: &CallerCtx) -> Result<usize> {
+        self.flinkat(id, 0, path, 0, ctx)
+    }
 
+    fn flinkat(
+        &mut self,
+        id: usize,
+        dirid: usize,
+        path: &str,
+        flags: u32,
+        _ctx: &CallerCtx,
+    ) -> Result<usize> {
+        let (target_path, _) = self.resolve_open_path(dirid, path)?;
         let old_path = match self.handles.get(&id) {
             Some(ProxyHandle::File(fh)) => fh.real_path.clone(),
             Some(ProxyHandle::Dir(_)) => return Err(Error::new(EISDIR)),
             None => return Err(Error::new(EBADF)),
         };
+        // A writable hard link to a read-only input would bypass its policy.
+        if self.check_with_symlink_resolution(&old_path) != Permission::ReadWrite
+            || self.check_with_symlink_resolution(&target_path) != Permission::ReadWrite
+        {
+            return Err(Error::new(EACCES));
+        }
 
-        self.io_worker.link_path(&old_path, &target_path)?;
+        self.io_worker.link_path(&old_path, &target_path, flags)?;
         Ok(0)
     }
 
     fn frename(&mut self, id: usize, path: &str, _ctx: &CallerCtx) -> Result<usize> {
-        let target_path = self.resolve_path(path);
-        if self.check_with_symlink_resolution(&target_path) != Permission::ReadWrite {
-            return Err(Error::new(EACCES));
-        }
-
         let (old_path, old_scheme_path) = match self.handles.get(&id) {
             Some(ProxyHandle::File(fh)) => (fh.real_path.clone(), fh.scheme_path.clone()),
             Some(ProxyHandle::Dir(dh)) => (dh.real_path.clone(), dh.scheme_path.clone()),
             None => return Err(Error::new(EBADF)),
         };
+        let (target_path, new_scheme_path) = self.resolve_open_path(0, path)?;
+        self.rename_paths(&old_path, &target_path, &old_scheme_path, &new_scheme_path, 0)
+    }
 
-        self.io_worker.rename_path(&old_path, &target_path)?;
-
-        let new_scheme_path = path.trim_matches('/').to_string();
-        self.rewrite_open_handle_paths(&old_path, &target_path, &old_scheme_path, &new_scheme_path);
-
-        Ok(0)
+    fn frenameat(
+        &mut self,
+        old_dir: usize,
+        old_path: &str,
+        new_dir: usize,
+        new_path: &str,
+        flags: u32,
+        _ctx: &CallerCtx,
+    ) -> Result<usize> {
+        let (old_path, old_scheme_path) = self.resolve_open_path(old_dir, old_path)?;
+        let (target_path, new_scheme_path) = self.resolve_open_path(new_dir, new_path)?;
+        self.rename_paths(&old_path, &target_path, &old_scheme_path, &new_scheme_path, flags)
     }
 
     fn fstat(&mut self, id: usize, stat: &mut Stat, _ctx: &CallerCtx) -> Result<()> {
@@ -995,7 +958,9 @@ impl SchemeSync for BuildFsHandler {
         const F_SETLKW_CMD: usize = 7;
 
         match cmd {
-            F_DUPFD | F_DUPFD_CLOEXEC => self.dup_handle(id),
+            cmd if cmd == F_DUPFD || cmd == libredox::flag::F_DUPFD_CLOEXEC as usize => {
+                self.dup_handle(id)
+            }
             F_GETFL => match self.handles.get(&id) {
                 Some(ProxyHandle::File(fh)) => {
                     let mut flags = if fh.writable { O_RDWR } else { O_RDONLY };
@@ -1194,97 +1159,4 @@ fn rewrite_scheme_prefix(path: &str, old_root: &Path, new_root: &Path) -> Option
         new_root.join(rest)
     };
     Some(updated.to_string_lossy().into_owned())
-}
-
-/// Read directory entries from a real directory via raw syscalls.
-///
-/// Opens the directory via `root_fd` (bypassing initnsmgr), reads
-/// entries with `SYS_GETDENTS`, and returns `(name, kind)` pairs.
-/// Filters out `.` and `..` entries.
-fn read_real_dir_entries(root_fd: usize, path: &Path) -> Vec<(String, DirentKind)> {
-    let path_str = path.to_string_lossy();
-    let clean = path_str.trim_start_matches('/');
-    // For root "/", open "." relative to root_fd.
-    let open_path = if clean.is_empty() { "." } else { clean };
-
-    let dir_fd = match raw_openat(root_fd, open_path, O_RDONLY | O_DIRECTORY) {
-        Ok(fd) => fd,
-        Err(e) => {
-            eprintln!("buildfs: read_real_dir open {:?}: {}", path, e);
-            return Vec::new();
-        }
-    };
-
-    let mut entries = Vec::new();
-    let mut raw_buf = [0u8; 8192];
-
-    loop {
-        let n = match unsafe {
-            syscall::syscall3(
-                syscall::SYS_GETDENTS,
-                dir_fd,
-                raw_buf.as_mut_ptr() as usize,
-                raw_buf.len(),
-            )
-        } {
-            Ok(0) => break,
-            Ok(n) => n,
-            Err(_) => break,
-        };
-
-        parse_raw_dirents(&raw_buf[..n], &mut entries);
-    }
-
-    raw_close(dir_fd);
-    entries
-}
-
-/// Parse raw getdents buffer into `(name, kind)` pairs.
-///
-/// Each entry is a `DirentHeader` (packed, 19 bytes) followed by the
-/// filename and a NUL terminator. `record_len` covers the full entry.
-///
-/// DirentHeader layout (redox_syscall 0.7, packed):
-///   inode:           u64  (8 bytes)
-///   next_opaque_id:  u64  (8 bytes)
-///   record_len:      u16  (2 bytes)
-///   kind:            u8   (1 byte)
-/// Total header: 19 bytes. Name follows, NUL-terminated.
-fn parse_raw_dirents(buf: &[u8], entries: &mut Vec<(String, DirentKind)>) {
-    const HEADER_SIZE: usize = 8 + 8 + 2 + 1; // 19 bytes
-
-    let mut pos = 0;
-    while pos + HEADER_SIZE <= buf.len() {
-        // Read fields manually to avoid alignment issues with packed structs.
-        let _inode = u64::from_ne_bytes(buf[pos..pos + 8].try_into().unwrap_or([0; 8]));
-        let _next_opaque_id =
-            u64::from_ne_bytes(buf[pos + 8..pos + 16].try_into().unwrap_or([0; 8]));
-        let record_len = u16::from_ne_bytes(buf[pos + 16..pos + 18].try_into().unwrap_or([0; 2]));
-        let kind_byte = buf[pos + 18];
-
-        if record_len == 0 || pos + record_len as usize > buf.len() {
-            break;
-        }
-
-        // Name starts after the header, extends to record_len.
-        // Trim trailing NUL bytes that the kernel appends.
-        let name_start = pos + HEADER_SIZE;
-        let name_end = pos + record_len as usize;
-        if name_start < name_end {
-            let name_bytes = &buf[name_start..name_end];
-            // Strip trailing NUL.
-            let name_trimmed = match name_bytes.iter().position(|&b| b == 0) {
-                Some(nul_pos) => &name_bytes[..nul_pos],
-                None => name_bytes,
-            };
-            if let Ok(name) = core::str::from_utf8(name_trimmed) {
-                if !name.is_empty() && name != "." && name != ".." {
-                    let kind = DirentKind::try_from_raw(kind_byte).unwrap_or(DirentKind::Regular);
-                    entries.push((name.to_string(), kind));
-                }
-            }
-        }
-
-        pos += record_len as usize;
-    }
 }

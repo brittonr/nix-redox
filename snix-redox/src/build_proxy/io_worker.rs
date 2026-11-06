@@ -2,7 +2,7 @@
 //!
 //! The build proxy's event loop handles a userspace `file:` scheme request.
 //! If that same thread tries to call into another userspace scheme (redoxfs)
-//! via `SYS_OPENAT(root_fd, ...)`, the request can deadlock because the
+//! via `libredox::call::openat(root_fd, ...)`, the request can deadlock because the
 //! scheme handler thread is now blocked inside nested scheme I/O.
 //!
 //! Fix: keep all real filesystem syscalls off the scheme event loop thread.
@@ -19,11 +19,12 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::thread;
 
-use syscall::data::{Map, Stat};
+use syscall::data::{Stat, StdFsCallMeta};
 use syscall::dirent::DirentKind;
 use syscall::error::{Error, Result, EBADF, EIO, ENOMEM};
 use syscall::flag::{
     MapFlags, AT_REMOVEDIR, O_CREAT, O_DIRECTORY, O_RDONLY, O_RDWR, O_SYMLINK, O_TRUNC, O_WRONLY,
+    CallFlags, StdFsCallKind,
 };
 
 pub struct OpenPathResult {
@@ -102,11 +103,13 @@ enum IoRequest {
     RenamePath {
         old_path: PathBuf,
         new_path: PathBuf,
+        flags: u32,
         response: mpsc::Sender<Result<()>>,
     },
     LinkPath {
         old_path: PathBuf,
         new_path: PathBuf,
+        flags: u32,
         response: mpsc::Sender<Result<()>>,
     },
     UnlinkPath {
@@ -295,24 +298,26 @@ impl BuildFsIoWorker {
         )
     }
 
-    pub fn rename_path(&self, old_path: &Path, new_path: &Path) -> Result<()> {
+    pub fn rename_path(&self, old_path: &Path, new_path: &Path, flags: u32) -> Result<()> {
         let (tx, rx) = mpsc::channel();
         self.request(
             IoRequest::RenamePath {
                 old_path: old_path.to_path_buf(),
                 new_path: new_path.to_path_buf(),
+                flags,
                 response: tx,
             },
             rx,
         )
     }
 
-    pub fn link_path(&self, old_path: &Path, new_path: &Path) -> Result<()> {
+    pub fn link_path(&self, old_path: &Path, new_path: &Path, flags: u32) -> Result<()> {
         let (tx, rx) = mpsc::channel();
         self.request(
             IoRequest::LinkPath {
                 old_path: old_path.to_path_buf(),
                 new_path: new_path.to_path_buf(),
+                flags,
                 response: tx,
             },
             rx,
@@ -519,21 +524,20 @@ fn worker_main(
             IoRequest::RenamePath {
                 old_path,
                 new_path,
+                flags,
                 response,
             } => {
                 let _ = response.send(worker_rename_path(
                     root_fd,
-                    profile_root_fd,
-                    store_root_fd,
-                    dev_null_fd,
-                    dev_urandom_fd,
                     &old_path,
                     &new_path,
+                    flags,
                 ));
             }
             IoRequest::LinkPath {
                 old_path,
                 new_path,
+                flags,
                 response,
             } => {
                 let _ = response.send(worker_link_path(
@@ -544,6 +548,7 @@ fn worker_main(
                     dev_urandom_fd,
                     &old_path,
                     &new_path,
+                    flags,
                 ));
             }
             IoRequest::UnlinkPath {
@@ -588,7 +593,7 @@ fn worker_main(
     }
 
     for (_, active_map) in active_maps.drain() {
-        let _ = unsafe { syscall::funmap(active_map.base_addr, active_map.len) };
+        let _ = unsafe { libredox::call::munmap(active_map.base_addr as *mut (), active_map.len) };
         raw_close(active_map.backing_fd);
     }
 
@@ -798,7 +803,7 @@ fn worker_chmod_path(
         path,
         flags,
     )?;
-    let result = unsafe { syscall::syscall2(syscall::SYS_FCHMOD, fd, new_mode as usize) };
+    let result = libredox::call::fchmod(fd, new_mode).map_err(Into::into);
     raw_close(fd);
     result.map(|_| ())
 }
@@ -854,26 +859,29 @@ fn worker_resolve_path(
 
 fn worker_rename_path(
     root_fd: usize,
-    profile_root_fd: Option<usize>,
-    store_root_fd: Option<usize>,
-    dev_null_fd: Option<usize>,
-    dev_urandom_fd: Option<usize>,
     old_path: &Path,
     new_path: &Path,
+    flags: u32,
 ) -> Result<()> {
-    let fd = open_fd(
-        root_fd,
-        profile_root_fd,
-        store_root_fd,
-        dev_null_fd,
-        dev_urandom_fd,
-        old_path,
-        O_RDONLY,
-    )?;
-    let new_path_str = new_path.to_string_lossy();
-    let result = syscall::frename(fd, new_path_str.as_ref()).map(|_| ());
-    raw_close(fd);
-    result
+    let old_path = old_path.to_string_lossy();
+    let new_path = new_path.to_string_lossy();
+    let old_path = old_path.trim_start_matches('/');
+    let new_path = new_path.trim_start_matches('/');
+    let mut payload = Vec::with_capacity(old_path.len() + 1 + new_path.len());
+    payload.extend_from_slice(old_path.as_bytes());
+    payload.push(0);
+    payload.extend_from_slice(new_path.as_bytes());
+    let metadata = StdFsCallMeta::new(StdFsCallKind::Frenameat, flags as u64, 0);
+    // Both paths are relative to the pre-opened filesystem root, never the
+    // namespace manager that is waiting for this proxy's response.
+    libredox::call::call_wo(
+        &[root_fd, root_fd][..],
+        &payload,
+        CallFlags::STD_FS,
+        &metadata,
+    )
+    .map(|_| ())
+    .map_err(Into::into)
 }
 
 fn worker_link_path(
@@ -884,6 +892,7 @@ fn worker_link_path(
     dev_urandom_fd: Option<usize>,
     old_path: &Path,
     new_path: &Path,
+    flags: u32,
 ) -> Result<()> {
     let fd = open_fd(
         root_fd,
@@ -895,7 +904,15 @@ fn worker_link_path(
         O_RDONLY,
     )?;
     let new_path_str = new_path.to_string_lossy();
-    let result = syscall::flink(fd, new_path_str.as_ref()).map(|_| ());
+    let metadata = StdFsCallMeta::new(StdFsCallKind::Flinkat, flags as u64, 0);
+    let result = libredox::call::call_wo(
+        &[fd, root_fd][..],
+        new_path_str.trim_start_matches('/').as_bytes(),
+        CallFlags::STD_FS,
+        &metadata,
+    )
+    .map(|_| ())
+    .map_err(Into::into);
     raw_close(fd);
     result
 }
@@ -913,14 +930,14 @@ fn worker_unlink_path(
 
     if clean == "nix/system/profile" || clean.starts_with("nix/system/profile/") {
         let rel = clean.strip_prefix("nix/system/profile/").unwrap_or(".");
-        return syscall::unlinkat(profile_root_fd.ok_or(Error::new(EIO))?, rel, flags).map(|_| ());
+        return crate::file_io_worker::unlink_via_root_fd(profile_root_fd.ok_or(Error::new(EIO))?, rel, flags);
     }
     if clean == "nix/store" || clean.starts_with("nix/store/") {
         let rel = clean.strip_prefix("nix/store/").unwrap_or(".");
-        return syscall::unlinkat(store_root_fd.ok_or(Error::new(EIO))?, rel, flags).map(|_| ());
+        return crate::file_io_worker::unlink_via_root_fd(store_root_fd.ok_or(Error::new(EIO))?, rel, flags);
     }
 
-    syscall::unlinkat(root_fd, clean, flags).map(|_| ())
+    crate::file_io_worker::unlink_via_root_fd(root_fd, clean, flags)
 }
 
 fn worker_mmap_path(
@@ -969,17 +986,24 @@ fn worker_mmap_path(
         path,
         open_flags,
     )?;
-    let map = Map {
-        offset: offset as usize,
-        size,
-        flags,
-        address: 0,
-    };
-    let base_addr = match unsafe { syscall::fmap(fd, &map) } {
-        Ok(base_addr) => base_addr,
+    // libredox resolves the worker's upper-table fd before entering the kernel.
+    // Protection bits in MapFlags occupy bits 16..19; mmap uses POSIX bits 0..3.
+    // Address-placement and lazy-request flags belong to the client's mapping,
+    // not this independently allocated backing range in the worker.
+    let base_addr = match unsafe {
+        libredox::call::mmap(libredox::call::MmapArgs {
+            addr: core::ptr::null_mut(),
+            length: size,
+            prot: ((flags.bits() >> 16) & 0x7) as u32,
+            flags: (flags & (MapFlags::MAP_SHARED | MapFlags::MAP_PRIVATE)).bits() as u32,
+            fd,
+            offset,
+        })
+    } {
+        Ok(base_addr) => base_addr as usize,
         Err(err) => {
             raw_close(fd);
-            return Err(err);
+            return Err(err.into());
         }
     };
 
@@ -1121,7 +1145,7 @@ fn worker_munmap_token(token: u64, active_maps: &mut HashMap<u64, ActiveMap>) ->
         anon_unmap(active_map.base_addr, active_map.len);
         return Ok(());
     }
-    unsafe { syscall::funmap(active_map.base_addr, active_map.len) }?;
+    unsafe { libredox::call::munmap(active_map.base_addr as *mut (), active_map.len) }?;
     raw_close(active_map.backing_fd);
     Ok(())
 }
@@ -1196,10 +1220,10 @@ fn open_fd(
     let clean = path_str.trim_start_matches('/');
 
     if clean == "dev/null" {
-        return syscall::dup(dev_null_fd.ok_or(Error::new(EIO))?, &[]);
+        return libredox::call::dup(dev_null_fd.ok_or(Error::new(EIO))?, &[]).map_err(Into::into);
     }
     if clean == "dev/urandom" || clean == "dev/random" {
-        return syscall::dup(dev_urandom_fd.ok_or(Error::new(EIO))?, &[]);
+        return libredox::call::dup(dev_urandom_fd.ok_or(Error::new(EIO))?, &[]).map_err(Into::into);
     }
     if clean == "nix/system/profile/lib/rustlib" {
         if let Some(mapped) = map_profile_rustlib_path("") {
@@ -1245,21 +1269,13 @@ fn map_profile_rustlib_path(rest: &str) -> Option<String> {
 fn raw_openat(root_fd: usize, path: &str, flags: usize) -> Result<usize> {
     let clean = path.trim_start_matches('/');
     let fcntl_flags = flags & syscall::O_FCNTL_MASK;
-    unsafe {
-        syscall::syscall5(
-            syscall::SYS_OPENAT,
-            root_fd,
-            clean.as_ptr() as usize,
-            clean.len(),
-            flags,
-            fcntl_flags,
-        )
-    }
+    libredox::call::openat(root_fd, clean, flags as i32, fcntl_flags as u32)
+        .map_err(Into::into)
 }
 
 fn raw_fpath(fd: usize) -> Option<PathBuf> {
     let mut buf = vec![0u8; 4096];
-    let len = syscall::fpath(fd, &mut buf).ok()?;
+    let len = libredox::call::fpath(fd, &mut buf).ok()?;
     buf.truncate(len);
     let nul = buf.iter().position(|b| *b == 0).unwrap_or(buf.len());
     let s = std::str::from_utf8(&buf[..nul]).ok()?;
@@ -1271,16 +1287,13 @@ fn raw_fpath(fd: usize) -> Option<PathBuf> {
 
 fn raw_fstat(fd: usize) -> Result<Stat> {
     let mut stat = Stat::default();
-    let stat_ptr = &mut stat as *mut Stat as usize;
-    let stat_size = core::mem::size_of::<Stat>();
-    unsafe {
-        syscall::syscall3(syscall::SYS_FSTAT, fd, stat_ptr, stat_size)?;
-    }
+    let metadata = StdFsCallMeta::new(StdFsCallKind::Fstat, 0, 0);
+    libredox::call::call_ro(fd, &mut stat, CallFlags::STD_FS, &metadata)?;
     Ok(stat)
 }
 
 fn raw_close(fd: usize) {
-    let _ = syscall::close(fd);
+    let _ = libredox::call::close(fd);
 }
 
 fn raw_mkdir(root_fd: usize, path: &str) -> Result<()> {

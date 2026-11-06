@@ -109,8 +109,8 @@ impl BuildFsProxy {
             BuildFsProxyError::SetupFailed(format!("register_scheme_to_ns('file'): {e}"))
         })?;
         eprintln!("buildfs: registered");
-        let _ = syscall::close(cap_fd);
-        let _ = syscall::close(child_ns_fd);
+        let _ = libredox::call::close(cap_fd);
+        let _ = libredox::call::close(child_ns_fd);
 
         eprintln!("buildfs: pre-opening /");
         let root_file =

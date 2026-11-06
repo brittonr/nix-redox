@@ -195,7 +195,7 @@ fn worker_preload(path: &PathBuf, root_fd: Option<usize>) -> io::Result<Vec<u8>>
     Ok(data)
 }
 
-/// Open a file, using raw `SYS_OPENAT(root_fd, ...)` on Redox when
+/// Open a file, using `libredox::call::openat(root_fd, ...)` on Redox when
 /// a root_fd is available (bypasses initnsmgr after setrens), or
 /// falling back to `std::fs::File::open()` on Linux/tests.
 fn open_file(path: &PathBuf, root_fd: Option<usize>) -> io::Result<fs::File> {
@@ -210,7 +210,7 @@ fn open_file(path: &PathBuf, root_fd: Option<usize>) -> io::Result<fs::File> {
     fs::File::open(path)
 }
 
-/// Redox-only: open a file via `SYS_OPENAT(root_fd, path, O_RDONLY)`.
+/// Redox-only: open a file via `libredox::call::openat(root_fd, path, ...)`.
 /// The root_fd points directly to redoxfs, bypassing initnsmgr.
 #[cfg(target_os = "redox")]
 fn open_via_root_fd(root_fd: usize, path: &PathBuf) -> io::Result<fs::File> {
@@ -218,22 +218,25 @@ fn open_via_root_fd(root_fd: usize, path: &PathBuf) -> io::Result<fs::File> {
 
     let path_str = path.to_string_lossy();
     let clean = path_str.trim_start_matches('/');
-    // SYS_OPENAT: (fd, ptr, len, flags, fcntl_flags)
     let flags = syscall::O_RDONLY;
     let fcntl_flags = flags & syscall::O_FCNTL_MASK;
-    let raw_fd = unsafe {
-        syscall::syscall5(
-            syscall::SYS_OPENAT,
-            root_fd,
-            clean.as_ptr() as usize,
-            clean.len(),
-            flags,
-            fcntl_flags,
-        )
-    }
-    .map_err(|e| io::Error::new(io::ErrorKind::NotFound, format!("SYS_OPENAT: {e}")))?;
+    let raw_fd = libredox::call::openat(root_fd, clean, flags as i32, fcntl_flags as u32)
+        .map_err(|e| io::Error::new(io::ErrorKind::NotFound, format!("openat: {e}")))?;
 
     Ok(unsafe { fs::File::from_raw_fd(raw_fd as i32) })
+}
+
+/// Unlink a root-relative path through a pre-opened upper-table descriptor.
+#[cfg(target_os = "redox")]
+pub(crate) fn unlink_via_root_fd(root_fd: usize, path: &str, flags: usize) -> syscall::Result<()> {
+    let metadata = syscall::data::StdFsCallMeta::new(
+        syscall::flag::StdFsCallKind::Unlinkat,
+        flags as u64,
+        0,
+    );
+    libredox::call::call_wo(root_fd, path.as_bytes(), syscall::CallFlags::STD_FS, &metadata)
+        .map(|_| ())
+        .map_err(Into::into)
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────

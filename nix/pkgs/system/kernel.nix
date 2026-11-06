@@ -210,13 +210,10 @@ pkgs.stdenv.mkDerivation ({
     runHook preConfigure
     ${configureSource patchedSrc}
 
-    # Restore the cached dependency artifacts from phase 1
-    cp -a ${kernelDeps}/. target/
+    # Nix deduplicates empty Cargo lock files. Mutable build/artifact locks
+    # must have independent inodes or Cargo can deadlock against itself.
+    cp -a --no-preserve=links --reflink=auto ${kernelDeps}/. target/
     chmod -R u+w target/
-
-    # Remove cargo lock files that can't be re-acquired across derivations
-    find target -name '.cargo-lock' -delete
-    find target -name '.package-cache' -delete
 
     # Reset all file timestamps in target/ to a consistent value.
     # Nix store normalizes mtimes to epoch (1), which breaks cargo's

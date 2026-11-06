@@ -184,7 +184,7 @@ in
   # Headless Cloud Hypervisor runner with serial console (no networking)
   # CPU topology tuning with optional direct I/O
   headless = pkgs.writeShellScriptBin "run-redox-cloud-hypervisor" ''
-    set -e
+    set -eo pipefail
 
     # Environment variable overrides for customization
     CH_CPUS="''${CH_CPUS:-${defaultCpus}}"
@@ -255,8 +255,11 @@ in
     echo "Storage: virtio-blk (direct I/O: $CH_DIRECT_IO)"
     echo ""
 
-    # Switch to raw mode right before launching (after all echo output)
-    [ -n "$SAVED_TTY" ] && stty raw -echo
+    # Keep Ctrl+C as a host interrupt while forwarding other input immediately.
+    [ -n "$SAVED_TTY" ] && stty raw -echo isig
+
+    # Cloud Hypervisor makes a tty stdout fully raw, disabling ISIG again.
+    # A pipe leaves terminal mode and restoration under this launcher's control.
 
     # Cloud Hypervisor UEFI boot with performance tuning:
     # - --firmware: CLOUDHV.fd for UEFI
@@ -276,7 +279,7 @@ in
       --pci-segment pci_segment=0,mmio32_aperture_weight=${mmio32ApertureWeight} \
       --serial tty \
       --console off \
-      "$@"
+      "$@" | ${pkgs.coreutils}/bin/cat
   '';
 
   # Cloud Hypervisor runner with TAP networking

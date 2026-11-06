@@ -10,4 +10,9 @@ See `docs/self-hosting/proof-artifacts.md` for the capture contract.
 | snix-sandbox-test | 20261028T163222-snix-sandbox-test | 2026-10-28T16:39:34-04:00 | `723d825e` | 19/19 pass | `/var/tmp/redox-self-hosting-captures/20261028T163222-snix-sandbox-test` |
 | kernel-rebuild-test | 20260415T000324-kernel-rebuild-test | 2026-04-15T00:15:32-04:00 | `af057438` | 10/10 pass | `/var/tmp/redox-self-hosting-captures/20260415T000324-kernel-rebuild-test` |
 | native-rebuild-test | 20261029T000233-native-rebuild-test | 2026-10-29T00:32:32-04:00 | `b5da985d` | 135/135 pass | `/var/tmp/redox-self-hosting-captures/20261029T000233-native-rebuild-test` |
+| file-source-context-smoke | 20261106T152938-file-source-context-smoke | 2026-11-06T15:29:43-05:00 | `295c2479` | 6/6 pass | `/var/tmp/redox-self-hosting-captures/20261106-file-context-smoke-295c2479-3` |
+| native-cc-probe | 20261106T172358-native-cc-probe | 2026-11-06T17:24:29-05:00 | `295c2479` | 3/3 pass | `/var/tmp/redox-self-hosting-captures/20261106-native-cc-stdin-n5inr` |
+| native-std-path-probe | 20261106T164804-native-std-path-probe | 2026-11-06T16:48:11-05:00 | `295c2479` | 2/2 pass | `/var/tmp/redox-self-hosting-captures/20261106-native-std-path-probe-n5inr-absolute` |
+| native-url-path-probe | 20261106T184057-native-url-path-probe | 2026-11-06T18:42:44-05:00 | `295c2479` | 2/2 pass | `/var/tmp/redox-self-hosting-captures/20261106-native-url-path-probe-7w5n-locked` |
+| proxy-abi-initial-namespace | 20261106T154528-proxy-abi-initial-namespace | 2026-11-06T15:45:38-05:00 | `295c2479` | 9/9 pass | `/var/tmp/redox-self-hosting-captures/20261106-proxy-abi-initial-namespace-295c2479-4` |
 | runtime-environment-smoke | 20261028T205624-runtime-environment-smoke | 2026-10-28T20:57:24-04:00 | `4d7b99f6` | 5/5 pass | `/var/tmp/redox-self-hosting-captures/20261028T205624-runtime-environment-smoke` |

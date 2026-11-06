@@ -23,6 +23,18 @@
 fn main() {
     let args: Vec<String> = std::env::args().collect();
 
+    // Run the real proxy helper in the same subprocess arrangement as snix.
+    if args.get(1).map(String::as_str) == Some("build-proxy-helper") {
+        assert_eq!(args.len(), 5, "proxy helper arguments");
+        snix_redox::build_proxy::BuildFsProxy::run_helper(
+            args[2].parse().expect("namespace fd"),
+            &args[3],
+            &args[4],
+        )
+        .expect("proxy helper");
+        return;
+    }
+
     // If invoked with --child <test>, run that child test function.
     // The parent forks us via Command::new with --child <test>,
     // having already done setns in pre_exec.
@@ -76,7 +88,7 @@ fn test_mkns_without_file() {
     match libredox::call::mkns(&io_slices) {
         Ok(ns_fd) => {
             println!("PASS (ns_fd={})", ns_fd);
-            let _ = syscall::close(ns_fd);
+            let _ = libredox::call::close(ns_fd);
         }
         Err(e) => {
             println!("FAIL: mkns returned error: {} (errno={})", e, e.errno());
@@ -99,7 +111,7 @@ fn test_register_file_scheme_to_ns() {
     let ns_fd = match libredox::call::mkns(&io_slices) {
         Ok(fd) => fd,
         Err(e) => {
-            println!("SKIP (mkns failed: {})", e);
+            println!("FAIL (mkns failed: {})", e);
             return;
         }
     };
@@ -108,7 +120,7 @@ fn test_register_file_scheme_to_ns() {
         Ok(s) => s,
         Err(e) => {
             println!("FAIL: Socket::create() failed: {}", e);
-            let _ = syscall::close(ns_fd);
+            let _ = libredox::call::close(ns_fd);
             return;
         }
     };
@@ -117,7 +129,7 @@ fn test_register_file_scheme_to_ns() {
         Ok(fd) => fd,
         Err(e) => {
             println!("FAIL: create_this_scheme_fd failed: {}", e);
-            let _ = syscall::close(ns_fd);
+            let _ = libredox::call::close(ns_fd);
             return;
         }
     };
@@ -135,8 +147,8 @@ fn test_register_file_scheme_to_ns() {
         }
     }
 
-    let _ = syscall::close(cap_fd);
-    let _ = syscall::close(ns_fd);
+    let _ = libredox::call::close(cap_fd);
+    let _ = libredox::call::close(ns_fd);
 }
 
 // ── Tests 3-9: Proxy I/O round-trip tests ──────────────────────────────
@@ -181,14 +193,8 @@ fn test_proxy_io() {
     {
         Ok(v) => v,
         Err(e) => {
-            println!("TEST 3: SKIP (proxy setup failed: {})", e);
-            println!("TEST 4: SKIP");
-            println!("TEST 5: SKIP");
-            println!("TEST 6: SKIP");
-            println!("TEST 7: SKIP");
-            println!("TEST 8: SKIP");
-            println!("TEST 9: SKIP");
-            return;
+            println!("TEST 3: FAIL (proxy setup failed: {})", e);
+            std::process::exit(1);
         }
     };
 
@@ -305,7 +311,7 @@ fn run_child_test(
     unsafe {
         cmd.pre_exec(move || {
             if let Some(fd) = socket_fd {
-                let _ = syscall::close(fd);
+                let _ = libredox::call::close(fd);
             }
             libredox::call::setns(child_ns_fd).map_err(|e| {
                 std::io::Error::new(std::io::ErrorKind::Other, format!("setns: {e}"))
@@ -394,25 +400,18 @@ fn verify_test_3() -> Result<(), String> {
 
 #[cfg(target_os = "redox")]
 fn child_test_4() {
-    // /etc/passwd is not on the allow-list. The proxy should deny access.
-    match std::fs::File::open("/etc/passwd") {
-        Ok(_) => {
-            eprintln!("/etc/passwd was readable (should be denied!)");
-            std::process::exit(1);
-        }
-        Err(e) => {
-            // PermissionDenied = proxy blocked it (EACCES).
-            // NotFound or other errors also acceptable — path is not
-            // accessible through the proxy either way.
-            let kind = e.kind();
-            if kind == std::io::ErrorKind::PermissionDenied {
-                eprintln!("got EACCES as expected");
-            } else {
-                eprintln!("got {:?} (also acceptable: path not accessible)", kind);
-            }
-            // exit(0) — test passed
-        }
-    }
+    let denied = std::fs::File::open("/etc/passwd").expect_err("deny undeclared input");
+    assert_eq!(denied.kind(), std::io::ErrorKind::PermissionDenied);
+
+    let input = "/tmp/proxy-test-input/sample.txt";
+    assert_eq!(std::fs::read_to_string(input).expect("read declared input"), "input-data-for-proxy-test\n");
+    let rename = std::fs::rename(input, "/tmp/proxy-test-out/input-renamed.txt")
+        .expect_err("deny rename of read-only input");
+    assert_eq!(rename.kind(), std::io::ErrorKind::PermissionDenied);
+    let link = std::fs::hard_link(input, "/tmp/proxy-test-out/input-linked.txt")
+        .expect_err("deny writable alias to read-only input");
+    assert_eq!(link.kind(), std::io::ErrorKind::PermissionDenied);
+    assert_eq!(std::fs::read_to_string(input).expect("input retained"), "input-data-for-proxy-test\n");
 }
 
 // ── Test 5: getdents ───────────────────────────────────────────────────
@@ -670,6 +669,13 @@ fn child_test_9() {
     std::fs::rename(&tmp_path, &final_path).expect("rename through proxy");
     std::fs::hard_link(&final_path, &linked_path).expect("hard link through proxy");
 
+    let removed_file = format!("{dir}/removed.txt");
+    std::fs::write(&removed_file, b"remove through proxy\n").expect("create unlink input");
+    std::fs::remove_file(&removed_file).expect("unlink through proxy");
+    let removed_dir = format!("{dir}/removed-dir");
+    std::fs::create_dir(&removed_dir).expect("create rmdir input");
+    std::fs::remove_dir(&removed_dir).expect("rmdir through proxy");
+
     let entries: Vec<String> = std::fs::read_dir(dir)
         .expect("read_dir through proxy after rename+link")
         .filter_map(|e| e.ok())
@@ -698,6 +704,24 @@ fn verify_test_9() -> Result<(), String> {
     for expected in ["libshlex.rlib", "libshlex-linked.rlib"] {
         if !entries.contains(&expected.to_string()) {
             return Err(format!("missing {expected} in {:?}", entries));
+        }
+    }
+    let dir = std::path::Path::new("/tmp/proxy-test-out/rename-link");
+    for name in ["libshlex.rlib", "libshlex-linked.rlib"] {
+        let contents = std::fs::read(dir.join(name)).map_err(|e| format!("read {name}: {e}"))?;
+        if contents != b"rlib-placeholder\n" {
+            return Err(format!("wrong content in {name}: {contents:?}"));
+        }
+    }
+    use std::os::unix::fs::MetadataExt;
+    let original = std::fs::metadata(dir.join("libshlex.rlib")).map_err(|e| e.to_string())?;
+    let linked = std::fs::metadata(dir.join("libshlex-linked.rlib")).map_err(|e| e.to_string())?;
+    if original.ino() != linked.ino() || original.dev() != linked.dev() {
+        return Err("hard link does not refer to the same real filesystem inode".to_string());
+    }
+    for removed in ["libshlex.tmp", "removed.txt", "removed-dir"] {
+        if dir.join(removed).exists() {
+            return Err(format!("path mutation retained {removed}"));
         }
     }
     Ok(())

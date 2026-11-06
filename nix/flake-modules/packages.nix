@@ -384,11 +384,11 @@ let
     }:
     let
       # Build the process filter expression for debug.rs.
-      # Empty list = match everything (.contains("") is always true).
-      # Single process = .contains("name")
-      # Multiple = .contains("a") || .contains("b") || ...
+      # Empty list matches every process; each predicate uses the same guard.
       filterNames = if debugProcesses == [ ] then [ "" ] else debugProcesses;
-      filterExpr = builtins.concatStringsSep " || " (map (name: ''.contains("${name}")'') filterNames);
+      filterExpr = builtins.concatStringsSep " || " (
+        map (name: ''guard.name.contains("${name}")'') filterNames
+      );
     in
     mkKernelPerCrate {
       extraFeatures = [ "syscall_debug" ];
@@ -404,9 +404,8 @@ let
             "installPhase"
           ];
           postPatch = ''
-                      # Rewrite the do_debug expression in debug_start().
-                      # Replace the entire `if false && ...contains("init")` block
-                      # with our filter expression.
+                      # Replace the pinned kernel's complete process guard.
+                      # Source drift must not silently retain bootstrap-only tracing.
                       ${pkgs.python3}/bin/python3 -c "
             import re, sys
 
@@ -414,36 +413,28 @@ let
             with open(path) as f:
                 src = f.read()
 
-            # Match the do_debug assignment block:
-            #   let do_debug = if false
-            #       && crate::context::current()
-            #           .read(token.token())
-            #           .name
-            #           .contains(\"init\")
             old_pattern = (
-                r'let do_debug = if false\n'
-                r'\s+&& crate::context::current\(\)\n'
-                r'\s+\.read\(token\.token\(\)\)\n'
-                r'\s+\.name\n'
-                r'\s+\.contains\([^)]+\)'
+                r'let do_debug = if false\s*&&\s*\{\s*'
+                r'let ctx = crate::context::current\(\);\s*'
+                r'let guard = ctx\.read\(token\.token\(\)\);\s*'
+                r'guard\.name\.contains\([^)]+\)\s*\|\|\s*'
+                r'guard\.name\.contains\([^)]+\)\s*\}'
             )
-
-            new_code = (
-                'let do_debug = if crate::context::current()\n'
-                '            .read(token.token())\n'
-                '            .name\n'
-                '            ${filterExpr}'
-            )
-
-            result = re.sub(old_pattern, new_code, src)
-            if result == src:
-                print('WARNING: pattern not found in debug.rs, trying fallback', file=sys.stderr)
-                result = src.replace('let do_debug = if false', 'let do_debug = if true')
+            new_code = '\n'.join([
+                'let do_debug = if {',
+                '    let ctx = crate::context::current();',
+                '    let guard = ctx.read(token.token());',
+                '    ' + sys.argv[1],
+                '}',
+            ])
+            result, count = re.subn(old_pattern, lambda _: new_code, src)
+            if count != 1:
+                sys.exit('Expected exactly one kernel syscall-debug process guard')
 
             with open(path, 'w') as f:
                 f.write(result)
             print('Patched debug.rs for syscall tracing')
-            "
+            " ${lib.escapeShellArg filterExpr}
           '';
           installPhase = "cp -r . $out";
         };

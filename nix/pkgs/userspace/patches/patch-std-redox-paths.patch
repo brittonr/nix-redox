@@ -1,0 +1,63 @@
+diff --git a/library/std/src/sys/fs/unix.rs b/library/std/src/sys/fs/unix.rs
+--- a/library/std/src/sys/fs/unix.rs
++++ b/library/std/src/sys/fs/unix.rs
+@@ -2203,7 +2203,12 @@ pub fn canonicalize(path: &CStr) -> io::Result<PathBuf> {
+         return Err(io::Error::last_os_error());
+     }
+     Ok(PathBuf::from(OsString::from_vec(unsafe {
+-        let buf = CStr::from_ptr(r).to_bytes().to_vec();
++        let buf = CStr::from_ptr(r).to_bytes();
++        // Redox realpath can return a scheme-qualified filesystem path. Normalize
++        // it before the existing copy, without interpreting path bytes as UTF-8.
++        #[cfg(target_os = "redox")]
++        let buf = if buf.starts_with(b"file:/") { &buf[5..] } else { buf };
++        let buf = buf.to_vec();
+         libc::free(r as *mut _);
+         buf
+     })))
+diff --git a/library/std/src/sys/paths/unix.rs b/library/std/src/sys/paths/unix.rs
+--- a/library/std/src/sys/paths/unix.rs
++++ b/library/std/src/sys/paths/unix.rs
+@@ -27,6 +27,13 @@ pub fn getcwd() -> io::Result<PathBuf> {
+             if !libc::getcwd(ptr, buf.capacity()).is_null() {
+                 let len = CStr::from_ptr(buf.as_ptr() as *const libc::c_char).to_bytes().len();
+                 buf.set_len(len);
++                // Match canonicalize: expose an absolute filesystem path, not a
++                // file: scheme name. Reuse the buffer and preserve non-UTF-8 bytes.
++                #[cfg(target_os = "redox")]
++                if buf.starts_with(b"file:/") {
++                    buf.copy_within(5.., 0);
++                    buf.truncate(len - 5);
++                }
+                 buf.shrink_to_fit();
+                 return Ok(PathBuf::from(OsString::from_vec(buf)));
+             } else {
+diff --git a/library/std/src/fs/tests.rs b/library/std/src/fs/tests.rs
+--- a/library/std/src/fs/tests.rs
++++ b/library/std/src/fs/tests.rs
+@@ -1557,6 +1557,25 @@ fn canonicalize_works_simple() {
+     assert_eq!(fs::canonicalize(&file).unwrap(), file);
+ }
+ 
++#[cfg(target_os = "redox")]
++#[test]
++fn canonicalize_redox_file_scheme() {
++    assert_eq!(fs::canonicalize("/").unwrap(), Path::new("/"));
++    let cwd = env::current_dir().unwrap();
++    assert!(cwd.is_absolute());
++    assert_eq!(fs::canonicalize(".").unwrap(), cwd);
++
++    let tmpdir = tmpdir();
++    let root = fs::canonicalize(tmpdir.path()).unwrap();
++    assert!(root.is_absolute());
++    let file = root.join("canonical-file");
++    File::create(&file).unwrap();
++    assert_eq!(fs::canonicalize(&file).unwrap(), file);
++    // A normalized path remains usable on repeated canonicalization.
++    assert_eq!(fs::canonicalize(fs::canonicalize(&file).unwrap()).unwrap(), file);
++    assert!(file.is_absolute());
++}
++
+ #[test]
+ fn realpath_works() {
+     let tmpdir = tmpdir();

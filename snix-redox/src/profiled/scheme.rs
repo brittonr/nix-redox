@@ -434,7 +434,7 @@ pub fn run_daemon(config: ProfiledConfig) -> Result<(), Box<dyn std::error::Erro
 
     // Pre-open "/" to get a direct fd to redoxfs. Must be done BEFORE
     // setrens(0, 0). The root_fd allows the FileIoWorker to continue
-    // reading files via SYS_OPENAT after the namespace is null.
+    // reading files via libredox openat after the namespace is null.
     eprintln!("profiled: pre-opening /");
     let root_file =
         std::fs::File::open("/").map_err(|e| format!("profiled: failed to open /: {e}"))?;
