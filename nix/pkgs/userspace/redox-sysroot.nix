@@ -148,24 +148,29 @@ pkgs.runCommand "redox-sysroot"
     # even when the hash changes between rustc versions.
     echo "Creating allocator shim..."
 
-    # Extract the crate hash from any defined __rustc symbol in the rlibs
+    # The v0-mangled __rustc crate hash changes between compiler versions, so
+    # derive it from the undefined __rust_alloc symbol instead of hardcoding it.
+    NM=${pkgs.llvmPackages.llvm}/bin/llvm-nm
     RLIB_DIR="$(echo ${rustc-redox}/lib/rustlib/x86_64-unknown-redox/lib)"
-    HASH_PREFIX=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --defined-only \
-      "$RLIB_DIR"/libstd-*.rlib 2>/dev/null \
-      | grep "CshD9Gi206LEK_7___rustc" | head -1 \
-      | grep -o '_RNvCs[^_]*_7___rustc' || true)
+    RUST_CRATE_HASH=$($NM --undefined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null \
+      | grep -o '_RNvCs[0-9A-Za-z]*_7___rustc[0-9]*___rust_alloc$' | head -1 \
+      | sed -e 's/^_RNv//' -e 's/_7___rustc[0-9]*___rust_alloc$//' || true)
+    HASH_PREFIX="_RNv''${RUST_CRATE_HASH}_7___rustc"
 
-    if [ -z "$HASH_PREFIX" ]; then
+    if [ -z "$RUST_CRATE_HASH" ]; then
       echo "WARNING: Could not extract __rustc crate hash from rlibs, skipping alloc shim"
     else
       echo "  __rustc hash prefix: $HASH_PREFIX"
 
       # Find the mangled names of the __rdl_* target functions
-      RDL_ALLOC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --defined-only "$RLIB_DIR"/libstd-*.rlib 2>/dev/null | grep "CshD9Gi206LEK.*rdl_alloc$" | awk '{print $NF}')
-      RDL_DEALLOC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --defined-only "$RLIB_DIR"/libstd-*.rlib 2>/dev/null | grep "CshD9Gi206LEK.*rdl_dealloc$" | awk '{print $NF}')
-      RDL_REALLOC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --defined-only "$RLIB_DIR"/libstd-*.rlib 2>/dev/null | grep "CshD9Gi206LEK.*rdl_realloc$" | awk '{print $NF}')
-      RDL_ALLOC_ZEROED=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --defined-only "$RLIB_DIR"/libstd-*.rlib 2>/dev/null | grep "CshD9Gi206LEK.*rdl_alloc_zeroed$" | awk '{print $NF}')
-      RDL_OOM=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --defined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep "CshD9Gi206LEK.*rdl_oom$" | awk '{print $NF}')
+      RDL_ALLOC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --defined-only "$RLIB_DIR"/libstd-*.rlib 2>/dev/null | grep "$HASH_PREFIX.*rdl_alloc$" | awk '{print $NF}') || true
+      RDL_DEALLOC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --defined-only "$RLIB_DIR"/libstd-*.rlib 2>/dev/null | grep "$HASH_PREFIX.*rdl_dealloc$" | awk '{print $NF}') || true
+      RDL_REALLOC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --defined-only "$RLIB_DIR"/libstd-*.rlib 2>/dev/null | grep "$HASH_PREFIX.*rdl_realloc$" | awk '{print $NF}') || true
+      RDL_ALLOC_ZEROED=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --defined-only "$RLIB_DIR"/libstd-*.rlib 2>/dev/null | grep "$HASH_PREFIX.*rdl_alloc_zeroed$" | awk '{print $NF}') || true
+      RDL_OOM=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --defined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep -o "$HASH_PREFIX[0-9]*___rdl_alloc_error_handler$" | head -1) || true
+      if [ -z "$RDL_OOM" ]; then
+        RDL_OOM=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --defined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep -o "$HASH_PREFIX[0-9]*___rdl_oom$" | head -1) || true
+      fi
 
       echo "  rdl_alloc: $RDL_ALLOC"
       echo "  rdl_dealloc: $RDL_DEALLOC"
@@ -174,13 +179,21 @@ pkgs.runCommand "redox-sysroot"
       echo "  rdl_oom: $RDL_OOM"
 
       # Find the mangled names of the undefined symbols we need to provide
-      RUST_ALLOC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep "CshD9Gi206LEK.*12___rust_alloc$" | awk '{print $NF}' | head -1)
-      RUST_DEALLOC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep "CshD9Gi206LEK.*14___rust_dealloc$" | awk '{print $NF}' | head -1)
-      RUST_REALLOC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep "CshD9Gi206LEK.*14___rust_realloc$" | awk '{print $NF}' | head -1)
-      RUST_ALLOC_ZEROED=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep "CshD9Gi206LEK.*19___rust_alloc_zeroed$" | awk '{print $NF}' | head -1)
-      RUST_ALLOC_ERROR=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep "CshD9Gi206LEK.*26___rust_alloc_error_handler$" | awk '{print $NF}' | head -1)
-      RUST_SHOULD_PANIC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/libstd-*.rlib 2>/dev/null | grep "CshD9Gi206LEK.*42___rust_alloc_error_handler_should_panic_v2$" | awk '{print $NF}' | head -1)
-      RUST_UNSTABLE=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep "CshD9Gi206LEK.*35___rust_no_alloc_shim_is_unstable_v2$" | awk '{print $NF}' | head -1)
+      RUST_ALLOC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep "$HASH_PREFIX.*12___rust_alloc$" | awk '{print $NF}' | head -1) || true
+      RUST_DEALLOC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep "$HASH_PREFIX.*14___rust_dealloc$" | awk '{print $NF}' | head -1) || true
+      RUST_REALLOC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep "$HASH_PREFIX.*14___rust_realloc$" | awk '{print $NF}' | head -1) || true
+      RUST_ALLOC_ZEROED=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/liballoc-*.rlib "$RLIB_DIR"/libstd-*.rlib 2>/dev/null | grep "$HASH_PREFIX.*19___rust_alloc_zeroed$" | awk '{print $NF}' | head -1) || true
+      RUST_ALLOC_ERROR=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep "$HASH_PREFIX.*26___rust_alloc_error_handler$" | awk '{print $NF}' | head -1) || true
+      RUST_SHOULD_PANIC=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/libstd-*.rlib 2>/dev/null | grep -o "$HASH_PREFIX[0-9]*___rust_alloc_error_handler_should_panic_v2$" | head -1) || true
+      SHOULD_PANIC_ASM=""
+      if [ -n "$RUST_SHOULD_PANIC" ]; then
+        SHOULD_PANIC_ASM="
+        .globl $RUST_SHOULD_PANIC
+        $RUST_SHOULD_PANIC:
+        xorl %eax, %eax
+        retq"
+      fi
+      RUST_UNSTABLE=$(${pkgs.llvmPackages.llvm}/bin/llvm-nm --undefined-only "$RLIB_DIR"/liballoc-*.rlib 2>/dev/null | grep "$HASH_PREFIX.*35___rust_no_alloc_shim_is_unstable_v2$" | awk '{print $NF}' | head -1) || true
 
       cat > $TMPDIR/alloc_shim.S << SHIMEOF
     /* Rust allocator shim for manual linking.
@@ -214,11 +227,9 @@ pkgs.runCommand "redox-sysroot"
         jmp $RDL_OOM
 
     /* __rust_alloc_error_handler_should_panic_v2() -> i8 { return 0; }
-     * OomStrategy::Abort = 0 (don't panic, just abort on OOM) */
-    .globl $RUST_SHOULD_PANIC
-    $RUST_SHOULD_PANIC:
-        xorl %eax, %eax
-        retq
+     * OomStrategy::Abort = 0 (don't panic, just abort on OOM).
+     * Emitted only when the compiler still declares the marker. */
+    $SHOULD_PANIC_ASM
 
     /* __rust_no_alloc_shim_is_unstable_v2() -> void { }
      * Marker function, no-op */
