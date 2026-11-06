@@ -3615,6 +3615,12 @@ selfHosting
 
   # Include snix source bundle on the filesystem for self-compile test
   "/filesystem" = (selfHosting."/filesystem" or { }) // {
+    extraFiles = (selfHosting."/filesystem".extraFiles or { }) // {
+      "usr/src/signal-registers.c" = {
+        text = builtins.readFile ../test-scripts/signal-registers.c;
+        mode = "0644";
+      };
+    };
     extraPaths =
       (
         if selfHosting ? "/filesystem" && selfHosting."/filesystem" ? extraPaths then
@@ -3622,12 +3628,6 @@ selfHosting
         else
           [ ]
       )
-      ++ [
-        {
-          source = ../test-scripts/signal-registers.c;
-          target = "usr/src/signal-registers.c";
-        }
-      ]
       ++ (
         if pkgs ? snix-source-bundle then
           [
