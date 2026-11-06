@@ -15,6 +15,11 @@
   openssl3-src,
   redox-zlib,
   redox-zstd,
+  # OpenSSL's zlib/zstd support only affects compressed-certificate handling.
+  # Building it in makes libssl.a reference zlib/zstd symbols that consumers
+  # (e.g. rustc's stage2 cargo) must link explicitly; the toolchain builds a
+  # copy without them.
+  withCompression ? true,
   ...
 }:
 
@@ -32,13 +37,13 @@ let
   targetOs = builtins.elemAt (lib.splitString "-" redoxTarget) 2;
   targetName = "${targetOs}-${targetArch}";
 
-  buildDeps = [
+  buildDeps = lib.optionals withCompression [
     redox-zlib
     redox-zstd
   ];
 in
 mkCLibrary.mkLibrary {
-  pname = "redox-openssl3";
+  pname = "redox-openssl3" + lib.optionalString (!withCompression) "-minimal";
   version = "3.5.3";
   src = openssl3-src;
 
@@ -67,8 +72,8 @@ mkCLibrary.mkLibrary {
       no-tests \
       no-unit-test \
       no-threads \
-      zlib \
-      enable-zstd \
+      ${lib.optionalString withCompression "zlib"} \
+      ${lib.optionalString withCompression "enable-zstd"} \
       no-shared \
       no-dso \
       ${targetName} \

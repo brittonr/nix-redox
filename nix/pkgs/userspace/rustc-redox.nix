@@ -25,7 +25,7 @@
   relibc,
   redox-llvm,
   redox-libcxx,
-  redox-openssl,
+  redox-openssl3,
   stubLibs,
   rustToolchain,
   ...
@@ -362,6 +362,13 @@ pkgs.stdenv.mkDerivation {
     ./patches/patch-rustc-execvpe.patch
     # cargo-util S_IRWXU type mismatch (i32 vs u32 on Redox)
     ./patches/patch-cargo-irwxu.patch
+    # Allow proc-macro/dylib outputs on Redox with crt-static default (needed
+    # for the self-hosted toolchain's stage2 cargo proc-macro deps)
+    ./patches/patch-rustc-redox-crt-static-dylibs.patch
+    # libc's Redox sigaction uses i32 sa_flags; nix 0.30.1 assumes u64
+    ./patches/patch-rustc-nix-redox-sigaction.patch
+    # relibc has no POSIX semaphores; ctrlc 3.5.1 needs a Redox fallback
+    ./patches/patch-rustc-ctrlc-redox-sema.patch
     # relibc now returns standard paths, so std and cargo need no "file:" stripping, and
     # pipe2/CLOEXEC works, so spawn() keeps its exec error pipe.
   ];
@@ -394,8 +401,9 @@ pkgs.stdenv.mkDerivation {
     # Point bootstrap at our stage 0 tools so it doesn't try to download
     export RUSTFMT="${rustToolchain}/bin/rustfmt"
 
-    # Point openssl-sys at our cross-compiled OpenSSL for the Redox target
-    export X86_64_UNKNOWN_REDOX_OPENSSL_DIR="${redox-openssl}"
+    # curl-sys 0.4.88 (curl 8.20) requires OpenSSL 3 (TLS1_3, EVP_sha512_256,
+    # SSL_CTX_set_ciphersuites); 1.1.1 headers fail to compile the bundled curl.
+    export X86_64_UNKNOWN_REDOX_OPENSSL_DIR="${redox-openssl3}"
     export X86_64_UNKNOWN_REDOX_OPENSSL_STATIC=1
 
     # Build stage 2 (cross-compiled for Redox)

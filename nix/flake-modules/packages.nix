@@ -964,6 +964,17 @@ let
     }
   );
 
+  # Toolchain copy: no zlib/zstd, so libssl.a does not pull symbols that the
+  # rustc stage2 cargo link line does not provide.
+  redox-openssl3-minimal = import ../pkgs/userspace/openssl3-redox.nix (
+    cLibCommon
+    // {
+      inherit (inputs) openssl3-src;
+      inherit redox-zlib redox-zstd;
+      withCompression = false;
+    }
+  );
+
   redox-curl = import ../pkgs/userspace/curl-redox.nix (
     cLibCommon
     // {
@@ -1133,9 +1144,9 @@ let
       inherit
         redox-llvm
         redox-libcxx
-        redox-openssl
         rustToolchain
         ;
+      redox-openssl3 = redox-openssl3-minimal;
     }
   );
 

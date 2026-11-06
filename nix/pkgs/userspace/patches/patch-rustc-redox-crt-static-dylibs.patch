@@ -1,0 +1,14 @@
+--- a/compiler/rustc_target/src/spec/targets/x86_64_unknown_redox.rs
++++ b/compiler/rustc_target/src/spec/targets/x86_64_unknown_redox.rs
+@@ -4,6 +4,11 @@
+     let mut base = base::redox::opts();
+     base.cpu = "x86-64".into();
+     base.plt_by_default = false;
++    // Redox ships DSOs (relibc.so, libgcc_s.so, rustc_driver.so). Without this
++    // the compiler drops proc-macro/cdylib outputs whenever crt-static is on,
++    // which breaks cross-building the self-hosted toolchain (cargo links
++    // proc-macro deps of the stage2 compiler).
++    base.crt_static_allows_dylibs = true;
+     base.max_atomic_width = Some(64);
+     base.add_pre_link_args(LinkerFlavor::Gnu(Cc::Yes, Lld::No), &["-m64"]);
+     base.stack_probes = StackProbeType::Inline;
