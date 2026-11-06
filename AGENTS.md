@@ -413,8 +413,8 @@ exec clang -static $SYSROOT/lib/crt0.o $SYSROOT/lib/crti.o "$@" \
 - focused test harness note: `snix-sandbox-test` originally checked `$out/bin/workspace-test`, but `workspace-build.nix` installs `$out/bin/mybin`
 
 ### Key Patches (all still required)
-**relibc** (12 patches): dso-runtime, dso-environ, environ-dso-init, prefault-stack, grow-main-stack, abort-dso,
-execvpe, ld-so-argv-utf8, fork-lock, fork-scratchpad, signal-rcx, ld-so-self-got. The cwd, ns-fd, run-init, symtab-fallback, ld-so-align,
+**relibc** (13 patches): dso-runtime, dso-environ, environ-dso-init, prefault-stack, grow-main-stack, abort-dso,
+execvpe, ld-so-argv-utf8, fork-lock, fork-scratchpad, signal-rcx, ld-so-self-got, pthread-init-once. The cwd, ns-fd, run-init, symtab-fallback, ld-so-align,
 pipe-cloexec, fcntl-lock and randd-read carries were dropped or folded into dso-runtime by the upstream alignment.
 `fork-scratchpad`: upstream `child_hook` reads its `&ForkScratchpad` (a local in `fork_inner`'s dead frame, just
 below the child's `rsp`) AFTER calling `sys::close()`; the `call` pushes its return address over `new_filetable_fd`,
@@ -432,6 +432,15 @@ faults. Initialize these slots to the interpreter's own definitions without allo
 symbol lookup still permits interposition. Guest proof with the repaired interpreter: rustc --version,
 --print cfg, and compile/link/run of a println program all pass. Increasing rustc's stack or enabling
 its frame pointers cannot diagnose this pre-entry loader failure.
+`pthread-init-once`: every embedded libc has its own `INIT_COMPLETE` and `.init_array` constructor.
+Loading a proc-macro on a compiler worker therefore called `pthread::init()` again and replaced that
+worker's real stack with the fixed original main-stack range. Worker exit passed the wrong range to
+the kernel for unmapping, so the parent later faulted restoring its original RSP. Preserve TCB pthread
+state when `stack_size != 0`; pthread creation installs that metadata before starting the worker.
+A real worker/dlopen probe observed the old DSO change `0xd80000/1048576` to
+`0x7ffffff00000/1048576`; the repaired DSO preserves the range, returns 42, and joins successfully.
+The existing `cargo-proc-macro` guest test compiles a derive consumer and runs its output, covering this
+constructor-on-worker lifecycle as well as macro expansion.
 **rustc tree** (15 patches, nightly-2026-05-24): sysroot, cmake, arange, bootstrap-force-link, main-stack,
 linker-pipes, read2-pipes, cargo-read2-pipes, jobserver-poll, cargo-heartbeat, execvpe, cargo-irwxu,
 redox-crt-static-dylibs, nix-redox-sigaction, ctrlc-redox-sema.

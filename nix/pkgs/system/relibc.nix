@@ -72,6 +72,8 @@ let
       ./patches/relibc/patch-relibc-signal-rcx.patch
       # Bootstrap local data GOT slots even without a libc.so dependency.
       ./patches/relibc/patch-relibc-ld-so-self-got.patch
+      # Embedded DSO constructors must not reset an existing worker's stack.
+      ./patches/relibc/patch-relibc-pthread-init-once.patch
     ];
 
     postUnpack = ''

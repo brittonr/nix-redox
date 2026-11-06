@@ -1,0 +1,29 @@
+--- a/src/pthread/mod.rs
++++ b/src/pthread/mod.rs
+@@ -25,8 +25,17 @@
+ 
+ use crate::sync::{Mutex, waitval::Waitval};
+ 
+-/// Called only by the main thread, as part of relibc_start.
++/// Initialize main-thread state unless the current TCB already owns a pthread.
+ pub unsafe fn init() {
++    let current_tcb = unsafe { Tcb::current() }.expect("no TCB present for main thread");
++    // Each statically embedded libc has its own constructor. A DSO loaded by a
++    // worker must not replace that worker's stack/identity/wait state with the
++    // main-thread defaults: thread exit would then unmap the main stack.
++    // pthread_create installs stack metadata before starting the worker.
++    if current_tcb.pthread.stack_size != 0 {
++        return;
++    }
++
+     //TODO: what is the best way to get these values?
+     #[cfg(target_os = "redox")]
+     let (stack_base, stack_size) = ((STACK_TOP - STACK_SIZE) as *mut c_void, STACK_SIZE);
+@@ -50,7 +59,6 @@
+         os_tid: UnsafeCell::new(Sys::current_os_tid()),
+     };
+ 
+-    let current_tcb = unsafe { Tcb::current() }.expect("no TCB present for main thread");
+     current_tcb.pthread = thread;
+     unsafe {
+         current_tcb.pthread.tcb_selfref.get().write(current_tcb);
