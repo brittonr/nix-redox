@@ -211,6 +211,13 @@ before loading compilers that embed libc; otherwise compiler startup can fault b
 Embedded libc constructors also preserve an existing worker's pthread state when
 loading proc-macros, so worker teardown cannot unmap the original main stack.
 
+A focused rebuilt-image smoke on 2026-11-06 passed native Rust and Cargo
+compile/run, distinct compile-time/runtime environment propagation, proc-macro
+loading and consumer execution, and the two-stage native C signal regression.
+The rebuilt graphical image also passed login and terminal input. Capture:
+`/var/tmp/redox-self-hosting-captures/20261106T161020-runtime-loader-smoke/`.
+This was focused runtime verification, not a full self-hosting suite run.
+
 ### Native system rebuilds
 
 `systemSource` selects a guest-local system derivation instead of the Linux
