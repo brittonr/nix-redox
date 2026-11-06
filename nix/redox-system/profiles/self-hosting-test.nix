@@ -634,8 +634,10 @@ let
 
                         # A handled signal must not replace the interrupted memcpy loop bound.
                         /nix/system/profile/bin/bash -c '
-                          if cc /usr/src/signal-registers.c -pthread -o /tmp/signal-registers \
-                              >/tmp/signal-registers-build-out 2>/tmp/signal-registers-build-err; then
+                          if cc -c /usr/src/signal-registers.c -o /tmp/signal-registers.o \
+                              >/tmp/signal-registers-build-out 2>/tmp/signal-registers-build-err && \
+                              cc /tmp/signal-registers.o -o /tmp/signal-registers \
+                              >>/tmp/signal-registers-build-out 2>>/tmp/signal-registers-build-err; then
                             OUTPUT=$(/tmp/signal-registers 2>/tmp/signal-registers-run-err)
                             EXIT=$?
                             if [ "$EXIT" -eq 0 ] && [ "$OUTPUT" = "signal registers preserved" ]; then
