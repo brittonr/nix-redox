@@ -13,6 +13,7 @@
 //! 7. Latency: 1000 open+read+close, print mean and p99.
 //! 8. Repeated write+read cycles stay live through the worker-backed proxy path.
 //! 9. Temp-file rename + hard-link flow stays visible through getdents.
+//! 10. File/directory symlinks retain link metadata, targets, and read-through behavior.
 //!
 //! Run inside Redox:
 //!   /nix/system/profile/bin/proxy_namespace_test
@@ -47,6 +48,7 @@ fn main() {
             "test7" => child_test_7(),
             "test8" => child_test_8(),
             "test9" => child_test_9(),
+            "test10" => child_test_10(),
             other => {
                 eprintln!("unknown child test: {}", other);
                 std::process::exit(99);
@@ -61,7 +63,7 @@ fn main() {
     test_mkns_without_file();
     test_register_file_scheme_to_ns();
 
-    // Tests 3-7 need a running proxy. Set up once, run all tests.
+    // Tests 3-10 need a running proxy. Set up once, run all tests.
     test_proxy_io();
 
     println!();
@@ -151,7 +153,7 @@ fn test_register_file_scheme_to_ns() {
     let _ = libredox::call::close(ns_fd);
 }
 
-// ── Tests 3-9: Proxy I/O round-trip tests ──────────────────────────────
+// ── Tests 3-10: Proxy I/O round-trip tests ─────────────────────────────
 
 #[cfg(target_os = "redox")]
 fn test_proxy_io() {
@@ -256,6 +258,14 @@ fn test_proxy_io() {
         socket_fd,
         "proxy-rename-link-visibility",
         Some(verify_test_9),
+    );
+    run_child_test(
+        "TEST 10: file and directory symlinks retain their targets",
+        "test10",
+        child_ns_fd,
+        socket_fd,
+        "proxy-symlink-metadata",
+        Some(verify_test_10),
     );
 
     // Shut down the proxy.
@@ -722,6 +732,54 @@ fn verify_test_9() -> Result<(), String> {
     for removed in ["libshlex.tmp", "removed.txt", "removed-dir"] {
         if dir.join(removed).exists() {
             return Err(format!("path mutation retained {removed}"));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "redox")]
+fn child_test_10() {
+    use std::os::unix::fs::symlink;
+
+    symlink(
+        "/tmp/proxy-test-input/sample.txt",
+        "/tmp/proxy-test-out/file-link",
+    )
+    .expect("create file symlink through proxy");
+    symlink("/tmp/proxy-test-input", "/tmp/proxy-test-out/dir-link")
+        .expect("create directory symlink through proxy");
+    verify_test_10().expect("inspect and read symlinks through proxy");
+}
+
+#[cfg(target_os = "redox")]
+fn verify_test_10() -> Result<(), String> {
+    use std::path::Path;
+
+    for (name, target, directory) in [
+        ("file-link", "/tmp/proxy-test-input/sample.txt", false),
+        ("dir-link", "/tmp/proxy-test-input", true),
+    ] {
+        let link = Path::new("/tmp/proxy-test-out").join(name);
+        let metadata = std::fs::symlink_metadata(&link)
+            .map_err(|e| format!("lstat {name}: {e}"))?;
+        if !metadata.file_type().is_symlink() {
+            return Err(format!("{name} metadata describes its target, not a symlink"));
+        }
+        let actual_target = std::fs::read_link(&link)
+            .map_err(|e| format!("readlink {name}: {e}"))?;
+        if actual_target != Path::new(target) {
+            return Err(format!("{name} target {actual_target:?} != {target:?}"));
+        }
+        let followed = std::fs::metadata(&link)
+            .map_err(|e| format!("stat through {name}: {e}"))?;
+        if (directory && !followed.is_dir()) || (!directory && !followed.is_file()) {
+            return Err(format!("{name} does not resolve to the expected target type"));
+        }
+        let file = if directory { link.join("sample.txt") } else { link };
+        let contents = std::fs::read(&file)
+            .map_err(|e| format!("read through {name}: {e}"))?;
+        if contents != b"input-data-for-proxy-test\n" {
+            return Err(format!("wrong content through {name}: {contents:?}"));
         }
     }
     Ok(())

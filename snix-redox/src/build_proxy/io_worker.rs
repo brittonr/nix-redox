@@ -23,8 +23,8 @@ use syscall::data::{Stat, StdFsCallMeta};
 use syscall::dirent::DirentKind;
 use syscall::error::{Error, Result, EBADF, EIO, ENOMEM};
 use syscall::flag::{
-    MapFlags, AT_REMOVEDIR, O_CREAT, O_DIRECTORY, O_RDONLY, O_RDWR, O_SYMLINK, O_TRUNC, O_WRONLY,
-    CallFlags, StdFsCallKind,
+    CallFlags, MapFlags, StdFsCallKind, AT_REMOVEDIR, O_CREAT, O_DIRECTORY, O_NOFOLLOW, O_RDONLY,
+    O_RDWR, O_STAT, O_SYMLINK, O_TRUNC, O_WRONLY,
 };
 
 pub struct OpenPathResult {
@@ -77,7 +77,7 @@ enum IoRequest {
     },
     StatPath {
         path: PathBuf,
-        directory: bool,
+        flags: usize,
         response: mpsc::Sender<Result<Stat>>,
     },
     ChmodPath {
@@ -238,12 +238,13 @@ impl BuildFsIoWorker {
         )
     }
 
-    pub fn stat_path(&self, path: &Path, directory: bool) -> Result<Stat> {
+    /// Preserve whether the original handle selected a symlink or its target.
+    pub fn stat_path(&self, path: &Path, flags: usize) -> Result<Stat> {
         let (tx, rx) = mpsc::channel();
         self.request(
             IoRequest::StatPath {
                 path: path.to_path_buf(),
-                directory,
+                flags,
                 response: tx,
             },
             rx,
@@ -453,7 +454,7 @@ fn worker_main(
             }
             IoRequest::StatPath {
                 path,
-                directory,
+                flags,
                 response,
             } => {
                 let _ = response.send(worker_stat_path(
@@ -463,7 +464,7 @@ fn worker_main(
                     dev_null_fd,
                     dev_urandom_fd,
                     &path,
-                    directory,
+                    flags,
                 ));
             }
             IoRequest::ChmodPath {
@@ -731,7 +732,8 @@ fn worker_write_at(
         dev_urandom_fd,
         path,
         if symlink {
-            O_WRONLY | O_SYMLINK
+            // Existing symlink writes require both path-only and no-follow.
+            O_WRONLY | O_SYMLINK | O_STAT | O_NOFOLLOW
         } else {
             O_RDWR
         },
@@ -758,13 +760,8 @@ fn worker_stat_path(
     dev_null_fd: Option<usize>,
     dev_urandom_fd: Option<usize>,
     path: &Path,
-    directory: bool,
+    flags: usize,
 ) -> Result<Stat> {
-    let flags = if directory {
-        O_RDONLY | O_DIRECTORY
-    } else {
-        O_RDONLY
-    };
     let fd = open_fd(
         root_fd,
         profile_root_fd,
@@ -826,7 +823,7 @@ fn worker_truncate_path(
         dev_urandom_fd,
         path,
         if symlink {
-            O_WRONLY | O_SYMLINK
+            O_WRONLY | O_SYMLINK | O_STAT | O_NOFOLLOW
         } else {
             O_RDWR
         },

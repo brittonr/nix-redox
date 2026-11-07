@@ -47,6 +47,30 @@
       },
       "verdict": "pass"
     },
+    "ln-directory-smoke": {
+      "boot_cycles": [],
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261106-ln-symlink-write-after",
+      "duration_seconds": 10,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261106-ln-symlink-write-after/excerpt.txt",
+      "exit_code": 0,
+      "finished_at": "2026-11-06T20:32:52-05:00",
+      "flow": "ln-directory-smoke",
+      "git_dirty": true,
+      "git_rev": "04f6d6bb",
+      "run_id": "20261106T203242-ln-directory-smoke",
+      "started_at": "2026-11-06T20:32:42-05:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261106-ln-symlink-write-after/summary.json",
+      "test_counts": {
+        "fail": 0,
+        "failure_lines": [],
+        "pass": 6,
+        "skip": 0,
+        "tests_complete": true,
+        "tests_started": true,
+        "total": 6
+      },
+      "verdict": "pass"
+    },
     "native-cc-probe": {
       "boot_cycles": [],
       "capture_dir": "/var/tmp/redox-self-hosting-captures/20261106-native-cc-stdin-n5inr",
@@ -221,25 +245,25 @@
     },
     "proxy-abi-initial-namespace": {
       "boot_cycles": [],
-      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261106-proxy-abi-initial-namespace-295c2479-4",
-      "duration_seconds": 10,
-      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261106-proxy-abi-initial-namespace-295c2479-4/excerpt.txt",
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261106-proxy-symlink-sdk-write-after",
+      "duration_seconds": 9,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261106-proxy-symlink-sdk-write-after/excerpt.txt",
       "exit_code": 0,
-      "finished_at": "2026-11-06T15:45:38-05:00",
+      "finished_at": "2026-11-06T20:32:15-05:00",
       "flow": "proxy-abi-initial-namespace",
       "git_dirty": true,
-      "git_rev": "295c2479",
-      "run_id": "20261106T154528-proxy-abi-initial-namespace",
-      "started_at": "2026-11-06T15:45:28-05:00",
-      "summary_path": "/var/tmp/redox-self-hosting-captures/20261106-proxy-abi-initial-namespace-295c2479-4/summary.json",
+      "git_rev": "04f6d6bb",
+      "run_id": "20261106T203206-proxy-abi-initial-namespace",
+      "started_at": "2026-11-06T20:32:06-05:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261106-proxy-symlink-sdk-write-after/summary.json",
       "test_counts": {
         "fail": 0,
         "failure_lines": [],
-        "pass": 9,
+        "pass": 10,
         "skip": 0,
         "tests_complete": true,
         "tests_started": true,
-        "total": 9
+        "total": 10
       },
       "verdict": "pass"
     },
@@ -334,8 +358,32 @@
         "total": 19
       },
       "verdict": "pass"
+    },
+    "symlink-root-abi-diagnostic": {
+      "boot_cycles": [],
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261106-symlink-root-abi-flags",
+      "duration_seconds": 20,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261106-symlink-root-abi-flags/excerpt.txt",
+      "exit_code": 0,
+      "finished_at": "2026-11-06T20:27:20-05:00",
+      "flow": "symlink-root-abi-diagnostic",
+      "git_dirty": true,
+      "git_rev": "04f6d6bb",
+      "run_id": "20261106T202700-symlink-root-abi-diagnostic",
+      "started_at": "2026-11-06T20:27:00-05:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261106-symlink-root-abi-flags/summary.json",
+      "test_counts": {
+        "fail": 0,
+        "failure_lines": [],
+        "pass": 2,
+        "skip": 0,
+        "tests_complete": true,
+        "tests_started": true,
+        "total": 2
+      },
+      "verdict": "pass"
     }
   },
   "schema_version": 1,
-  "updated_at": "2026-11-06T18:42:44-05:00"
+  "updated_at": "2026-11-06T20:32:15-05:00"
 }

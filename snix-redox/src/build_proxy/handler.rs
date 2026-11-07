@@ -34,8 +34,8 @@ use syscall::dirent::{DirEntry as RedoxDirEntry, DirentBuf, DirentKind};
 use syscall::error::{Error, Result, EACCES, EBADF, EIO, EISDIR, ENOENT, ENOTDIR, EOPNOTSUPP};
 use syscall::flag::{
     MapFlags, MunmapFlags, AT_REMOVEDIR, F_DUPFD, F_GETFD, F_GETFL, F_SETFD,
-    F_SETFL, MODE_PERM, O_ACCMODE, O_APPEND, O_CREAT, O_DIRECTORY, O_EXCL, O_RDONLY, O_RDWR,
-    O_SYMLINK, O_TRUNC, O_WRONLY,
+    F_SETFL, MODE_PERM, MODE_SYMLINK, MODE_TYPE, O_ACCMODE, O_APPEND, O_CREAT, O_DIRECTORY, O_EXCL,
+    O_NOFOLLOW, O_RDONLY, O_RDWR, O_STAT, O_SYMLINK, O_TRUNC, O_WRONLY,
 };
 use syscall::schemev2::NewFdFlags;
 
@@ -98,13 +98,17 @@ pub struct OpenFlags {
     pub directory: bool,
     /// Operate on a symlink itself instead of its target (O_SYMLINK).
     pub symlink: bool,
+    /// Open only the path/metadata without requiring data access (O_STAT/O_PATH).
+    pub path_only: bool,
+    /// Do not follow the final symlink (O_NOFOLLOW).
+    pub no_follow: bool,
     /// Permission bits carried in Redox open flags when creating files.
     pub mode_perm: usize,
 }
 
 /// Translate raw Redox open flags into the proxy's internal representation.
 ///
-/// Redox flag values (from redox_syscall 0.7):
+/// Redox flag values (from redox_syscall 0.9):
 ///   O_RDONLY    = 0x0001_0000
 ///   O_WRONLY    = 0x0002_0000
 ///   O_RDWR      = 0x0003_0000
@@ -125,6 +129,8 @@ pub fn translate_open_flags(raw: usize) -> OpenFlags {
         append: raw & O_APPEND != 0,
         directory: raw & O_DIRECTORY != 0,
         symlink: raw & O_SYMLINK != 0,
+        path_only: raw & O_STAT != 0,
+        no_follow: raw & O_NOFOLLOW != 0,
         mode_perm: raw & MODE_PERM as usize,
     }
 }
@@ -166,6 +172,12 @@ impl OpenFlags {
         }
         if self.symlink {
             f |= O_SYMLINK;
+        }
+        if self.path_only {
+            f |= O_STAT;
+        }
+        if self.no_follow {
+            f |= O_NOFOLLOW;
         }
         f | self.mode_perm
     }
@@ -514,7 +526,7 @@ impl SchemeSync for BuildFsHandler {
                     scheme_path,
                     writable: oflags.wants_write(),
                     append: oflags.append,
-                    symlink: oflags.symlink,
+                    symlink: stat.st_mode & MODE_TYPE == MODE_SYMLINK,
                     size: stat.st_size,
                     mode: stat.st_mode as u32,
                 }),
@@ -707,7 +719,8 @@ impl SchemeSync for BuildFsHandler {
     fn fstat(&mut self, id: usize, stat: &mut Stat, _ctx: &CallerCtx) -> Result<()> {
         match self.handles.get_mut(&id) {
             Some(ProxyHandle::File(fh)) => {
-                if let Ok(real_stat) = self.io_worker.stat_path(&fh.real_path, false) {
+                let flags = O_RDONLY | if fh.symlink { O_SYMLINK } else { 0 };
+                if let Ok(real_stat) = self.io_worker.stat_path(&fh.real_path, flags) {
                     if real_stat.st_size > fh.size {
                         fh.size = real_stat.st_size;
                     }
@@ -732,7 +745,7 @@ impl SchemeSync for BuildFsHandler {
                 Ok(())
             }
             Some(ProxyHandle::Dir(dh)) => {
-                if let Ok(real_stat) = self.io_worker.stat_path(&dh.real_path, true) {
+                if let Ok(real_stat) = self.io_worker.stat_path(&dh.real_path, O_RDONLY | O_DIRECTORY) {
                     stat.st_mode = real_stat.st_mode;
                     stat.st_size = real_stat.st_size;
                     stat.st_nlink = real_stat.st_nlink;

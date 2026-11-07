@@ -203,3 +203,23 @@ native Clang 21 toolchain: direct frontend compile/link/runtime, integrated-driv
 compilation, and signal-register compile/link/runtime. The signal binary exits
 zero and prints `signal registers preserved`. This focused result does not
 replace a complete self-hosting suite result.
+
+## Proxy symlink descriptors
+
+The proxy preserves `O_STAT`/`O_NOFOLLOW` on metadata-only opens and refreshes
+`fstat` against the same object selected by the handle. Link descriptors must
+not acquire their target's file type or size. Existing-link write/truncate
+reopens use `O_WRONLY|O_SYMLINK|O_STAT|O_NOFOLLOW`: the native root ABI rejects
+the write with EISDIR without both path-only and no-follow flags.
+
+`proxy_namespace_test` test 10 creates file and directory links, checks their
+exact targets and link metadata, then checks followed metadata and contents.
+The same checks run inside the proxy and from its real parent filesystem.
+Capture `20261106-proxy-symlink-sdk-write-after` passes all **10/10** namespace
+cases and a separate active-proxy Snix build. Its metadata repair note records
+the original index-path EROFS error; successful guest execution was not rerun.
+
+Capture `20261106-ln-symlink-write-after` passes **6/6** root, Rust, unsandboxed
+and default-proxy controls. Both `ln -s` and Rust links retain nonempty targets
+and readable contents, verified again outside the proxy after the builder exits.
+These focused results do not replace the complete native three-boot proof.
