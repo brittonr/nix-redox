@@ -14,7 +14,7 @@ release gate, evidence rules, and known limitations.
 ## Run It
 
 ```bash
-nix run github:brittonr/redox
+nix run github:brittonr/nix-redox
 ```
 
 That builds everything from source and boots a graphical Redox VM in QEMU.
