@@ -43,6 +43,16 @@ mkUserspace.mkBinary {
 
   vendorHash = "sha256-mz5MtGbCxzaQ2pmP5oswxJcUi7l8agSkD/wikkl3g/M=";
 
+  # redox_syscall 0.3.4 getpid/kill/waitpid are legacy syscalls that the
+  # refreshed kernel rejects with ENOSYS; use libc's proc-scheme paths.
+  nativeBuildInputs = [ pkgs.python3 ];
+  preConfigure = ''
+    python3 ${./patches/patch-strace-libc-process.py} .
+  '';
+  # The advanced mode still uses the legacy event: API; the simple blocking
+  # tracer is what the proc: trace handle implements.
+  cargoBuildFlags = "--no-default-features --bin strace";
+
   gitSources = [
     {
       url = "git+https://gitlab.redox-os.org/redox-os/liblibc.git?branch=rust-2022-03-18";
