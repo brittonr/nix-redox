@@ -275,9 +275,7 @@ let
       };
     };
 
-    sodium = import ./userspace/sodium.nix (
-      userspaceArgs // { inherit (inputs) sodium-src; }
-    );
+    sodium = import ./userspace/sodium.nix (userspaceArgs // { inherit (inputs) sodium-src; });
 
     netutils = mkUserspace.mkPackage {
       pname = "netutils";

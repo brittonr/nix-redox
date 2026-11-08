@@ -188,4 +188,4 @@ fi
 
 /nix/system/profile/bin/llvm-objcopy --strip-debug "$kernel_bin" "$out/boot/kernel"
 /nix/system/profile/bin/llvm-objcopy --only-keep-debug "$kernel_bin" "$out/boot/kernel.sym"
-printf '%s\n' "$out" > "$out/boot-proof-id"
+printf '%s\n' "$out" >"$out/boot-proof-id"

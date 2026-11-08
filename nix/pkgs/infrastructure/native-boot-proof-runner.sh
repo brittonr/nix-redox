@@ -5,19 +5,19 @@ BOOT_NAMES=(seed native rollback)
 HOST_RESULTS="$WORK_DIR/host-results.log"
 RESULT_LOG="$WORK_DIR/combined-serial.log"
 CAPTURE_LOG="$RESULT_LOG"
-: > "$HOST_RESULTS"
-: > "$RESULT_LOG"
+: >"$HOST_RESULTS"
+: >"$RESULT_LOG"
 declare -A EXPECTED
-EXPECTED[seed:bootloader]="$PROOF_SEED_BOOTLOADER"
-EXPECTED[seed:kernel]="$PROOF_SEED_KERNEL"
-EXPECTED[seed:initfs]="$PROOF_SEED_INITFS"
+EXPECTED["seed:bootloader"]="$PROOF_SEED_BOOTLOADER"
+EXPECTED["seed:kernel"]="$PROOF_SEED_KERNEL"
+EXPECTED["seed:initfs"]="$PROOF_SEED_INITFS"
 PROOF_FAILED=0
 TEST_PREFIX=FUNC_TEST
 TESTS_COMPLETE=0
 LAST_PARSED_LINE=0
 
 proof_result() {
-  printf 'FUNC_TEST:host_%s:%s%s\n' "$1" "$2" "${3:+:$3}" >> "$HOST_RESULTS"
+  printf 'FUNC_TEST:host_%s:%s%s\n' "$1" "$2" "${3:+:$3}" >>"$HOST_RESULTS"
   echo "  host $1: $2${3:+ ($3)}"
 }
 
@@ -28,15 +28,15 @@ proof_fail() {
 }
 
 proof_collect() {
-  : > "$RESULT_LOG"
+  : >"$RESULT_LOG"
   for boot in 0 1 2; do
     log="$WORK_DIR/boot-$boot-${BOOT_NAMES[$boot]}.serial.log"
     if [ -f "$log" ]; then
-      tr -d '\000\r' < "$log" >> "$RESULT_LOG"
-      printf '\n' >> "$RESULT_LOG"
+      tr -d '\000\r' <"$log" >>"$RESULT_LOG"
+      printf '\n' >>"$RESULT_LOG"
     fi
   done
-  cat "$HOST_RESULTS" >> "$RESULT_LOG"
+  cat "$HOST_RESULTS" >>"$RESULT_LOG"
 }
 
 proof_stop_vm() {
@@ -58,7 +58,7 @@ proof_stop_vm() {
 
 proof_launch() {
   SERIAL_LOG="$WORK_DIR/boot-$BOOT_INDEX-${BOOT_NAMES[$BOOT_INDEX]}.serial.log"
-  : > "$SERIAL_LOG"
+  : >"$SERIAL_LOG"
   M_BOOTLOADER=0 M_KERNEL=0 M_BOOT=0 LAST_PARSED_LINE=0
   echo "  Firmware boot $BOOT_INDEX (${BOOT_NAMES[$BOOT_INDEX]})"
   launch_vm
@@ -72,23 +72,32 @@ proof_launch() {
 proof_freeze_expectations() {
   local component phase value count
   count=$(printf '%s\n' "$LOG_CONTENT" | "$PROOF_GREP" -c '^FUNC_EXPECT:' || true)
-  [ "$count" = 6 ] || { proof_fail expectations "expected exactly six pre-reboot manifest identities, got $count"; return 1; }
+  [ "$count" = 6 ] || {
+    proof_fail expectations "expected exactly six pre-reboot manifest identities, got $count"
+    return 1
+  }
   for phase in seed native; do
     for component in bootloader kernel initfs; do
       value=$(printf '%s\n' "$LOG_CONTENT" | "$PROOF_GREP" "^FUNC_EXPECT:$phase:$component:" | cut -d: -f4-)
-      if [[ ! "$value" =~ ^/nix/store/[a-z0-9]{32}-[^/:[:space:]]+$ ]]; then
+      if [[ ! $value =~ ^/nix/store/[a-z0-9]{32}-[^/:[:space:]]+$ ]]; then
         proof_fail expectations "invalid or duplicate $phase $component identity"
         return 1
       fi
       if [ "$phase" = seed ]; then
-        [ "$value" = "${EXPECTED[seed:$component]}" ] || { proof_fail expectations "seed $component does not match configured seed derivation"; return 1; }
+        [ "$value" = "${EXPECTED["seed:$component"]}" ] || {
+          proof_fail expectations "seed $component does not match configured seed derivation"
+          return 1
+        }
       else
-        [ "$value" != "${EXPECTED[seed:$component]}" ] || { proof_fail expectations "native $component is the seed artifact"; return 1; }
-        EXPECTED[native:$component]="$value"
+        [ "$value" != "${EXPECTED["seed:$component"]}" ] || {
+          proof_fail expectations "native $component is the seed artifact"
+          return 1
+        }
+        EXPECTED["native:$component"]="$value"
       fi
     done
   done
-  printf '%s\n' "$LOG_CONTENT" | "$PROOF_GREP" '^FUNC_EXPECT:' > "$WORK_DIR/expected-identities.log"
+  printf '%s\n' "$LOG_CONTENT" | "$PROOF_GREP" '^FUNC_EXPECT:' >"$WORK_DIR/expected-identities.log"
   proof_result frozen_manifest_identities PASS
 }
 
@@ -97,8 +106,8 @@ proof_validate_runtime() {
   for component in bootloader kernel initfs; do
     count=$(printf '%s\n' "$LOG_CONTENT" | "$PROOF_GREP" -c "^BOOT_PROOF:$component:" || true)
     actual=$(printf '%s\n' "$LOG_CONTENT" | "$PROOF_GREP" "^BOOT_PROOF:$component:" | cut -d: -f3-)
-    if [ "$count" != 1 ] || [ "$actual" != "${EXPECTED[$phase:$component]}" ]; then
-      proof_fail "boot_${BOOT_INDEX}_${component}_identity" "expected ${EXPECTED[$phase:$component]}, observed $actual ($count markers)"
+    if [ "$count" != 1 ] || [ "$actual" != "${EXPECTED["$phase:$component"]}" ]; then
+      proof_fail "boot_${BOOT_INDEX}_${component}_identity" "expected ${EXPECTED["$phase:$component"]}, observed $actual ($count markers)"
       return 1
     fi
     proof_result "boot_${BOOT_INDEX}_${component}_identity" PASS
@@ -121,14 +130,15 @@ fi
 START_MS=$(ms_now)
 proof_launch
 while true; do
-  ELAPSED_MS=$(( $(ms_now) - START_MS ))
+  ELAPSED_MS=$(($(ms_now) - START_MS))
   if [ "$((ELAPSED_MS / 1000))" -ge "$TIMEOUT" ]; then
     proof_fail protocol "three-boot proof timed out on boot $BOOT_INDEX" || true
     break
   fi
 
   # Ignore an incomplete final serial line until its newline is committed.
-  LOG_CONTENT=$("$PROOF_PYTHON" - "$SERIAL_LOG" <<'PY'
+  LOG_CONTENT=$(
+    "$PROOF_PYTHON" - "$SERIAL_LOG" <<'PY'
 import sys
 with open(sys.argv[1], 'rb') as log:
     data = log.read().replace(b'\0', b'').replace(b'\r', b'')
@@ -136,10 +146,10 @@ end = data.rfind(b'\n')
 if end >= 0:
     sys.stdout.buffer.write(data[:end + 1])
 PY
-)
+  )
   check_boot_milestones "$LOG_CONTENT" "$ELAPSED_MS"
   parse_test_lines "$LOG_CONTENT" FUNC_TEST
-  if "$PROOF_GREP" -q '^FUNC_TEST:[^:]*:FAIL\(:\|$\)' <<< "$LOG_CONTENT"; then
+  if "$PROOF_GREP" -q '^FUNC_TEST:[^:]*:FAIL\(:\|$\)' <<<"$LOG_CONTENT"; then
     proof_fail protocol "guest assertion failed on boot $BOOT_INDEX; refusing restart/completion" || true
     break
   fi
@@ -172,10 +182,10 @@ PY
     if [ "$BOOT_INDEX" = 0 ]; then
       proof_freeze_expectations || break
       proof_validate_runtime seed || break
-      NEXT_ID="${EXPECTED[native:bootloader]}"
+      NEXT_ID="${EXPECTED["native:bootloader"]}"
     else
       proof_validate_runtime native || break
-      NEXT_ID="${EXPECTED[seed:bootloader]}"
+      NEXT_ID="${EXPECTED["seed:bootloader"]}"
     fi
     if [ "$EFI_PATH" != "$NEXT_ID/boot/EFI/BOOT/BOOTX64.EFI" ]; then
       proof_fail protocol "EFI request is not the expected $NEXT_PHASE bootloader store file" || true
@@ -212,7 +222,7 @@ PY
 done
 proof_stop_vm
 proof_collect
-FINAL_MS=$(( $(ms_now) - START_MS ))
+FINAL_MS=$(($(ms_now) - START_MS))
 count_results FUNC_TEST
 if [ "$PROOF_FAILED" != 0 ]; then
   TESTS_COMPLETE=0

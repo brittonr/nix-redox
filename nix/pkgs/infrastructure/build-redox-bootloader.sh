@@ -187,4 +187,4 @@ if [ -z "$bootloader_bin" ] || [ ! -f "$bootloader_bin" ]; then
 fi
 
 cp "$bootloader_bin" "$out/boot/EFI/BOOT/BOOTX64.EFI"
-printf '%s\n' "$out" > "$out/boot-proof-id"
+printf '%s\n' "$out" >"$out/boot-proof-id"
