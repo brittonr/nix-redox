@@ -215,6 +215,23 @@ compilation, and signal-register compile/link/runtime. The signal binary exits
 zero and prints `signal registers preserved`. This focused result does not
 replace a complete self-hosting suite result.
 
+## Public graphical and headless launch checks
+
+The literal public runners are exercised, not custom VMM commands. Capture
+`/var/tmp/redox-self-hosting-captures/20261108-e2e-public-entrypoints-eb4dca57/`
+records the re-check at clean commit `eb4dca57`:
+
+- `nix run .` — GTK window on a private Xvfb display, boot to the Orbital login
+  screen, login as `user`, then `echo graphical-entrypoint-ok` in the Orbital
+  terminal; the command prints the expected output. Monitor `quit` exits 0.
+  `login.png`, `desktop.png`, and `terminal.png` are retained with `graphical.log`.
+- `nix run .#headless` — boot to the serial login, login as `user`, then
+  `echo HEADLESS-ENTRYPOINT-OK` prints the expected output. Ctrl+C exits 130 and
+  the host terminal attributes are restored (`headless-control.json`).
+
+The earlier `20261106-e2e-public-entrypoints-295c2479` capture covers the same
+runners before the toolchain/proxy changes; it remains a historical receipt.
+
 ## Proxy symlink descriptors
 
 The proxy preserves `O_STAT`/`O_NOFOLLOW` on metadata-only opens and refreshes
