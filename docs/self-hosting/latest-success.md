@@ -5,11 +5,11 @@ See `docs/self-hosting/proof-artifacts.md` for the capture contract.
 
 | Flow | Run ID | Finished | Commit | Tests | Capture dir |
 |---|---|---|---|---|---|
-| self-hosting-test | 20261028T211136-self-hosting-test | 2026-10-28T23:05:23-04:00 | `b5da985d` | 84/84 pass | `/var/tmp/redox-self-hosting-captures/20261028T211136-self-hosting-test` |
+| self-hosting-test | 20261106T204250-self-hosting-test | 2026-11-06T21:32:33-05:00 | `19975ccf` | 86/86 pass | `/var/tmp/redox-self-hosting-captures/20261106-e2e-self-hosting-19975ccf` |
 | snix-compile-test | 20261028T091421-snix-compile-test | 2026-10-28T10:08:15-04:00 | `8a9604d9` | 8/8 pass | `/var/tmp/redox-self-hosting-captures/20261028T091421-snix-compile-test` |
 | snix-sandbox-test | 20261028T163222-snix-sandbox-test | 2026-10-28T16:39:34-04:00 | `723d825e` | 19/19 pass | `/var/tmp/redox-self-hosting-captures/20261028T163222-snix-sandbox-test` |
-| kernel-rebuild-test | 20260415T000324-kernel-rebuild-test | 2026-04-15T00:15:32-04:00 | `af057438` | 10/10 pass | `/var/tmp/redox-self-hosting-captures/20260415T000324-kernel-rebuild-test` |
-| native-rebuild-test | 20261029T000233-native-rebuild-test | 2026-10-29T00:32:32-04:00 | `b5da985d` | 135/135 pass | `/var/tmp/redox-self-hosting-captures/20261029T000233-native-rebuild-test` |
+| kernel-rebuild-test | 20261106T204101-kernel-rebuild-test | 2026-11-06T21:10:49-05:00 | `19975ccf` | 10/10 pass | `/var/tmp/redox-self-hosting-captures/20261106-e2e-kernel-19975ccf` |
+| native-rebuild-test | 20261106T204234-native-rebuild-test | 2026-11-06T21:24:45-05:00 | `19975ccf` | 134/134 pass | `/var/tmp/redox-self-hosting-captures/20261106-e2e-native-19975ccf` |
 | file-source-context-smoke | 20261106T152938-file-source-context-smoke | 2026-11-06T15:29:43-05:00 | `295c2479` | 6/6 pass | `/var/tmp/redox-self-hosting-captures/20261106-file-context-smoke-295c2479-3` |
 | ln-directory-smoke | 20261106T203242-ln-directory-smoke | 2026-11-06T20:32:52-05:00 | `04f6d6bb` | 6/6 pass | `/var/tmp/redox-self-hosting-captures/20261106-ln-symlink-write-after` |
 | native-cc-probe | 20261106T172358-native-cc-probe | 2026-11-06T17:24:29-05:00 | `295c2479` | 3/3 pass | `/var/tmp/redox-self-hosting-captures/20261106-native-cc-stdin-n5inr` |

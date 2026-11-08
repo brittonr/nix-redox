@@ -125,22 +125,26 @@ The 16 GiB mutable image and native build scratch need host disk space; use
 `TMPDIR=/var/tmp` when `/tmp` is memory-backed or small. Capture metadata reports
 the exact run verdict; test fixtures alone are not evidence of a successful run.
 
-Completed Cloud Hypervisor proof: `20261029T000233-native-rebuild-test` passes
-**135/135**, with zero failures or skips, in 1799 seconds. All three cold firmware
-boots use the same writable disk. The native boot executes the frozen guest-built
-bootloader/kernel/initfs identities; the rollback boot executes the original seed
-identities and restores generation 1, the original manifest/configuration, service
-units, and kernel/initfs bytes. The saved native generation remains GC-rooted.
+Completed Cloud Hypervisor proof: `20261106-e2e-native-19975ccf` passes
+**134/134**, with zero failures or skips, in 2531 seconds. All three cold firmware
+boots use the same writable disk. The seed boot executes the original bootloader,
+kernel, and initfs; the native boot executes the frozen guest-built identities
+(bootloader `isrhbs9g…`, kernel `icgv3yid…`, initfs `j0l2iq43…`); the rollback
+boot executes the original seed identities again and restores generation 1, the
+original manifest/configuration, service units, and kernel/initfs bytes. The saved
+native generation remains GC-rooted. The earlier `20261029T000233-native-rebuild-test`
+135/135 result remains a valid historical receipt for its own commit.
 
 Seed image assembly preserves complete boot package outputs, including
 `boot-proof-id`, at the manifest's store paths. Before restart the guest flushes
 the active `/etc` tree rather than requiring native-only leaf files: the seed
 generation keeps its PCI configuration inside initfs, not under `/etc/pcid.d`.
 
-Capture: `/var/tmp/redox-self-hosting-captures/20261029T000233-native-rebuild-test/`.
-It includes per-boot serial/VMM logs, frozen pre-reboot identities, and the standard
-summary/excerpt. `latest-success` now records this completed three-boot result for
-`native-rebuild-test`, replacing the earlier single-boot 88/88 result.
+Capture: `/var/tmp/redox-self-hosting-captures/20261106-e2e-native-19975ccf/`.
+It includes `boot-0-seed`, `boot-1-native`, and `boot-2-rollback` serial/VMM logs,
+`expected-identities.log`, and the standard summary/excerpt. `latest-success`
+records this completed three-boot result for `native-rebuild-test`, replacing the
+earlier single-boot 88/88 result.
 
 QEMU disk-UEFI smoke: `20261028T213608-native-rebuild-test` booted the seed EFI
 from the ESP and emitted all three executing-artifact identities. Its intentional
@@ -179,17 +183,24 @@ It retains `probe.nix` (the focused image expression that extracts the current
 profile probes), serial output, the runner log, and the standard summary.
 `latest-success` records this as a separate flow, not a new full-suite result.
 
-Strict full-suite proof: `20261028T211136-self-hosting-test` passes **84/84**, with
-zero failures or skips, in 6827 seconds. The count is unchanged, but the two
-diagnostic checks now require successful execution: the serial log records
+Strict full-suite proof: `20261106-e2e-self-hosting-19975ccf` passes **86/86**,
+with zero failures or skips, in 2979 seconds at clean commit `19975ccf`. The
+count now includes `signal-registers` runtime success and the native Cargo
+path/vendored-dependency/proc-macro cases. Direct-link and environment checks
+still require successful execution: the serial log records
 `Direct link binary exit: 0`, `Output: direct link works!`,
 `Runtime env binary exit: 0`, `COMPILE_TIME_DIAG_TEST_VAR=hello_from_environ`, and
 `RUNTIME_DIAG_TEST_VAR=hello_runtime`. The same run passes native Snix self-build,
 execution/evaluation of that binary, source rebuild, and the hostname/inline-file
-rebuild cycle.
+rebuild cycle. The earlier `20261028T211136-self-hosting-test` 84/84 result and the
+`20261106-e2e-self-hosting-04f6d6bb` 86/86 result remain historical receipts for
+their own commits.
 
-Capture: `/var/tmp/redox-self-hosting-captures/20261028T211136-self-hosting-test/`.
-`latest-success` now records this strict run under `self-hosting-test`.
+Capture: `/var/tmp/redox-self-hosting-captures/20261106-e2e-self-hosting-19975ccf/`.
+`latest-success` records this strict run under `self-hosting-test`.
+
+The companion kernel/UEFI rebuild proof `20261106-e2e-kernel-19975ccf` passes
+**10/10** in 1788 seconds at the same commit.
 
 ## Native C signal-register check
 
