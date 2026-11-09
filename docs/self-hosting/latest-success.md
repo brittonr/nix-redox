@@ -5,7 +5,7 @@ See `docs/self-hosting/proof-artifacts.md` for the capture contract.
 
 | Flow | Run ID | Finished | Commit | Tests | Capture dir |
 |---|---|---|---|---|---|
-| self-hosting-test | 20261106T204250-self-hosting-test | 2026-11-06T21:32:33-05:00 | `19975ccf` | 86/86 pass | `/var/tmp/redox-self-hosting-captures/20261106-e2e-self-hosting-19975ccf` |
+| self-hosting-test | 20261109T084146-self-hosting-test | 2026-11-09T09:34:00-05:00 | `37444ebb` | 86/86 pass | `/var/tmp/redox-self-hosting-captures/20261109T084146-self-hosting-test` |
 | snix-compile-test | 20261028T091421-snix-compile-test | 2026-10-28T10:08:15-04:00 | `8a9604d9` | 8/8 pass | `/var/tmp/redox-self-hosting-captures/20261028T091421-snix-compile-test` |
 | snix-sandbox-test | 20261028T163222-snix-sandbox-test | 2026-10-28T16:39:34-04:00 | `723d825e` | 19/19 pass | `/var/tmp/redox-self-hosting-captures/20261028T163222-snix-sandbox-test` |
 | kernel-rebuild-test | 20261106T204101-kernel-rebuild-test | 2026-11-06T21:10:49-05:00 | `19975ccf` | 10/10 pass | `/var/tmp/redox-self-hosting-captures/20261106-e2e-kernel-19975ccf` |

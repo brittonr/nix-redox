@@ -293,17 +293,17 @@
     },
     "self-hosting-test": {
       "boot_cycles": [],
-      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261106-e2e-self-hosting-19975ccf",
-      "duration_seconds": 2983,
-      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261106-e2e-self-hosting-19975ccf/excerpt.txt",
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261109T084146-self-hosting-test",
+      "duration_seconds": 3134,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261109T084146-self-hosting-test/excerpt.txt",
       "exit_code": 0,
-      "finished_at": "2026-11-06T21:32:33-05:00",
+      "finished_at": "2026-11-09T09:34:00-05:00",
       "flow": "self-hosting-test",
       "git_dirty": false,
-      "git_rev": "19975ccf",
-      "run_id": "20261106T204250-self-hosting-test",
-      "started_at": "2026-11-06T20:42:50-05:00",
-      "summary_path": "/var/tmp/redox-self-hosting-captures/20261106-e2e-self-hosting-19975ccf/summary.json",
+      "git_rev": "37444ebb",
+      "run_id": "20261109T084146-self-hosting-test",
+      "started_at": "2026-11-09T08:41:46-05:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261109T084146-self-hosting-test/summary.json",
       "test_counts": {
         "fail": 0,
         "failure_lines": [],
@@ -387,5 +387,5 @@
     }
   },
   "schema_version": 1,
-  "updated_at": "2026-11-06T21:32:33-05:00"
+  "updated_at": "2026-11-09T09:34:00-05:00"
 }
