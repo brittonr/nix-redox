@@ -287,9 +287,16 @@ use rmm::Arch;""",
             // with `<pid>/ctx`
             _ => Err(Error::new(EBADF)),""",
         """            ContextHandle::Trace { session, .. } => {
+                // Report ESRCH once the tracee is gone and events are drained.
+                if session.data.lock().is_closed_empty() {
+                    return Err(Error::new(ESRCH));
+                }
                 // Wait for events if none pending (check via fevent flags)
                 if session.data.lock().session_fevent_flags().is_empty() {
                     ptrace::wait(Arc::clone(session), token)?;
+                }
+                if session.data.lock().is_closed_empty() {
+                    return Err(Error::new(ESRCH));
                 }
                 // Drain events into output buffer
                 let event_size = mem::size_of::<crate::syscall::data::PtraceEvent>();
@@ -610,10 +617,159 @@ use rmm::Arch;""",
     print("Proc scheme patched: Trace and Memory handles added")
 
 
+def patch_breakpoint_semantics(src_dir):
+    """Fix the restored ptrace breakpoint gate and signal-wake loop.
+
+    The restored code stopped for events the tracer did NOT request, and its
+    wait loop re-queued events when a signal (e.g. SIGCONT) kept wait() from
+    blocking, exhausting the 1 MiB kernel heap.
+    """
+
+    ptrace_file = os.path.join(src_dir, "src/ptrace.rs")
+
+    patch_file(
+        ptrace_file,
+        """        // TODO: Some or all flags?
+        // Only stop if the tracer have asked for this breakpoint
+        if percpu.ptrace_flags.get().contains(match_flags) {
+            return None;
+        }""",
+        """        // Only stop if the tracer asked for this breakpoint.
+        if !percpu.ptrace_flags.get().contains(match_flags) {
+            return None;
+        }""",
+    )
+
+    patch_file(
+        ptrace_file,
+        """        if session
+            .tracee
+            .wait(data, "ptrace::breakpoint_callback", &mut token)
+        {
+            // We successfully waited, wake up!
+            break Some(breakpoint.flags);
+        }
+    }""",
+        """        // The tracer continued us, or a signal is pending. Do not loop:
+        // a pending signal makes wait() return immediately every time and
+        // re-queues events until the 1 MiB kernel heap is exhausted.
+        let _ = session
+            .tracee
+            .wait(data, "ptrace::breakpoint_callback", &mut token);
+        break Some(breakpoint.flags);
+    }""",
+    )
+
+    print("Breakpoint gate and signal-wake semantics patched")
+
+
+def patch_tracee_exit(src_dir):
+    """Notify the tracer when the tracee exits and report EOF as ESRCH."""
+
+    ptrace_file = os.path.join(src_dir, "src/ptrace.rs")
+
+    patch_file(
+        ptrace_file,
+        """pub struct SessionData {
+    pub(crate) breakpoint: Option<Breakpoint>,
+    events: VecDeque<PtraceEvent>,
+    file_id: usize,
+}""",
+        """pub struct SessionData {
+    pub(crate) breakpoint: Option<Breakpoint>,
+    events: VecDeque<PtraceEvent>,
+    closed: bool,
+    file_id: usize,
+}""",
+    )
+
+    patch_file(
+        ptrace_file,
+        """            data: Mutex::new(SessionData {
+                breakpoint: None,
+                events: VecDeque::new(),
+                file_id,
+            }),""",
+        """            data: Mutex::new(SessionData {
+                breakpoint: None,
+                events: VecDeque::new(),
+                closed: false,
+                file_id,
+            }),""",
+    )
+
+    patch_file(
+        ptrace_file,
+        """    /// Poll events, return the amount read. This drains events from the queue.""",
+        """    pub fn is_closed_empty(&self) -> bool {
+        self.closed && self.events.is_empty()
+    }
+
+    /// Poll events, return the amount read. This drains events from the queue.""",
+    )
+
+    patch_file(
+        ptrace_file,
+        """pub fn close_tracee(session: &Session, token: &mut CleanLockToken) {
+    session.tracer.notify(token);
+
+    let data = session.data.lock();
+    proc_trigger_event(data.file_id, EVENT_READ, token);
+}""",
+        """pub fn close_tracee(session: &Session, token: &mut CleanLockToken) {
+    session.data.lock().closed = true;
+    session.tracer.notify(token);
+
+    let data = session.data.lock();
+    proc_trigger_event(data.file_id, EVENT_READ, token);
+}""",
+    )
+
+    process_file = os.path.join(src_dir, "src/syscall/process.rs")
+
+    patch_file(
+        process_file,
+        """    let context_lock = Arc::clone(&*context::current());
+    let (addrspace_opt, mut close_files) = {
+        let mut context = context_lock.write(token.token());
+        let (context, token) = context.token_split();
+        let close_files = Arc::try_unwrap(mem::take(&mut context.files))""",
+        """    let context_lock = Arc::clone(&*context::current());
+    let (addrspace_opt, mut close_files, ptrace_session) = {
+        let mut context = context_lock.write(token.token());
+        let (context, token) = context.token_split();
+        let ptrace_session = context.ptrace_session.take().and_then(|weak| weak.upgrade());
+        let close_files = Arc::try_unwrap(mem::take(&mut context.files))""",
+    )
+
+    patch_file(
+        process_file,
+        """        (addrspace_opt, close_files)
+    };""",
+        """        (addrspace_opt, close_files, ptrace_session)
+    };""",
+    )
+
+    patch_file(
+        process_file,
+        """    // TODO: Should status == Status::HardBlocked be handled differently?
+    let owner = {""",
+        """    if let Some(session) = ptrace_session.as_ref() {
+        crate::ptrace::close_tracee(session, token);
+    }
+    // TODO: Should status == Status::HardBlocked be handled differently?
+    let owner = {""",
+    )
+
+    print("Tracee exit notification patched")
+
+
 def patch_all(src_dir):
     patch_context_struct(src_dir)
     patch_context_switch(src_dir)
     patch_proc_scheme(src_dir)
+    patch_breakpoint_semantics(src_dir)
+    patch_tracee_exit(src_dir)
     print("\nAll ptrace proc handle patches applied successfully")
 
 

@@ -38,19 +38,23 @@ replace(
 replace(
     main,
     "    e(syscall::kill(e(syscall::getpid())?, syscall::SIGSTOP))?;",
-    "    e_libc(unsafe { libc::kill(libc::getpid(), libc::SIGSTOP) })?;",
+    "    // Let the tracer attach without a stop/continue signal pair: SIGCONT\n"
+    "    // left pending in the tracee spuriously wakes futex waiters.\n"
+    "    unsafe { libc::usleep(500_000); }",
 )
 
 replace(
     main,
     "    e(syscall::waitpid(pid, &mut status, syscall::WUNTRACED))?;",
-    "    e_libc(unsafe { libc::waitpid(pid as libc::pid_t, &mut status, libc::WUNTRACED) })?;",
+    "    // The child sleeps briefly instead of stopping; attach directly.",
 )
 
 replace(
     main,
     "    e(syscall::kill(pid, syscall::SIGCONT))?;",
-    "    e_libc(unsafe { libc::kill(pid as libc::pid_t, libc::SIGCONT) })?;",
+    "    // The kernel resumes the tracee when the tracer writes trace flags.\n"
+    "    // Sending SIGCONT here leaves a pending signal and spuriously wakes\n"
+    "    // futex waiters in the tracee, which can spin in relibc.",
 )
 
 replace(main, "Some(syscall::ESRCH)", "Some(libc::ESRCH)")
