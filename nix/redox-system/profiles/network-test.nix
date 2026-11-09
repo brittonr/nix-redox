@@ -31,8 +31,9 @@ let
   #   7. Routing table has default route
   #   8. Inbound connection (nc listen + connect)
   #
-  # Interface names are PCI-path based (e.g. pci-0000-00-04.0_e1000),
-  # NOT "eth0". We discover the first interface at runtime.
+  # The current netstack exposes a fixed `eth0` entry under
+  # /scheme/netcfg/ifaces and does not implement directory listing there,
+  # so probe the entry directly instead of listing the parent.
   # ==========================================================================
   testScript = ''
     echo ""
@@ -44,23 +45,14 @@ let
     echo ""
 
     # ── Discover first network interface ───────────────────────
-    # Redox uses PCI-path interface names (e.g. pci-0000-00-04.0_e1000).
-    # Wait for any interface to appear in /scheme/netcfg/ifaces/.
+    # netstack exposes a fixed `eth0` entry; directory listing on
+    # /scheme/netcfg/ifaces is not implemented. Poll the entry directly.
     let iface = ""
     let disc_attempts = 0
     while test $disc_attempts -lt 600
-        let candidates = $(ls /scheme/netcfg/ifaces/ ^> /dev/null)
-        if not test $candidates = ""
-            # Take first non-lo entry. Ion has no head — use for loop + break.
-            for name in @split(candidates)
-                if not test $name = "lo"
-                    let iface = $name
-                    break
-                end
-            end
-            if not test $iface = ""
-                break
-            end
+        if exists -f /scheme/netcfg/ifaces/eth0/mac
+            let iface = "eth0"
+            break
         end
         cat /scheme/sys/uname > /dev/null
         cat /scheme/sys/uname > /dev/null
