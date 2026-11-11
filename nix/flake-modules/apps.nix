@@ -421,6 +421,12 @@ in
       meta.description = "Search the generated Redox module options reference";
     };
 
+    redox-install = {
+      type = "app";
+      program = "${self'.packages.redox-install}/bin/redox-install";
+      meta.description = "Write a Redox image to a block device with validation";
+    };
+
     # ── Quick test runners ─────────────────────────────────────────
     # These run subsets of checks for fast iteration.
 

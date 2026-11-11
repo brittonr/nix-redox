@@ -1537,6 +1537,8 @@ in
       redox-help
       ;
 
+    redox-install = import ../pkgs/host/redox-install.nix { hostPkgs = pkgs; };
+
     # Default package is set in system.nix (diskImageGraphical)
   };
 

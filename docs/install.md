@@ -35,7 +35,17 @@ Log in as `user` with password `redox`; `root` uses the same password.
    ```
 
 3. Write it to a USB device. **Double-check the device path**; this destroys
-   the target:
+   the target. The installer validates the image checksum, refuses mounted or
+   undersized devices, and verifies the read-back:
+
+   ```bash
+   nix run .#redox-install -- list
+   sudo nix run .#redox-install -- write \
+     --image redox-graphical.img --device /dev/sdX
+   ```
+
+   It prompts for `WRITE` unless `--yes` is passed. `--dry-run` performs all
+   validation without writing. A traditional `dd` also works:
 
    ```bash
    sudo dd if=redox-graphical.img of=/dev/sdX bs=4M status=progress oflag=sync

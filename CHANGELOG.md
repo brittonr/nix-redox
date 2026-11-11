@@ -18,6 +18,8 @@ All notable changes to this project are documented here. The format follows
   trust, and usage documentation.
 - `redox-rebuild image` and `export`, including SHA-256 output for raw disk images.
 - Installation documentation covering VM, verified USB writing, and guest updates.
+- `redox-install`, a checksum-validating image writer with mounted/undersized
+  device checks, explicit confirmation, dry-run, and read-back verification.
 - Tag release workflow that builds graphical/minimal images, writes checksums,
   and uploads them to the GitHub release.
 

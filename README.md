@@ -240,9 +240,9 @@ snix install ripgrep
 ## Installing
 
 The supported alpha path is a VM; release images can also be written to USB for
-experimental bare-metal boots. See [`docs/install.md`](docs/install.md) for
-verification, USB writing, and the update story. There is no partition wizard
-yet.
+experimental bare-metal boots with `redox-install`. See
+[`docs/install.md`](docs/install.md) for verification, USB writing, and the
+update story. There is no partition wizard yet.
 
 ## Binary cache
 
