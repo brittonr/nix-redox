@@ -3,6 +3,7 @@
 [![CI](https://github.com/brittonr/nix-redox/actions/workflows/ci.yml/badge.svg)](https://github.com/brittonr/nix-redox/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Nix Flakes](https://img.shields.io/badge/Nix-flakes-5277C3?logo=nixos&logoColor=white)](https://nixos.org)
+[![Website](https://img.shields.io/badge/website-nix--redox-63b3ed)](https://brittonr.github.io/nix-redox/)
 
 **A complete [Redox OS](https://www.redox-os.org/) distribution, built from source with Nix. One command boots a graphical Redox desktop.**
 

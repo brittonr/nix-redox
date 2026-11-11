@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>nix-redox — Redox OS, built with Nix</title>
+  <meta name="description" content="A complete Redox OS distribution built from source with Nix. One command boots a graphical Redox desktop.">
+  <meta property="og:title" content="nix-redox — Redox OS, built with Nix">
+  <meta property="og:description" content="A complete Redox OS distribution built from source with Nix. One command boots a graphical Redox desktop.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://brittonr.github.io/nix-redox/">
+  <meta property="og:image" content="https://brittonr.github.io/nix-redox/assets/orbital-social.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="canonical" href="https://brittonr.github.io/nix-redox/">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b3a5b'/%3E%3Ctext x='32' y='46' font-family='system-ui,sans-serif' font-size='42' font-weight='700' text-anchor='middle' fill='%23ffffff'%3ER%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-header">
+    <div class="wrap header-inner">
+      <a class="brand" href="/nix-redox/">
+        <span class="brand-mark">R</span>
+        <span>nix-redox</span>
+      </a>
+      <nav aria-label="Primary">
+        <a href="#quick-start">Quick start</a>
+        <a href="#features">Features</a>
+        <a href="https://github.com/brittonr/nix-redox#documentation">Docs</a>
+        <a href="https://github.com/brittonr/nix-redox/discussions">Community</a>
+        <a class="nav-cta" href="https://github.com/brittonr/nix-redox">GitHub</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <div class="wrap hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow">Alpha · Redox OS · Nix flakes</p>
+          <h1>Redox OS,<br>built from source.</h1>
+          <p class="lede">
+            A complete Redox distribution assembled with Nix: kernel, bootloader,
+            libc, userspace, and the Orbital desktop. One command gets you a
+            running desktop; every component is reproducible from source.
+          </p>
+          <div class="actions">
+            <a class="button primary" href="#quick-start">Quick start</a>
+            <a class="button" href="https://github.com/brittonr/nix-redox/releases/tag/v0.1.0-alpha">Release notes</a>
+            <a class="button ghost" href="https://github.com/brittonr/nix-redox">Source</a>
+          </div>
+          <p class="note">x86_64 Linux host · KVM · ~10 GB · graphical display for the desktop runner</p>
+        </div>
+        <figure class="hero-shot">
+          <img src="assets/orbital-login.png" alt="Orbital login screen on Redox OS" width="1280" height="800">
+          <figcaption>Orbital on Redox, built and booted entirely with Nix.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="quick-start" class="section">
+      <div class="wrap">
+        <h2>Quick start</h2>
+        <p class="section-lede">Boot the graphical desktop directly from the flake.</p>
+        <div class="terminal" role="group" aria-label="Quick start command">
+          <div class="terminal-bar"><span></span><span></span><span></span></div>
+          <pre><code><span class="prompt">$</span> nix run github:brittonr/nix-redox</code></pre>
+        </div>
+        <p class="fine">Log in as <code>user</code> with password <code>redox</code>. The first build compiles the OS; later runs reuse the store. Use <code>nix run .#headless</code> without a display.</p>
+      </div>
+    </section>
+
+    <section id="features" class="section alt">
+      <div class="wrap">
+        <h2>What is in the image</h2>
+        <div class="cards">
+          <article class="card">
+            <h3>Source-built OS</h3>
+            <p>UEFI bootloader, Redox kernel, initfs, relibc, base daemons, userspace, and Orbital — all Nix derivations.</p>
+          </article>
+          <article class="card">
+            <h3>Declarative system</h3>
+            <p>Composable modules for users, networking, services, hardware, and image assembly. Search the option surface with <code>redox-help</code>.</p>
+          </article>
+          <article class="card">
+            <h3>Self-hosting</h3>
+            <p>The self-hosting image ships rustc, cargo, LLVM/LLD, and <code>snix</code>; compile and manage the system from inside Redox.</p>
+          </article>
+          <article class="card">
+            <h3>Generations and rollback</h3>
+            <p><code>redox-rebuild</code> tracks host-side builds; <code>snix system rebuild</code> and generations handle live guest changes.</p>
+          </article>
+          <article class="card">
+            <h3>Reproducible by default</h3>
+            <p>Pinned inputs, per-crate builds, fixed-output sources, and a tiered CI gate from evaluation to VM integration.</p>
+          </article>
+          <article class="card">
+            <h3>Honest alpha</h3>
+            <p>VM, declarative configuration, self-hosting, and image workflows are exercised. Bare metal and some networking paths are experimental.</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="wrap split">
+        <div>
+          <h2>Included</h2>
+          <ul class="checklist">
+            <li>ion shell, bash, uutils, binutils, findutils</li>
+            <li>helix, sodium, smith</li>
+            <li>ripgrep, fd, bat, hexyl, zoxide, dust, lsd, bottom, tokei</li>
+            <li>smolnetd TCP/IP stack, dhcpd, ping, nc, curl</li>
+            <li>git, make, diffutils, sed, patch, strace</li>
+            <li>Orbital, orbterm, orbutils, orbdata <span class="muted">(graphical)</span></li>
+            <li>rustc, cargo, LLVM/LLD, cmake <span class="muted">(self-hosting)</span></li>
+          </ul>
+        </div>
+        <div>
+          <h2>Explore</h2>
+          <ul class="links">
+            <li><a href="https://github.com/brittonr/nix-redox#readme">README and commands</a></li>
+            <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/install.md">Install and USB writing</a></li>
+            <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/options.md">Module options reference</a></li>
+            <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/redox-rebuild.md">Host-side generations</a></li>
+            <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/alpha-release.md">Alpha scope and limitations</a></li>
+            <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/self-hosting/proof-artifacts.md">Self-hosting proof contract</a></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section class="section alt">
+      <div class="wrap cta">
+        <h2>Build a Redox desktop with one command.</h2>
+        <div class="actions">
+          <a class="button primary" href="https://github.com/brittonr/nix-redox">View on GitHub</a>
+          <a class="button" href="https://github.com/brittonr/nix-redox/discussions">Discussions</a>
+          <a class="button ghost" href="https://github.com/brittonr/nix-redox/releases">Releases</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="wrap footer-inner">
+      <p><strong>nix-redox</strong> · MIT licensed · alpha software</p>
+      <p>
+        <a href="https://www.redox-os.org/">Redox OS</a> ·
+        <a href="https://github.com/brittonr/nix-redox">GitHub</a> ·
+        <a href="https://github.com/brittonr/nix-redox/security/advisories/new">Security</a>
+      </p>
+    </div>
+  </footer>
+</body>
+</html>
