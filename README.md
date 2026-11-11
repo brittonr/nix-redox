@@ -237,6 +237,13 @@ nix run .#push-to-redox -- ripgrep fd bat  # push from the host
 snix install ripgrep
 ```
 
+## Installing
+
+The supported alpha path is a VM; release images can also be written to USB for
+experimental bare-metal boots. See [`docs/install.md`](docs/install.md) for
+verification, USB writing, and the update story. There is no partition wizard
+yet.
+
 ## Binary cache
 
 A public Cachix workflow is included but gated on repository configuration.
@@ -276,6 +283,7 @@ and evidence rules.
 - [`docs/binary-cache.md`](docs/binary-cache.md) — Cachix setup, trust and usage
 - [`docs/nixos-integration.md`](docs/nixos-integration.md) — NixOS module options and VM service
 - [`docs/releases.md`](docs/releases.md) — tag, image assets and verification
+- [`docs/install.md`](docs/install.md) — VM, USB writing, verification and updates
 - [`docs/redox-substrate.md`](docs/redox-substrate.md) — external system-layer API
 - [`docs/self-hosting/proof-artifacts.md`](docs/self-hosting/proof-artifacts.md) — proof capture contract
 - [`docs/syscall-debugging.md`](docs/syscall-debugging.md) — kernel syscall tracing

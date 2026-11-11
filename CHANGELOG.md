@@ -17,6 +17,7 @@ All notable changes to this project are documented here. The format follows
 - Gated Cachix workflow (`.github/workflows/cache.yml`) and binary-cache setup,
   trust, and usage documentation.
 - `redox-rebuild image` and `export`, including SHA-256 output for raw disk images.
+- Installation documentation covering VM, verified USB writing, and guest updates.
 - Tag release workflow that builds graphical/minimal images, writes checksums,
   and uploads them to the GitHub release.
 
