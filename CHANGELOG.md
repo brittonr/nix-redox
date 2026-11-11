@@ -24,6 +24,8 @@ All notable changes to this project are documented here. The format follows
 - Static marketing landing page and GitHub Pages deployment workflow.
 - Troubleshooting guide for dead host substituters/build farms, direnv fallback,
   and expected headless boot warnings.
+- Public `nix-redox` Cachix cache wired into the flake, docs, and CI (publishing
+  still requires the `CACHIX_AUTH_TOKEN` secret).
 - Tag release workflow that builds graphical/minimal images, writes checksums,
   and uploads them to the GitHub release.
 

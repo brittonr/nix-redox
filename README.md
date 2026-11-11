@@ -247,9 +247,10 @@ update story. There is no partition wizard yet.
 
 ## Binary cache
 
-A public Cachix workflow is included but gated on repository configuration.
-Until it is enabled, builds are source-only. To enable or consume the cache,
-see [`docs/binary-cache.md`](docs/binary-cache.md).
+The project cache is `nix-redox`:
+`https://nix-redox.cachix.org`. The flake declares it in `nixConfig`; CI
+publishing additionally needs a `CACHIX_AUTH_TOKEN` repository secret. See
+[`docs/binary-cache.md`](docs/binary-cache.md).
 
 ## Testing
 

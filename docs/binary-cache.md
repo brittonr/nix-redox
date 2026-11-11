@@ -1,23 +1,30 @@
 # Binary cache
 
 A public binary cache is the difference between a multi-hour source build and a
-few minutes of downloads. The repository includes a gated Cachix workflow; it
-is inactive until the repository variable and secret below are configured.
+few minutes of downloads.
+
+The project cache is **`nix-redox`**:
+
+- Substituter: `https://nix-redox.cachix.org`
+- Public key: `nix-redox.cachix.org-1:d0dvP2sgt2k2M3MRT6lHm4S0AMAtOP6yiuvSDF8Khuc=`
+
+The flake declares this cache in `nixConfig`; accept the flake configuration or
+use `cachix use nix-redox`. The GitHub workflow can also push, but needs an
+auth token.
 
 ## Enable the workflow
 
-1. Create a Cachix cache for the project, for example `nix-redox`.
-2. Add a repository variable:
-   - **Settings → Secrets and variables → Actions → Variables**
-   - `CACHIX_CACHE_NAME` = the cache name
-3. Add a repository secret:
-   - `CACHIX_AUTH_TOKEN` = a Cachix auth token with write access
-4. Run the **Binary cache** workflow, or push to `main`.
+The cache name is already set as the `CACHIX_CACHE_NAME` repository variable.
+To enable publishing:
 
-The workflow builds `.#redox-minimal` and `.#redox-graphical` under
-`cachix watch-exec`, which uploads their closures. It starts only when
-`CACHIX_CACHE_NAME` is set; missing credentials fail the job rather than
-silently skipping cache publication.
+1. Create a Cachix auth token with write access to `nix-redox`.
+2. Add **Settings → Secrets and variables → Actions → Secrets** →
+   `CACHIX_AUTH_TOKEN`.
+3. Run the **Binary cache** workflow, or push to `main`.
+
+The workflow checks for the token first. Without it, it logs a warning and
+skips cleanly; with it, it builds `.#redox-minimal` and `.#redox-graphical`
+under `cachix watch-exec` and uploads their closures.
 
 ## Use the cache
 
@@ -28,13 +35,13 @@ cachix use nix-redox
 nix run github:brittonr/nix-redox
 ```
 
-Or pass the substituter explicitly. The public key is shown by Cachix when the
-cache is created:
+Or accept the flake's cache configuration and pass the substituter explicitly:
 
 ```bash
 nix build \
+  --accept-flake-config \
   --extra-substituters https://nix-redox.cachix.org \
-  --extra-trusted-public-keys "<cache-public-key>" \
+  --extra-trusted-public-keys "nix-redox.cachix.org-1:d0dvP2sgt2k2M3MRT6lHm4S0AMAtOP6yiuvSDF8Khuc=" \
   github:brittonr/nix-redox
 ```
 
@@ -45,7 +52,7 @@ module:
 programs.redox = {
   enable = true;
   binaryCacheUrl = "https://nix-redox.cachix.org";
-  binaryCachePublicKey = "<cache-public-key>";
+  binaryCachePublicKey = "nix-redox.cachix.org-1:d0dvP2sgt2k2M3MRT6lHm4S0AMAtOP6yiuvSDF8Khuc=";
 };
 ```
 

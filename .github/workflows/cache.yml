@@ -19,20 +19,36 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 360
     steps:
+      - name: Check Cachix credentials
+        id: creds
+        env:
+          TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::CACHIX_AUTH_TOKEN is not configured; skipping cache push"
+          fi
+
       - uses: actions/checkout@v4
+        if: steps.creds.outputs.run == 'true'
 
       - uses: cachix/install-nix-action@v30
+        if: steps.creds.outputs.run == 'true'
         with:
           extra_nix_config: |
             experimental-features = nix-command flakes
             accept-flake-config = true
 
       - uses: cachix/cachix-action@v15
+        if: steps.creds.outputs.run == 'true'
         with:
           name: ${{ vars.CACHIX_CACHE_NAME }}
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Build and push the minimal and graphical images
+        if: steps.creds.outputs.run == 'true'
         env:
           CACHE: ${{ vars.CACHIX_CACHE_NAME }}
         run: |

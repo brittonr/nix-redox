@@ -6,6 +6,13 @@
     nix build — Build the disk image
   '';
 
+  nixConfig = {
+    extra-substituters = [ "https://nix-redox.cachix.org" ];
+    extra-trusted-public-keys = [
+      "nix-redox.cachix.org-1:d0dvP2sgt2k2M3MRT6lHm4S0AMAtOP6yiuvSDF8Khuc="
+    ];
+  };
+
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
