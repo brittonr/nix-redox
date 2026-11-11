@@ -214,6 +214,7 @@ let
     dust-cross = packages.dust;
     hexyl-cross = packages.hexyl;
     shellharden-cross = packages.shellharden;
+    tree-cross = packages.tree;
     smith-cross = packages.smith;
     exampled-cross = packages.exampled;
     tokei-cross = packages.tokei;

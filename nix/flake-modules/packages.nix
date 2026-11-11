@@ -1016,6 +1016,7 @@ let
   redox-libiconv = import ../pkgs/userspace/libiconv-redox.nix cLibCommon;
 
   redox-bzip2 = import ../pkgs/userspace/bzip2-redox.nix cLibCommon;
+  tree = import ../pkgs/userspace/tree-redox.nix cLibCommon;
 
   redox-lz4 = import ../pkgs/userspace/lz4-redox.nix cLibCommon;
 
@@ -1475,6 +1476,7 @@ in
       # Tier 1 foundation libraries
       redox-libiconv
       redox-bzip2
+      tree
       redox-lz4
       redox-xz
       redox-libffi

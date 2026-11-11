@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Cross-compiled `tree` package, included in the development profile and the
+  cross check tier.
+
 ## [0.1.1-alpha] - 2026-11-11
 
 ### Added

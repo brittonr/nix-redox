@@ -70,7 +70,7 @@ filesystem.
 | **Utilities** | uutils, binutils, extrautils, findutils |
 | **Editors** | helix, sodium, smith |
 | **Networking** | smolnetd TCP/IP stack, dhcpd, ping, nc, curl |
-| **CLI tools** | ripgrep, fd, bat, hexyl, zoxide, dust, lsd, bottom, tokei |
+| **CLI tools** | ripgrep, fd, bat, hexyl, zoxide, dust, lsd, bottom, tokei, tree |
 | **Development** | gnu-make, git, diffutils, sed, patch, strace |
 | **Packages** | snix: Nix evaluation and builds running on Redox |
 | **Graphics** | Orbital, orbterm, orbutils, orbdata *(graphical image)* |
