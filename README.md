@@ -1,108 +1,114 @@
-# Redox OS — Built with Nix
+# nix-redox
 
-A complete [Redox OS](https://www.redox-os.org/) built entirely from source
-using Nix. One command gets you a running Redox desktop.
+[![CI](https://github.com/brittonr/nix-redox/actions/workflows/ci.yml/badge.svg)](https://github.com/brittonr/nix-redox/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Nix Flakes](https://img.shields.io/badge/Nix-flakes-5277C3?logo=nixos&logoColor=white)](https://nixos.org)
 
-## Alpha Status
+**A complete [Redox OS](https://www.redox-os.org/) distribution, built from source with Nix. One command boots a graphical Redox desktop.**
 
-This tree is being prepared as an alpha-quality Redox/Nix distribution:
-the VM build/run path, declarative system assembly, on-guest `snix` workflows,
-and self-hosting proofs are in scope; bare-metal board support and some
-networking paths remain experimental. See `docs/alpha-release.md` for the
-release gate, evidence rules, and known limitations.
+![Orbital login screen on Redox OS](docs/assets/screenshots/orbital-login.png)
 
-## Run It
+> **Alpha status.** The VM build/run path, declarative system assembly, on-guest
+> `snix` workflows, and self-hosting proofs are exercised. Bare-metal board
+> support and some networking paths remain experimental. See
+> [`docs/alpha-release.md`](docs/alpha-release.md) for the release gate,
+> supported scope, and known limitations.
+
+## Quick start
+
+Requirements: an `x86_64-linux` host with Nix flakes enabled, KVM access
+(`/dev/kvm`), roughly 10 GB of disk space, and a graphical display for the
+desktop runner.
 
 ```bash
-nix run github:brittonr/redox
+nix run github:brittonr/nix-redox
 ```
 
-That builds everything from source and boots a graphical Redox VM in QEMU.
-Login: `user` / `redox` (or `root` / `redox`).
+The first run builds the full operating system from source. Later runs reuse
+cached artifacts. Log in as **`user`** with password **`redox`** (the `root`
+account uses the same password).
 
-First build takes a while (cross-compiling the full OS). Subsequent runs
-use cached artifacts.
+From a checkout, use `nix run .`. Without a display, use `nix run .#headless`.
 
-From a local checkout, run `nix run .`. The graphical launcher requires an
-`x86_64-linux` host with access to `/dev/kvm` and an X11 or Wayland display.
-Use `nix run .#headless` when no graphical display is available.
-The QEMU launchers discard inherited `LD_LIBRARY_PATH` overrides so their pinned
-host libraries stay consistent, and the graphical launcher propagates emulator
-startup and runtime failures instead of reporting a successful exit.
+```bash
+git clone https://github.com/brittonr/nix-redox
+cd nix-redox
+nix run .                    # graphical desktop (QEMU + GTK)
+nix run .#headless           # serial console only (Cloud Hypervisor)
+nix run .#run-redox-minimal  # ion shell + uutils
+nix run .#run-redox-self-hosting  # includes rustc, cargo and LLVM
+```
 
-To use `nix run redox` from any directory, register this checkout once:
+**Exit:** close the QEMU window (graphical) · `Ctrl+C` (headless) ·
+`Ctrl+A X` (QEMU headless).
+
+To run `nix run redox` from any directory, register the checkout once:
 
 ```bash
 nix registry add redox "git+file://$PWD"
 nix run redox
 ```
 
-The alias follows this local checkout, including tracked working-tree changes.
-
-### Other ways to run
-
-```bash
-nix run .#graphical     # Graphical desktop (QEMU + GTK) — the default
-nix run .#headless      # Serial console only (Cloud Hypervisor, faster)
-nix run .#run-redox-minimal      # Bare minimum: ion shell + uutils
-nix run .#run-redox-self-hosting # With Rust toolchain for on-guest compilation
-```
-
-**Exit:** Close the QEMU window (graphical) · `Ctrl+C` (headless) · `Ctrl+A X` (QEMU headless)
-
-Cloud Hypervisor runners default to buffered disk I/O. `CH_DIRECT_IO=on`
-remains an opt-in override, but prevented the pinned firmware from finding
-the bootable disk in the verified run; leave it unset for normal boots.
-
 ### Build the disk image
 
 ```bash
-nix build              # Graphical disk image (default)
-nix build .#diskImage  # Development image (no graphics)
+nix build              # graphical disk image (default)
+nix build .#diskImage  # development image without graphics
 ```
 
-The image is a GPT disk with a UEFI boot partition and RedoxFS root filesystem.
+The result is a GPT disk with a UEFI boot partition and a RedoxFS root
+filesystem.
 
-## What's in the Image
+## What you get
 
-| Category | Packages |
+| Category | Included |
 |---|---|
-| **Boot** | bootloader, kernel, initfs |
-| **System** | 46 base daemons/drivers, relibc (C library) |
+| **Boot** | UEFI bootloader, kernel, initfs |
+| **System** | Redox base daemons and drivers, relibc C library |
 | **Shell** | ion (default), bash |
-| **Coreutils** | uutils, binutils, extrautils, findutils |
+| **Utilities** | uutils, binutils, extrautils, findutils |
 | **Editors** | helix, sodium, smith |
-| **Network** | smolnetd (TCP/IP stack), dhcpd, ping, nc, curl |
-| **CLI Tools** | ripgrep, fd, bat, hexyl, zoxide, dust, lsd, bottom, tokei |
-| **Dev Tools** | gnu-make, git, diffutils, sed, patch, strace |
-| **Package Manager** | snix (Nix evaluator + builder running on Redox) |
-| **Graphics** | orbital, orbterm, orbutils, orbdata *(graphical image)* |
-| **Self-Hosting** | rustc, cargo, LLVM/LLD, cmake *(self-hosting image only)* |
+| **Networking** | smolnetd TCP/IP stack, dhcpd, ping, nc, curl |
+| **CLI tools** | ripgrep, fd, bat, hexyl, zoxide, dust, lsd, bottom, tokei |
+| **Development** | gnu-make, git, diffutils, sed, patch, strace |
+| **Packages** | snix: Nix evaluation and builds running on Redox |
+| **Graphics** | Orbital, orbterm, orbutils, orbdata *(graphical image)* |
+| **Self-hosting** | rustc, cargo, LLVM/LLD, cmake *(self-hosting image)* |
 
-## How It Works
+## How it works
 
-Every component is a Nix derivation built from source — no binary blobs, no
-upstream Makefile/cookbook. The build has three layers:
+```mermaid
+flowchart LR
+  F[flake.nix] --> M[System modules]
+  F --> P[Packages]
+  P --> B[bootloader, kernel, initfs]
+  P --> U[base daemons, userspace, Orbital]
+  M --> R[root tree and /etc]
+  B --> I[GPT disk image]
+  U --> I
+  R --> I
+  I --> V[QEMU or Cloud Hypervisor]
+```
 
-1. **Bootstrap** — relibc (13 patches), kernel, bootloader. Cross-compiled
-   with `-Z build-std` since they ARE the standard library.
+Every image component is a Nix derivation built from source, with no upstream
+Makefile or cookbook in the build path. The build has three layers:
 
-2. **Userspace** — 70+ packages. Rust crates are split into per-crate
-   derivations via [unit2nix](https://github.com/brittonr/unit2nix) for
-   granular caching. C libraries use a clang cross-compiler with relibc
-   as the sysroot.
+1. **Bootstrap** — relibc, kernel, and bootloader, cross-compiled with
+   `-Z build-std` because they provide Redox's standard library.
+2. **Userspace** — Rust crates split into per-crate derivations through
+   [unit2nix](https://github.com/brittonr/unit2nix) for granular caching. C
+   libraries use a clang cross-compiler with relibc as the sysroot.
+3. **Assembly** — a NixOS-style module system evaluates the configuration and
+   produces the root tree, initfs, and bootable disk image.
 
-3. **Assembly** — A NixOS-style module system (17 modules) evaluates the
-   config and produces the root tree, initfs, and bootable disk image.
+External system-layer consumers can target the public substrate surface at
+`legacyPackages.${system}.redoxSubstrate`. See
+[`docs/redox-substrate.md`](docs/redox-substrate.md) for the manifest, plan
+shape, builder shell, and Redox/OnixOS boundary.
 
-External system-layer consumers should target the public substrate surface at
-`legacyPackages.${system}.redoxSubstrate`, not private flake-module internals or
-Adios path-keyed profiles. See `docs/redox-substrate.md` for the manifest,
-primitive plan shape, builder shell, and Redox/OnixOS boundary.
+### Declarative configuration
 
-### NixOS-style Configuration
-
-Profiles are declarative, composable Nix expressions:
+Profiles are composable Nix expressions:
 
 ```nix
 # profiles/my-server.nix
@@ -121,10 +127,11 @@ Profiles are declarative, composable Nix expressions:
   };
 
   "/users".users.admin = {
-    uid = 1001; gid = 1001;
+    uid = 1001;
+    gid = 1001;
     home = "/home/admin";
     shell = "/bin/ion";
-    password = "changeme";
+    password = "changeme"; # change this before exposing a system
     createHome = true;
   };
 
@@ -139,94 +146,50 @@ Profiles are declarative, composable Nix expressions:
 }
 ```
 
-Profiles compose with `//` — the graphical profile extends the development
-profile, which extends the base.
+Profiles compose with `//`: the graphical profile extends the development
+profile, which extends the base profile.
 
-### System Management (on-guest)
+### Managing the system on-guest
 
-Once booted, `snix` manages the running system like `nixos-rebuild`:
+Once booted, `snix` manages the running system in the style of
+`nixos-rebuild`:
 
 ```bash
-snix system rebuild          # Apply configuration.nix changes
+snix system rebuild            # apply configuration.nix changes
 snix system rebuild --dry-run
-snix system generations      # List system generations
-snix system switch --rollback # Roll back to previous state
-snix system gc               # Garbage collect old generations
-snix install ripgrep         # Install a package from the binary cache
+snix system generations        # list system generations
+snix system switch --rollback  # roll back to the previous generation
+snix system gc                 # garbage-collect old generations
+snix install ripgrep           # install a package from the binary cache
 ```
 
-## Testing
+## Self-hosting
 
-Use tiered release gates for normal validation:
-
-```bash
-nix run .#test-quick  # module eval, type, artifact, and library checks
-nix run .#test-host   # quick tier plus host tools and snix host tests
-nix run .#test-cross  # host tier plus cross-compiled Redox packages
-nix run .#test-vm     # fast VM integration tier: boot, functional, schemes, bridge
-```
-
-Focused VM suites remain available when touching their subsystem:
-
-```bash
-nix run .#functional-test
-nix run .#bridge-test
-nix run .#rebuild-generations-test
-nix run .#e2e-rebuild-test
-nix run .#network-test
-nix run .#snix-sandbox-test -- --verbose
-nix run .#self-hosting-test -- --verbose
-```
-
-Run `nix flake check` as the final aggregate gate for a release candidate.
-See `docs/alpha-release.md` for the full alpha checklist and proof-artifact
-rules.
-
-## Build Bridge
-
-Push packages from the host to a running VM without rebuilding disk images:
-
-```bash
-nix run .#run-redox-shared                    # Boot VM with shared filesystem
-nix run .#push-to-redox -- ripgrep fd bat     # Push from host
-# Inside guest:
-snix install ripgrep
-```
-
-## Self-Hosting
-
-The self-hosting image includes a full Rust toolchain cross-compiled for Redox:
+The self-hosting image carries a full Rust toolchain cross-compiled for Redox:
 
 ```bash
 nix run .#run-redox-self-hosting
-# Inside guest:
-mkdir hello && cd hello
-cargo init
-cargo build    # compiles natively on Redox
 ```
 
-`snix build .#ripgrep` works — Nix derivation evaluation and building, on Redox.
+Inside the guest:
 
-The self-hosting regression suite checks that standard and realtime signals preserve
-the interrupted register state. The loader also initializes its own data GOT slots
-before loading compilers that embed libc; otherwise compiler startup can fault before
-`main`, even for `rustc --version`.
-Embedded libc constructors also preserve an existing worker's pthread state when
-loading proc-macros, so worker teardown cannot unmap the original main stack.
+```bash
+mkdir hello && cd hello
+cargo init
+cargo build      # compiles natively on Redox
+snix build .#ripgrep
+```
 
-A focused rebuilt-image smoke on 2026-11-06 passed native Rust and Cargo
-compile/run, distinct compile-time/runtime environment propagation, proc-macro
-loading and consumer execution, and the two-stage native C signal regression.
-The rebuilt graphical image also passed login and terminal input. Capture:
-`/var/tmp/redox-self-hosting-captures/20261106T161020-runtime-loader-smoke/`.
-This was focused runtime verification, not a full self-hosting suite run.
+The regression suite covers native Rust and Cargo builds, proc-macro loading,
+environment propagation, signal delivery, and the system rebuild path. See
+[`docs/self-hosting/proof-artifacts.md`](docs/self-hosting/proof-artifacts.md)
+for the proof contract and artifact layout.
 
 ### Native system rebuilds
 
 `systemSource` selects a guest-local system derivation instead of the Linux
-build bridge. In a self-hosting image, stage `native-system-source-bundle` at
-`/usr/src/nix-redox` and `native-kernel-rebuild-bundle` at
-`/usr/src/native-kernel-rebuild`. Both bundles are flake package outputs.
+build bridge. Stage `native-system-source-bundle` at `/usr/src/nix-redox` and
+`native-kernel-rebuild-bundle` at `/usr/src/native-kernel-rebuild`, then set:
 
 ```nix
 # /etc/redox-system/configuration.nix
@@ -237,66 +200,95 @@ build bridge. In a self-hosting image, stage `native-system-source-bundle` at
 }
 ```
 
-Run `snix system rebuild` normally. `systemSource` also applies to `--local`
-and `--source`; `packageSources` remains available for native package
-derivations. The source expression accepts `{ config, currentManifest }` and
-returns a derivation containing `manifest.json`, boot artifacts, an etc source,
-and optional `root-files` for mutable rootfs files.
+Run `snix system rebuild` normally. The staged graph builds the kernel, UEFI
+bootloader, initfs tools, initfs, etc tree, and generation identity on Redox,
+offline, and only a successful graph build reaches activation. Generations keep
+their boot artifacts and GC roots for rollback.
 
-The staged graph builds the kernel, UEFI bootloader, initfs archive tools,
-initfs, etc tree, and generation identity on Redox, offline. Existing packages
-provide the bootstrap/toolchain; source packages join the same dependency graph.
-Initfs, PCI configuration, and init units reuse the host system renderers.
-Newly imported literal-path and `builtins.toFile` inputs are materialized in
-`/nix/store` before native builders run. Publication preserves file contents,
-executability, and symlinks, and registers source metadata for store references.
-Dry runs evaluate the graph without publishing those imported inputs.
-Evaluation failures report the innermost Nix source diagnostic instead of
-repeatedly dumping the generated manifest expression as trace frames.
+## Build bridge
 
-Only a successful graph build reaches activation. Generations retain their
-boot/identity/etc GC roots and original init-unit contents for rollback.
-
-The focused acceptance image exercises offline native rebuild, failed-build
-isolation, then three firmware boots on one disk: seed → native → exact previous
-generation.
+Push packages to a running VM without rebuilding a disk image:
 
 ```bash
-TMPDIR=/var/tmp nix run .#native-rebuild-test -- --verbose
+nix run .#run-redox-shared                 # boot with a shared filesystem
+nix run .#push-to-redox -- ripgrep fd bat  # push from the host
+# inside the guest:
+snix install ripgrep
 ```
 
-The host harness installs the selected EFI bytes extracted from that guest disk
-into its ESP before each restart; this is not a production guest ESP installer.
-Executing bootloader/kernel/initfs identities must match the selected generation
-after both restarts. Rollback checks restored configuration, service units, boot
-bytes, and native GC roots. Captures retain all three boot logs and identities;
-see [`docs/self-hosting/proof-artifacts.md`](docs/self-hosting/proof-artifacts.md).
+## Testing
 
+Tiered release gates:
 
-## Requirements
+| Command | Scope |
+|---|---|
+| `nix run .#test-quick` | module eval, type, artifact, and library checks |
+| `nix run .#test-host` | quick tier plus host tools and snix host tests |
+| `nix run .#test-cross` | host tier plus cross-compiled Redox packages |
+| `nix run .#test-vm` | fast VM integration: boot, functional, schemes, bridge |
 
-- Nix with flakes enabled
-- KVM support (for VM acceleration)
-- ~10 GB disk space for a full build
-- GTK for graphical mode (headless works without)
+Focused suites remain available when touching their subsystem:
 
-## Structure
-
+```bash
+nix run .#functional-test
+nix run .#network-test
+nix run .#bridge-test
+nix run .#snix-sandbox-test -- --verbose
+nix run .#self-hosting-test -- --verbose
 ```
-flake.nix                  Entry point
-nix/
-  flake-modules/           Flake outputs (packages, apps, checks)
-  pkgs/system/             Core: relibc, kernel, bootloader, base (46 daemons)
-  pkgs/userspace/          70+ packages: ion, helix, ripgrep, snix, rustc, ...
-  pkgs/infrastructure/     VM runners, test harnesses, build bridge
-  redox-system/
-    modules/               17 NixOS-style modules (environment, networking, ...)
-    profiles/              Preset configurations (minimal, development, graphical, ...)
-snix-redox/                snix source (Nix evaluator/builder for Redox)
-```
+
+Run `nix flake check` as the final aggregate gate for a release candidate.
+[`docs/alpha-release.md`](docs/alpha-release.md) describes the full checklist
+and evidence rules.
+
+## Documentation
+
+- [`docs/alpha-release.md`](docs/alpha-release.md) — alpha scope, gates, known limitations
+- [`docs/redox-substrate.md`](docs/redox-substrate.md) — external system-layer API
+- [`docs/self-hosting/proof-artifacts.md`](docs/self-hosting/proof-artifacts.md) — proof capture contract
+- [`docs/syscall-debugging.md`](docs/syscall-debugging.md) — kernel syscall tracing
+- [`docs/bare-metal-lattepanda-mu.md`](docs/bare-metal-lattepanda-mu.md) — experimental bare-metal notes
+- [`docs/redox-book/`](docs/redox-book/) — mirrored Redox architecture documentation
+
+## Project status
+
+Supported for alpha:
+
+- `x86_64-linux` hosts with Nix flakes and KVM.
+- `nix run .#graphical` (QEMU desktop) and `nix run .#headless` (serial console).
+- Disk-image builds, declarative configuration, on-guest `snix system rebuild`,
+  generations and rollback, and package install/remove via the build bridge.
+- The self-hosting image and guest-native compilation.
+
+Experimental:
+
+- Bare-metal profiles (GMKtec, LattePanda, N100 class hardware).
+- I225/I226 networking and netcfg autoconfiguration outside validated hardware.
+- `aarch64-linux` outputs unless explicitly validated for a release candidate.
+
+## Contributing
+
+Contributions are welcome. Start with
+[`CONTRIBUTING.md`](CONTRIBUTING.md), run `nix develop`, and use the tiered
+tests above. Please keep build evidence reproducible and remove local
+credentials or machine-specific paths from logs before posting them.
+
+## Security
+
+Report vulnerabilities privately through
+[GitHub Security Advisories](https://github.com/brittonr/nix-redox/security/advisories/new)
+or `b@robitzs.ch`. Do not open a public issue for an unfixed vulnerability.
+See [`SECURITY.md`](SECURITY.md).
+
+## License
+
+This repository is released under the [MIT License](LICENSE). Components built
+from upstream projects retain their own licenses; Redox OS is predominantly
+MIT-licensed.
 
 ## Credits
 
-- **[Redox OS](https://www.redox-os.org/)** — the operating system
-- **[adios](https://github.com/adisbladis/adios)** — module system
-- **[snix](https://snix.dev/)** — Nix evaluator (patched for Redox)
+- [Redox OS](https://www.redox-os.org/) — the operating system
+- [adios](https://github.com/adisbladis/adios) — module system
+- [snix](https://snix.dev/) — Nix evaluator (patched for Redox)
+- [unit2nix](https://github.com/brittonr/unit2nix) — per-crate Nix derivations

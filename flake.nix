@@ -479,7 +479,7 @@
           # Flake module for downstream flake-parts / adios-flake consumers
           flakeModules.default = ./nix/flake-module.nix;
 
-          # Template: nix flake init -t github:user/redox
+          # Template: nix flake init -t github:brittonr/nix-redox
           templates.default = {
             path = ./templates/default;
             description = "Minimal Redox OS system configuration";

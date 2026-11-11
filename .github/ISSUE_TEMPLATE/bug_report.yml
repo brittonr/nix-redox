@@ -1,0 +1,71 @@
+name: Bug report
+description: Report a reproducible problem with a build, VM, or system image.
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. Keep logs sanitized: remove credentials, private
+        keys, tokens, and machine-specific paths before posting.
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: A clear description of the unexpected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command and configuration
+      description: The exact command and, if relevant, the profile or configuration snippet.
+      placeholder: |
+        nix run .#headless
+        # or: nix build .#redox-graphical
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      description: Include the failing phase (evaluation, build, boot, guest test) and the first error.
+    validations:
+      required: true
+  - type: input
+    id: commit
+    attributes:
+      label: Commit or tag
+      placeholder: e.g. 0d17cee6 or v0.1.0-alpha
+    validations:
+      required: true
+  - type: input
+    id: host
+    attributes:
+      label: Host environment
+      placeholder: e.g. NixOS 25.11, x86_64-linux, KVM enabled, 32 GB RAM
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: Paste the smallest useful excerpt, or link to a gist. Do not paste secrets.
+      render: shell
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues for this problem.
+          required: true
+        - label: I removed credentials, tokens, and private paths from the logs.
+          required: true
+        - label: This is not a security vulnerability (those go through SECURITY.md).
+          required: true

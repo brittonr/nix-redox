@@ -436,7 +436,7 @@ fn build_derivation_inner(
     }
 
     // Avoid cmd.output() — its internal read2 may use poll() which is
-    // unreliable on Redox (AGENTS.md). Instead, spawn the child with
+    // unreliable on Redox. Instead, spawn the child with
     // piped stdout/stderr and use dedicated threads to drain each pipe.
     // This also avoids a hang when the proxy sandbox is active: leaked
     // fds from the proxy setup (cap_fd, scheme socket) could prevent

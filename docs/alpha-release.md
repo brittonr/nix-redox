@@ -16,7 +16,7 @@ Experimental for alpha:
 
 - Bare-metal profiles, including GMKtec/LattePanda/N100 bring-up.
 - I225/I226 networking and netcfg autoconfiguration outside validated hardware runs.
-- Vendored-crate cleanup, native C/C++ gauntlet expansion, and CA-bundle unification work tracked in OpenSpec changes.
+- Vendored-crate cleanup, native C/C++ gauntlet expansion, and CA-bundle unification work.
 - `aarch64-linux` flake outputs unless a release candidate is explicitly validated on that host.
 
 ## Required validation gates
@@ -69,7 +69,6 @@ is not part of the validated default QEMU path.
 
 - Long VM proof wrappers write durable artifacts under `/var/tmp/redox-self-hosting-captures/<run-id>/`.
 - Successful proof wrappers refresh `docs/self-hosting/latest-success.md` and `docs/self-hosting/latest-success.json`.
-- Keep pueue logs only as convenience output; copy important excerpts into durable capture dirs or docs.
 - A release candidate is not ready if the latest success doc points at an older commit for a touched proof path.
 
 ## Release checklist

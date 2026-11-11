@@ -17,3 +17,18 @@ snix-redox/target-host/
 # direnv
 .direnv/
 .envrc
+
+# Local agent/planning artifacts (never publish)
+.claude/
+.pijul/
+openspec/
+cairn/
+autoresearch.*
+AGENTS.md
+CLAUDE.md
+shell.nix.nixtamal
+build-plan.json
+build-*.log
+/Cargo.toml
+/Cargo.lock
+/src/main.rs

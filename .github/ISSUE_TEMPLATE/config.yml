@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Documentation
+    url: https://github.com/brittonr/nix-redox#documentation
+    about: Read the README, alpha notes, and proof-artifact documentation first.
+  - name: Security reports
+    url: https://github.com/brittonr/nix-redox/security/advisories/new
+    about: Report vulnerabilities privately. Do not open a public issue.

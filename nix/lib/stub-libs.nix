@@ -11,7 +11,8 @@
 # binaries like rustc. Separate .o files let the linker pull in only the
 # backtrace/info stubs without poisoning the active unwind pathway.
 #
-# See: openspec/changes/fix-relibc-panic-abort/ for the full diagnosis.
+# Keep this per-function split: a monolithic object reintroduces the
+# unwind-poisoning failure this comment describes.
 
 { pkgs, redoxTarget }:
 
