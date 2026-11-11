@@ -342,6 +342,51 @@ fn load_manifest() -> Result<Manifest, Box<dyn std::error::Error>> {
 // ===== Commands =====
 
 /// Display system information from the embedded manifest
+/// List declared services from a manifest, optionally as JSON.
+pub fn services(manifest_path: Option<&str>, json: bool) -> Result<(), Box<dyn std::error::Error>> {
+    let manifest = match manifest_path {
+        Some(p) => load_manifest_from(p)?,
+        None => load_manifest()?,
+    };
+
+    let declared = &manifest.services.declared;
+    if json {
+        println!("{}", serde_json::to_string_pretty(declared)?);
+        return Ok(());
+    }
+
+    if declared.is_empty() {
+        println!("No declared services in this manifest.");
+        if !manifest.services.init_scripts.is_empty() {
+            println!("Init scripts: {}", manifest.services.init_scripts.join(", "));
+        }
+        return Ok(());
+    }
+
+    println!(
+        "{:<28} {:<9} {:<8} {:<10} {}",
+        "SERVICE", "TYPE", "TARGET", "AFTER", "COMMAND"
+    );
+    for (name, svc) in declared {
+        let mut command = svc.command.clone();
+        if !svc.args.is_empty() {
+            command.push(' ');
+            command.push_str(&svc.args);
+        }
+        println!(
+            "{:<28} {:<9} {:<8} {:<10} {}",
+            name,
+            svc.svc_type,
+            svc.wanted_by,
+            svc.after.join(","),
+            command
+        );
+    }
+    println!();
+    println!("{} declared services", declared.len());
+    Ok(())
+}
+
 pub fn info(manifest_path: Option<&str>) -> Result<(), Box<dyn std::error::Error>> {
     let manifest = match manifest_path {
         Some(p) => load_manifest_from(p)?,

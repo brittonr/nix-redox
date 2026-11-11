@@ -227,6 +227,7 @@ enum Command {
     ///   snix system rollback -g 3        Jump to a specific generation
     ///   snix system gc --keep 3          Prune old generations + sweep store
     ///   snix system boot 2               Set generation to activate on next boot
+    ///   snix system services              List declared services
     System {
         #[command(subcommand)]
         command: SystemCommand,
@@ -364,6 +365,17 @@ enum SystemCommand {
         /// Path to manifest file (default: /etc/redox-system/manifest.json)
         #[arg(short, long)]
         manifest: Option<String>,
+    },
+
+    /// List declared services from the system manifest
+    Services {
+        /// Path to manifest file (default: /etc/redox-system/manifest.json)
+        #[arg(short, long)]
+        manifest: Option<String>,
+
+        /// Emit the declared service map as JSON
+        #[arg(long)]
+        json: bool,
     },
 
     /// Verify all tracked files against manifest hashes
@@ -849,6 +861,7 @@ fn main() {
         },
         Command::System { command } => match command {
             SystemCommand::Info { manifest } => system::info(manifest.as_deref()),
+            SystemCommand::Services { manifest, json } => system::services(manifest.as_deref(), json),
             SystemCommand::Verify { verbose, manifest } => {
                 system::verify(manifest.as_deref(), verbose)
             }

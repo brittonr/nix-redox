@@ -10,6 +10,8 @@ All notable changes to this project are documented here. The format follows
 
 - Cross-compiled `tree` package, included in the development profile and the
   cross check tier.
+- `snix system services` read-only listing, with `--json` output, verified in a
+  guest against the declared service manifest.
 
 ## [0.1.1-alpha] - 2026-11-11
 

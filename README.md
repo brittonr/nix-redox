@@ -162,6 +162,7 @@ snix system rebuild --dry-run
 snix system generations        # list system generations
 snix system switch --rollback  # roll back to the previous generation
 snix system gc                 # garbage-collect old generations
+snix system services           # list declared services
 snix install ripgrep           # install a package from the binary cache
 ```
 
