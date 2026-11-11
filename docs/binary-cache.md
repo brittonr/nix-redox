@@ -9,9 +9,13 @@ The project cache is **`nix-redox`**:
 - Public key: `nix-redox.cachix.org-1:d0dvP2sgt2k2M3MRT6lHm4S0AMAtOP6yiuvSDF8Khuc=`
 
 The flake declares this cache in `nixConfig`; accept the flake configuration or
-use `cachix use nix-redox`. The GitHub workflow can also push, but needs an
-auth token. The cache is initially empty and fills after the first successful
-push.
+use `cachix use nix-redox`. The GitHub workflow pushes the minimal and graphical
+images for Nix 2.24.9 and 2.35.1, the two versions used by CI.
+
+**Nix store paths are version-dependent here.** A client whose Nix version
+produces different derivation paths will miss the cache for those paths. Use a
+matching Nix version for cache hits, or expect source builds on other versions.
+Deliveries are still valid; they are simply not interchangeable across versions.
 
 ## Enable the workflow
 

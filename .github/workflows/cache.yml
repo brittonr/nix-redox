@@ -14,10 +14,14 @@ permissions:
 
 jobs:
   push:
-    name: Build and push to Cachix
+    name: Build and push (Nix ${{ matrix.nix }})
     if: vars.CACHIX_CACHE_NAME != ''
     runs-on: ubuntu-latest
     timeout-minutes: 360
+    strategy:
+      fail-fast: false
+      matrix:
+        nix: ["2.24.9", "2.35.1"]
     steps:
       - name: Check Cachix credentials
         id: creds
@@ -37,6 +41,7 @@ jobs:
       - uses: cachix/install-nix-action@v30
         if: steps.creds.outputs.run == 'true'
         with:
+          install_url: https://releases.nixos.org/nix/nix-${{ matrix.nix }}/install
           extra_nix_config: |
             experimental-features = nix-command flakes
             accept-flake-config = true

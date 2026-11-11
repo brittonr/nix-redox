@@ -249,7 +249,8 @@ update story. There is no partition wizard yet.
 
 The project cache is `nix-redox`:
 `https://nix-redox.cachix.org`. The flake declares it in `nixConfig`; CI
-publishing additionally needs a `CACHIX_AUTH_TOKEN` repository secret. See
+publishes images for Nix 2.24.9 and 2.35.1. Store paths are version-dependent,
+so use a matching Nix for cache hits. See
 [`docs/binary-cache.md`](docs/binary-cache.md).
 
 ## Testing
