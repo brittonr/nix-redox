@@ -22,6 +22,8 @@ All notable changes to this project are documented here. The format follows
   device checks, explicit confirmation, dry-run, and read-back verification.
 - Package porting guide covering Rust plans, C cross-builds, vendoring, and CI.
 - Static marketing landing page and GitHub Pages deployment workflow.
+- Troubleshooting guide for dead host substituters/build farms, direnv fallback,
+  and expected headless boot warnings.
 - Tag release workflow that builds graphical/minimal images, writes checksums,
   and uploads them to the GitHub release.
 
