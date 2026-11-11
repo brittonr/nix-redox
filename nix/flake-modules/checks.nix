@@ -98,6 +98,35 @@ let
 
   # ── Tier 1: eval (seconds) ──────────────────────────────────────
   # Module system tests with mock packages. No builds, just Nix evaluation.
+  nixosIntegrationEval = import "${self.inputs.nixpkgs}/nixos/lib/eval-config.nix" {
+    system = pkgs.system;
+    modules = [
+      self.nixosModules.default
+      {
+        programs.redox.enable = true;
+        services.redox-vm = {
+          enable = true;
+          profile = "graphical";
+        };
+      }
+    ];
+  };
+
+  nixosIntegrationCacheEval = import "${self.inputs.nixpkgs}/nixos/lib/eval-config.nix" {
+    system = pkgs.system;
+    modules = [
+      self.nixosModules.default
+      {
+        programs.redox = {
+          enable = true;
+          binaryCacheUrl = "https://cache.example";
+          binaryCachePublicKey = "cache.example-1:test-key";
+        };
+        services.redox-vm.enable = true;
+      }
+    ];
+  };
+
   evalChecks =
     moduleSystemTests.eval
     // moduleSystemTests.types
@@ -107,6 +136,33 @@ let
     // {
       options-docs = pkgs.runCommand "check-options-docs" { } ''
         diff -u ${../../docs/options.md} ${packages.optionsMarkdown}
+        touch $out
+      '';
+
+      nixos-integration = pkgs.runCommand "check-nixos-integration" { } ''
+        test "${builtins.toJSON nixosIntegrationEval.config.programs.redox.enable}" = "true"
+        test "${nixosIntegrationEval.config.services.redox-vm.profile}" = "graphical"
+        test "${nixosIntegrationEval.config.programs.redox.binaryCacheUrl}" = ""
+        test "${
+          builtins.toString (
+            builtins.length (nixosIntegrationEval.config.nix.settings.extra-substituters or [ ])
+          )
+        }" = "0"
+        test "${nixosIntegrationCacheEval.config.programs.redox.binaryCacheUrl}" = "https://cache.example"
+        test "${
+          builtins.toJSON (
+            builtins.elem "https://cache.example" (
+              nixosIntegrationCacheEval.config.nix.settings.extra-substituters or [ ]
+            )
+          )
+        }" = "true"
+        test "${
+          builtins.toJSON (
+            builtins.elem "cache.example-1:test-key" (
+              nixosIntegrationCacheEval.config.nix.settings.extra-trusted-public-keys or [ ]
+            )
+          )
+        }" = "true"
         touch $out
       '';
     };

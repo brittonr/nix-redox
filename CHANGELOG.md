@@ -8,6 +8,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Verified NixOS integration: documented `programs.redox`/`services.redox-vm`,
+  and added an eval-tier check for module defaults and opt-in cache settings.
 - Generated module options reference at `docs/options.md` and the `redox-help`
   search command, with a drift check in the eval tier.
 - `redox-rebuild switch` and `boot` aliases plus `--dry-run` planning for host-side
