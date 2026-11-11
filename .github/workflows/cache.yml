@@ -57,5 +57,8 @@ jobs:
         env:
           CACHE: ${{ vars.CACHIX_CACHE_NAME }}
         run: |
-          cachix watch-exec "$CACHE" -- \
-            nix build --no-link .#redox-minimal .#redox-graphical
+          set -euo pipefail
+          nix build --no-link --print-out-paths .#redox-minimal .#redox-graphical > image-paths
+          cat image-paths
+          # Push the full closures, not only paths built in this step.
+          cachix push "$CACHE" $(cat image-paths)
