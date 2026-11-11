@@ -10,6 +10,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Data-only per-user home files (`users.<name>.files`), aligned with the
+  adios-native configuration model rather than Home Manager activation.
 - Cross-compiled `tree` package, included in the development profile and the
   cross check tier.
 - `snix system services` read-only listing, with `--json` output, verified in a

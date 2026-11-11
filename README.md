@@ -290,6 +290,7 @@ and evidence rules.
 - [`docs/releases.md`](docs/releases.md) — tag, image assets and verification
 - [`docs/install.md`](docs/install.md) — VM, USB writing, verification and updates
 - [`docs/porting-packages.md`](docs/porting-packages.md) — Rust and C package porting
+- [`docs/home-configuration.md`](docs/home-configuration.md) — data-only per-user files
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — host Nix config, direnv, and headless boot warnings
 - [`docs/redox-substrate.md`](docs/redox-substrate.md) — external system-layer API
 - [`docs/self-hosting/proof-artifacts.md`](docs/self-hosting/proof-artifacts.md) — proof capture contract

@@ -9,6 +9,11 @@ adios:
 let
   t = adios.types;
 
+  homeFileType = t.struct "HomeFile" {
+    text = t.string;
+    mode = t.optionalAttr t.string;
+  };
+
   userType = t.struct "User" {
     uid = t.int;
     gid = t.int;
@@ -17,6 +22,9 @@ let
     password = t.string;
     realname = t.optionalAttr t.string;
     createHome = t.optionalAttr t.bool;
+    # Declarative user files, relative to home. This is data-only: files are
+    # baked into the image, with no Home Manager-style activation or store.
+    files = t.optionalAttr (t.attrsOf homeFileType);
     # Per-user login namespace scheme list.
     # Set to a list of scheme name strings for the user's login namespace.
     # When absent, login falls back to DEFAULT_SCHEMES in the userutils binary.

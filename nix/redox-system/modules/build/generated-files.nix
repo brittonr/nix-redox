@@ -760,6 +760,18 @@ let
       };
     }) (inputs.activation.scripts or { }))
 
+    # Declarative per-user home files (data-only Home Manager-style layer).
+    // (lib.concatMapAttrs (name: user:
+      lib.mapAttrs' (path: file:
+        lib.nameValuePair
+          "${lib.removePrefix "/" user.home}/${lib.removePrefix "/" path}"
+          {
+            text = file.text;
+            mode = file.mode or "0644";
+          }
+      ) (user.files or { })
+    ) inputs.users.users)
+
     # Standard /etc files expected by upstream Redox programs
     // {
       "etc/motd" = {
