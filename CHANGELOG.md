@@ -20,6 +20,7 @@ All notable changes to this project are documented here. The format follows
 - Installation documentation covering VM, verified USB writing, and guest updates.
 - `redox-install`, a checksum-validating image writer with mounted/undersized
   device checks, explicit confirmation, dry-run, and read-back verification.
+- Package porting guide covering Rust plans, C cross-builds, vendoring, and CI.
 - Tag release workflow that builds graphical/minimal images, writes checksums,
   and uploads them to the GitHub release.
 

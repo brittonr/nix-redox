@@ -284,6 +284,7 @@ and evidence rules.
 - [`docs/nixos-integration.md`](docs/nixos-integration.md) — NixOS module options and VM service
 - [`docs/releases.md`](docs/releases.md) — tag, image assets and verification
 - [`docs/install.md`](docs/install.md) — VM, USB writing, verification and updates
+- [`docs/porting-packages.md`](docs/porting-packages.md) — Rust and C package porting
 - [`docs/redox-substrate.md`](docs/redox-substrate.md) — external system-layer API
 - [`docs/self-hosting/proof-artifacts.md`](docs/self-hosting/proof-artifacts.md) — proof capture contract
 - [`docs/syscall-debugging.md`](docs/syscall-debugging.md) — kernel syscall tracing
