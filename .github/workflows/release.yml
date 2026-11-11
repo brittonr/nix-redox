@@ -32,7 +32,7 @@ jobs:
           minimal=$(nix build --no-link --print-out-paths .#redox-minimal)
           cp "$graphical/redox.img" dist/redox-graphical.img
           cp "$minimal/redox.img" dist/redox-minimal.img
-          sha256sum dist/*.img > dist/SHA256SUMS
+          ( cd dist && sha256sum ./*.img > SHA256SUMS )
           ls -lh dist
 
       - name: Create release if needed
