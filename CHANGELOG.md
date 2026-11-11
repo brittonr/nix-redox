@@ -24,8 +24,9 @@ All notable changes to this project are documented here. The format follows
 - Static marketing landing page and GitHub Pages deployment workflow.
 - Troubleshooting guide for dead host substituters/build farms, direnv fallback,
   and expected headless boot warnings.
-- Public `nix-redox` Cachix cache wired into the flake, docs, and CI, populated
-  for Nix 2.24.9 and 2.35.1 (store paths are Nix-version dependent).
+- Public `nix-redox` Cachix cache wired into the flake, docs, and CI; CI
+  publishes minimal/graphical images for Nix 2.24.9 and 2.35.1 (store paths are
+  Nix-version dependent).
 - Tag release workflow that builds graphical/minimal images, writes checksums,
   and uploads them to the GitHub release.
 

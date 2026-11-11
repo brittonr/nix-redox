@@ -17,19 +17,16 @@ produces different derivation paths will miss the cache for those paths. Use a
 matching Nix version for cache hits, or expect source builds on other versions.
 Deliveries are still valid; they are simply not interchangeable across versions.
 
-## Enable the workflow
+## Publishing
 
-The cache name is already set as the `CACHIX_CACHE_NAME` repository variable.
-To enable publishing:
+The cache name and auth token are configured as the repository variable
+`CACHIX_CACHE_NAME` and secret `CACHIX_AUTH_TOKEN`. The **Binary cache**
+workflow runs on every push to `main` and builds `.#redox-minimal` and
+`.#redox-graphical` for each supported Nix version under `cachix watch-exec`.
 
-1. Create a Cachix auth token with write access to `nix-redox`.
-2. Add **Settings → Secrets and variables → Actions → Secrets** →
-   `CACHIX_AUTH_TOKEN`.
-3. Run the **Binary cache** workflow, or push to `main`.
-
-The workflow checks for the token first. Without it, it logs a warning and
-skips cleanly; with it, it builds `.#redox-minimal` and `.#redox-graphical`
-under `cachix watch-exec` and uploads their closures.
+To publish from a fork, create a token with write access and set the same
+variable and secret. If a token is missing, the workflow logs a warning and
+skips cleanly.
 
 ## Use the cache
 
