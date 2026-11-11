@@ -266,6 +266,12 @@ Experimental:
 - I225/I226 networking and netcfg autoconfiguration outside validated hardware.
 - `aarch64-linux` outputs unless explicitly validated for a release candidate.
 
+## Community
+
+- [GitHub Discussions](https://github.com/brittonr/nix-redox/discussions) — questions, build reports, package requests, show-and-tell
+- [Issues](https://github.com/brittonr/nix-redox/issues) — reproducible bugs and feature requests
+- [Security advisories](https://github.com/brittonr/nix-redox/security/advisories/new) — private vulnerability reports
+
 ## Contributing
 
 Contributions are welcome. Start with
