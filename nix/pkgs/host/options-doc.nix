@@ -149,7 +149,7 @@ let
             lines.append("")
 
         with open(sys.argv[2], "w") as f:
-            f.write("\n".join(lines) + "\n")
+            f.write("\n".join(lines).rstrip("\n") + "\n")
         ' "$json" "$out"
       '';
   optionsHelp = hostPkgs.writeScriptBin "redox-help" ''
