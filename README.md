@@ -250,7 +250,8 @@ update story. There is no partition wizard yet.
 The project cache is `nix-redox`:
 `https://nix-redox.cachix.org`. The flake declares it in `nixConfig`; CI
 publishes images for Nix 2.24.9 and 2.35.1. Store paths are version-dependent,
-so use a matching Nix for cache hits. See
+so use a matching Nix for cache hits; a clean-store run fetches the heavy
+components and only assembles the final image locally. See
 [`docs/binary-cache.md`](docs/binary-cache.md).
 
 ## Testing

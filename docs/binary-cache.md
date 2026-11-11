@@ -17,6 +17,11 @@ produces different derivation paths will miss the cache for those paths. Use a
 matching Nix version for cache hits, or expect source builds on other versions.
 Deliveries are still valid; they are simply not interchangeable across versions.
 
+A cold-store verification was run with Nix 2.36 and a matching 2.35.1 cache
+entry: the minimal image fetched its heavy components from `nix-redox` and only
+assembled the final disk-image derivation locally (~89 seconds). The final
+image assembly may still run on the client even when its outputs are cached.
+
 ## Publishing
 
 The cache name and auth token are configured as the repository variable

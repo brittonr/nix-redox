@@ -26,7 +26,8 @@ All notable changes to this project are documented here. The format follows
   and expected headless boot warnings.
 - Public `nix-redox` Cachix cache wired into the flake, docs, and CI; CI
   publishes minimal/graphical images for Nix 2.24.9 and 2.35.1 (store paths are
-  Nix-version dependent).
+  Nix-version dependent). Verified cold-store substitution in 89 seconds plus
+  local final-image assembly.
 - Tag release workflow that builds graphical/minimal images, writes checksums,
   and uploads them to the GitHub release.
 
