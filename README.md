@@ -164,6 +164,24 @@ snix system gc                 # garbage-collect old generations
 snix install ripgrep           # install a package from the binary cache
 ```
 
+## Host-side system management
+
+`redox-rebuild` builds configurations and tracks generations on the host:
+
+```bash
+nix run .#redox-rebuild -- build
+nix run .#redox-rebuild -- switch graphical
+nix run .#redox-rebuild -- list-generations
+nix run .#redox-rebuild -- rollback
+nix run .#redox-rebuild -- run graphical
+```
+
+Generations live in `.redox-generations/` (override with
+`REDOX_GENERATIONS`). `diff` compares a fresh build with the current
+generation, `check` runs assertions, and `--dry-run` plans without recording.
+See [`docs/redox-rebuild.md`](docs/redox-rebuild.md) for the boundary with
+in-guest `snix system rebuild`.
+
 ## Self-hosting
 
 The self-hosting image carries a full Rust toolchain cross-compiled for Redox:
@@ -217,6 +235,12 @@ nix run .#push-to-redox -- ripgrep fd bat  # push from the host
 snix install ripgrep
 ```
 
+## Binary cache
+
+A public Cachix workflow is included but gated on repository configuration.
+Until it is enabled, builds are source-only. To enable or consume the cache,
+see [`docs/binary-cache.md`](docs/binary-cache.md).
+
 ## Testing
 
 Tiered release gates:
@@ -246,6 +270,8 @@ and evidence rules.
 
 - [`docs/alpha-release.md`](docs/alpha-release.md) — alpha scope, gates, known limitations
 - [`docs/options.md`](docs/options.md) — generated module options reference
+- [`docs/redox-rebuild.md`](docs/redox-rebuild.md) — host-side builds, generations and rollback
+- [`docs/binary-cache.md`](docs/binary-cache.md) — Cachix setup, trust and usage
 - [`docs/redox-substrate.md`](docs/redox-substrate.md) — external system-layer API
 - [`docs/self-hosting/proof-artifacts.md`](docs/self-hosting/proof-artifacts.md) — proof capture contract
 - [`docs/syscall-debugging.md`](docs/syscall-debugging.md) — kernel syscall tracing

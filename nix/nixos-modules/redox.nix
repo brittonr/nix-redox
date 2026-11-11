@@ -15,6 +15,18 @@ in
 {
   options.programs.redox = {
     enable = lib.mkEnableOption "Redox OS development tools";
+
+    binaryCacheUrl = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      description = "Optional binary cache URL for Redox packages.";
+    };
+
+    binaryCachePublicKey = lib.mkOption {
+      type = lib.types.str;
+      default = "";
+      description = "Public key for binaryCacheUrl, if the cache is not trusted globally.";
+    };
   };
 
   options.services.redox-vm = {
@@ -148,12 +160,10 @@ in
       ];
       programs.fuse.userAllowOther = true;
 
-      # Binary cache for cross-compiled Redox packages (tailnet only).
-      # harmonia on aspen1 serves pre-built relibc, kernel, base, userspace, etc.
-      # Only reachable from machines on the tailnet.
-      nix.settings = {
-        extra-substituters = [ "http://aspen1:5000" ];
-        extra-trusted-public-keys = [ "aspen1-1:hdbOqMbh1N/jLuqHVErDlrI7Wh9Cd/htzF7HUWYjQRc=" ];
+      # Optional binary cache for cross-compiled Redox packages.
+      nix.settings = lib.mkIf (cfg.binaryCacheUrl != "") {
+        extra-substituters = [ cfg.binaryCacheUrl ];
+        extra-trusted-public-keys = lib.optional (cfg.binaryCachePublicKey != "") cfg.binaryCachePublicKey;
       };
     })
 

@@ -340,14 +340,9 @@ in
         pkgs.writeShellScript "push-cache" ''
           set -euo pipefail
 
-          CACHE_HOST="''${1:-aspen1}"
-          CACHE_URL="ssh-ng://''${CACHE_HOST}"
+          CACHE_URL="''${1:?usage: push-cache ssh-ng://HOST}"
 
-          # Work around OpenSSH 10.x %t token breakage in ssh_config
-          # until home-manager rebuild applies the fix.
-          export NIX_SSHOPTS="''${NIX_SSHOPTS:--o IdentityAgent=none -o IdentityFile=$HOME/.ssh/framework}"
-
-          echo "Pushing Redox packages to binary cache on $CACHE_HOST..."
+          echo "Pushing Redox packages to $CACHE_URL..."
           echo ""
 
           PUSHED=0
@@ -374,7 +369,7 @@ in
           echo "Pushed: $PUSHED  Skipped: $SKIPPED"
         ''
       );
-      meta.description = "Push built Redox packages to the binary cache on aspen1 (or specified host)";
+      meta.description = "Push built Redox packages to a binary cache over SSH";
     };
 
     cache-status = {
@@ -383,7 +378,7 @@ in
         pkgs.writeShellScript "cache-status" ''
           set -euo pipefail
 
-          CACHE_URL="''${1:-http://aspen1:5000}"
+          CACHE_URL="''${1:?usage: cache-status https://CACHE-URL}"
 
           echo "Checking Redox package cache coverage at $CACHE_URL"
           echo ""
@@ -417,7 +412,7 @@ in
           fi
         ''
       );
-      meta.description = "Check which Redox packages are in the binary cache on aspen1";
+      meta.description = "Check which Redox packages are present in a binary cache";
     };
 
     redox-help = {

@@ -33,6 +33,7 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
     VERBOSE=0
     SHOW_TRACE=0
     JSON=0
+    DRY_RUN=0
     ACTION=""
     EXTRA_ARGS=()
 
@@ -58,6 +59,8 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
 
   ''${BOLD}ACTIONS:''${RESET}
       build [PROFILE]        Build the system toplevel derivation
+      switch [PROFILE]       Build and select a new generation (alias: boot)
+      boot [PROFILE]         Alias for switch
       run [PROFILE]          Build disk image and launch VM
       test [PROFILE]         Build and run automated boot test
       diff [PROFILE]         Show what changed vs current generation
@@ -81,6 +84,7 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
       --verbose, -v          Show nix build output
       --show-trace           Pass --show-trace to nix
       --json                 JSON output (list-generations, version)
+      --dry-run              Show what build/switch would do without changing state
       --help, -h             Show this help
 
   ''${BOLD}EXAMPLES:''${RESET}
@@ -102,7 +106,7 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
     # === Argument Parsing ===
     while [ $# -gt 0 ]; do
       case "$1" in
-        build|run|test|diff|check|list-generations|rollback|repl|edit|changelog|version)
+        build|switch|boot|run|test|diff|check|list-generations|rollback|repl|edit|changelog|version)
           ACTION="$1"
           shift
           # Next positional arg (if not an option) is the profile or gen number
@@ -141,6 +145,10 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
           JSON=1
           shift
           ;;
+        --dry-run)
+          DRY_RUN=1
+          shift
+          ;;
         --help|-h)
           usage
           ;;
@@ -168,6 +176,14 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
     fi
     if [ "$SHOW_TRACE" = "1" ]; then
       BUILD_FLAGS+=("--show-trace")
+    fi
+    if [ "$DRY_RUN" = "1" ]; then
+      BUILD_FLAGS+=("--dry-run")
+    fi
+
+    if [ "$DRY_RUN" = "1" ] && [ "$ACTION" != "build" ] && [ "$ACTION" != "switch" ] && [ "$ACTION" != "boot" ]; then
+      echo -e "''${RED}--dry-run is supported for build/switch/boot only.''${RESET}" >&2
+      exit 1
     fi
 
     # === Profile → Flake Attr Mapping ===
@@ -248,6 +264,13 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
       local attr
       attr=$(resolve_toplevel_attr)
       echo -e "''${BLUE}Building system configuration (profile: $PROFILE)...''${RESET}" >&2
+
+      if [ "$DRY_RUN" = "1" ]; then
+        ${pkgs.nix}/bin/nix build "''${FLAKE}#''${attr}" \
+          --no-link "''${BUILD_FLAGS[@]}" >&2
+        echo -e "''${YELLOW}Dry run: no generation recorded.''${RESET}" >&2
+        exit 0
+      fi
 
       local toplevel
       toplevel=$(${pkgs.nix}/bin/nix build "''${FLAKE}#''${attr}" \
@@ -585,6 +608,8 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
     # === Dispatch ===
     case "$ACTION" in
       build)            do_build ;;
+      switch)           do_build ;;
+      boot)             do_build ;;
       run)              do_run ;;
       test)             do_test ;;
       diff)             do_diff ;;

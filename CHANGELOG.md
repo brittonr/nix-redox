@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Generated module options reference at `docs/options.md` and the `redox-help`
+  search command, with a drift check in the eval tier.
+- `redox-rebuild switch` and `boot` aliases plus `--dry-run` planning for host-side
+  builds, and user-facing documentation for generations and rollback.
+- Gated Cachix workflow (`.github/workflows/cache.yml`) and binary-cache setup,
+  trust, and usage documentation.
+
+### Changed
+
+- The NixOS integration module no longer injects a private cache or public key;
+  `programs.redox.binaryCacheUrl` and `binaryCachePublicKey` are opt-in.
+- `push-cache` and `cache-status` now require an explicit cache URL instead of
+  defaulting to a private host.
+
 ## [0.1.0-alpha] - 2026-11-11
 
 ### Added
