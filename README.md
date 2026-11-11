@@ -147,7 +147,8 @@ Profiles are composable Nix expressions:
 ```
 
 Profiles compose with `//`: the graphical profile extends the development
-profile, which extends the base profile.
+profile, which extends the base profile. Search the full option surface with
+`nix run .#redox-help -- <query>`, or browse [`docs/options.md`](docs/options.md).
 
 ### Managing the system on-guest
 
@@ -244,6 +245,7 @@ and evidence rules.
 ## Documentation
 
 - [`docs/alpha-release.md`](docs/alpha-release.md) — alpha scope, gates, known limitations
+- [`docs/options.md`](docs/options.md) — generated module options reference
 - [`docs/redox-substrate.md`](docs/redox-substrate.md) — external system-layer API
 - [`docs/self-hosting/proof-artifacts.md`](docs/self-hosting/proof-artifacts.md) — proof capture contract
 - [`docs/syscall-debugging.md`](docs/syscall-debugging.md) — kernel syscall tracing

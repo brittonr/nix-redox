@@ -103,7 +103,13 @@ let
     // moduleSystemTests.types
     // moduleSystemTests.artifacts
     // moduleSystemTests.lib
-    // moduleSystemTests.substrate;
+    // moduleSystemTests.substrate
+    // {
+      options-docs = pkgs.runCommand "check-options-docs" { } ''
+        diff -u ${../../docs/options.md} ${packages.optionsMarkdown}
+        touch $out
+      '';
+    };
 
   # ── Tier 2: host (minutes) ──────────────────────────────────────
   # Native host-side builds and tests. No cross-compilation.

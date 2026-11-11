@@ -1533,6 +1533,8 @@ in
       })
       optionsJSON
       optionsMarkdown
+      optionsHelp
+      redox-help
       ;
 
     # Default package is set in system.nix (diskImageGraphical)

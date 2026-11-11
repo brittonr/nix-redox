@@ -420,6 +420,12 @@ in
       meta.description = "Check which Redox packages are in the binary cache on aspen1";
     };
 
+    redox-help = {
+      type = "app";
+      program = "${self'.packages.redox-help}/bin/redox-help";
+      meta.description = "Search the generated Redox module options reference";
+    };
+
     # ── Quick test runners ─────────────────────────────────────────
     # These run subsets of checks for fast iteration.
 
