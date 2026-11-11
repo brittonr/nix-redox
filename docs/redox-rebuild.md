@@ -9,6 +9,8 @@ the target is a VM image rather than the host OS.
 
 ```bash
 nix run .#redox-rebuild -- build                  # build default and record a generation
+nix run .#redox-rebuild -- image graphical        # build and print the disk-image path
+nix run .#redox-rebuild -- export graphical --out redox-graphical.img
 nix run .#redox-rebuild -- switch graphical       # build and select a new generation
 nix run .#redox-rebuild -- boot                   # alias for switch
 nix run .#redox-rebuild -- run graphical          # build and launch the VM
@@ -53,8 +55,10 @@ snix system switch --rollback
 snix system generations
 ```
 
-`redox-rebuild run` builds the selected profile and launches it through the
-normal graphical or headless runner. `redox-rebuild diff` compares top-level
+`redox-rebuild image` prints the disk-image derivation; `export` copies its
+`redox.img` to `--out` and writes a matching `.sha256` file. `redox-rebuild run`
+builds the selected profile and launches it through the normal graphical or
+headless runner. `redox-rebuild diff` compares top-level
 metadata and root-tree file lists between the current generation and a fresh
 build.
 
@@ -66,5 +70,6 @@ build.
 --verbose, -v          show Nix build logs
 --show-trace           pass --show-trace to Nix
 --json                 JSON output for list-generations and version
+--out PATH             export destination (default: redox-PROFILE.img)
 --dry-run              plan only for build/switch/boot
 ```

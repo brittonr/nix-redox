@@ -171,6 +171,8 @@ snix install ripgrep           # install a package from the binary cache
 ```bash
 nix run .#redox-rebuild -- build
 nix run .#redox-rebuild -- switch graphical
+nix run .#redox-rebuild -- image graphical
+nix run .#redox-rebuild -- export graphical --out redox-graphical.img
 nix run .#redox-rebuild -- list-generations
 nix run .#redox-rebuild -- rollback
 nix run .#redox-rebuild -- run graphical

@@ -34,6 +34,7 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
     SHOW_TRACE=0
     JSON=0
     DRY_RUN=0
+    OUT=""
     ACTION=""
     EXTRA_ARGS=()
 
@@ -59,6 +60,8 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
 
   ''${BOLD}ACTIONS:''${RESET}
       build [PROFILE]        Build the system toplevel derivation
+      image [PROFILE]        Build and print the disk-image path
+      export [PROFILE]       Build the disk image and copy it to --out
       switch [PROFILE]       Build and select a new generation (alias: boot)
       boot [PROFILE]         Alias for switch
       run [PROFILE]          Build disk image and launch VM
@@ -83,6 +86,7 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
       --profile-name, -p N   Profile name (default: system)
       --verbose, -v          Show nix build output
       --show-trace           Pass --show-trace to nix
+      --out PATH             Output path for export (default: redox-PROFILE.img)
       --json                 JSON output (list-generations, version)
       --dry-run              Show what build/switch would do without changing state
       --help, -h             Show this help
@@ -106,7 +110,7 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
     # === Argument Parsing ===
     while [ $# -gt 0 ]; do
       case "$1" in
-        build|switch|boot|run|test|diff|check|list-generations|rollback|repl|edit|changelog|version)
+        build|image|export|switch|boot|run|test|diff|check|list-generations|rollback|repl|edit|changelog|version)
           ACTION="$1"
           shift
           # Next positional arg (if not an option) is the profile or gen number
@@ -144,6 +148,10 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
         --json)
           JSON=1
           shift
+          ;;
+        --out)
+          OUT="$2"
+          shift 2
           ;;
         --dry-run)
           DRY_RUN=1
@@ -259,6 +267,42 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
     }
 
     # === Actions ===
+
+    do_image() {
+      local attr
+      attr=$(resolve_diskimage_attr)
+      echo -e "''${BLUE}Building disk image (profile: $PROFILE)...''${RESET}" >&2
+
+      local image
+      image=$(${pkgs.nix}/bin/nix build "''${FLAKE}#''${attr}" \
+        --no-link --print-out-paths "''${BUILD_FLAGS[@]}" 2>&1 | tail -1)
+
+      if [ ! -d "$image" ]; then
+        echo -e "''${RED}Image build failed.''${RESET}" >&2
+        exit 1
+      fi
+
+      echo "$image"
+    }
+
+    do_export() {
+      local out="$OUT"
+      if [ -z "$out" ]; then
+        out="redox-''${PROFILE}.img"
+      fi
+      local image
+      image=$(do_image)
+      if [ ! -f "$image/redox.img" ]; then
+        echo -e "''${RED}Image output has no redox.img: $image''${RESET}" >&2
+        exit 1
+      fi
+      echo -e "''${BLUE}Copying to $out...''${RESET}" >&2
+      cp "$image/redox.img" "$out"
+      chmod u+w "$out"
+      ${pkgs.coreutils}/bin/sha256sum "$out" > "''${out}.sha256"
+      echo "$out"
+      echo "''${out}.sha256"
+    }
 
     do_build() {
       local attr
@@ -608,6 +652,8 @@ pkgs.writeShellScriptBin "redox-rebuild" ''
     # === Dispatch ===
     case "$ACTION" in
       build)            do_build ;;
+      image)            do_image ;;
+      export)           do_export ;;
       switch)           do_build ;;
       boot)             do_build ;;
       run)              do_run ;;
