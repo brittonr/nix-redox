@@ -3,7 +3,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    redox.url = "github:user/redox"; # TODO: update to your Redox flake URL
+    redox.url = "github:brittonr/nix-redox";
     redox.inputs.nixpkgs.follows = "nixpkgs";
   };
 

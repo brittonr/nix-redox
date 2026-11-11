@@ -4,7 +4,7 @@
 #   nix build
 #
 # See the full options reference:
-#   nix build github:user/redox#optionsMarkdown
+#   nix build github:brittonr/nix-redox#optionsMarkdown
 #
 # Start from a profile and override what you need.
 

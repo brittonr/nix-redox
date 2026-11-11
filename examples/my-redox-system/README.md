@@ -53,7 +53,7 @@ After editing, `nix run` rebuilds and boots the new image.
 
 ## Available packages
 
-All packages from the [redox](https://github.com/brittonr/redox) flake are
+All packages from the [redox](https://github.com/brittonr/nix-redox) flake are
 available via the `pkgs` argument. Common ones:
 
 `ion` `uutils` `extrautils` `helix` `sodium` `smith` `snix` `redox-bash`

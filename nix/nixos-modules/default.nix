@@ -7,7 +7,7 @@
 #
 # Usage in NixOS configuration:
 #   {
-#     inputs.redox.url = "github:user/redox";
+#     inputs.redox.url = "github:brittonr/nix-redox";
 #     nixosConfigurations.myhost = nixpkgs.lib.nixosSystem {
 #       modules = [
 #         redox.nixosModules.default
