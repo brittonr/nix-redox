@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1-alpha] - 2026-11-11
+
 ### Added
 
 - Verified NixOS integration: documented `programs.redox`/`services.redox-vm`,
@@ -64,5 +66,6 @@ All notable changes to this project are documented here. The format follows
 - Guest-native builds and system activation preserve environment, environment
   variables, and rollback metadata across generations.
 
-[Unreleased]: https://github.com/brittonr/nix-redox/compare/v0.1.0-alpha...HEAD
-[0.1.0-alpha]: https://github.com/brittonr/nix-redox/releases
+[Unreleased]: https://github.com/brittonr/nix-redox/compare/v0.1.1-alpha...HEAD
+[0.1.1-alpha]: https://github.com/brittonr/nix-redox/releases/tag/v0.1.1-alpha
+[0.1.0-alpha]: https://github.com/brittonr/nix-redox/releases/tag/v0.1.0-alpha
