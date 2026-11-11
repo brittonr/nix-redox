@@ -10,7 +10,8 @@ The project cache is **`nix-redox`**:
 
 The flake declares this cache in `nixConfig`; accept the flake configuration or
 use `cachix use nix-redox`. The GitHub workflow can also push, but needs an
-auth token.
+auth token. The cache is initially empty and fills after the first successful
+push.
 
 ## Enable the workflow
 
