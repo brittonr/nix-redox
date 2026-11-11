@@ -16,6 +16,8 @@ All notable changes to this project are documented here. The format follows
   builds, and user-facing documentation for generations and rollback.
 - Gated Cachix workflow (`.github/workflows/cache.yml`) and binary-cache setup,
   trust, and usage documentation.
+- Tag release workflow that builds graphical/minimal images, writes checksums,
+  and uploads them to the GitHub release.
 
 ### Changed
 

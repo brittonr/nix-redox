@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  images:
+    name: Build and publish disk images
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Build images
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          graphical=$(nix build --no-link --print-out-paths .#redox-graphical)
+          minimal=$(nix build --no-link --print-out-paths .#redox-minimal)
+          cp "$graphical/redox.img" dist/redox-graphical.img
+          cp "$minimal/redox.img" dist/redox-minimal.img
+          sha256sum dist/*.img > dist/SHA256SUMS
+          ls -lh dist
+
+      - name: Create release if needed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if ! gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" \
+              --title "nix-redox $GITHUB_REF_NAME" \
+              --prerelease \
+              --generate-notes
+          fi
+
+      - name: Upload images
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload "$GITHUB_REF_NAME" dist/*.img dist/SHA256SUMS --clobber
