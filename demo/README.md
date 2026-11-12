@@ -1,9 +1,9 @@
 # End-to-end asciinema demo
 
 `record-e2e.py` boots a Redox image in QEMU, logs in over the serial console,
-runs `tree --version`, `snix eval`, `snix system info`, and
-`snix system services`, and records the guest terminal with `asciinema`.
-The cast is rendered to MP4 with `asciinema-agg` and ffmpeg.
+runs `tree --version`, `snix eval`, a `snix build` of a fresh package, and
+`snix system info`/`snix system services`, and records the guest terminal with
+`asciinema`. The cast is rendered to MP4 with `asciinema-agg` and ffmpeg.
 
 It is intentionally non-interactive. QEMU serial input and output go through a
 Unix socket, so no graphical session or X server is required.
@@ -51,10 +51,13 @@ asciinema play docs/assets/demo/nix-redox-e2e.cast
 ## What it shows
 
 1. UEFI boot and the Redox serial login.
-2. Login as `user` / `redox`.
+2. Login as `root` / `redox`; the demo builds into the read-only `/nix/store`
+  as root.
 3. `tree --version`.
 4. `snix eval --expr "1 + 1"`.
-5. `snix system info` and `snix system services` inside the guest.
+5. `snix build` of a fresh package, including the resulting store path.
+6. `cat /nix/store/*-nix-demo` to show the built package contents.
+7. `snix system info` and `snix system services` inside the guest.
 
 QEMU keyboard input is sent to the guest's serial console. The bootloader's
 default entry is selected with a carriage return; `LF` is not an Enter key on

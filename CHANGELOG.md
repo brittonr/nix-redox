@@ -9,8 +9,9 @@ All notable changes to this project are documented here. The format follows
 ### Added
 
 - Reproducible asciinema demo (`demo/record-e2e.py`): serial-console UEFI boot,
-  login, `tree --version`, `snix eval`, `snix system info`, and
-  `snix system services`, rendered to MP4 and published on the site.
+  login, `tree --version`, `snix eval`, a fresh `snix build`, and
+  `snix system info`/`snix system services`, rendered to MP4 and published on
+  the site.
 
 ## [0.1.2-alpha] - 2026-11-11
 

@@ -31,6 +31,14 @@ from pathlib import Path
 COMMANDS = [
     ("tree --version", 1.0),
     ('snix eval --expr "1 + 1"', 1.2),
+    (
+        "snix build --expr 'derivation { name = \"nix-demo\"; "
+        "builder = \"/nix/system/profile/bin/bash\"; "
+        "args = [ \"-c\" \"echo built-with-nix > $out\" ]; "
+        "system = \"x86_64-unknown-redox\"; }'",
+        3.0,
+    ),
+    ("cat /nix/store/*-nix-demo", 1.5),
     ("snix system info", 2.8),
     ("snix system services", 3.2),
 ]
@@ -72,6 +80,35 @@ class SerialCapture:
     def contains(self, needle: bytes) -> bool:
         with self.lock:
             return needle in self.buffer
+
+    def length(self) -> int:
+        with self.lock:
+            return len(self.buffer)
+
+    def wait_prompt(self, after: int, timeout: float = 180.0) -> bool:
+        """Wait until a fresh shell prompt is at the tail and has settled."""
+        deadline = time.monotonic() + timeout
+        last_length = after
+        stable_since = None
+        while time.monotonic() < deadline:
+            with self.lock:
+                length = len(self.buffer)
+                tail = bytes(self.buffer[-80:])
+            if length <= after or b"redox# " not in tail:
+                stable_since = None
+                last_length = length
+                time.sleep(0.05)
+                continue
+            if length == last_length:
+                if stable_since is None:
+                    stable_since = time.monotonic()
+                elif time.monotonic() - stable_since > 0.35:
+                    return True
+            else:
+                stable_since = time.monotonic()
+                last_length = length
+            time.sleep(0.05)
+        return False
 
     def wait(self, needle: bytes, timeout: float) -> bool:
         deadline = time.monotonic() + timeout
@@ -169,7 +206,7 @@ def guest_session(args: argparse.Namespace) -> int:
             print("guest did not reach the login prompt", file=sys.stderr)
             return 1
         time.sleep(0.4)
-        sock.sendall(b"user\r")
+        sock.sendall(b"root\r")
         if not capture.wait(b"password:", 15):
             print("guest did not reach the password prompt", file=sys.stderr)
             return 1
@@ -181,10 +218,14 @@ def guest_session(args: argparse.Namespace) -> int:
         time.sleep(1.0)
 
         for command, delay in COMMANDS:
+            start = capture.length()
             for char in command:
                 sock.sendall(char.encode())
                 time.sleep(TYPE_DELAY)
             sock.sendall(b"\r")
+            if not capture.wait_prompt(start, timeout=180):
+                print(f"guest did not finish command: {command}", file=sys.stderr)
+                return 1
             time.sleep(delay)
         time.sleep(1.5)
         return 0
@@ -306,7 +347,7 @@ def main() -> int:
             "-vf", "fps=6,scale=900:-2",
             "-c:v", "libx264",
             "-preset", "slow",
-            "-crf", "35",
+            "-crf", "38",
             "-pix_fmt", "yuv420p",
             "-movflags", "+faststart",
             str(output),
