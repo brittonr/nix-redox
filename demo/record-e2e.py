@@ -1,17 +1,25 @@
 #!/usr/bin/env python3
-"""Record a reproducible nix-redox end-to-end demo.
+"""Record a reproducible nix-redox demo as an asciinema cast.
 
-Boots a graphical Redox image in QEMU, logs in through Orbital, runs
-`tree` and `snix system services`, captures the VGA surface through the QEMU
-monitor, and encodes an MP4 with intro/outro cards.
+Boots a Redox image in QEMU, logs in over the serial console, runs
+`tree --version`, `snix eval`, `snix system info`, and `snix system services`,
+then renders the resulting cast to an MP4 with `agg`.
 
-Requirements: qemu-system-x86_64, OVMF.fd, a Redox UEFI bootloader EFI,
-ffmpeg, ImageMagick, and a font. Input is sent through the QEMU HMP monitor;
-no interactive desktop is required.
+The guest is driven through a QEMU serial socket.  The serial console is the
+source of truth: asciinema records exactly what the guest emits, including the
+typed commands echoed by the shell.  No graphical session is required.
+
+Requirements: qemu-system-x86_64 with KVM, OVMF.fd, a Redox UEFI bootloader,
+asciinema, asciinema-agg, and ffmpeg.  On Nix:
+
+  nix shell nixpkgs#asciinema nixpkgs#asciinema-agg -c \
+    python3 demo/record-e2e.py --image ... --bootloader ... --ovmf ... \
+    --output docs/assets/demo/nix-redox-e2e.mp4
 """
 
 import argparse
 import os
+import shlex
 import shutil
 import socket
 import subprocess
@@ -20,161 +28,87 @@ import threading
 import time
 from pathlib import Path
 
-KEYMAP = {
-    " ": "spc",
-    "/": "slash",
-    "-": "minus",
-    ".": "dot",
-    "_": "shift-minus",
-}
+COMMANDS = [
+    ("tree --version", 1.0),
+    ('snix eval --expr "1 + 1"', 1.2),
+    ("snix system info", 2.8),
+    ("snix system services", 3.2),
+]
+
+TYPE_DELAY = 0.035
 
 
-class Hmp:
-    def __init__(self, path: Path):
-        self.path = path
+class SerialCapture:
+    """Read the QEMU serial socket, tee it to stdout, and retain a tail."""
+
+    def __init__(self, sock: socket.socket, limit: int = 4_000_000):
+        self.sock = sock
+        self.limit = limit
+        self.buffer = bytearray()
         self.lock = threading.Lock()
+        self.running = True
+        self.thread = threading.Thread(target=self._read, daemon=True)
 
-    def send(self, command: str, settle: float = 0.18) -> None:
+    def start(self) -> None:
+        self.thread.start()
+
+    def _read(self) -> None:
+        while self.running:
+            try:
+                data = self.sock.recv(65536)
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+            if not data:
+                break
+            with self.lock:
+                self.buffer.extend(data)
+                if len(self.buffer) > self.limit:
+                    del self.buffer[: len(self.buffer) - self.limit]
+            sys.stdout.buffer.write(data)
+            sys.stdout.buffer.flush()
+
+    def contains(self, needle: bytes) -> bool:
         with self.lock:
-            sock = socket.socket(socket.AF_UNIX)
-            sock.settimeout(5)
-            sock.connect(str(self.path))
-            time.sleep(0.12)
-            try:
-                sock.recv(4096)
-            except OSError:
-                pass
-            sock.sendall((command + "\n").encode())
-            time.sleep(settle)
-            try:
-                sock.recv(8192)
-            except OSError:
-                pass
-            sock.close()
+            return needle in self.buffer
+
+    def wait(self, needle: bytes, timeout: float) -> bool:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self.contains(needle):
+                return True
+            time.sleep(0.05)
+        return False
+
+    def close(self) -> None:
+        self.running = False
+        try:
+            self.thread.join(timeout=2)
+        except RuntimeError:
+            pass
 
 
-def wait_for(path: Path, timeout: float) -> None:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
+def wait_for_path(path: Path, timeout: float) -> None:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
         if path.exists():
             return
-        time.sleep(0.1)
+        time.sleep(0.05)
     raise TimeoutError(f"timed out waiting for {path}")
 
 
-def wait_serial(path: Path, needle: str, timeout: float) -> None:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        if path.exists() and needle in path.read_text(errors="replace"):
-            return
-        time.sleep(0.5)
-    raise TimeoutError(f"timed out waiting for {needle!r} in {path}")
+def guest_session(args: argparse.Namespace) -> int:
+    """Run QEMU and drive the guest; stdout is the serial stream for asciinema."""
 
-
-def type_text(hmp: Hmp, text: str, per_key: float = 0.075) -> None:
-    for ch in text:
-        hmp.send("sendkey " + KEYMAP.get(ch, ch), per_key)
-
-
-def screenshot(hmp: Hmp, path: Path) -> None:
-    hmp.send(f"screendump {path}", 0.25)
-
-
-def card(path: Path, *, title: str, subtitle: str, footer: str, mono: bool, font: str, title_size: int = 84) -> None:
-    family = "DejaVuSansMono" if mono else "DejaVuSans"
-    subprocess.run(
-        [
-            "convert",
-            "-size",
-            "1280x800",
-            "xc:#071c2c",
-            "-font",
-            font,
-            "-fill",
-            "#eef7ff",
-            "-pointsize",
-            str(title_size if not mono else 70),
-            "-gravity",
-            "center",
-            "-annotate",
-            "+0-90",
-            title,
-            "-font",
-            font,
-            "-pointsize",
-            "30",
-            "-fill",
-            "#a9c4d8",
-            "-annotate",
-            "+0+10",
-            subtitle,
-            "-pointsize",
-            "23",
-            "-fill",
-            "#63b3ed",
-            "-annotate",
-            "+0+82",
-            footer,
-            str(path),
-        ],
-        check=True,
-    )
-
-
-def encode_clip(image: Path, out: Path, seconds: float) -> None:
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-loglevel",
-            "error",
-            "-loop",
-            "1",
-            "-t",
-            str(seconds),
-            "-i",
-            str(image),
-            "-vf",
-            "fps=30,format=yuv420p",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "medium",
-            "-crf",
-            "18",
-            str(out),
-        ],
-        check=True,
-    )
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--image", required=True, help="Redox graphical redox.img")
-    parser.add_argument("--bootloader", required=True, help="BOOTX64.EFI")
-    parser.add_argument("--ovmf", required=True, help="OVMF.fd")
-    parser.add_argument("--qemu", default="qemu-system-x86_64")
-    parser.add_argument("--output", default="nix-redox-e2e.mp4")
-    parser.add_argument("--font", default=None)
-    parser.add_argument("--keep-frames", action="store_true")
-    args = parser.parse_args()
-
-    font = args.font
-    if font is None:
-        font = subprocess.check_output(
-            ["fc-match", "-f", "%{file}", "sans"], text=True
-        ).strip()
-
-    work = Path("/var/tmp/redox-demo-recording")
-    if work.exists():
-        shutil.rmtree(work)
-    frames = work / "frames"
-    frames.mkdir(parents=True)
-    serial = work / "serial.log"
-    monitor = work / "monitor.sock"
-    for p in (serial, monitor):
+    work = Path(args.work)
+    work.mkdir(parents=True, exist_ok=True)
+    serial_path = work / "serial.sock"
+    monitor_path = work / "monitor.sock"
+    qemu_log = open(work / "qemu.log", "wb")
+    for path in (serial_path, monitor_path):
         try:
-            p.unlink()
+            path.unlink()
         except FileNotFoundError:
             pass
 
@@ -183,194 +117,233 @@ def main() -> int:
     env.pop("LD_PRELOAD", None)
     qemu = [
         args.qemu,
-        "-M",
-        "pc",
-        "-cpu",
-        "host",
-        "-m",
-        "2048",
-        "-smp",
-        "4",
+        "-M", "pc",
+        "-cpu", "host",
+        "-m", "2048",
+        "-smp", "4",
         "-enable-kvm",
         "-snapshot",
-        "-kernel",
-        args.bootloader,
-        "-bios",
-        args.ovmf,
-        "-drive",
-        f"file={os.path.realpath(args.image)},format=raw,if=none,id=disk0",
-        "-device",
-        "virtio-blk-pci,drive=disk0",
-        "-vga",
-        "std",
-        "-display",
-        "none",
-        "-monitor",
-        f"unix:{monitor},server,nowait",
-        "-serial",
-        f"file:{serial}",
+        "-kernel", args.bootloader,
+        "-bios", args.ovmf,
+        "-drive", f"file={os.path.realpath(args.image)},format=raw,if=none,id=disk0",
+        "-device", "virtio-blk-pci,drive=disk0",
+        "-vga", "std",
+        "-display", "none",
+        "-monitor", f"unix:{monitor_path},server=on,wait=off",
+        "-serial", f"unix:{serial_path},server=on,wait=off",
     ]
-    process = subprocess.Popen(qemu, env=env, start_new_session=True,
-                               stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT)
-    hmp = Hmp(monitor)
-    recording = threading.Event()
-    recorded: list[tuple[Path, float]] = []
-
-    def grab() -> None:
-        index = 0
-        while recording.is_set():
-            frame = frames / f"frame{index:05d}.ppm"
-            try:
-                hmp.send(f"screendump {frame}", 0.12)
-            except OSError:
-                break
-            if frame.exists() and frame.stat().st_size > 0:
-                recorded.append((frame, time.time()))
-                index += 1
-            time.sleep(0.08)
-
+    process = subprocess.Popen(
+        qemu,
+        env=env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=qemu_log,
+        start_new_session=True,
+    )
+    capture = None
     try:
-        wait_for(monitor, 20)
-        time.sleep(3)
-        hmp.send("sendkey ret")
-        time.sleep(1)
-        recording.set()
-        grabber = threading.Thread(target=grab, daemon=True)
-        grabber.start()
+        wait_for_path(serial_path, 20)
+        sock = socket.socket(socket.AF_UNIX)
+        sock.settimeout(0.2)
+        sock.connect(str(serial_path))
+        capture = SerialCapture(sock)
+        capture.start()
 
-        wait_serial(serial, "GraphicScreen", 40)
-        time.sleep(9)  # reach the Orbital login screen
+        # UEFI has loaded the Redox bootloader by now.  A carriage return
+        # selects the default boot entry; LF is not an Enter key on this path.
+        if capture.wait(b"Press e to edit", 20):
+            time.sleep(0.6)
+            sock.sendall(b"\r")
+        else:
+            time.sleep(8)
+            sock.sendall(b"\r")
 
-        hmp.send("mouse_move 640 425")
-        hmp.send("mouse_button 1")
-        time.sleep(0.2)
-        hmp.send("mouse_button 0")
-        time.sleep(0.3)
-        type_text(hmp, "redox", 0.12)
-        hmp.send("sendkey ret", 0.4)
-        time.sleep(8)  # orblogin starts orbterm
+        if not capture.wait(b"Redox OS starting", 30) and not capture.wait(b"login:", 5):
+            # A second Enter recovers from the bootloader's environment editor.
+            sock.sendall(b"\r")
+            if not capture.wait(b"Redox OS starting", 20) and not capture.wait(b"login:", 15):
+                print("guest did not reach the kernel or login prompt", file=sys.stderr)
+                return 1
 
-        type_text(hmp, "tree --version")
-        hmp.send("sendkey ret", 0.4)
-        time.sleep(1.3)
-        type_text(hmp, "snix system info")
-        hmp.send("sendkey ret", 0.4)
-        time.sleep(2.2)
-        type_text(hmp, "snix system services")
-        hmp.send("sendkey ret", 0.4)
-        time.sleep(3.0)
-        time.sleep(2.0)
-    finally:
-        recording.clear()
+        if not capture.wait(b"login:", 45):
+            print("guest did not reach the login prompt", file=sys.stderr)
+            return 1
         time.sleep(0.4)
+        sock.sendall(b"user\r")
+        if not capture.wait(b"password:", 15):
+            print("guest did not reach the password prompt", file=sys.stderr)
+            return 1
+        time.sleep(0.3)
+        sock.sendall(b"redox\r")
+        if not capture.wait(b"redox#", 20):
+            print("guest login failed", file=sys.stderr)
+            return 1
+        time.sleep(1.0)
+
+        for command, delay in COMMANDS:
+            for char in command:
+                sock.sendall(char.encode())
+                time.sleep(TYPE_DELAY)
+            sock.sendall(b"\r")
+            time.sleep(delay)
+        time.sleep(1.5)
+        return 0
+    finally:
+        if capture is not None:
+            capture.close()
         process.terminate()
         try:
             process.wait(timeout=10)
         except subprocess.TimeoutExpired:
             process.kill()
-        try:
-            grabber.join(timeout=2)
-        except NameError:
-            pass
+            process.wait(timeout=5)
+        qemu_log.close()
 
-    if len(recorded) < 10:
-        print("recording failed: too few frames", file=sys.stderr)
-        return 1
 
-    screen_list = work / "screen.ffconcat"
-    with screen_list.open("w") as handle:
-        handle.write("ffconcat version 1.0\n")
-        for index, (frame, stamp) in enumerate(recorded):
-            nxt = recorded[index + 1][1] if index + 1 < len(recorded) else stamp + 1.0
-            duration = max(0.05, min(1.0, nxt - stamp))
-            handle.write(f"file '{frame}'\n")
-            handle.write(f"duration {duration:.4f}\n")
+def resolve_tool(explicit: str | None, name: str, hint: str) -> str:
+    if explicit:
+        return explicit
+    found = shutil.which(name)
+    if found:
+        return found
+    raise SystemExit(f"{name} not found; {hint}")
 
-    screen = work / "screen.mp4"
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-loglevel",
-            "error",
-            "-f",
-            "concat",
-            "-safe",
-            "0",
-            "-i",
-            str(screen_list),
-            "-vf",
-            "fps=30,format=yuv420p",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "medium",
-            "-crf",
-            "18",
-            str(screen),
-        ],
-        check=True,
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--image", required=True, help="Redox redox.img")
+    parser.add_argument("--bootloader", required=True, help="BOOTX64.EFI")
+    parser.add_argument("--ovmf", required=True, help="OVMF.fd")
+    parser.add_argument("--qemu", default="qemu-system-x86_64")
+    parser.add_argument("--asciinema", default=None)
+    parser.add_argument("--agg", default=None)
+    parser.add_argument("--output", default="nix-redox-e2e.mp4")
+    parser.add_argument("--cast", default=None, help="asciicast output path")
+    parser.add_argument("--theme", default="github-dark")
+    parser.add_argument("--font-size", type=int, default=14)
+    parser.add_argument("--keep-work", action="store_true")
+    parser.add_argument("--guest-mode", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--work", default="/var/tmp/redox-asciinema", help=argparse.SUPPRESS)
+    args = parser.parse_args()
+
+    if args.guest_mode:
+        return guest_session(args)
+
+    asciinema = resolve_tool(
+        args.asciinema,
+        "asciinema",
+        "run inside `nix shell nixpkgs#asciinema`",
     )
-
-    intro = work / "intro.png"
-    outro = work / "outro.png"
-    card(
-        intro,
-        title="nix-redox",
-        subtitle="Redox OS, built with Nix",
-        footer="A public alpha · MIT",
-        mono=False,
-        font=font,
+    agg = resolve_tool(
+        args.agg,
+        "agg",
+        "run inside `nix shell nixpkgs#asciinema-agg`",
     )
-    card(
-        outro,
-        title="One command. A complete Redox OS.",
-        subtitle="nix run github:brittonr/nix-redox",
-        footer="brittonr.github.io/nix-redox · v0.1.2-alpha",
-        mono=False,
-        font=font,
-        title_size=54,
-    )
-    intro_mp4 = work / "intro.mp4"
-    outro_mp4 = work / "outro.mp4"
-    encode_clip(intro, intro_mp4, 2.5)
-    encode_clip(outro, outro_mp4, 3.5)
 
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
+    cast = Path(args.cast) if args.cast else output.with_suffix(".cast")
+    work = Path(args.work)
+    if work.exists():
+        shutil.rmtree(work)
+    work.mkdir(parents=True)
+
+    guest_args = [
+        sys.executable,
+        str(Path(__file__).resolve()),
+        "--guest-mode",
+        "--image", args.image,
+        "--bootloader", args.bootloader,
+        "--ovmf", args.ovmf,
+        "--qemu", args.qemu,
+        "--work", str(work),
+    ]
+    command = shlex.join(guest_args)
+    rec = [
+        asciinema,
+        "rec",
+        "--headless",
+        "--quiet",
+        "--overwrite",
+        "--return",
+        "--output-format", "asciicast-v2",
+        "--window-size", "120x40",
+        "--idle-time-limit", "2",
+        "--title", "nix-redox: a Nix-built Redox OS",
+        "--command", command,
+        str(cast),
+    ]
+    subprocess.run(rec, check=True)
+
+    if not cast.exists() or cast.stat().st_size < 1000:
+        print(f"asciinema did not produce a usable cast at {cast}", file=sys.stderr)
+        return 1
+
+    gif = work / "terminal.gif"
+    subprocess.run(
+        [
+            agg,
+            "--quiet",
+            "--theme", args.theme,
+            "--font-size", str(args.font_size),
+            "--line-height", "1.28",
+            "--cols", "120",
+            "--rows", "40",
+            "--fps-cap", "6",
+            "--last-frame-duration", "2",
+            "--idle-time-limit", "2",
+            str(cast),
+            str(gif),
+        ],
+        check=True,
+    )
     subprocess.run(
         [
             "ffmpeg",
             "-y",
-            "-loglevel",
-            "error",
-            "-i",
-            str(intro_mp4),
-            "-i",
-            str(screen),
-            "-i",
-            str(outro_mp4),
-            "-filter_complex",
-            "[0:v][1:v][2:v]concat=n=3:v=1:a=0[v]",
-            "-map",
-            "[v]",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "slow",
-            "-crf",
-            "27",
-            "-pix_fmt",
-            "yuv420p",
-            "-movflags",
-            "+faststart",
+            "-loglevel", "error",
+            "-i", str(gif),
+            "-vf", "fps=6,scale=900:-2",
+            "-c:v", "libx264",
+            "-preset", "slow",
+            "-crf", "35",
+            "-pix_fmt", "yuv420p",
+            "-movflags", "+faststart",
             str(output),
         ],
         check=True,
     )
-    print(f"wrote {output} ({output.stat().st_size} bytes, {len(recorded)} frames)")
 
-    if not args.keep_frames:
+    duration = float(
+        subprocess.check_output(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=nw=1:nk=1",
+                str(output),
+            ],
+            text=True,
+        ).strip()
+    )
+    poster = output.with_name(output.stem + "-poster.png")
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-loglevel", "error",
+            "-ss", f"{duration * 0.75:.2f}",
+            "-i", str(output),
+            "-frames:v", "1",
+            str(poster),
+        ],
+        check=True,
+    )
+
+    print(f"wrote {cast} ({cast.stat().st_size} bytes)")
+    print(f"wrote {output} ({output.stat().st_size} bytes)")
+    print(f"wrote {poster} ({poster.stat().st_size} bytes)")
+    if not args.keep_work:
         shutil.rmtree(work)
     return 0
 

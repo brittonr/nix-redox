@@ -153,6 +153,24 @@ boot 0`; it did not turn a partial cycle into success or update the success inde
 Capture: `/var/tmp/redox-self-hosting-captures/20261028T213608-native-rebuild-test/`.
 This is a bounded QEMU boot/rejection check, not a completed QEMU three-boot proof.
 
+## Current candidate proof set
+
+At clean commit `1ff012e`, the current VM proofs pass:
+
+- `self-hosting-test` — `20261111T233153-self-hosting-test`, **86/86** in
+  4215 seconds. Includes the guest-native Snix self-build, execution, evaluation,
+  source rebuild, and hostname/inline-file rebuild cycle.
+- `native-rebuild-test` — `20261111T233134-native-rebuild-test`, **134/134** in
+  3702 seconds across three cold firmware boots on one writable disk. The seed,
+  native, and rollback boots all report the expected executing bootloader,
+  kernel, and initfs identities.
+- `snix-sandbox-test` — `20261112T001037-snix-sandbox-test`, **19/19** in
+  705 seconds, including the sandboxed source rebuild probe.
+
+All three runs record `git_dirty: false`; the generated
+`docs/self-hosting/latest-success.md` index is the canonical pointer to their
+capture directories.
+
 ## Direct rustc and environment checks
 
 The self-hosting profile's `rustc-direct-link` and `environ-diag` checks compile

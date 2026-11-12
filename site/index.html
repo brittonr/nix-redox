@@ -14,6 +14,7 @@
   <link rel="canonical" href="https://brittonr.github.io/nix-redox/">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b3a5b'/%3E%3Ctext x='32' y='46' font-family='system-ui,sans-serif' font-size='42' font-weight='700' text-anchor='middle' fill='%23ffffff'%3ER%3C/text%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="assets/asciinema/asciinema-player.min.css">
 </head>
 <body>
   <a class="skip" href="#main">Skip to content</a>
@@ -75,15 +76,13 @@
     <section id="demo" class="section">
       <div class="wrap">
         <h2>See it boot</h2>
-        <p class="section-lede">A 61-second end-to-end run: UEFI boot, Orbital login, and <code>snix</code> system inspection inside the guest.</p>
+        <p class="section-lede">An asciinema cast of the serial console: UEFI boot, login, and <code>snix</code> evaluation and system inspection inside the guest.</p>
         <figure class="demo-shot">
-          <video controls preload="metadata" poster="assets/orbital-login.png" width="1280" height="800">
-            <source src="assets/demo/nix-redox-e2e.mp4" type="video/mp4">
-            Your browser does not support the video tag.
-            <a href="assets/demo/nix-redox-e2e.mp4">Download the demo</a>.
-          </video>
-          <figcaption>Recorded from the v0.1.2-alpha graphical image in QEMU with KVM.</figcaption>
+          <div id="demo-player" class="demo-player" role="region" aria-label="Asciinema recording of Redox booting and running snix commands"></div>
+          <noscript><p><a href="assets/demo/nix-redox-e2e.mp4">Watch the rendered MP4</a>.</p></noscript>
+          <figcaption>Recorded from the v0.1.2-alpha graphical image over the QEMU serial console.</figcaption>
         </figure>
+        <p class="fine"><a href="assets/demo/nix-redox-e2e.cast">Asciicast source</a> · <a href="assets/demo/nix-redox-e2e.mp4">MP4</a></p>
       </div>
     </section>
 
@@ -110,6 +109,10 @@
           <article class="card">
             <h3>Reproducible by default</h3>
             <p>Pinned inputs, per-crate builds, fixed-output sources, and a tiered CI gate from evaluation to VM integration.</p>
+          </article>
+          <article class="card">
+            <h3>Self-hosting, proven</h3>
+            <p>86/86 self-hosting tests, 134/134 native rebuild tests across three cold boots, and 19/19 Snix sandbox tests on the current candidate.</p>
           </article>
           <article class="card">
             <h3>Honest alpha</h3>
@@ -141,6 +144,7 @@
             <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/options.md">Module options reference</a></li>
             <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/redox-rebuild.md">Host-side generations</a></li>
             <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/alpha-release.md">Alpha scope and limitations</a></li>
+            <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/self-hosting/latest-success.md">Latest VM proof runs</a></li>
             <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/self-hosting/proof-artifacts.md">Self-hosting proof contract</a></li>
           </ul>
         </div>
@@ -169,5 +173,22 @@
       </p>
     </div>
   </footer>
+  <script src="assets/asciinema/asciinema-player.min.js"></script>
+  <script>
+    AsciinemaPlayer.create(
+      "assets/demo/nix-redox-e2e.cast",
+      document.getElementById("demo-player"),
+      {
+        cols: 120,
+        rows: 40,
+        fit: "width",
+        theme: "github-dark",
+        poster: "npt:0:15",
+        preload: true,
+        controls: true,
+        autoPlay: false
+      }
+    );
+  </script>
 </body>
 </html>

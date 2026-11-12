@@ -149,15 +149,15 @@ h1 {
 figcaption { color: var(--muted); font-size: 0.82rem; margin-top: 0.7rem; }
 
 .demo-shot { margin: 0; }
-.demo-shot video {
-  display: block;
+.demo-player {
   width: 100%;
-  height: auto;
-  background: #000;
+  min-height: 20rem;
   border-radius: 0.9rem;
+  overflow: hidden;
   border: 1px solid var(--border);
   box-shadow: 0 30px 70px rgb(0 0 0 / 35%);
 }
+.demo-player .ap-player { border-radius: 0.9rem; }
 
 .section { padding: 4rem 0; }
 .section.alt { background: color-mix(in srgb, var(--bg-alt) 78%, transparent); border-block: 1px solid var(--border); }
