@@ -54,6 +54,15 @@ hosted evidence gate.
 
 ## Security and branch protection
 
+Repository ruleset `Require self-hosting evidence` is active on `main` and
+requires the hosted check:
+
+- `Evidence replay / video`
+
+This forbids merging a change to `main` until the evidence/video gate passes.
+The live KVM check is not required by default because no self-hosted runner is
+registered; its job is skipped while `KVM_PROOF_ENABLED` is unset.
+
 This repository is public. **Do not attach a persistent self-hosted runner to
 untrusted pull requests.** A self-hosted runner executes repository code with
 the runner user's permissions and must be treated as a trusted machine.
@@ -67,12 +76,12 @@ Safe options:
 
 Require the hosted check for pull requests:
 
-- Required check: `Self-hosting proof / Evidence replay / video`
+- Required check: `Evidence replay / video`
 
 If a trusted, isolated KVM runner is available for pull requests, add the live
 check as well:
 
-- Required check: `Self-hosting proof / Native rebuild proof (KVM)`
+- Required check: `Native rebuild proof (KVM)`
 
 A required check that can run untrusted PR code on shared infrastructure is not
 acceptable for this public repository.
