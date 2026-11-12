@@ -1,0 +1,75 @@
+[2J[001;001H[=3h[2J[001;001HBdsDxe: loading Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x1,0x0)
+BdsDxe: starting Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x1,0x0)
+[2J[001;001H[8;056;240t[2J[001;001HWARN - Failed to locate Outputs: Status(0x800000000000000E) "not found"
+
+BOOT_PROOF:bootloader:/nix/store/ywkimw16wyiw6srh60biv0c9bwiafhmb-redox-bootloader-native-boot-proof-unstable
+Redox OS Bootloader 1.0.0 on x86_64/UEFI
+Hardware descriptor: Acpi(bf138000, 24)
+Looking for RedoxFS:
+RedoxFS 55752de3-8e36-45cc-8037-af114d29b6af: 16180 MiB
+
+usr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 1/1 MiBusr/lib/boot/kernel: 1/1 MiB
+usr/lib/boot/initfs: 0/51 MiBusr/lib/boot/initfs: 0/51 MiBusr/lib/boot/initfs: 1/51 MiBusr/lib/boot/initfs: 2/51 MiBusr/lib/boot/initfs: 3/51 MiBusr/lib/boot/initfs: 4/51 MiBusr/lib/boot/initfs: 5/51 MiBusr/lib/boot/initfs: 6/51 MiBusr/lib/boot/initfs: 7/51 MiBusr/lib/boot/initfs: 8/51 MiBusr/lib/boot/initfs: 9/51 MiBusr/lib/boot/initfs: 10/51 MiBusr/lib/boot/initfs: 11/51 MiBusr/lib/boot/initfs: 12/51 MiBusr/lib/boot/initfs: 13/51 MiBusr/lib/boot/initfs: 14/51 MiBusr/lib/boot/initfs: 15/51 MiBusr/lib/boot/initfs: 16/51 MiBusr/lib/boot/initfs: 17/51 MiBusr/lib/boot/initfs: 18/51 MiBusr/lib/boot/initfs: 19/51 MiBusr/lib/boot/initfs: 20/51 MiBusr/lib/boot/initfs: 21/51 MiBusr/lib/boot/initfs: 22/51 MiBusr/lib/boot/initfs: 23/51 MiBusr/lib/boot/initfs: 24/51 MiBusr/lib/boot/initfs: 25/51 MiBusr/lib/boot/initfs: 26/51 MiBusr/lib/boot/initfs: 27/51 MiBusr/lib/boot/initfs: 28/51 MiBusr/lib/boot/initfs: 29/51 MiBusr/lib/boot/initfs: 30/51 MiBusr/lib/boot/initfs: 31/51 MiBusr/lib/boot/initfs: 32/51 MiBusr/lib/boot/initfs: 33/51 MiBusr/lib/boot/initfs: 34/51 MiBusr/lib/boot/initfs: 35/51 MiBusr/lib/boot/initfs: 36/51 MiBusr/lib/boot/initfs: 37/51 MiBusr/lib/boot/initfs: 38/51 MiBusr/lib/boot/initfs: 39/51 MiBusr/lib/boot/initfs: 40/51 MiBusr/lib/boot/initfs: 41/51 MiBusr/lib/boot/initfs: 42/51 MiBusr/lib/boot/initfs: 43/51 MiBusr/lib/boot/initfs: 44/51 MiBusr/lib/boot/initfs: 45/51 MiBusr/lib/boot/initfs: 46/51 MiBusr/lib/boot/initfs: 47/51 MiBusr/lib/boot/initfs: 48/51 MiBusr/lib/boot/initfs: 49/51 MiBusr/lib/boot/initfs: 50/51 MiBusr/lib/boot/initfs: 51/51 MiBusr/lib/boot/initfs: 51/51 MiB
+Starting graphical debug
+Framebuffer not found
+BOOT_PROOF:kernel:/nix/store/mm889zql4h1wwmra5ddpbx466lpy98af-redox-kernel-native-boot-proof-unstable
+kernel::arch::x86_shared::start:INFO -- Redox OS starting...
+kernel::startup::memory:INFO -- Memory: 8084 MB
+kernel::startup::memory:INFO -- Highest huge page level: 1
+kernel::startup::memory:INFO -- Permanently used: 1204 KB
+kernel::arch::x86_shared::start:INFO -- Now on kmain stack
+kernel::arch::x86_64::alternative:INFO -- Enabling AVX
+Unable to find HPET
+I/O APICs: [IoApic { redir_table: [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 65536, 65536, 65536, 65536, 65536, 65536, 65536, 65536], gsi_start: 0, count: 24 }], overrides: [Override { bus_irq: 4, gsi: 4, trigger_mode: ConformsToSpecs, polarity: ConformsToSpecs }]
+Unable to determine NUMA topology
+init: switchroot to /scheme/initfs /scheme/initfs/etc
+BOOT_PROOF:initfs:/nix/store/vin80lxr75qkg43kgjha33km5kck802v-redox-initfs-unstable
+[3m[38;5;15m2026-11-12T05-32-09.066[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@acpid[39m:32 [1m[38;5;12mINFO[m[39m] [1m[38;5;15macpid start[m[39m
+[3m[38;5;15m2026-11-12T05-32-09.072[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@acpid[39m:116 [1m[38;5;12mINFO[m[39m] [1m[38;5;15macpid ready[m[39m
+[3m[38;5;15m2026-11-12T05-32-09.078[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@hwd[39m:25 [1m[38;5;12mINFO[m[39m] [1m[38;5;15musing ACPI backend[m[39m
+[3m[38;5;15m2026-11-12T05-32-09.112[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid[39m:327 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI SG-BS:DV.F VEND:DEVI CL.SC.IN.RV[m[39m
+[3m[38;5;15m2026-11-12T05-32-09.120[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid[39m:424 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI 0000:00:00.0 8086:0D57 06.00.00.00 HostBridge[m[39m
+[3m[38;5;15m2026-11-12T05-32-09.128[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid[39m:424 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI 0000:00:01.0 1AF4:1042 01.80.00.01 OtherMassStorageController[m[39m
+[3m[38;5;15m2026-11-12T05-32-09.136[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid[39m:424 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI 0000:00:02.0 1AF4:1044 FF.FF.00.01 Unknown[m[39m
+[3m[38;5;15m2026-11-12T05-32-09.144[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid::cfg_access::fallback[39m:31 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI: couldn't find or access PCIe extended configuration, and thus falling back to PCI 3.0 io ports[m[39m
+[3m[38;5;15m2026-11-12T05-32-09.154[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@acpi::aml[39m:135 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mInitializing AML interpreter v6.1.1[m[39m
+[3m[38;5;15m2026-11-12T05-32-09.184[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid_spawner[39m:87 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mpcid-spawner: spawn "/scheme/initfs/lib/drivers/virtio-blkd"[m[39m
+[3m[38;5;15m2026-11-12T05-32-09.206[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@virtio_blkd[39m:128 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mvirtio-blk: initiating startup sequence :^)[m[39m
+[3m[38;5;15m2026-11-12T05-32-09.220[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@virtio_blkd[39m:140 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mvirtio-blk: disk size: 33554432 sectors and block size of 512 bytes[m[39m
+[ERROR redoxfs] failed to open filesystem /scheme/disk.pci-0000-00-01.0_virtio_blk/0: No such file or directory
+removing handle: id: 3, Some(Disk(0))
+[ERROR redoxfs] failed to open filesystem /scheme/disk.pci-0000-00-01.0_virtio_blk/0p0: No such file or directory
+removing handle: id: 4, Some(Partition(0, 0))
+removing handle: id: 2, Some(List([48, 10, 48, 112, 48, 10, 48, 112, 49, 10]))
+init: switchroot to /usr /etc
+native-proof-remove-marker
+native-proof-retain-marker
+FUNC_TESTS_START
+Native system bootstrap isolation: SNIX_NO_SANDBOX=unset
+FUNC_TEST:persisted-boot-state:PASS
+Native proof boot phase: rollback
+FUNC_TEST:rollback-running-generation:PASS
+FUNC_TEST:rollback-current-generation:PASS
+FUNC_TEST:rollback-boot-default:PASS
+FUNC_TEST:rollback-manifest:PASS
+FUNC_TEST:rollback-hostname:PASS
+FUNC_TEST:rollback-kernel-bytes:PASS
+FUNC_TEST:rollback-initfs-bytes:PASS
+FUNC_TEST:rollback-removed-service-restored:PASS
+FUNC_TEST:rollback-retained-service-restored:PASS
+FUNC_TEST:rollback-system-identity:PASS
+FUNC_TEST:rollback-etc-identity:PASS
+FUNC_TEST:saved-native-still-rooted:PASS
+FUNC_TEST:no-build-bridge-after-rebuild:PASS
+FUNC_ARTIFACT:native-generation:/etc/redox-system/generations/2/manifest.json
+FUNC_ARTIFACT:rollback-log:/var/lib/redox-native-proof/rollback.out
+FUNC_TESTS_COMPLETE
+
+==========================================
+  Redox OS Boot Complete!
+==========================================
+
+
+Welcome to Redox OS!
+
+ion: expansion error: Variable "cmd" does not exist

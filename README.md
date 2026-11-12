@@ -1,6 +1,7 @@
 # nix-redox
 
 [![CI](https://github.com/brittonr/nix-redox/actions/workflows/ci.yml/badge.svg)](https://github.com/brittonr/nix-redox/actions/workflows/ci.yml)
+[![Self-hosting](https://github.com/brittonr/nix-redox/actions/workflows/self-hosting.yml/badge.svg)](https://github.com/brittonr/nix-redox/actions/workflows/self-hosting.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Nix Flakes](https://img.shields.io/badge/Nix-flakes-5277C3?logo=nixos&logoColor=white)](https://nixos.org)
 [![Website](https://img.shields.io/badge/website-nix--redox-63b3ed)](https://brittonr.github.io/nix-redox/)
@@ -291,6 +292,10 @@ nix run .#bridge-test
 nix run .#snix-sandbox-test -- --verbose
 nix run .#self-hosting-test -- --verbose
 ```
+
+The self-build evidence video is validated in
+[`Self-hosting CI`](docs/ci-self-hosting.md). The live three-boot proof uses a
+self-hosted KVM runner; standard GitHub-hosted runners do not expose `/dev/kvm`.
 
 Run `nix flake check` as the final aggregate gate for a release candidate.
 [`docs/alpha-release.md`](docs/alpha-release.md) describes the full checklist

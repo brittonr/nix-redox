@@ -1,0 +1,284 @@
+[2J[001;001H[=3h[2J[001;001HBdsDxe: loading Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x1,0x0)
+BdsDxe: starting Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x1,0x0)
+[2J[001;001H[8;056;240t[2J[001;001HWARN - Failed to locate Outputs: Status(0x800000000000000E) "not found"
+
+BOOT_PROOF:bootloader:/nix/store/ywkimw16wyiw6srh60biv0c9bwiafhmb-redox-bootloader-native-boot-proof-unstable
+Redox OS Bootloader 1.0.0 on x86_64/UEFI
+Hardware descriptor: Acpi(bf138000, 24)
+Looking for RedoxFS:
+RedoxFS 55752de3-8e36-45cc-8037-af114d29b6af: 16180 MiB
+
+usr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 1/1 MiBusr/lib/boot/kernel: 1/1 MiB
+usr/lib/boot/initfs: 0/51 MiBusr/lib/boot/initfs: 0/51 MiBusr/lib/boot/initfs: 1/51 MiBusr/lib/boot/initfs: 2/51 MiBusr/lib/boot/initfs: 3/51 MiBusr/lib/boot/initfs: 4/51 MiBusr/lib/boot/initfs: 5/51 MiBusr/lib/boot/initfs: 6/51 MiBusr/lib/boot/initfs: 7/51 MiBusr/lib/boot/initfs: 8/51 MiBusr/lib/boot/initfs: 9/51 MiBusr/lib/boot/initfs: 10/51 MiBusr/lib/boot/initfs: 11/51 MiBusr/lib/boot/initfs: 12/51 MiBusr/lib/boot/initfs: 13/51 MiBusr/lib/boot/initfs: 14/51 MiBusr/lib/boot/initfs: 15/51 MiBusr/lib/boot/initfs: 16/51 MiBusr/lib/boot/initfs: 17/51 MiBusr/lib/boot/initfs: 18/51 MiBusr/lib/boot/initfs: 19/51 MiBusr/lib/boot/initfs: 20/51 MiBusr/lib/boot/initfs: 21/51 MiBusr/lib/boot/initfs: 22/51 MiBusr/lib/boot/initfs: 23/51 MiBusr/lib/boot/initfs: 24/51 MiBusr/lib/boot/initfs: 25/51 MiBusr/lib/boot/initfs: 26/51 MiBusr/lib/boot/initfs: 27/51 MiBusr/lib/boot/initfs: 28/51 MiBusr/lib/boot/initfs: 29/51 MiBusr/lib/boot/initfs: 30/51 MiBusr/lib/boot/initfs: 31/51 MiBusr/lib/boot/initfs: 32/51 MiBusr/lib/boot/initfs: 33/51 MiBusr/lib/boot/initfs: 34/51 MiBusr/lib/boot/initfs: 35/51 MiBusr/lib/boot/initfs: 36/51 MiBusr/lib/boot/initfs: 37/51 MiBusr/lib/boot/initfs: 38/51 MiBusr/lib/boot/initfs: 39/51 MiBusr/lib/boot/initfs: 40/51 MiBusr/lib/boot/initfs: 41/51 MiBusr/lib/boot/initfs: 42/51 MiBusr/lib/boot/initfs: 43/51 MiBusr/lib/boot/initfs: 44/51 MiBusr/lib/boot/initfs: 45/51 MiBusr/lib/boot/initfs: 46/51 MiBusr/lib/boot/initfs: 47/51 MiBusr/lib/boot/initfs: 48/51 MiBusr/lib/boot/initfs: 49/51 MiBusr/lib/boot/initfs: 50/51 MiBusr/lib/boot/initfs: 51/51 MiBusr/lib/boot/initfs: 51/51 MiB
+Starting graphical debug
+Framebuffer not found
+BOOT_PROOF:kernel:/nix/store/mm889zql4h1wwmra5ddpbx466lpy98af-redox-kernel-native-boot-proof-unstable
+kernel::arch::x86_shared::start:INFO -- Redox OS starting...
+kernel::startup::memory:INFO -- Memory: 8084 MB
+kernel::startup::memory:INFO -- Highest huge page level: 1
+kernel::startup::memory:INFO -- Permanently used: 1204 KB
+kernel::arch::x86_shared::start:INFO -- Now on kmain stack
+kernel::arch::x86_64::alternative:INFO -- Enabling AVX
+Unable to find HPET
+I/O APICs: [IoApic { redir_table: [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 65536, 65536, 65536, 65536, 65536, 65536, 65536, 65536], gsi_start: 0, count: 24 }], overrides: [Override { bus_irq: 4, gsi: 4, trigger_mode: ConformsToSpecs, polarity: ConformsToSpecs }]
+Unable to determine NUMA topology
+init: switchroot to /scheme/initfs /scheme/initfs/etc
+BOOT_PROOF:initfs:/nix/store/vin80lxr75qkg43kgjha33km5kck802v-redox-initfs-unstable
+[3m[38;5;15m2026-11-12T04-31-41.563[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@acpid[39m:32 [1m[38;5;12mINFO[m[39m] [1m[38;5;15macpid start[m[39m
+[3m[38;5;15m2026-11-12T04-31-41.572[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@acpid[39m:116 [1m[38;5;12mINFO[m[39m] [1m[38;5;15macpid ready[m[39m
+[3m[38;5;15m2026-11-12T04-31-41.579[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@hwd[39m:25 [1m[38;5;12mINFO[m[39m] [1m[38;5;15musing ACPI backend[m[39m
+[3m[38;5;15m2026-11-12T04-31-41.626[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid[39m:327 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI SG-BS:DV.F VEND:DEVI CL.SC.IN.RV[m[39m
+[3m[38;5;15m2026-11-12T04-31-41.630[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid[39m:424 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI 0000:00:00.0 8086:0D57 06.00.00.00 HostBridge[m[39m
+[3m[38;5;15m2026-11-12T04-31-41.640[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid[39m:424 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI 0000:00:01.0 1AF4:1042 01.80.00.01 OtherMassStorageController[m[39m
+[3m[38;5;15m2026-11-12T04-31-41.645[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid[39m:424 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI 0000:00:02.0 1AF4:1044 FF.FF.00.01 Unknown[m[39m
+[3m[38;5;15m2026-11-12T04-31-41.656[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid::cfg_access::fallback[39m:31 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI: couldn't find or access PCIe extended configuration, and thus falling back to PCI 3.0 io ports[m[39m
+[3m[38;5;15m2026-11-12T04-31-41.668[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@acpi::aml[39m:135 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mInitializing AML interpreter v6.1.1[m[39m
+[3m[38;5;15m2026-11-12T04-31-41.715[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid_spawner[39m:87 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mpcid-spawner: spawn "/scheme/initfs/lib/drivers/virtio-blkd"[m[39m
+[3m[38;5;15m2026-11-12T04-31-41.806[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@virtio_blkd[39m:128 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mvirtio-blk: initiating startup sequence :^)[m[39m
+[3m[38;5;15m2026-11-12T04-31-41.825[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@virtio_blkd[39m:140 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mvirtio-blk: disk size: 33554432 sectors and block size of 512 bytes[m[39m
+[ERROR redoxfs] failed to open filesystem /scheme/disk.pci-0000-00-01.0_virtio_blk/0: No such file or directory
+removing handle: id: 3, Some(Disk(0))
+[ERROR redoxfs] failed to open filesystem /scheme/disk.pci-0000-00-01.0_virtio_blk/0p0: No such file or directory
+removing handle: id: 4, Some(Partition(0, 0))
+removing handle: id: 2, Some(List([48, 10, 48, 112, 48, 10, 48, 112, 49, 10]))
+init: switchroot to /usr /etc
+native-proof-remove-marker
+native-proof-retain-marker
+FUNC_TESTS_START
+Native system bootstrap isolation: SNIX_NO_SANDBOX=unset
+Native proof boot phase: seed
+FUNC_TEST:durable-flush-helper-built:PASS
+FUNC_TEST:native-inputs:PASS
+FUNC_TEST:no-build-bridge:PASS
+FUNC_TEST:original-manifest:PASS
+FUNC_TEST:initial-removal-service:PASS
+FUNC_TEST:initial-retained-service:PASS
+FUNC_TEST:service-fixtures:PASS
+FUNC_TEST:driver-fixture:PASS
+FUNC_ARTIFACT:configuration:/var/lib/redox-native-proof/config.json
+[native-system:rebuild] elapsed=70s pid=60
+[native-system:rebuild] elapsed=100s pid=60
+[native-system:rebuild] elapsed=131s pid=60
+[native-system:rebuild] elapsed=161s pid=60
+[native-system:rebuild] elapsed=191s pid=60
+[native-system:rebuild] elapsed=222s pid=60
+[native-system:rebuild] elapsed=252s pid=60
+[native-system:rebuild] elapsed=282s pid=60
+[native-system:rebuild] elapsed=312s pid=60
+[native-system:rebuild] elapsed=342s pid=60
+[native-system:rebuild] elapsed=372s pid=60
+[native-system:rebuild] elapsed=402s pid=60
+[native-system:rebuild] elapsed=432s pid=60
+[native-system:rebuild] elapsed=462s pid=60
+[native-system:rebuild] elapsed=492s pid=60
+[native-system:rebuild] elapsed=522s pid=60
+[native-system:rebuild] elapsed=553s pid=60
+[native-system:rebuild] elapsed=583s pid=60
+[native-system:rebuild] elapsed=613s pid=60
+[native-system:rebuild] elapsed=643s pid=60
+[native-system:rebuild] elapsed=673s pid=60
+[native-system:rebuild] elapsed=703s pid=60
+[native-system:rebuild] elapsed=733s pid=60
+[native-system:rebuild] elapsed=763s pid=60
+[native-system:rebuild] elapsed=793s pid=60
+[native-system:rebuild] elapsed=823s pid=60
+[native-system:rebuild] elapsed=853s pid=60
+[native-system:rebuild] elapsed=883s pid=60
+[native-system:rebuild] elapsed=913s pid=60
+[native-system:rebuild] elapsed=943s pid=60
+[native-system:rebuild] elapsed=973s pid=60
+[native-system:rebuild] elapsed=1004s pid=60
+[native-system:rebuild] elapsed=1034s pid=60
+[native-system:rebuild] elapsed=1064s pid=60
+[native-system:rebuild] elapsed=1094s pid=60
+[native-system:rebuild] elapsed=1124s pid=60
+[native-system:rebuild] elapsed=1154s pid=60
+[native-system:rebuild] elapsed=1184s pid=60
+[native-system:rebuild] elapsed=1214s pid=60
+[native-system:rebuild] elapsed=1244s pid=60
+[native-system:rebuild] elapsed=1274s pid=60
+[native-system:rebuild] elapsed=1305s pid=60
+[native-system:rebuild] elapsed=1335s pid=60
+[native-system:rebuild] elapsed=1365s pid=60
+[native-system:rebuild] elapsed=1395s pid=60
+[native-system:rebuild] elapsed=1425s pid=60
+[native-system:rebuild] elapsed=1455s pid=60
+[native-system:rebuild] elapsed=1487s pid=60
+[native-system:rebuild] elapsed=1517s pid=60
+[native-system:rebuild] elapsed=1547s pid=60
+[native-system:rebuild] elapsed=1578s pid=60
+[native-system:rebuild] elapsed=1608s pid=60
+[native-system:rebuild] elapsed=1638s pid=60
+[native-system:rebuild] elapsed=1668s pid=60
+[native-system:rebuild] elapsed=1698s pid=60
+[native-system:rebuild] elapsed=1729s pid=60
+[native-system:rebuild] elapsed=1759s pid=60
+[native-system:rebuild] elapsed=1789s pid=60
+[native-system:rebuild] elapsed=1819s pid=60
+[native-system:rebuild] elapsed=1849s pid=60
+[native-system:rebuild] elapsed=1879s pid=60
+[native-system:rebuild] elapsed=1909s pid=60
+[native-system:rebuild] elapsed=1939s pid=60
+[native-system:rebuild] elapsed=1969s pid=60
+[native-system:rebuild] elapsed=2000s pid=60
+[native-system:rebuild] elapsed=2030s pid=60
+[native-system:rebuild] elapsed=2060s pid=60
+[native-system:rebuild] elapsed=2090s pid=60
+[native-system:rebuild] elapsed=2120s pid=60
+[native-system:rebuild] elapsed=2150s pid=60
+[native-system:rebuild] elapsed=2180s pid=60
+[native-system:rebuild] elapsed=2210s pid=60
+[native-system:rebuild] elapsed=2241s pid=60
+[native-system:rebuild] elapsed=2271s pid=60
+[native-system:rebuild] elapsed=2301s pid=60
+[native-system:rebuild] elapsed=2331s pid=60
+[native-system:rebuild] elapsed=2361s pid=60
+[native-system:rebuild] elapsed=2391s pid=60
+[native-system:rebuild] elapsed=2421s pid=60
+[native-system:rebuild] elapsed=2451s pid=60
+[native-system:rebuild] elapsed=2481s pid=60
+[native-system:rebuild] elapsed=2511s pid=60
+[native-system:rebuild] elapsed=2541s pid=60
+[native-system:rebuild] elapsed=2572s pid=60
+[native-system:rebuild] elapsed=2602s pid=60
+[native-system:rebuild] elapsed=2632s pid=60
+[native-system:rebuild] elapsed=2662s pid=60
+[native-system:rebuild] elapsed=2693s pid=60
+[native-system:rebuild] elapsed=2723s pid=60
+[native-system:rebuild] elapsed=2753s pid=60
+[native-system:rebuild] elapsed=2784s pid=60
+[native-system:rebuild] elapsed=2814s pid=60
+[native-system:rebuild] elapsed=2844s pid=60
+[native-system:rebuild] elapsed=2874s pid=60
+[native-system:rebuild] elapsed=2904s pid=60
+[native-system:rebuild] elapsed=2934s pid=60
+[native-system:rebuild] elapsed=2965s pid=60
+[native-system:rebuild] elapsed=2995s pid=60
+[native-system:rebuild] elapsed=3025s pid=60
+[native-system:rebuild] elapsed=3055s pid=60
+FUNC_ARTIFACT:rebuild-stdout:/var/lib/redox-native-proof/rebuild.out
+FUNC_ARTIFACT:rebuild-stderr:/var/lib/redox-native-proof/rebuild.err
+FUNC_TEST:native-system-rebuild:PASS
+FUNC_TEST:native-output-is-store:PASS
+FUNC_TEST:graph-not-prebuilt:PASS
+FUNC_TEST:native-output-identity:PASS
+FUNC_ARTIFACT:native-toplevel:/nix/store/gydfcig6phakdi1jq6dq0sn6msy9j3xl-redox-system-native
+FUNC_TEST:generation-advanced:PASS
+FUNC_TEST:current-generation:PASS
+FUNC_TEST:saved-manifest:PASS
+FUNC_TEST:native-output-manifest:PASS
+FUNC_TEST:package-toolchain-retained:PASS
+FUNC_TEST:native-services-and-drivers:PASS
+FUNC_TEST:hostname-generated:PASS
+FUNC_TEST:timezone-generated:PASS
+FUNC_TEST:etc-generation-identity:PASS
+FUNC_TEST:etc-generated-hostname:PASS
+FUNC_TEST:kernel-elf-machine:PASS
+FUNC_TEST:kernel-executable-load:PASS
+FUNC_TEST:bootloader-pe-machine:PASS
+FUNC_TEST:bootloader-efi-subsystem:PASS
+FUNC_ARTIFACT:kernel-headers:/var/lib/redox-native-proof/kernel.headers
+FUNC_ARTIFACT:bootloader-headers:/var/lib/redox-native-proof/bootloader.headers
+FUNC_TEST:active-kernel-compiled-bytes:PASS
+FUNC_TEST:active-initfs-generated-bytes:PASS
+FUNC_TEST:native-kernel-not-seed:PASS
+FUNC_TEST:native-initfs-not-seed:PASS
+FUNC_TEST:native-bootloader-not-seed:PASS
+FUNC_TEST:kernel-generation-root:PASS
+FUNC_TEST:kernel-local-build-registration:PASS
+FUNC_ARTIFACT:kernel-pathinfo:/nix/var/snix/pathinfo/ny2n16vkyxxn5fg6s4v2q8hjg5mfcapw.json
+FUNC_TEST:initfs-generation-root:PASS
+FUNC_TEST:initfs-local-build-registration:PASS
+FUNC_ARTIFACT:initfs-pathinfo:/nix/var/snix/pathinfo/lhbi12n21lfaf65ck65k619wsjx0jpss.json
+FUNC_TEST:bootloader-generation-root:PASS
+FUNC_TEST:bootloader-local-build-registration:PASS
+FUNC_ARTIFACT:bootloader-pathinfo:/nix/var/snix/pathinfo/7lnk45v8czsix05csl1s1my97zbg9bjm.json
+FUNC_TEST:native-toplevel-root:PASS
+FUNC_TEST:native-etc-root:PASS
+FUNC_TEST:native-graph-references:PASS
+FUNC_ARTIFACT:native-toplevel-pathinfo:/nix/var/snix/pathinfo/gydfcig6phakdi1jq6dq0sn6msy9j3xl.json
+FUNC_TEST:native-initfs-consumer:PASS
+FUNC_TEST:initfs-consumer-parses-image:PASS
+FUNC_TEST:initfs-pci-config:PASS
+FUNC_TEST:initfs-network-driver-removed:PASS
+FUNC_TEST:initfs-usb-driver-removed:PASS
+FUNC_TEST:initfs-usb-config-removed:PASS
+FUNC_TEST:initfs-storage-ahcid-retained:PASS
+FUNC_TEST:initfs-storage-nvmed-retained:PASS
+FUNC_TEST:initfs-storage-virtio-blkd-retained:PASS
+FUNC_ARTIFACT:initfs-dump:/var/lib/redox-native-proof/initfs.dump
+FUNC_TEST:retained-service-generated:PASS
+FUNC_TEST:retained-service-command:PASS
+FUNC_TEST:removed-service-not-loaded:PASS
+FUNC_TEST:live-unit-11_ptyd.service:PASS
+FUNC_TEST:live-unit-15_native-proof-retain.service:PASS
+FUNC_TEST:live-unit-79_native-proof-runner.service:PASS
+FUNC_TEST:pci-config-generated:PASS
+FUNC_TEST:pci-network-driver-removed:PASS
+FUNC_TEST:pci-usb-driver-removed:PASS
+[native-system:failure] elapsed=3165s pid=920
+[native-system:failure] elapsed=3195s pid=920
+[native-system:failure] elapsed=3225s pid=920
+[native-system:failure] elapsed=3256s pid=920
+[native-system:failure] elapsed=3286s pid=920
+FUNC_ARTIFACT:failure-stdout:/var/lib/redox-native-proof/failure.out
+FUNC_ARTIFACT:failure-stderr:/var/lib/redox-native-proof/failure.err
+Evaluating /var/lib/redox-native-proof/failing-config.json...
+Evaluating native system source /usr/src/nix-redox/build.nix...
+Native system derivation: /nix/store/wwwia71w7jh8kia1qk11099lcwiq7nzn-redox-system-native.drv
+building 06d97y61yjgm11zrvbb3y7wfbp2mff6p-redox-initfs-native.drv (2/6)...
+buildfs: creating socket
+buildfs: socket created
+buildfs: creating cap fd
+buildfs: registering in ns_fd=4611686018427388055
+buildfs: registered
+buildfs: pre-opening /
+buildfs: entering null namespace
+buildfs: proxy mode active
+p
+                           buildfs: spawning builder 06d97y61yjgm11zrvbb3y7wfbp2mff6p-redox-initfs-native
+buildfs: trace openat path="/nix/system/profile/bin/bash" raw_flags=0x10000 oflags=OpenFlags { read: true, write: false, create: false, truncate: false, exclusive: false, append: false, directory: false, symlink: false, path_only: false, no_follow: false, mode_perm: 0 } perm=ReadOnly effective=ReadOnly real_flags=0x10000
+buildfs: open error file path="/dev/tty" errno=18
+buildfs: open error file path="/nix/store/x922qz0frrd5kb759iphff96z11cb6cp-base/bin/definitely-missing-driver" errno=2
+Native initfs: unavailable driver definitely-missing-driver
+buildfs: builder 06d97y61yjgm11zrvbb3y7wfbp2mff6p-redox-initfs-native exited status=ExitStatus(unix_wait_status(256)) stdout_bytes=0 stderr_bytes=60
+buildfs: waiting for proxy helper pid=926
+buildfs: proxy helper still alive, killing pid=926
+buildfs: proxy helper reaped
+error: native system build failed: dependency /nix/store/06d97y61yjgm11zrvbb3y7wfbp2mff6p-redox-initfs-native.drv failed: builder for '06d97y61yjgm11zrvbb3y7wfbp2mff6p-redox-initfs-native' failed (exit code 1): Native initfs: unavailable driver definitely-missing-driver
+
+FUNC_TEST:native-build-failure:PASS
+/var/lib/redox-native-proof/runner.sh: line 86: warning: command substitution: ignored null byte in input
+FUNC_TEST:failure-reason:PASS
+FUNC_TEST:failure-manifest-unchanged:PASS
+FUNC_TEST:failure-no-generation:PASS
+FUNC_TEST:failure-current-generation:PASS
+FUNC_TEST:failure-current-system:PASS
+FUNC_TEST:failure-etc-identity:PASS
+FUNC_TEST:failure-hostname:PASS
+FUNC_TEST:failure-active-kernel:PASS
+FUNC_TEST:failure-active-initfs:PASS
+FUNC_TEST:failure-boot-default:PASS
+FUNC_TEST:failure-active-service:PASS
+FUNC_TEST:failure-removed-service-stays-absent:PASS
+FUNC_TEST:failure-pci-config:PASS
+FUNC_TEST:boot-default-consumer:PASS
+FUNC_TEST:bootloader-proof-distinct:PASS
+FUNC_TEST:bootloader-seed-proof-metadata:PASS
+FUNC_TEST:bootloader-native-proof-metadata:PASS
+FUNC_TEST:kernel-proof-distinct:PASS
+FUNC_TEST:kernel-seed-proof-metadata:PASS
+FUNC_TEST:kernel-native-proof-metadata:PASS
+FUNC_TEST:initfs-proof-distinct:PASS
+FUNC_TEST:initfs-seed-proof-metadata:PASS
+FUNC_TEST:initfs-native-proof-metadata:PASS
+FUNC_EXPECT:seed:bootloader:/nix/store/ywkimw16wyiw6srh60biv0c9bwiafhmb-redox-bootloader-native-boot-proof-unstable
+FUNC_EXPECT:native:bootloader:/nix/store/7lnk45v8czsix05csl1s1my97zbg9bjm-redox-bootloader-native-rebuild
+FUNC_EXPECT:seed:kernel:/nix/store/mm889zql4h1wwmra5ddpbx466lpy98af-redox-kernel-native-boot-proof-unstable
+FUNC_EXPECT:native:kernel:/nix/store/ny2n16vkyxxn5fg6s4v2q8hjg5mfcapw-redox-kernel-native-rebuild
+FUNC_EXPECT:seed:initfs:/nix/store/vin80lxr75qkg43kgjha33km5kck802v-redox-initfs-unstable
+FUNC_EXPECT:native:initfs:/nix/store/lhbi12n21lfaf65ck65k619wsjx0jpss-redox-initfs-native
+FUNC_TEST:native-restart-efi:PASS
+FUNC_REBOOT:native:/nix/store/7lnk45v8czsix05csl1s1my97zbg9bjm-redox-bootloader-native-rebuild/boot/EFI/BOOT/BOOTX64.EFI
+
+==========================================

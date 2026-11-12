@@ -1,0 +1,123 @@
+# Self-hosting CI
+#
+# Two gates:
+#  - evidence: hosted-runner check that renders the self-build video from the
+#    committed native proof fixture. This runs on every push and pull request.
+#  - native-rebuild: the real VM proof. It requires /dev/kvm, so it can only
+#    run on a self-hosted runner with the `redox-kvm` label. It is opt-in via
+#    the repository variable KVM_PROOF_ENABLED and runs on main or manually.
+#
+# See docs/ci-self-hosting.md for runner requirements and branch protection.
+
+name: Self-hosting proof
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: self-hosting-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    name: Evidence replay / video
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v30
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Render the self-build replay from the proof fixture
+        run: |
+          set -euo pipefail
+          nix shell nixpkgs#asciinema-agg nixpkgs#ffmpeg -c \
+            python3 demo/render-self-build.py \
+              --capture demo/fixtures/native-rebuild-test \
+              --output "$RUNNER_TEMP/nix-redox-self-build.mp4" \
+              --cast "$RUNNER_TEMP/nix-redox-self-build.cast"
+
+      - name: Validate the rendered evidence
+        run: |
+          set -euo pipefail
+          cast="$RUNNER_TEMP/nix-redox-self-build.cast"
+          video="$RUNNER_TEMP/nix-redox-self-build.mp4"
+          test -s "$cast"
+          test -s "$video"
+          grep -q 'Native proof boot phase: seed' "$cast"
+          grep -q 'Native proof boot phase: native' "$cast"
+          grep -q 'Native proof boot phase: rollback' "$cast"
+          grep -q '134/134' "$cast"
+          nix shell nixpkgs#ffmpeg -c bash -c '
+            duration=$(ffprobe -v error -show_entries format=duration \
+              -of default=nw=1:nk=1 "$1")
+            awk -v d="$duration" "BEGIN { exit !(d >= 10 && d <= 120) }"
+          ' _ "$video"
+
+  native-rebuild:
+    name: Native rebuild proof (KVM)
+    if: >-
+      vars.KVM_PROOF_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event_name == 'push' && github.ref == 'refs/heads/main'))
+    # This label must be provided by a trusted self-hosted runner. Do not run
+    # this job for pull_request events on a public repository.
+    runs-on: [self-hosted, linux, x64, redox-kvm]
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Verify KVM and resources
+        run: |
+          set -euo pipefail
+          test -c /dev/kvm
+          test "$(nproc)" -ge 4
+          df -h /var/tmp /nix/store
+          free -h
+
+      - name: Build, boot, verify and roll back the native system
+        env:
+          TMPDIR: /var/tmp
+          CARGO_BUILD_JOBS: "2"
+          RAYON_NUM_THREADS: "2"
+        run: |
+          set -euo pipefail
+          nix run --builders '' --option build-hook '' \
+            .#native-rebuild-test -- --verbose --timeout 7200
+
+      - name: Assert the proof verdict
+        run: |
+          set -euo pipefail
+          capture=$(ls -dt /var/tmp/redox-self-hosting-captures/*native-rebuild-test | head -1)
+          echo "CAPTURE=$capture" >> "$GITHUB_ENV"
+          jq -e '
+            .verdict == "pass" and
+            .git_dirty == false and
+            .test_counts.fail == 0 and
+            .test_counts.skip == 0 and
+            .test_counts.pass == .test_counts.total and
+            .test_counts.total > 0
+          ' "$capture/summary.json"
+
+      - name: Upload proof capture
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-rebuild-capture-${{ github.run_id }}
+          path: /var/tmp/redox-self-hosting-captures/*native-rebuild-test
+          retention-days: 14

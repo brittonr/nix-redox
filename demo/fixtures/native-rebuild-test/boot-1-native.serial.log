@@ -1,0 +1,82 @@
+[2J[001;001H[=3h[2J[001;001HBdsDxe: loading Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x1,0x0)
+BdsDxe: starting Boot0002 "UEFI Misc Device" from PciRoot(0x0)/Pci(0x1,0x0)
+[2J[001;001H[8;056;240t[2J[001;001HWARN - Failed to locate Outputs: Status(0x800000000000000E) "not found"
+
+BOOT_PROOF:bootloader:/nix/store/7lnk45v8czsix05csl1s1my97zbg9bjm-redox-bootloader-native-rebuild
+Redox OS Bootloader 1.0.0 on x86_64/UEFI
+Hardware descriptor: Acpi(bf138000, 24)
+Looking for RedoxFS:
+RedoxFS 55752de3-8e36-45cc-8037-af114d29b6af: 16180 MiB
+
+usr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 0/1 MiBusr/lib/boot/kernel: 1/1 MiBusr/lib/boot/kernel: 1/1 MiB
+usr/lib/boot/initfs: 0/37 MiBusr/lib/boot/initfs: 0/37 MiBusr/lib/boot/initfs: 1/37 MiBusr/lib/boot/initfs: 2/37 MiBusr/lib/boot/initfs: 3/37 MiBusr/lib/boot/initfs: 4/37 MiBusr/lib/boot/initfs: 5/37 MiBusr/lib/boot/initfs: 6/37 MiBusr/lib/boot/initfs: 7/37 MiBusr/lib/boot/initfs: 8/37 MiBusr/lib/boot/initfs: 9/37 MiBusr/lib/boot/initfs: 10/37 MiBusr/lib/boot/initfs: 11/37 MiBusr/lib/boot/initfs: 12/37 MiBusr/lib/boot/initfs: 13/37 MiBusr/lib/boot/initfs: 14/37 MiBusr/lib/boot/initfs: 15/37 MiBusr/lib/boot/initfs: 16/37 MiBusr/lib/boot/initfs: 17/37 MiBusr/lib/boot/initfs: 18/37 MiBusr/lib/boot/initfs: 19/37 MiBusr/lib/boot/initfs: 20/37 MiBusr/lib/boot/initfs: 21/37 MiBusr/lib/boot/initfs: 22/37 MiBusr/lib/boot/initfs: 23/37 MiBusr/lib/boot/initfs: 24/37 MiBusr/lib/boot/initfs: 25/37 MiBusr/lib/boot/initfs: 26/37 MiBusr/lib/boot/initfs: 27/37 MiBusr/lib/boot/initfs: 28/37 MiBusr/lib/boot/initfs: 29/37 MiBusr/lib/boot/initfs: 30/37 MiBusr/lib/boot/initfs: 31/37 MiBusr/lib/boot/initfs: 32/37 MiBusr/lib/boot/initfs: 33/37 MiBusr/lib/boot/initfs: 34/37 MiBusr/lib/boot/initfs: 35/37 MiBusr/lib/boot/initfs: 36/37 MiBusr/lib/boot/initfs: 37/37 MiBusr/lib/boot/initfs: 37/37 MiB
+Starting graphical debug
+Framebuffer not found
+BOOT_PROOF:kernel:/nix/store/ny2n16vkyxxn5fg6s4v2q8hjg5mfcapw-redox-kernel-native-rebuild
+kernel::arch::x86_shared::start:INFO -- Redox OS starting...
+kernel::startup::memory:INFO -- Memory: 8111 MB
+kernel::startup::memory:INFO -- Highest huge page level: 1
+kernel::startup::memory:INFO -- Permanently used: 1172 KB
+kernel::arch::x86_shared::start:INFO -- Now on kmain stack
+kernel::arch::x86_64::alternative:INFO -- Enabling AVX
+Unable to find HPET
+I/O APICs: [IoApic { redir_table: [32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 65536, 65536, 65536, 65536, 65536, 65536, 65536, 65536], gsi_start: 0, count: 24 }], overrides: [Override { bus_irq: 4, gsi: 4, trigger_mode: ConformsToSpecs, polarity: ConformsToSpecs }]
+Unable to determine NUMA topology
+init: switchroot to /scheme/initfs /scheme/initfs/etc
+BOOT_PROOF:initfs:/nix/store/lhbi12n21lfaf65ck65k619wsjx0jpss-redox-initfs-native
+[3m[38;5;15m2026-11-12T05-30-14.398[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@acpid[39m:32 [1m[38;5;12mINFO[m[39m] [1m[38;5;15macpid start[m[39m
+[3m[38;5;15m2026-11-12T05-30-14.407[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@acpid[39m:116 [1m[38;5;12mINFO[m[39m] [1m[38;5;15macpid ready[m[39m
+[3m[38;5;15m2026-11-12T05-30-14.414[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@hwd[39m:25 [1m[38;5;12mINFO[m[39m] [1m[38;5;15musing ACPI backend[m[39m
+[3m[38;5;15m2026-11-12T05-30-14.493[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid[39m:327 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI SG-BS:DV.F VEND:DEVI CL.SC.IN.RV[m[39m
+[3m[38;5;15m2026-11-12T05-30-14.500[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid[39m:424 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI 0000:00:00.0 8086:0D57 06.00.00.00 HostBridge[m[39m
+[3m[38;5;15m2026-11-12T05-30-14.510[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid[39m:424 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI 0000:00:01.0 1AF4:1042 01.80.00.01 OtherMassStorageController[m[39m
+[3m[38;5;15m2026-11-12T05-30-14.519[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid[39m:424 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI 0000:00:02.0 1AF4:1044 FF.FF.00.01 Unknown[m[39m
+[3m[38;5;15m2026-11-12T05-30-14.534[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid::cfg_access::fallback[39m:31 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mPCI: couldn't find or access PCIe extended configuration, and thus falling back to PCI 3.0 io ports[m[39m
+[3m[38;5;15m2026-11-12T05-30-14.545[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@acpi::aml[39m:135 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mInitializing AML interpreter v6.1.1[m[39m
+[3m[38;5;15m2026-11-12T05-30-14.578[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@pcid_spawner[39m:87 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mpcid-spawner: spawn "/scheme/initfs/lib/drivers/virtio-blkd"[m[39m
+[3m[38;5;15m2026-11-12T05-30-14.607[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@virtio_blkd[39m:128 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mvirtio-blk: initiating startup sequence :^)[m[39m
+[3m[38;5;15m2026-11-12T05-30-14.630[m[39m[3m[38;5;7mZ[m[39m [[38;5;7m@virtio_blkd[39m:140 [1m[38;5;12mINFO[m[39m] [1m[38;5;15mvirtio-blk: disk size: 33554432 sectors and block size of 512 bytes[m[39m
+[ERROR redoxfs] failed to open filesystem /scheme/disk.pci-0000-00-01.0_virtio_blk/0: No such file or directory
+removing handle: id: 3, Some(Disk(0))
+[ERROR redoxfs] failed to open filesystem /scheme/disk.pci-0000-00-01.0_virtio_blk/0p0: No such file or directory
+removing handle: id: 4, Some(Partition(0, 0))
+removing handle: id: 2, Some(List([48, 10, 48, 112, 48, 10, 48, 112, 49, 10]))
+init: switchroot to /usr /etc
+native-proof-retain-marker
+FUNC_TESTS_START
+Native system bootstrap isolation: SNIX_NO_SANDBOX=unset
+FUNC_TEST:persisted-boot-state:PASS
+Native proof boot phase: native
+FUNC_TEST:native-boot-generation:PASS
+FUNC_TEST:native-boot-manifest:PASS
+FUNC_TEST:native-boot-default:PASS
+FUNC_TEST:native-boot-current-generation:PASS
+FUNC_TEST:boot-selected-native-identity:PASS
+FUNC_TEST:boot-selected-native-hostname:PASS
+FUNC_TEST:boot-selected-kernel:PASS
+FUNC_TEST:boot-selected-initfs:PASS
+FUNC_TEST:boot-selection-no-generation:PASS
+FUNC_TEST:native-boot-timezone:PASS
+FUNC_TEST:native-boot-etc:PASS
+FUNC_TEST:native-boot-removed-service:PASS
+FUNC_TEST:native-boot-retained-service:PASS
+FUNC_TEST:native-boot-retained-bytes:PASS
+FUNC_TEST:native-boot-pci-config:PASS
+FUNC_TEST:native-boot-network-driver-removed:PASS
+FUNC_TEST:native-boot-usb-driver-removed:PASS
+FUNC_TEST:native-system-rollback:PASS
+Switching from generation 3 to generation 1...
+  /etc/static → /nix/store/xvr6ydbapxjfnrm8aszl7yywsvi687a5-redox-etc
+GC roots updated: 38 packages + 3 boot components + 1 system outputs protected for generation 1
+  /run/current-system → /etc/redox-system
+Switched to generation 1
+FUNC_TEST:rollback-select-previous:PASS
+Next boot will activate generation 1
+(Run `snix system rollback --generation 1` to activate it now)
+FUNC_TEST:rollback-boot-previous:PASS
+FUNC_TEST:rollback-selected-generation:PASS
+FUNC_TEST:rollback-selected-efi:PASS
+FUNC_TEST:rollback-restart-efi:PASS
+FUNC_REBOOT:rollback:/nix/store/ywkimw16wyiw6srh60biv0c9bwiafhmb-redox-bootloader-native-boot-proof-unstable/boot/EFI/BOOT/BOOTX64.EFI
+
+==========================================
