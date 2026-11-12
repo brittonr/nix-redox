@@ -216,7 +216,46 @@ in
     ];
   };
 
-  # Test 2: rootTree contains /etc/group with correct format
+  # Test 2: rootTree contains declarative per-user home files
+  rootTree-has-home-file = mkArtifactTest {
+    name = "rootTree-has-home-file";
+    description = "Verifies declarative user files are baked into the home directory";
+    modules = [
+      {
+        "/users" = {
+          users = {
+            testuser = {
+              uid = 1000;
+              gid = 1000;
+              home = "/home/testuser";
+              shell = "/bin/ion";
+              password = "test";
+              realname = "Test User";
+              createHome = true;
+              files = {
+                ".config/demo/hello.txt" = {
+                  text = "home-data-ok\n";
+                  mode = "0644";
+                };
+              };
+            };
+          };
+        };
+      }
+    ];
+    checks = [
+      {
+        file = "home/testuser/.config/demo/hello.txt";
+        contains = "home-data-ok";
+      }
+      {
+        file = "home/testuser/.config/demo/hello.txt";
+        mode = "644";
+      }
+    ];
+  };
+
+  # Test 3: rootTree contains /etc/group with correct format
   rootTree-has-group = mkArtifactTest {
     name = "rootTree-has-group";
     description = "Verifies rootTree contains /etc/group with semicolon-delimited format";
