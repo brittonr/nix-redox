@@ -9,6 +9,9 @@
 
 ![Orbital login screen on Redox OS](docs/assets/screenshots/orbital-login.png)
 
+▶ **[Watch the 61-second end-to-end demo](docs/assets/demo/nix-redox-e2e.mp4)** —
+UEFI boot, Orbital login, and `snix system` inspection inside the guest.
+
 > **Alpha status.** The VM build/run path, declarative system assembly, on-guest
 > `snix` workflows, and self-hosting proofs are exercised. Bare-metal board
 > support and some networking paths remain experimental. See

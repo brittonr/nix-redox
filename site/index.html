@@ -25,6 +25,7 @@
       </a>
       <nav aria-label="Primary">
         <a href="#quick-start">Quick start</a>
+        <a href="#demo">Demo</a>
         <a href="#features">Features</a>
         <a href="https://github.com/brittonr/nix-redox#documentation">Docs</a>
         <a href="https://github.com/brittonr/nix-redox/discussions">Community</a>
@@ -46,6 +47,7 @@
           </p>
           <div class="actions">
             <a class="button primary" href="#quick-start">Quick start</a>
+            <a class="button ghost" href="#demo">Watch demo</a>
             <a class="button" href="https://github.com/brittonr/nix-redox/releases/tag/v0.1.0-alpha">Release notes</a>
             <a class="button ghost" href="https://github.com/brittonr/nix-redox">Source</a>
           </div>
@@ -67,6 +69,21 @@
           <pre><code><span class="prompt">$</span> nix run github:brittonr/nix-redox</code></pre>
         </div>
         <p class="fine">Log in as <code>user</code> with password <code>redox</code>. The first build compiles the OS; later runs reuse the store. Use <code>nix run .#headless</code> without a display.</p>
+      </div>
+    </section>
+
+    <section id="demo" class="section">
+      <div class="wrap">
+        <h2>See it boot</h2>
+        <p class="section-lede">A 61-second end-to-end run: UEFI boot, Orbital login, and <code>snix</code> system inspection inside the guest.</p>
+        <figure class="demo-shot">
+          <video controls preload="metadata" poster="assets/orbital-login.png" width="1280" height="800">
+            <source src="assets/demo/nix-redox-e2e.mp4" type="video/mp4">
+            Your browser does not support the video tag.
+            <a href="assets/demo/nix-redox-e2e.mp4">Download the demo</a>.
+          </video>
+          <figcaption>Recorded from the v0.1.2-alpha graphical image in QEMU with KVM.</figcaption>
+        </figure>
       </div>
     </section>
 

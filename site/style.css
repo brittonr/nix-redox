@@ -148,6 +148,17 @@ h1 {
 }
 figcaption { color: var(--muted); font-size: 0.82rem; margin-top: 0.7rem; }
 
+.demo-shot { margin: 0; }
+.demo-shot video {
+  display: block;
+  width: 100%;
+  height: auto;
+  background: #000;
+  border-radius: 0.9rem;
+  border: 1px solid var(--border);
+  box-shadow: 0 30px 70px rgb(0 0 0 / 35%);
+}
+
 .section { padding: 4rem 0; }
 .section.alt { background: color-mix(in srgb, var(--bg-alt) 78%, transparent); border-block: 1px solid var(--border); }
 h2 { margin: 0 0 0.7rem; font-size: clamp(1.7rem, 3vw, 2.3rem); letter-spacing: -0.02em; }

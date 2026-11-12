@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Reproducible 61-second end-to-end demo (`demo/record-e2e.py`): UEFI boot,
+  Orbital login, `tree --version`, `snix system info`, and
+  `snix system services`, published in the README and on the site.
+
 ## [0.1.2-alpha] - 2026-11-11
 
 ### Added
