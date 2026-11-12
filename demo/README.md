@@ -48,6 +48,22 @@ Play the cast locally with:
 asciinema play docs/assets/demo/nix-redox-e2e.cast
 ```
 
+## Self-build proof video
+
+`render-self-build.py` turns a completed `native-rebuild-test` capture into a
+short evidence replay. It reads the three guest serial logs and summary, then
+emits an asciicast and renders it with `asciinema-agg` and ffmpeg.
+
+```bash
+nix shell nixpkgs#asciinema-agg -c \
+  python3 demo/render-self-build.py \
+    --capture /var/tmp/redox-self-hosting-captures/<run-id>-native-rebuild-test \
+    --output docs/assets/demo/nix-redox-self-build.mp4
+```
+
+The video copies selected guest output; the timeline is compressed and the
+original run ID is displayed. It is an evidence replay, not a live run.
+
 ## What it shows
 
 1. UEFI boot and the Redox serial login.

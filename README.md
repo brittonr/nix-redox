@@ -15,6 +15,11 @@ UEFI boot, serial login, `tree`, `snix eval`, a fresh `snix build`, and
 [asciicast source](docs/assets/demo/nix-redox-e2e.cast) is recorded directly
 from the guest console.
 
+▶ **[Watch the self-build proof](docs/assets/demo/nix-redox-self-build.mp4)** —
+a 30-second evidence replay of `native-rebuild-test`: the guest builds its own
+kernel, bootloader, initfs and system, boots the native generation, rolls back,
+and passes **134/134** tests across three cold boots.
+
 > **Alpha status.** The VM build/run path, declarative system assembly, on-guest
 > `snix` workflows, and self-hosting proofs are exercised. Bare-metal board
 > support and some networking paths remain experimental. See

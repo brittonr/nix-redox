@@ -171,6 +171,11 @@ All three runs record `git_dirty: false`; the generated
 `docs/self-hosting/latest-success.md` index is the canonical pointer to their
 capture directories.
 
+The 30-second evidence video `docs/assets/demo/nix-redox-self-build.mp4`
+(asciicast: `nix-redox-self-build.cast`) is rendered from the native capture by
+`demo/render-self-build.py`. It shows the seed build, native boot, rollback
+boot, and the 134/134 result; it is a compressed replay, not a live run.
+
 ## Direct rustc and environment checks
 
 The self-hosting profile's `rustc-direct-link` and `environ-diag` checks compile

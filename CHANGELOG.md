@@ -12,6 +12,9 @@ All notable changes to this project are documented here. The format follows
   login, `tree --version`, `snix eval`, a fresh `snix build`, and
   `snix system info`/`snix system services`, rendered to MP4 and published on
   the site.
+- Self-build evidence video and reproducible renderer
+  (`demo/render-self-build.py`), generated from the `native-rebuild-test`
+  capture: seed build, native boot, rollback, 134/134 pass.
 
 ## [0.1.2-alpha] - 2026-11-11
 

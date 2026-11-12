@@ -27,6 +27,7 @@
       <nav aria-label="Primary">
         <a href="#quick-start">Quick start</a>
         <a href="#demo">Demo</a>
+        <a href="#self-build">Self-build</a>
         <a href="#features">Features</a>
         <a href="https://github.com/brittonr/nix-redox#documentation">Docs</a>
         <a href="https://github.com/brittonr/nix-redox/discussions">Community</a>
@@ -83,6 +84,19 @@
           <figcaption>Recorded from the v0.1.2-alpha graphical image over the QEMU serial console.</figcaption>
         </figure>
         <p class="fine"><a href="assets/demo/nix-redox-e2e.cast">Asciicast source</a> · <a href="assets/demo/nix-redox-e2e.mp4">MP4</a></p>
+      </div>
+    </section>
+
+    <section id="self-build" class="section">
+      <div class="wrap">
+        <h2>Redox builds Redox</h2>
+        <p class="section-lede">Evidence replay of <code>native-rebuild-test</code>: build a native system inside the guest, boot it, verify it, and roll back.</p>
+        <figure class="demo-shot">
+          <div id="self-build-player" class="demo-player" role="region" aria-label="Asciinema evidence replay of the native Redox rebuild"></div>
+          <noscript><p><a href="assets/demo/nix-redox-self-build.mp4">Watch the rendered MP4</a>.</p></noscript>
+          <figcaption>Replay of run <code>20261111T233134-native-rebuild-test</code> from the actual guest serial logs: 134/134 pass across three cold boots.</figcaption>
+        </figure>
+        <p class="fine"><a href="assets/demo/nix-redox-self-build.cast">Asciicast source</a> · <a href="assets/demo/nix-redox-self-build.mp4">MP4</a> · <a href="https://github.com/brittonr/nix-redox/blob/main/docs/self-hosting/latest-success.md">Latest proof runs</a></p>
       </div>
     </section>
 
@@ -184,6 +198,20 @@
         fit: "width",
         theme: "github-dark",
         poster: "npt:0:15",
+        preload: true,
+        controls: true,
+        autoPlay: false
+      }
+    );
+    AsciinemaPlayer.create(
+      "assets/demo/nix-redox-self-build.cast",
+      document.getElementById("self-build-player"),
+      {
+        cols: 120,
+        rows: 40,
+        fit: "width",
+        theme: "github-dark",
+        poster: "npt:0:25",
         preload: true,
         controls: true,
         autoPlay: false
