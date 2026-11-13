@@ -64,6 +64,9 @@ nix shell nixpkgs#asciinema-agg -c \
 The video copies selected guest output; the timeline is compressed and the
 original run ID is displayed. It is an evidence replay, not a live run.
 
+The poster, `nix-redox-self-build-poster.png`, is the final summary frame. The
+site shows it in place of the player when JavaScript is off.
+
 ## What it shows
 
 1. UEFI boot and the Redox serial login.

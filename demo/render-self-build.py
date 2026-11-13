@@ -299,12 +299,14 @@ def render(args: argparse.Namespace) -> int:
             text=True,
         ).strip()
     )
+    # The finished summary screen is held through the cast's final pause and
+    # agg's --last-frame-duration, so one second before the end is always on it.
     subprocess.run(
         [
             "ffmpeg",
             "-y",
             "-loglevel", "error",
-            "-ss", f"{duration * 0.82:.2f}",
+            "-sseof", "-1",
             "-i", str(output),
             "-frames:v", "1",
             str(poster),
