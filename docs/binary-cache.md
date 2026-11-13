@@ -10,7 +10,9 @@ The project cache is **`nix-redox`**:
 
 The flake declares this cache in `nixConfig`; accept the flake configuration or
 use `cachix use nix-redox`. The GitHub workflow pushes the minimal and graphical
-images for Nix 2.24.9 and 2.35.1, the two versions used by CI.
+images for Nix 2.24.9 and 2.35.1, the two versions used by CI. Flake-free builds
+([`nixtamal.md`](nixtamal.md)) produce the same store paths but ignore
+`nixConfig`, so they need the substituter configured in `nix.conf` or by Cachix.
 
 **Nix store paths are version-dependent here.** A client whose Nix version
 produces different derivation paths will miss the cache for those paths. Use a

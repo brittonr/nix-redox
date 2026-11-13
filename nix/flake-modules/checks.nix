@@ -139,6 +139,26 @@ let
         touch $out
       '';
 
+      # nix/tamal pins exactly the sources flake.lock pins (docs/nixtamal.md).
+      nixtamal-pins = pkgs.runCommand "check-nixtamal-pins" { nativeBuildInputs = [ pkgs.jq ]; } ''
+        jq -nr \
+          --slurpfile flake ${../../flake.lock} \
+          --slurpfile tamal ${../tamal/lock.json} \
+          '($flake[0].nodes | del(.[$flake[0].root]) | map_values(.locked.narHash)) as $want
+          | ($tamal[0].i | map_values(.ha.vl)) as $have
+          | ($want + $have | keys[])
+          | select($want[.] != $have[.])
+          | "\(.): flake.lock \($want[.] // "has no such node"), nix/tamal \($have[.] // "has no pin")"' \
+          > mismatches
+        if [ -s mismatches ]; then
+          echo "nix/tamal/lock.json and flake.lock pin different sources:" >&2
+          cat mismatches >&2
+          echo "Re-pin with \`nixtamal refresh\` from the repository root (docs/nixtamal.md)." >&2
+          exit 1
+        fi
+        touch $out
+      '';
+
       nixos-integration = pkgs.runCommand "check-nixos-integration" { } ''
         test "${builtins.toJSON nixosIntegrationEval.config.programs.redox.enable}" = "true"
         test "${nixosIntegrationEval.config.services.redox-vm.profile}" = "graphical"

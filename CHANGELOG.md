@@ -15,6 +15,11 @@ All notable changes to this project are documented here. The format follows
 - Self-build evidence video and reproducible renderer
   (`demo/render-self-build.py`), generated from the `native-rebuild-test`
   capture: seed build, native boot, rollback, 134/134 pass.
+- Flake-free builds with [Nixtamal](https://nixtamal.toast.al/):
+  `default.nix` and `shell.nix` evaluate the flake's outputs from the pins in
+  `nix/tamal` (one per `flake.lock` node) and produce the same derivations as
+  the flake. The `nixtamal-pins` eval check and a CI step keep the two in
+  sync; see `docs/nixtamal.md`.
 
 ### Changed
 
@@ -24,6 +29,9 @@ All notable changes to this project are documented here. The format follows
   self-hosted Archivo and JetBrains Mono fonts; copy buttons; keyboard-operable
   tabs; and asciinema players that load as they scroll into view. Without
   JavaScript every panel stays visible and the recordings play as MP4s.
+- `shell.nix` and `default.nix` no longer require the `flakes` experimental
+  feature or copy the whole working tree into the store; `nix-build` builds the
+  default disk image.
 
 ## [0.1.2-alpha] - 2026-11-11
 
