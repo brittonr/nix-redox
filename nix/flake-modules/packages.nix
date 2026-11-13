@@ -574,69 +574,80 @@ let
         rm -f $out/upstream
         cp -r ${snixUpstreamSource} $out/upstream
       '';
-    in
-    mkCrossPackage {
-      pname = "snix-redox";
-      src = snixCombinedSrc;
-      plan = ../pkgs/userspace/snix-build-plan.json;
-      member = "snix-redox";
-      extraCrateOverrides = {
-        # Proto compilation needs protoc and PROTO_ROOT for snix proto paths
-        snix-castore = _: {
-          nativeBuildInputs = [ hostPkgs.protobuf ];
-          PROTO_ROOT = snixUpstreamSource;
-          SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
-        };
-        snix-store = _: {
-          nativeBuildInputs = [ hostPkgs.protobuf ];
-          PROTO_ROOT = snixUpstreamSource;
-          SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
-        };
-        snix-build = _: {
-          nativeBuildInputs = [ hostPkgs.protobuf ];
-          PROTO_ROOT = snixUpstreamSource;
-          SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
-        };
-        # Patch reqwest Client to not panic when no CA certificates exist.
-        # Redox has no system cert store; the default rustls-native-certs
-        # loader panics with "No CA certificates were loaded from the system".
-        # Disable built-in native cert loading so the client creates with an
-        # empty root store. Local eval/build work without TLS.
-        snix-glue = _: {
-          nativeBuildInputs = [ hostPkgs.protobuf ];
-          PROTO_ROOT = snixUpstreamSource;
-          SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
-          postPatch = ''
-            ${hostPkgs.python3}/bin/python3 ${../pkgs/userspace/patches/patch-snix-fetcher-no-tls-panic.py} src/fetchers/mod.rs
-          '';
-        };
-        # prost-wkt-types also needs protoc
-        prost-wkt-types = _: {
-          nativeBuildInputs = [ hostPkgs.protobuf ];
-        };
-        # zstd-sys: C code compiles with glibc fortify symbols (__memcpy_chk)
-        # not in relibc. Override CC to use our cross-compiler targeting relibc.
-        zstd-sys = _: {
-          CC_x86_64_unknown_redox = "${hostPkgs.llvmPackages.clang-unwrapped}/bin/clang";
-          CFLAGS_x86_64_unknown_redox = builtins.concatStringsSep " " [
-            "--target=x86_64-unknown-redox"
-            "--sysroot=${modularPkgs.system.relibc}/${redoxTarget}"
-            "-isystem ${modularPkgs.system.relibc}/${redoxTarget}/include"
-          ];
-        };
-        # liblzma-sys: the nixpkgs xz only ships a Linux .so, which cannot be
-        # linked statically into a Redox binary. Build the crate's bundled xz
-        # for the Redox target instead, like zstd-sys above.
-        liblzma-sys = _: {
-          LZMA_API_STATIC = "1";
-          CC_x86_64_unknown_redox = "${hostPkgs.llvmPackages.clang-unwrapped}/bin/clang";
-          CFLAGS_x86_64_unknown_redox = builtins.concatStringsSep " " [
-            "--target=x86_64-unknown-redox"
-            "--sysroot=${modularPkgs.system.relibc}/${redoxTarget}"
-            "-isystem ${modularPkgs.system.relibc}/${redoxTarget}/include"
-          ];
+      compiledSnix = mkCrossPackage {
+        pname = "snix-redox";
+        src = snixCombinedSrc;
+        plan = ../pkgs/userspace/snix-build-plan.json;
+        member = "snix-redox";
+        extraCrateOverrides = {
+          # Proto compilation needs protoc and PROTO_ROOT for snix proto paths
+          snix-castore = _: {
+            nativeBuildInputs = [ hostPkgs.protobuf ];
+            PROTO_ROOT = snixUpstreamSource;
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          };
+          snix-store = _: {
+            nativeBuildInputs = [ hostPkgs.protobuf ];
+            PROTO_ROOT = snixUpstreamSource;
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          };
+          snix-build = _: {
+            nativeBuildInputs = [ hostPkgs.protobuf ];
+            PROTO_ROOT = snixUpstreamSource;
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+          };
+          # Patch reqwest Client to not panic when no CA certificates exist.
+          # Redox has no system cert store; the default rustls-native-certs
+          # loader panics with "No CA certificates were loaded from the system".
+          # Disable built-in native cert loading so the client creates with an
+          # empty root store. Local eval/build work without TLS.
+          snix-glue = _: {
+            nativeBuildInputs = [ hostPkgs.protobuf ];
+            PROTO_ROOT = snixUpstreamSource;
+            SNIX_BUILD_SANDBOX_SHELL = "/bin/sh";
+            postPatch = ''
+              ${hostPkgs.python3}/bin/python3 ${../pkgs/userspace/patches/patch-snix-fetcher-no-tls-panic.py} src/fetchers/mod.rs
+            '';
+          };
+          # prost-wkt-types also needs protoc
+          prost-wkt-types = _: {
+            nativeBuildInputs = [ hostPkgs.protobuf ];
+          };
+          # zstd-sys: C code compiles with glibc fortify symbols (__memcpy_chk)
+          # not in relibc. Override CC to use our cross-compiler targeting relibc.
+          zstd-sys = _: {
+            CC_x86_64_unknown_redox = "${hostPkgs.llvmPackages.clang-unwrapped}/bin/clang";
+            CFLAGS_x86_64_unknown_redox = builtins.concatStringsSep " " [
+              "--target=x86_64-unknown-redox"
+              "--sysroot=${modularPkgs.system.relibc}/${redoxTarget}"
+              "-isystem ${modularPkgs.system.relibc}/${redoxTarget}/include"
+            ];
+          };
+          # liblzma-sys: the nixpkgs xz only ships a Linux .so, which cannot be
+          # linked statically into a Redox binary. Build the crate's bundled xz
+          # for the Redox target instead, like zstd-sys above.
+          liblzma-sys = _: {
+            LZMA_API_STATIC = "1";
+            CC_x86_64_unknown_redox = "${hostPkgs.llvmPackages.clang-unwrapped}/bin/clang";
+            CFLAGS_x86_64_unknown_redox = builtins.concatStringsSep " " [
+              "--target=x86_64-unknown-redox"
+              "--sysroot=${modularPkgs.system.relibc}/${redoxTarget}"
+              "-isystem ${modularPkgs.system.relibc}/${redoxTarget}/include"
+            ];
+          };
         };
       };
+    in
+    hostPkgs.symlinkJoin {
+      name = "snix-redox";
+      inherit (compiledSnix) pname;
+      paths = [ compiledSnix ];
+      meta = compiledSnix.meta or { };
+      postBuild = ''
+        for command in nix nix-hash nix-prefetch-url nix-prefetch-git nix-instantiate nix-store; do
+          ln -s snix "$out/bin/$command"
+        done
+      '';
     };
 
   stored = hostPkgs.runCommand "stored-redox" { } ''
@@ -985,6 +996,8 @@ let
   # === Self-hosting: C binaries cross-compiled for Redox ===
 
   gnu-make = import ../pkgs/userspace/gnu-make.nix cLibCommon;
+
+  nixtamal = import ../pkgs/userspace/nixtamal-redox.nix cLibCommon;
 
   redox-bash = import ../pkgs/userspace/bash-redox.nix (
     cLibCommon
@@ -1497,6 +1510,7 @@ in
     # Self-hosting: build tools and shells
     inherit
       gnu-make
+      nixtamal
       redox-bash
       redox-git
       redox-diffutils

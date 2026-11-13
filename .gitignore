@@ -18,6 +18,9 @@ snix-redox/target-host/
 .direnv/
 .envrc
 
+# Nixtamal GC roots
+nix/tamal/.silo
+
 # Local agent/planning artifacts (never publish)
 .claude/
 .pijul/

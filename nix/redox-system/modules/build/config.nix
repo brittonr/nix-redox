@@ -211,7 +211,7 @@ let
     ++ bootExtraEssentialPackages
   );
 
-  # Self-hosting packages: need full store copy (lib/, sysroot/, include/).
+  # Toolchain/runtime packages need full store copy (libraries, helpers, data).
   # Same pattern — derivation references, not name strings.
   # Extra packages from environment.selfHostingPackages are merged in.
   selfHostingPackages = lib.unique (
@@ -219,6 +219,8 @@ let
     ++ lib.optional (pkgs ? redox-llvm) pkgs.redox-llvm
     ++ lib.optional (pkgs ? redox-sysroot) pkgs.redox-sysroot
     ++ lib.optional (pkgs ? redox-cmake) pkgs.redox-cmake
+    ++ lib.optional (pkgs ? redox-git) pkgs.redox-git
+    ++ lib.optional (pkgs ? nixtamal) pkgs.nixtamal
     ++ lib.optional (pkgs ? redox-libcxx) pkgs.redox-libcxx
     ++ lib.optional (pkgs ? redox-libstdcxx-shim) pkgs.redox-libstdcxx-shim
     ++ extraSelfHostingPackages

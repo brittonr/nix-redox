@@ -77,6 +77,21 @@ nix build .#diskImage  # development image without graphics
 The result is a GPT disk with a UEFI boot partition and a RedoxFS root
 filesystem.
 
+### Without flakes
+
+`default.nix` and `shell.nix` evaluate the same derivations with inputs pinned
+by [Nixtamal](https://nixtamal.toast.al/), so no experimental features are
+needed:
+
+```bash
+nix-build                                     # graphical disk image (default)
+nix-build -A packages.x86_64-linux.diskImage  # development image without graphics
+nix-shell                                     # development shell
+```
+
+See [`docs/nixtamal.md`](docs/nixtamal.md) for runners, the binary cache, and
+keeping the pins in sync with `flake.lock`.
+
 ## What you get
 
 | Category | Included |
@@ -89,7 +104,7 @@ filesystem.
 | **Networking** | smolnetd TCP/IP stack, dhcpd, ping, nc, curl |
 | **CLI tools** | ripgrep, fd, bat, hexyl, zoxide, dust, lsd, bottom, tokei, tree |
 | **Development** | gnu-make, git, diffutils, sed, patch, strace |
-| **Packages** | snix: Nix evaluation and builds running on Redox |
+| **Packages** | snix: native Nix evaluation and builds; Nixtamal: input pinning |
 | **Graphics** | Orbital, orbterm, orbutils, orbdata *(graphical image)* |
 | **Self-hosting** | rustc, cargo, LLVM/LLD, cmake *(self-hosting image)* |
 
@@ -314,6 +329,7 @@ and evidence rules.
 - [`docs/binary-cache.md`](docs/binary-cache.md) — Cachix setup, trust and usage
 - [`docs/nixos-integration.md`](docs/nixos-integration.md) — NixOS module options and VM service
 - [`docs/releases.md`](docs/releases.md) — tag, image assets and verification
+- [`docs/nixtamal.md`](docs/nixtamal.md) — building without flakes; Nixtamal pins
 - [`docs/install.md`](docs/install.md) — VM, USB writing, verification and updates
 - [`docs/porting-packages.md`](docs/porting-packages.md) — Rust and C package porting
 - [`docs/home-configuration.md`](docs/home-configuration.md) — data-only per-user files

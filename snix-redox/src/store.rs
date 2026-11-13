@@ -113,6 +113,25 @@ impl GcRoots {
         Ok(())
     }
 
+    /// Create ROOT → STORE_PATH and register an indirect symlink to ROOT.
+    /// Removing a generation link therefore releases only that generation.
+    pub fn add_indirect_root(&self, root: &Path, store_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        use sha2::{Digest, Sha256};
+        StorePath::<String>::from_absolute_path(store_path.as_bytes())?;
+        let root = if root.is_absolute() { root.to_owned() } else { std::env::current_dir()?.join(root) };
+        let name = root.file_name().ok_or("GC root needs a filename")?;
+        let parent = fs::canonicalize(root.parent().ok_or("GC root needs a parent")?)?;
+        let root = parent.join(name);
+        if root.starts_with(STORE_DIR) || root.starts_with(fs::canonicalize(&self.roots_dir)?) {
+            return Err("indirect GC root must be outside the store and root registry".into());
+        }
+        replace_root_symlink(&root, Path::new(store_path))?;
+        let digest = Sha256::digest(root.as_os_str().as_encoded_bytes());
+        let indirect = self.roots_dir.join(format!("auto-{}", data_encoding::HEXLOWER.encode(&digest)));
+        replace_root_symlink(&indirect, &root)?;
+        Ok(())
+    }
+
     /// Remove a GC root by name.
     pub fn remove_root(&self, name: &str) -> Result<(), Box<dyn std::error::Error>> {
         let link = self.roots_dir.join(name);
@@ -130,11 +149,22 @@ impl GcRoots {
         for entry in fs::read_dir(&self.roots_dir)? {
             let entry = entry?;
             let name = entry.file_name().to_string_lossy().to_string();
-            if let Ok(target) = fs::read_link(entry.path()) {
-                roots.push(GcRoot {
-                    name,
-                    target: target.to_string_lossy().to_string(),
-                });
+            if let Ok(mut target) = fs::read_link(entry.path()) {
+                if target.is_relative() { target = self.roots_dir.join(target); }
+                // Resolve the external generation link, but stop at the store
+                // path itself: a symlink-valued store object is still the root.
+                for _ in 0..64 {
+                    if StorePath::<String>::from_absolute_path(target.as_os_str().as_encoded_bytes()).is_ok() {
+                        roots.push(GcRoot { name, target: target.to_string_lossy().into_owned() });
+                        break;
+                    }
+                    match fs::read_link(&target) {
+                        Ok(next) => {
+                            target = if next.is_absolute() { next } else { target.parent().unwrap_or(Path::new("/")).join(next) };
+                        }
+                        Err(_) => break, // dangling/moved indirect roots no longer protect data
+                    }
+                }
             }
         }
         roots.sort_by(|a, b| a.name.cmp(&b.name));
@@ -160,21 +190,36 @@ impl GcRoots {
                 );
                 continue;
             }
-            match compute_closure(db, &root.target) {
-                Ok(closure) => {
-                    live.extend(closure.paths);
-                }
-                Err(e) => {
-                    eprintln!(
-                        "warning: cannot compute closure for root '{}': {e}",
-                        root.name
-                    );
-                }
-            }
+            // An incomplete closure is not evidence that a rooted path is
+            // dead. Abort collection rather than collecting live generations.
+            live.extend(compute_closure(db, &root.target)?.paths);
         }
 
         Ok(live)
     }
+}
+
+fn replace_root_symlink(link: &Path, target: &Path) -> io::Result<()> {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    match fs::symlink_metadata(link) {
+        Ok(meta) if !meta.file_type().is_symlink() => return Err(io::Error::other("refusing to replace a non-symlink GC root")),
+        Ok(_) => (),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => (),
+        Err(e) => return Err(e),
+    }
+    let parent = link.parent().ok_or_else(|| io::Error::other("root has no parent"))?;
+    let temporary = loop {
+        let temporary = parent.join(format!(".snix-root-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+        match std::os::unix::fs::symlink(target, &temporary) {
+            Ok(()) => break temporary,
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
+        }
+    };
+    let result = fs::rename(&temporary, link);
+    if result.is_err() { let _ = fs::remove_file(temporary); }
+    result
 }
 
 // ===== Garbage Collection =====
@@ -613,6 +658,50 @@ mod tests {
             files: vec![],
         };
         db.register(&info).unwrap();
+    }
+
+    #[test]
+    fn indirect_generation_roots_preserve_each_generation() {
+        let tmp = TempDir::new().unwrap();
+        let roots = make_roots(&tmp);
+        let db = make_db(&tmp);
+        register(&db, P_A, vec![P_C], 10);
+        register(&db, P_B, vec![], 20);
+        register(&db, P_C, vec![], 30);
+        let generations = tmp.path().join("milpa");
+        fs::create_dir(&generations).unwrap();
+        let first = generations.join("1");
+        roots.add_indirect_root(&first, P_A).unwrap();
+        roots.add_indirect_root(&generations.join("2"), P_B).unwrap();
+        roots.add_indirect_root(&first, P_A).unwrap(); // re-registration is idempotent
+        assert_eq!(roots.list_roots().unwrap().len(), 2);
+        let live = roots.compute_live_set(&db).unwrap();
+        assert!(live.contains(P_A) && live.contains(P_B) && live.contains(P_C));
+        fs::remove_file(&first).unwrap();
+        let live = roots.compute_live_set(&db).unwrap();
+        assert!(!live.contains(P_A) && !live.contains(P_C));
+        assert!(live.contains(P_B));
+    }
+
+    #[test]
+    fn indirect_roots_refuse_regular_file_overwrite() {
+        let tmp = TempDir::new().unwrap();
+        let roots = make_roots(&tmp);
+        let root = tmp.path().join("important");
+        fs::write(&root, "keep").unwrap();
+        assert!(roots.add_indirect_root(&root, P_A).is_err());
+        assert_eq!(fs::read_to_string(root).unwrap(), "keep");
+    }
+
+    #[test]
+    fn rooted_incomplete_closure_aborts_collection() {
+        let tmp = TempDir::new().unwrap();
+        let roots = make_roots(&tmp);
+        let db = make_db(&tmp);
+        register(&db, P_A, vec![P_B], 10);
+        roots.add_root("protected", P_A).unwrap();
+        assert!(garbage_collect(&db, &roots, true).is_err());
+        assert!(db.is_registered(P_A));
     }
 
     // ===== Closure Tests =====

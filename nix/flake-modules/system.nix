@@ -94,6 +94,7 @@ let
     wasmtime-redox = self'.packages.wasmtime-redox or null;
     irohd = self'.packages.irohd or null;
     snix = self'.packages.snix or null;
+    nixtamal = self'.packages.nixtamal or null;
     stored = self'.packages.stored or null;
     ca-certificates = self'.packages.ca-certificates or null;
     redox-curl = self'.packages.redox-curl or null;
@@ -891,6 +892,64 @@ let
     inherit bootloader;
   };
 
+  # Offline fixtures are genuine archives and a deterministic local Git repo.
+  # The guest must run upstream Nixtamal and native Snix to pin/evaluate them.
+  nixtamalTestFixtures =
+    pkgs.runCommand "nixtamal-test-fixtures"
+      {
+        nativeBuildInputs = [
+          pkgs.coreutils
+          pkgs.gnutar
+          pkgs.gzip
+          pkgs.git
+        ];
+      }
+      ''
+        mkdir -p "$out"
+        cp ${../redox-system/test-scripts/nixtamal}/manifest.kdl "$out/manifest.kdl"
+        cp ${../redox-system/test-scripts/nixtamal}/verify-lock.nix "$out/verify-lock.nix"
+        cp ${../redox-system/test-scripts/nixtamal}/verify-roots.sh "$out/verify-roots.sh"
+        for version in one two; do
+          mkdir -p "archive-$version/source"
+          printf '"nixtamal-archive-%s"\n' "$version" > "archive-$version/source/default.nix"
+          tar --sort=name --mtime=@1 --owner=0 --group=0 --numeric-owner \
+            --format=gnu --mode='u=rwX,go=rX' -C "archive-$version" -cf - source \
+            | gzip -n > "$out/archive-$version.tar.gz"
+        done
+
+        export HOME="$TMPDIR/home"
+        export GIT_CONFIG_NOSYSTEM=1
+        export GIT_AUTHOR_DATE='2000-01-01T00:00:00Z'
+        export GIT_COMMITTER_DATE="$GIT_AUTHOR_DATE"
+        mkdir -p "$HOME"
+        git init --object-format=sha1 --initial-branch=pinned git-work
+        printf '"nixtamal-git-pinned"\n' > git-work/default.nix
+        git -C git-work add default.nix
+        git -C git-work -c user.name='Nixtamal fixture' \
+          -c user.email='nixtamal-fixture@invalid' commit -m 'Pinned local input'
+        git -C git-work rev-parse HEAD > "$out/git-revision"
+        # HEAD advances after the pin: ignoring the requested revision must fail.
+        printf '"nixtamal-git-moving-head"\n' > git-work/default.nix
+        git -C git-work add default.nix
+        git -C git-work -c user.name='Nixtamal fixture' \
+          -c user.email='nixtamal-fixture@invalid' commit -m 'Advance unpinned HEAD'
+        git init --bare --object-format=sha1 --initial-branch=pinned "$out/pinned.git"
+        git -C git-work push "$out/pinned.git" pinned
+      '';
+  nixtamalTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/nixtamal-test.nix ];
+    extraPkgs = extraPkgs // {
+      nixtamal = self'.packages.nixtamal;
+      nixtamal-test-fixtures = nixtamalTestFixtures;
+    };
+  };
+  nixtamalTest = mkFunctionalTest {
+    diskImage = nixtamalTestSystem.diskImage;
+    inherit bootloader;
+    memoryMB = 2048;
+    defaultTimeout = 300;
+  };
+
   # Rebuild & generations test: snix system rebuild, generations, rollback
   rebuildGenerationsTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/rebuild-generations-test.nix ];
@@ -1124,6 +1183,9 @@ in
     scheme-native-test = schemeNativeTest;
     redox-stored-lazy-test = storedLazyTestSystem.diskImage;
     stored-lazy-test = storedLazyTest;
+
+    redox-nixtamal-test = nixtamalTestSystem.diskImage;
+    nixtamal-test = nixtamalTest;
 
     redox-rebuild-generations-test = rebuildGenerationsTestSystem.diskImage;
     rebuild-generations-test = rebuildGenerationsTest;

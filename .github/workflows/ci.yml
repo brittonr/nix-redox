@@ -62,7 +62,16 @@ jobs:
             .#checks.x86_64-linux.eval-security-config \
             .#checks.x86_64-linux.eval-programs-config \
             .#checks.x86_64-linux.eval-power-config \
+            .#checks.x86_64-linux.nixtamal-pins \
             .#checks.x86_64-linux.eval-profile-functional-test
+
+      - name: "Flake-free entry point matches the flake"
+        run: |
+          flake=$(nix eval --raw .#checks.x86_64-linux.tier-eval.drvPath)
+          tamal=$(nix-instantiate --option experimental-features '' -A checks.x86_64-linux.tier-eval)
+          echo "flake.nix:   $flake"
+          echo "default.nix: $tamal"
+          test "$flake" = "$tamal"
 
       - name: "Type validation tests"
         run: |

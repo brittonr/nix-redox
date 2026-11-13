@@ -1,0 +1,23 @@
+version "2.0.0"
+default-hash-algorithm SHA-256
+default-fetch-time eval
+default-gc track
+inputs {
+    archive {
+        archive {
+            url "file:///usr/share/nixtamal-test/archive-{{fresh_value}}.tar.gz"
+        }
+        fresh-cmd {
+            $ cat "/tmp/nixtamal-test/fresh"
+        }
+    }
+    git {
+        git {
+            repository "file:///usr/share/nixtamal-test/pinned.git"
+            ref "{{fresh_value}}"
+        }
+        fresh-cmd {
+            $ cat "/usr/share/nixtamal-test/git-revision"
+        }
+    }
+}

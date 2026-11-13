@@ -1,16 +1,694 @@
 // ┏┓╻+╻ ╱┏┳┓┏┓┏┳┓┏┓╻
 // ┃┃┃┃┗━┓╹┃╹┣┫┃┃┃┣┫┃   Read the manpage:
 // ╹┗┛╹╱ ╹ ╹ ╹╹╹ ╹╹╹┗┛  $ man nixtamal-manifest
-version "0.1.0"
+//
+// Pins for building without flakes; see docs/nixtamal.md.
+//
+// flake.lock stays the source of truth. There is one input per flake.lock
+// node, named after it, & every fresh-cmd reads that node’s revision, so
+// `nixtamal refresh` (run from the repository root) re-pins to flake.lock.
+// The nixtamal-pins check fails while the two disagree.
+//
+// Inputs are fetched at evaluation time under the store name “source”, as
+// flake inputs are, so they land at the flake’s store paths & derivations stay
+// identical. Redox GitLab repositories use the git kind: the archive endpoint
+// behind `gitlab:` flake inputs answers non-browser clients with a challenge
+// page, while Git over HTTPS works.
+version "2.0.0"
+default-fetch-time eval
 inputs {
-	nixpkgs {
+	// flake.nix inputs
+	nixpkgs name=source {
 		archive {
-			url "https://github.com/NixOS/nixpkgs/archive/{{cmd_value}}.tar.gz"
+			url "https://github.com/NixOS/nixpkgs/archive/{{fresh_value}}.tar.gz"
 		}
-		hash algorithm=SHA256
-		latest-cmd {
-			$ git ls-remote "https://github.com/NixOS/nixpkgs.git" --refs "refs/heads/nixos-unstable"
-			| cut -f1
+		fresh-cmd {
+			$ jq -er --arg node nixpkgs ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	adios-flake name=source {
+		archive {
+			url "https://github.com/Mic92/adios-flake/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node adios-flake ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	flake-parts name=source {
+		archive {
+			url "https://github.com/hercules-ci/flake-parts/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node flake-parts ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	treefmt-nix name=source {
+		archive {
+			url "https://github.com/numtide/treefmt-nix/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node treefmt-nix ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	git-hooks name=source {
+		archive {
+			url "https://github.com/cachix/git-hooks.nix/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node git-hooks ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	rust-overlay name=source {
+		archive {
+			url "https://github.com/oxalica/rust-overlay/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node rust-overlay ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	crane name=source {
+		archive {
+			url "https://github.com/ipetkov/crane/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node crane ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	unit2nix name=source {
+		archive {
+			url "https://github.com/brittonr/unit2nix/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node unit2nix ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	relibc-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/relibc.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node relibc-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	kernel-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/kernel.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node kernel-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	redoxfs-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/redoxfs.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node redoxfs-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	installer-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/installer.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node installer-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	pkgutils-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/pkgutils.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node pkgutils-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	ion-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/ion.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node ion-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	helix-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/helix.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node helix-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	redox-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/redox.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node redox-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	openlibm-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/openlibm.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node openlibm-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	dlmalloc-rs-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/dlmalloc-rs.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node dlmalloc-rs-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	redox-scheme-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/redox-scheme.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node redox-scheme-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	fdt-src name=source {
+		archive {
+			url "https://github.com/repnop/fdt/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node fdt-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	kernel-fdt-src name=source {
+		archive {
+			url "https://github.com/repnop/fdt/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node kernel-fdt-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	redox-path-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/redox-path.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node redox-path-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	bootloader-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/bootloader.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node bootloader-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	uefi-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/uefi.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node uefi-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	base-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/base.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node base-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	base-orbital-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/base.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node base-orbital-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	orbclient-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/orbclient.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node orbclient-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	rustix-redox-src name=source {
+		archive {
+			url "https://github.com/jackpot51/rustix/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node rustix-redox-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	uutils-src name=source {
+		archive {
+			url "https://github.com/uutils/coreutils/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node uutils-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	binutils-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/binutils.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node binutils-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	extrautils-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/extrautils.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node extrautils-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	sodium-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/sodium.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node sodium-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	filetime-src name=source {
+		archive {
+			url "https://github.com/jackpot51/filetime/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node filetime-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	libredox-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/libredox.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node libredox-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	netutils-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/netutils.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node netutils-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	orbital-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/orbital.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node orbital-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	orbdata-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/orbdata.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node orbdata-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	orbterm-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/orbterm.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node orbterm-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	orbutils-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/orbutils.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node orbutils-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	orbfont-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/orbfont.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node orbfont-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	orbimage-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/orbimage.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node orbimage-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	redox-log-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/redox-log.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node redox-log-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	userutils-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/userutils.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node userutils-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	termion-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/termion.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node termion-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	ripgrep-src name=source {
+		archive {
+			url "https://github.com/BurntSushi/ripgrep/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node ripgrep-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	fd-src name=source {
+		archive {
+			url "https://github.com/sharkdp/fd/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node fd-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	bat-src name=source {
+		archive {
+			url "https://github.com/sharkdp/bat/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node bat-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	hexyl-src name=source {
+		archive {
+			url "https://github.com/sharkdp/hexyl/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node hexyl-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	zoxide-src name=source {
+		archive {
+			url "https://github.com/ajeetdsouza/zoxide/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node zoxide-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	dust-src name=source {
+		archive {
+			url "https://github.com/bootandy/dust/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node dust-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	shellharden-src name=source {
+		archive {
+			url "https://github.com/anordal/shellharden/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node shellharden-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	perg-src name=source {
+		archive {
+			url "https://github.com/guerinoni/perg/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node perg-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	smith-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/Smith.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node smith-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	strace-redox-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/strace-redox.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node strace-redox-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	findutils-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/findutils.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node findutils-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	contain-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/contain.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node contain-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	pkgar-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/pkgar.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node pkgar-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	exampled-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/exampled.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node exampled-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	games-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/games.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node games-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	openssl-redox-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/openssl.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node openssl-redox-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	openssl3-src name=source frozen=#true {
+		archive {
+			url "https://github.com/openssl/openssl/releases/download/openssl-3.5.3/openssl-3.5.3.tar.gz"
+		}
+	}
+	openssh-src name=source frozen=#true {
+		archive {
+			url "https://cdn.openbsd.org/pub/OpenBSD/OpenSSH/portable/openssh-9.8p1.tar.gz"
+		}
+	}
+	ca-certificates-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/ca-certificates.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node ca-certificates-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	terminfo-src name=source {
+		archive {
+			url "https://github.com/sajattack/terminfo/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node terminfo-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	netdb-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/netdb.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node netdb-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	wasmtime-redox name=source {
+		archive {
+			url "https://github.com/brittonr/wasmtime-redox/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node wasmtime-redox ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	bottom-src name=source {
+		archive {
+			url "https://github.com/ClementTsang/bottom/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node bottom-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	onefetch-src name=source {
+		archive {
+			url "https://github.com/o2sh/onefetch/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node onefetch-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	gdb-protocol-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/gdb-protocol.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node gdb-protocol-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	intelflash-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/intelflash.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node intelflash-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	buffer-pool-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/redox-buffer-pool.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node buffer-pool-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	kprofiling-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/kprofiling.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node kprofiling-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	redoxer-src name=source {
+		git {
+			repository "https://gitlab.redox-os.org/redox-os/redoxer.git"
+			ref "{{fresh_value}}"
+		}
+		fresh-cmd {
+			$ jq -er --arg node redoxer-src ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	// Inputs of those inputs (nested flake.lock nodes)
+	adios name=source {
+		archive {
+			url "https://github.com/adisbladis/adios/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node adios ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	flake-compat name=source {
+		archive {
+			url "https://github.com/NixOS/flake-compat/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node flake-compat ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	flake-parts_2 name=source {
+		archive {
+			url "https://github.com/hercules-ci/flake-parts/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node flake-parts_2 ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	gitignore name=source {
+		archive {
+			url "https://github.com/hercules-ci/gitignore.nix/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node gitignore ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	nixpkgs_2 name=source {
+		archive {
+			url "https://github.com/NixOS/nixpkgs/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node nixpkgs_2 ".nodes[$node].locked.rev" flake.lock
+		}
+	}
+	wasmtime-src name=source {
+		archive {
+			url "https://github.com/bytecodealliance/wasmtime/archive/{{fresh_value}}.tar.gz"
+		}
+		fresh-cmd {
+			$ jq -er --arg node wasmtime-src ".nodes[$node].locked.rev" flake.lock
 		}
 	}
 }

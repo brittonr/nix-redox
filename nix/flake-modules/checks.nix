@@ -89,6 +89,7 @@ let
           # client that needs CA certificates. Tests don't do HTTP but
           # reqwest with native-roots panics on missing certs at client init.
           snix-redox = attrs: {
+            nativeBuildInputs = (attrs.nativeBuildInputs or [ ]) ++ [ pkgs.git ];
             SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
           };
         };
@@ -136,6 +137,26 @@ let
     // {
       options-docs = pkgs.runCommand "check-options-docs" { } ''
         diff -u ${../../docs/options.md} ${packages.optionsMarkdown}
+        touch $out
+      '';
+
+      # nix/tamal pins exactly the sources flake.lock pins (docs/nixtamal.md).
+      nixtamal-pins = pkgs.runCommand "check-nixtamal-pins" { nativeBuildInputs = [ pkgs.jq ]; } ''
+        jq -nr \
+          --slurpfile flake ${../../flake.lock} \
+          --slurpfile tamal ${../tamal/lock.json} \
+          '($flake[0].nodes | del(.[$flake[0].root]) | map_values(.locked.narHash)) as $want
+          | ($tamal[0].i | map_values(.ha.vl)) as $have
+          | ($want + $have | keys[])
+          | select($want[.] != $have[.])
+          | "\(.): flake.lock \($want[.] // "has no such node"), nix/tamal \($have[.] // "has no pin")"' \
+          > mismatches
+        if [ -s mismatches ]; then
+          echo "nix/tamal/lock.json and flake.lock pin different sources:" >&2
+          cat mismatches >&2
+          echo "Re-pin with \`nixtamal refresh\` from the repository root (docs/nixtamal.md)." >&2
+          exit 1
+        fi
         touch $out
       '';
 
@@ -206,8 +227,9 @@ let
     sodium-build = packages.sodium;
     netutils-build = packages.netutils;
 
-    # snix (cross-compiled for Redox)
+    # snix and Nixtamal (cross-compiled for Redox)
     snix-build = packages.snix;
+    nixtamal-build = packages.nixtamal;
 
     # CLI tools
     ripgrep-cross = packages.ripgrep;
@@ -234,6 +256,7 @@ let
   vmChecksFast = {
     boot-test = packages.bootTest;
     functional-test = packages.functionalTest;
+    nixtamal-test = packages.nixtamal-test;
     multi-user-test = packages.multi-user-test;
     bridge-test = packages.bridgeTest;
     scheme-daemon-test = packages.scheme-daemon-test;

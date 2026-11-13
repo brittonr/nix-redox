@@ -8,6 +8,7 @@
 # - syslog removal, setsid guard
 # - Hard link → symlink fallback (Redox lacks hard links)
 # - endian.h include for bswap
+# - URL transport detection before Redox-local scheme path probing
 #
 # Dependencies: curl, expat, openssl, zlib (all already built)
 #
@@ -133,6 +134,8 @@ pkgs.stdenv.mkDerivation {
     NEEDS_SSL_WITH_CURL = 1
     NEEDS_CRYPTO_WITH_SSL = 1
     BLK_SHA1 = 1
+    SHELL_PATH = /nix/system/profile/bin/bash
+    BUILD_SHELL_PATH = ${pkgs.runtimeShell}
   CFGEOF
   '';
 

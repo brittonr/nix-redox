@@ -856,7 +856,7 @@ pub fn nar_hash_path(path: &Path) -> io::Result<(String, u64)> {
 }
 
 /// Recursively serialize a filesystem path into NAR format.
-fn write_path_to_nar<W: io::Write>(
+pub(crate) fn write_path_to_nar<W: io::Write>(
     node: nix_compat::nar::writer::Node<'_, W>,
     path: &Path,
 ) -> io::Result<()> {
@@ -875,7 +875,7 @@ fn write_path_to_nar<W: io::Write>(
         }
     } else if meta.is_file() {
         #[cfg(unix)]
-        let executable = meta.permissions().mode() & 0o111 != 0;
+        let executable = meta.permissions().mode() & 0o100 != 0;
         #[cfg(not(unix))]
         let executable = false;
 
@@ -902,6 +902,8 @@ fn write_path_to_nar<W: io::Write>(
             write_path_to_nar(child, &entry.path())?;
         }
         dir.close()?;
+    } else {
+        return Err(io::Error::new(io::ErrorKind::InvalidInput, format!("unsupported NAR file type: {}", path.display())));
     }
 
     Ok(())

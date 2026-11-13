@@ -30,6 +30,7 @@ mod vendor;
 // mod known_paths; // Replaced by upstream snix-glue::known_paths
 mod local_cache;
 mod nar;
+mod nix_cli;
 mod pathinfo;
 mod rebuild;
 mod store;
@@ -711,6 +712,17 @@ fn main() {
             // remote fetches will fail with a clear TLS error.
             std::env::set_var("SSL_CERT_FILE", "/dev/null");
         }
+    }
+
+    if let Some(result) = nix_cli::dispatch() {
+        use std::io::Write;
+        let result = result.and_then(|()| std::io::stdout().flush().map_err(Into::into));
+        if let Err(error) = result {
+            eprintln!("snix: {error}");
+            let _ = std::io::stderr().flush();
+            std::process::exit(1);
+        }
+        return;
     }
 
     let cli = Cli::parse();

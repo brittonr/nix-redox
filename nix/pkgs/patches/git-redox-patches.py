@@ -89,4 +89,26 @@ c = c.replace('struct ustar_header *header',
     1)
 with open('builtin/get-tar-commit-id.c', 'w') as f: f.write(c)
 
+# 10. Redox resolves file: scheme paths in stat(), so clone must recognize URLs
+# before probing for a local repository and prefixing the working directory.
+patch_file('builtin/clone.c', '#include "connected.h"',
+    '#include "connected.h"\n#include "url.h"')
+patch_file('builtin/clone.c', '\tstrbuf_addstr(&path, repo);',
+    '\tif (is_url(repo))\n\t\treturn NULL;\n\n\tstrbuf_addstr(&path, repo);')
+
+# 11. Cross builds execute generators on the host, but installed helpers and
+# Git's command strings require the guest's POSIX shell rather than Ion.
+patch_file('Makefile', 'SHELL = $(SHELL_PATH)',
+    'BUILD_SHELL_PATH ?= $(SHELL_PATH)\nSHELL = $(BUILD_SHELL_PATH)')
+patch_file('Makefile', '$(SHELL_PATH) ./GIT-VERSION-GEN',
+    '$(BUILD_SHELL_PATH) ./GIT-VERSION-GEN')
+patch_file('Makefile', '$(SHELL_PATH) ./generate-cmdlist.sh',
+    '$(BUILD_SHELL_PATH) ./generate-cmdlist.sh')
+patch_file('Makefile', 'export DIFF TAR INSTALL DESTDIR SHELL_PATH',
+    'export DIFF TAR INSTALL DESTDIR SHELL_PATH BUILD_SHELL_PATH')
+patch_file('git-gui/Makefile', 'ifndef SHELL_PATH\n\tSHELL_PATH = /bin/sh\nendif',
+    'ifndef SHELL_PATH\n\tSHELL_PATH = /bin/sh\nendif\nBUILD_SHELL_PATH ?= $(SHELL_PATH)')
+patch_file('git-gui/Makefile', '$(SHELL_PATH) ./GIT-VERSION-GEN',
+    '$(BUILD_SHELL_PATH) ./GIT-VERSION-GEN')
+
 print('All git patches applied successfully')
