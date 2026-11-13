@@ -16,6 +16,15 @@ All notable changes to this project are documented here. The format follows
   (`demo/render-self-build.py`), generated from the `native-rebuild-test`
   capture: seed build, native boot, rollback, 134/134 pass.
 
+### Changed
+
+- Redesigned the landing page (`site/`): numbered sections for running, the
+  demo, the self-build proof, the build pipeline, configuration, image contents,
+  status and docs; light and dark themes that follow the OS, with a toggle;
+  self-hosted Archivo and JetBrains Mono fonts; copy buttons; keyboard-operable
+  tabs; and asciinema players that load as they scroll into view. Without
+  JavaScript every panel stays visible and the recordings play as MP4s.
+
 ## [0.1.2-alpha] - 2026-11-11
 
 ### Added

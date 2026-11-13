@@ -3,220 +3,679 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>nix-redox — Redox OS, built with Nix</title>
+  <title>nix-redox — Redox OS, built from source with Nix</title>
   <meta name="description" content="A complete Redox OS distribution built from source with Nix. One command boots a graphical Redox desktop.">
-  <meta property="og:title" content="nix-redox — Redox OS, built with Nix">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f3efe6">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#151311">
+  <meta property="og:title" content="nix-redox — Redox OS, built from source with Nix">
   <meta property="og:description" content="A complete Redox OS distribution built from source with Nix. One command boots a graphical Redox desktop.">
   <meta property="og:type" content="website">
   <meta property="og:url" content="https://brittonr.github.io/nix-redox/">
   <meta property="og:image" content="https://brittonr.github.io/nix-redox/assets/orbital-social.png">
   <meta name="twitter:card" content="summary_large_image">
   <link rel="canonical" href="https://brittonr.github.io/nix-redox/">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='12' fill='%230b3a5b'/%3E%3Ctext x='32' y='46' font-family='system-ui,sans-serif' font-size='42' font-weight='700' text-anchor='middle' fill='%23ffffff'%3ER%3C/text%3E%3C/svg%3E">
+  <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+  <link rel="preload" href="assets/fonts/archivo-latin-wdth-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/jetbrains-mono-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin>
+  <script>
+    (function () {
+      var root = document.documentElement;
+      root.classList.add("js");
+      try {
+        var theme = localStorage.getItem("nix-redox-theme");
+        if (theme === "light" || theme === "dark") root.dataset.theme = theme;
+      } catch (e) {}
+    })();
+  </script>
   <link rel="stylesheet" href="style.css">
-  <link rel="stylesheet" href="assets/asciinema/asciinema-player.min.css">
+  <script src="site.js" defer></script>
 </head>
 <body>
+  <svg class="sprite" aria-hidden="true">
+    <symbol id="i-copy" viewBox="0 0 16 16"><rect x="5.5" y="5.5" width="8" height="8" rx="1"/><path d="M10.5 5.5v-2a1 1 0 0 0-1-1h-6a1 1 0 0 0-1 1v6a1 1 0 0 0 1 1h2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 16 16"><path d="M3 8.5l3.3 3.3L13 4.7"/></symbol>
+    <symbol id="i-theme" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 16 16"><path d="M2 4.5h12M2 8h12M2 11.5h12"/></symbol>
+  </svg>
+
   <a class="skip" href="#main">Skip to content</a>
-  <header class="site-header">
-    <div class="wrap header-inner">
-      <a class="brand" href="/nix-redox/">
-        <span class="brand-mark">R</span>
+
+  <header class="masthead">
+    <div class="wrap masthead-row">
+      <a class="brand" href="./">
+        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+          <path class="mark-nix" d="M5 12.5h22L20.5 6"/>
+          <path class="mark-oxide" d="M27 19.5H5l6.5 6.5"/>
+        </svg>
         <span>nix-redox</span>
       </a>
-      <nav aria-label="Primary">
-        <a href="#quick-start">Quick start</a>
+      <nav id="site-nav" class="nav" aria-label="Sections">
+        <a href="#quick-start">Run</a>
         <a href="#demo">Demo</a>
         <a href="#self-build">Self-build</a>
-        <a href="#features">Features</a>
-        <a href="https://github.com/brittonr/nix-redox#documentation">Docs</a>
-        <a href="https://github.com/brittonr/nix-redox/discussions">Community</a>
-        <a class="nav-cta" href="https://github.com/brittonr/nix-redox">GitHub</a>
+        <a href="#how">How it works</a>
+        <a href="#configure">Configure</a>
+        <a href="#inside">Inside</a>
+        <a href="#status">Status</a>
+        <a href="#docs">Docs</a>
       </nav>
+      <div class="masthead-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme">
+          <svg class="ico"><use href="#i-theme"/></svg>
+        </button>
+        <a class="btn btn-small" href="https://github.com/brittonr/nix-redox">GitHub <span aria-hidden="true">↗</span></a>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav">
+          <svg class="ico"><use href="#i-menu"/></svg>
+        </button>
+      </div>
     </div>
+    <div class="progress" aria-hidden="true"></div>
   </header>
 
   <main id="main">
-    <section class="hero">
+    <section class="hero" aria-labelledby="hero-title">
       <div class="wrap hero-grid">
         <div class="hero-copy">
-          <p class="eyebrow">Alpha · Redox OS · Nix flakes</p>
-          <h1>Redox OS,<br>built from source.</h1>
+          <p class="eyebrow">
+            <a href="https://github.com/brittonr/nix-redox/releases/tag/v0.1.2-alpha"><span class="tag">Alpha</span> v0.1.2-alpha release notes <span aria-hidden="true">→</span></a>
+          </p>
+          <h1 id="hero-title">Redox&nbsp;OS, built from source<span class="dot">.</span></h1>
           <p class="lede">
-            A complete Redox distribution assembled with Nix: kernel, bootloader,
-            libc, userspace, and the Orbital desktop. One command gets you a
-            running desktop; every component is reproducible from source.
+            A complete Redox distribution assembled with Nix: bootloader, kernel,
+            libc, userspace and the Orbital desktop. One command boots a desktop,
+            and every component is a derivation built from source.
+          </p>
+          <div class="cmd cmd-hero" role="group" aria-label="Quick start command">
+            <code class="cmd-line"><span class="cmd-prompt" aria-hidden="true">$ </span><span class="cmd-text">nix run <span class="seg">github:brittonr/nix-redox</span></span></code>
+            <button class="copy" type="button"><svg class="ico"><use href="#i-copy"/></svg><span class="copy-label">Copy</span></button>
+          </div>
+          <p class="hint">
+            Log in as <code>user</code> / <code>redox</code>. Needs an x86_64 Linux
+            host with Nix flakes, KVM and about 10&nbsp;GB of disk.
           </p>
           <div class="actions">
-            <a class="button primary" href="#quick-start">Quick start</a>
-            <a class="button ghost" href="#demo">Watch demo</a>
-            <a class="button" href="https://github.com/brittonr/nix-redox/releases/tag/v0.1.2-alpha">Release notes</a>
-            <a class="button ghost" href="https://github.com/brittonr/nix-redox">Source</a>
+            <a class="btn" href="#demo">Watch it boot</a>
+            <a class="btn" href="#self-build">See the proof</a>
           </div>
-          <p class="note">x86_64 Linux host · KVM · ~10 GB · graphical display for the desktop runner</p>
         </div>
-        <figure class="hero-shot">
-          <img src="assets/orbital-login.png" alt="Orbital login screen on Redox OS" width="1280" height="800">
-          <figcaption>Orbital on Redox, built and booted entirely with Nix.</figcaption>
+        <figure class="fig hero-fig">
+          <div class="plate">
+            <img src="assets/orbital-login.png" alt="Orbital login dialog over the blue Redox wallpaper" width="1280" height="800" fetchpriority="high">
+          </div>
+          <figcaption><span class="fig-no">Fig. 1</span> Orbital on Redox, built and booted entirely with Nix.</figcaption>
         </figure>
       </div>
-    </section>
-
-    <section id="quick-start" class="section">
       <div class="wrap">
-        <h2>Quick start</h2>
-        <p class="section-lede">Boot the graphical desktop directly from the flake.</p>
-        <div class="terminal" role="group" aria-label="Quick start command">
-          <div class="terminal-bar"><span></span><span></span><span></span></div>
-          <pre><code><span class="prompt">$</span> nix run github:brittonr/nix-redox</code></pre>
-        </div>
-        <p class="fine">Log in as <code>user</code> with password <code>redox</code>. The first build compiles the OS; later runs reuse the store. Use <code>nix run .#headless</code> without a display.</p>
+        <dl class="titleblock">
+          <div><dt>Release</dt><dd>v0.1.2-alpha</dd></div>
+          <div><dt>Status</dt><dd>Alpha</dd></div>
+          <div><dt>Host</dt><dd>x86_64-linux, KVM</dd></div>
+          <div><dt>Runs in</dt><dd>QEMU, Cloud Hypervisor</dd></div>
+          <div><dt>Image</dt><dd>GPT, UEFI + RedoxFS</dd></div>
+          <div><dt>License</dt><dd>MIT</dd></div>
+        </dl>
       </div>
     </section>
 
-    <section id="demo" class="section">
-      <div class="wrap">
-        <h2>See it boot</h2>
-        <p class="section-lede">An asciinema cast of the serial console: UEFI boot, login, and <code>snix</code> evaluating and building a fresh package inside the guest.</p>
-        <figure class="demo-shot">
-          <div id="demo-player" class="demo-player" role="region" aria-label="Asciinema recording of Redox booting and running snix commands"></div>
-          <noscript><p><a href="assets/demo/nix-redox-e2e.mp4">Watch the rendered MP4</a>.</p></noscript>
-          <figcaption>Recorded from the v0.1.2-alpha graphical image over the QEMU serial console.</figcaption>
-        </figure>
-        <p class="fine"><a href="assets/demo/nix-redox-e2e.cast">Asciicast source</a> · <a href="assets/demo/nix-redox-e2e.mp4">MP4</a></p>
-      </div>
-    </section>
+    <section id="quick-start" class="sheet" aria-labelledby="run-title">
+      <div class="wrap sheet-grid">
+        <header class="sheet-head">
+          <p class="sheet-no"><span>01</span> Run</p>
+          <h2 id="run-title">One command, four ways to boot.</h2>
+          <p class="sheet-lede">
+            Every runner builds its image from the flake and boots it in a VM.
+            Start with the desktop; go headless when a shell is all you need.
+          </p>
+        </header>
+        <div class="sheet-body">
+          <div class="tabs" data-tabs>
+            <div class="tablist" role="tablist" aria-label="Runner">
+              <button type="button" role="tab" id="run-tab-desktop" aria-controls="run-panel-desktop" aria-selected="true">Desktop</button>
+              <button type="button" role="tab" id="run-tab-headless" aria-controls="run-panel-headless" aria-selected="false" tabindex="-1">Headless</button>
+              <button type="button" role="tab" id="run-tab-minimal" aria-controls="run-panel-minimal" aria-selected="false" tabindex="-1">Minimal</button>
+              <button type="button" role="tab" id="run-tab-self-hosting" aria-controls="run-panel-self-hosting" aria-selected="false" tabindex="-1">Self-hosting</button>
+            </div>
 
-    <section id="self-build" class="section">
-      <div class="wrap">
-        <h2>Redox builds Redox</h2>
-        <p class="section-lede">Evidence replay of <code>native-rebuild-test</code>: build a native system inside the guest, boot it, verify it, and roll back.</p>
-        <figure class="demo-shot">
-          <div id="self-build-player" class="demo-player" role="region" aria-label="Asciinema evidence replay of the native Redox rebuild"></div>
-          <noscript><p><a href="assets/demo/nix-redox-self-build.mp4">Watch the rendered MP4</a>.</p></noscript>
-          <figcaption>Replay of run <code>20261111T233134-native-rebuild-test</code> from the actual guest serial logs: 134/134 pass across three cold boots.</figcaption>
-        </figure>
-        <p class="fine"><a href="assets/demo/nix-redox-self-build.cast">Asciicast source</a> · <a href="assets/demo/nix-redox-self-build.mp4">MP4</a> · <a href="https://github.com/brittonr/nix-redox/blob/main/docs/self-hosting/latest-success.md">Latest proof runs</a></p>
-      </div>
-    </section>
+            <div class="tabpanel is-active" role="tabpanel" id="run-panel-desktop" aria-labelledby="run-tab-desktop">
+              <h3 class="panel-title">Desktop</h3>
+              <div class="cmd" role="group" aria-label="Desktop runner command">
+                <code class="cmd-line"><span class="cmd-prompt" aria-hidden="true">$ </span><span class="cmd-text">nix run <span class="seg">github:brittonr/nix-redox</span></span></code>
+                <button class="copy" type="button"><svg class="ico"><use href="#i-copy"/></svg><span class="copy-label">Copy</span></button>
+              </div>
+              <dl class="facts">
+                <div><dt>Boots</dt><dd>The Orbital desktop in a QEMU window (GTK).</dd></div>
+                <div><dt>Image</dt><dd>Graphical profile: the development image plus Orbital, orbterm, orbutils and orbdata.</dd></div>
+                <div><dt>Exit</dt><dd>Close the QEMU window.</dd></div>
+                <div><dt>Needs</dt><dd>A graphical display.</dd></div>
+              </dl>
+            </div>
 
-    <section id="features" class="section alt">
-      <div class="wrap">
-        <h2>What is in the image</h2>
-        <div class="cards">
-          <article class="card">
-            <h3>Source-built OS</h3>
-            <p>UEFI bootloader, Redox kernel, initfs, relibc, base daemons, userspace, and Orbital — all Nix derivations.</p>
-          </article>
-          <article class="card">
-            <h3>Declarative system</h3>
-            <p>Composable modules for users, networking, services, hardware, and image assembly. Search the option surface with <code>redox-help</code>.</p>
-          </article>
-          <article class="card">
-            <h3>Self-hosting</h3>
-            <p>The self-hosting image ships rustc, cargo, LLVM/LLD, and <code>snix</code>; compile and manage the system from inside Redox.</p>
-          </article>
-          <article class="card">
-            <h3>Generations and rollback</h3>
-            <p><code>redox-rebuild</code> tracks host-side builds; <code>snix system rebuild</code> and generations handle live guest changes.</p>
-          </article>
-          <article class="card">
-            <h3>Reproducible by default</h3>
-            <p>Pinned inputs, per-crate builds, fixed-output sources, and a tiered CI gate from evaluation to VM integration.</p>
-          </article>
-          <article class="card">
-            <h3>Self-hosting, proven</h3>
-            <p>86/86 self-hosting tests, 134/134 native rebuild tests across three cold boots, and 19/19 Snix sandbox tests on the current candidate.</p>
-          </article>
-          <article class="card">
-            <h3>Honest alpha</h3>
-            <p>VM, declarative configuration, self-hosting, and image workflows are exercised. Bare metal and some networking paths are experimental.</p>
-          </article>
-        </div>
-      </div>
-    </section>
+            <div class="tabpanel" role="tabpanel" id="run-panel-headless" aria-labelledby="run-tab-headless">
+              <h3 class="panel-title">Headless</h3>
+              <div class="cmd" role="group" aria-label="Headless runner command">
+                <code class="cmd-line"><span class="cmd-prompt" aria-hidden="true">$ </span><span class="cmd-text">nix run <span class="seg">github:brittonr/nix-redox</span><span class="seg">#headless</span></span></code>
+                <button class="copy" type="button"><svg class="ico"><use href="#i-copy"/></svg><span class="copy-label">Copy</span></button>
+              </div>
+              <dl class="facts">
+                <div><dt>Boots</dt><dd>A serial console in Cloud Hypervisor.</dd></div>
+                <div><dt>Image</dt><dd>Development profile: shells, editors, CLI tools, networking and <code>snix</code>, without graphics.</dd></div>
+                <div><dt>Exit</dt><dd><kbd>Ctrl</kbd>+<kbd>C</kbd></dd></div>
+                <div><dt>Needs</dt><dd>No display.</dd></div>
+              </dl>
+            </div>
 
-    <section class="section">
-      <div class="wrap split">
-        <div>
-          <h2>Included</h2>
-          <ul class="checklist">
-            <li>ion shell, bash, uutils, binutils, findutils</li>
-            <li>helix, sodium, smith</li>
-            <li>ripgrep, fd, bat, hexyl, zoxide, dust, lsd, bottom, tokei</li>
-            <li>smolnetd TCP/IP stack, dhcpd, ping, nc, curl</li>
-            <li>git, make, diffutils, sed, patch, strace</li>
-            <li>Orbital, orbterm, orbutils, orbdata <span class="muted">(graphical)</span></li>
-            <li>rustc, cargo, LLVM/LLD, cmake <span class="muted">(self-hosting)</span></li>
+            <div class="tabpanel" role="tabpanel" id="run-panel-minimal" aria-labelledby="run-tab-minimal">
+              <h3 class="panel-title">Minimal</h3>
+              <div class="cmd" role="group" aria-label="Minimal runner command">
+                <code class="cmd-line"><span class="cmd-prompt" aria-hidden="true">$ </span><span class="cmd-text">nix run <span class="seg">github:brittonr/nix-redox</span><span class="seg">#run-redox-minimal</span></span></code>
+                <button class="copy" type="button"><svg class="ico"><use href="#i-copy"/></svg><span class="copy-label">Copy</span></button>
+              </div>
+              <dl class="facts">
+                <div><dt>Boots</dt><dd>A serial console in Cloud Hypervisor.</dd></div>
+                <div><dt>Image</dt><dd>Minimal profile: the ion shell and uutils.</dd></div>
+                <div><dt>Exit</dt><dd><kbd>Ctrl</kbd>+<kbd>C</kbd></dd></div>
+                <div><dt>Needs</dt><dd>No display.</dd></div>
+              </dl>
+            </div>
+
+            <div class="tabpanel" role="tabpanel" id="run-panel-self-hosting" aria-labelledby="run-tab-self-hosting">
+              <h3 class="panel-title">Self-hosting</h3>
+              <div class="cmd" role="group" aria-label="Self-hosting runner command">
+                <code class="cmd-line"><span class="cmd-prompt" aria-hidden="true">$ </span><span class="cmd-text">nix run <span class="seg">github:brittonr/nix-redox</span><span class="seg">#run-redox-self-hosting</span></span></code>
+                <button class="copy" type="button"><svg class="ico"><use href="#i-copy"/></svg><span class="copy-label">Copy</span></button>
+              </div>
+              <dl class="facts">
+                <div><dt>Boots</dt><dd>A serial console in Cloud Hypervisor.</dd></div>
+                <div><dt>Image</dt><dd>Self-hosting profile: rustc, cargo, LLVM/LLD and cmake, cross-compiled for Redox.</dd></div>
+                <div><dt>Try</dt><dd><code>cargo init</code>, then <code>cargo build</code>: it compiles natively on Redox.</dd></div>
+                <div><dt>Exit</dt><dd><kbd>Ctrl</kbd>+<kbd>C</kbd></dd></div>
+              </dl>
+            </div>
+          </div>
+
+          <ul class="notes">
+            <li>
+              <h3>Credentials</h3>
+              <p><code>user</code> / <code>redox</code>; <code>root</code> uses the same password. Change both before exposing a service to a network.</p>
+            </li>
+            <li>
+              <h3>First run</h3>
+              <p>Builds the whole OS from source; later runs reuse the store. To download instead, accept the flake's <code>nix-redox</code> Cachix cache. CI publishes it for Nix 2.24.9 and 2.35.1; store paths depend on the Nix version, so others may still build from source. <a href="https://github.com/brittonr/nix-redox/blob/main/docs/binary-cache.md">Cache setup</a></p>
+            </li>
+            <li>
+              <h3>From a checkout</h3>
+              <p>Clone the repository and drop the URL: <code>nix run .</code> for the desktop, <code>nix run .#headless</code> for the console.</p>
+            </li>
+            <li>
+              <h3>As a disk image</h3>
+              <p><code>nix build</code> produces a GPT disk with a UEFI boot partition and a RedoxFS root. Tagged <a href="https://github.com/brittonr/nix-redox/releases">releases</a> publish graphical and minimal images with <code>SHA256SUMS</code>.</p>
+            </li>
           </ul>
         </div>
-        <div>
-          <h2>Explore</h2>
-          <ul class="links">
-            <li><a href="https://github.com/brittonr/nix-redox#readme">README and commands</a></li>
-            <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/install.md">Install and USB writing</a></li>
-            <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/options.md">Module options reference</a></li>
-            <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/redox-rebuild.md">Host-side generations</a></li>
-            <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/alpha-release.md">Alpha scope and limitations</a></li>
-            <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/self-hosting/latest-success.md">Latest VM proof runs</a></li>
-            <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/self-hosting/proof-artifacts.md">Self-hosting proof contract</a></li>
-          </ul>
+      </div>
+    </section>
+
+    <section id="demo" class="sheet" aria-labelledby="demo-title">
+      <div class="wrap sheet-grid">
+        <header class="sheet-head">
+          <p class="sheet-no"><span>02</span> Demo</p>
+          <h2 id="demo-title">Watch it boot.</h2>
+        </header>
+        <p class="sheet-intro">
+          A short serial-console recording of the v0.1.2-alpha graphical image,
+          from UEFI firmware to a fresh <code>snix build</code> inside the guest.
+        </p>
+      </div>
+      <div class="wrap sheet-wide split">
+        <figure class="fig">
+          <div class="term">
+            <p class="term-bar">serial console · redox-graphical.img</p>
+            <div class="player" data-cast="assets/demo/nix-redox-e2e.cast" data-poster="0:27">
+              <noscript><video controls preload="none" width="900" height="644" poster="assets/demo/nix-redox-e2e-poster.png" src="assets/demo/nix-redox-e2e.mp4" aria-label="Serial console recording"></video></noscript>
+              <a class="player-fallback" href="assets/demo/nix-redox-e2e.mp4">Play the recording (MP4)</a>
+            </div>
+          </div>
+          <figcaption>
+            <span class="fig-no">Fig. 2</span> Recorded over the QEMU serial console by
+            <a href="https://github.com/brittonr/nix-redox/tree/main/demo"><code>demo/record-e2e.py</code></a>.
+            <a href="assets/demo/nix-redox-e2e.cast">Asciicast</a> · <a href="assets/demo/nix-redox-e2e.mp4">MP4</a>
+          </figcaption>
+        </figure>
+        <div class="split-aside">
+          <h3 class="steps-title">What it shows</h3>
+          <ol class="steps">
+            <li>UEFI boot and the Redox serial login</li>
+            <li><code>tree --version</code></li>
+            <li><code>snix eval --expr "1 + 1"</code></li>
+            <li><code>snix build</code> of a new derivation, with its store path</li>
+            <li><code>cat</code> of the built output</li>
+            <li><code>snix system info</code> and <code>snix system services</code></li>
+          </ol>
         </div>
       </div>
     </section>
 
-    <section class="section alt">
-      <div class="wrap cta">
-        <h2>Build a Redox desktop with one command.</h2>
+    <section id="self-build" class="sheet" aria-labelledby="self-build-title">
+      <div class="wrap sheet-grid">
+        <header class="sheet-head">
+          <p class="sheet-no"><span>03</span> Self-build</p>
+          <h2 id="self-build-title">Redox builds Redox.</h2>
+          <p class="sheet-lede">
+            <code>native-rebuild-test</code> boots with no network and no Linux
+            build bridge, runs an ordinary <code>snix system rebuild</code>, and
+            compiles a new kernel, UEFI bootloader and initfs inside the guest.
+            Then it boots what it built, and rolls back.
+          </p>
+          <p class="stat"><b>134<span>/134</span></b> checks pass across three cold boots</p>
+        </header>
+        <div class="sheet-body">
+          <figure class="fig">
+            <ol class="boots">
+              <li class="boot">
+                <p class="boot-no">Boot 0</p>
+                <h3>Seed</h3>
+                <p>Compiles the native system inside Redox, selects it and requests a restart.</p>
+                <dl class="ids">
+                  <div><dt>bootloader</dt><dd class="id-host">ywkimw16…</dd></div>
+                  <div><dt>kernel</dt><dd class="id-host">mm889zql…</dd></div>
+                  <div><dt>initfs</dt><dd class="id-host">vin80lxr…</dd></div>
+                </dl>
+              </li>
+              <li class="boot">
+                <p class="boot-no">Boot 1</p>
+                <h3>Native</h3>
+                <p>Firmware boots the guest-built bootloader, kernel and initfs. The test verifies them, then rolls back.</p>
+                <dl class="ids">
+                  <div><dt>bootloader</dt><dd class="id-guest">7lnk45v8…</dd></div>
+                  <div><dt>kernel</dt><dd class="id-guest">ny2n16vk…</dd></div>
+                  <div><dt>initfs</dt><dd class="id-guest">lhbi12n2…</dd></div>
+                </dl>
+              </li>
+              <li class="boot">
+                <p class="boot-no">Boot 2</p>
+                <h3>Rollback</h3>
+                <p>The original system executes again, verified byte for byte. The native generation stays GC-rooted.</p>
+                <dl class="ids">
+                  <div><dt>bootloader</dt><dd class="id-host">ywkimw16…</dd></div>
+                  <div><dt>kernel</dt><dd class="id-host">mm889zql…</dd></div>
+                  <div><dt>initfs</dt><dd class="id-host">vin80lxr…</dd></div>
+                </dl>
+              </li>
+            </ol>
+            <figcaption>
+              <span class="fig-no">Fig. 3</span> Store identities reported by the executing
+              bootloader, kernel and initfs on each boot of run
+              <code>20261111T233134-native-rebuild-test</code>, replayed in Fig. 4.
+              <span class="legend">
+                <span class="key"><i class="id-host"></i> built by Nix on the Linux host</span>
+                <span class="key"><i class="id-guest"></i> built by snix on Redox</span>
+              </span>
+            </figcaption>
+          </figure>
+        </div>
+      </div>
+      <div class="wrap sheet-wide split">
+        <figure class="fig">
+          <div class="term">
+            <p class="term-bar">evidence replay · native-rebuild-test</p>
+            <div class="player" data-cast="assets/demo/nix-redox-self-build.cast" data-poster="0:27.7">
+              <noscript><video controls preload="none" width="900" height="644" poster="assets/demo/nix-redox-self-build-poster.png" src="assets/demo/nix-redox-self-build.mp4" aria-label="Self-build evidence replay"></video></noscript>
+              <a class="player-fallback" href="assets/demo/nix-redox-self-build.mp4">Play the replay (MP4)</a>
+            </div>
+          </div>
+          <figcaption>
+            <span class="fig-no">Fig. 4</span> Evidence replay of the run in Fig. 3,
+            at commit <code>1ff012e</code>, rendered from its guest serial logs. The
+            timeline is compressed from 3702 seconds; this is not a live run.
+            <a href="assets/demo/nix-redox-self-build.cast">Asciicast</a> · <a href="assets/demo/nix-redox-self-build.mp4">MP4</a>
+          </figcaption>
+        </figure>
+        <div class="split-aside">
+          <figure class="fig">
+            <table class="ledger">
+              <thead>
+                <tr><th scope="col">Flow</th><th scope="col">Exercises</th><th scope="col">Commit</th><th scope="col">Result</th></tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row"><code>native-rebuild-test</code></th>
+                  <td>Kernel, UEFI bootloader, initfs and system graph built on Redox; three cold boots with rollback.</td>
+                  <td><a href="https://github.com/brittonr/nix-redox/commit/e0f0102"><code>e0f0102</code></a></td>
+                  <td class="result"><b>134/134</b> <span class="pass">pass</span></td>
+                </tr>
+                <tr>
+                  <th scope="row"><code>self-hosting-test</code></th>
+                  <td>Native rustc and Cargo builds, proc-macro loading, environment propagation, signal delivery and the system rebuild path.</td>
+                  <td><a href="https://github.com/brittonr/nix-redox/commit/e0f0102"><code>e0f0102</code></a></td>
+                  <td class="result"><b>86/86</b> <span class="pass">pass</span></td>
+                </tr>
+                <tr>
+                  <th scope="row"><code>snix-sandbox-test</code></th>
+                  <td>Sandboxed <code>snix</code> builds inside the guest, including a source rebuild probe.</td>
+                  <td><a href="https://github.com/brittonr/nix-redox/commit/1ff012e"><code>1ff012e</code></a></td>
+                  <td class="result"><b>19/19</b> <span class="pass">pass</span></td>
+                </tr>
+              </tbody>
+            </table>
+            <figcaption>
+              <span class="fig-no">Table 1</span> Latest recorded VM proofs as of 2026-11-12. Run IDs
+              and capture directories for every flow are in the
+              <a href="https://github.com/brittonr/nix-redox/blob/main/docs/self-hosting/latest-success.md">proof index</a>.
+            </figcaption>
+          </figure>
+
+          <p class="scope">
+            <b>What this does not claim.</b> The native graph reuses the seed
+            toolchain, libraries, userspace packages and driver binaries, so it is
+            not a toolchain or all-packages rebuild, and the host installs the
+            selected EFI file into the ESP between boots.
+            <a href="https://github.com/brittonr/nix-redox/blob/main/docs/self-hosting/proof-artifacts.md">Read the proof contract</a>
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <section id="how" class="sheet" aria-labelledby="how-title">
+      <div class="wrap sheet-grid">
+        <header class="sheet-head">
+          <p class="sheet-no"><span>04</span> How it works</p>
+          <h2 id="how-title">Every component is a derivation.</h2>
+          <p class="sheet-lede">
+            No upstream Makefile or cookbook sits in the build path. The flake
+            evaluates packages and system modules into one bootable image.
+          </p>
+        </header>
+        <div class="sheet-body">
+          <ol class="layers">
+            <li>
+              <h3>Bootstrap</h3>
+              <p>relibc, the kernel and the bootloader are cross-compiled with <code>-Z build-std</code>, because they provide Redox's standard library.</p>
+            </li>
+            <li>
+              <h3>Userspace</h3>
+              <p>Rust crates are split into per-crate derivations through <a href="https://github.com/brittonr/unit2nix">unit2nix</a> for granular caching. C libraries build with a clang cross-compiler that uses relibc as its sysroot.</p>
+            </li>
+            <li>
+              <h3>Assembly</h3>
+              <p>A NixOS-style module system evaluates the configuration and produces the root tree, the initfs and the bootable disk image.</p>
+            </li>
+          </ol>
+        </div>
+      </div>
+      <div class="wrap sheet-wide">
+        <figure class="fig">
+          <div class="pipe" role="img" aria-label="Build pipeline. flake.nix defines packages and system modules. Packages build the bootloader, kernel and initfs, and the base daemons, userspace and Orbital. System modules produce the root tree and /etc. All of it is assembled into one GPT disk image, which boots in QEMU or Cloud Hypervisor.">
+            <p class="node n-src"><span><code>flake.nix</code></span></p>
+            <p class="node n-pkgs"><span><b>Packages</b></span></p>
+            <p class="node"><span><b>System modules</b></span></p>
+            <p class="node n-out"><span>bootloader, kernel, initfs</span></p>
+            <p class="node n-out"><span>base daemons, userspace, Orbital</span></p>
+            <p class="node n-out"><span>root tree and <code>/etc</code></span></p>
+            <p class="node n-img"><span><b>GPT disk image</b></span></p>
+            <p class="node n-vm"><span>QEMU or Cloud Hypervisor</span></p>
+          </div>
+          <figcaption><span class="fig-no">Fig. 5</span> From one flake to a bootable disk.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section id="configure" class="sheet" aria-labelledby="configure-title">
+      <div class="wrap sheet-grid">
+        <header class="sheet-head">
+          <p class="sheet-no"><span>05</span> Configure</p>
+          <h2 id="configure-title">Declare&nbsp;it. Rebuild&nbsp;it. Roll&nbsp;it&nbsp;back.</h2>
+          <p class="sheet-lede">
+            Profiles are composable Nix expressions. On the guest,
+            <code>snix</code> manages the running system in the style of
+            <code>nixos-rebuild</code>; on the host, <code>redox-rebuild</code>
+            builds configurations and tracks generations.
+          </p>
+        </header>
+        <div class="sheet-body">
+          <div class="tabs" data-tabs>
+            <div class="tablist" role="tablist" aria-label="Configuration examples">
+              <button type="button" role="tab" id="cfg-tab-profile" aria-controls="cfg-panel-profile" aria-selected="true">Profile</button>
+              <button type="button" role="tab" id="cfg-tab-guest" aria-controls="cfg-panel-guest" aria-selected="false" tabindex="-1">On the guest</button>
+              <button type="button" role="tab" id="cfg-tab-host" aria-controls="cfg-panel-host" aria-selected="false" tabindex="-1">On the host</button>
+              <button type="button" role="tab" id="cfg-tab-bridge" aria-controls="cfg-panel-bridge" aria-selected="false" tabindex="-1">Build bridge</button>
+            </div>
+
+            <div class="tabpanel is-active" role="tabpanel" id="cfg-panel-profile" aria-labelledby="cfg-tab-profile">
+              <h3 class="panel-title">Profile</h3>
+              <pre class="code" tabindex="0"><code># profiles/my-server.nix
+{ pkgs, lib }:
+{
+  "/environment" = {
+    systemPackages = [
+      pkgs.ion pkgs.uutils pkgs.extrautils pkgs.snix pkgs.redox-curl
+    ];
+    etc."etc/motd" = { text = "Welcome to my Redox server!"; };
+  };
+
+  "/networking" = {
+    enable = true;
+    mode = "dhcp";
+    dns = [ "1.1.1.1" "8.8.8.8" ];
+    remoteShellEnable = true;
+  };
+
+  "/users".users.admin = {
+    uid = 1001;
+    gid = 1001;
+    home = "/home/admin";
+    shell = "/bin/ion";
+    password = "changeme"; # change this before exposing a system
+    createHome = true;
+  };
+
+  "/services".ssh = {
+    enable = true;
+    port = 22;
+    permitRootLogin = false;
+  };
+
+  "/security".requirePasswords = true;
+  "/time".hostname = "my-server";
+}</code></pre>
+              <p class="panel-note">Profiles compose with <code>//</code>: graphical extends development, which extends base. Search every option with <code>nix run .#redox-help -- &lt;query&gt;</code> or browse the <a href="https://github.com/brittonr/nix-redox/blob/main/docs/options.md">options reference</a>.</p>
+            </div>
+
+            <div class="tabpanel" role="tabpanel" id="cfg-panel-guest" aria-labelledby="cfg-tab-guest">
+              <h3 class="panel-title">On the guest</h3>
+              <pre class="code" tabindex="0"><code>snix system rebuild            # apply configuration.nix changes
+snix system rebuild --dry-run
+snix system generations        # list system generations
+snix system switch --rollback  # roll back to the previous generation
+snix system gc                 # garbage-collect old generations
+snix system services           # list declared services
+snix install ripgrep           # install a package from the binary cache</code></pre>
+              <p class="panel-note">Generations keep their boot artifacts and GC roots, so a rollback is a boot selection, not a rebuild.</p>
+            </div>
+
+            <div class="tabpanel" role="tabpanel" id="cfg-panel-host" aria-labelledby="cfg-tab-host">
+              <h3 class="panel-title">On the host</h3>
+              <pre class="code" tabindex="0"><code>nix run .#redox-rebuild -- build
+nix run .#redox-rebuild -- switch graphical
+nix run .#redox-rebuild -- image graphical
+nix run .#redox-rebuild -- export graphical --out redox-graphical.img
+nix run .#redox-rebuild -- list-generations
+nix run .#redox-rebuild -- rollback
+nix run .#redox-rebuild -- run graphical</code></pre>
+              <p class="panel-note">Generations live in <code>.redox-generations/</code>. <code>diff</code> compares a fresh build with the current generation and <code>--dry-run</code> plans without recording. <a href="https://github.com/brittonr/nix-redox/blob/main/docs/redox-rebuild.md">redox-rebuild guide</a></p>
+            </div>
+
+            <div class="tabpanel" role="tabpanel" id="cfg-panel-bridge" aria-labelledby="cfg-tab-bridge">
+              <h3 class="panel-title">Build bridge</h3>
+              <pre class="code" tabindex="0"><code>nix run .#run-redox-shared                 # boot with a shared filesystem
+nix run .#push-to-redox -- ripgrep fd bat  # push from the host
+# inside the guest:
+snix install ripgrep</code></pre>
+              <p class="panel-note">Push host-built packages into a running VM without rebuilding a disk image.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="inside" class="sheet" aria-labelledby="inside-title">
+      <div class="wrap sheet-grid">
+        <header class="sheet-head">
+          <p class="sheet-no"><span>06</span> Inside</p>
+          <h2 id="inside-title">What is in the image.</h2>
+          <p class="sheet-lede">
+            A bill of materials, from the UEFI bootloader to the desktop. All of
+            it is built from source as Nix derivations.
+          </p>
+        </header>
+        <div class="sheet-body">
+          <table class="bom">
+            <tbody>
+              <tr><th scope="row">Boot</th><td>UEFI bootloader, kernel, initfs</td></tr>
+              <tr><th scope="row">System</th><td>Redox base daemons and drivers, relibc C library</td></tr>
+              <tr><th scope="row">Shell</th><td>ion (default), bash</td></tr>
+              <tr><th scope="row">Utilities</th><td>uutils, binutils, extrautils, findutils</td></tr>
+              <tr><th scope="row">Editors</th><td>helix, sodium, smith</td></tr>
+              <tr><th scope="row">Networking</th><td>smolnetd TCP/IP stack, dhcpd, ping, nc, curl</td></tr>
+              <tr><th scope="row">CLI tools</th><td>ripgrep, fd, bat, hexyl, zoxide, dust, lsd, bottom, tokei, tree</td></tr>
+              <tr><th scope="row">Development</th><td>gnu-make, git, diffutils, sed, patch, strace</td></tr>
+              <tr><th scope="row">Packages</th><td>snix: Nix evaluation and builds running on Redox</td></tr>
+              <tr><th scope="row">Graphics</th><td>Orbital, orbterm, orbutils, orbdata <span class="only">graphical image</span></td></tr>
+              <tr><th scope="row">Self-hosting</th><td>rustc, cargo, LLVM/LLD, cmake <span class="only">self-hosting image</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="status" class="sheet" aria-labelledby="status-title">
+      <div class="wrap sheet-grid">
+        <header class="sheet-head">
+          <p class="sheet-no"><span>07</span> Status</p>
+          <h2 id="status-title">Honest alpha.</h2>
+          <p class="sheet-lede">
+            The VM path is exercised end to end. Bare-metal boards and some
+            networking paths are not there yet, and the docs say so.
+          </p>
+        </header>
+        <div class="sheet-body">
+          <div class="status">
+            <div class="status-col status-ok">
+              <h3>Supported for alpha</h3>
+              <ul>
+                <li><code>x86_64-linux</code> hosts with Nix flakes and KVM.</li>
+                <li>The QEMU desktop runner and the headless serial console.</li>
+                <li>Disk-image builds, declarative configuration, on-guest <code>snix system rebuild</code>, generations and rollback, and package install and remove through the build bridge.</li>
+                <li>The self-hosting image and guest-native compilation.</li>
+              </ul>
+            </div>
+            <div class="status-col status-exp">
+              <h3>Experimental</h3>
+              <ul>
+                <li>Bare-metal profiles: GMKtec, LattePanda and N100-class hardware.</li>
+                <li>I225/I226 networking and netcfg autoconfiguration outside validated hardware.</li>
+                <li><code>aarch64-linux</code> outputs, unless validated for a release candidate.</li>
+              </ul>
+            </div>
+          </div>
+          <p class="panel-note">Release gates, supported scope and known limitations are in the <a href="https://github.com/brittonr/nix-redox/blob/main/docs/alpha-release.md">alpha release notes</a>.</p>
+        </div>
+      </div>
+    </section>
+
+    <section id="docs" class="sheet" aria-labelledby="docs-title">
+      <div class="wrap sheet-grid">
+        <header class="sheet-head">
+          <p class="sheet-no"><span>08</span> Docs</p>
+          <h2 id="docs-title">Go deeper.</h2>
+          <p class="sheet-lede">
+            The documentation lives beside the code. Start with the
+            <a href="https://github.com/brittonr/nix-redox#readme">README</a>.
+          </p>
+        </header>
+        <div class="sheet-body">
+          <div class="doc-groups">
+            <div>
+              <h3>Start</h3>
+              <ul class="doc-list">
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/install.md">Install</a><span>VM, USB writing, verification and updates</span></li>
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/binary-cache.md">Binary cache</a><span>Cachix setup, trust and usage</span></li>
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/troubleshooting.md">Troubleshooting</a><span>Host Nix config, direnv and headless boot warnings</span></li>
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/releases.md">Releases</a><span>Tags, image assets and verification</span></li>
+              </ul>
+            </div>
+            <div>
+              <h3>Configure</h3>
+              <ul class="doc-list">
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/options.md">Module options</a><span>Generated options reference</span></li>
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/home-configuration.md">Home configuration</a><span>Data-only per-user files</span></li>
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/redox-rebuild.md">redox-rebuild</a><span>Host-side builds, generations and rollback</span></li>
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/nixos-integration.md">NixOS integration</a><span>NixOS module options and VM service</span></li>
+              </ul>
+            </div>
+            <div>
+              <h3>Extend</h3>
+              <ul class="doc-list">
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/porting-packages.md">Porting packages</a><span>Rust and C package porting</span></li>
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/redox-substrate.md">Redox substrate</a><span>External system-layer API</span></li>
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/snix-redox.md">Snix Redox port</a><span>Upstream patches and native self-build limits</span></li>
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/CONTRIBUTING.md">Contributing</a><span>Dev shell, tiered tests and evidence rules</span></li>
+              </ul>
+            </div>
+            <div>
+              <h3>Evidence and internals</h3>
+              <ul class="doc-list">
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/alpha-release.md">Alpha release</a><span>Scope, gates and known limitations</span></li>
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/self-hosting/proof-artifacts.md">Proof artifacts</a><span>Proof capture contract</span></li>
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/syscall-debugging.md">Syscall debugging</a><span>Kernel syscall tracing</span></li>
+                <li><a href="https://github.com/brittonr/nix-redox/blob/main/docs/bare-metal-lattepanda-mu.md">Bare metal</a><span>Experimental LattePanda Mu notes</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="closing" aria-labelledby="closing-title">
+      <div class="wrap closing-inner">
+        <h2 id="closing-title">Boot Redox from a flake.</h2>
+        <div class="cmd cmd-hero" role="group" aria-label="Quick start command">
+          <code class="cmd-line"><span class="cmd-prompt" aria-hidden="true">$ </span><span class="cmd-text">nix run <span class="seg">github:brittonr/nix-redox</span></span></code>
+          <button class="copy" type="button"><svg class="ico"><use href="#i-copy"/></svg><span class="copy-label">Copy</span></button>
+        </div>
         <div class="actions">
-          <a class="button primary" href="https://github.com/brittonr/nix-redox">View on GitHub</a>
-          <a class="button" href="https://github.com/brittonr/nix-redox/discussions">Discussions</a>
-          <a class="button ghost" href="https://github.com/brittonr/nix-redox/releases">Releases</a>
+          <a class="btn btn-primary" href="https://github.com/brittonr/nix-redox">View on GitHub</a>
+          <a class="btn" href="https://github.com/brittonr/nix-redox/discussions">Discussions</a>
+          <a class="btn" href="https://github.com/brittonr/nix-redox/releases">Releases</a>
         </div>
       </div>
     </section>
   </main>
 
-  <footer class="site-footer">
-    <div class="wrap footer-inner">
-      <p><strong>nix-redox</strong> · MIT licensed · alpha software</p>
-      <p>
-        <a href="https://www.redox-os.org/">Redox OS</a> ·
-        <a href="https://github.com/brittonr/nix-redox">GitHub</a> ·
-        <a href="https://github.com/brittonr/nix-redox/security/advisories/new">Security</a>
+  <footer class="colophon">
+    <div class="wrap colophon-grid">
+      <p class="colophon-brand">
+        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+          <path class="mark-nix" d="M5 12.5h22L20.5 6"/>
+          <path class="mark-oxide" d="M27 19.5H5l6.5 6.5"/>
+        </svg>
+        <span><b>nix-redox</b> is MIT licensed alpha software. Components built from upstream projects keep their own licenses.</span>
+      </p>
+      <ul class="colophon-links" aria-label="Project links">
+        <li><a href="https://github.com/brittonr/nix-redox">GitHub</a></li>
+        <li><a href="https://github.com/brittonr/nix-redox/discussions">Discussions</a></li>
+        <li><a href="https://github.com/brittonr/nix-redox/issues">Issues</a></li>
+        <li><a href="https://github.com/brittonr/nix-redox/security/advisories/new">Security</a></li>
+      </ul>
+      <p class="colophon-credits">
+        Built on <a href="https://www.redox-os.org/">Redox OS</a>,
+        <a href="https://github.com/adisbladis/adios">adios</a>,
+        <a href="https://snix.dev/">snix</a> and
+        <a href="https://github.com/brittonr/unit2nix">unit2nix</a>.
       </p>
     </div>
   </footer>
-  <script src="assets/asciinema/asciinema-player.min.js"></script>
-  <script>
-    AsciinemaPlayer.create(
-      "assets/demo/nix-redox-e2e.cast",
-      document.getElementById("demo-player"),
-      {
-        cols: 120,
-        rows: 40,
-        fit: "width",
-        theme: "github-dark",
-        poster: "npt:0:15",
-        preload: true,
-        controls: true,
-        autoPlay: false
-      }
-    );
-    AsciinemaPlayer.create(
-      "assets/demo/nix-redox-self-build.cast",
-      document.getElementById("self-build-player"),
-      {
-        cols: 120,
-        rows: 40,
-        fit: "width",
-        theme: "github-dark",
-        poster: "npt:0:25",
-        preload: true,
-        controls: true,
-        autoPlay: false
-      }
-    );
-  </script>
+
+  <p class="sr-only" role="status" id="live"></p>
 </body>
 </html>
