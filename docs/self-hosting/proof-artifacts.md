@@ -86,6 +86,21 @@ Failed runs keep their capture directories for debugging but do not replace the 
 Use the generated latest-success index when you want the current canonical capture path.
 Use archived OpenSpec evidence when you need an exact historical run tied to a specific change.
 
+## Snix self-build proof scope
+
+The guest-native Snix build uses a source bundle with additional dependency
+replacements and host-generated protobuf Rust modules. Some replacements are
+functional compatibility shims, not semantics-preserving portability patches;
+the native Serde derive shim, for example, cannot deserialize at runtime. See
+[Snix Redox port](../snix-redox.md) for the upstream/local boundary, active
+dependency overrides, and native-build limitations.
+
+The self-built binary is checked with `--version` and
+`eval --expr "1 + 1"`. Subsequent source/system rebuild checks use the seed
+`/bin/snix`, not that newly built binary. A passing suite therefore proves native
+compilation and those smoke checks, not full package-manager equivalence or a
+second-generation bootstrap using the self-built Snix.
+
 ## Native system proof scope
 
 `native-rebuild-test` boots without networking or a build bridge. It invokes
@@ -116,6 +131,11 @@ launches firmware from the disk. QEMU does not inject a seed EFI for this flow.
 This is **host-assisted ESP installation**, not a production guest ESP installer.
 The guest fsyncs its phase state and boot files before requesting each orderly
 stop/restart; this is not a sudden-power-loss durability claim.
+
+This graph reuses the seed compiler/toolchain, libraries, existing userspace
+packages, and driver binaries. It is not an all-packages/toolchain rebuild, and
+the package manager executing the graph is the seed Snix rather than the
+separately self-built Snix.
 
 Missing/duplicate/wrong runtime identities, guest failures, early completion, or
 missing/out-of-order restarts fail the proof. Only the final rollback boot may
@@ -153,28 +173,33 @@ boot 0`; it did not turn a partial cycle into success or update the success inde
 Capture: `/var/tmp/redox-self-hosting-captures/20261028T213608-native-rebuild-test/`.
 This is a bounded QEMU boot/rejection check, not a completed QEMU three-boot proof.
 
-## Current candidate proof set
+## Recorded VM proof set
 
-At clean commit `1ff012e`, the current VM proofs pass:
+The latest full self-hosting and native system proofs were captured at `e0f0102`:
 
-- `self-hosting-test` — `20261111T233153-self-hosting-test`, **86/86** in
-  4215 seconds. Includes the guest-native Snix self-build, execution, evaluation,
-  source rebuild, and hostname/inline-file rebuild cycle.
-- `native-rebuild-test` — `20261111T233134-native-rebuild-test`, **134/134** in
-  3702 seconds across three cold firmware boots on one writable disk. The seed,
+- `self-hosting-test` — `20261112T180932-self-hosting-test`, **86/86** in
+  3774 seconds. Includes the bundled Snix self-build and version/evaluation smoke
+  checks; source rebuild and hostname/inline-file rebuild checks use seed Snix.
+- `native-rebuild-test` — `20261112T180932-native-rebuild-test`, **134/134** in
+  3205 seconds across three cold firmware boots on one writable disk. The seed,
   native, and rollback boots all report the expected executing bootloader,
   kernel, and initfs identities.
 - `snix-sandbox-test` — `20261112T001037-snix-sandbox-test`, **19/19** in
-  705 seconds, including the sandboxed source rebuild probe.
+  705 seconds at `1ff012e`, including the sandboxed source rebuild probe. This
+  older flow was not rerun alongside the two `e0f0102` proofs.
 
-All three runs record `git_dirty: false`; the generated
-`docs/self-hosting/latest-success.md` index is the canonical pointer to their
-capture directories.
+The native proof records `git_dirty: false`; the self-hosting proof records
+`git_dirty: true` after the generated success index was updated during its run.
+The sandbox receipt records `git_dirty: false` for its own revision. The generated
+`latest-success.md` index is the canonical pointer to the capture directories;
+historical receipts elsewhere on this page retain their original run IDs.
 
 The 30-second evidence video `docs/assets/demo/nix-redox-self-build.mp4`
-(asciicast: `nix-redox-self-build.cast`) is rendered from the native capture by
-`demo/render-self-build.py`. It shows the seed build, native boot, rollback
-boot, and the 134/134 result; it is a compressed replay, not a live run.
+(asciicast: `nix-redox-self-build.cast`) is rendered by
+`demo/render-self-build.py` from the historical native capture
+`20261111T233134-native-rebuild-test`. It shows the seed build, native boot,
+rollback boot, and the 134/134 result; it is a compressed replay, not a live run
+or a rendering of the newer `e0f0102` capture.
 
 ## Direct rustc and environment checks
 
