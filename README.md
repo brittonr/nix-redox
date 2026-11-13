@@ -225,6 +225,11 @@ environment propagation, signal delivery, and the system rebuild path. See
 [`docs/self-hosting/proof-artifacts.md`](docs/self-hosting/proof-artifacts.md)
 for the proof contract and artifact layout.
 
+Snix's upstream patches, local Redox features, and native-only dependency
+replacements are documented in [Snix Redox port](docs/snix-redox.md). The
+guest-built Snix is smoke-tested with `--version` and a simple evaluation;
+system-rebuild proofs still use the seed binary.
+
 ### Native system rebuilds
 
 `systemSource` selects a guest-local system derivation instead of the Linux
@@ -314,6 +319,7 @@ and evidence rules.
 - [`docs/home-configuration.md`](docs/home-configuration.md) — data-only per-user files
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — host Nix config, direnv, and headless boot warnings
 - [`docs/redox-substrate.md`](docs/redox-substrate.md) — external system-layer API
+- [`docs/snix-redox.md`](docs/snix-redox.md) — upstream patches, Redox integration, and native self-build limits
 - [`docs/self-hosting/proof-artifacts.md`](docs/self-hosting/proof-artifacts.md) — proof capture contract
 - [`docs/syscall-debugging.md`](docs/syscall-debugging.md) — kernel syscall tracing
 - [`docs/bare-metal-lattepanda-mu.md`](docs/bare-metal-lattepanda-mu.md) — experimental bare-metal notes
