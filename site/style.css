@@ -1,228 +1,1182 @@
-:root {
-  color-scheme: dark;
-  --bg: #071c2c;
-  --bg-alt: #0a2438;
-  --panel: #0e2f47;
-  --panel-2: #113a56;
-  --border: #1d5275;
-  --text: #eef7ff;
-  --muted: #a9c4d8;
-  --accent: #63b3ed;
-  --accent-2: #7dd3fc;
-  --code: #061622;
-  --success: #7ee787;
-  --max: 1160px;
+/*
+ * nix-redox landing page.
+ *
+ * Two inks on paper: blue marks what Nix builds on the Linux host, oxide marks
+ * what Redox builds for itself. Both themes come from the same tokens through
+ * light-dark(); [data-theme] on <html> overrides the OS preference.
+ *
+ * Fonts are the latin subsets of Archivo Variable (wdth, wght) and JetBrains
+ * Mono Variable (wght) from @fontsource-variable/{archivo,jetbrains-mono}@5.3.0,
+ * SIL OFL 1.1. Licenses: assets/fonts/LICENSE-*.txt.
+ */
+
+@font-face {
+  font-family: "Archivo";
+  src: url("assets/fonts/archivo-latin-wdth-normal.woff2") format("woff2");
+  font-weight: 100 900;
+  font-stretch: 62% 125%;
+  font-style: normal;
+  font-display: swap;
 }
 
-* { box-sizing: border-box; }
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("assets/fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2");
+  font-weight: 100 800;
+  font-style: normal;
+  font-display: swap;
+}
 
-html { scroll-behavior: smooth; }
+:root {
+  color-scheme: light dark;
+
+  --paper: light-dark(#f3efe6, #151311);
+  --paper-sunk: light-dark(#e9e4d8, #0f0e0c);
+  --paper-raised: light-dark(#fbf9f4, #1d1a17);
+  --ink: light-dark(#191713, #ede7db);
+  --ink-2: light-dark(#4b473e, #bdb5a6);
+  --ink-3: light-dark(#6a655a, #918a7c);
+  --line: light-dark(#191713, #ede7db66);
+  --hair: light-dark(#19171326, #ede7db26);
+  --tint: light-dark(#1917130d, #ede7db14);
+  --grid: light-dark(#19171317, #ede7db12);
+  --oxide: light-dark(#b5390f, #ff8552);
+  --oxide-solid: light-dark(#c2410c, #ff8552);
+  --on-oxide: light-dark(#fffaf3, #1c0e06);
+  --nix: light-dark(#2450c0, #93b4ff);
+  --pass: light-dark(#197040, #74d492);
+  --warn: light-dark(#8a5a00, #f0b955);
+  --shadow: light-dark(#191713, #000);
+
+  /* Terminals stay dark in both themes. */
+  --term-bg: #0d0c0a;
+  --term-fg: #e8e2d5;
+  --term-dim: #a19a8c;
+  --term-line: #ffffff24;
+  --term-oxide: #ff8552;
+  --term-string: #ffb38f;
+  --term-pass: #74d492;
+
+  --font-sans: "Archivo", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "Cascadia Code", Menlo, Consolas, "Liberation Mono", monospace;
+
+  --wrap: 76rem;
+  --gutter: clamp(1.25rem, 4vw, 2.5rem);
+  --header-h: 3.75rem;
+  --radius: 3px;
+  --offset: 0.5rem;
+}
+
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* ── Base ─────────────────────────────────────────────────────────── */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  scroll-padding-top: calc(var(--header-h) + 1.25rem);
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html { scroll-behavior: smooth; }
+}
 
 body {
   margin: 0;
-  background:
-    radial-gradient(1100px 600px at 80% -10%, #124c70 0%, transparent 60%),
-    radial-gradient(900px 500px at 0% 30%, #0b3350 0%, transparent 55%),
-    var(--bg);
-  color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  line-height: 1.6;
+  background-color: var(--paper);
+  background-image: radial-gradient(var(--grid) 1px, transparent 1.5px);
+  background-size: 1.5rem 1.5rem;
+  color: var(--ink);
+  font: 400 1.0625rem/1.6 var(--font-sans);
+  -webkit-font-smoothing: antialiased;
 }
 
-a { color: var(--accent); text-decoration: none; }
-a:hover { color: var(--accent-2); text-decoration: underline; }
+h1, h2, h3, p, ul, ol, dl, dd, figure, pre { margin: 0; }
 
-.wrap { width: min(var(--max), calc(100% - 2.5rem)); margin-inline: auto; }
+h1, h2 {
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+h1 {
+  font-size: clamp(2.6rem, 1.5rem + 5.4vw, 5.25rem);
+  font-stretch: 116%;
+  line-height: 0.96;
+  letter-spacing: -0.035em;
+}
+
+h2 {
+  font-size: clamp(1.9rem, 1.35rem + 2.3vw, 3rem);
+  font-stretch: 110%;
+}
+
+h3 {
+  font-size: 1.05rem;
+  font-weight: 700;
+  font-stretch: 105%;
+  line-height: 1.25;
+}
+
+p { text-wrap: pretty; }
+
+a {
+  color: inherit;
+  text-decoration-line: underline;
+  text-decoration-color: var(--oxide);
+  text-decoration-thickness: 0.09em;
+  text-underline-offset: 0.2em;
+}
+a:hover { color: var(--oxide); }
+
+:focus-visible {
+  outline: 2px solid var(--nix);
+  outline-offset: 3px;
+}
+
+img { display: block; max-width: 100%; height: auto; }
+
+code, kbd, pre {
+  font-family: var(--font-mono);
+  font-variant-ligatures: none;
+}
+
+code { font-size: 0.86em; }
+
+/*
+ * Inline code chips never break inside: a short command stays whole and the
+ * punctuation after it stays attached. Below 22rem the longest chip is wider
+ * than a line of text, so there a chip may break like any other text.
+ */
+:not(pre, .cmd) > code {
+  padding: 0.1em 0.32em;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius);
+  background: var(--tint);
+  white-space: nowrap;
+}
+@media (max-width: 22rem) {
+  :not(pre, .cmd) > code {
+    white-space: normal;
+    overflow-wrap: anywhere;
+    -webkit-box-decoration-break: clone;
+    box-decoration-break: clone;
+  }
+}
+a:has(> code) { text-decoration: none; }
+a > code { border-bottom-color: var(--oxide); }
+
+kbd {
+  padding: 0.1em 0.4em;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: var(--radius);
+  background: var(--paper);
+  font-size: 0.78em;
+}
+
+.wrap {
+  width: min(var(--wrap), 100% - 2 * var(--gutter));
+  margin-inline: auto;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.sprite { position: absolute; width: 0; height: 0; }
+
+.ico {
+  width: 1rem;
+  height: 1rem;
+  flex: none;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .skip {
   position: absolute;
-  left: -999px;
-  top: 0;
-  background: var(--text);
-  color: var(--bg);
-  padding: 0.5rem 1rem;
-  z-index: 10;
+  top: 0.5rem;
+  left: -100rem;
+  z-index: 30;
+  padding: 0.6rem 1rem;
+  background: var(--ink);
+  color: var(--paper);
 }
-.skip:focus { left: 1rem; }
+.skip:focus { left: 0.5rem; color: var(--paper); }
 
-.site-header {
+/* Small uppercase mono labels: section numbers, table heads, field names. */
+.sheet-no,
+.fig-no,
+.term-bar,
+.boot-no,
+.only,
+.titleblock dt,
+.facts dt,
+.notes h3,
+.ledger thead th,
+.bom th,
+.doc-groups h3,
+.steps-title,
+.ledger td:nth-child(3)::before,
+.layers li::before {
+  font: 600 0.72rem/1.3 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+  color: var(--ink);
+  font: 650 0.95rem/1 var(--font-sans);
+  text-decoration: none;
+  transition: transform 0.12s, box-shadow 0.12s;
+}
+.btn:hover { color: var(--ink); }
+/* The lift is for pointers that hover; on touch it would stick after a tap. */
+@media (hover: hover) {
+  .btn:hover {
+    transform: translate(-2px, -2px);
+    box-shadow: 3px 3px 0 var(--shadow);
+  }
+  .btn:active { transform: none; box-shadow: none; }
+}
+
+.btn-primary {
+  border-color: var(--oxide-solid);
+  background: var(--oxide-solid);
+  color: var(--on-oxide);
+}
+.btn-primary:hover { color: var(--on-oxide); }
+
+.btn-small { padding: 0.55rem 0.8rem; font: 600 0.8rem/1 var(--font-mono); }
+
+.icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.icon-btn:hover {
+  border-color: var(--hair);
+  background: var(--tint);
+  color: var(--ink);
+}
+
+/* ── Masthead ─────────────────────────────────────────────────────── */
+
+.masthead {
   position: sticky;
   top: 0;
-  z-index: 5;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(10px);
-  border-bottom: 1px solid var(--border);
+  z-index: 20;
+  border-bottom: 1px solid var(--hair);
+  background: color-mix(in srgb, var(--paper) 90%, transparent);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
 }
 
-.header-inner {
+.masthead-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 1rem;
-  min-height: 4rem;
+  min-height: var(--header-h);
 }
 
 .brand {
   display: inline-flex;
   align-items: center;
   gap: 0.6rem;
-  color: var(--text);
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font: 700 1rem/1 var(--font-mono);
+  text-decoration: none;
+  white-space: nowrap;
 }
-.brand:hover { text-decoration: none; color: var(--text); }
-.brand-mark {
-  display: grid;
-  place-items: center;
-  width: 2rem;
-  height: 2rem;
-  border-radius: 0.5rem;
-  background: linear-gradient(145deg, #23689a, #0b3a5b);
-  border: 1px solid var(--border);
-  font-size: 1.1rem;
+.brand:hover { color: inherit; }
+
+.mark {
+  width: 1.6rem;
+  height: 1.6rem;
+  flex: none;
+  fill: none;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.mark-nix { stroke: var(--nix); }
+.mark-oxide { stroke: var(--oxide); }
+
+.nav a {
+  padding: 0.5rem 0.6rem;
+  border-radius: var(--radius);
+  color: var(--ink-2);
+  font: 500 0.8rem/1 var(--font-mono);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.nav a:hover { background: var(--tint); color: var(--ink); }
+.nav a[aria-current] { color: var(--ink); box-shadow: inset 0 -2px 0 var(--oxide); }
+
+.masthead-tools {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-left: auto;
 }
 
-nav { display: flex; align-items: center; gap: 1.1rem; flex-wrap: wrap; }
-nav a { color: var(--muted); font-size: 0.95rem; }
-nav a:hover { color: var(--text); }
-nav .nav-cta {
-  color: var(--text);
-  border: 1px solid var(--border);
-  padding: 0.35rem 0.8rem;
-  border-radius: 0.5rem;
-  background: var(--panel);
+/* Below 22rem the row is narrower than its contents: close the gaps and drop the arrow. */
+@media (max-width: 22rem) {
+  .masthead-row { gap: 0.5rem; }
+  .masthead-tools { gap: 0.125rem; }
+  .masthead .btn-small { padding-inline: 0.55rem; }
+  .masthead .btn-small span { display: none; }
 }
-nav .nav-cta:hover { background: var(--panel-2); text-decoration: none; }
+/* Below 19.5rem only the brand, the theme and the menu fit; GitHub stays in the footer. */
+@media (max-width: 19.5rem) {
+  .masthead .btn-small { display: none; }
+}
 
-.hero { padding: 5rem 0 4rem; }
+/* Narrow screens: the section list folds behind the menu button. */
+.js .nav {
+  display: none;
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.25rem;
+  padding: 0.75rem var(--gutter) 1.25rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
+}
+.js .nav-open .nav { display: grid; }
+.js .nav a { padding: 0.8rem 0.6rem; }
+
+/* Without JavaScript the list stays visible and scrolls sideways. */
+html:not(.js) .masthead-row { flex-wrap: wrap; }
+html:not(.js) .nav {
+  display: flex;
+  order: 3;
+  width: 100%;
+  padding-bottom: 0.5rem;
+  overflow-x: auto;
+}
+/* The second row makes the masthead taller, and anchors have to clear it. */
+@media not all and (min-width: 64rem) {
+  html:not(.js) { --header-h: 5.4rem; }
+}
+html:not(.js) :is(.theme-toggle, .nav-toggle, .copy, .tablist, .player-fallback) { display: none; }
+
+.progress { display: none; }
+
+@supports (animation-timeline: scroll()) {
+  .progress {
+    display: block;
+    position: absolute;
+    left: 0;
+    bottom: -1px;
+    width: 100%;
+    height: 2px;
+    background: var(--oxide);
+    transform-origin: 0 50%;
+    animation: progress linear both;
+    animation-timeline: scroll(root);
+  }
+  @keyframes progress {
+    from { transform: scaleX(0); }
+    to { transform: scaleX(1); }
+  }
+}
+
+/* ── Hero ─────────────────────────────────────────────────────────── */
+
+.hero { padding-block: clamp(2.5rem, 6vw, 5rem) clamp(3rem, 7vw, 5rem); }
+
 .hero-grid {
   display: grid;
-  grid-template-columns: 1.05fr 1fr;
-  gap: 3rem;
+  gap: clamp(2.5rem, 6vw, 5rem);
   align-items: center;
 }
-.eyebrow {
-  margin: 0 0 1rem;
-  color: var(--accent-2);
-  font-size: 0.82rem;
+
+.eyebrow { margin-bottom: 1.5rem; font: 500 0.78rem/1.2 var(--font-mono); }
+.eyebrow a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0.75rem 0.3rem 0.3rem;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius);
+  background: var(--paper-raised);
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.eyebrow a:hover { border-color: var(--line); color: var(--ink); }
+
+.tag {
+  padding: 0.25rem 0.45rem;
+  border-radius: 2px;
+  background: var(--oxide-solid);
+  color: var(--on-oxide);
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-h1 {
-  margin: 0;
-  font-size: clamp(2.6rem, 6vw, 4.4rem);
-  line-height: 1.02;
-  letter-spacing: -0.035em;
+
+.dot { color: var(--oxide); }
+
+.lede {
+  max-width: 34rem;
+  margin-top: 1.5rem;
+  color: var(--ink-2);
+  font-size: clamp(1.05rem, 1rem + 0.4vw, 1.25rem);
+  line-height: 1.55;
 }
-.lede { color: var(--muted); font-size: 1.15rem; max-width: 34rem; margin: 1.5rem 0 0; }
-.note { color: var(--muted); font-size: 0.85rem; margin-top: 1.1rem; }
 
-.actions { display: flex; gap: 0.7rem; flex-wrap: wrap; margin-top: 1.8rem; }
-.button {
-  display: inline-block;
-  padding: 0.7rem 1.05rem;
-  border-radius: 0.6rem;
-  border: 1px solid var(--border);
-  background: var(--panel);
-  color: var(--text);
-  font-weight: 600;
-  font-size: 0.95rem;
-}
-.button:hover { background: var(--panel-2); color: var(--text); text-decoration: none; }
-.button.primary {
-  background: linear-gradient(180deg, #256b9c, #154d73);
-  border-color: #3b83b5;
-}
-.button.primary:hover { background: linear-gradient(180deg, #2f7fb5, #195a85); }
-.button.ghost { background: transparent; }
-
-.hero-shot { margin: 0; }
-.hero-shot img {
-  display: block;
-  width: 100%;
-  height: auto;
-  border-radius: 0.9rem;
-  border: 1px solid var(--border);
-  box-shadow: 0 30px 70px rgb(0 0 0 / 35%);
-}
-figcaption { color: var(--muted); font-size: 0.82rem; margin-top: 0.7rem; }
-
-.demo-shot { margin: 0; }
-.demo-player {
-  width: 100%;
-  min-height: 20rem;
-  border-radius: 0.9rem;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  box-shadow: 0 30px 70px rgb(0 0 0 / 35%);
-}
-.demo-player .ap-player { border-radius: 0.9rem; }
-
-.section { padding: 4rem 0; }
-.section.alt { background: color-mix(in srgb, var(--bg-alt) 78%, transparent); border-block: 1px solid var(--border); }
-h2 { margin: 0 0 0.7rem; font-size: clamp(1.7rem, 3vw, 2.3rem); letter-spacing: -0.02em; }
-.section-lede { color: var(--muted); margin: 0 0 1.5rem; }
-
-.terminal {
-  max-width: 46rem;
-  border: 1px solid var(--border);
-  border-radius: 0.8rem;
-  background: var(--code);
-  overflow: hidden;
-}
-.terminal-bar { display: flex; gap: 0.4rem; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--border); }
-.terminal-bar span { width: 0.65rem; height: 0.65rem; border-radius: 50%; background: #2d5f80; }
-.terminal pre { margin: 0; padding: 1.2rem; overflow-x: auto; }
-code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.92em; }
-.terminal code { color: #d8f0ff; }
-.prompt { color: var(--success); margin-right: 0.4rem; }
-.fine { color: var(--muted); font-size: 0.9rem; margin-top: 0.9rem; }
-.fine code { color: var(--text); background: var(--panel); padding: 0.1rem 0.3rem; border-radius: 0.25rem; }
-
-.cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-}
-.card {
-  background: color-mix(in srgb, var(--panel) 75%, transparent);
-  border: 1px solid var(--border);
-  border-radius: 0.8rem;
-  padding: 1.2rem;
-}
-.card h3 { margin: 0 0 0.4rem; font-size: 1.05rem; }
-.card p { margin: 0; color: var(--muted); font-size: 0.95rem; }
-
-.split { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; }
-.checklist, .links { padding-left: 1.1rem; color: var(--muted); }
-.checklist li, .links li { margin: 0.45rem 0; }
-.checklist li::marker { color: var(--success); }
-.links a { font-weight: 500; }
-.muted { color: color-mix(in srgb, var(--muted) 70%, transparent); }
-
-.cta { text-align: center; }
-.cta .actions { justify-content: center; }
-
-.site-footer { border-top: 1px solid var(--border); padding: 1.5rem 0; }
-.footer-inner {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-  color: var(--muted);
+.hint {
+  max-width: 34rem;
+  margin-top: 1rem;
+  color: var(--ink-3);
   font-size: 0.9rem;
 }
-.footer-inner p { margin: 0; }
 
-@media (max-width: 860px) {
-  .hero-grid, .split { grid-template-columns: 1fr; }
-  .hero { padding-top: 3rem; }
-  .cards { grid-template-columns: 1fr 1fr; }
-  nav a:not(.nav-cta) { display: none; }
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  margin-top: 1.75rem;
 }
 
-@media (max-width: 560px) {
-  .cards { grid-template-columns: 1fr; }
-  .footer-inner { flex-direction: column; }
+.titleblock {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin-top: clamp(3rem, 7vw, 5rem);
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+.titleblock > div { padding: 0.8rem 1rem 0.9rem; background: var(--paper-raised); }
+.titleblock dt { color: var(--ink-3); }
+.titleblock dd { margin-top: 0.3rem; font-weight: 650; font-size: 0.95rem; line-height: 1.3; }
+
+/* ── Commands ─────────────────────────────────────────────────────── */
+
+.cmd {
+  display: flex;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--term-bg);
+  color: var(--term-fg);
+}
+
+.cmd-hero {
+  max-width: 34rem;
+  margin-top: 2rem;
+  box-shadow: var(--offset) var(--offset) 0 var(--oxide-solid);
+}
+
+.cmd-line {
+  --pad-x: 1.1rem;
+  flex: 1;
+  min-width: 0;
+  /* Hanging indent: a wrapped command continues under its first word, not under the prompt. */
+  padding: 1rem var(--pad-x) 1rem calc(var(--pad-x) + 2ch);
+  font-size: var(--cmd-size, 0.95rem);
+  font-weight: 500;
+  line-height: 1.5;
+  text-indent: -2ch;
+  overflow-wrap: anywhere;
+}
+
+.cmd-prompt { color: var(--term-oxide); user-select: none; }
+
+/* A flake reference and its attribute each wrap as one unit while they fit on a line. */
+.seg { display: inline-block; max-width: 100%; text-indent: 0; }
+
+/* Runner commands are longer: one size down keeps the longest on one line at full width. */
+.tabpanel .cmd { --cmd-size: 0.875rem; }
+
+.copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 1rem;
+  border: 0;
+  border-left: 1px solid var(--term-line);
+  background: none;
+  color: var(--term-dim);
+  font: 600 0.75rem/1 var(--font-mono);
+  cursor: pointer;
+}
+.copy:hover { background: #ffffff14; color: var(--term-fg); }
+.copy:focus-visible { outline-offset: -3px; }
+.copy.is-copied { color: var(--term-pass); }
+/* Room for "Copied", so the command does not reflow when the label changes. */
+.copy-label { min-width: 6ch; text-align: left; }
+
+/*
+ * Phones: the button keeps only its icon and the command sets at code size,
+ * so the quick-start command fits on one line from about 24rem up.
+ */
+@media (max-width: 30rem) {
+  .cmd-line { --pad-x: 0.9rem; --cmd-size: 0.8rem; padding-block: 0.9rem; }
+  .copy { padding: 0 0.9rem; }
+  .copy-label {
+    position: absolute;
+    width: 1px;
+    min-width: 0;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* ── Sheets: one numbered section per topic ───────────────────────── */
+
+.sheet {
+  padding-block: clamp(3.5rem, 8vw, 6.5rem);
+  border-top: 1px solid var(--line);
+}
+
+.sheet-grid { display: grid; gap: clamp(2rem, 6vw, 5.5rem); }
+
+/* A full-width row below the two-column grid. */
+.sheet-wide { margin-top: clamp(2.5rem, 5vw, 4rem); }
+
+/*
+ * A recording with its notes: stacked, then side by side from 75rem, where a
+ * 120-column terminal still gets 11px glyphs next to a 21rem column.
+ */
+.split { display: grid; gap: 2.5rem 2rem; }
+.split > * { min-width: 0; }
+.split-aside { container-type: inline-size; }
+.split-aside > .scope { margin-top: 2rem; }
+
+.sheet-no {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  color: var(--ink-3);
+}
+.sheet-no span { color: var(--oxide); }
+
+.sheet-lede { max-width: 32rem; margin-top: 1.25rem; color: var(--ink-2); }
+
+/* The lede of a section whose content is one wide figure sits beside the title. */
+.sheet-intro {
+  max-width: 36rem;
+  color: var(--ink-2);
+  font-size: clamp(1.05rem, 1rem + 0.4vw, 1.25rem);
+  line-height: 1.55;
+}
+
+/* A size container, so the figures inside lay out by the room they actually get. */
+.sheet-body { min-width: 0; container-type: inline-size; }
+.sheet-body > * + * { margin-top: 2.5rem; }
+
+/* ── Tabs ─────────────────────────────────────────────────────────── */
+
+.tablist {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  border: 1px solid var(--line);
+  background: var(--line);
+}
+
+[role="tab"] {
+  padding: 0.85rem 0.5rem;
+  border: 0;
+  border-radius: 0;
+  background: var(--paper-sunk);
+  color: var(--ink-2);
+  font: 600 0.8rem/1.2 var(--font-mono);
+  cursor: pointer;
+}
+[role="tab"]:hover { color: var(--ink); }
+[role="tab"][aria-selected="true"] {
+  background: var(--paper-raised);
+  color: var(--ink);
+  box-shadow: inset 0 3px 0 var(--oxide);
+}
+[role="tab"]:focus-visible { outline-offset: -3px; }
+
+.tabpanel {
+  --pad: clamp(1rem, 3vw, 1.5rem);
+  padding: var(--pad);
+  border: 1px solid var(--line);
+  background: var(--paper-raised);
+}
+.js .tablist + .tabpanel,
+.js .tabpanel + .tabpanel { border-top: 0; }
+.js .tabpanel:not(.is-active),
+.js .panel-title { display: none; }
+
+html:not(.js) .tabpanel + .tabpanel { margin-top: 1rem; }
+.panel-title { margin-bottom: 1rem; }
+
+.panel-note { color: var(--ink-2); font-size: 0.92rem; }
+.tabpanel > .panel-note { margin-top: var(--pad); }
+
+.facts > div {
+  display: grid;
+  grid-template-columns: 4.5rem minmax(0, 1fr);
+  gap: 1rem;
+  padding: 0.7rem 0;
+  border-top: 1px solid var(--hair);
+  font-size: 0.95rem;
+}
+.facts { margin-top: var(--pad); }
+.facts > div:last-child { padding-bottom: 0; }
+.facts dt { padding-top: 0.3rem; color: var(--ink-3); }
+
+.notes {
+  display: grid;
+  gap: 1px;
+  padding: 0;
+  border: 1px solid var(--hair);
+  background: var(--hair);
+  list-style: none;
+}
+.notes li { padding: 1.1rem 1.25rem 1.25rem; background: var(--paper); }
+.notes h3 { color: var(--ink); }
+.notes p { margin-top: 0.5rem; color: var(--ink-2); font-size: 0.92rem; }
+
+/* ── Figures, terminals and players ───────────────────────────────── */
+
+figcaption {
+  margin-top: 1rem;
+  color: var(--ink-3);
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+.fig-no { margin-right: 0.4rem; color: var(--ink); }
+
+.plate {
+  margin-right: var(--offset);
+  border: 1px solid var(--line);
+  box-shadow: var(--offset) var(--offset) 0 var(--oxide-solid);
+}
+.hero-fig figcaption { margin-top: calc(1rem + var(--offset)); }
+
+.term {
+  /* Recordings are 120x40: cap the width so a whole frame fits below the masthead. */
+  max-width: max(36rem, (100svh - var(--header-h) - 8rem) * 1.28);
+  margin-right: var(--offset);
+  border: 1px solid var(--line);
+  background: var(--term-bg);
+  box-shadow: var(--offset) var(--offset) 0 var(--oxide-solid);
+}
+.term + figcaption { margin-top: calc(1rem + var(--offset)); }
+
+.term-bar {
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--term-line);
+  color: var(--term-dim);
+}
+
+/*
+ * The placeholder reserves the mounted player's exact box, so nothing below
+ * moves when it loads: a 120x40 terminal (73.5em by 54.83em with the player's
+ * 0.75em border) above its fixed 32px control bar.
+ */
+.player:not(.is-ready) {
+  box-sizing: content-box;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 73.5 / 54.83;
+  padding-bottom: 32px;
+}
+.player-fallback { color: var(--term-fg); font: 500 0.85rem/1 var(--font-mono); }
+.player-fallback:hover { color: var(--term-oxide); }
+
+/* Without JavaScript each recording is its rendered video. */
+html:not(.js) .player { display: block; aspect-ratio: auto; padding: 0; }
+.player video { display: block; width: 100%; height: auto; }
+
+/*
+ * Player theme "nix-redox". The player stylesheet loads later and declares its
+ * defaults on .ap-player, so the theme needs the extra .player to win.
+ */
+.player .asciinema-player-theme-nix-redox {
+  --term-color-foreground: #e8e2d5;
+  --term-color-background: #0d0c0a;
+  --term-color-0: #0d0c0a;
+  --term-color-1: #ff6b57;
+  --term-color-2: #74d492;
+  --term-color-3: #f0b955;
+  --term-color-4: #93b4ff;
+  --term-color-5: #d7a6ff;
+  --term-color-6: #7fd6d0;
+  --term-color-7: #d9d2c4;
+  --term-color-8: #7d7669;
+  --term-color-9: #ff8552;
+  --term-color-10: #9fe6b4;
+  --term-color-11: #ffd68a;
+  --term-color-12: #b9ceff;
+  --term-color-13: #e6c7ff;
+  --term-color-14: #a8e8e3;
+  --term-color-15: #fbf9f4;
+}
+.player .ap-player { border-radius: 0; }
+
+.steps-title { color: var(--ink-3); }
+.steps {
+  margin-top: 0.9rem;
+  padding: 0;
+  border-top: 1px solid var(--hair);
+  list-style: none;
+  counter-reset: step;
+}
+.steps li {
+  position: relative;
+  padding: 0.55rem 0 0.55rem 2.25rem;
+  border-bottom: 1px solid var(--hair);
+  color: var(--ink-2);
+  font-size: 0.92rem;
+  counter-increment: step;
+}
+.steps li::before {
+  content: counter(step, decimal-leading-zero);
+  position: absolute;
+  left: 0;
+  color: var(--ink-3);
+  font: 600 0.72rem/2.1 var(--font-mono);
+}
+
+@container (min-width: 36rem) {
+  .steps { columns: 2; column-gap: 2rem; }
+  .steps li { break-inside: avoid; }
+}
+
+/* ── Self-build: three boots and the proof ledger ─────────────────── */
+
+.stat {
+  width: fit-content;
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--hair);
+  color: var(--ink-2);
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+.stat b {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: var(--ink);
+  font-size: clamp(3.5rem, 2.5rem + 4vw, 5.5rem);
+  font-weight: 800;
+  font-stretch: 68%;
+  line-height: 0.85;
+  font-variant-numeric: tabular-nums;
+}
+.stat b span { color: var(--oxide); }
+
+.boots {
+  --gap: 1.75rem;
+  display: grid;
+  gap: var(--gap);
+  padding: 0;
+  list-style: none;
+}
+
+.boot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  padding: 1.1rem 1.1rem 0.75rem;
+  border: 1px solid var(--line);
+  background: var(--paper-raised);
+}
+.boot-no { color: var(--ink-3); }
+.boot h3 { margin-top: 0.3rem; font-size: 1.35rem; font-stretch: 110%; }
+.boot > p:not(.boot-no) { margin-top: 0.6rem; color: var(--ink-2); font-size: 0.88rem; line-height: 1.5; }
+
+/*
+ * Connector arrows: a 1px shaft with a 7px head, drawn in the gap before a
+ * box (::before) or after it (::after). They point down while a diagram is
+ * stacked and turn right once it lays out in a row.
+ */
+.boot + .boot::before,
+.pipe > :not(.n-src, .n-img)::before,
+.n-out::after {
+  content: "";
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  width: 9px;
+  height: var(--gap);
+  margin-left: -4.5px;
+  background: var(--ink);
+  clip-path: polygon(4px 0, 5px 0, 5px calc(100% - 7px), 9px calc(100% - 7px), 4.5px 100%, 0 calc(100% - 7px), 4px calc(100% - 7px));
+}
+.n-out::after { top: 100%; bottom: auto; }
+
+/* Three across once the figure has room for a whole identity row in each box. */
+@container (min-width: 40rem) {
+  .boots { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .boot + .boot::before {
+    top: 50%;
+    right: 100%;
+    bottom: auto;
+    left: auto;
+    width: var(--gap);
+    height: 9px;
+    margin: -4.5px 0 0;
+    clip-path: polygon(0 4px, calc(100% - 7px) 4px, calc(100% - 7px) 0, 100% 4.5px, calc(100% - 7px) 9px, calc(100% - 7px) 5px, 0 5px);
+  }
+}
+
+/* Pinned to the bottom so the identity rows line up across the three boots. */
+.ids { margin-top: auto; padding-top: 1rem; }
+.ids > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid var(--hair);
+  font: 500 0.75rem/1.4 var(--font-mono);
+}
+.ids dt { color: var(--ink-3); }
+.ids dd { font-weight: 700; }
+
+.id-host { color: var(--nix); }
+.id-guest { color: var(--oxide); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 0.3rem 1.5rem; margin-top: 0.6rem; }
+.key { display: inline-flex; align-items: center; gap: 0.45rem; }
+.key i { width: 0.6rem; height: 0.6rem; flex: none; background: currentColor; }
+
+.ledger,
+.bom {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-collapse: collapse;
+  background: var(--paper-raised);
+  font-size: 0.92rem;
+  text-align: left;
+}
+
+/*
+ * Cards until the container has room for a table. The flow name and its
+ * result share a line when they fit; the result drops below when they do not.
+ */
+.ledger thead { display: none; }
+.ledger tr {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 1rem;
+  border-top: 1px solid var(--hair);
+}
+.ledger tbody tr:first-child { border-top: 0; }
+.ledger th, .ledger td { padding: 0; font-weight: 500; }
+.ledger td { color: var(--ink-2); }
+.ledger td:not(.result) { order: 1; flex-basis: 100%; }
+.ledger .result { white-space: nowrap; }
+/* In a card the commit has no column head, so it carries its own label. */
+.ledger td:nth-child(3)::before { content: "Commit"; margin-right: 0.5rem; color: var(--ink-3); }
+.result b {
+  color: var(--ink);
+  font-size: 1.4rem;
+  font-weight: 800;
+  font-stretch: 75%;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.pass {
+  margin-left: 0.3rem;
+  padding: 0.15rem 0.35rem;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  color: var(--pass);
+  font: 700 0.65rem/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  vertical-align: 0.25em;
+}
+
+@container (min-width: 36rem) {
+  .ledger thead { display: table-header-group; }
+  .ledger tr { display: table-row; }
+  .ledger th, .ledger td { padding: 0.9rem 1rem; border-top: 1px solid var(--hair); vertical-align: top; }
+  .ledger thead th { border-top: 0; border-bottom: 1px solid var(--line); background: var(--paper-sunk); color: var(--ink-3); }
+  .ledger tbody th, .ledger td:nth-child(3) { white-space: nowrap; }
+  .ledger td:nth-child(3)::before { content: none; }
+  .ledger .result { text-align: right; }
+}
+
+.scope {
+  padding: 1rem 1.25rem;
+  border-left: 3px solid var(--warn);
+  background: var(--tint);
+  color: var(--ink-2);
+  font-size: 0.92rem;
+}
+.scope b { color: var(--ink); }
+
+/* ── How it works: the build pipeline ─────────────────────────────── */
+
+/*
+ * One grid, two orientations. Stacked, the three outputs sit side by side
+ * under their sources; in a row (64rem and up) the grid is transposed. The
+ * source and the image span every lane, so each connector is a straight arrow.
+ */
+.pipe {
+  --gap: 1.75rem;
+  --lane-gap: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--gap) var(--lane-gap);
+}
+
+.node {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 3rem;
+  padding: 0.6rem 0.5rem;
+  border: 1px solid var(--line);
+  background: var(--paper-raised);
+  font-size: 0.82rem;
+  line-height: 1.3;
+  text-align: center;
+}
+.node code { padding: 0; border: 0; background: none; font-size: 0.95em; }
+
+.n-src, .n-img, .n-vm { grid-column: 1 / -1; }
+.n-pkgs { grid-column: span 2; }
+.n-img { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+
+.layers {
+  display: grid;
+  gap: 1.5rem;
+  padding: 0;
+  list-style: none;
+  counter-reset: layer;
+}
+.layers li { padding-top: 1rem; border-top: 2px solid var(--line); counter-increment: layer; }
+.layers li::before { content: "Layer " counter(layer); color: var(--oxide); }
+.layers h3 { margin-top: 0.4rem; }
+.layers p { margin-top: 0.5rem; color: var(--ink-2); font-size: 0.92rem; }
+
+/* ── Configure: code panels ───────────────────────────────────────── */
+
+.code {
+  overflow-x: auto;
+  margin: calc(var(--pad) * -1) calc(var(--pad) * -1) 0;
+  padding: 1.1rem 1.25rem;
+  background: var(--term-bg);
+  color: var(--term-fg);
+  font-size: 0.8rem;
+  line-height: 1.7;
+  tab-size: 2;
+}
+.code code { font-size: inherit; overflow-wrap: normal; }
+.code .c { color: var(--term-dim); }
+.code .s { color: var(--term-string); }
+.code:focus-visible { outline-offset: -3px; }
+
+/* ── Inside: bill of materials ────────────────────────────────────── */
+
+.bom tr { display: grid; gap: 0.25rem; padding: 0.8rem 1rem; border-top: 1px solid var(--hair); }
+.bom tr:first-child { border-top: 0; }
+.bom th, .bom td { padding: 0; }
+.bom th { color: var(--ink-3); }
+/* A flex row, so an image tag that does not fit drops to its own line flush left. */
+.bom td { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.3rem 0.6rem; }
+
+.only {
+  padding: 0.15rem 0.4rem;
+  border: 1px solid var(--hair);
+  border-radius: 2px;
+  color: var(--ink-3);
+  font-size: 0.65rem;
+  white-space: nowrap;
+}
+
+/* ── Status ───────────────────────────────────────────────────────── */
+
+.status { display: grid; gap: 1.5rem; }
+
+.status-col { padding: 1.25rem 1.25rem 0.6rem; border: 1px solid var(--line); background: var(--paper-raised); }
+.status-col h3 { display: flex; align-items: center; gap: 0.6rem; }
+.status-col h3::before { content: ""; width: 0.7rem; height: 0.7rem; flex: none; }
+.status-ok h3::before { background: var(--pass); }
+.status-exp h3::before { border: 2px solid var(--warn); }
+
+.status-col ul { margin-top: 1rem; padding: 0; list-style: none; }
+.status-col li {
+  padding: 0.65rem 0;
+  border-top: 1px solid var(--hair);
+  color: var(--ink-2);
+  font-size: 0.92rem;
+}
+
+/* ── Docs ─────────────────────────────────────────────────────────── */
+
+.doc-groups { display: grid; gap: 2rem 2.5rem; }
+.doc-groups h3 { padding-bottom: 0.7rem; border-bottom: 1px solid var(--line); color: var(--ink-3); }
+
+.doc-list { padding: 0; list-style: none; }
+.doc-list li {
+  position: relative;
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.75rem 1.5rem 0.75rem 0;
+  border-bottom: 1px solid var(--hair);
+}
+.doc-list a { font-weight: 650; text-decoration: none; }
+.doc-list a::before { content: ""; position: absolute; inset: 0; }
+.doc-list a::after {
+  content: "";
+  position: absolute;
+  top: 1.15rem;
+  right: 0.35rem;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-top: 1.5px solid var(--ink-3);
+  border-right: 1.5px solid var(--ink-3);
+  transform: rotate(45deg);
+  transition: translate 0.12s;
+}
+.doc-list li:hover a::after { border-color: var(--oxide); translate: 3px 0; }
+.doc-list span { color: var(--ink-3); font-size: 0.85rem; }
+
+/* ── Closing and colophon: one dark slab in both themes ───────────── */
+
+.closing, .colophon {
+  color-scheme: dark;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.closing { padding-block: clamp(4rem, 10vw, 7.5rem); border-top: 1px solid var(--line); }
+.closing h2 { font-size: clamp(2.2rem, 1.4rem + 4vw, 4.25rem); font-stretch: 116%; }
+.closing .cmd-hero { margin-top: 2.5rem; }
+.closing .actions { margin-top: 2.5rem; }
+
+.colophon {
+  padding-block: 2rem 2.5rem;
+  border-top: 1px solid var(--hair);
+  color: var(--ink-2);
+  font-size: 0.88rem;
+}
+.colophon-grid { display: grid; gap: 1.25rem 3rem; }
+.colophon-brand { display: flex; gap: 0.9rem; max-width: 34rem; }
+.colophon-brand b { color: var(--ink); }
+.colophon-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  padding: 0;
+  list-style: none;
+  font: 500 0.8rem/1.4 var(--font-mono);
+}
+.colophon-credits { color: var(--ink-3); }
+
+/* ── Wider screens ────────────────────────────────────────────────── */
+
+@media (min-width: 40rem) {
+  .titleblock { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tablist { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .notes, .status, .doc-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .layers { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+  .node { padding-inline: 0.9rem; font-size: 0.9rem; }
+
+  .bom tr { grid-template-columns: 8.5rem minmax(0, 1fr); gap: 1rem; }
+  .bom th { padding-top: 0.2rem; }
+
+  .colophon-grid { grid-template-columns: minmax(0, 1fr) auto; }
+  .colophon-credits { grid-column: 1 / -1; }
+}
+
+@media (min-width: 64rem) {
+  .js .nav, html:not(.js) .nav {
+    display: flex;
+    position: static;
+    order: 0;
+    width: auto;
+    gap: 0.15rem;
+    margin-inline: auto;
+    padding: 0;
+    border: 0;
+    background: none;
+    overflow: visible;
+  }
+  .js .nav a { padding: 0.5rem 0.6rem; }
+  .nav-toggle { display: none; }
+  .masthead-tools { margin-left: 0; }
+
+  .hero-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); }
+  .titleblock { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+  .sheet-grid { grid-template-columns: minmax(0, 5fr) minmax(0, 8fr); align-items: start; }
+  /* The title column is narrow until the page is wide, so titles size by the column. */
+  .sheet-head { container-type: inline-size; }
+  .sheet-head h2 { font-size: clamp(1.9rem, 11.5cqi, 3rem); }
+
+  .sheet-intro { align-self: end; }
+
+  .pipe {
+    --gap: 2.75rem;
+    --lane-gap: 0.75rem;
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1.5fr) auto auto;
+    grid-template-rows: repeat(3, 1fr);
+    grid-auto-flow: column;
+    gap: var(--lane-gap) var(--gap);
+  }
+  .node { min-height: 3.5rem; padding-inline: 1.25rem; }
+  .n-src, .n-img, .n-vm { grid-column: auto; grid-row: 1 / -1; }
+  .n-pkgs { grid-column: auto; grid-row: span 2; }
+  .n-vm { align-self: center; max-width: 11rem; }
+
+  .pipe > :not(.n-src, .n-img)::before,
+  .n-out::after {
+    top: 50%;
+    right: 100%;
+    bottom: auto;
+    left: auto;
+    width: var(--gap);
+    height: 9px;
+    margin: -4.5px 0 0;
+    clip-path: polygon(0 4px, calc(100% - 7px) 4px, calc(100% - 7px) 0, 100% 4.5px, calc(100% - 7px) 9px, calc(100% - 7px) 5px, 0 5px);
+  }
+  .n-out::after { right: auto; left: 100%; }
+}
+
+@media (min-width: 75rem) {
+  .split { grid-template-columns: minmax(0, 1fr) 21rem; align-items: start; }
+}
+
+/* Keep the section title in view while its content scrolls past. */
+@media (min-width: 64rem) and (min-height: 46rem) {
+  .sheet-head { position: sticky; top: calc(var(--header-h) + 2.5rem); }
 }
