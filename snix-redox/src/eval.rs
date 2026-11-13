@@ -381,9 +381,146 @@ async fn write_source_node(
     Ok(())
 }
 
+/// Fetch Git into a private staging directory, then publish its real NAR-based
+/// address. A custom store root keeps the filesystem contract testable without
+/// touching the host's global store; the logical address remains /nix/store.
+fn fetch_git_source(
+    url: &str,
+    revision: &str,
+    name: &str,
+    expected_sri: Option<&str>,
+    submodules: bool,
+    lfs: bool,
+    db: &PathInfoDb,
+    store_root: &Path,
+) -> Result<nix_compat::store_path::StorePath<String>, Box<dyn std::error::Error>> {
+    use nix_compat::nixhash::{CAHash, HashAlgo, NixHash};
+    use nix_compat::store_path::{build_ca_path, validate_name, StorePath};
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    validate_name(name)?;
+    let expected = expected_sri
+        .map(|value| NixHash::from_str(value, Some(HashAlgo::Sha256)))
+        .transpose()?;
+    // A known content hash permits an offline cache hit, but never trust an
+    // existing path without checking its contents and registering its metadata.
+    if let Some(expected) = &expected {
+        let path: StorePath<String> = build_ca_path(
+            name,
+            &CAHash::Nar(expected.clone()),
+            std::iter::empty::<&str>(),
+            false,
+        )?;
+        let destination = store_root.join(path.to_string());
+        match fs::symlink_metadata(&destination) {
+            Ok(_) => {
+                let (hash, size) = crate::local_build::nar_hash_path(&destination)?;
+                if NixHash::from_str(&hash, Some(HashAlgo::Sha256))? != *expected {
+                    return Err(format!(
+                        "fetchGit: cached path has corrupt content: {}",
+                        path.to_absolute_path()
+                    )
+                    .into());
+                }
+                crate::store::register_path(
+                    db,
+                    &path.to_absolute_path(),
+                    &hash,
+                    size,
+                    Vec::new(),
+                    Vec::new(),
+                )?;
+                return Ok(path);
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => (),
+            Err(error) => return Err(error.into()),
+        }
+    }
+
+    fs::create_dir_all(store_root)?;
+    let staging = loop {
+        let path = store_root.join(format!(
+            ".snix-fetchgit-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        match fs::DirBuilder::new().mode(0o700).create(&path) {
+            Ok(()) => break path,
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Err(error) => return Err(error.into()),
+        }
+    };
+    let result: Result<StorePath<String>, Box<dyn std::error::Error>> = (|| {
+        let source = staging.join("source");
+        crate::fetchers::fetch_git_checkout(
+            url,
+            revision,
+            source.to_str().ok_or("non-UTF-8 Git staging path")?,
+            submodules,
+            lfs,
+        )?;
+        let (hash, size) = crate::local_build::nar_hash_path(&source)?;
+        let actual = NixHash::from_str(&hash, Some(HashAlgo::Sha256))?;
+        if let Some(expected) = &expected {
+            if expected != &actual {
+                return Err(format!(
+                    "fetchGit: NAR hash mismatch:\n  expected: {}\n  got:      {}",
+                    expected, actual
+                )
+                .into());
+            }
+        }
+        let path: StorePath<String> = build_ca_path(
+            name,
+            &CAHash::Nar(actual),
+            std::iter::empty::<&str>(),
+            false,
+        )?;
+        let destination = store_root.join(path.to_string());
+        let verify_existing = || -> Result<(), Box<dyn std::error::Error>> {
+            let (existing_hash, existing_size) = crate::local_build::nar_hash_path(&destination)?;
+            if existing_hash != hash || existing_size != size {
+                return Err(format!(
+                    "fetchGit: existing store path has stale or corrupt content: {}",
+                    path.to_absolute_path()
+                )
+                .into());
+            }
+            Ok(())
+        };
+        match fs::symlink_metadata(&destination) {
+            Ok(_) => verify_existing()?,
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                if let Err(error) = fs::rename(&source, &destination) {
+                    // A concurrent fetch may have published the same object.
+                    if fs::symlink_metadata(&destination).is_err() {
+                        return Err(error.into());
+                    }
+                    verify_existing()?;
+                }
+            }
+            Err(error) => return Err(error.into()),
+        }
+        crate::store::register_path(
+            db,
+            &path.to_absolute_path(),
+            &hash,
+            size,
+            Vec::new(),
+            Vec::new(),
+        )?;
+        Ok(path)
+    })();
+    let cleanup = fs::remove_dir_all(staging);
+    let path = result?;
+    cleanup?;
+    Ok(path)
+}
+
 /// Build a `fetchGit` builtin that uses our git CLI-based fetch.
 ///
-/// Accepts `{ url, rev?, ref?, narHash?, name? }` or a URL string.
+/// Accepts `{ url, rev?, ref?, narHash?, name?, submodules?, lfs? }` or a URL string.
 /// Returns a store path string with Nix context.
 fn make_fetchgit_builtin(io: Rc<SnixStoreIO>) -> Vec<(&'static str, snix_eval::Value)> {
     use snix_eval::generators::Gen;
@@ -391,120 +528,93 @@ fn make_fetchgit_builtin(io: Rc<SnixStoreIO>) -> Vec<(&'static str, snix_eval::V
 
     let builtin = Builtin::new("fetchGit", None, 1, move |args| {
         let _io = io.clone();
-        Gen::new(|_co| {
+        Gen::new(|co| {
             let fut: std::pin::Pin<
                 Box<dyn std::future::Future<Output = Result<Value, ErrorKind>>>,
             > = Box::pin(async move {
-                let arg = args.into_iter().next().unwrap();
+                let arg =
+                    snix_eval::generators::request_force(&co, args.into_iter().next().unwrap())
+                        .await;
+                if arg.is_catchable() {
+                    return Ok(arg);
+                }
 
-                // Parse args — either a string URL or an attrset
-                let (url, rev, ref_, nar_hash, name) = if let Ok(s) = arg.to_str() {
-                    let url_str =
-                        String::from_utf8(s.as_bytes().to_vec()).map_err(|_| ErrorKind::Utf8)?;
+                // Force attribute values as upstream builtins do: generated
+                // loaders pass projections and expressions, not just literals.
+                let (url, rev, ref_, nar_hash, name, submodules, lfs) = if let Ok(s) = arg.to_str()
+                {
                     (
-                        url_str,
-                        None::<String>,
-                        None::<String>,
-                        None::<String>,
-                        "source".to_string(),
+                        String::from_utf8(s.as_bytes().to_vec()).map_err(|_| ErrorKind::Utf8)?,
+                        None,
+                        None,
+                        None,
+                        "source".to_owned(),
+                        false,
+                        false,
                     )
                 } else {
-                    let attrs = arg.to_attrs().map_err(|_| ErrorKind::TypeError {
-                        expected: "attribute set or string",
-                        actual: "other",
-                    })?;
-
-                    let url = attrs
-                        .select("url")
-                        .ok_or_else(|| ErrorKind::AttributeNotFound { name: "url".into() })?
-                        .to_str()
-                        .map_err(|_| ErrorKind::TypeError {
-                            expected: "string",
-                            actual: "other",
-                        })?;
-                    let url =
-                        String::from_utf8(url.as_bytes().to_vec()).map_err(|_| ErrorKind::Utf8)?;
-
-                    let rev = attrs
-                        .select("rev")
-                        .and_then(|v| v.to_str().ok())
-                        .map(|s| String::from_utf8(s.as_bytes().to_vec()).unwrap_or_default());
-
-                    let ref_ = attrs
-                        .select("ref")
-                        .and_then(|v| v.to_str().ok())
-                        .map(|s| String::from_utf8(s.as_bytes().to_vec()).unwrap_or_default());
-
-                    let nar_hash = attrs
-                        .select("narHash")
-                        .and_then(|v| v.to_str().ok())
-                        .map(|s| String::from_utf8(s.as_bytes().to_vec()).unwrap_or_default());
-
-                    let name = attrs
-                        .select("name")
-                        .and_then(|v| v.to_str().ok())
-                        .map(|s| String::from_utf8(s.as_bytes().to_vec()).unwrap_or_default())
-                        .unwrap_or_else(|| "source".to_string());
-
-                    (url, rev, ref_, nar_hash, name)
-                };
-
-                // Resolve ref to rev if needed
-                let resolved_rev = match (rev.as_deref(), ref_.as_deref()) {
-                    (Some(r), _) => r.to_string(),
-                    (None, Some(ref_name)) => crate::fetchers::resolve_git_ref(&url, ref_name)
-                        .map_err(|e| {
-                            ErrorKind::SnixError(std::sync::Arc::new(std::io::Error::other(
-                                format!("fetchGit: {e}"),
-                            )))
-                        })?,
-                    (None, None) => {
-                        // Default to HEAD
-                        crate::fetchers::resolve_git_ref(&url, "HEAD").map_err(|e| {
-                            ErrorKind::SnixError(std::sync::Arc::new(std::io::Error::other(
-                                format!("fetchGit: {e}"),
-                            )))
-                        })?
+                    let attrs = arg.to_attrs()?;
+                    let mut strings: [Option<String>; 5] = Default::default();
+                    for (slot, key) in strings
+                        .iter_mut()
+                        .zip(["url", "rev", "ref", "narHash", "name"])
+                    {
+                        if let Some(value) = attrs.select(key) {
+                            let value =
+                                snix_eval::generators::request_force(&co, value.clone()).await;
+                            if value.is_catchable() {
+                                return Ok(value);
+                            }
+                            let value = value.to_str()?;
+                            *slot = Some(
+                                String::from_utf8(value.as_bytes().to_vec())
+                                    .map_err(|_| ErrorKind::Utf8)?,
+                            );
+                        }
                     }
+                    let mut flags = [false; 2];
+                    for (slot, key) in flags.iter_mut().zip(["submodules", "lfs"]) {
+                        if let Some(value) = attrs.select(key) {
+                            let value =
+                                snix_eval::generators::request_force(&co, value.clone()).await;
+                            if value.is_catchable() {
+                                return Ok(value);
+                            }
+                            *slot = value.as_bool()?;
+                        }
+                    }
+                    let [url, rev, ref_, nar_hash, name] = strings;
+                    (
+                        url.ok_or_else(|| ErrorKind::AttributeNotFound { name: "url".into() })?,
+                        rev,
+                        ref_,
+                        nar_hash,
+                        name.unwrap_or_else(|| "source".to_owned()),
+                        flags[0],
+                        flags[1],
+                    )
                 };
+                // A supplied revision always wins over a moving ref. Let git
+                // resolve refs (including annotated tags) to the checked-out
+                // commit, rather than guessing from ls-remote's first result.
+                let revision = rev.as_deref().or(ref_.as_deref()).unwrap_or("HEAD");
 
-                // Compute store path from narHash if available
-                let store_path = if let Some(ref nar_hash_sri) = nar_hash {
-                    use nix_compat::nixhash::{CAHash, HashAlgo, NixHash};
-                    use nix_compat::store_path::build_ca_path;
-
-                    let nix_hash = NixHash::from_str(nar_hash_sri, Some(HashAlgo::Sha256))
-                        .map_err(|e| {
-                            ErrorKind::SnixError(std::sync::Arc::new(std::io::Error::other(
-                                format!("fetchGit: invalid narHash: {e}"),
-                            )))
-                        })?;
-                    let ca_hash = CAHash::Nar(nix_hash);
-                    let sp: nix_compat::store_path::StorePath<String> =
-                        build_ca_path(&name, &ca_hash, std::iter::empty::<&str>(), false).map_err(
-                            |e| {
-                                ErrorKind::SnixError(std::sync::Arc::new(std::io::Error::other(
-                                    format!("fetchGit: store path: {e}"),
-                                )))
-                            },
-                        )?;
-                    sp.to_absolute_path()
-                } else {
-                    // Without narHash, use a hash of url+rev for the path name
-                    use sha2::{Digest, Sha256};
-                    let hash_input = format!("git-{}-{}", url, resolved_rev);
-                    let h = Sha256::digest(hash_input.as_bytes());
-                    let hex = data_encoding::HEXLOWER.encode(&h);
-                    format!("/nix/store/{}-{}", &hex[..32], name)
-                };
-
-                // Fetch if not cached
-                crate::fetchers::fetch_git(&url, &resolved_rev, &store_path, nar_hash.as_deref())
-                    .map_err(|e| {
-                    ErrorKind::SnixError(std::sync::Arc::new(std::io::Error::other(format!(
-                        "fetchGit: {e}"
-                    ))))
-                })?;
+                let db =
+                    PathInfoDb::open().map_err(|error| ErrorKind::SnixError(Arc::new(error)))?;
+                let store_path = fetch_git_source(
+                    &url,
+                    revision,
+                    &name,
+                    nar_hash.as_deref(),
+                    submodules,
+                    lfs,
+                    &db,
+                    Path::new(nix_compat::store_path::STORE_DIR),
+                )
+                .map_err(|error| {
+                    ErrorKind::SnixError(Arc::new(io::Error::other(format!("fetchGit: {error}"))))
+                })?
+                .to_absolute_path();
 
                 // Return store path with context
                 let context =
@@ -523,6 +633,162 @@ fn make_fetchgit_builtin(io: Rc<SnixStoreIO>) -> Vec<(&'static str, snix_eval::V
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn git_fixture(tmp: &Path) -> (PathBuf, String) {
+        let repo = tmp.join("repo");
+        fs::create_dir(&repo).unwrap();
+        let git = |arguments: &[&str]| {
+            let output = std::process::Command::new("git")
+                .current_dir(&repo)
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .env("GIT_CONFIG_NOSYSTEM", "1")
+                .env("GIT_AUTHOR_NAME", "Snix test")
+                .env("GIT_AUTHOR_EMAIL", "snix@example.invalid")
+                .env("GIT_COMMITTER_NAME", "Snix test")
+                .env("GIT_COMMITTER_EMAIL", "snix@example.invalid")
+                .args(arguments)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git {} failed: {}",
+                arguments[0],
+                String::from_utf8_lossy(&output.stderr)
+            );
+            String::from_utf8(output.stdout).unwrap().trim().to_owned()
+        };
+        git(&["init"]);
+        fs::write(repo.join("value"), "pinned content\n").unwrap();
+        git(&["add", "value"]);
+        git(&["commit", "-m", "pinned"]);
+        let pinned = git(&["rev-parse", "HEAD"]);
+        git(&["tag", "-a", "-m", "annotated pinned tag", "pinned"]);
+        fs::write(repo.join("value"), "newer content\n").unwrap();
+        git(&["commit", "-am", "newer"]);
+        (repo, pinned)
+    }
+
+    #[test]
+    fn git_source_without_nar_hash_is_canonical_registered_and_pinned() {
+        use nix_compat::nixhash::{CAHash, HashAlgo, NixHash};
+        use nix_compat::store_path::{build_ca_path, StorePath};
+        let tmp = tempfile::tempdir().unwrap();
+        let (repo, pinned) = git_fixture(tmp.path());
+        let expected_tree = tmp.path().join("expected");
+        fs::create_dir(&expected_tree).unwrap();
+        fs::write(expected_tree.join("value"), "pinned content\n").unwrap();
+        let (hash, size) = crate::local_build::nar_hash_path(&expected_tree).unwrap();
+        let expected_hash = NixHash::from_str(&hash, Some(HashAlgo::Sha256)).unwrap();
+        let expected_path: StorePath<String> = build_ca_path(
+            "fixture",
+            &CAHash::Nar(expected_hash.clone()),
+            std::iter::empty::<&str>(),
+            false,
+        )
+        .unwrap();
+        let store = tmp.path().join("store");
+        let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+        let url = format!("file://{}", repo.display());
+        let path =
+            fetch_git_source(&url, &pinned, "fixture", None, false, false, &db, &store).unwrap();
+        assert_eq!(path, expected_path);
+        let destination = store.join(path.to_string());
+        assert_eq!(
+            fs::read_to_string(destination.join("value")).unwrap(),
+            "pinned content\n"
+        );
+        assert!(!destination.join(".git").exists());
+        let metadata = db.get(&path.to_absolute_path()).unwrap().unwrap();
+        assert_eq!(metadata.nar_hash, hash);
+        assert_eq!(metadata.nar_size, size);
+        // Different origins and annotated refs to identical content converge
+        // on the same address used by nix-prefetch-git's SHA256 NAR path.
+        let tagged = fetch_git_source(
+            repo.to_str().unwrap(),
+            "refs/tags/pinned",
+            "fixture",
+            None,
+            false,
+            false,
+            &db,
+            &store,
+        )
+        .unwrap();
+        assert_eq!(tagged, path);
+        assert_eq!(fs::read_dir(&store).unwrap().count(), 1);
+        // A verified hash permits offline evaluation without contacting Git.
+        assert_eq!(
+            fetch_git_source(
+                "file:///nonexistent-snix-test-repo",
+                &pinned,
+                "fixture",
+                Some(&expected_hash.to_sri_string()),
+                false,
+                false,
+                &db,
+                &store
+            )
+            .unwrap(),
+            path
+        );
+        let roots = crate::store::GcRoots::open_at(tmp.path().join("roots")).unwrap();
+        roots
+            .add_indirect_root(&tmp.path().join("generation"), &path.to_absolute_path())
+            .unwrap();
+        assert!(roots
+            .compute_live_set(&db)
+            .unwrap()
+            .contains(&path.to_absolute_path()));
+        fs::write(destination.join("value"), "corrupt").unwrap();
+        assert!(fetch_git_source(
+            "file:///nonexistent-snix-test-repo",
+            &pinned,
+            "fixture",
+            Some(&expected_hash.to_sri_string()),
+            false,
+            false,
+            &db,
+            &store
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn git_source_hash_mismatch_and_failed_revision_leave_no_partial_store_data() {
+        use nix_compat::nixhash::NixHash;
+        let tmp = tempfile::tempdir().unwrap();
+        let (repo, pinned) = git_fixture(tmp.path());
+        let store = tmp.path().join("store");
+        let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+        let url = format!("file://{}", repo.display());
+        let wrong_hash = NixHash::Sha256([0; 32]).to_sri_string();
+        fetch_git_source(
+            &url,
+            &pinned,
+            "fixture",
+            Some(&wrong_hash),
+            false,
+            false,
+            &db,
+            &store,
+        )
+        .unwrap_err();
+        assert_eq!(fs::read_dir(&store).unwrap().count(), 0);
+        assert!(db.all_paths_set().unwrap().is_empty());
+        assert!(fetch_git_source(
+            &url,
+            "refs/tags/missing",
+            "fixture",
+            None,
+            false,
+            false,
+            &db,
+            &store
+        )
+        .is_err());
+        assert_eq!(fs::read_dir(&store).unwrap().count(), 0);
+        assert!(db.all_paths_set().unwrap().is_empty());
+    }
 
     #[test]
     fn file_source_resolves_parent_reads_and_nested_imports() {

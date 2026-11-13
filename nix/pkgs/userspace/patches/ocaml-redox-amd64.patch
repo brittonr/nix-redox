@@ -1,0 +1,42 @@
+Redox uses the amd64 System V ELF backend, not Linux platform defines.
+Keep configure feature checks against relibc and the POSIX pthread fallback.
+
+--- a/configure.ac
++++ b/configure.ac
+@@ -1572,6 +1572,8 @@
+     [arch=arm; system=openbsd],
+   [zaurus*-*-openbsd*],
+     [arch=arm; system=openbsd],
++  [x86_64-*-redox*],
++    [has_native_backend=yes; arch=amd64; system=redox],
+   [x86_64-*-linux*],
+     [has_native_backend=yes; arch=amd64; system=linux],
+   [x86_64-*-dragonfly*],
+--- a/asmcomp/x86_proc.ml
++++ b/asmcomp/x86_proc.ml
+@@ -27,6 +27,7 @@
+   | S_freebsd
+   | S_netbsd
+   | S_openbsd
++  | S_redox
+ 
+   | S_unknown
+ 
+@@ -43,6 +44,7 @@
+   | "freebsd" -> S_freebsd
+   | "netbsd" -> S_netbsd
+   | "openbsd" -> S_openbsd
++  | "redox" -> S_redox
+ 
+   | _ -> S_unknown
+ 
+--- a/asmcomp/x86_proc.mli
++++ b/asmcomp/x86_proc.mli
+@@ -69,6 +69,7 @@
+   | S_freebsd
+   | S_netbsd
+   | S_openbsd
++  | S_redox
+ 
+   | S_unknown
+ 

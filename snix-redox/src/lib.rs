@@ -20,6 +20,7 @@ pub mod install;
 pub mod local_build;
 pub mod local_cache;
 pub mod nar;
+pub mod nix_cli;
 pub mod pathinfo;
 pub mod profiled;
 pub mod rebuild;

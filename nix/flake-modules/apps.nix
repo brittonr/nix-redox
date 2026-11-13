@@ -213,6 +213,12 @@ in
       meta.description = "Run functional tests inside Redox OS (shell, filesystem, tools, config)";
     };
 
+    nixtamal-test = {
+      type = "app";
+      program = "${self'.packages.nixtamal-test}/bin/functional-test";
+      meta.description = "Lock and refresh local archive/Git inputs with native upstream Nixtamal and Snix inside Redox";
+    };
+
     kernel-rebuild-test = {
       type = "app";
       program = "${self'.packages.kernel-rebuild-test}/bin/functional-test";

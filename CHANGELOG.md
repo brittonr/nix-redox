@@ -20,6 +20,12 @@ All notable changes to this project are documented here. The format follows
   `nix/tamal` (one per `flake.lock` node) and produce the same derivations as
   the flake. The `nixtamal-pins` eval check and a CI step keep the two in
   sync; see `docs/nixtamal.md`.
+- Native upstream Nixtamal 3.1.0 in Redox development images, with a
+  cross-built OCaml runtime and C bindings. Snix provides native archive/Git
+  prefetch, hash conversion, loader evaluation, and genuine store/GC-root
+  operations. An isolated `nixtamal-test` VM exercises lock, refresh, pinned
+  revisions, generated loaders, and retained input generations offline; see
+  `docs/nixtamal.md`.
 
 ### Changed
 
@@ -32,6 +38,17 @@ All notable changes to this project are documented here. The format follows
 - `shell.nix` and `default.nix` no longer require the `flakes` experimental
   feature or copy the whole working tree into the store; `nix-build` builds the
   default disk image.
+
+### Fixed
+
+- Native Git preserves URI transports before probing Redox-local scheme paths,
+  so cloning a `file://` repository no longer prefixes the working directory
+  onto its protocol.
+- Git helper command strings use the guest's POSIX Bash while cross-build
+  generators continue to use the host shell. Runtime assembly retains
+  `libexec/`, templates, Unicode data, and notices needed by Git and Nixtamal.
+- Native Git fetching resolves pinned ancestors from advertised history on
+  servers that reject direct requests for unadvertised commit IDs.
 
 ## [0.1.2-alpha] - 2026-11-11
 

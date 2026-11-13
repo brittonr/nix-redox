@@ -82,3 +82,62 @@ the inputs of removed nodes and run `nixtamal lock`.
 The release tarballs `openssl3-src` and `openssh-src` are `frozen`, so
 `nixtamal refresh` skips them. When their URL changes in `flake.nix`, change it
 in `manifest.kdl` too and run `nixtamal lock <name>`.
+
+## Running Nixtamal on Redox
+
+Development images include upstream Nixtamal 3.1.0, Git, curl, and Snix's
+native `nix`, `nix-hash`, `nix-prefetch-url`, `nix-prefetch-git`,
+`nix-instantiate`, and `nix-store` compatibility commands. These commands
+implement the operations Nixtamal needs, not the entire Nix CLI.
+
+The CLI embeds portable OCaml bytecode in a Redox executable, linked against
+the matching OCaml 5.4 runtime, relibc, and target C bindings. The compiler and
+PPX generators run on the build host; no Linux executable runs in the guest.
+Camomile's Unicode tables and dependency notices are bundled with the guest
+package. Git's POSIX helper command strings use the installed Bash, not Ion;
+its private helper binaries and templates are retained in the image.
+The package pins Nixtamal's newer dependency package set because it needs
+Eio 1.6 rather than the main package set's Eio 1.3.
+
+Build the guest executable without flakes:
+
+```bash
+nix-build -A packages.x86_64-linux.nixtamal
+```
+
+For a project's native manifest, use `default-fetch-time eval` and
+`default-hash-algorithm SHA-256` with archive or Git inputs. SHA-256 keeps Git
+prefetch results and the generated loader's `builtins.fetchGit` at the same
+canonical store path. Other VCS prefetchers are not bundled; any programs
+used by `fresh-cmd` must also be installed in the guest.
+
+From that project's root inside Redox:
+
+```bash
+nixtamal lock --directory ./nix/tamal --jobs 1 --no-tui
+nixtamal refresh --directory ./nix/tamal --jobs 1 --no-tui
+snix eval --expr 'import ./nix/tamal { bootstrap-pkgs = {}; }'
+```
+
+For Nixtamal's experimental generation roots, set
+`NIXTAMAL_EXPERIMENTAL_GC=1` and use `default-gc track` in the manifest.
+`NIXTAMAL_GC_GENERATIONS=0` retains all generations. Snix registers real
+content-addressed store objects and indirect GC roots; it does not fabricate
+store paths or report success for missing inputs.
+
+The isolated offline VM proof uses the actual upstream CLI to lock local
+archives and immutable Git inputs whose branch HEAD has advanced. It evaluates
+the generated loader, preserves an existing pin on a second lock, refreshes to
+different archive contents, and validates both generations' contents and store
+registration. It does not run global store GC:
+
+```bash
+nix-build -A packages.x86_64-linux.nixtamal-test
+./result/bin/functional-test --verbose
+```
+
+### Git fetch behavior
+
+Fixed commit IDs clone advertised history; named refs remain shallow. This
+can fetch more history, but works with older servers that reject direct
+requests for unadvertised ancestor commits.

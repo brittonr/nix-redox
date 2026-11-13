@@ -38,6 +38,7 @@ in
       ++ opt "wasmtime-redox"
       # System management
       ++ opt "snix"
+      ++ opt "nixtamal"
       ++ opt "redox-curl"
       # Build tools (small, useful for development)
       ++ opt "redox-bash"

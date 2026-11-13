@@ -1,0 +1,15 @@
+Redox has getauxval but does not define Linux's AT_SECURE auxiliary-vector key.
+Use OCaml's existing issetugid/UID/GID fallback when that key is absent, rather
+than assigning a Linux auxiliary-vector constant to another operating system.
+
+--- a/otherlibs/unix/envir_unix.c
++++ b/otherlibs/unix/envir_unix.c
+@@ -39,7 +39,7 @@
+ 
+ static char **secure_environ(void)
+ {
+-#ifdef HAS_GETAUXVAL
++#if defined(HAS_GETAUXVAL) && defined(AT_SECURE)
+   if (!getauxval(AT_SECURE))
+     return environ;
+   else

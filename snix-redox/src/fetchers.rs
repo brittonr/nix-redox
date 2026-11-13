@@ -179,57 +179,7 @@ pub fn fetch_git(
         return Ok(());
     }
 
-    let git = find_git()?;
-
-    // Create a temp dir for the bare clone
-    let tmp_parent = std::path::Path::new(out)
-        .parent()
-        .unwrap_or(std::path::Path::new("/tmp"));
-    std::fs::create_dir_all(tmp_parent)?;
-    let tmp_bare = format!("{out}.git-bare-tmp");
-    let _ = std::fs::remove_dir_all(&tmp_bare);
-
-    // Clone bare (faster — no working tree)
-    eprintln!(
-        "git clone {url} (rev {})...",
-        &rev[..std::cmp::min(rev.len(), 12)]
-    );
-    let clone_out = std::process::Command::new(&git)
-        .args(["clone", "--bare", url, &tmp_bare])
-        .output()
-        .map_err(|e| format!("failed to run git clone: {e}"))?;
-
-    if !clone_out.status.success() {
-        let stderr = String::from_utf8_lossy(&clone_out.stderr);
-        let _ = std::fs::remove_dir_all(&tmp_bare);
-        return Err(format!("git clone failed for '{url}':\n{stderr}").into());
-    }
-
-    // Create the output directory and checkout the specific rev
-    std::fs::create_dir_all(out)?;
-    let checkout_out = std::process::Command::new(&git)
-        .args([
-            "--git-dir",
-            &tmp_bare,
-            "--work-tree",
-            out,
-            "checkout",
-            rev,
-            "--",
-            ".",
-        ])
-        .output()
-        .map_err(|e| format!("failed to run git checkout: {e}"))?;
-
-    if !checkout_out.status.success() {
-        let stderr = String::from_utf8_lossy(&checkout_out.stderr);
-        let _ = std::fs::remove_dir_all(&tmp_bare);
-        let _ = std::fs::remove_dir_all(out);
-        return Err(format!("git checkout failed for rev '{rev}':\n{stderr}").into());
-    }
-
-    // Clean up bare clone
-    let _ = std::fs::remove_dir_all(&tmp_bare);
+    fetch_git_checkout(url, rev, out, false, false)?;
 
     // Verify NAR hash if provided
     if let Some(expected_sri) = nar_hash_sri {
@@ -240,6 +190,134 @@ pub fn fetch_git(
         "✓ fetched git {url} @ {} to {out}",
         &rev[..std::cmp::min(rev.len(), 12)]
     );
+    Ok(())
+}
+
+/// Fetch a revision into a fresh staging path, returning its immutable commit ID.
+/// Submodules and LFS are handled by native git (and git-lfs when requested).
+pub(crate) fn fetch_git_checkout(
+    url: &str,
+    rev: &str,
+    out: &str,
+    submodules: bool,
+    lfs: bool,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if rev.is_empty() || rev.starts_with('-') || rev.chars().any(char::is_whitespace) {
+        return Err("git revision must be a nonempty ref or commit ID, not an option".into());
+    }
+    if std::path::Path::new(out).symlink_metadata().is_ok() {
+        return Err("git checkout destination already exists".into());
+    }
+    let git = find_git()?;
+    let command = |args: &[&str], cwd: Option<&str>| {
+        let mut command = std::process::Command::new(&git);
+        command
+            .args(args)
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_LFS_SKIP_SMUDGE", "1");
+        if let Some(cwd) = cwd {
+            command.current_dir(cwd);
+        }
+        command
+    };
+    let run = |args: &[&str], cwd: Option<&str>| -> Result<String, Box<dyn std::error::Error>> {
+        let output = command(args, cwd).output()?;
+        if !output.status.success() {
+            return Err(format!(
+                "git {} failed: {}",
+                args[0],
+                String::from_utf8_lossy(&output.stderr)
+            )
+            .into());
+        }
+        let mut stdout = String::from_utf8(output.stdout)?;
+        stdout.truncate(stdout.trim_end().len());
+        Ok(stdout)
+    };
+    let result = (|| {
+        let pinned = (rev.len() == 40 || rev.len() == 64)
+            && rev.bytes().all(|byte| byte.is_ascii_hexdigit());
+        // Depth-one clones cannot resolve pinned ancestors on servers that
+        // reject unadvertised SHA requests. Named refs can remain shallow.
+        if pinned {
+            run(&["clone", "--no-checkout", "--", url, out], None)?;
+        } else {
+            run(
+                &["clone", "--depth", "1", "--no-checkout", "--", url, out],
+                None,
+            )?;
+        }
+        let local_commit = if pinned {
+            let expression = format!("{rev}^{{commit}}");
+            let output = command(
+                &["rev-parse", "--verify", "--quiet", &expression],
+                Some(out),
+            )
+            .output()?;
+            match output.status.code() {
+                Some(0) => {
+                    let mut commit = String::from_utf8(output.stdout)?;
+                    commit.truncate(commit.trim_end().len());
+                    Some(commit)
+                }
+                Some(1) => None,
+                _ => {
+                    return Err(format!(
+                        "git revision lookup failed: {}",
+                        String::from_utf8_lossy(&output.stderr)
+                    )
+                    .into())
+                }
+            }
+        } else {
+            None
+        };
+        let commit = match local_commit {
+            Some(commit) => commit,
+            None => {
+                run(&["fetch", "--depth", "1", "origin", rev], Some(out))?;
+                run(&["rev-parse", "--verify", "FETCH_HEAD^{commit}"], Some(out))?
+            }
+        };
+        if !(commit.len() == 40 || commit.len() == 64)
+            || !commit.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err("git returned an invalid commit ID".into());
+        }
+        run(&["checkout", "--detach", &commit], Some(out))?;
+        if submodules {
+            run(&["submodule", "update", "--init", "--recursive"], Some(out))?;
+        }
+        if lfs {
+            run(&["lfs", "fetch", "origin", &commit], Some(out))?;
+            run(&["lfs", "checkout"], Some(out))?;
+            if submodules {
+                run(
+                    &["submodule", "foreach", "--recursive", "git lfs pull"],
+                    Some(out),
+                )?;
+            }
+        }
+        remove_git_metadata(std::path::Path::new(out))?;
+        Ok(commit)
+    })();
+    if result.is_err() {
+        let _ = std::fs::remove_dir_all(out);
+    }
+    result
+}
+
+fn remove_git_metadata(path: &std::path::Path) -> std::io::Result<()> {
+    for entry in std::fs::read_dir(path)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if entry.file_name() == ".git" {
+            if ty.is_dir() { std::fs::remove_dir_all(entry.path())?; }
+            else { std::fs::remove_file(entry.path())?; }
+        } else if ty.is_dir() {
+            remove_git_metadata(&entry.path())?;
+        }
+    }
     Ok(())
 }
 
@@ -327,13 +405,24 @@ fn find_git() -> Result<String, Box<dyn std::error::Error>> {
 
 // ── Download helpers (sync, ureq-based) ────────────────────────────────────
 
-/// Download a URL and write the raw content to a file (flat mode).
-fn fetch_flat(url: &str, out: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let resp = ureq::get(url).call()?;
-    let mut reader = resp.into_body().into_reader();
+/// Download a URL (including local file URLs) in flat mode.
+pub(crate) fn fetch_flat(url: &str, out: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut reader = open_url(url)?;
     let mut file = std::fs::File::create(out)?;
     std::io::copy(&mut reader, &mut file)?;
     Ok(())
+}
+
+fn open_url(url: &str) -> Result<Box<dyn std::io::Read + Send>, Box<dyn std::error::Error>> {
+    if url.starts_with("file:") {
+        // Let the upstream Fetch variant supply its URL type without a second parser.
+        let fetch = Fetch::URL { url: url.parse()?, exp_hash: None };
+        let Fetch::URL { url: parsed, .. } = fetch else { unreachable!() };
+        let path = parsed.to_file_path().map_err(|_| "file URL must have a local absolute path")?;
+        return Ok(Box::new(std::fs::File::open(path)?));
+    }
+    let response = ureq::get(url).call()?;
+    Ok(Box::new(response.into_body().into_reader()))
 }
 
 /// Download a NAR file from a URL and extract it.
@@ -353,8 +442,7 @@ fn fetch_nar(url: &str, out: &str) -> Result<(), Box<dyn std::error::Error>> {
 ///
 /// Supports `.tar.gz`, `.tar.xz`, `.tar.bz2`, `.tar.zst`, and plain `.tar`.
 pub fn fetch_and_unpack(url: &str, out: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let resp = ureq::get(url).call()?;
-    let reader = resp.into_body().into_reader();
+    let reader = open_url(url)?;
 
     let decompressed: Box<dyn std::io::Read + Send> = decompress_reader(url, reader)?;
     extract_tar(decompressed, out)?;
@@ -366,6 +454,7 @@ fn decompress_reader(
     url: &str,
     reader: impl std::io::Read + Send + 'static,
 ) -> Result<Box<dyn std::io::Read + Send>, Box<dyn std::error::Error>> {
+    let url = url.split(['?', '#']).next().unwrap_or(url);
     if url.ends_with(".gz") || url.ends_with(".tgz") {
         Ok(Box::new(flate2::read::GzDecoder::new(reader)))
     } else if url.ends_with(".xz") || url.ends_with(".txz") {
@@ -402,97 +491,42 @@ fn decompress_reader(
 /// Strips the top-level directory component (like GitHub release tarballs
 /// where all entries are under `project-v1.0/`).
 fn extract_tar<R: std::io::Read>(reader: R, out: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let out_path = std::path::Path::new(out);
-    std::fs::create_dir_all(out_path)?;
-
-    let mut archive = tar::Archive::new(reader);
-    // Don't preserve mtime — matches Nix's deterministic store semantics.
-    archive.set_preserve_mtime(false);
-
-    let mut prefix_to_strip: Option<std::path::PathBuf> = None;
-
-    for entry_result in archive.entries()? {
-        let mut entry = entry_result?;
-        let entry_path = entry.path()?.into_owned();
-
-        // Determine prefix from first non-empty entry.
-        if prefix_to_strip.is_none() {
-            if let Some(first_component) = entry_path.components().next() {
-                prefix_to_strip = Some(std::path::PathBuf::from(first_component.as_os_str()));
-            }
-        }
-
-        // Strip the top-level prefix.
-        let relative = match &prefix_to_strip {
-            Some(pfx) => match entry_path.strip_prefix(pfx) {
-                Ok(stripped) => stripped.to_path_buf(),
-                Err(_) => entry_path.clone(),
-            },
-            None => entry_path.clone(),
-        };
-
-        // Skip the top-level directory entry itself (empty after stripping).
-        if relative.as_os_str().is_empty() || relative == std::path::Path::new(".") {
-            continue;
-        }
-
-        let dest = out_path.join(&relative);
-
-        match entry.header().entry_type() {
-            tar::EntryType::Regular | tar::EntryType::GNUSparse => {
-                if let Some(parent) = dest.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                let mut file = std::fs::File::create(&dest)?;
-                std::io::copy(&mut entry, &mut file)?;
-
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    if let Ok(mode) = entry.header().mode() {
-                        let _ =
-                            std::fs::set_permissions(&dest, std::fs::Permissions::from_mode(mode));
-                    }
-                }
-            }
-            tar::EntryType::Directory => {
-                std::fs::create_dir_all(&dest)?;
-            }
-            tar::EntryType::Symlink => {
-                if let Some(parent) = dest.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                #[cfg(unix)]
-                if let Some(target) = entry.link_name()? {
-                    std::os::unix::fs::symlink(target.as_ref(), &dest)?;
-                }
-            }
-            tar::EntryType::Link => {
-                // Hard link — copy the target file's contents.
-                if let Some(parent) = dest.parent() {
-                    std::fs::create_dir_all(parent)?;
-                }
-                if let Some(link_target) = entry.link_name()? {
-                    let stripped_target = match &prefix_to_strip {
-                        Some(pfx) => link_target
-                            .strip_prefix(pfx.as_path())
-                            .unwrap_or(link_target.as_ref())
-                            .to_path_buf(),
-                        None => link_target.into_owned(),
-                    };
-                    let target_path = out_path.join(&stripped_target);
-                    if target_path.exists() {
-                        std::fs::copy(&target_path, &dest)?;
-                    }
-                }
-            }
-            _ => {
-                // Skip unknown entry types (pax headers, etc.)
-            }
-        }
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    let out = std::path::Path::new(out);
+    if out.symlink_metadata().is_ok() {
+        return Err(format!("refusing to unpack over existing path {}", out.display()).into());
     }
-
-    Ok(())
+    let parent = out.parent().ok_or("unpack destination has no parent")?;
+    std::fs::create_dir_all(parent)?;
+    let staging = loop {
+        let candidate = parent.join(format!(".snix-unpack-{}-{}", std::process::id(), NEXT.fetch_add(1, Ordering::Relaxed)));
+        match std::fs::create_dir(&candidate) {
+            Ok(()) => break candidate,
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e.into()),
+        }
+    };
+    let result = (|| {
+        let mut archive = tar::Archive::new(reader);
+        archive.set_preserve_mtime(false);
+        // tar's unpack implementation rejects traversal and refuses to follow
+        // archive-created symlinks while creating subsequent entries.
+        archive.unpack(&staging)?;
+        let entries = std::fs::read_dir(&staging)?.collect::<Result<Vec<_>, _>>()?;
+        // Nix strips a single directory wrapper, not an arbitrary first component.
+        let source = if entries.len() == 1 && entries[0].file_type()?.is_dir() {
+            entries[0].path()
+        } else {
+            staging.clone()
+        };
+        std::fs::rename(source, out)?;
+        Ok(())
+    })();
+    if staging.exists() {
+        let _ = std::fs::remove_dir_all(&staging);
+    }
+    result
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -500,6 +534,59 @@ fn extract_tar<R: std::io::Read>(reader: R, out: &str) -> Result<(), Box<dyn std
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_url_decodes_local_paths() {
+        let temp = tempfile::tempdir().unwrap();
+        let input = temp.path().join("with space");
+        let output = temp.path().join("download");
+        std::fs::write(&input, b"local input").unwrap();
+        let url = format!("file://{}", input.to_str().unwrap().replace(' ', "%20"));
+        fetch_flat(&url, output.to_str().unwrap()).unwrap();
+        assert_eq!(std::fs::read(output).unwrap(), b"local input");
+        assert!(open_url("file://remote.example/etc/passwd").is_err());
+    }
+
+    #[test]
+    fn unpack_preserves_multiple_top_level_entries() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut builder = tar::Builder::new(Vec::new());
+        for name in ["first", "second"] {
+            let mut header = tar::Header::new_gnu();
+            header.set_size(1);
+            header.set_mode(0o644);
+            header.set_cksum();
+            builder.append_data(&mut header, name, &b"x"[..]).unwrap();
+        }
+        let output = temp.path().join("out");
+        extract_tar(std::io::Cursor::new(builder.into_inner().unwrap()), output.to_str().unwrap()).unwrap();
+        assert_eq!(std::fs::read(output.join("first")).unwrap(), b"x");
+        assert_eq!(std::fs::read(output.join("second")).unwrap(), b"x");
+    }
+
+    #[test]
+    fn unpack_rejects_archive_symlink_parent_escape() {
+        let temp = tempfile::tempdir().unwrap();
+        let outside = temp.path().join("outside");
+        std::fs::create_dir(&outside).unwrap();
+        let mut builder = tar::Builder::new(Vec::new());
+        let mut link = tar::Header::new_gnu();
+        link.set_entry_type(tar::EntryType::Symlink);
+        link.set_size(0);
+        link.set_mode(0o777);
+        link.set_link_name(&outside).unwrap();
+        link.set_cksum();
+        builder.append_data(&mut link, "wrapper/link", std::io::empty()).unwrap();
+        let mut file = tar::Header::new_gnu();
+        file.set_mode(0o644);
+        file.set_size(4);
+        file.set_cksum();
+        builder.append_data(&mut file, "wrapper/link/escaped", &b"oops"[..]).unwrap();
+        let output = temp.path().join("out");
+        assert!(extract_tar(std::io::Cursor::new(builder.into_inner().unwrap()), output.to_str().unwrap()).is_err());
+        assert!(!outside.join("escaped").exists());
+        assert!(!output.exists());
+    }
 
     #[test]
     fn extract_tar_empty() {
@@ -596,11 +683,6 @@ mod tests {
 
     #[test]
     fn fetch_git_from_local_repo() {
-        // Skip if git is not available
-        if find_git().is_err() {
-            eprintln!("skipping fetch_git_from_local_repo: git not found");
-            return;
-        }
 
         let tmp = tempfile::tempdir().unwrap();
         let repo_dir = tmp.path().join("test-repo");
@@ -668,12 +750,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn find_git_returns_path() {
-        // Just verify find_git doesn't panic
-        match find_git() {
-            Ok(path) => assert!(!path.is_empty()),
-            Err(_) => eprintln!("git not installed, skipping"),
-        }
-    }
 }

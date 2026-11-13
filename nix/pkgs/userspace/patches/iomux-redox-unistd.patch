@@ -1,0 +1,11 @@
+diff --git a/lib/iomux_stubs.c b/lib/iomux_stubs.c
+--- a/lib/iomux_stubs.c
++++ b/lib/iomux_stubs.c
+@@ -3,6 +3,7 @@
+ #include <errno.h>
+ #include <poll.h>
+ #include <signal.h>
++#include <unistd.h>
+ 
+ #include <caml/bigarray.h>
+ #include <caml/memory.h>

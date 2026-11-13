@@ -1,0 +1,20 @@
+--- a/src/configImpl.dune.ml
++++ b/src/configImpl.dune.ml
+@@ -1,5 +1,12 @@
+-let get_path site = match site with [path] -> path | _ -> assert false
+-let datadir = get_path Sites.Sites.database
+-let localedir = get_path Sites.Sites.locales
+-let charmapdir = get_path Sites.Sites.charmaps
+-let unimapdir = get_path Sites.Sites.mappings
++let runtime_prefix = Sys.getenv_opt "NIXTAMAL_CAMOMILE_DIR"
++
++let get_path resource site =
++  match runtime_prefix, site with
++  | Some prefix, _ -> Filename.concat prefix resource
++  | None, [path] -> path
++  | _ -> assert false
++
++let datadir = get_path "database" Sites.Sites.database
++let localedir = get_path "locales" Sites.Sites.locales
++let charmapdir = get_path "charmaps" Sites.Sites.charmaps
++let unimapdir = get_path "mappings" Sites.Sites.mappings

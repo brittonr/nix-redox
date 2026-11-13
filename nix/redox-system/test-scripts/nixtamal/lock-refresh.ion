@@ -1,0 +1,120 @@
+# Isolated from the wildcard full-suite scripts: this needs its own image,
+# deterministic local archives, pinned Git repository, and real Nixtamal binary.
+echo ""
+echo "=== Native Nixtamal lock/refresh proof ==="
+echo "FUNC_TESTS_START"
+
+let PATH = "/nix/system/profile/bin:/bin:/usr/bin"
+export PATH
+export HOME = "/tmp/nixtamal-test/home"
+let XDG_CACHE_HOME = "/tmp/nixtamal-test/cache"
+export XDG_CACHE_HOME
+let NIXTAMAL_EXPERIMENTAL_GC = "1"
+export NIXTAMAL_EXPERIMENTAL_GC
+# Keep both generations without ever running GC against the guest store.
+let NIXTAMAL_GC_GENERATIONS = "0"
+export NIXTAMAL_GC_GENERATIONS
+
+mkdir -p /tmp/nixtamal-test/tamal $HOME $XDG_CACHE_HOME
+cp /usr/share/nixtamal-test/manifest.kdl /tmp/nixtamal-test/tamal/manifest.kdl
+if test $? != 0
+    echo "FUNC_TEST:nixtamal-fixtures:FAIL:cannot prepare isolated manifest"
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+# The boot service inherits initfs's cwd across switchroot. Use the project.
+cd /tmp/nixtamal-test
+echo one > /tmp/nixtamal-test/fresh
+
+# Invoking the actual upstream CLI exercises OCaml runtime IO, child process
+# spawning, local fresh-cmd, native prefetch/hash aliases, and generated loader.
+nixtamal lock --directory /tmp/nixtamal-test/tamal --jobs 1 --no-tui > /tmp/nixtamal-test/lock.log ^> /tmp/nixtamal-test/lock.err
+if test $? != 0
+    echo "FUNC_TEST:nixtamal-lock-local-inputs:FAIL:upstream lock command failed"
+    cat /tmp/nixtamal-test/lock.log /tmp/nixtamal-test/lock.err
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+
+/bin/snix eval --expr 'import /usr/share/nixtamal-test/verify-lock.nix { value = "nixtamal-archive-one"; }' > /tmp/nixtamal-test/eval.out ^> /tmp/nixtamal-test/eval.err
+if test $? != 0
+    echo "FUNC_TEST:nixtamal-locked-loader-evaluates:FAIL:generated lock or loader is invalid"
+    cat /tmp/nixtamal-test/eval.out /tmp/nixtamal-test/eval.err
+    cat /tmp/nixtamal-test/tamal/lock.json
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+/nix/system/profile/bin/bash -c 'test "$(cat /tmp/nixtamal-test/eval.out)" = true'
+if test $? = 0
+    echo "FUNC_TEST:nixtamal-locked-loader-evaluates:PASS"
+else
+    echo "FUNC_TEST:nixtamal-locked-loader-evaluates:FAIL:unexpected native Snix result"
+    cat /tmp/nixtamal-test/eval.out
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+
+/nix/system/profile/bin/bash /usr/share/nixtamal-test/verify-roots.sh one > /tmp/nixtamal-test/roots.out ^> /tmp/nixtamal-test/roots.err
+if test $? = 0
+    echo "FUNC_TEST:nixtamal-first-generation-real-store-roots:PASS"
+else
+    echo "FUNC_TEST:nixtamal-first-generation-real-store-roots:FAIL:GC roots do not resolve to registered pinned inputs"
+    cat /tmp/nixtamal-test/roots.out /tmp/nixtamal-test/roots.err
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+
+cp /tmp/nixtamal-test/tamal/lock.json /tmp/nixtamal-test/first-lock.json
+echo two > /tmp/nixtamal-test/fresh
+# Lock must preserve an existing pin even when fresh-cmd would now return two.
+nixtamal lock --directory /tmp/nixtamal-test/tamal --jobs 1 --no-tui > /tmp/nixtamal-test/relock.log ^> /tmp/nixtamal-test/relock.err
+if test $? != 0
+    echo "FUNC_TEST:nixtamal-lock-preserves-pin:FAIL:second lock command failed"
+    cat /tmp/nixtamal-test/relock.log /tmp/nixtamal-test/relock.err
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+/nix/system/profile/bin/bash -c 'test "$(cat /tmp/nixtamal-test/first-lock.json)" = "$(cat /tmp/nixtamal-test/tamal/lock.json)"'
+if test $? = 0
+    echo "FUNC_TEST:nixtamal-lock-preserves-pin:PASS"
+else
+    echo "FUNC_TEST:nixtamal-lock-preserves-pin:FAIL:lock changed without refresh"
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+
+nixtamal refresh --directory /tmp/nixtamal-test/tamal --jobs 1 --no-tui > /tmp/nixtamal-test/refresh.log ^> /tmp/nixtamal-test/refresh.err
+if test $? != 0
+    echo "FUNC_TEST:nixtamal-refresh-local-inputs:FAIL:upstream refresh command failed"
+    cat /tmp/nixtamal-test/refresh.log /tmp/nixtamal-test/refresh.err
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+
+/bin/snix eval --expr 'import /usr/share/nixtamal-test/verify-lock.nix { value = "nixtamal-archive-two"; }' > /tmp/nixtamal-test/eval.out ^> /tmp/nixtamal-test/eval.err
+if test $? != 0
+    echo "FUNC_TEST:nixtamal-refreshed-loader-evaluates:FAIL:refreshed lock did not evaluate to second value and original Git revision"
+    cat /tmp/nixtamal-test/eval.out /tmp/nixtamal-test/eval.err
+    cat /tmp/nixtamal-test/tamal/lock.json
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+/nix/system/profile/bin/bash -c 'test "$(cat /tmp/nixtamal-test/eval.out)" = true'
+if test $? = 0
+    echo "FUNC_TEST:nixtamal-refreshed-loader-evaluates:PASS"
+else
+    echo "FUNC_TEST:nixtamal-refreshed-loader-evaluates:FAIL:unexpected native Snix result"
+    cat /tmp/nixtamal-test/eval.out
+    echo "FUNC_TESTS_COMPLETE"
+    exit
+end
+
+/nix/system/profile/bin/bash /usr/share/nixtamal-test/verify-roots.sh two > /tmp/nixtamal-test/roots.out ^> /tmp/nixtamal-test/roots.err
+if test $? = 0
+    echo "FUNC_TEST:nixtamal-refresh-retains-genuine-generations:PASS"
+else
+    echo "FUNC_TEST:nixtamal-refresh-retains-genuine-generations:FAIL:old/new generation contents, current root, or store registration mismatch"
+    cat /tmp/nixtamal-test/roots.out /tmp/nixtamal-test/roots.err
+end
+
+echo "FUNC_TESTS_COMPLETE"

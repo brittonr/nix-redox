@@ -104,7 +104,7 @@ keeping the pins in sync with `flake.lock`.
 | **Networking** | smolnetd TCP/IP stack, dhcpd, ping, nc, curl |
 | **CLI tools** | ripgrep, fd, bat, hexyl, zoxide, dust, lsd, bottom, tokei, tree |
 | **Development** | gnu-make, git, diffutils, sed, patch, strace |
-| **Packages** | snix: Nix evaluation and builds running on Redox |
+| **Packages** | snix: native Nix evaluation and builds; Nixtamal: input pinning |
 | **Graphics** | Orbital, orbterm, orbutils, orbdata *(graphical image)* |
 | **Self-hosting** | rustc, cargo, LLVM/LLD, cmake *(self-hosting image)* |
 

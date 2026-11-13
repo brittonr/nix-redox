@@ -81,8 +81,8 @@ let
         cp -r "${pkg}/bin" "$pkg_store/bin"
       fi
       ${lib.optionalString (cfg.isSelfHostingPkg pkg) ''
-        # Self-hosting package: also copy lib/, sysroot/, include/, share/, etc/
-        for subdir in lib sysroot include share etc; do
+        # Full runtime package: retain libraries, helpers, data and notices.
+        for subdir in lib libexec sysroot include share etc; do
           if [ -d "${pkg}/$subdir" ]; then
             cp -r "${pkg}/$subdir" "$pkg_store/$subdir"
           fi

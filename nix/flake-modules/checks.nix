@@ -89,6 +89,7 @@ let
           # client that needs CA certificates. Tests don't do HTTP but
           # reqwest with native-roots panics on missing certs at client init.
           snix-redox = attrs: {
+            nativeBuildInputs = (attrs.nativeBuildInputs or [ ]) ++ [ pkgs.git ];
             SSL_CERT_FILE = "${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt";
           };
         };
@@ -226,8 +227,9 @@ let
     sodium-build = packages.sodium;
     netutils-build = packages.netutils;
 
-    # snix (cross-compiled for Redox)
+    # snix and Nixtamal (cross-compiled for Redox)
     snix-build = packages.snix;
+    nixtamal-build = packages.nixtamal;
 
     # CLI tools
     ripgrep-cross = packages.ripgrep;
@@ -254,6 +256,7 @@ let
   vmChecksFast = {
     boot-test = packages.bootTest;
     functional-test = packages.functionalTest;
+    nixtamal-test = packages.nixtamal-test;
     multi-user-test = packages.multi-user-test;
     bridge-test = packages.bridgeTest;
     scheme-daemon-test = packages.scheme-daemon-test;

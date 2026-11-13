@@ -1,0 +1,33 @@
+diff --git a/lib_eio_posix/eio_posix_stubs.c b/lib_eio_posix/eio_posix_stubs.c
+--- a/lib_eio_posix/eio_posix_stubs.c
++++ b/lib_eio_posix/eio_posix_stubs.c
+@@ -10,7 +10,9 @@
+ #include <sys/types.h>
+ #include <sys/select.h>
+ #include <sys/socket.h>
+-#ifdef __linux__
++#ifdef __redox__
++#include <sys/random.h>
++#elif defined(__linux__)
+ #if __GLIBC__ > 2 || __GLIBC_MINOR__ > 24
+ #include <sys/random.h>
+ #else
+@@ -21,6 +23,7 @@
+ #include <sys/stat.h>
+ #include <errno.h>
+ #include <fcntl.h>
+ #include <string.h>
++#include <strings.h>
+ #include <stdlib.h>
+ #include <dirent.h>
+@@ -88,7 +91,9 @@ CAMLprim value caml_eio_posix_getrandom(value v_ba, value v_off, value v_len) {
+   do {
+     void *buf = (uint8_t *)Caml_ba_data_val(v_ba) + off;
+     caml_enter_blocking_section();
+-#ifdef __linux__
++#ifdef __redox__
++    ret = getrandom(buf, len, 0);
++#elif defined(__linux__)
+ #if __GLIBC__ > 2 || __GLIBC_MINOR__ > 24
+     ret = getrandom(buf, len, 0);
+ #else
