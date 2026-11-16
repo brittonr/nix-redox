@@ -400,6 +400,16 @@ class Harness:
             self.page.wait_for_function("expected => {const lines=window.redoxDemo.transcript.replace(/\\r/g,'').split('\\n');return expected.every(line=>lines.includes(line));}",
                                         arg=list(lines), timeout=self.args.command_timeout * 1000)
 
+        with self.phase(f"{mode}-relative-directory-listing"):
+            token = secrets.token_hex(12)
+            name = f".browser-cwd-{token}"
+            output = successful(self.run(
+                f"printf '%s\\n' '{token}' > {name} && pwd && ls -1a . && rm {name}"),
+                "initial working directory supports relative file commands")
+            require(name in output.replace("\r", "").splitlines(),
+                    "relative directory listing omitted the file created in the initial working directory")
+            self.evidence.setdefault("workingDirectoryRuns", []).append({"mode": mode, "file": name, "output": output})
+
         with self.phase(f"{mode}-typed-serial-input"):
             nonce = secrets.randbelow(10**8) + 1
             token = secrets.token_hex(12)

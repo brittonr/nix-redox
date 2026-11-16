@@ -31,6 +31,9 @@ All notable changes to this project are documented here. The format follows
   explicit lifecycle/reset behavior and measured browser resource policies.
 - A separate direct Snix-WASM playground and real Orbital framebuffer/input
   profile, plus matched native-to-browser snapshot capture and resume bindings.
+- A multiline guest-command editor with populate-only examples, actual process
+  output and exit status, and exclusive serial ownership shared by guided
+  actions, package transfer and the playground's explicit guest execution.
 
 ### Changed
 
@@ -40,6 +43,10 @@ All notable changes to this project are documented here. The format follows
   self-hosted Archivo and JetBrains Mono fonts; copy buttons; keyboard-operable
   tabs; and asciinema players that load as they scroll into view. Without
   JavaScript every panel stays visible and the recordings play as MP4s.
+- The live browser showcase now follows the landing page's visual design, with
+  explicit startup/ready/busy states, measured elapsed clocks and download bytes,
+  expandable asset details, and a width-fitting readable serial terminal. The
+  homepage links directly to the live demo while retaining the recording fallback.
 - `shell.nix` and `default.nix` no longer require the `flakes` experimental
   feature or copy the whole working tree into the store; `nix-build` builds the
   default disk image.
@@ -73,6 +80,9 @@ All notable changes to this project are documented here. The format follows
 - Browser serial checks use the terminal's actual native Ctrl+Shift+V paste
   event and verify typed input, CRLF multiline paste, and guest Ctrl+C byte
   delivery rather than treating Ctrl+V's literal-next byte as a paste.
+- Browser demo shells enter their writable home after switchroot instead of
+  retaining init's unreadable initfs working directory. The real-browser gate
+  checks relative file creation and directory listing before terminal workloads.
 - The 64-bit HPET clock source uses its free-running counter, so coalesced
   emulation interrupts do not slow the guest clock.
   External sleep checks separate executable startup with a warmed sleep control.

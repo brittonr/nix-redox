@@ -1,5 +1,9 @@
 :root { color-scheme: dark; font-family: ui-monospace, monospace; }
-body { margin: 0; background: #111; color: #eee; }
-#terminal { padding: 12px; min-height: 500px; overflow: auto; }
+body { margin: 0; min-width: 0; background: #101519; color: #e3ebef; }
+#terminal { box-sizing: border-box; width: 100%; min-width: 0; padding: 12px; min-height: 500px; }
 #display:empty { display: none; }
-.xterm { padding-bottom: 12px; }
+.xterm { width: 100%; min-width: 0; padding-bottom: 12px; }
+.xterm-viewport { overscroll-behavior: contain; }
+@media (max-width: 480px) {
+  #terminal { padding: 8px; }
+}
