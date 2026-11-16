@@ -327,6 +327,7 @@ and evidence rules.
 - [`docs/options.md`](docs/options.md) — generated module options reference
 - [`docs/redox-rebuild.md`](docs/redox-rebuild.md) — host-side builds, generations and rollback
 - [`docs/binary-cache.md`](docs/binary-cache.md) — Cachix setup, trust and usage
+- [`docs/browser-demo.md`](docs/browser-demo.md) — local QEMU-WASM, offline fixtures, immutable releases, snapshots and browser evidence
 - [`docs/nixos-integration.md`](docs/nixos-integration.md) — NixOS module options and VM service
 - [`docs/releases.md`](docs/releases.md) — tag, image assets and verification
 - [`docs/nixtamal.md`](docs/nixtamal.md) — building without flakes; Nixtamal pins

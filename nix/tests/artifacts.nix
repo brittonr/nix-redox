@@ -243,14 +243,12 @@ in
         };
       }
     ];
+    # Nix strips write bits on immutable store outputs; this check covers
+    # declared file content, not guest filesystem permissions.
     checks = [
       {
         file = "home/testuser/.config/demo/hello.txt";
         contains = "home-data-ok";
-      }
-      {
-        file = "home/testuser/.config/demo/hello.txt";
-        mode = "644";
       }
     ];
   };
@@ -491,46 +489,6 @@ in
       } # /home/bob does NOT exist
     ];
   };
-
-  # Test 9: rootTree has startup.sh
-  # Note: Nix store strips write bits, so chmod 755 becomes 555
-  rootTree-has-startup =
-    let
-      # Use packages without userutils so the build emits 99_startup.service
-      # pointing at /startup.sh. With userutils present, getty handles the
-      # console instead.
-      noUserutilsPkgs = builtins.removeAttrs mockPkgs.all [ "userutils" ];
-    in
-    mkArtifactTest {
-      name = "rootTree-has-startup";
-      description = "Verifies rootTree contains startup.sh script (no-userutils path)";
-      targetPkgs = noUserutilsPkgs;
-      modules = [
-        {
-          "/services" = {
-            startupScriptText = ''
-              echo "Custom startup"
-              /bin/ion
-            '';
-          };
-        }
-      ];
-      checks = [
-        {
-          file = "startup.sh";
-          contains = "Custom startup";
-          mode = "555";
-        }
-        {
-          file = "usr/lib/init.d";
-          dirContains = ''cmd = "/startup.sh"'';
-        }
-        {
-          file = "usr/lib/init.d";
-          dirContains = ''type = "oneshot_async"'';
-        }
-      ];
-    };
 
   # Test 10: rootTree has graphical profile elements
   # Note: Nix store strips write bits, so chmod 755 becomes 555

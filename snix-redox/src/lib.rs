@@ -6,6 +6,7 @@
 pub mod activate;
 pub mod bridge;
 pub mod bridge_build;
+pub mod browser_cache;
 pub mod build_proxy;
 pub mod cache;
 pub mod cache_source;

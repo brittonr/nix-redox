@@ -1,0 +1,11 @@
+.graphical-display { background:#101416; color:#e5edf0; padding:1rem; }
+.graphical-toolbar { display:flex; flex-wrap:wrap; gap:.75rem; }
+.graphical-status { min-height:2.5em; }
+.guest-framebuffer { display:block; width:auto; max-width:100%; height:auto; margin:0 auto;
+  /* One backing pixel is one guest pixel. CSS/DPR scaling never changes GOP. */
+  image-rendering:pixelated; background:#000; outline:2px solid transparent; touch-action:none; }
+.guest-framebuffer:focus { outline-color:#64c6c4; cursor:none; }
+.graphical-display:fullscreen { box-sizing:border-box; width:100vw; height:100vh;
+  display:flex; flex-direction:column; align-items:stretch; overflow:auto; }
+.graphical-display:fullscreen .guest-framebuffer { max-height:calc(100vh - 12rem);
+  max-width:100%; object-fit:contain; flex-shrink:1; min-height:0; }

@@ -25,14 +25,23 @@ in
       description = "Kernel package";
     };
     bootloader = {
-      # attrs not derivation: defaultFunc may return {} when package missing
+      # attrs rather than derivation permits lightweight package injection.
       type = t.attrs;
-      defaultFunc = { inputs, options }: 
-        if options.liveMode then
-          inputs.pkgs.pkgs.bootloaderAutoboot or inputs.pkgs.pkgs.bootloader or { }
-        else
-          inputs.pkgs.pkgs.bootloader or { };
-      description = "Bootloader package. Auto-selects autoboot variant when liveMode is true.";
+      defaultFunc = { inputs, options }:
+        let
+          variant =
+            if options.liveMode then
+              if options.autoBoot then "bootloaderLiveAutoboot" else "bootloaderLive"
+            else
+              if options.autoBoot then "bootloaderAutoboot" else "bootloader";
+        in
+        inputs.pkgs.pkgs.${variant}
+          or (throw "boot: required ${variant} package is missing (liveMode=${builtins.toJSON options.liveMode}, autoBoot=${builtins.toJSON options.autoBoot})");
+      description = ''
+        Bootloader package selected independently by liveMode and autoBoot.
+        An explicit package override takes precedence over both options and
+        must implement the requested storage and selection behavior itself.
+      '';
     };
     bootProof = {
       type = t.bool;
@@ -142,6 +151,19 @@ in
         Empty string (default) means normal interactive login.
       '';
     };
+    autoBoot = {
+      type = t.bool;
+      defaultFunc = { options }: options.liveMode;
+      description = ''
+        Skip the graphical bootloader's interactive resolution/mode menu.
+        Does not enable live filesystem loading or change persistence.
+        Defaults to liveMode, preserving unattended live-image behavior and
+        interactive ordinary disk boot. Set explicitly to decouple selection
+        from storage: true with liveMode=false boots unattended from disk;
+        false with liveMode=true retains the interactive live menu.
+        Serial-only firmware may bypass the graphical menu in either mode.
+      '';
+    };
     liveMode = {
       type = t.bool;
       default = false;
@@ -151,6 +173,10 @@ in
         lived provides a COW overlay so writes go to memory, not disk.
         When true, storage drivers (nvmed, ahcid) are excluded from
         initfs since the rootfs is served from RAM, not a real disk.
+        Defaults autoBoot to true for compatibility; an explicit autoBoot
+        value controls menu selection independently. The interactive menu's
+        upstream 'l' key can still toggle live loading for that boot only;
+        it does not regenerate initfs or restore omitted storage drivers.
       '';
     };
     initDebug = {

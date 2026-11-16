@@ -94,13 +94,14 @@ impl CacheSource {
     fn fetch_package_index(&self, url: &str) -> Result<PackageIndex, Box<dyn std::error::Error>> {
         let index_url = format!("{url}/packages.json");
         let body = http_get_text(&index_url)?;
-        serde_json::from_str(&body).map_err(|e| {
+        let index: PackageIndex = serde_json::from_str(&body).map_err(|e| {
             format!(
                 "failed to parse packages.json from {index_url}: {e}; body starts with {:?}",
                 preview_bytes(body.as_bytes(), PARSE_ERROR_PREVIEW_BYTES)
             )
-            .into()
-        })
+        })?;
+        index.validate()?;
+        Ok(index)
     }
 
     // ── NarInfo ────────────────────────────────────────────────────────
@@ -124,7 +125,13 @@ impl CacheSource {
         };
 
         let body_static: &'static str = Box::leak(body.into_boxed_str());
-        Ok(NarInfo::parse(body_static)?)
+        let narinfo = NarInfo::parse(body_static)?;
+        if narinfo.store_path != sp.as_ref() {
+            return Err(format!("narinfo identity mismatch for {}: received {}",
+                sp.to_absolute_path(), narinfo.store_path.to_absolute_path()).into());
+        }
+        validate_nar_url(&narinfo.url)?;
+        Ok(narinfo)
     }
 
     fn fetch_remote_narinfo(
@@ -146,6 +153,7 @@ impl CacheSource {
         &self,
         narinfo: &NarInfo<'_>,
     ) -> Result<Box<dyn Read + Send>, Box<dyn std::error::Error>> {
+        validate_nar_url(&narinfo.url)?;
         match self {
             CacheSource::Local(path) => {
                 let nar_path = path.join(&*narinfo.url);
@@ -396,6 +404,17 @@ fn format_size(bytes: u64) -> String {
     }
 }
 
+/// Neither local joins nor remote fetches may reinterpret a payload URL as
+/// an absolute path, traversal, encoded path, or a different cache source.
+fn validate_nar_url(url: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if url.is_empty() || url.contains([':', '\\', '%'])
+        || url.split('/').any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        return Err(format!("unsafe NAR URL: {url:?}; expected a relative cache path").into());
+    }
+    Ok(())
+}
+
 // ── Tests ──────────────────────────────────────────────────────────────────
 
 #[cfg(test)]
@@ -575,5 +594,29 @@ mod tests {
 
     fn store_path(path: &str) -> StorePath<String> {
         StorePath::from_absolute_path(path.as_bytes()).unwrap()
+    }
+
+    #[test]
+    fn payload_urls_stay_relative_to_cache_root() {
+        for url in ["nar/hash.nar.zst", "hash.nar"] {
+            validate_nar_url(url).unwrap();
+        }
+        for url in ["", "/tmp/payload", "../payload", "nar/../payload", "nar/./payload",
+                    "nar//payload", "https://other/cache.nar", "nar\\payload", "nar/%2e%2e/payload"] {
+            assert!(validate_nar_url(url).is_err(), "accepted {url:?}");
+        }
+    }
+
+    #[test]
+    fn narinfo_cannot_substitute_another_store_identity() {
+        let server = serve_once(
+            "200 OK",
+            "StorePath: /nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-other\nURL: nar/other.nar\nCompression: none\nNarHash: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\nNarSize: 0\n",
+            "text/plain",
+        );
+        let source = CacheSource::Remote(server);
+        let path = store_path("/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-requested");
+        let error = source.fetch_narinfo(&path).unwrap_err().to_string();
+        assert!(error.contains("narinfo identity mismatch"));
     }
 }

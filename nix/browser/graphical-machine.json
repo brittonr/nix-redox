@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "variant": "graphical-v1",
+  "engineVariant": "browser-display-v1",
+  "target": "x86_64-unknown-redox",
+  "machine": "pc-i440fx-8.2",
+  "cpu": "qemu64",
+  "vcpus": 1,
+  "ramMiB": 1024,
+  "ram": "1024M",
+  "accelerator": "tcg,thread=multi",
+  "firmware": {
+    "mode": "bios",
+    "file": "OVMF.fd",
+    "mutable": []
+  },
+  "devices": [
+    "virtio-blk-pci",
+    "isa-serial",
+    "VGA",
+    "i8042",
+    "ps2-kbd",
+    "ps2-mouse",
+    "vmmouse"
+  ],
+  "display": {
+    "backend": "redox-browser-rgba-v1",
+    "selector": "browser",
+    "model": "stdvga",
+    "requestedMode": { "width": 1024, "height": 768 },
+    "modeSelection": "firmware-gop-edid",
+    "guestModeResizing": false,
+    "pixelFormat": "RGBA8888"
+  },
+  "input": {
+    "keyboard": "ps2",
+    "pointer": "ps2-vmmouse",
+    "buttons": 3,
+    "wheel": true,
+    "usb": false
+  },
+  "args": [
+    "-machine", "pc-i440fx-8.2",
+    "-cpu", "qemu64",
+    "-smp", "1",
+    "-m", "{ram}",
+    "-accel", "tcg,thread=multi",
+    "-L", "{pack}",
+    "-bios", "{pack}/OVMF.fd",
+    "-drive", "file={disk},format=raw,if=none,id=redox,cache=writeback",
+    "-device", "virtio-blk-pci,drive=redox",
+    "-display", "browser,gl=off",
+    "-vga", "std",
+    "-global", "VGA.xres=1024",
+    "-global", "VGA.yres=768",
+    "-chardev", "stdio,id=serial0,signal=off",
+    "-serial", "chardev:serial0",
+    "-monitor", "none",
+    "-nic", "none",
+    "-no-reboot"
+  ]
+}

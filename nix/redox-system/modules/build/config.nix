@@ -14,7 +14,7 @@ let
 
   graphicsEnabled = inputs.graphics.enable;
   networkingEnabled = inputs.networking.enable;
-  usbEnabled = inputs.hardware.usbEnable || graphicsEnabled;
+  usbEnabled = inputs.hardware.usbEnable;
   audioEnabled = inputs.hardware.audioEnable;
   initfsEnableGraphics = inputs.boot.initfsEnableGraphics || graphicsEnabled;
   initfsSizeMB = inputs.boot.initfsSizeMB;

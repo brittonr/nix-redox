@@ -19,7 +19,7 @@
 #   sysrootVendor = redoxLib.sysroot.vendor;
 #
 #   # Get RUSTFLAGS (after relibc is built)
-#   rustFlags = redoxLib.mkRustFlags { inherit relibc; };
+#   rustFlags = redoxLib.mkRustFlags { inherit relibc rustToolchain; };
 #
 # For package definitions, see ../pkgs/default.nix
 
@@ -62,11 +62,12 @@ rec {
   # - mkRustFlagsString: Composable flag builder
   # - mkCrossEnvScript: Shell snippet that exports all cross-compilation env vars
   mkRustFlags =
-    { relibc }:
+    { relibc, rustToolchain }:
     import ./rust-flags.nix {
       inherit
         lib
         pkgs
+        rustToolchain
         redoxTarget
         relibc
         ;

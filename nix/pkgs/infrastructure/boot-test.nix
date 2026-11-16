@@ -7,11 +7,13 @@
 #   1. "Redox OS Bootloader"   → UEFI loaded our bootloader
 #   2. "Redox OS starting"     → kernel is executing
 #   3. "Boot Complete"         → rootfs mounted, init.d scripts ran
-#   4. "ion>" or "Welcome"     → shell/login prompt ready
+#   4. Fresh serial nonce output → guest shell executed a command
 #
 # Usage:
 #   nix run .#boot-test              # Auto-detect (CH if KVM, else QEMU)
 #   nix run .#boot-test -- --qemu    # Force QEMU TCG mode
+#   nix run .#boot-test -- --qemu --accel auto # QEMU with host-aware acceleration
+#   nix run .#boot-test -- --qemu --accel tcg --cpus 1 --artifacts ./tcg-proof
 #   nix run .#boot-test -- --timeout 120
 
 {
@@ -31,6 +33,9 @@ vmTest.mkVmTest {
   inherit diskImage bootloader;
   memoryMB = vmConfig.memorySize or 1024;
   cpus = vmConfig.cpus or 2;
+  acceleration = vmConfig.acceleration or "auto";
+  tcgCpus = vmConfig.tcgCpus or 1;
+  machineType = vmConfig.qemuMachineType or "pc";
   defaultTimeout = 90;
   chMinTimeout = vmConfig.chMinTimeout or 180;
   trackShell = true;

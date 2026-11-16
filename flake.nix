@@ -52,56 +52,57 @@
       inputs.nixpkgs.follows = "nixpkgs";
     };
 
-    # Redox source repositories
+    # Use Git instead of GitLab's archive API, which denies hosted CI runners.
+    # Revisions and NAR identities remain pinned in flake.lock.
     relibc-src = {
-      url = "gitlab:redox-os/relibc/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/relibc.git?ref=master&shallow=1";
       flake = false;
     };
 
     kernel-src = {
-      url = "gitlab:redox-os/kernel/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/kernel.git?ref=master&shallow=1";
       flake = false;
     };
 
     redoxfs-src = {
-      url = "gitlab:redox-os/redoxfs/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/redoxfs.git?ref=master&shallow=1";
       flake = false;
     };
 
     installer-src = {
-      url = "gitlab:redox-os/installer/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/installer.git?ref=master&shallow=1";
       flake = false;
     };
 
     pkgutils-src = {
-      url = "gitlab:redox-os/pkgutils/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/pkgutils.git?ref=master&shallow=1";
       flake = false;
     };
 
     ion-src = {
-      url = "gitlab:redox-os/ion/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/ion.git?ref=master&shallow=1";
       flake = false;
     };
 
     helix-src = {
-      url = "gitlab:redox-os/helix/redox?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/helix.git?ref=redox&shallow=1";
       flake = false;
     };
 
     # The main Redox repository (contains cookbook)
     redox-src = {
-      url = "gitlab:redox-os/redox/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/redox.git?ref=master&shallow=1";
       flake = false;
     };
 
     # relibc submodules
     openlibm-src = {
-      url = "gitlab:redox-os/openlibm/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/openlibm.git?ref=master&shallow=1";
       flake = false;
     };
 
     dlmalloc-rs-src = {
-      url = "gitlab:redox-os/dlmalloc-rs/main?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/dlmalloc-rs.git?ref=main&shallow=1";
       flake = false;
     };
 
@@ -109,7 +110,7 @@
     # NOTE: Currently blocked due to syscall 0.6.0 API incompatibility
     # See nix/pkgs/userspace/orbital.nix for details
     redox-scheme-src = {
-      url = "gitlab:redox-os/redox-scheme/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/redox-scheme.git?ref=master&shallow=1";
       flake = false;
     };
 
@@ -126,36 +127,36 @@
     };
 
     redox-path-src = {
-      url = "gitlab:redox-os/redox-path/main?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/redox-path.git?ref=main&shallow=1";
       flake = false;
     };
 
     # bootloader
     bootloader-src = {
-      url = "gitlab:redox-os/bootloader/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/bootloader.git?ref=master&shallow=1";
       flake = false;
     };
 
     # bootloader dependencies (redox uefi library)
     uefi-src = {
-      url = "gitlab:redox-os/uefi/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/uefi.git?ref=master&shallow=1";
       flake = false;
     };
 
     # base - essential system components (init, drivers, daemons)
     base-src = {
-      url = "gitlab:redox-os/base/main?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/base.git?ref=main&shallow=1";
       flake = false;
     };
 
     # Keep graphics-ipc/inputd at the exact base revision in Orbital's Cargo.lock.
     base-orbital-src = {
-      url = "gitlab:redox-os/base/c4f68cdce365713a9557c84a98642226ae62b073?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/base.git?rev=c4f68cdce365713a9557c84a98642226ae62b073&shallow=1";
       flake = false;
     };
 
     orbclient-src = {
-      url = "gitlab:redox-os/orbclient/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/orbclient.git?ref=master&shallow=1";
       flake = false;
     };
 
@@ -172,19 +173,19 @@
 
     # binutils - binary utilities (strings, hex, hexdump)
     binutils-src = {
-      url = "gitlab:redox-os/binutils/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/binutils.git?ref=master&shallow=1";
       flake = false;
     };
 
     # extrautils - extended utilities (grep, tar, gzip, less, etc.)
     extrautils-src = {
-      url = "gitlab:redox-os/extrautils/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/extrautils.git?ref=master&shallow=1";
       flake = false;
     };
 
     # sodium - vi-like text editor
     sodium-src = {
-      url = "gitlab:redox-os/sodium/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/sodium.git?ref=master&shallow=1";
       flake = false;
     };
 
@@ -196,46 +197,46 @@
 
     # libredox - stable API for Redox OS
     libredox-src = {
-      url = "gitlab:redox-os/libredox/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/libredox.git?ref=master&shallow=1";
       flake = false;
     };
 
     # netutils - network utilities (dhcpd, dnsd, ping, ifconfig, nc)
     netutils-src = {
-      url = "gitlab:redox-os/netutils/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/netutils.git?ref=master&shallow=1";
       flake = false;
     };
 
     # Orbital ecosystem - graphical desktop support
     orbital-src = {
-      url = "gitlab:redox-os/orbital/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/orbital.git?ref=master&shallow=1";
       flake = false;
     };
 
     orbdata-src = {
-      url = "gitlab:redox-os/orbdata/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/orbdata.git?ref=master&shallow=1";
       flake = false;
     };
 
     orbterm-src = {
-      url = "gitlab:redox-os/orbterm/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/orbterm.git?ref=master&shallow=1";
       flake = false;
     };
 
     orbutils-src = {
-      url = "gitlab:redox-os/orbutils/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/orbutils.git?ref=master&shallow=1";
       flake = false;
     };
 
     # orbfont - font rendering for Orbital
     orbfont-src = {
-      url = "gitlab:redox-os/orbfont/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/orbfont.git?ref=master&shallow=1";
       flake = false;
     };
 
     # orbimage - image loading for Orbital
     orbimage-src = {
-      url = "gitlab:redox-os/orbimage/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/orbimage.git?ref=master&shallow=1";
       flake = false;
     };
 
@@ -245,19 +246,19 @@
 
     # redox-log - logging library for Redox
     redox-log-src = {
-      url = "gitlab:redox-os/redox-log/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/redox-log.git?ref=master&shallow=1";
       flake = false;
     };
 
     # userutils - user management utilities (getty, login, passwd, su, sudo)
     userutils-src = {
-      url = "gitlab:redox-os/userutils/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/userutils.git?ref=master&shallow=1";
       flake = false;
     };
 
     # termion - terminal I/O library for Redox
     termion-src = {
-      url = "gitlab:redox-os/termion/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/termion.git?ref=master&shallow=1";
       flake = false;
     };
 
@@ -311,49 +312,49 @@
 
     # smith - text editor (Redox-native)
     smith-src = {
-      url = "gitlab:redox-os/Smith/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/Smith.git?ref=master&shallow=1";
       flake = false;
     };
 
     # strace-redox - system call tracer (Redox-native)
     strace-redox-src = {
-      url = "gitlab:redox-os/strace-redox/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/strace-redox.git?ref=master&shallow=1";
       flake = false;
     };
 
     # findutils - find command (Redox-native)
     findutils-src = {
-      url = "gitlab:redox-os/findutils/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/findutils.git?ref=master&shallow=1";
       flake = false;
     };
 
     # contain - container/namespace tool (Redox-native)
     contain-src = {
-      url = "gitlab:redox-os/contain/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/contain.git?ref=master&shallow=1";
       flake = false;
     };
 
     # pkgar - package archive tool (Redox-native)
     pkgar-src = {
-      url = "gitlab:redox-os/pkgar/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/pkgar.git?ref=master&shallow=1";
       flake = false;
     };
 
     # exampled - example scheme daemon (Redox-native)
     exampled-src = {
-      url = "gitlab:redox-os/exampled/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/exampled.git?ref=master&shallow=1";
       flake = false;
     };
 
     # games - terminal games collection (Redox-native)
     games-src = {
-      url = "gitlab:redox-os/games/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/games.git?ref=master&shallow=1";
       flake = false;
     };
 
     # openssl - Redox-patched OpenSSL fork (v1 branch)
     openssl-redox-src = {
-      url = "gitlab:redox-os/openssl/redox-v1?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/openssl.git?ref=redox-v1&shallow=1";
       flake = false;
     };
 
@@ -371,7 +372,7 @@
 
     # ca-certificates - TLS root certificate bundle
     ca-certificates-src = {
-      url = "gitlab:redox-os/ca-certificates/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/ca-certificates.git?ref=master&shallow=1";
       flake = false;
     };
 
@@ -383,7 +384,7 @@
 
     # netdb - network database (hosts, services, protocols)
     netdb-src = {
-      url = "gitlab:redox-os/netdb/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/netdb.git?ref=master&shallow=1";
       flake = false;
     };
 
@@ -406,31 +407,31 @@
 
     # gdb-protocol - GDB Remote Serial Protocol implementation
     gdb-protocol-src = {
-      url = "gitlab:redox-os/gdb-protocol/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/gdb-protocol.git?ref=master&shallow=1";
       flake = false;
     };
 
     # intelflash - Intel SPI flash read/write library
     intelflash-src = {
-      url = "gitlab:redox-os/intelflash/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/intelflash.git?ref=master&shallow=1";
       flake = false;
     };
 
     # redox-buffer-pool - zero-copy shared buffer management for drivers
     buffer-pool-src = {
-      url = "gitlab:redox-os/redox-buffer-pool/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/redox-buffer-pool.git?ref=master&shallow=1";
       flake = false;
     };
 
     # kprofiling - kernel profiling data converter
     kprofiling-src = {
-      url = "gitlab:redox-os/kprofiling/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/kprofiling.git?ref=master&shallow=1";
       flake = false;
     };
 
     # redoxer - run Redox programs from Linux via KVM
     redoxer-src = {
-      url = "gitlab:redox-os/redoxer/master?host=gitlab.redox-os.org";
+      url = "git+https://gitlab.redox-os.org/redox-os/redoxer.git?ref=master&shallow=1";
       flake = false;
     };
   };
@@ -448,6 +449,7 @@
       modules = [
         (import ./nix/flake-modules/packages.nix)
         (import ./nix/flake-modules/system.nix)
+        (import ./nix/flake-modules/browser.nix)
         (import ./nix/flake-modules/apps.nix)
         (import ./nix/flake-modules/devshells.nix)
         (import ./nix/flake-modules/checks.nix)
@@ -480,6 +482,8 @@
               graphical = mkSys [ ./nix/redox-system/profiles/graphical.nix ];
               cloud = mkSys [ ./nix/redox-system/profiles/cloud-hypervisor.nix ];
               self-hosting = mkSys [ ./nix/redox-system/profiles/self-hosting.nix ];
+              browser-demo = self'.legacyPackages.browserSystem;
+              browser-graphical = self'.legacyPackages.graphicalSystem;
             }
           );
 

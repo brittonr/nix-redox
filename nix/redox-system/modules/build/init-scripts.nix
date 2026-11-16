@@ -361,7 +361,8 @@ let
         ''description = "Startup shell"''
         ""
         "[service]"
-        ''cmd = "/startup.sh"''
+        ''cmd = "/bin/ion"''
+        ''args = ["-c", "/startup.sh < /scheme/debug/no-preserve > /scheme/debug/no-preserve ^> /scheme/debug/no-preserve"]''
         ''type = "oneshot_async"''
       ];
       directory = "usr/lib/init.d";

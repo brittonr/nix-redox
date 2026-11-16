@@ -4,34 +4,82 @@ on:
   push:
     branches: [main]
     paths:
-      - "site/**"
-      - ".github/workflows/pages.yml"
+      - 'site/**'
+      - 'nix/**'
+      - 'snix-redox/**'
+      - 'snix-wasm/**'
+      - 'src/**'
+      - 'flake.*'
+      - 'default.nix'
+      - '.github/workflows/pages.yml'
+      - '.github/workflows/browser.yml'
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
+  build:
+    name: Build and prove exact browser revision
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = false
+      - name: Build deploy tree and delivery tests
+        run: |
+          nix build .#browser-site --out-link browser-site
+          nix run .#browser-delivery-tests
+      - name: Real Chromium cold and snapshot gate
+        run: nix run .#browser-smoke-test -- --output browser-evidence
+      - name: Enforce actual Pages size limit
+        # https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits
+        # Published sites <=1 GB; deployment <=10 minutes; soft bandwidth 100 GB/month.
+        run: |
+          python3 - <<'PY'
+          import pathlib
+          root = pathlib.Path('browser-site')
+          size = sum(p.stat().st_size for p in root.rglob('*') if p.is_file())
+          print(f'Published logical file bytes (including duplicated entrypoints/notices): {size}')
+          if size > 1_000_000_000:
+              raise SystemExit('Unsupported GitHub Pages artifact: exceeds 1 GB published-site limit. Use direct COOP/COEP hosting; do not drop sources, notices, or guest assets.')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-evidence-${{ github.sha }}
+          path: browser-evidence/
+          if-no-files-found: error
+          retention-days: 30
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: browser-site
+
   deploy:
-    name: Deploy landing page
+    name: Publish proven complete tree
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
+      # No repository code executes in this privileged job. It consumes only the
+      # artifact built and gated in this same trusted-main workflow run.
       - uses: actions/configure-pages@v5
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
       - id: deployment
         uses: actions/deploy-pages@v4

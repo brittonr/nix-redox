@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "target": "x86_64-unknown-redox",
+  "fixtureRoot": "/etc/browser-demo",
+  "readinessMarker": "REDOX_BROWSER_DEMO_READY:v1:shell=1:snix=1:initial=1",
+  "notReadyMarker": "REDOX_BROWSER_DEMO_NOT_READY:v1",
+  "suiteStart": "FUNC_TESTS_START",
+  "suiteComplete": "FUNC_TESTS_COMPLETE",
+  "testPrefix": "FUNC_TEST",
+  "tests": [
+    "initial-state",
+    "offline-eval",
+    "cache-package-absent",
+    "offline-install-execute",
+    "offline-remove",
+    "fresh-build-first",
+    "fresh-build-second",
+    "local-rebuild",
+    "generation-state",
+    "actual-rollback",
+    "final-package-state"
+  ],
+  "commands": {
+    "all": "/nix/system/profile/bin/bash /etc/browser-demo/run.sh all",
+    "checkInitial": "/nix/system/profile/bin/bash /etc/browser-demo/ready.sh --check-only",
+    "buildSelectedInput": "/nix/system/profile/bin/bash /etc/browser-demo/run.sh build INPUT",
+    "framedAll": "browser_command TOKEN /nix/system/profile/bin/bash /etc/browser-demo/run.sh all",
+    "capture": "/nix/system/profile/bin/bash /etc/browser-demo/capture.sh TOKEN"
+  },
+  "completion": {
+    "format": "REDOX_BROWSER_DEMO_COMMAND:TOKEN:EXIT_STATUS",
+    "tokenPattern": "^[A-Za-z0-9_-]+$",
+    "successExitStatus": 0,
+    "requireFreshRandomToken": true,
+    "matchWholeLine": true
+  },
+  "capture": {
+    "readyFormat": "REDOX_BROWSER_CAPTURE_READY:v1:TOKEN",
+    "resumeLineFormat": "REDOX_BROWSER_RESUME:v1:TOKEN",
+    "resumedFormat": "REDOX_BROWSER_RESUMED:v1:TOKEN",
+    "tokenPattern": "^[A-Za-z0-9_-]+$",
+    "flushExecutable": "/nix/system/profile/bin/browser-demo-flush",
+    "flushRoots": ["/etc", "/nix", "/var", "/tmp", "/root", "/home"],
+    "requireSuccessfulFlushBeforeReady": true,
+    "snapshotWhileWaitingForResumeLine": true
+  },
+  "evaluationFixtures": {
+    "root": "/playground/v1",
+    "manifest": "/playground/v1/manifest.json",
+    "source": "snix-wasm/fixtures/v1",
+    "preserveRelativePaths": true,
+    "bundledImport": "/playground/v1/lib/math.nix",
+    "guestCommand": "/bin/snix eval --file /playground/v1/FILE"
+  },
+  "build": {
+    "declaredInput": "input",
+    "inputPattern": "^[A-Za-z0-9_-]+$",
+    "baselineInputs": ["first", "second"],
+    "expectedContents": {"first": "first\n", "second": "second\n"},
+    "requireAbsentOutputBeforeBuild": true,
+    "requireDistinctOutputPaths": true,
+    "builder": "/nix/system/profile/bin/bash",
+    "derivation": "/etc/browser-demo/build.nix"
+  },
+  "package": {
+    "name": "ripgrep",
+    "cache": "/nix/cache",
+    "profile": "/nix/var/snix/profiles/default",
+    "executable": "/nix/var/snix/profiles/default/bin/rg",
+    "preinstalled": false,
+    "expectedMatch": "REDOX_BROWSER_RIPGREP_SAMPLE"
+  },
+  "configuration": {
+    "before": "/etc/browser-demo/before.nix",
+    "after": "/etc/browser-demo/after.nix",
+    "hostnameBefore": "browser-demo",
+    "hostnameAfter": "browser-demo-changed",
+    "initialGeneration": 1,
+    "rebuiltGeneration": 2,
+    "rollbackGeneration": 3,
+    "rollbackTarget": 1,
+    "preservePackageSet": true
+  },
+  "resultsDirectory": "/var/lib/browser-demo",
+  "reset": {
+    "method": "discard-session-disk-and-copy-pristine-image",
+    "reuseMutatedDisk": false,
+    "verify": "readiness marker and initial-state test on the second fresh boot",
+    "restores": ["empty-user-profile", "absent-first-and-second-build-outputs", "hostname-browser-demo", "generation-1", "absent-results-directory"]
+  },
+  "machine": {
+    "serialOnly": true,
+    "storage": "virtio-blk",
+    "cpus": 1,
+    "networking": false,
+    "graphics": false,
+    "audio": false,
+    "usb": false,
+    "autoBoot": true,
+    "liveMode": false
+  },
+  "resources": {
+    "sizePolicy": "measured-browser-profile-with-explicit-regression-ceilings",
+    "guestRamPolicy": "1024-MiB-workload-proven-not-a-verified-minimum",
+    "requiredMeasurementFields": ["compressedTransferBytes", "logicalDiskBytes", "guestRamMiB", "emulatorMemorySettings", "observedBrowserMemoryBytes"],
+    "baseline": {
+      "browser": "Chromium 148.0.7778.167",
+      "runner": "Linux x86_64; AMD Ryzen 9 9950X3D; 32 hardware threads",
+      "graphicalRevision": "b9132e1ea4c0a57df4b64e3f1447bad545e13603bc085910754c46fc76a7890b",
+      "serialRevision": "a33dd73a705a1863b6858b2784983fb32da23fc795b76230a7cfe9a86943ac59",
+      "readinessMs": 85294.45939097786,
+      "firstCommandMs": 12756.609470001422,
+      "serialFixturesMs": 406405.604561005,
+      "graphicalFixturesMs": 640339.3004669924,
+      "compressedDiskBytes": 342825961,
+      "sampledProcessRssBytes": 5078183936,
+      "sampledProcessPssBytes": 4716443648,
+      "scope": "Complete graphical gate and completed serial mandatory-fixture phase; sampled browser aggregate memory, not an OS high-water mark",
+      "headroom": "3x readiness/first-command rounded up to seconds; retained 900s fixture bound above both measured suites; 1.25x compressed disk rounded up to MiB; 1.5x sampled process memory rounded up to GiB"
+    },
+    "ceilings": {
+      "readinessMs": 256000,
+      "firstCommandMs": 39000,
+      "mandatoryFixturesMs": 900000,
+      "compressedDiskBytes": 428867584,
+      "logicalDiskBytes": 1073741824,
+      "guestRamMiB": 1024,
+      "wasmMemoryBytes": 3221225472,
+      "sampledProcessRssBytes": 8589934592,
+      "sampledProcessPssBytes": 7516192768
+    },
+    "guestRam512MiB": "unverified-experiment"
+  }
+}

@@ -1,8 +1,8 @@
 # Shared VM test runner infrastructure for RedoxOS
 #
 # Extracts common boilerplate from boot-test, functional-test, network-test:
-#   - CLI arg parsing (--qemu, --ch, --timeout, --verbose)
-#   - VMM auto-detection (KVM → Cloud Hypervisor, fallback → QEMU TCG)
+#   - Backend and explicit auto/kvm/tcg acceleration policy
+#   - Shared policy with ordinary QEMU runners
 #   - VM lifecycle (disk copy, launch, cleanup trap)
 #   - Millisecond timing (ms_now, fmt_ms)
 #   - Boot milestone polling (bootloader → kernel → boot complete)
@@ -21,6 +21,7 @@ let
   grep = "${pkgs.gnugrep}/bin/grep";
   sed = "${pkgs.gnused}/bin/sed";
 
+  policy = builtins.readFile ./vm-policy.sh;
   # Bash helper functions shared by all VM tests.
   bashLib = ''
     # === Color support ===
@@ -44,13 +45,27 @@ let
 
     # === Work directory + cleanup ===
     WORK_DIR=$(mktemp -d)
+    ARTIFACT_DIR="''${REDOX_VM_ARTIFACTS_DIR:-''${REDOX_VM_MONITOR_DIR:-}}"
+    if [ -z "$ARTIFACT_DIR" ]; then
+      ARTIFACT_DIR=$(mktemp -d "''${TMPDIR:-/tmp}/redox-vm-artifacts.XXXXXX")
+    fi
+    mkdir -p "$ARTIFACT_DIR"
+    echo "  Artifacts: $ARTIFACT_DIR"
     VM_PID=""
     TAIL_PID=""
     MONITOR_PID=""
+    SERIAL_PID=""
+    RUN_START_MS=$(ms_now)
     cleanup() {
-      if [ -n "''${VM_PID:-}" ] && kill -0 "$VM_PID" 2>/dev/null; then
-        kill "$VM_PID" 2>/dev/null || true
-        wait "$VM_PID" 2>/dev/null || true
+      TEST_EXIT_STATUS=$?
+      trap - EXIT
+      VM_EXIT_STATUS=not-started
+      if [ -n "''${VM_PID:-}" ]; then
+        if kill -0 "$VM_PID" 2>/dev/null; then
+          kill "$VM_PID" 2>/dev/null || true
+        fi
+        VM_EXIT_STATUS=0
+        wait "$VM_PID" 2>/dev/null || VM_EXIT_STATUS=$?
       fi
       if [ -n "''${TAIL_PID:-}" ] && kill -0 "$TAIL_PID" 2>/dev/null; then
         kill "$TAIL_PID" 2>/dev/null || true
@@ -58,6 +73,22 @@ let
       if [ -n "''${MONITOR_PID:-}" ] && kill -0 "$MONITOR_PID" 2>/dev/null; then
         kill "$MONITOR_PID" 2>/dev/null || true
       fi
+      if [ -n "''${SERIAL_PID:-}" ]; then
+        kill "$SERIAL_PID" 2>/dev/null || true
+        wait "$SERIAL_PID" 2>/dev/null || true
+      fi
+      {
+        echo "test_exit_status=$TEST_EXIT_STATUS"
+        echo "vm_exit_status=$VM_EXIT_STATUS"
+        echo "elapsed_ms=$(( $(ms_now) - RUN_START_MS ))"
+        echo "bootloader=''${M_BOOTLOADER:-0}"
+        echo "kernel=''${M_KERNEL:-0}"
+        echo "boot=''${M_BOOT:-0}"
+        echo "shell=''${M_SHELL:-0}"
+      } > "$ARTIFACT_DIR/result.env"
+      for capture in "$WORK_DIR"/*.log; do
+        [ ! -f "$capture" ] || cp "$capture" "$ARTIFACT_DIR/"
+      done
       if [ -n "''${REDOX_VM_MONITOR_DIR:-}" ]; then
         mkdir -p "$REDOX_VM_MONITOR_DIR"
         if [ -e "''${CAPTURE_LOG:-$SERIAL_LOG}" ]; then
@@ -73,6 +104,7 @@ let
         fi
       fi
       rm -rf "$WORK_DIR"
+      exit "$TEST_EXIT_STATUS"
     }
     trap cleanup EXIT
 
@@ -80,6 +112,29 @@ let
     RESULT_LOG="$SERIAL_LOG"
     touch "$SERIAL_LOG"
 
+    record_vm_execution() {
+      # argv.nul is lossless; command.sh retains the exact readable invocation.
+      printf '%s\0' "''${VM_COMMAND[@]}" > "$ARTIFACT_DIR/argv.nul"
+      printf '%q ' "''${VM_COMMAND[@]}" > "$ARTIFACT_DIR/command.sh"
+      printf '\n' >> "$ARTIFACT_DIR/command.sh"
+      "''${VM_COMMAND[0]}" --version > "$ARTIFACT_DIR/vmm-version.log" 2>&1 || return $?
+      {
+        echo "executable=''${VM_COMMAND[0]}"
+        echo "requested_backend=$REQUESTED_MODE"
+        echo "requested_acceleration=$REQUESTED_ACCEL"
+        echo "backend=$MODE"
+        echo "acceleration=$RESOLVED_ACCEL"
+        echo "cpu=$CPU_MODEL"
+        echo "cpus=$VCPUS"
+        echo "machine=$MACHINE_TYPE"
+        echo "memory_mb=$MEMORY_MB"
+        echo "guest_image=$GUEST_IMAGE_SOURCE"
+        echo "firmware=$FIRMWARE_SOURCE"
+        echo "bootloader=$BOOTLOADER_SOURCE"
+      } > "$ARTIFACT_DIR/machine.env"
+      ${pkgs.coreutils}/bin/sha256sum "$GUEST_IMAGE_SOURCE" "$FIRMWARE_SOURCE" \
+        ''${BOOTLOADER_SOURCE:+"$BOOTLOADER_SOURCE"} > "$ARTIFACT_DIR/identities.sha256"
+    }
     start_vm_monitor() {
       if [ -z "''${REDOX_VM_MONITOR_DIR:-}" ]; then
         return 0
@@ -245,7 +300,9 @@ let
       bootloader,
       memoryMB ? 1024,
       cpus ? 2,
+      machineType ? "pc",
       extraArgs ? "",
+      shellProbe ? false,
       diskOnly ? false,
     }:
     ''
@@ -253,31 +310,45 @@ let
       cp ${pkgs.OVMF.fd}/FV/OVMF.fd "$OVMF"
       chmod +w "$OVMF"
 
-      KVM_FLAGS=""
-      CPU_MODEL="qemu64"
-      if [ -w /dev/kvm ] 2>/dev/null; then
-        KVM_FLAGS="-enable-kvm"
-        CPU_MODEL="host"
-      fi
-
-      ${pkgs.qemu}/bin/qemu-system-x86_64 \
-        -M pc \
-        -cpu $CPU_MODEL \
-        -m ${toString memoryMB} \
-        -smp ${toString cpus} \
-        $KVM_FLAGS \
-        -serial file:"$SERIAL_LOG" \
-        -device isa-debug-exit,iobase=0xf4,iosize=0x04 \
-        -bios "$OVMF" \
-        ${lib.optionalString (!diskOnly) "-kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI"} \
-        -drive file="$IMAGE",format=raw,if=none,id=disk0 \
-        -device virtio-blk-pci,drive=disk0 \
-        -display none \
-        -vga none \
-        -no-reboot \
-        ${extraArgs} \
-        &>"$WORK_DIR/vmm.log" &
+      MACHINE_TYPE=${lib.escapeShellArg machineType}
+      MEMORY_MB=${toString memoryMB}
+      FIRMWARE_SOURCE=${pkgs.OVMF.fd}/FV/OVMF.fd
+      BOOTLOADER_SOURCE=${lib.escapeShellArg (if diskOnly then "" else "${bootloader}/boot/EFI/BOOT/BOOTX64.EFI")}
+      QEMU_EXTRA_ARGS=( ${extraArgs} )
+      redox_vm_validate_qemu_extra "''${QEMU_EXTRA_ARGS[@]}" || exit $?
+      VM_COMMAND=(
+        ${pkgs.qemu}/bin/qemu-system-x86_64
+        -M "$MACHINE_TYPE"
+        "''${QEMU_ACCEL_ARGS[@]}"
+        -m "$MEMORY_MB"
+        -smp "$VCPUS"
+        ${if shellProbe then ''
+          -chardev socket,id=serial0,path="$WORK_DIR/serial.sock",server=on,wait=on
+          -serial chardev:serial0
+        '' else ''-serial file:"$SERIAL_LOG"''}
+        -device isa-debug-exit,iobase=0xf4,iosize=0x04
+        -bios "$OVMF"
+        ${lib.optionalString (!diskOnly) "-kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI"}
+        -drive file="$IMAGE",format=raw,if=none,id=disk0
+        -device virtio-blk-pci,drive=disk0
+        -display none
+        -vga none
+        -no-reboot
+        "''${QEMU_EXTRA_ARGS[@]}"
+      )
+      record_vm_execution || exit $?
+      "''${VM_COMMAND[@]}" &>"$WORK_DIR/vmm.log" &
       VM_PID=$!
+      ${lib.optionalString shellProbe ''
+        mkfifo "$WORK_DIR/serial-input"
+        exec {SERIAL_INPUT_FD}<>"$WORK_DIR/serial-input"
+        (
+          while [ ! -S "$WORK_DIR/serial.sock" ] && kill -0 "$VM_PID" 2>/dev/null; do sleep 0.05; done
+          exec ${pkgs.socat}/bin/socat - UNIX-CONNECT:"$WORK_DIR/serial.sock" \
+            < "$WORK_DIR/serial-input" >> "$SERIAL_LOG" 2> "$WORK_DIR/serial-transport.log"
+        ) &
+        SERIAL_PID=$!
+      ''}
     '';
 
   # Generate Cloud Hypervisor launch command.
@@ -289,16 +360,23 @@ let
       extraArgs ? "",
     }:
     ''
-      FIRMWARE="${cloudhvFirmware}/FV/CLOUDHV.fd"
-      ${cloudHypervisor}/bin/cloud-hypervisor \
-        --firmware "$FIRMWARE" \
-        --disk path="$IMAGE" \
-        --cpus boot=${toString cpus} \
-        --memory size=${toString memoryMB}M \
-        --serial file="$SERIAL_LOG" \
-        --console off \
-        ${extraArgs} \
-        &>"$WORK_DIR/vmm.log" &
+      MACHINE_TYPE=cloud-hypervisor
+      MEMORY_MB=${toString memoryMB}
+      FIRMWARE_SOURCE="${cloudhvFirmware}/FV/CLOUDHV.fd"
+      BOOTLOADER_SOURCE=""
+      FIRMWARE="$FIRMWARE_SOURCE"
+      VM_COMMAND=(
+        ${cloudHypervisor}/bin/cloud-hypervisor
+        --firmware "$FIRMWARE"
+        --disk path="$IMAGE"
+        --cpus boot="$VCPUS"
+        --memory size=${toString memoryMB}M
+        --serial file="$SERIAL_LOG"
+        --console off
+        ${extraArgs}
+      )
+      record_vm_execution || exit $?
+      "''${VM_COMMAND[@]}" &>"$WORK_DIR/vmm.log" &
       VM_PID=$!
     '';
 
@@ -336,6 +414,9 @@ in
       memoryMB ? 1024,
       cpus ? 2,
       defaultMode ? "auto",
+      acceleration ? "auto",
+      tcgCpus ? 1,
+      machineType ? "pc",
       enableQemu ? true,
       enableCH ? true,
       qemuExtraArgs ? "",
@@ -361,7 +442,8 @@ in
 
       # === Configuration ===
       TIMEOUT="''${${timeoutEnvVar}:-${toString defaultTimeout}}"
-      MODE="${defaultMode}"
+      ${policy}
+      redox_vm_policy_init ${lib.escapeShellArg defaultMode} ${lib.escapeShellArg acceleration} ${toString cpus} ${toString tcgCpus}
       VERBOSE=0
       TEST_FILTER=""
       STOP_AFTER_SCRIPT=""
@@ -372,8 +454,11 @@ in
         echo "  ${title}"
         echo ""
         echo "Options:"
-        ${lib.optionalString enableQemu ''echo "  --qemu         Force QEMU TCG mode (no KVM required)"''}
-        ${lib.optionalString enableCH ''echo "  --ch           Force Cloud Hypervisor mode (KVM required)"''}
+        ${lib.optionalString enableQemu ''echo "  --qemu         Select QEMU; defaults to TCG unless --accel is supplied"''}
+        ${lib.optionalString enableCH ''echo "  --ch           Select Cloud Hypervisor (KVM only)"''}
+        echo "  --accel POLICY auto, kvm, tcg (CLI > --qemu shorthand > REDOX_VM_ACCEL > Nix)"
+        echo "  --cpus N       Override vCPUs (TCG default: ${toString tcgCpus}; native: ${toString cpus})"
+        echo "  --artifacts DIR Retain serial/VMM logs, command, identities and results"
         echo "  --timeout SEC  Set timeout (default: ${toString defaultTimeout}, env: ${timeoutEnvVar})"
         echo "  --filter PAT   Only report tests matching pattern (substring match)"
         echo "  --stop-after-script NAME"
@@ -385,68 +470,31 @@ in
 
       while [ $# -gt 0 ]; do
         case "$1" in
-          ${lib.optionalString enableQemu ''--qemu)    MODE="qemu"; shift ;;''}
-          ${lib.optionalString enableCH ''--ch)      MODE="ch"; shift ;;''}
+          --qemu|--ch|--accel|--cpus)
+            redox_vm_policy_option "$@" || exit $?
+            shift "$POLICY_SHIFT" ;;
+          --artifacts)
+            [ $# -ge 2 ] || { echo "ERROR: --artifacts requires a directory" >&2; exit 2; }
+            REDOX_VM_ARTIFACTS_DIR="$2"; shift 2 ;;
           --timeout) TIMEOUT="$2"; shift 2 ;;
           --filter)  TEST_FILTER="$2"; shift 2 ;;
           --stop-after-script) STOP_AFTER_SCRIPT="$2"; shift 2 ;;
           --verbose) VERBOSE=1; shift ;;
           --help)    usage ;;
-          *)         echo "Unknown option: $1"; usage ;;
+          *) echo "Unknown option: $1" >&2; exit 2 ;;
         esac
       done
 
-      ${lib.optionalString (!enableQemu) ''
-        if [ "$MODE" = "qemu" ]; then
-          echo "QEMU mode not available for ${name}"
-          exit 1
-        fi
-      ''}
-      ${lib.optionalString (!enableCH) ''
-        if [ "$MODE" = "ch" ]; then
-          echo "Cloud Hypervisor mode not available for ${name}"
-          exit 1
-        fi
-      ''}
-
-      # Auto-detect VMM
-      if [ "$MODE" = "auto" ]; then
-        ${
-          if enableCH && enableQemu then
-            ''
-              if [ -w /dev/kvm ] 2>/dev/null; then
-                MODE="ch"
-              else
-                echo "  Warning: /dev/kvm not available — falling back to QEMU TCG (slower)"
-                MODE="qemu"
-                if [ "$TIMEOUT" -lt ${toString chMinTimeout} ]; then
-                  TIMEOUT=${toString chMinTimeout}
-                fi
-              fi
-            ''
-          else if enableCH then
-            ''
-              MODE="ch"
-            ''
-          else if enableQemu then
-            ''
-              MODE="qemu"
-              if [ "$TIMEOUT" -lt ${toString chMinTimeout} ]; then
-                TIMEOUT=${toString chMinTimeout}
-              fi
-            ''
-          else
-            ''
-              echo "No VM mode available for ${name}"
-              exit 1
-            ''
-        }
+      redox_vm_policy_resolve ${if enableQemu then "1" else "0"} ${if enableCH then "1" else "0"} || exit $?
+      if [ "$RESOLVED_ACCEL" = tcg ] && [ "$TIMEOUT" -lt ${toString chMinTimeout} ]; then
+        TIMEOUT=${toString chMinTimeout}
       fi
 
       ${bashLib}
 
       # === Setup ===
       IMAGE="$WORK_DIR/redox.img"
+      GUEST_IMAGE_SOURCE=${diskImage}/redox.img
       cp ${lib.optionalString (nativeBootProof != null) "--sparse=always"} ${diskImage}/redox.img "$IMAGE"
       chmod +w "$IMAGE"
 
@@ -466,13 +514,13 @@ in
             if [ "$MODE" = "ch" ]; then
               ${launchCH { inherit memoryMB cpus; extraArgs = chExtraArgs; }}
             else
-              ${launchQemu { inherit bootloader memoryMB cpus; diskOnly = nativeBootProof != null; extraArgs = qemuExtraArgs; }}
+              ${launchQemu { inherit bootloader memoryMB cpus machineType; shellProbe = trackShell; diskOnly = nativeBootProof != null; extraArgs = qemuExtraArgs; }}
             fi
           ''
         else if enableCH then
           launchCH { inherit memoryMB cpus; extraArgs = chExtraArgs; }
         else
-          launchQemu { inherit bootloader memoryMB cpus; diskOnly = nativeBootProof != null; extraArgs = qemuExtraArgs; }
+          launchQemu { inherit bootloader memoryMB cpus machineType; shellProbe = trackShell; diskOnly = nativeBootProof != null; extraArgs = qemuExtraArgs; }
       }
       }
 
@@ -508,7 +556,11 @@ in
       M_BOOTLOADER=0
       M_KERNEL=0
       M_BOOT=0
-      ${lib.optionalString trackShell "M_SHELL=0"}
+      ${lib.optionalString trackShell ''
+        M_SHELL=0
+        SHELL_MARKER="REDOX_VM_SHELL_READY_$$"
+        LAST_SHELL_PROBE=-1
+      ''}
       ${lib.optionalString hasTests ''
         TESTS_STARTED=0
         TESTS_COMPLETE=0
@@ -554,9 +606,19 @@ in
         ''}
 
         ${lib.optionalString trackShell ''
-          if [ "$M_SHELL" = "0" ] && echo "$LOG_CONTENT" | ${grep} -qE "(ion>|Welcome to Redox)"; then
+          if [ "$MODE" = qemu ]; then
+            if [ "$M_BOOT" = 1 ] && [ "$M_SHELL" = 0 ] && [ "$LAST_SHELL_PROBE" != "$ELAPSED_S" ] && [ -S "$WORK_DIR/serial.sock" ]; then
+              LAST_SHELL_PROBE="$ELAPSED_S"
+              # Require command output, not the banner or an echoed input line.
+              printf 'echo; echo %s\n' "$SHELL_MARKER" >&"$SERIAL_INPUT_FD"
+            fi
+            if [ "$M_SHELL" = 0 ] && printf '%s\n' "$LOG_CONTENT" | tr -d '\r' | ${grep} -qxF "$SHELL_MARKER"; then
+              M_SHELL=1
+              echo "  ✓ [$(fmt_ms $ELAPSED_MS)] Shell executed probe"
+            fi
+          elif [ "$M_SHELL" = 0 ] && echo "$LOG_CONTENT" | ${grep} -qE '(ion>|Welcome to Redox)'; then
             M_SHELL=1
-            echo "  ✓ [$(fmt_ms $ELAPSED_MS)] Shell ready"
+            echo "  ✓ [$(fmt_ms $ELAPSED_MS)] Shell/login prompt ready"
           fi
         ''}
 
@@ -631,12 +693,6 @@ in
         ${lib.optionalString (!hasTests && trackShell) ''
           if [ "$M_BOOT" = "1" ] && [ "$M_SHELL" = "1" ]; then
             break
-          fi
-          if [ "$M_BOOT" = "1" ] && [ "$M_SHELL" = "0" ]; then
-            if [ -z "''${BOOT_MS:-}" ]; then BOOT_MS=$ELAPSED_MS; fi
-            if [ "$(( (ELAPSED_MS - BOOT_MS) / 1000 ))" -ge 10 ]; then
-              break
-            fi
           fi
         ''}
         ${lib.optionalString (!hasTests && !trackShell) ''

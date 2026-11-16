@@ -1,0 +1,56 @@
+diff --git a/block/meson.build b/block/meson.build
+--- a/block/meson.build
++++ b/block/meson.build
+@@ -1,5 +1,6 @@
+ block_ss.add(genh)
+ block_ss.add(files(
++  'browser-chunk.c',
+   'accounting.c',
+   'aio_task.c',
+   'amend.c',
+diff --git a/qapi/block-core.json b/qapi/block-core.json
+--- a/qapi/block-core.json
++++ b/qapi/block-core.json
+@@ -3185,9 +3185,12 @@
+ #
+ # @snapshot-access: Since 7.0
+ #
++# @browser-chunk: verified browser disk with volatile session writes (Redox)
++#
+ # Since: 2.9
+ ##
+ { 'enum': 'BlockdevDriver',
+   'data': [ 'blkdebug', 'blklogwrites', 'blkreplay', 'blkverify', 'bochs',
++            'browser-chunk',
+             'cloop', 'compress', 'copy-before-write', 'copy-on-read', 'dmg',
+             'file', 'snapshot-access', 'ftp', 'ftps', 'gluster',
+@@ -3287,6 +3287,21 @@
+ { 'struct': 'BlockdevOptionsNull',
+   'data': { '*size': 'int', '*latency-ns': 'uint64', '*read-zeroes': 'bool' } }
+
++##
++# @BlockdevOptionsBrowserChunk:
++#
++# An immutable content-addressed browser base with volatile session writes.
++# Flush commits to session RAM only; no persistence or discard is provided.
++#
++# @size: exact logical size in bytes, a positive multiple of 512
++#
++# @image-id: lowercase SHA-256 of the exact logical base image
++#
++# Since: 8.2
++##
++{ 'struct': 'BlockdevOptionsBrowserChunk',
++  'data': { 'size': 'int', 'image-id': 'str' } }
++
+ ##
+ # @BlockdevOptionsNVMe:
+ #
+@@ -4671,6 +4671,7 @@
+       'blklogwrites':'BlockdevOptionsBlklogwrites',
+       'blkverify':  'BlockdevOptionsBlkverify',
+       'blkreplay':  'BlockdevOptionsBlkreplay',
++      'browser-chunk': 'BlockdevOptionsBrowserChunk',
+       'bochs':      'BlockdevOptionsGenericFormat',
+       'cloop':      'BlockdevOptionsGenericFormat',
+       'compress':   'BlockdevOptionsGenericFormat',

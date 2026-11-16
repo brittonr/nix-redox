@@ -36,39 +36,36 @@
     "base-orbital-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1790199225,
         "narHash": "sha256-q79B3CtFfsd6mK/QmyilgOV2UyZzkxkbWAnT4isQaBw=",
-        "owner": "redox-os",
-        "repo": "base",
         "rev": "c4f68cdce365713a9557c84a98642226ae62b073",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/base.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
-        "repo": "base",
         "rev": "c4f68cdce365713a9557c84a98642226ae62b073",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/base.git"
       }
     },
     "base-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1793239801,
         "narHash": "sha256-6rTqt/HRZ6HB5ztt5VBW28aQogrpaMFYSl8VUD0Jbmw=",
-        "owner": "redox-os",
-        "repo": "base",
+        "ref": "main",
         "rev": "40fef636b01627c74612894532b119c6178bd098",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/base.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "main",
-        "repo": "base",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/base.git"
       }
     },
     "bat-src": {
@@ -91,39 +88,37 @@
     "binutils-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1753534630,
         "narHash": "sha256-rA4538n+260JYCycVgWpCloxQULh/uSBcXolkvw9fPk=",
-        "owner": "redox-os",
-        "repo": "binutils",
+        "ref": "master",
         "rev": "d26234f8841c23c6c284f2892dfab5fde1c731ef",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/binutils.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "binutils",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/binutils.git"
       }
     },
     "bootloader-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1793137497,
         "narHash": "sha256-uagalrIcIJRdObaDxwnsbx5yPj3mI2mvEue0IonfUPM=",
-        "owner": "redox-os",
-        "repo": "bootloader",
+        "ref": "master",
         "rev": "11b85164383c1dfc0415a36b389f6eb999b9b2f5",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/bootloader.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "bootloader",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/bootloader.git"
       }
     },
     "bottom-src": {
@@ -146,58 +141,55 @@
     "buffer-pool-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1786029350,
         "narHash": "sha256-nFNJ3oG4k2nzheyjZvKUKXVU5nhEikN79P9HnAAGalM=",
-        "owner": "redox-os",
-        "repo": "redox-buffer-pool",
+        "ref": "master",
         "rev": "259719734304f6d2138b8b910fbdac663ebe6ff0",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redox-buffer-pool.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "redox-buffer-pool",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redox-buffer-pool.git"
       }
     },
     "ca-certificates-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1786022350,
         "narHash": "sha256-sl6z0Cv6+pYFl2QFvDQMhR+tsJPrlow02gdbq2H4BDs=",
-        "owner": "redox-os",
-        "repo": "ca-certificates",
+        "ref": "master",
         "rev": "4955c9001ad38451fe2b7b2bf5bf85b1b5aef390",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/ca-certificates.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "ca-certificates",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/ca-certificates.git"
       }
     },
     "contain-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1790723957,
         "narHash": "sha256-CZt/t8zmgBPmKe6LHbTM+I2DBzXWZO4Ijw6VWzo3xys=",
-        "owner": "redox-os",
-        "repo": "contain",
+        "ref": "master",
         "rev": "d04331ec8badc56be7616f08121659ec1fd39201",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/contain.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "contain",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/contain.git"
       }
     },
     "crane": {
@@ -218,20 +210,19 @@
     "dlmalloc-rs-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1784029915,
         "narHash": "sha256-7FkbzE13xtvTUAvKeLSySFsURlE9ioVJt/rt8Wh7a6Q=",
-        "owner": "redox-os",
-        "repo": "dlmalloc-rs",
+        "ref": "main",
         "rev": "40c10f6182cb1d2a78b29f85492936dfbeded02e",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/dlmalloc-rs.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "main",
-        "repo": "dlmalloc-rs",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/dlmalloc-rs.git"
       }
     },
     "dust-src": {
@@ -254,39 +245,37 @@
     "exampled-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1770693710,
         "narHash": "sha256-Ff2xShPG/dqT3hLbV7LRABL1MBYh94K7AO6c9j6DfFM=",
-        "owner": "redox-os",
-        "repo": "exampled",
+        "ref": "master",
         "rev": "3f6ae3a664cad3125da4e554d994a3755d5070f2",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/exampled.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "exampled",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/exampled.git"
       }
     },
     "extrautils-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1778887305,
         "narHash": "sha256-Hg+Qwbv8YjPV1lonoxQUkI+503rkxUc34+ozHKAD1ak=",
-        "owner": "redox-os",
-        "repo": "extrautils",
+        "ref": "master",
         "rev": "97bf8c6b6eade670e98de18a04a6f1b08ebcaf84",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/extrautils.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "extrautils",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/extrautils.git"
       }
     },
     "fd-src": {
@@ -342,20 +331,19 @@
     "findutils-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1676151471,
         "narHash": "sha256-PB44tLl6/J8wnzA9GH/69MZvI1JfmUWGs93d6GOIL9w=",
-        "owner": "redox-os",
-        "repo": "findutils",
+        "ref": "master",
         "rev": "116c044399318bf1c77a0d97371b61999ee170b4",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/findutils.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "findutils",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/findutils.git"
       }
     },
     "flake-compat": {
@@ -418,39 +406,37 @@
     "games-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1790595456,
         "narHash": "sha256-6sQEcV3JXsebJ7l+2G+V12Dv2hYS3R8ZjhmfSJ0xIF0=",
-        "owner": "redox-os",
-        "repo": "games",
+        "ref": "master",
         "rev": "72c09751f4a73e54d0773891eaf1ff1bdac2d99b",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/games.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "games",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/games.git"
       }
     },
     "gdb-protocol-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1565896055,
         "narHash": "sha256-Ol5lweA5L0vOn+gxw6dLfsmLkX/Zv6K/msFAfKhdq/A=",
-        "owner": "redox-os",
-        "repo": "gdb-protocol",
+        "ref": "master",
         "rev": "457129fe30df52cb2b0c8540f971cdce91bf0aad",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/gdb-protocol.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "gdb-protocol",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/gdb-protocol.git"
       }
     },
     "git-hooks": {
@@ -499,20 +485,19 @@
     "helix-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1719924337,
         "narHash": "sha256-3yhZuhbX6xEThkGbI1R7C5CGqUO37eZeihhej00t85g=",
-        "owner": "redox-os",
-        "repo": "helix",
+        "ref": "redox",
         "rev": "a039755139d92737503f90652fa9b9e23035e128",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/helix.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "redox",
-        "repo": "helix",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/helix.git"
       }
     },
     "hexyl-src": {
@@ -535,58 +520,55 @@
     "installer-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1790800541,
         "narHash": "sha256-yHsAxT7R7eaX4MTNnLXRua5bDt7mATc1GEhokprmE8w=",
-        "owner": "redox-os",
-        "repo": "installer",
+        "ref": "master",
         "rev": "2d2416c151e880bd68799b5c6cf46d019d964675",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/installer.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "installer",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/installer.git"
       }
     },
     "intelflash-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1720222027,
         "narHash": "sha256-yGmZzaCce9/OfQHo0ahYEEhPGT9Ypd6PC/INnuRuG4A=",
-        "owner": "redox-os",
-        "repo": "intelflash",
+        "ref": "master",
         "rev": "457f92eafae87680b6350beb38f19d0ec22ba5f6",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/intelflash.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "intelflash",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/intelflash.git"
       }
     },
     "ion-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1788810964,
         "narHash": "sha256-jvBBeaQvTBBCgiXv375TTI8SJKMSFIX1vrYGUju/5Y8=",
-        "owner": "redox-os",
-        "repo": "ion",
+        "ref": "master",
         "rev": "e9b3ca48b7ab6444498d5c3aa902d471ce29f759",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/ion.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "ion",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/ion.git"
       }
     },
     "kernel-fdt-src": {
@@ -609,96 +591,91 @@
     "kernel-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1793226217,
         "narHash": "sha256-8NypPxbyvTIHmMpU4LVyeU9GNS7ZnvQ6cESTEI7w/Js=",
-        "owner": "redox-os",
-        "repo": "kernel",
+        "ref": "master",
         "rev": "7b1f8e0166a470252f1bcbd299fc7efc6ccc48f4",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/kernel.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "kernel",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/kernel.git"
       }
     },
     "kprofiling-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1788619137,
         "narHash": "sha256-8JOrcWqCsPezUe/QqzV2VhwuwgLDiFerKFks0IsRGsA=",
-        "owner": "redox-os",
-        "repo": "kprofiling",
+        "ref": "master",
         "rev": "36faafc854f288af116778444841feda08a4da53",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/kprofiling.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "kprofiling",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/kprofiling.git"
       }
     },
     "libredox-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1793128420,
         "narHash": "sha256-29Vm9m8euMTPNHELMVaNwVmCCpRRCC2XoZ/iavnin7w=",
-        "owner": "redox-os",
-        "repo": "libredox",
+        "ref": "master",
         "rev": "4b25b7394eb2ce11e36e8f6df04a6cdc8109bb08",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/libredox.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "libredox",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/libredox.git"
       }
     },
     "netdb-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1511149750,
         "narHash": "sha256-Ei88cjh7tdHSrXJG+JkosDca3fodApU4djR6Izh0BRU=",
-        "owner": "redox-os",
-        "repo": "netdb",
+        "ref": "master",
         "rev": "2c1560629852f10c8cc3dde3d254f7c753d7557d",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/netdb.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "netdb",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/netdb.git"
       }
     },
     "netutils-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1789564422,
         "narHash": "sha256-rCaDidBznZAa1HD8Ric40Te9ZqYpq6/kD4/9SzkCv7U=",
-        "owner": "redox-os",
-        "repo": "netutils",
+        "ref": "master",
         "rev": "4900bdc333e291abc61ac8790908a295ec92cd0b",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/netutils.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "netutils",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/netutils.git"
       }
     },
     "nixpkgs": {
@@ -753,20 +730,19 @@
     "openlibm-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1757301398,
         "narHash": "sha256-jQoqfKE6CeXg/Gjy8O7wtlDQzxORRUqU56AoquCG7Y0=",
-        "owner": "redox-os",
-        "repo": "openlibm",
+        "ref": "master",
         "rev": "f5ed774593458e116e69731a3ffa59e2a6408d4e",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/openlibm.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "openlibm",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/openlibm.git"
       }
     },
     "openssh-src": {
@@ -785,20 +761,19 @@
     "openssl-redox-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1763325406,
         "narHash": "sha256-E9nLb1hHAGDDjXPbLGC8139XV6VloJxcD1dIT3LM2Zw=",
-        "owner": "redox-os",
-        "repo": "openssl",
+        "ref": "redox-v1",
         "rev": "4718e756cf7a2be433113b844dda79de3d599d8f",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/openssl.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "redox-v1",
-        "repo": "openssl",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/openssl.git"
       }
     },
     "openssl3-src": {
@@ -817,134 +792,127 @@
     "orbclient-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1792953419,
         "narHash": "sha256-VvaG8STEv/jEgf07SL1FixM7OO/WIBJE0f1hRJzmpZI=",
-        "owner": "redox-os",
-        "repo": "orbclient",
+        "ref": "master",
         "rev": "e9573da7e4cce13898094aba9923f69547461c19",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbclient.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "orbclient",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbclient.git"
       }
     },
     "orbdata-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1790723938,
         "narHash": "sha256-6850XAjpAubniVtZj62e1m9IYDGSz1n3q5pj/D7Q9hM=",
-        "owner": "redox-os",
-        "repo": "orbdata",
+        "ref": "master",
         "rev": "58d1140176430f222ac0749c8b83349f2c4da916",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbdata.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "orbdata",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbdata.git"
       }
     },
     "orbfont-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1781299690,
         "narHash": "sha256-SyOHL8AaklISfw4gnoPjxQrcD8n+eIJRk/69qVLD/4s=",
-        "owner": "redox-os",
-        "repo": "orbfont",
+        "ref": "master",
         "rev": "feae5a3577f43edc114986b753f776993d605796",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbfont.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "orbfont",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbfont.git"
       }
     },
     "orbimage-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1551119480,
         "narHash": "sha256-YPkZHSFYa8T1wLx6KnTaX+mW+8uRTxudc4zY1mQ5e50=",
-        "owner": "redox-os",
-        "repo": "orbimage",
+        "ref": "master",
         "rev": "6ac674e165746cc17615d04728df7d244959a3ba",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbimage.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "orbimage",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbimage.git"
       }
     },
     "orbital-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1790723932,
         "narHash": "sha256-/kOD/2hSlnI+hSe1GlhKD9LFJXQ6My18NPefHmd5FPs=",
-        "owner": "redox-os",
-        "repo": "orbital",
+        "ref": "master",
         "rev": "a6132b1c2add31def08b4b537271492c17e3e343",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbital.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "orbital",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbital.git"
       }
     },
     "orbterm-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1792599395,
         "narHash": "sha256-7UXNkCrIHocIYWc2wO+8qA3mzuZkImHPFCHAz8fdnEs=",
-        "owner": "redox-os",
-        "repo": "orbterm",
+        "ref": "master",
         "rev": "5cc7a2d8a50c3aeae4196a7b5661b5e36a23b0bb",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbterm.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "orbterm",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbterm.git"
       }
     },
     "orbutils-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1791138502,
         "narHash": "sha256-QUmyWbqhBa7rBwNQxOwimXYUectw2yiSVTv+xABdJKU=",
-        "owner": "redox-os",
-        "repo": "orbutils",
+        "ref": "master",
         "rev": "77d4a56c3ae4c0e6830aa51c7f82d68c6a9766b4",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbutils.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "orbutils",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/orbutils.git"
       }
     },
     "perg-src": {
@@ -967,172 +935,163 @@
     "pkgar-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1789827409,
         "narHash": "sha256-3Y3mPV78nVx9UgaBxwBOLeCRIrQhHHSsWpHSU/kLSH8=",
-        "owner": "redox-os",
-        "repo": "pkgar",
+        "ref": "master",
         "rev": "d10d42b143b03b141f9792a48cfd3ef059867051",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/pkgar.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "pkgar",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/pkgar.git"
       }
     },
     "pkgutils-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1790443306,
         "narHash": "sha256-oSyq4qTUXapsnoSmQnDeT41DXjsV4i2X4xnKtZrGUoI=",
-        "owner": "redox-os",
-        "repo": "pkgutils",
+        "ref": "master",
         "rev": "fe21bfd95d869cafd356bcdec4d1a81739ede5ee",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/pkgutils.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "pkgutils",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/pkgutils.git"
       }
     },
     "redox-log-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1768742706,
         "narHash": "sha256-rJUrJN/ERSHeEZvCfD0jaQQyjSjXLNRl4aabap0p3D0=",
-        "owner": "redox-os",
-        "repo": "redox-log",
+        "ref": "master",
         "rev": "ac8cbc40a281879f1fee77483342edcc4de89983",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redox-log.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "redox-log",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redox-log.git"
       }
     },
     "redox-path-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1787057979,
         "narHash": "sha256-r2ns+sGfoUCSSYQ1jKRdXwUWL9aOqhpKwFUrTGBQcRw=",
-        "owner": "redox-os",
-        "repo": "redox-path",
+        "ref": "main",
         "rev": "00761f6eab244c59c607785f9e4b0a294b2c3cc3",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redox-path.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "main",
-        "repo": "redox-path",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redox-path.git"
       }
     },
     "redox-scheme-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1792953081,
         "narHash": "sha256-a0u7rs9Z69PS+4/dRsxSalgDaT7suUvz9Zq4weETcYk=",
-        "owner": "redox-os",
-        "repo": "redox-scheme",
+        "ref": "master",
         "rev": "3514d5696fb8cbbe7d517d37d3074d7cd5cfdded",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redox-scheme.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "redox-scheme",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redox-scheme.git"
       }
     },
     "redox-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1793239525,
         "narHash": "sha256-jJ7217XL2lGwIJHxfttBXyis5Cv/Z94d5cPF84ONJEE=",
-        "owner": "redox-os",
-        "repo": "redox",
+        "ref": "master",
         "rev": "70a3f9e16ed71461b6a3f58220b61576172329b0",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redox.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "redox",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redox.git"
       }
     },
     "redoxer-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1793110967,
         "narHash": "sha256-17zveYZqTTO/NTRXpwqpwSBCDqjXNmiox09dnQuxfPM=",
-        "owner": "redox-os",
-        "repo": "redoxer",
+        "ref": "master",
         "rev": "da7ec171322b28073c177bdf9cebbdc6049813eb",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redoxer.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "redoxer",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redoxer.git"
       }
     },
     "redoxfs-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1792685847,
         "narHash": "sha256-iMbcvrAxAQCh4R5+5cdaXmUOct8kafnFq5LjUX1B3hc=",
-        "owner": "redox-os",
-        "repo": "redoxfs",
+        "ref": "master",
         "rev": "c988cb84008bb9dd402c8404331078af47be39af",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redoxfs.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "redoxfs",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/redoxfs.git"
       }
     },
     "relibc-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1793240404,
         "narHash": "sha256-u84922TgJNWKhcgbPPxTzi5U4MZprN9vGFgDb024rKs=",
-        "owner": "redox-os",
-        "repo": "relibc",
+        "ref": "master",
         "rev": "6ed72da393d54798b27620d0af7f88576a6917ce",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/relibc.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "relibc",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/relibc.git"
       }
     },
     "ripgrep-src": {
@@ -1286,58 +1245,55 @@
     "smith-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1729101825,
         "narHash": "sha256-7SFgaRqGUyOUvMoHGpSFVgZX+C4t6PFNC5QSfzBRZHg=",
-        "owner": "redox-os",
-        "repo": "Smith",
+        "ref": "master",
         "rev": "3f5086fff7a9a41fadaa201014cacb62b6aff406",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/Smith.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "Smith",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/Smith.git"
       }
     },
     "sodium-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1791580222,
         "narHash": "sha256-gtHFz1gt3OrjqWTofIXgTfNpk6pjHEj+azSyT3ye/ik=",
-        "owner": "redox-os",
-        "repo": "sodium",
+        "ref": "master",
         "rev": "cfd87df29ce56cd30bebf049d10e74ad1e70b059",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/sodium.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "sodium",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/sodium.git"
       }
     },
     "strace-redox-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1721054904,
         "narHash": "sha256-2eF/luUabdpf//j85tNjSBQG479h9+q4yCgnBrsSjqk=",
-        "owner": "redox-os",
-        "repo": "strace-redox",
+        "ref": "master",
         "rev": "d77fdb0e393590ac11b0e6045647d87d1b51ae07",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/strace-redox.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "strace-redox",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/strace-redox.git"
       }
     },
     "terminfo-src": {
@@ -1359,20 +1315,19 @@
     "termion-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1763752023,
         "narHash": "sha256-EI/S8FHrQ5uDqanwU3M5/XTGlIHPe929fSYq9434ygY=",
-        "owner": "redox-os",
-        "repo": "termion",
+        "ref": "master",
         "rev": "c784cec0a6f8d1b02692eb58d781acf172bb5959",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/termion.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "termion",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/termion.git"
       }
     },
     "treefmt-nix": {
@@ -1398,20 +1353,19 @@
     "uefi-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1793139191,
         "narHash": "sha256-qUUA+uU/2WsemQwUJ9OJyivEovd7Enj3eSY/i06LCw0=",
-        "owner": "redox-os",
-        "repo": "uefi",
+        "ref": "master",
         "rev": "2b87d96bf7f2c77aaf6e7fb3c4b263a5a1ea9ba1",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/uefi.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "uefi",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/uefi.git"
       }
     },
     "unit2nix": {
@@ -1438,20 +1392,19 @@
     "userutils-src": {
       "flake": false,
       "locked": {
-        "host": "gitlab.redox-os.org",
         "lastModified": 1792953156,
         "narHash": "sha256-4YvHQ5lYBkDXilpzljZtuRwjHzvg5bMsT8JQD+wV5Ds=",
-        "owner": "redox-os",
-        "repo": "userutils",
+        "ref": "master",
         "rev": "641a5aa81574db79d883151bc3438d3e59f90b88",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/userutils.git"
       },
       "original": {
-        "host": "gitlab.redox-os.org",
-        "owner": "redox-os",
         "ref": "master",
-        "repo": "userutils",
-        "type": "gitlab"
+        "shallow": true,
+        "type": "git",
+        "url": "https://gitlab.redox-os.org/redox-os/userutils.git"
       }
     },
     "uutils-src": {

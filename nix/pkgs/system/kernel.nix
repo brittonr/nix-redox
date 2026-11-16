@@ -32,6 +32,7 @@ let
   patchedSrc = pkgs.stdenv.mkDerivation {
     name = "kernel-src-patched";
     src = kernel-src;
+    patches = [ ../patches/patch-kernel-hpet-clock.patch ];
 
     phases = [
       "unpackPhase"

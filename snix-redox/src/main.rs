@@ -11,6 +11,7 @@
 mod activate;
 mod bridge;
 mod bridge_build;
+mod browser_cache;
 mod build_proxy;
 mod cache;
 mod cache_source;
@@ -137,6 +138,9 @@ enum Command {
         #[command(subcommand)]
         command: StoreCommand,
     },
+
+    /// Receive a pinned browser cache closure over the foreground serial terminal
+    BrowserCache(browser_cache::ReceiveArgs),
 
     /// Install a package from a binary cache (local or remote)
     Install {
@@ -799,6 +803,7 @@ fn main() {
             ready_file,
         } => build_proxy::BuildFsProxy::run_helper(child_ns_fd, &allow_list_file, &ready_file)
             .map_err(|e| e.into()),
+        Command::BrowserCache(args) => browser_cache::receive(&args),
         Command::Install {
             name,
             cache_url,

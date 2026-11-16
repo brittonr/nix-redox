@@ -41,7 +41,10 @@ in
     resolution = "1280x800";
   };
 
-  "/hardware".audioEnable = true;
+  "/hardware" = {
+    audioEnable = true;
+    usbEnable = true;
+  };
 
   "/networking" = {
     enable = true;

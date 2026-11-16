@@ -6,8 +6,10 @@ looks like.
 
 ## Development setup
 
-You need an `x86_64-linux` host with Nix flakes enabled. KVM is required for VM
-tests; a graphical display is required only for the desktop runner.
+You need an `x86_64-linux` host with Nix flakes enabled. The default Cloud
+Hypervisor VM tests require KVM; QEMU supports explicit software emulation with
+`--qemu --accel tcg`. A graphical display is required only for the native desktop
+runner; browser proofs use real headless Chromium.
 
 ```bash
 git clone https://github.com/brittonr/nix-redox

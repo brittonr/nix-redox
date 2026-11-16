@@ -1,0 +1,3 @@
+Offline package installation runs a real Redox executable.
+REDOX_BROWSER_RIPGREP_SAMPLE
+This file is shipped in the pristine browser demo image.

@@ -10,17 +10,8 @@
 //!   /nix/cache/nar/*.nar.zst     — compressed NAR files
 
 use std::collections::BTreeMap;
-use std::io::{self, BufReader, Read};
 use std::path::{Path, PathBuf};
 
-use nix_compat::narinfo::NarInfo;
-use nix_compat::nixbase32;
-use nix_compat::store_path::StorePath;
-use sha2::{Digest, Sha256};
-
-use crate::nar;
-use crate::pathinfo::PathInfoDb;
-use crate::store;
 
 /// Default local cache path on Redox.
 pub const DEFAULT_CACHE_PATH: &str = "/nix/cache";
@@ -35,13 +26,60 @@ pub struct PackageEntry {
     pub nar_hash: Option<String>,
     pub nar_size: Option<u64>,
     pub file_size: Option<u64>,
+    pub compatibility: Option<Compatibility>,
+}
+
+/// Versioned artifact evidence; native targets are build declarations, not names.
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct Compatibility {
+    pub version: u32,
+    pub kind: String,
+    pub target: String,
+    pub evidence: String,
 }
 
 /// Package index (packages.json).
 #[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PackageIndex {
     pub version: u32,
     pub packages: BTreeMap<String, PackageEntry>,
+    pub closure_manifest_version: Option<u32>,
+    pub installation_mode: Option<String>,
+}
+
+impl PackageIndex {
+    /// Version 1 is the legacy standalone catalog. Version 2 requires complete
+    /// narinfo traversal and compatibility evidence on every advertised root.
+    pub fn validate(&self) -> Result<(), Box<dyn std::error::Error>> {
+        match self.version {
+            1 => return Ok(()),
+            2 => {}
+            version => return Err(format!("unsupported package-index version: {version}").into()),
+        }
+        if self.closure_manifest_version != Some(1)
+            || self.installation_mode.as_deref() != Some("recursive")
+        {
+            return Err("package-index v2 requires closure manifest v1 and recursive installation".into());
+        }
+        for (name, entry) in &self.packages {
+            let compatibility = entry.compatibility.as_ref()
+                .ok_or_else(|| format!("package '{name}' lacks compatibility evidence"))?;
+            if compatibility.version != 1 || compatibility.evidence.is_empty() {
+                return Err(format!("unsupported compatibility evidence for package '{name}'").into());
+            }
+            let compatible = match compatibility.kind.as_str() {
+                "native" => compatibility.target == "x86_64-unknown-redox",
+                "script" | "data" => compatibility.target == "any",
+                _ => false,
+            };
+            if !compatible {
+                return Err(format!("wrong-target package '{name}': {} ({})",
+                    compatibility.target, compatibility.kind).into());
+            }
+        }
+        Ok(())
+    }
 }
 
 /// Read the package index from a local cache.
@@ -50,6 +88,7 @@ pub fn read_index(cache_path: &str) -> Result<PackageIndex, Box<dyn std::error::
     let content = std::fs::read_to_string(&index_path)
         .map_err(|e| format!("cannot read {}: {e}", index_path.display()))?;
     let index: PackageIndex = serde_json::from_str(&content)?;
+    index.validate()?;
     Ok(index)
 }
 
@@ -100,126 +139,17 @@ pub fn search(cache_path: &str, pattern: Option<&str>) -> Result<(), Box<dyn std
 
 /// Fetch a store path from a local binary cache.
 ///
-/// Reads narinfo, decompresses NAR, extracts to /nix/store/, verifies hash.
+/// Restore the entire narinfo reference closure using the common verified
+/// installer, without advertising dependencies as separate profile packages.
 pub fn fetch_local(store_path: &str, cache_path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = StorePath::<String>::from_absolute_path(store_path.as_bytes())?;
-    let dest = sp.to_absolute_path();
-
-    // Already present?
-    if Path::new(&dest).exists() {
-        eprintln!("already exists: {dest}");
-        return Ok(());
-    }
-
-    store::ensure_store_dir()?;
-
-    // Read narinfo
-    let hash = nixbase32::encode(sp.digest());
-    let narinfo_path = PathBuf::from(cache_path).join(format!("{hash}.narinfo"));
-    let narinfo_text = std::fs::read_to_string(&narinfo_path)
-        .map_err(|e| format!("narinfo not found: {}: {e}", narinfo_path.display()))?;
-
-    let narinfo_static: &'static str = Box::leak(narinfo_text.into_boxed_str());
-    let narinfo = NarInfo::parse(narinfo_static)?;
-
-    // Read compressed NAR
-    let nar_path = PathBuf::from(cache_path).join(&*narinfo.url);
-    eprintln!("extracting {}...", nar_path.display());
-
-    let file = std::fs::File::open(&nar_path)
-        .map_err(|e| format!("NAR file not found: {}: {e}", nar_path.display()))?;
-    let reader = BufReader::new(file);
-
-    // Decompress (all decompressors produce Send types)
-    let decompressed: Box<dyn Read + Send> = match narinfo.compression {
-        None | Some("none") => Box::new(reader),
-        Some("zstd") | Some("zst") => Box::new(
-            ruzstd::decoding::StreamingDecoder::new(reader)
-                .map_err(|e| format!("zstd decompression error: {e}"))?,
-        ),
-        Some("xz") => {
-            let mut input = BufReader::new(reader);
-            let mut output = Vec::new();
-            lzma_rs::xz_decompress(&mut input, &mut output)
-                .map_err(|e| format!("xz decompression error: {e}"))?;
-            Box::new(io::Cursor::new(output))
-        }
-        Some("bzip2") | Some("bz2") => Box::new(bzip2_rs::DecoderReader::new(reader)),
-        Some(other) => return Err(format!("unsupported compression: {other}").into()),
-    };
-
-    // Hash while extracting
-    let mut hashing = HashingReader::new(decompressed);
-    let mut buf_reader = BufReader::new(&mut hashing);
-
-    eprintln!("extracting to {dest}...");
-    let manifest = nar::extract_with_manifest(&mut buf_reader, &dest)?;
-
-    // Verify NAR hash
-    let actual_hash = hashing.finalize();
-    if actual_hash != narinfo.nar_hash {
-        let _ = std::fs::remove_dir_all(&dest);
-        return Err(format!(
-            "NAR hash mismatch!\n  expected: {}\n  got:      {}",
-            data_encoding::HEXLOWER.encode(&narinfo.nar_hash),
-            data_encoding::HEXLOWER.encode(&actual_hash),
-        )
-        .into());
-    }
-
-    // Register in PathInfo database
-    let db = PathInfoDb::open()?;
-    let nar_hash_hex = data_encoding::HEXLOWER.encode(&narinfo.nar_hash);
-    let references: Vec<String> = narinfo
-        .references
-        .iter()
-        .map(|r| r.to_absolute_path())
-        .collect();
-    let signatures: Vec<String> = narinfo.signatures.iter().map(|s| s.to_string()).collect();
-
-    store::register_path_with_files(
-        &db,
-        &dest,
-        &nar_hash_hex,
-        narinfo.nar_size,
-        references,
-        signatures,
-        manifest,
-    )?;
-
-    eprintln!("✓ verified and installed: {dest}");
-    Ok(())
+    crate::install::fetch_and_extract(
+        store_path,
+        &crate::cache_source::CacheSource::Local(PathBuf::from(cache_path)),
+    )
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
-struct HashingReader<R> {
-    inner: R,
-    hasher: Sha256,
-}
-
-impl<R: Read> HashingReader<R> {
-    fn new(inner: R) -> Self {
-        Self {
-            inner,
-            hasher: Sha256::new(),
-        }
-    }
-
-    fn finalize(self) -> [u8; 32] {
-        self.hasher.finalize().into()
-    }
-}
-
-impl<R: Read> Read for HashingReader<R> {
-    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
-        let n = self.inner.read(buf)?;
-        if n > 0 {
-            self.hasher.update(&buf[..n]);
-        }
-        Ok(n)
-    }
-}
 
 fn format_size(bytes: u64) -> String {
     const KB: u64 = 1024;
@@ -293,5 +223,40 @@ mod tests {
         assert_eq!(pkg.nar_hash, None);
         assert_eq!(pkg.nar_size, None);
         assert_eq!(pkg.file_size, None);
+    }
+
+    #[test]
+    fn package_index_v2_requires_known_schema_and_target_evidence() {
+        let value = serde_json::json!({
+            "version": 2,
+            "closureManifestVersion": 1,
+            "installationMode": "recursive",
+            "packages": { "fixture": {
+                "storePath": "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-fixture",
+                "pname": "fixture", "version": "1",
+                "compatibility": { "version": 1, "kind": "native",
+                    "target": "x86_64-unknown-redox", "evidence": "derivation.TARGET" }
+            }}
+        });
+        let parse = |value: &serde_json::Value| serde_json::from_value::<PackageIndex>(value.clone()).unwrap();
+        assert!(parse(&value).validate().is_ok());
+        let mut bad = value.clone();
+        bad["version"] = serde_json::json!(99);
+        assert!(parse(&bad).validate().unwrap_err().to_string().contains("unsupported package-index"));
+        bad = value.clone();
+        bad["closureManifestVersion"] = serde_json::json!(99);
+        assert!(parse(&bad).validate().is_err());
+        bad = value.clone();
+        bad["packages"]["fixture"]["compatibility"]["target"] = serde_json::json!("x86_64-linux");
+        assert!(parse(&bad).validate().unwrap_err().to_string().contains("wrong-target"));
+        bad = value.clone();
+        bad["packages"]["fixture"]["compatibility"] = serde_json::Value::Null;
+        assert!(parse(&bad).validate().unwrap_err().to_string().contains("lacks compatibility"));
+        for kind in ["script", "data"] {
+            let mut portable = value.clone();
+            portable["packages"]["fixture"]["compatibility"]["kind"] = serde_json::json!(kind);
+            portable["packages"]["fixture"]["compatibility"]["target"] = serde_json::json!("any");
+            assert!(parse(&portable).validate().is_ok());
+        }
     }
 }

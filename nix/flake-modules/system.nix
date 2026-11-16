@@ -94,6 +94,8 @@ let
     wasmtime-redox = self'.packages.wasmtime-redox or null;
     irohd = self'.packages.irohd or null;
     snix = self'.packages.snix or null;
+    browser-demo-flush = self'.packages.browser-demo-flush or null;
+    cache-closure-fixture = self'.packages.cache-closure-fixture or null;
     nixtamal = self'.packages.nixtamal or null;
     stored = self'.packages.stored or null;
     ca-certificates = self'.packages.ca-certificates or null;
@@ -344,6 +346,7 @@ let
   bootTest = mkBootTest {
     diskImage = systems.minimal.diskImage;
     inherit bootloader;
+    vmConfig = systems.minimal.vmConfig;
   };
 
   mkFunctionalTest = modularPkgs.infrastructure.mkFunctionalTest;

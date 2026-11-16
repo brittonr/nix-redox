@@ -1,0 +1,5 @@
+:root { color-scheme: dark; font-family: ui-monospace, monospace; }
+body { margin: 0; background: #111; color: #eee; }
+#terminal { padding: 12px; min-height: 500px; overflow: auto; }
+#display:empty { display: none; }
+.xterm { padding-bottom: 12px; }

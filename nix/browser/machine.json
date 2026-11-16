@@ -1,0 +1,52 @@
+{
+  "version": 1,
+  "target": "x86_64-unknown-redox",
+  "machine": "pc-i440fx-8.2",
+  "cpu": "qemu64",
+  "vcpus": 1,
+  "ramMiB": 1024,
+  "ram": "1024M",
+  "accelerator": "tcg,thread=multi",
+  "firmware": {
+    "mode": "bios",
+    "file": "OVMF.fd",
+    "mutable": []
+  },
+  "devices": [
+    "virtio-blk-pci",
+    "isa-serial"
+  ],
+  "args": [
+    "-machine",
+    "pc-i440fx-8.2",
+    "-cpu",
+    "qemu64",
+    "-smp",
+    "1",
+    "-m",
+    "{ram}",
+    "-accel",
+    "tcg,thread=multi",
+    "-L",
+    "{pack}",
+    "-bios",
+    "{pack}/OVMF.fd",
+    "-drive",
+    "file={disk},format=raw,if=none,id=redox,cache=writeback",
+    "-device",
+    "virtio-blk-pci,drive=redox",
+    "-display",
+    "none",
+    "-vga",
+    "none",
+    "-chardev",
+    "stdio,id=serial0,signal=off",
+    "-serial",
+    "chardev:serial0",
+    "-monitor",
+    "none",
+    "-nic",
+    "none",
+    "-no-reboot"
+  ]
+}
