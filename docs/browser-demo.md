@@ -5,6 +5,14 @@ QEMU compiled to WebAssembly. It is not a recording, a remote VM, or the direct
 WASM evaluator. Guest networking is disabled. The landing-page recordings remain
 available when browser isolation or VM startup fails.
 
+The landing page and live workspace share `site/identity.css`, adapted from
+Kiln's neutral paper/ink palette, local typography, square frames and semantic
+status colors. Its MIT attribution is retained in the stylesheet; no Kiln
+backend or external font service is embedded. The live rail navigates actual
+sections, including the bundled package actions before the VM starts. On narrow
+screens, **Menu** expands navigation and **Escape** closes it. **Appearance**
+uses the same saved light/dark preference as the landing page.
+
 ## Build and serve
 
 ```sh
@@ -29,6 +37,33 @@ workers. Reset does not preserve installed packages, builds, configuration
 changes, or writes. Verified immutable download bytes may remain in a bounded
 cache; a cached download is not retained guest state. A stopped or replaced
 session cannot execute another guest command.
+
+## Using the showcase
+
+Press **Boot**, then wait for **Ready**. Loading shows real download byte counts;
+booting waits for the guest readiness marker. The elapsed clock is measured time,
+not a completion estimate. Expand **Startup asset details** for per-file download
+and verification information without hiding the main terminal behind ROM logs.
+
+The **Shell command** editor accepts one command or a multiline Bash script.
+Example buttons only fill the editor; **Run command** starts actual guest
+execution and displays its output, exit status and elapsed time. Each submission
+runs in a child shell in the same guest filesystem; use the terminal for
+interactive programs or persistent changes to shell working directory and
+environment. Source is limited to 64 KiB and editor commands have a two-minute
+timeout. A nonzero command exit is reported without disabling the ready guest.
+
+Named busy states explain when an action owns serial input. During that action,
+terminal keystrokes and competing guest actions are paused; **Stop** remains
+available. The independent WASM evaluator does not acquire the guest channel;
+its explicit **Run in Redox** action does. The terminal fits its column count to
+the available width without shrinking its text.
+
+The serial shell starts in its writable home after switchroot, not the initfs
+directory inherited from init. Ordinary relative commands such as `pwd`, `ls`
+and creating a file therefore operate on the real guest filesystem. Fresh-build
+actions require a new declared input each time; an existing output is rejected.
+
 
 ## Offline guest contract
 

@@ -10,6 +10,7 @@ let module;
 let master;
 let terminal;
 let display;
+let disposeTerminalFit;
 let disk;
 let config;
 let serialBuffer = "";
@@ -68,6 +69,43 @@ function serial(data) {
     resumeSent = true;
     send(config.snapshot.handshake.resumeInput);
   }
+}
+
+function fitTerminalWidth() {
+  const element = terminal.element;
+  const screen = element.querySelector(".xterm-screen");
+  const viewport = element.querySelector(".xterm-viewport");
+  if (!screen || !viewport) throw new Error("Pinned terminal layout is unavailable");
+  if (lifetime.signal.aborted) return;
+  let frame = 0;
+  const fit = () => {
+    frame = 0;
+    if (lifetime.signal.aborted) return;
+    // Use the rendered cell pitch and public column count, not xterm's private
+    // renderer fields. Keep the font readable; only the serial grid changes.
+    const cellWidth = screen.getBoundingClientRect().width / terminal.cols;
+    const style = getComputedStyle(element);
+    const scrollbar = viewport.offsetWidth - viewport.clientWidth;
+    const width = element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight) - scrollbar;
+    if (cellWidth <= 0 || width <= 0) return; // Hidden frames fit when shown.
+    const cols = Math.max(2, Math.floor(width / cellWidth));
+    if (cols !== terminal.cols) terminal.resize(cols, terminal.rows);
+  };
+  const schedule = () => {
+    if (!frame && !lifetime.signal.aborted) frame = requestAnimationFrame(fit);
+  };
+  const observer = new ResizeObserver(schedule);
+  observer.observe(element);
+  observer.observe(screen);
+  window.addEventListener("resize", schedule, { signal: lifetime.signal });
+  document.fonts?.addEventListener("loadingdone", schedule, { signal: lifetime.signal });
+  schedule();
+  return () => {
+    observer.disconnect();
+    cancelAnimationFrame(frame);
+    window.removeEventListener("resize", schedule);
+    document.fonts?.removeEventListener("loadingdone", schedule);
+  };
 }
 
 async function rawDisk(bytes, identity) {
@@ -131,7 +169,11 @@ async function initialize(value) {
   const style = document.createElement("link");
   style.rel = "stylesheet";
   style.href = blobURL(assets.xtermCss, "text/css");
-  document.head.append(style);
+  await new Promise((resolve, reject) => {
+    style.onload = resolve;
+    style.onerror = () => reject(new Error("Verified terminal stylesheet failed to load"));
+    document.head.append(style);
+  });
   await script(assets.xterm);
   await script(assets.pty);
   if (typeof window.Terminal !== "function" || typeof window.openpty !== "function") throw new Error("Pinned terminal/PTY ABI is unavailable");
@@ -176,6 +218,8 @@ async function initialize(value) {
     }
   });
   terminal.onResize(({ rows, cols }) => master.notifyResize(rows, cols));
+  master.notifyResize(terminal.rows, terminal.cols);
+  disposeTerminalFit = fitTerminalWidth();
   terminal.attachCustomKeyEventHandler(event => {
     if (event.type === "keydown" && event.key.toLowerCase() === "c" && (event.ctrlKey || event.metaKey) && terminal.hasSelection()) {
       navigator.clipboard?.writeText(terminal.getSelection()).catch(() => {});
@@ -294,6 +338,7 @@ window.addEventListener("pagehide", () => {
   clearInterval(metricsTimer);
   clearTimeout(resumeTimer);
   clearTimeout(serialTimer);
+  disposeTerminalFit?.();
   display?.dispose();
   disk?.close();
   terminal?.dispose();

@@ -1,6 +1,9 @@
 #!/nix/system/profile/bin/bash
 set -u
 source /etc/browser-demo/common.sh
+# init retains its initfs cwd across switchroot; start the guest shell in its
+# writable home so ordinary relative commands do not access the old initfs.
+cd "$HOME" || exit 1
 # Token-framed execution avoids confusing echoed input or a prompt with command
 # completion. The caller supplies a fresh alphanumeric/hyphen/underscore token.
 browser_command() {
