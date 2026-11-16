@@ -74,7 +74,6 @@ nix build .#checks.x86_64-linux.type-valid-user-complete
 - `artifact-rootTree-has-static-netcfg` — Static network configuration script
 - `artifact-rootTree-has-binaries` — Binaries from packages in /bin and /usr/bin
 - `artifact-rootTree-has-home-dirs` — Home directories for users with createHome=true
-- `artifact-rootTree-has-startup` — startup.sh script
 - `artifact-rootTree-has-graphical-init` — Graphical init scripts when graphics enabled
 - `artifact-drivers-all-types` — System builds with all driver types
 - `artifact-rootTree-has-dns-config` — DNS configuration
@@ -315,10 +314,5 @@ Tests are automatically run by `nix flake check`:
 
 ## Coverage
 
-Current test coverage:
-- **Module evaluation:** 11 tests (profiles, extend, overrides)
-- **Type validation:** 24 tests (enums, structs, type coercion)
-- **Build artifacts:** 15 tests (files, content, format)
-- **Library functions:** 18 tests (passwd, group, init.rc)
-
-**Total:** 68 tests covering all module system components.
+The exported check set is the source of truth. `nix flake show` lists the
+current module-system checks alongside feature-specific and VM tiers.

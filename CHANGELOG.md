@@ -50,6 +50,10 @@ All notable changes to this project are documented here. The format follows
   API, which returns HTTP 403 on hosted CI. Locked revisions, NAR hashes and
   source timestamps are unchanged.
 
+- Removed obsolete artifact assertions for startup-unit command spelling and
+  write bits on immutable Nix-store files. Real boot and declared home-file
+  content checks remain.
+
 - QEMU runners separate backend selection from `auto`/`kvm`/`tcg` acceleration;
   forced TCG uses `qemu64` and a fresh serial-command nonce rather than a boot
   banner as shell evidence. Startup reconnects to the serial console instead

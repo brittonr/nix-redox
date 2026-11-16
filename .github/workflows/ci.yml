@@ -144,7 +144,6 @@ jobs:
             .#checks.x86_64-linux.artifact-rootTree-has-shadow \
             .#checks.x86_64-linux.artifact-rootTree-has-profile \
             .#checks.x86_64-linux.artifact-rootTree-has-init-scripts \
-            .#checks.x86_64-linux.artifact-rootTree-has-startup \
             .#checks.x86_64-linux.artifact-rootTree-has-binaries \
             .#checks.x86_64-linux.artifact-rootTree-has-dns-config \
             .#checks.x86_64-linux.artifact-rootTree-has-shell-aliases \
