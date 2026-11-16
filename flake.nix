@@ -448,6 +448,7 @@
       modules = [
         (import ./nix/flake-modules/packages.nix)
         (import ./nix/flake-modules/system.nix)
+        (import ./nix/flake-modules/browser.nix)
         (import ./nix/flake-modules/apps.nix)
         (import ./nix/flake-modules/devshells.nix)
         (import ./nix/flake-modules/checks.nix)
@@ -480,6 +481,8 @@
               graphical = mkSys [ ./nix/redox-system/profiles/graphical.nix ];
               cloud = mkSys [ ./nix/redox-system/profiles/cloud-hypervisor.nix ];
               self-hosting = mkSys [ ./nix/redox-system/profiles/self-hosting.nix ];
+              browser-demo = self'.legacyPackages.browserSystem;
+              browser-graphical = self'.legacyPackages.graphicalSystem;
             }
           );
 

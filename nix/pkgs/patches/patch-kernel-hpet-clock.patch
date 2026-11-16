@@ -1,0 +1,75 @@
+diff --git a/src/arch/x86_shared/time.rs b/src/arch/x86_shared/time.rs
+--- a/src/arch/x86_shared/time.rs
++++ b/src/arch/x86_shared/time.rs
+@@ -1,6 +1,33 @@
+ use super::device::{hpet, pit};
+ use crate::sync::CleanLockToken;
++use spin::Once;
+ 
++struct HpetClock {
++    counter: u64,
++    nanoseconds: u128,
++    period_fs: u64,
++}
++
++static HPET_CLOCK: Once<HpetClock> = Once::new();
++
++/// Preserve the existing clock origin before reprogramming the HPET comparator.
++pub(crate) fn init_hpet_clock(
++    counter: u64,
++    comparator: u64,
++    period_fs: u64,
++    divisor: u64,
++) {
++    let mut token = unsafe { CleanLockToken::new() };
++    let offset = { *crate::time::OFFSET.read(token.token()) };
++    let elapsed = counter.saturating_sub(comparator.saturating_sub(divisor));
++    let nanoseconds = offset + (elapsed as u128 * period_fs as u128) / 1_000_000;
++    HPET_CLOCK.call_once(|| HpetClock {
++        counter,
++        nanoseconds,
++        period_fs,
++    });
++}
++
+ pub fn monotonic_absolute(token: &mut CleanLockToken) -> u128 {
+     // The paravirtualized TSC is already guaranteed to be monotonic, and thus doesn't need to be
+     // readjusted.
+@@ -8,7 +35,18 @@
+     if let Some(ns) = super::device::tsc::monotonic_absolute() {
+         return ns;
+     }
+ 
++    // Coalesced interrupts cannot account for elapsed HPET time. Read the
++    // free-running 64-bit counter, retaining the PIT/32-bit HPET fallback.
++    if let Some(clock) = HPET_CLOCK.get()
++        && let Some(ref hpet) = *crate::acpi::ACPI_TABLE.hpet.read()
++    {
++        let counter = unsafe { hpet.read_u64(hpet::MAIN_COUNTER_OFFSET) };
++        return clock.nanoseconds
++            + (counter.saturating_sub(clock.counter) as u128 * clock.period_fs as u128)
++                / 1_000_000;
++    }
++
+     let offset = { *crate::time::OFFSET.read(token.token()) };
+     offset + hpet_or_pit()
+ }
+diff --git a/src/arch/x86_shared/device/hpet.rs b/src/arch/x86_shared/device/hpet.rs
+--- a/src/arch/x86_shared/device/hpet.rs
++++ b/src/arch/x86_shared/device/hpet.rs
+@@ -52,8 +52,15 @@
+             return false;
+         }
+ 
+         let counter = hpet.read_u64(MAIN_COUNTER_OFFSET);
+ 
++        // Anchor the clock while the counter is stopped and before the
++        // comparator changes. A 32-bit counter keeps the existing fallback.
++        if capability & (1 << 13) != 0 {
++            let comparator = hpet.read_u64(T0_COMPARATOR_OFFSET);
++            super::super::time::init_hpet_clock(counter, comparator, period_fs, divisor);
++        }
++
+         let t0_config_word: u64 = TN_VAL_SET_CNF | TN_TYPE_CNF | TN_INT_ENB_CNF;
+         hpet.write_u64(T0_CONFIG_CAPABILITY_OFFSET, t0_config_word);
+         // set accumulator value

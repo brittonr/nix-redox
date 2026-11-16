@@ -1,0 +1,5 @@
+.snix-playground { max-width: 70rem; margin-inline: auto; padding: 1rem; }
+.snix-playground textarea { display: block; box-sizing: border-box; width: 100%; font: inherit; font-family: monospace; }
+.snix-playground button { margin: .5rem .5rem .5rem 0; }
+.snix-playground pre { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: .75rem; border: 1px solid currentColor; }
+.snix-playground p { overflow-wrap: anywhere; }

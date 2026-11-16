@@ -122,7 +122,11 @@ let
         skipTargetCheck = true;
       };
     in
-    ws.workspaceMembers.${member}.build // { inherit pname; };
+    ws.workspaceMembers.${member}.build
+    // {
+      inherit pname;
+      TARGET = redoxTarget;
+    };
 
   # Shared crate-level overrides for cross-builds.
   cratePatches = {
@@ -1228,6 +1232,7 @@ let
       ion-shell = _: {
         # build.rs reads git_revision.txt; without it, tries `git rev-parse`
         postPatch = ''
+          ${pkgs.python3}/bin/python3 ${../pkgs/userspace/patches/ion/read-capability.py} .
           echo "nix-build" > git_revision.txt
         '';
       };
@@ -1390,6 +1395,9 @@ in
       relibc
       kernel
       bootloader
+      bootloaderAutoboot
+      bootloaderLive
+      bootloaderLiveAutoboot
       base
       ;
     inherit sysroot sysrootVendor;

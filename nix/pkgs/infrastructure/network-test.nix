@@ -37,6 +37,9 @@ vmTest.mkVmTest {
   defaultMode = "qemu";
   memoryMB = vmConfig.memorySize or 2048;
   cpus = vmConfig.cpus or 4;
+  acceleration = vmConfig.acceleration or "auto";
+  tcgCpus = vmConfig.tcgCpus or 1;
+  machineType = vmConfig.qemuMachineType or "pc";
   chMinTimeout = vmConfig.chMinTimeout or 180;
   testPrefix = "NET_TEST";
   qemuExtraArgs = "-netdev user,id=net0 -device e1000,netdev=net0";

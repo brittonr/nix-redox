@@ -26,6 +26,11 @@ All notable changes to this project are documented here. The format follows
   operations. An isolated `nixtamal-test` VM exercises lock, refresh, pinned
   revisions, generated loaders, and retained input generations offline; see
   `docs/nixtamal.md`.
+- Static browser-local x86_64 Redox images and immutable Nix site outputs,
+  with a real serial terminal, offline Snix install/build/rollback fixtures,
+  explicit lifecycle/reset behavior and measured browser resource policies.
+- A separate direct Snix-WASM playground and real Orbital framebuffer/input
+  profile, plus matched native-to-browser snapshot capture and resume bindings.
 
 ### Changed
 
@@ -41,6 +46,55 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- QEMU runners separate backend selection from `auto`/`kvm`/`tcg` acceleration;
+  forced TCG uses `qemu64` and a fresh serial-command nonce rather than a boot
+  banner as shell evidence. Startup reconnects to the serial console instead
+  of reading EOF from the logger, and Ion `read` checks raw-mode capability
+  while retaining its input binding across conditional scopes.
+- Automatic boot selection is independent of live filesystem loading, with
+  explicit disk/live and manual/automatic bootloader variants and fail-closed
+  patch-drift checks. Non-live boot no longer implies a filesystem-sized RAM copy.
+- Browser machine contracts use the pinned WASM backend's initialized MTTCG
+  loop with one vCPU and a representable 1024 MiB allocation. Runtime startup
+  distinguishes Emscripten's successful live-runtime return from actual exits,
+  flushes early failure serial output, and preserves phase-entry timestamps.
+- Handwritten TCG/libffi bridges and chunk completion mailboxes use unsigned
+  wasm32 heap addresses; JavaScript/Wasm imports agree on fixed 3 GiB memory.
+  Nonblocking PTY reads preserve partial input and EAGAIN without waiting for
+  another keystroke; guest RAM remains independently configured.
+- Browser serial checks use the terminal's actual native Ctrl+Shift+V paste
+  event and verify typed input, CRLF multiline paste, and guest Ctrl+C byte
+  delivery rather than treating Ctrl+V's literal-next byte as a paste.
+- The 64-bit HPET clock source uses its free-running counter, so coalesced
+  emulation interrupts do not slow the guest clock.
+  External sleep checks separate executable startup with a warmed sleep control.
+  A 16-second default interval amortizes command/scheduling jitter without
+  widening the 35% tolerance, and raw/control/adjusted timings are retained before
+  asserting. The real four-times-fast-clock self-test uses a baseline-length
+  sleep rather than an interval small enough for executable/serial overhead
+  to mask.
+- Snapshot artifact admission accepts safe nested firmware-pack paths and QEMU
+  ROM filenames while rejecting traversal and URL escapes.
+- Browser failure probes let the session's readiness timeout precede the outer
+  harness bound, remove protected guest tools without prompts, and reject
+  incompatible snapshot identities even when their artifact hashes are valid.
+- Browser disk probes use available guest filesystem tools and buffered writes
+  instead of absent utility applets, without lowering cache or overlay quotas.
+- Rejected lazy root-disk writes promptly fail and dispose the owning VM and
+  reject pending commands, instead of waiting for a guest-command timeout.
+  The real 64 MiB quota gate verifies ENOSPC, bounded failure delivery and a
+  fresh reset that discards partial writes and executes a new guest nonce.
+- Binary-cache exports include complete target-aware runtime closures and
+  truthful References; guest restoration traverses and verifies dependencies
+  even when a root is already present.
+- Browser pages no longer freeze during long guest serial transfers. Engine
+  finalization makes the pinned Emscripten runtime signal a synchronous proxy
+  waiter before unlocking its stack-allocated context; previously the page's
+  main thread could signal reused stack memory and spin indefinitely. The cache
+  gate also uses a measured bound for bundled package installs and reports an
+  unreleased receiver immediately instead of waiting on a disabled control.
+  Stop checks wait up to 10 s for Chromium to terminate the removed document's
+  engine workers (about 2 s measured) rather than sampling once after 1 s.
 - Native Git preserves URI transports before probing Redox-local scheme paths,
   so cloning a `file://` repository no longer prefixes the working directory
   onto its protocol.

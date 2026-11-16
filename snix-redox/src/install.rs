@@ -17,6 +17,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::io::{BufReader, Read};
 use std::path::{Path, PathBuf};
 
+use nix_compat::narinfo::NarInfo;
 use nix_compat::store_path::StorePath;
 use sha2::{Digest, Sha256};
 
@@ -227,44 +228,14 @@ pub fn install_with_options(
         return Ok(());
     }
 
-    // 3. Fetch from cache — eager or lazy
+    // Every install traverses narinfo references, including local/offline and
+    // lazy installs. A root-only install is not valid for a version-2 catalog.
+    // Resolve the whole graph before changing the store or the profile.
     let stored_running = stored_is_running();
-    if lazy && stored_running {
-        // Lazy install: register in PathInfoDb without extracting.
-        // The stored daemon will extract on first access via the store: scheme.
-        if !Path::new(&entry.store_path).exists() {
-            eprintln!(
-                "lazy-installing {name} {} (stored will extract on demand)...",
-                entry.version
-            );
-            register_without_extract(&entry.store_path, source)?;
-        } else {
-            eprintln!("'{name}' already in store...");
-        }
-    } else {
-        if lazy && !stored_running {
-            eprintln!("note: --lazy requires the stored daemon; falling back to eager install");
-        }
-        // Eager install: download, decompress, extract to /nix/store/
-        if !Path::new(&entry.store_path).exists() {
-            eprintln!("installing {name} {}...", entry.version);
-            fetch_and_extract(&entry.store_path, source)?;
-        } else {
-            eprintln!("'{name}' already in store, linking into profile...");
-        }
+    if lazy && !stored_running {
+        eprintln!("note: --lazy requires the stored daemon; falling back to eager install");
     }
-
-    // 4. Notify stored daemon about the new manifest (if running).
-    //    This lets stored serve directory listings and file content
-    //    for packages installed after the daemon started.
-    if stored_running {
-        if let Some(info) = crate::pathinfo::PathInfoDb::open()
-            .ok()
-            .and_then(|db| db.get(&entry.store_path).ok().flatten())
-        {
-            stored_notify(&entry.store_path, &info.nar_hash, &info.files);
-        }
-    }
+    fetch_closure_with_mode(&entry.store_path, source, lazy && stored_running)?;
 
     // 5. Add GC root to protect from garbage collection
     let root_name = format!("profile-{name}");
@@ -424,119 +395,67 @@ pub fn show(name: &str, source: &CacheSource) -> Result<(), Box<dyn std::error::
     source.show_package(name)
 }
 
-/// Install a package and all its transitive dependencies from a binary cache.
-///
-/// Uses BFS to discover dependencies from narinfo References fields.
-/// Already-present local store paths are skipped.
+/// Explicit recursive CLI mode, retained for version-1 catalog workflows.
+/// All installs now traverse references; both entry points share profile logic.
 pub fn install_recursive(
     name: &str,
     source: &CacheSource,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Look up package in index
-    let index = source.read_index()?;
-    let entry = index
-        .packages
-        .get(name)
-        .ok_or_else(|| format!("package '{name}' not found in {}.", source.display_name()))?;
+    install(name, source)
+}
 
-    // 2. BFS dependency resolution
-    let mut queue: VecDeque<String> = VecDeque::new();
-    let mut visited: BTreeSet<String> = BTreeSet::new();
-    let mut fetched: u32 = 0;
-    let mut skipped: u32 = 0;
-
-    queue.push_back(entry.store_path.clone());
-
-    let db = PathInfoDb::open()?;
-
+/// Discover a closure from authoritative narinfos, including paths already on
+/// disk. Do not trust an old local registration to hide a missing dependency.
+fn resolve_closure(
+    root: &str,
+    source: &CacheSource,
+) -> Result<Vec<(String, NarInfo<'static>)>, Box<dyn std::error::Error>> {
+    let mut queue = VecDeque::from([root.to_string()]);
+    let mut visited = BTreeSet::new();
+    let mut paths = Vec::new();
     while let Some(path) = queue.pop_front() {
-        if visited.contains(&path) {
+        if !visited.insert(path.clone()) {
             continue;
         }
-        visited.insert(path.clone());
-
-        let already_present = Path::new(&path).exists();
-        let already_registered = db.is_registered(&path);
-
-        if already_present && already_registered {
-            skipped += 1;
-            eprintln!("✓ already present: {path}");
-
-            // Follow references for completeness
-            if let Some(info) = db.get(&path)? {
-                for r in &info.references {
-                    if !visited.contains(r) {
-                        queue.push_back(r.clone());
-                    }
-                }
-            }
-            continue;
-        }
-
-        // Fetch narinfo to discover references
         let sp = StorePath::<String>::from_absolute_path(path.as_bytes())?;
-        let narinfo = source.fetch_narinfo(&sp)?;
-
-        // Enqueue dependencies
-        let references: Vec<String> = narinfo
-            .references
-            .iter()
-            .map(|r| r.to_absolute_path())
-            .collect();
-        for r in &references {
-            if !visited.contains(r) {
-                queue.push_back(r.clone());
+        let narinfo = source.fetch_narinfo(&sp)
+            .map_err(|error| format!("cannot resolve closure member {path}: {error}"))?;
+        for reference in &narinfo.references {
+            let reference = reference.to_absolute_path();
+            if !visited.contains(&reference) {
+                queue.push_back(reference);
             }
         }
+        paths.push((path, narinfo));
+    }
+    Ok(paths)
+}
 
-        // Download and extract if not present
-        if !already_present {
-            fetch_and_extract(&path, source)?;
-        } else if !already_registered {
-            // Present on disk but not registered
-            let nar_hash_hex = data_encoding::HEXLOWER.encode(&narinfo.nar_hash);
-            let signatures: Vec<String> =
-                narinfo.signatures.iter().map(|s| s.to_string()).collect();
-            store::register_path(
-                &db,
-                &path,
-                &nar_hash_hex,
-                narinfo.nar_size,
-                references.clone(),
-                signatures,
-            )?;
-            eprintln!("✓ registered: {path}");
+fn fetch_closure_with_mode(
+    root: &str,
+    source: &CacheSource,
+    lazy: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let paths = resolve_closure(root, source)?;
+    let db = PathInfoDb::open()?;
+    store::ensure_store_dir()?;
+    let stored_running = stored_is_running();
+    for (path, narinfo) in paths {
+        let present = Path::new(&path).symlink_metadata().is_ok();
+        if lazy || present {
+            if !present || !db.is_registered(&path) {
+                register_without_extract(&path, &narinfo, &db)?;
+            }
+        } else {
+            extract_narinfo(&path, &narinfo, source, &db)
+                .map_err(|error| format!("cannot restore closure member {path}: {error}"))?;
         }
-
-        fetched += 1;
+        if stored_running {
+            if let Some(info) = db.get(&path)? {
+                stored_notify(&path, &info.nar_hash, &info.files);
+            }
+        }
     }
-
-    eprintln!();
-    eprintln!("Done: {fetched} fetched, {skipped} already present");
-
-    // 3. Link into profile (same as regular install)
-    let mut manifest = ProfileManifest::load();
-    if !manifest.packages.contains_key(name) {
-        let binaries = link_package_binaries(&entry.store_path)?;
-
-        manifest.packages.insert(
-            name.to_string(),
-            InstalledPackage {
-                name: name.to_string(),
-                pname: entry.pname.clone(),
-                version: entry.version.clone(),
-                store_path: entry.store_path.clone(),
-                binaries: binaries.clone(),
-            },
-        );
-        manifest.save()?;
-
-        let root_name = format!("profile-{name}");
-        store::add_root(&root_name, &entry.store_path)?;
-
-        eprintln!("✓ installed {name} {} (with dependencies)", entry.version);
-    }
-
     Ok(())
 }
 
@@ -549,15 +468,9 @@ pub fn install_recursive(
 /// get the hash, size, and references for registration.
 fn register_without_extract(
     store_path_str: &str,
-    source: &CacheSource,
+    narinfo: &NarInfo<'_>,
+    db: &PathInfoDb,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = StorePath::<String>::from_absolute_path(store_path_str.as_bytes())?;
-
-    // Fetch narinfo for metadata
-    let narinfo = source.fetch_narinfo(&sp)?;
-
-    // Register in PathInfoDb (no extraction — stored daemon handles that)
-    let db = PathInfoDb::open()?;
     let nar_hash_hex = data_encoding::HEXLOWER.encode(&narinfo.nar_hash);
     let references: Vec<String> = narinfo
         .references
@@ -567,7 +480,7 @@ fn register_without_extract(
     let signatures: Vec<String> = narinfo.signatures.iter().map(|s| s.to_string()).collect();
 
     store::register_path(
-        &db,
+        db,
         store_path_str,
         &nar_hash_hex,
         narinfo.nar_size,
@@ -579,48 +492,29 @@ fn register_without_extract(
     Ok(())
 }
 
-/// Fetch a store path from any cache source, decompress, verify hash, extract, and register.
-/// Extract a package from the binary cache to /nix/store/.
-///
-/// Fetches the narinfo, decompresses the NAR, extracts, verifies hash,
-/// and registers in PathInfoDb. Skips if the store path already exists.
+/// Restore a complete reference closure without creating a profile entry.
+/// Every new payload is decompressed, NAR-verified, atomically published, and
+/// registered; existing payloads are retained while their references are followed.
 pub fn fetch_and_extract(
     store_path_str: &str,
     source: &CacheSource,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let sp = StorePath::<String>::from_absolute_path(store_path_str.as_bytes())?;
-    let dest = sp.to_absolute_path();
+    fetch_closure_with_mode(store_path_str, source, false)
+}
 
-    if Path::new(&dest).exists() {
-        eprintln!("already exists: {dest}");
-        return Ok(());
-    }
-
-    store::ensure_store_dir()?;
-
-    // Fetch narinfo
-    eprintln!("fetching narinfo for {}...", sp.to_absolute_path());
-    let narinfo = source.fetch_narinfo(&sp)?;
-
-    // Open and decompress the NAR
-    let decompressed = source.open_nar_decompressed(&narinfo)?;
-
-    // Hash while extracting
-    let mut hashing = HashingReader::new(decompressed);
-    let mut buf_reader = BufReader::new(&mut hashing);
-
+fn extract_narinfo(
+    dest: &str,
+    narinfo: &NarInfo<'_>,
+    source: &CacheSource,
+    db: &PathInfoDb,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let decompressed = source.open_nar_decompressed(narinfo)?;
     eprintln!("extracting to {dest}...");
-    let manifest = nar::extract_with_manifest(&mut buf_reader, &dest)?;
+    let manifest = extract_verified(
+        decompressed, Path::new(dest), &narinfo.nar_hash, narinfo.nar_size,
+    )?;
 
-    // Verify hash
-    let actual_hash = hashing.finalize();
-    if let Err(e) = verify_nar_hash(&narinfo.nar_hash, &actual_hash) {
-        let _ = std::fs::remove_dir_all(&dest);
-        return Err(e);
-    }
-
-    // Register in PathInfoDb
-    let db = PathInfoDb::open()?;
+    // Publish metadata only after the verified payload is atomically in place.
     let nar_hash_hex = data_encoding::HEXLOWER.encode(&narinfo.nar_hash);
     let references: Vec<String> = narinfo
         .references
@@ -630,8 +524,8 @@ pub fn fetch_and_extract(
     let signatures: Vec<String> = narinfo.signatures.iter().map(|s| s.to_string()).collect();
 
     store::register_path_with_files(
-        &db,
-        &dest,
+        db,
+        dest,
         &nar_hash_hex,
         narinfo.nar_size,
         references,
@@ -643,10 +537,72 @@ pub fn fetch_and_extract(
     Ok(())
 }
 
+/// Extract into a private sibling directory; only verified NARs become store
+/// paths. The guard removes every partial file on parsing/hash/rename failure.
+struct ExtractionStage {
+    directory: PathBuf,
+}
+
+impl ExtractionStage {
+    fn new(parent: &Path) -> Result<Self, std::io::Error> {
+        use std::os::unix::fs::DirBuilderExt;
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static NEXT_STAGE: AtomicU64 = AtomicU64::new(0);
+        loop {
+            let id = NEXT_STAGE.fetch_add(1, Ordering::Relaxed);
+            let directory = parent.join(format!(".snix-extract-{}-{id}", std::process::id()));
+            match std::fs::DirBuilder::new().mode(0o700).create(&directory) {
+                Ok(()) => return Ok(Self { directory }),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error),
+            }
+        }
+    }
+}
+
+impl Drop for ExtractionStage {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.directory);
+    }
+}
+
+fn extract_verified(
+    reader: Box<dyn Read + Send>,
+    destination: &Path,
+    expected_hash: &[u8; 32],
+    expected_size: u64,
+) -> Result<Vec<nar::ManifestEntry>, Box<dyn std::error::Error>> {
+    let parent = destination.parent().ok_or("store path has no parent")?;
+    let stage = ExtractionStage::new(parent)?;
+    let payload = stage.directory.join("payload");
+    let mut hashing = HashingReader::new(reader);
+    let manifest = {
+        let mut buffered = BufReader::new(&mut hashing);
+        let manifest = nar::extract_with_manifest(
+            &mut buffered,
+            payload.to_str().ok_or("non-UTF8 staging path")?,
+        )?;
+        if buffered.read(&mut [0_u8; 1])? != 0 {
+            return Err("trailing data after NAR archive".into());
+        }
+        manifest
+    };
+    if hashing.bytes_read != expected_size {
+        return Err(format!("NAR size mismatch: expected {expected_size}, got {}", hashing.bytes_read).into());
+    }
+    verify_nar_hash(expected_hash, &hashing.finalize())?;
+    if destination.symlink_metadata().is_ok() {
+        return Err(format!("store path appeared during extraction: {}", destination.display()).into());
+    }
+    std::fs::rename(&payload, destination)?;
+    Ok(manifest)
+}
+
 /// Reader wrapper that hashes content as it's read.
 struct HashingReader<R> {
     inner: R,
     hasher: Sha256,
+    bytes_read: u64,
 }
 
 impl<R: Read> HashingReader<R> {
@@ -654,6 +610,7 @@ impl<R: Read> HashingReader<R> {
         Self {
             inner,
             hasher: Sha256::new(),
+            bytes_read: 0,
         }
     }
 
@@ -667,6 +624,7 @@ impl<R: Read> Read for HashingReader<R> {
         let n = self.inner.read(buf)?;
         if n > 0 {
             self.hasher.update(&buf[..n]);
+            self.bytes_read += n as u64;
         }
         Ok(n)
     }
@@ -923,5 +881,90 @@ mod tests {
     fn profiled_list_none_on_linux() {
         // On non-Redox, profiled_list returns None.
         assert!(profiled_list().is_none());
+    }
+
+    const CLOSURE_A: &str = "/nix/store/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-a";
+    const CLOSURE_B: &str = "/nix/store/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-b";
+    const CLOSURE_C: &str = "/nix/store/cccccccccccccccccccccccccccccccc-c";
+    const CLOSURE_D: &str = "/nix/store/dddddddddddddddddddddddddddddddd-d";
+
+    fn closure_cache(edges: &[(&str, &[&str])]) -> tempfile::TempDir {
+        let directory = tempfile::tempdir().unwrap();
+        for (path, references) in edges {
+            let basename = Path::new(path).file_name().unwrap().to_str().unwrap();
+            let references = references.iter()
+                .map(|reference| Path::new(reference).file_name().unwrap().to_str().unwrap())
+                .collect::<Vec<_>>().join(" ");
+            let narinfo = format!(
+                "StorePath: {path}\nURL: nar/{basename}.nar\nCompression: none\nNarHash: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\nNarSize: 0\nReferences: {references}\n"
+            );
+            std::fs::write(directory.path().join(format!("{}.narinfo", &basename[..32])), narinfo).unwrap();
+        }
+        directory
+    }
+
+    fn resolved_paths(root: &str, source: &CacheSource) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+        Ok(resolve_closure(root, source)?.into_iter().map(|(path, _)| path).collect())
+    }
+
+    #[test]
+    fn recursive_resolution_follows_chain_and_reports_missing_dependency() {
+        let cache = closure_cache(&[(CLOSURE_A, &[CLOSURE_B]), (CLOSURE_B, &[CLOSURE_C]), (CLOSURE_C, &[])]);
+        let source = CacheSource::Local(cache.path().to_path_buf());
+        assert_eq!(resolved_paths(CLOSURE_A, &source).unwrap(), [CLOSURE_A, CLOSURE_B, CLOSURE_C]);
+        std::fs::remove_file(cache.path().join(format!("{}.narinfo", "c".repeat(32)))).unwrap();
+        let error = resolve_closure(CLOSURE_A, &source).unwrap_err().to_string();
+        assert!(error.contains("cannot resolve closure member"));
+        assert!(error.contains(CLOSURE_C));
+    }
+
+    #[test]
+    fn recursive_resolution_terminates_for_diamond_and_self_reference() {
+        let cache = closure_cache(&[
+            (CLOSURE_A, &[CLOSURE_A, CLOSURE_B, CLOSURE_C]),
+            (CLOSURE_B, &[CLOSURE_D]), (CLOSURE_C, &[CLOSURE_D]), (CLOSURE_D, &[]),
+        ]);
+        let source = CacheSource::Local(cache.path().to_path_buf());
+        assert_eq!(resolved_paths(CLOSURE_A, &source).unwrap(), [CLOSURE_A, CLOSURE_B, CLOSURE_C, CLOSURE_D]);
+    }
+
+    #[test]
+    fn missing_dependency_payload_is_explicit() {
+        let cache = closure_cache(&[(CLOSURE_A, &[CLOSURE_B]), (CLOSURE_B, &[])]);
+        let source = CacheSource::Local(cache.path().to_path_buf());
+        resolved_paths(CLOSURE_A, &source).unwrap();
+        let sp = StorePath::<String>::from_absolute_path(CLOSURE_B.as_bytes()).unwrap();
+        let narinfo = source.fetch_narinfo(&sp).unwrap();
+        let error = source.open_nar(&narinfo).err().unwrap().to_string();
+        assert!(error.contains("NAR file not found"));
+        assert!(error.contains("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-b.nar"));
+    }
+
+    #[test]
+    fn extraction_only_publishes_verified_complete_nar() {
+        let bytes = include_bytes!("../testdata/nar/helloworld.nar");
+        let hash: [u8; 32] = Sha256::digest(bytes).into();
+        let directory = tempfile::tempdir().unwrap();
+        let destination = directory.path().join("payload");
+        extract_verified(Box::new(std::io::Cursor::new(bytes.to_vec())), &destination, &hash, bytes.len() as u64).unwrap();
+        assert_eq!(std::fs::read_to_string(&destination).unwrap(), "Hello World!");
+        assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn failed_extraction_hash_size_and_parse_leave_no_store_path() {
+        let bytes = include_bytes!("../testdata/nar/helloworld.nar");
+        let hash: [u8; 32] = Sha256::digest(bytes).into();
+        for (input, expected_hash, expected_size) in [
+            (bytes.to_vec(), [0_u8; 32], bytes.len() as u64),
+            (bytes.to_vec(), hash, bytes.len() as u64 + 1),
+            (bytes[..bytes.len() / 2].to_vec(), hash, bytes.len() as u64),
+        ] {
+            let directory = tempfile::tempdir().unwrap();
+            let destination = directory.path().join("payload");
+            assert!(extract_verified(Box::new(std::io::Cursor::new(input)), &destination, &expected_hash, expected_size).is_err());
+            assert!(destination.symlink_metadata().is_err());
+            assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 0);
+        }
     }
 }

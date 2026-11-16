@@ -16,7 +16,9 @@
   uefi-src,
   fdt-src,
   vendor,
-  bootloaderFeatures ? [],
+  # Independent Cargo features: [] (disk/manual), ["autoboot"] (disk/auto),
+  # ["live"] (RAM/manual), ["live" "autoboot"] (RAM/auto).
+  bootloaderFeatures ? [ ],
   ...
 }:
 
@@ -118,7 +120,8 @@ pkgs.stdenv.mkDerivation {
       --bin bootloader \
       --target ${uefiTarget} \
       --release \
-      ${lib.optionalString (bootloaderFeatures != []) "--features ${lib.concatStringsSep "," bootloaderFeatures}"} \
+      --no-default-features \
+      ${lib.optionalString (bootloaderFeatures != [ ]) "--features ${lib.concatStringsSep "," bootloaderFeatures}"} \
       -Z build-std=core,alloc \
       -Z build-std-features=compiler-builtins-mem
 
@@ -133,6 +136,8 @@ pkgs.stdenv.mkDerivation {
 
     runHook postInstall
   '';
+
+  passthru = { inherit bootloaderFeatures; };
 
   meta = with lib; {
     description = "Redox OS UEFI Bootloader";

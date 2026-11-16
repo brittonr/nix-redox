@@ -27,6 +27,7 @@ let
     inherit
       lib
       pkgs
+      rustToolchain
       redoxTarget
       relibc
       stubLibs

@@ -16,6 +16,8 @@
 let
   defaultMemory = toString (vmConfig.memorySize or 2048);
   defaultCpus = toString (vmConfig.cpus or 4);
+  defaultAcceleration = vmConfig.acceleration or "auto";
+  defaultTcgCpus = toString (vmConfig.tcgCpus or 1);
   nicModel = vmConfig.qemuNicModel or "e1000";
   machineType = vmConfig.qemuMachineType or "pc";
   defaultHostSshPort = toString (vmConfig.qemuHostSshPort or 8022);
@@ -42,10 +44,10 @@ let
   # Common QEMU arguments shared between graphical and headless modes
   commonQemuArgs = ''
     -M ${machineType} \
-    -cpu host \
+    -cpu $CPU_MODEL \
     -m ${defaultMemory} \
-    -smp ${defaultCpus} \
-    -enable-kvm \
+    -smp $VCPUS \
+    -accel $QEMU_ACCELERATOR \
     -kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI \
     -drive file=$IMAGE,format=raw,if=none,id=disk0 \
     -device virtio-blk-pci,drive=disk0 \
@@ -56,6 +58,22 @@ let
   commonSetup = ''
     # Keep host audio/GUI library overrides out of the pinned QEMU closure.
     unset LD_LIBRARY_PATH
+    ${builtins.readFile ./vm-policy.sh}
+    redox_vm_policy_init qemu ${lib.escapeShellArg defaultAcceleration} ${defaultCpus} ${defaultTcgCpus}
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --help)
+          echo "Usage: $0 [--accel auto|kvm|tcg] [--cpus N] [--qemu]"
+          echo "Default: REDOX_VM_ACCEL or virtualisation.acceleration (${defaultAcceleration})."
+          echo "--qemu selects TCG unless --accel is explicit (independent of order)."
+          echo "TCG uses qemu64, single-thread execution, ${defaultTcgCpus} vCPU(s) unless --cpus overrides."
+          exit 0 ;;
+        *)
+          redox_vm_policy_option "$@" || { echo "Invalid VM option: $1" >&2; exit 2; }
+          shift "$POLICY_SHIFT" ;;
+      esac
+    done
+    redox_vm_policy_resolve 1 0 || exit $?
 
     ${portFinder}
 
@@ -144,6 +162,7 @@ in
 
   # Headless QEMU runner with serial console
   headless = pkgs.writeShellScriptBin "run-redox" ''
+    set -e
     ${commonSetup}
 
     echo "Starting Redox OS (headless with networking)..."

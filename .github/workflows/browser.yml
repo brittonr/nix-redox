@@ -1,0 +1,66 @@
+name: Browser revision preview
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'nix/**'
+      - 'snix-redox/**'
+      - 'snix-wasm/**'
+      - 'src/**'
+      - 'flake.*'
+      - 'default.nix'
+      - '.github/workflows/browser.yml'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+# This workflow executes untrusted PR code: no environments, secrets, caches with
+# write credentials, deployment token, id-token, or pull_request_target trigger.
+permissions:
+  contents: read
+concurrency:
+  group: browser-preview-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = false
+      - name: Build exact revision
+        run: |
+          nix build .#browser-site --out-link browser-site
+          nix run .#browser-delivery-tests
+      - name: Real Chromium guest gate
+        run: nix run .#browser-smoke-test -- --output browser-evidence
+      - name: Record exact preview identity
+        if: always()
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          printf 'head=%s\nbase=%s\n' "$HEAD_SHA" "$BASE_SHA" > preview-identity.txt
+          printf 'Source commit artifact: `%s` (not deployed).\n\nDownload and serve the artifact; `/live/` selects the complete immutable bundle.\n' "$HEAD_SHA" >> "$GITHUB_STEP_SUMMARY"
+          if test -e browser-site/channel.json; then
+            python3 -c 'import json; p=json.load(open("browser-site/channel.json")); print("Immutable preview: `/revisions/" + p["revision"] + "/live/` (source `" + p["sourceRevision"] + "`).")' >> "$GITHUB_STEP_SUMMARY"
+            cat browser-site/channel.json >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: browser-preview-${{ github.event.pull_request.head.sha || github.sha }}
+          path: |
+            browser-site/
+            browser-evidence/
+            preview-identity.txt
+          retention-days: 14
+          if-no-files-found: error

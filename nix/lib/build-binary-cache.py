@@ -4,16 +4,20 @@ Build a Nix-compatible binary cache from cross-compiled packages.
 
 Generates:
   nix-cache-info          — cache metadata
-  packages.json           — name → store path index (non-standard, for snix)
+  packages.json           — v2 installable-root index (non-standard, for snix)
   {hash}.narinfo          — per-path metadata
   nar/{sha256hex}.nar.zst — compressed NAR files
+  closure.json            — v1 complete closure with direct references/evidence
+  transport.json          — v1 exact per-root transport inventory
 
 NAR format: https://nixos.org/manual/nix/stable/protocols/nix-archive
 """
 
+import base64
 import hashlib
 import json
 import os
+import re
 import struct
 import subprocess
 import sys
@@ -68,13 +72,13 @@ def _serialize_entry(f, path):
 
     elif os.path.isdir(path):
         _write_str(f, "directory")
-        for name in sorted(os.listdir(path)):
+        for name in sorted(os.listdir(os.fsencode(path))):
             _write_str(f, "entry")
             _write_str(f, "(")
             _write_str(f, "name")
             _write_str(f, name)
             _write_str(f, "node")
-            _serialize_entry(f, os.path.join(path, name))
+            _serialize_entry(f, os.path.join(os.fsencode(path), name))
             _write_str(f, ")")
 
     elif os.path.isfile(path):
@@ -138,7 +142,8 @@ def store_path_name(path):
     return basename[33:]  # skip hash + dash
 
 
-def build_narinfo(store_path, nar_hash_bytes, nar_size, file_hash_bytes, file_size, nar_url):
+def build_narinfo(store_path, nar_hash_bytes, nar_size, file_hash_bytes, file_size, nar_url,
+                  references):
     """Generate a narinfo file content.
 
     Uses nixbase32 for hashes (the canonical format for Nix binary caches).
@@ -153,115 +158,233 @@ def build_narinfo(store_path, nar_hash_bytes, nar_size, file_hash_bytes, file_si
         f"FileSize: {file_size}",
         f"NarHash: sha256:{nar_hash_nix32}",
         f"NarSize: {nar_size}",
-        f"References: ",
+        "References: " + " ".join(os.path.basename(ref) for ref in sorted(set(references))),
     ]
     return "\n".join(lines) + "\n"
 
 
-def main():
-    if len(sys.argv) != 3:
-        print(f"Usage: {sys.argv[0]} <package-info.json> <output-dir>", file=sys.stderr)
-        sys.exit(1)
+STORE_PATH = re.compile(r"/nix/store/[0123456789abcdfghijklmnpqrsvwxyz]{32}-[^/\s]+\Z")
 
-    info_path = sys.argv[1]
-    out_dir = sys.argv[2]
 
-    with open(info_path) as f:
-        package_list = json.load(f)
+def compatibility_for(path, declaration, target):
+    """Inspect content, never names or the platform that assembled a data file.
 
+    ELF executable/shared-object content needs declared build-target evidence.
+    ELF headers cannot distinguish all Linux and Redox binaries (both use SYSV
+    OSABI), so guessing from those headers would incorrectly certify host code.
+    Host-assembled data and shebang scripts do not need a native-code target.
+    Their store references, including store-path interpreters, remain in closure.
+    """
+    native = False
+    script = False
+    paths = []
+    if os.path.isdir(path) and not os.path.islink(path):
+        for directory, dirs, files in os.walk(path, followlinks=False):
+            dirs.sort()
+            paths.extend(os.path.join(directory, name) for name in sorted(files))
+    else:
+        paths.append(path)
+    for item in paths:
+        if os.path.islink(item):
+            continue  # The referent is checked as its own graph member.
+        with open(item, "rb") as stream:
+            header = stream.read(64)
+        if header.startswith(b"\x7fELF"):
+            if len(header) < 20 or header[5] not in (1, 2):
+                raise ValueError(f"invalid ELF header: {item}")
+            endian = "little" if header[5] == 1 else "big"
+            if int.from_bytes(header[16:18], endian) in (2, 3):
+                native = True
+                # This cache's declared ABI is x86_64, not merely any Redox.
+                if target == "x86_64-unknown-redox" and (
+                    header[4] != 2 or int.from_bytes(header[18:20], endian) != 62
+                ):
+                    raise ValueError(f"wrong-target ELF architecture: {item}")
+        elif header[:4] in (b"\xfe\xed\xfa\xce", b"\xce\xfa\xed\xfe",
+                            b"\xfe\xed\xfa\xcf", b"\xcf\xfa\xed\xfe"):
+            raise ValueError(f"wrong-target native executable: {item}")
+        elif header.startswith(b"MZ") and len(header) >= 64:
+            # A two-byte text prefix is not executable evidence. PE requires
+            # the DOS header's offset to name an actual PE signature.
+            with open(item, "rb") as stream:
+                stream.seek(int.from_bytes(header[60:64], "little"))
+                if stream.read(4) == b"PE\x00\x00":
+                    raise ValueError(f"wrong-target native executable: {item}")
+        elif header.startswith(b"#!"):
+            script = True
+    if native:
+        if not declaration or not isinstance(declaration.get("evidence"), str) or not declaration["evidence"]:
+            raise ValueError(f"native code in {path} lacks declared target evidence; add pathMetadata")
+        if declaration.get("target") != target:
+            raise ValueError(f"wrong-target native code in {path}: declared {declaration.get('target')!r}, expected {target}")
+        return {"version": 1, "kind": "native", "target": target,
+                "evidence": declaration["evidence"]}
+    return {"version": 1, "kind": "script" if script else "data", "target": "any",
+            "evidence": "content:shebang-no-native-code" if script else "content:no-native-code"}
+
+
+def validate_manifest(info, exists=os.path.lexists, inspect=compatibility_for):
+    """Validate the Nix-supplied closure before producing any successful index."""
+    target = info["target"]
+    if target != "x86_64-unknown-redox":
+        raise ValueError(f"unsupported guest cache target: {target}")
+    members = {}
+    for entry in info["closure"]:
+        path = entry["path"]
+        if not STORE_PATH.fullmatch(path):
+            raise ValueError(f"invalid store path in closure: {path}")
+        if path in members:
+            raise ValueError(f"duplicate closure member: {path}")
+        members[path] = {"references": sorted(set(entry["references"]))}
+    roots = {}
+    declarations = {}
+    for entry in info.get("pathMetadata", []):
+        path = entry["path"]
+        declaration = {"target": entry["target"], "evidence": entry["evidence"]}
+        if path in declarations and declarations[path] != declaration:
+            raise ValueError(f"conflicting target evidence for {path}")
+        declarations[path] = declaration
+    for entry in info["packageEntries"]:
+        name, path = entry["name"], entry["storePath"]
+        if name in roots:
+            raise ValueError(f"duplicate package name: {name}")
+        if path not in members:
+            raise ValueError(f"installable root {name} missing from closure: {path}")
+        roots[name] = path
+        declaration = entry.get("compatibility")
+        # An explicit per-path declaration may describe a manually cross-built
+        # output whose stdenv itself still describes the host builder.
+        if declaration and path not in declarations:
+            declarations[path] = declaration
+    for path, member in sorted(members.items()):
+        if not exists(path):
+            raise ValueError(f"missing dependency payload: {path}")
+        for reference in member["references"]:
+            if reference not in members:
+                raise ValueError(f"unresolved reference: {path} -> {reference}")
+        member["compatibility"] = inspect(path, declarations.get(path), target)
+    # Check reachability iteratively: diamond, self and cyclic references are
+    # retained truthfully and cannot recurse forever or duplicate payloads.
+    reached, pending = set(), list(roots.values())
+    while pending:
+        path = pending.pop()
+        if path not in reached:
+            reached.add(path)
+            pending.extend(members[path]["references"])
+    if reached != members.keys():
+        raise ValueError(f"unreachable closure members: {sorted(members.keys() - reached)}")
+    return {"version": 1, "target": target, "roots": dict(sorted(roots.items())),
+            "paths": dict(sorted(members.items()))}
+
+
+def verify_registered_nar(entry, digest, size):
+    """The output's identity stays Nix's identity; verify our NAR against it."""
+    known_hash = entry["narHash"]
+    accepted = {"sha256:" + nixbase32_encode(digest), "sha256:" + digest.hex(),
+                "sha256-" + base64.b64encode(digest).decode("ascii")}
+    if known_hash not in accepted or entry["narSize"] != size:
+        raise ValueError(f"NAR differs from Nix registration for {entry['path']}: {known_hash}")
+
+
+def build_transport(manifest, out_dir):
+    """Pin the exact metadata and payload bytes needed for each selected root."""
+    inventory = {}
+
+    def record(relative):
+        if relative not in inventory:
+            digest, size = hashlib.sha256(), 0
+            with open(os.path.join(out_dir, relative), "rb") as stream:
+                for chunk in iter(lambda: stream.read(65536), b""):
+                    digest.update(chunk)
+                    size += len(chunk)
+            inventory[relative] = {"path": relative, "sha256": digest.hexdigest(), "size": size}
+        return inventory[relative]
+
+    packages = {}
+    for name, root in manifest["roots"].items():
+        reached, pending = set(), [root]
+        files = {"packages.json", "closure.json", "nix-cache-info"}
+        while pending:
+            path = pending.pop()
+            if path in reached:
+                continue
+            reached.add(path)
+            member = manifest["paths"][path]
+            pending.extend(member["references"])
+            files.add(f"{store_path_hash(path)}.narinfo")
+            files.add(member["url"])
+        packages[name] = {"storePath": root, "files": [record(path) for path in sorted(files)]}
+    transport = {"version": 1, "target": manifest["target"], "packages": packages}
+    with open(os.path.join(out_dir, "transport.json"), "w") as stream:
+        json.dump(transport, stream, indent=2, sort_keys=True)
+        stream.write("\n")
+
+
+def build_cache(info, out_dir):
+    manifest = validate_manifest(info)
     os.makedirs(os.path.join(out_dir, "nar"), exist_ok=True)
-
-    # Build index for packages.json
-    index = {"version": 1, "packages": {}}
-    total_nar = 0
-    total_compressed = 0
-
-    for entry in package_list:
-        name = entry["name"]
-        store_path = entry["storePath"]
-        pname = entry.get("pname", name)
-        version = entry.get("version", "unknown")
-
-        if not os.path.exists(store_path):
-            print(f"  SKIP {name}: {store_path} not found", file=sys.stderr)
-            continue
-
-        sp_hash = store_path_hash(store_path)
-        print(f"  {name}: NAR-serializing {store_path}...", file=sys.stderr)
-
-        # 1. Serialize to NAR (temp file)
+    index = {"version": 2, "closureManifestVersion": 1,
+             "installationMode": "recursive", "packages": {}}
+    registered = {entry["path"]: entry for entry in info["closure"]}
+    total_nar = total_compressed = 0
+    for store_path, member in manifest["paths"].items():
+        print(f"  NAR-serializing {store_path}...", file=sys.stderr)
         with tempfile.NamedTemporaryFile(suffix=".nar", delete=False) as tmp:
             tmp_nar = tmp.name
-
         try:
             nar_hash_bytes, nar_size = serialize_to_nar(store_path, tmp_nar)
-            nar_hash_hex = nar_hash_bytes.hex()
+            verify_registered_nar(registered[store_path], nar_hash_bytes, nar_size)
             total_nar += nar_size
-
-            # 2. Compress with zstd
-            compressed_name = f"{nar_hash_hex}.nar.zst"
+            compressed_name = f"{nar_hash_bytes.hex()}.nar.zst"
             compressed_path = os.path.join(out_dir, "nar", compressed_name)
-
-            subprocess.run(
-                ["zstd", "-q", "-19", "--rm", tmp_nar, "-o", compressed_path],
-                check=True,
-            )
-
-            # 3. Hash the compressed file
-            file_hasher = hashlib.sha256()
-            file_size = 0
-            with open(compressed_path, "rb") as cf:
-                while True:
-                    chunk = cf.read(65536)
-                    if not chunk:
-                        break
+            subprocess.run(["zstd", "-q", "-19", "-f", "--rm", tmp_nar,
+                            "-o", compressed_path], check=True)
+            file_hasher, file_size = hashlib.sha256(), 0
+            with open(compressed_path, "rb") as stream:
+                for chunk in iter(lambda: stream.read(65536), b""):
                     file_hasher.update(chunk)
                     file_size += len(chunk)
-            file_hash_bytes = file_hasher.digest()
             total_compressed += file_size
-
-            # 4. Write narinfo
             nar_url = f"nar/{compressed_name}"
-            narinfo_content = build_narinfo(
-                store_path, nar_hash_bytes, nar_size, file_hash_bytes, file_size, nar_url
-            )
-            narinfo_path = os.path.join(out_dir, f"{sp_hash}.narinfo")
-            with open(narinfo_path, "w") as nf:
-                nf.write(narinfo_content)
-
-            # 5. Add to index
-            index["packages"][name] = {
-                "storePath": store_path,
-                "pname": pname,
-                "version": version,
-                "narHash": f"sha256:{nar_hash_hex}",
-                "narSize": nar_size,
-                "fileSize": file_size,
-            }
-
-            ratio = (file_size / nar_size * 100) if nar_size > 0 else 0
-            print(
-                f"         NAR {nar_size // 1024}K → zstd {file_size // 1024}K ({ratio:.0f}%)",
-                file=sys.stderr,
-            )
-
+            narinfo = build_narinfo(store_path, nar_hash_bytes, nar_size,
+                                   file_hasher.digest(), file_size, nar_url,
+                                   member["references"])
+            with open(os.path.join(out_dir, f"{store_path_hash(store_path)}.narinfo"), "w") as stream:
+                stream.write(narinfo)
+            member.update({"narHash": f"sha256:{nar_hash_bytes.hex()}",
+                           "narSize": nar_size, "fileSize": file_size, "url": nar_url})
         finally:
             if os.path.exists(tmp_nar):
                 os.unlink(tmp_nar)
+    # All graph members have verified payloads before any installable roots are
+    # advertised. Internal dependencies are intentionally not separate products.
+    for entry in sorted(info["packageEntries"], key=lambda item: item["name"]):
+        member = manifest["paths"][entry["storePath"]]
+        index["packages"][entry["name"]] = {
+            "storePath": entry["storePath"], "pname": entry["pname"],
+            "version": entry["version"],
+            **{key: member[key] for key in ("narHash", "narSize", "fileSize", "compatibility")},
+        }
+    for filename, value in (("closure.json", manifest), ("packages.json", index)):
+        with open(os.path.join(out_dir, filename), "w") as stream:
+            json.dump(value, stream, indent=2, sort_keys=True)
+            stream.write("\n")
+    with open(os.path.join(out_dir, "nix-cache-info"), "w") as stream:
+        stream.write("StoreDir: /nix/store\n")
+    build_transport(manifest, out_dir)
+    print(f"Binary cache: {len(index['packages'])} roots, {len(manifest['paths'])} paths; "
+          f"{total_nar} NAR bytes, {total_compressed} compressed bytes", file=sys.stderr)
 
-    # Write packages.json index
-    with open(os.path.join(out_dir, "packages.json"), "w") as f:
-        json.dump(index, f, indent=2, sort_keys=True)
 
-    # Write nix-cache-info
-    with open(os.path.join(out_dir, "nix-cache-info"), "w") as f:
-        f.write("StoreDir: /nix/store\n")
-
-    pkg_count = len(index["packages"])
-    print(file=sys.stderr)
-    print(f"Binary cache: {pkg_count} packages", file=sys.stderr)
-    print(f"  Total NAR:        {total_nar // (1024*1024)} MB", file=sys.stderr)
-    print(f"  Total compressed: {total_compressed // (1024*1024)} MB", file=sys.stderr)
+def main():
+    if len(sys.argv) != 3:
+        sys.exit(f"Usage: {sys.argv[0]} <nix-attrs.json> <output-dir>")
+    with open(sys.argv[1]) as stream:
+        info = json.load(stream)
+    try:
+        build_cache(info, sys.argv[2])
+    except (ValueError, KeyError, OSError, subprocess.CalledProcessError) as error:
+        sys.exit(f"binary-cache export failed: {error}")
 
 
 if __name__ == "__main__":

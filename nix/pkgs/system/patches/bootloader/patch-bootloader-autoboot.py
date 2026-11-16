@@ -7,34 +7,34 @@ This removes the need to manually press Enter at the resolution picker.
 
 The 'live' feature is orthogonal — it controls whether the disk is loaded
 into RAM. Both can be combined for fully unattended boot.
+
+Targets match bootloader revision 11b85164383c1dfc0415a36b389f6eb999b9b2f5.
+Validate every target before writing either file: source drift must fail the
+build, never leave a successfully or partially patched source tree.
 """
 
+from pathlib import Path
 import sys
-import os
 
 
-def patch_file(filepath, old, new):
-    with open(filepath, "r") as f:
-        content = f.read()
-    if old not in content:
-        print(f"WARNING: patch target not found in {filepath}")
-        print(f"  Looking for: {repr(old[:80])}...")
-        return False
-    content = content.replace(old, new, 1)
-    with open(filepath, "w") as f:
-        f.write(content)
-    print(f"  Patched {filepath}")
-    return True
+def prepare_patch(filepath, old, new):
+    content = filepath.read_text()
+    occurrences = content.count(old)
+    if occurrences != 1:
+        raise ValueError(
+            f"{filepath}: expected exactly one autoboot patch target, "
+            f"found {occurrences}: {old!r}"
+        )
+    return filepath, content.replace(old, new, 1)
 
 
 def patch_main(src_dir):
-    main_rs = os.path.join(src_dir, "src/main.rs")
+    src_dir = Path(src_dir)
 
-    # After best_resolution is determined and `selected` is set,
-    # add an early return when autoboot feature is enabled.
-    # The target text is right after the best_resolution loop.
-    patch_file(
-        main_rs,
+    # Prepare both edits before touching the source tree. In particular, a
+    # missing Cargo feature anchor must not leave main.rs modified.
+    main_patch = prepare_patch(
+        src_dir / "src/main.rs",
         '    println!();\n'
         '\n'
         '    println!("Arrow keys and enter select mode");',
@@ -51,17 +51,23 @@ def patch_main(src_dir):
         '    println!("Arrow keys and enter select mode");',
     )
 
-    # Add the feature to Cargo.toml
-    cargo_toml = os.path.join(src_dir, "Cargo.toml")
-    patch_file(
-        cargo_toml,
+    cargo_patch = prepare_patch(
+        src_dir / "Cargo.toml",
         'serial_debug = []',
-        'serial_debug = []\nautoboot = ["live"]',
+        'serial_debug = []\nautoboot = []',
     )
+
+    for filepath, content in (main_patch, cargo_patch):
+        filepath.write_text(content)
+        print(f"  Patched {filepath}")
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
         print(f"Usage: {sys.argv[0]} <bootloader-src-dir>")
         sys.exit(1)
-    patch_main(sys.argv[1])
+    try:
+        patch_main(sys.argv[1])
+    except (OSError, ValueError) as error:
+        print(f"autoboot patch failed: {error}", file=sys.stderr)
+        sys.exit(1)

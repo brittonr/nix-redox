@@ -278,12 +278,15 @@ in
         echo ""
         echo "Welcome to Redox OS!"
         echo ""
-        # ion's interactive mode (and login) require terminal raw mode
-        # (tcsetattr) which the serial debug: scheme doesn't support.
-        # This basic prompt loop uses plain blocking I/O instead.
+        # Ion's line editor requires named "termios" duplication, which the
+        # serial debug: scheme does not support. Use capability-aware read
+        # with plain blocking I/O on the startup service's real console.
+        let cmd = ""
         while true
           echo -n "$ "
-          read cmd
+          if not read cmd
+            break
+          end
           if not test "$cmd" = ""
             eval $cmd
           end

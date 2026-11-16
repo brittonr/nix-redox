@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Live Redox — local QEMU-WASM and Snix</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="../playground/style.css">
+  <script src="../coi-serviceworker.js"></script>
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <header><a href="../">nix-redox</a><h1>Live Redox in your browser</h1>
+    <p>The real x86_64 Redox kernel and Snix run locally under QEMU-WASM. No remote VM. Guest networking is disabled.</p>
+    <p><a href="../#demo">Watch the recorded demo instead</a>. Browser support and resource requirements are experimental until the release's real-guest smoke evidence passes.</p>
+  </header>
+  <main>
+    <section aria-labelledby="vm-title">
+      <h2 id="vm-title">Redox guest</h2>
+      <div class="controls">
+        <label>Startup <select id="mode"><option value="cold">Cold boot</option><option value="snapshot">Compatible snapshot, with cold fallback</option></select></label>
+        <label>Disk <select id="disk-backend"><option value="preload">Verified preload</option><option value="lazy">Lazy chunks (patched engine required)</option></select></label>
+        <button id="boot" type="button">Boot</button><button id="stop" type="button" disabled>Stop</button><button id="reset" type="button" disabled>Reset</button>
+        <button id="diagnostics" type="button">Download diagnostics</button>
+      </div>
+      <p id="state" role="status" aria-live="polite">Stopped. Start the VM to load its immutable artifacts.</p>
+      <p id="identity"></p><p id="progress" role="status"></p>
+      <p id="error" role="alert"></p>
+      <div id="guest"></div>
+      <p>Click the terminal to type or edit command lines; on Linux, paste with Ctrl+Shift+V (Ctrl+V is literal-next). Ctrl+C sends byte 0x03 when no text is selected; the serial debug scheme is not a full POSIX TTY and does not generate SIGINT for guest programs. Stop always terminates an unresponsive VM. Reset discards all guest writes, profiles and build results; verified immutable downloads may be reused.</p>
+    </section>
+    <section aria-labelledby="guided-title">
+      <h2 id="guided-title">Run real guest commands</h2>
+      <p>These actions use the same guest serial input path as typing. Expressions and command text are encoded as data, never substituted into shell syntax.</p>
+      <label for="expression">Nix expression</label><textarea id="expression" rows="3" spellcheck="false">builtins.concatStringsSep "-" [ "hello" "Redox" ]</textarea>
+      <button id="evaluate" type="button" disabled>Evaluate in Redox</button>
+      <label for="build-input">Declared build input (letters, digits, underscore or hyphen)</label><input id="build-input" value="hello-redox" pattern="[A-Za-z0-9_-]+" maxlength="128">
+      <button id="build" type="button" disabled>Build a fresh output</button>
+      <button id="package" type="button" disabled>Install and run bundled ripgrep</button>
+      <button id="fixtures" type="button" disabled>Run offline install/build/rollback checks</button>
+      <pre id="command-output" aria-label="Actual guest command output" tabindex="0"></pre>
+    </section>
+    <section id="downloads" hidden aria-labelledby="download-title"><h2 id="download-title">Download a Redox package</h2><div id="cache-ui"></div></section>
+    <section id="playground" class="snix-playground" aria-label="Independent Snix WASM evaluator"></section>
+    <details><summary>Bounded raw serial diagnostics</summary><pre id="serial" tabindex="0"></pre></details>
+  </main>
+</body>
+</html>

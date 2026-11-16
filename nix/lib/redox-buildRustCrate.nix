@@ -153,6 +153,10 @@ let
     "target-cpu=x86-64"
     "-C"
     "panic=abort"
+    # Imported and locally compiled std diagnostic locations must not retain
+    # the host rust-src store path. Runtime path literals are left unchanged.
+    "--remap-path-prefix"
+    "${rustToolchain}/lib/rustlib/src/rust=/rustc-src"
     "-L"
     "${sysroot}/lib"
     "-L"

@@ -291,6 +291,8 @@ adios:
         vmm = inputs.virtualisation.vmm;
         memorySize = inputs.virtualisation.memorySize;
         cpus = inputs.virtualisation.cpus;
+        acceleration = inputs.virtualisation.acceleration;
+        tcgCpus = inputs.virtualisation.tcgCpus;
         graphics = inputs.virtualisation.graphics;
         serialConsole = inputs.virtualisation.serialConsole;
         hugepages = inputs.virtualisation.hugepages;

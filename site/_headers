@@ -1,0 +1,14 @@
+# Hosts supporting _headers should use these directly. GitHub Pages ignores this
+# file; coi-serviceworker.js is a bounded, separately tested fallback, not headers.
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+  Cross-Origin-Resource-Policy: same-origin
+  X-Content-Type-Options: nosniff
+  Cache-Control: no-store
+/revisions/*
+  Cache-Control: public, max-age=31536000, immutable
+/revisions/*/coi-serviceworker.js
+  Cache-Control: no-store
+/*.wasm
+  Content-Type: application/wasm

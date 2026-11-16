@@ -1,0 +1,231 @@
+From: nix-redox browser display
+Subject: [PATCH] ui: add Emscripten software framebuffer and input listener
+
+Pinned base: ktock/qemu-wasm 0ef7b4e2814b231705d8371dd7997f5b72e70baf.
+Apply only to the wasm build; configure --disable-sdl --enable-pixman.
+The dedicated browser selector uses a QEMU display listener, not SDL or VNC.
+
+diff --git a/qapi/ui.json b/qapi/ui.json
+--- a/qapi/ui.json
++++ b/qapi/ui.json
+@@ -1462,1 +1462,4 @@
+ # @gtk: The GTK user interface.
++#
++# @browser: The Emscripten software framebuffer and input user interface.
++#
+@@ -1489,3 +1492,4 @@
+     { 'name': 'default' },
+     { 'name': 'none' },
++    { 'name': 'browser' },
+     { 'name': 'gtk', 'if': 'CONFIG_GTK' },
+diff --git a/ui/meson.build b/ui/meson.build
+--- a/ui/meson.build
++++ b/ui/meson.build
+@@ -1,1 +1,4 @@
+ system_ss.add(pixman)
++if cc.has_header('emscripten.h')
++  system_ss.add(files('browser-display.c'))
++endif
+diff --git a/ui/browser-display.c b/ui/browser-display.c
+new file mode 100644
+--- /dev/null
++++ b/ui/browser-display.c
+@@ -0,0 +1,198 @@
++/*
++ * Browser software framebuffer and input frontend.
++ * SPDX-License-Identifier: GPL-2.0-or-later
++ * QEMU 8.2 DisplayChangeListener, compiled only by Emscripten.
++ * A dedicated browser selector leaves native GTK/SDL frontends unmodified.
++ * There is no network display server and no SDL dependency.
++ */
++#include "qemu/osdep.h"
++#include "qemu/module.h"
++#include "ui/console.h"
++#include "ui/input.h"
++#include <emscripten.h>
++#include <stdatomic.h>
++#include <unistd.h>
++
++#define INPUT_CAPACITY 256
++#define EVENT_WORDS 6
++/* Single browser producer, single QEMU/BQL consumer. All header accesses are
++ * atomic. release/ack provides an out-of-band release even if the ring fills. */
++static struct {
++    _Atomic int write, read, release, ack;
++    _Atomic unsigned consumed[4];
++    int events[INPUT_CAPACITY][EVENT_WORDS];
++} browser_input;
++static DisplayChangeListener browser_dcl;
++static DisplaySurface *browser_surface;
++static pixman_image_t *browser_rgba;
++static bool browser_keys[768];
++static bool browser_buttons[3];
++static const InputButton button_map[] = {
++    INPUT_BUTTON_LEFT, INPUT_BUTTON_MIDDLE, INPUT_BUTTON_RIGHT
++};
++
++static void browser_release(QemuConsole *con)
++{
++    int i;
++    for (i = 0; i < G_N_ELEMENTS(browser_keys); i++) {
++        if (browser_keys[i]) {
++            qemu_input_event_send_key_qcode(con,
++                qemu_input_linux_to_qcode(i), false);
++            browser_keys[i] = false;
++        }
++    }
++    for (i = 0; i < G_N_ELEMENTS(browser_buttons); i++) {
++        qemu_input_queue_btn(con, button_map[i], false);
++        browser_buttons[i] = false;
++    }
++    qemu_input_event_sync();
++}
++
++static void browser_poll(DisplayChangeListener *dcl)
++{
++    int read, write, release, *ev;
++    release = atomic_load(&browser_input.release);
++    if (release != atomic_load(&browser_input.ack)) {
++        browser_release(dcl->con);
++        atomic_store(&browser_input.read, atomic_load(&browser_input.write));
++        atomic_store(&browser_input.ack, release);
++    }
++    read = atomic_load(&browser_input.read);
++    write = atomic_load(&browser_input.write);
++    while (read != write) {
++        ev = browser_input.events[read];
++        switch (ev[0]) {
++        case 1:
++            if (ev[1] > 0 && ev[1] < G_N_ELEMENTS(browser_keys)) {
++                browser_keys[ev[1]] = !!ev[2];
++                qemu_input_event_send_key_qcode(dcl->con,
++                    qemu_input_linux_to_qcode(ev[1]), !!ev[2]);
++            }
++            break;
++        case 2:
++            if (browser_surface && qemu_input_is_absolute(dcl->con)) {
++                qemu_input_queue_abs(dcl->con, INPUT_AXIS_X, ev[1], 0,
++                                    MAX(1, surface_width(browser_surface) - 1));
++                qemu_input_queue_abs(dcl->con, INPUT_AXIS_Y, ev[2], 0,
++                                    MAX(1, surface_height(browser_surface) - 1));
++            } else {
++                qemu_input_queue_rel(dcl->con, INPUT_AXIS_X, ev[3]);
++                qemu_input_queue_rel(dcl->con, INPUT_AXIS_Y, ev[4]);
++            }
++            break;
++        case 3:
++            if (ev[1] >= 0 && ev[1] < G_N_ELEMENTS(button_map)) {
++                browser_buttons[ev[1]] = !!ev[2];
++                qemu_input_queue_btn(dcl->con, button_map[ev[1]], !!ev[2]);
++            }
++            break;
++        case 4: {
++            InputButton button;
++            if (ev[1] == 0) {
++                button = ev[2] < 0 ? INPUT_BUTTON_WHEEL_UP : INPUT_BUTTON_WHEEL_DOWN;
++            } else {
++                button = ev[2] < 0 ? INPUT_BUTTON_WHEEL_LEFT : INPUT_BUTTON_WHEEL_RIGHT;
++            }
++            qemu_input_queue_btn(dcl->con, button, true);
++            qemu_input_event_sync();
++            qemu_input_queue_btn(dcl->con, button, false);
++            break;
++        }
++        }
++        if (ev[0] >= 1 && ev[0] <= 4) {
++            atomic_fetch_add(&browser_input.consumed[ev[0] - 1], 1);
++        }
++        qemu_input_event_sync();
++        read = (read + 1) % INPUT_CAPACITY;
++        atomic_store(&browser_input.read, read);
++    }
++    graphic_hw_update(dcl->con);
++}
++
++static void browser_update(DisplayChangeListener *dcl, int x, int y, int w, int h)
++{
++    int width, height, stride;
++    double begin;
++    uint32_t *pixels;
++    if (!browser_surface || !browser_rgba) {
++        return;
++    }
++    width = surface_width(browser_surface);
++    height = surface_height(browser_surface);
++    x = MAX(0, x);
++    y = MAX(0, y);
++    w = MIN(w, width - x);
++    h = MIN(h, height - y);
++    if (w <= 0 || h <= 0) {
++        return;
++    }
++    begin = emscripten_get_now();
++    pixman_image_composite32(PIXMAN_OP_SRC, browser_surface->image, NULL,
++        browser_rgba, x, y, 0, 0, x, y, w, h);
++    pixels = pixman_image_get_data(browser_rgba);
++    stride = pixman_image_get_stride(browser_rgba);
++    /* Synchronous proxy: the source remains alive and immutable until the
++     * main thread has copied the dirty rectangle. Never retain a heap view. */
++    MAIN_THREAD_EM_ASM({
++        if (!Module['redoxDisplayFrame']) {
++            throw new Error('Graphical engine requires redoxDisplayFrame');
++        }
++        Module['redoxDisplayFrame'](HEAPU8, $0, $1, $2, $3, $4, $5, $6, $7, $8, $9 >>> 0);
++    }, pixels, width, height, stride, x, y, w, h, emscripten_get_now() - begin,
++       (uintptr_t)sbrk(0));
++}
++
++static void browser_switch(DisplayChangeListener *dcl, DisplaySurface *surface)
++{
++    if (browser_rgba) {
++        pixman_image_unref(browser_rgba);
++        browser_rgba = NULL;
++    }
++    browser_surface = surface;
++    if (!surface) {
++        return;
++    }
++    browser_rgba = pixman_image_create_bits(PIXMAN_a8b8g8r8,
++        surface_width(surface), surface_height(surface), NULL, 0);
++    if (!browser_rgba) {
++        fprintf(stderr, "browser-display: RGBA framebuffer allocation failed\n");
++        exit(1);
++    }
++    browser_update(dcl, 0, 0, surface_width(surface), surface_height(surface));
++}
++
++static const DisplayChangeListenerOps browser_ops = {
++    .dpy_name = "redox-browser-rgba-v1",
++    .dpy_refresh = browser_poll,
++    .dpy_gfx_update = browser_update,
++    .dpy_gfx_switch = browser_switch,
++};
++
++static void browser_init(DisplayState *ds, DisplayOptions *opts)
++{
++    browser_dcl.con = qemu_console_lookup_by_index(0);
++    if (!browser_dcl.con || !qemu_console_is_graphic(browser_dcl.con)) {
++        fprintf(stderr, "browser-display: graphical console 0 required\n");
++        exit(1);
++    }
++    MAIN_THREAD_EM_ASM({
++        if (!Module['redoxDisplayInput']) {
++            throw new Error('Graphical engine requires redoxDisplayInput');
++        }
++        Module['redoxDisplayInput'](HEAP32, $0, $1, $2, $3);
++    }, &browser_input, INPUT_CAPACITY, EVENT_WORDS, 8);
++    browser_dcl.ops = &browser_ops;
++    browser_dcl.update_interval = 16;
++    register_displaychangelistener(&browser_dcl);
++}
++
++static QemuDisplay browser_display = {
++    .type = DISPLAY_TYPE_BROWSER,
++    .init = browser_init,
++};
++
++static void browser_register(void)
++{
++    qemu_display_register(&browser_display);
++}
++type_init(browser_register);

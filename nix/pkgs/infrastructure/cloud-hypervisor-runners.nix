@@ -78,6 +78,22 @@ let
   mmio32ApertureWeight = toString (vmConfig.chMmio32ApertureWeight or 4);
   memoryHotplugSizeMB = toString (vmConfig.chMemoryHotplugSizeMB or 2048);
 
+  # Consume policy before setup while preserving native CH argument passthrough.
+  accelerationGuard = ''
+    ${builtins.readFile ./vm-policy.sh}
+    redox_vm_policy_init ch ${lib.escapeShellArg (vmConfig.acceleration or "auto")} "''${CH_CPUS:-${defaultCpus}}" ${toString (vmConfig.tcgCpus or 1)}
+    CH_ARGS=()
+    while [ $# -gt 0 ]; do
+      case "$1" in
+        --qemu|--ch|--accel)
+          redox_vm_policy_option "$@" || exit $?
+          shift "$POLICY_SHIFT" ;;
+        *) CH_ARGS+=("$1"); shift ;;
+      esac
+    done
+    redox_vm_policy_resolve 0 1 || exit $?
+  '';
+
   # Use network-optimized disk image if provided, otherwise fall back to default
   networkDiskImage = if diskImageNet != null then diskImageNet else diskImage;
 in
@@ -185,6 +201,7 @@ in
   # CPU topology tuning with optional direct I/O
   headless = pkgs.writeShellScriptBin "run-redox-cloud-hypervisor" ''
     set -eo pipefail
+    ${accelerationGuard}
 
     # Environment variable overrides for customization
     CH_CPUS="''${CH_CPUS:-${defaultCpus}}"
@@ -279,7 +296,7 @@ in
       --pci-segment pci_segment=0,mmio32_aperture_weight=${mmio32ApertureWeight} \
       --serial tty \
       --console off \
-      "$@" | ${pkgs.coreutils}/bin/cat
+      "''${CH_ARGS[@]}" | ${pkgs.coreutils}/bin/cat
   '';
 
   # Cloud Hypervisor runner with TAP networking
@@ -288,6 +305,7 @@ in
   # CPU topology and multi-queue networking with optional direct I/O
   withNetwork = pkgs.writeShellScriptBin "run-redox-cloud-hypervisor-net" ''
     set -e
+    ${accelerationGuard}
 
     # Network configuration
     TAP_NAME="''${TAP_NAME:-${tapInterface}}"
@@ -418,7 +436,7 @@ in
       --net tap="$TAP_NAME",mac="$GUEST_MAC",num_queues="$CH_NET_QUEUES",queue_size="$CH_NET_QUEUE_SIZE" \
       --serial tty \
       --console off \
-      "$@"
+      "''${CH_ARGS[@]}"
   '';
 
   # Cloud Hypervisor runner with shared filesystem via virtio-fs
@@ -426,6 +444,7 @@ in
   # The guest sees the shared directory at /scheme/shared (via virtio-fsd driver)
   withSharedFs = pkgs.writeShellScriptBin "run-redox-cloud-hypervisor-shared" ''
     set -e
+    ${accelerationGuard}
 
     # Configuration
     CH_CPUS="''${CH_CPUS:-${defaultCpus}}"
@@ -547,13 +566,14 @@ in
       --fs tag="$FS_TAG",socket="$VIRTIOFSD_SOCKET",num_queues=${sharedFsNumQueues},queue_size=${sharedFsQueueSize} \
       --serial tty \
       --console off \
-      "$@"
+      "''${CH_ARGS[@]}"
   '';
 
   # Development mode runner with API socket for runtime control
   # Enables pause/resume, snapshot/restore, and runtime monitoring
   withDev = pkgs.writeShellScriptBin "run-redox-cloud-hypervisor-dev" ''
     set -e
+    ${accelerationGuard}
 
     # Environment variable overrides for customization
     CH_CPUS="''${CH_CPUS:-${defaultCpus}}"
@@ -641,7 +661,7 @@ in
       --api-socket path="$CH_API_SOCKET" \
       --serial tty \
       --console off \
-      "$@"
+      "''${CH_ARGS[@]}"
   '';
 
   # ch-remote wrapper: Pause VM

@@ -130,12 +130,28 @@ let
       }
     );
 
-    # Bootloader with autoboot (auto-select resolution + live mode)
+    # Automatic selection does not imply loading the filesystem into RAM.
     bootloaderAutoboot = import ./system/bootloader.nix (
       commonArgs
       // {
         inherit (inputs) bootloader-src uefi-src fdt-src;
         bootloaderFeatures = [ "autoboot" ];
+      }
+    );
+
+    bootloaderLive = import ./system/bootloader.nix (
+      commonArgs
+      // {
+        inherit (inputs) bootloader-src uefi-src fdt-src;
+        bootloaderFeatures = [ "live" ];
+      }
+    );
+
+    bootloaderLiveAutoboot = import ./system/bootloader.nix (
+      commonArgs
+      // {
+        inherit (inputs) bootloader-src uefi-src fdt-src;
+        bootloaderFeatures = [ "live" "autoboot" ];
       }
     );
 
@@ -177,6 +193,7 @@ let
       vendorHash = "sha256-6h9onMvVr0nX3nB5UUERaPv/2tdkrMu7A0CKfgpWn2g=";
       binaryName = "ion";
       preConfigure = ''
+        ${pkgs.python3}/bin/python3 ${./userspace/patches/ion/read-capability.py} .
         echo "nix-build" > git_revision.txt
       '';
       gitSources = [
@@ -645,7 +662,7 @@ let
       src = inputs.uutils-src;
       vendorHash = "sha256-Ucf4C9pXt2Gp125IwA3TuUWXTviHbyzhmfUX1GhuTko=";
       nativeBuildInputs = [ pkgs.jq ];
-      cargoBuildFlags = "--features \"ls head cat echo mkdir touch rm cp mv pwd df du wc sort uniq sleep chmod ln\" --no-default-features";
+      cargoBuildFlags = "--features \"ls head cat echo mkdir touch rm cp mv pwd df du wc sort uniq sleep chmod ln base64\" --no-default-features";
       preConfigure = ''
         # Patch ctrlc to disable semaphore usage on Redox
         # This will be done after vendor-combined is created
@@ -705,7 +722,7 @@ let
         # Create symlinks for multicall binary
         if [ -f "$out/bin/coreutils" ]; then
           cd $out/bin
-          for util in ls head cat echo mkdir touch rm cp mv pwd df du wc sort uniq sleep chmod ln; do
+          for util in ls head cat echo mkdir touch rm cp mv pwd df du wc sort uniq sleep chmod ln base64; do
             ln -sf coreutils $util
           done
         fi

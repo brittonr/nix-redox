@@ -153,6 +153,12 @@ pkgs.stdenv.mkDerivation {
   TARGET = redoxTarget;
   RUST_SRC_PATH = "${rustToolchain}/lib/rustlib/src/rust/library";
 
+  # Makefile's RUSTCFLAGS only reach the final cargo-rustc invocation. Cargo
+  # target flags also cover its dependencies and the core/alloc build-std units
+  # whose diagnostic filenames would otherwise leak the host toolchain into libc.a.
+  "CARGO_TARGET_${lib.toUpper (builtins.replaceStrings [ "-" ] [ "_" ] redoxTarget)}_RUSTFLAGS" =
+    "--remap-path-prefix=${rustToolchain}/lib/rustlib/src/rust=/rustc-src";
+
   configurePhase = ''
       runHook preConfigure
 

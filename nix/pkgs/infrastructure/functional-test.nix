@@ -46,6 +46,9 @@ vmTest.mkVmTest {
   inherit diskImage bootloader defaultTimeout nativeBootProof;
   memoryMB = effectiveMemory;
   cpus = effectiveCpus;
+  acceleration = vmConfig.acceleration or "auto";
+  tcgCpus = vmConfig.tcgCpus or 1;
+  machineType = vmConfig.qemuMachineType or "pc";
   chMinTimeout = vmConfig.chMinTimeout or 180;
   defaultMode = if defaultMode != null then defaultMode else (vmConfig.vmm or "auto");
   inherit enableQemu enableCH;

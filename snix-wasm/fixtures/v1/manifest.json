@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "revision": "34604636d7e3adbad6f7f909c98bb493f26855f9",
+  "cases": [
+    {
+      "id": "arithmetic",
+      "file": "arithmetic.nix",
+      "source": "1 + 2 * 3",
+      "expected": "7"
+    },
+    {
+      "id": "attributes",
+      "file": "attributes.nix",
+      "source": "let value = { answer = 6 * 7; nested = { enabled = true; }; }; in builtins.deepSeq value value",
+      "expected": "{ answer = 42; nested = { enabled = true; }; }"
+    },
+    {
+      "id": "functions",
+      "file": "functions.nix",
+      "source": "let twice = f: x: f (f x); in twice (x: x + 3) 4",
+      "expected": "10"
+    },
+    {
+      "id": "bundled-import",
+      "file": "bundled-import.nix",
+      "source": "let math = import ./lib/math.nix; in math.square 7 + math.offset",
+      "expected": "52"
+    },
+    {
+      "id": "source-data",
+      "file": "source-data.nix",
+      "source": "let text = \"quotes: ' \\\"; shell: $(false)\";\nin builtins.substring 0 6 text",
+      "expected": "\"quotes\""
+    }
+  ]
+}

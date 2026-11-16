@@ -13,6 +13,7 @@
 {
   lib,
   pkgs,
+  rustToolchain,
   redoxTarget,
   relibc,
   stubLibs,
@@ -87,6 +88,11 @@ rec {
         # Target CPU — baseline x86-64 avoids advanced instructions
         # (RDRAND, SSE4, AVX) that may not be available in QEMU/older CPUs
         "-C target-cpu=x86-64"
+
+        # Remap imported and locally compiled std diagnostic locations without
+        # changing explicit runtime store-path literals. Apply the same rule
+        # when compiling relibc itself, before its objects enter libc.a.
+        "--remap-path-prefix=${rustToolchain}/lib/rustlib/src/rust=/rustc-src"
 
         # Library search path for relibc
         "-L ${relibc}/${redoxTarget}/lib"

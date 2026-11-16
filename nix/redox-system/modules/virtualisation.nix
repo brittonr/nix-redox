@@ -28,6 +28,16 @@ in
       default = "cloud-hypervisor";
       description = "Virtual machine monitor backend";
     };
+    acceleration = {
+      type = t.enum "Acceleration" [ "auto" "kvm" "tcg" ];
+      default = "auto";
+      description = "VM acceleration policy, independent of backend: auto selects KVM when /dev/kvm is readable and writable, otherwise QEMU TCG. Cloud Hypervisor requires KVM. CLI --accel overrides REDOX_VM_ACCEL and this default; --qemu alone preserves the TCG shorthand.";
+    };
+    tcgCpus = {
+      type = t.int;
+      default = 1;
+      description = "QEMU TCG vCPUs (overridden by --cpus); TCG always uses qemu64 and thread=single, never host CPU or KVM. Native KVM uses cpus.";
+    };
 
     # Resources
     memorySize = {
@@ -118,7 +128,7 @@ in
     chMinTimeout = {
       type = t.int;
       default = 180;
-      description = "Minimum timeout floor (seconds) applied when auto-selecting Cloud Hypervisor for tests";
+      description = "Minimum timeout floor (seconds) for VM tests resolved to QEMU TCG";
     };
     chNetQueues = {
       type = t.int;
