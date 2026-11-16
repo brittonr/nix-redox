@@ -1,5 +1,6 @@
-:root { color-scheme: dark; font-family: ui-monospace, monospace; }
-body { margin: 0; min-width: 0; background: #101519; color: #e3ebef; }
+@import url("../identity.css");
+:root { color-scheme: dark; font-family: var(--mono); }
+body { margin: 0; min-width: 0; background: var(--editor-background); color: var(--editor-foreground); }
 #terminal { box-sizing: border-box; width: 100%; min-width: 0; padding: 12px; min-height: 500px; }
 #display:empty { display: none; }
 .xterm { width: 100%; min-width: 0; padding-bottom: 12px; }

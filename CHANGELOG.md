@@ -40,13 +40,17 @@ All notable changes to this project are documented here. The format follows
 - Redesigned the landing page (`site/`): numbered sections for running, the
   demo, the self-build proof, the build pipeline, configuration, image contents,
   status and docs; light and dark themes that follow the OS, with a toggle;
-  self-hosted Archivo and JetBrains Mono fonts; copy buttons; keyboard-operable
+  local Helvetica-class and monospace type; copy buttons; keyboard-operable
   tabs; and asciinema players that load as they scroll into view. Without
   JavaScript every panel stays visible and the recordings play as MP4s.
-- The live browser showcase now follows the landing page's visual design, with
-  explicit startup/ready/busy states, measured elapsed clocks and download bytes,
-  expandable asset details, and a width-fitting readable serial terminal. The
-  homepage links directly to the live demo while retaining the recording fallback.
+- Landing and live browser surfaces share a Kiln-derived identity: neutral
+  paper/ink, local typography, square frames and semantic status signals. The
+  live lab uses compact rail/top-bar navigation, a mobile menu and the shared
+  appearance preference; adapted styling retains the MIT notice.
+- The live browser showcase exposes startup/ready/busy states, measured elapsed
+  clocks and download bytes, expandable asset details, and a width-fitting
+  readable serial terminal. The homepage links directly to the live demo while
+  retaining the recording fallback.
 - `shell.nix` and `default.nix` no longer require the `flakes` experimental
   feature or copy the whole working tree into the store; `nix-build` builds the
   default disk image.

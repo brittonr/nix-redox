@@ -5,6 +5,14 @@ QEMU compiled to WebAssembly. It is not a recording, a remote VM, or the direct
 WASM evaluator. Guest networking is disabled. The landing-page recordings remain
 available when browser isolation or VM startup fails.
 
+The landing page and live workspace share `site/identity.css`, adapted from
+Kiln's neutral paper/ink palette, local typography, square frames and semantic
+status colors. Its MIT attribution is retained in the stylesheet; no Kiln
+backend or external font service is embedded. The live rail navigates actual
+sections, including the bundled package actions before the VM starts. On narrow
+screens, **Menu** expands navigation and **Escape** closes it. **Appearance**
+uses the same saved light/dark preference as the landing page.
+
 ## Build and serve
 
 ```sh

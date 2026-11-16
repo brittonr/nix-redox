@@ -167,9 +167,9 @@
       loadAsset("script", { src: `${PLAYER}.js` }),
     ]));
 
-  // The terminals use the page's monospace stack. The player measures glyphs
-  // when it mounts, so the web font has to be loaded first.
-  const monoFont = getComputedStyle(root).getPropertyValue("--font-mono").trim();
+  // The player measures glyphs when it mounts; use the shared local monospace
+  // stack and wait for its font selection before measuring the terminal.
+  const monoFont = getComputedStyle(root).getPropertyValue("--mono").trim();
 
   const mountPlayer = async (container) => {
     await Promise.all([loadPlayer(), document.fonts.load(`1em ${monoFont}`)]);

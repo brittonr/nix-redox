@@ -1,0 +1,111 @@
+/*
+ * Redox's shared browser identity, adapted from Kiln's identity.css and web.css.
+ * Kiln source: crates/kiln-dashboard/src/render/identity.css and
+ * crates/kiln-web-service/src/web.css. Selected license: MIT.
+ *
+ * Copyright (c) Kamacite contributors
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ */
+:root {
+  color-scheme: light dark;
+  --background: light-dark(#ececec, #0a0a0a);
+  --foreground: light-dark(#0b0b0b, #f0f0f0);
+  --muted: light-dark(#f4f4f4, #171717);
+  --muted-foreground: light-dark(#545454, #a4a4a4);
+  --secondary: light-dark(#ffffff, #121212);
+  --group-box: light-dark(#ffffff, #101010);
+  --popover: light-dark(#ffffff, #151515);
+  --accent: light-dark(#e2e2e2, #242424);
+  --list-hover: light-dark(#f0f0f0, #1b1b1b);
+  --list-active: light-dark(#e3e3e3, #262626);
+  --table-head: light-dark(#f4f4f4, #171717);
+  --border: light-dark(#c8c8c8, #333333);
+  --border-emphasis: light-dark(#8a8a8a, #5e5e5e);
+  --frame: light-dark(#0b0b0b, #7a7a7a);
+  --input-border: light-dark(#0b0b0b, #9a9a9a);
+  --sidebar: #000000;
+  --link: var(--foreground);
+  --primary: light-dark(#0b0b0b, #f0f0f0);
+  --primary-hover: light-dark(#333333, #cfcfcf);
+  --primary-foreground: light-dark(#ffffff, #000000);
+  --ring: light-dark(#0b0b0b, #ffffff);
+  --brand: #fc3d21;
+  --success: light-dark(#0b6a30, #6fd98a);
+  --success-background: light-dark(#e2f0e6, #0d2615);
+  --danger: light-dark(#b0001b, #ff7e8a);
+  --danger-background: light-dark(#fbe5e8, #360c12);
+  --info: light-dark(#0b3d91, #8fb6ff);
+  --info-background: light-dark(#e4ebf7, #0e1b36);
+  --warning: light-dark(#844800, #f2bd5c);
+  --warning-background: light-dark(#faeed7, #2f2108);
+  --queued: light-dark(#4f4f4f, #c2c2c2);
+  --queued-background: light-dark(#ebebeb, #202020);
+  --cancelled: light-dark(#595959, #a9a9a9);
+  --cancelled-background: light-dark(#e6e6e6, #1c1c1c);
+  --unknown: light-dark(#665300, #ded087);
+  --unknown-background: light-dark(#f3eed5, #28230d);
+  --editor-background: #050505;
+  --editor-foreground: #e6e6e6;
+  --editor-muted-foreground: #9b9b9b;
+  --syntax-keyword: light-dark(#7b3aa8, #c9a8f5);
+  --syntax-string: light-dark(#17673f, #8ed6a6);
+  --syntax-comment: light-dark(#5f5f5f, #a3a3a3);
+  --syntax-number: light-dark(#b23a1e, #ffa98a);
+  --syntax-constant: light-dark(#96500a, #f1c56c);
+  --syntax-type: light-dark(#0b6a72, #7fd4cc);
+  --syntax-function: light-dark(#1d4fb0, #9dbcff);
+  --code-selection: light-dark(#fff1b3, #3a3313);
+  --shadow-overlay: 6px 6px 0 0 light-dark(rgb(0 0 0 / 20%), rgb(0 0 0 / 75%));
+  --overlay: rgb(0 0 0 / 55%);
+  --sans: "Helvetica Neue", Helvetica, "Nimbus Sans", "Nimbus Sans L", "TeX Gyre Heros", Arimo, "Liberation Sans", Arial, sans-serif;
+  --mono: "Berkeley Mono", "TX-02", "JetBrains Mono", "IBM Plex Mono", "SF Mono", SFMono-Regular, ui-monospace, "Cascadia Code", Menlo, Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+  --text-xs: .75rem;
+  --text-sm: .8125rem;
+  --text-md: .875rem;
+  --text-lg: 1rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --label-font: 500 .6875rem/1.4 var(--mono);
+  --label-tracking: .07em;
+  --space-1: .25rem;
+  --space-2: .5rem;
+  --space-3: .75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space: 1.25rem;
+  --radius-sm: 0;
+  --radius: 0;
+  --radius-lg: 0;
+  --radius-pill: 0;
+  --control-height: 2.5rem;
+  --motion-fast: 100ms;
+  --motion: 150ms;
+  font-family: var(--sans);
+  font-synthesis: none;
+  font-kerning: normal;
+  background: var(--background);
+  color: var(--foreground);
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+::selection { background: var(--code-selection); }
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { :root { --motion-fast: 0ms; --motion: 0ms; } }

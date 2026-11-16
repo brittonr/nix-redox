@@ -2,6 +2,70 @@ import { RedoxSession } from "./session.js";
 import { createCacheTransport, mountCacheTransport } from "./cache-transport.js";
 
 const $ = selector => document.querySelector(selector);
+
+// Workspace chrome is independent of the guest/session and serial input paths.
+const root = document.documentElement;
+const navigation = $("#workspace-nav");
+const navigationToggle = $("#nav-toggle");
+const narrowNavigation = matchMedia("(max-width: 60rem)");
+const navigationLinks = [...navigation.querySelectorAll("nav a")];
+const setNavigation = open => {
+  navigation.classList.toggle("nav-open", open);
+  navigationToggle.setAttribute("aria-expanded", String(open));
+};
+navigationToggle.addEventListener("click", () => {
+  const open = navigationToggle.getAttribute("aria-expanded") !== "true";
+  setNavigation(open);
+  if (open) navigationLinks[0].focus();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && navigationToggle.getAttribute("aria-expanded") === "true") {
+    setNavigation(false);
+    navigationToggle.focus();
+  }
+});
+narrowNavigation.addEventListener("change", () => {
+  const focusedNavigation = navigation.contains(document.activeElement);
+  setNavigation(false);
+  if (narrowNavigation.matches && focusedNavigation) navigationToggle.focus();
+});
+const syncNavigation = () => {
+  const destination = location.hash || "#machine";
+  for (const link of navigationLinks) {
+    if (link.hash === destination) link.setAttribute("aria-current", "location");
+    else link.removeAttribute("aria-current");
+  }
+  if (destination === "#raw-diagnostics") $("#raw-diagnostics").open = true;
+};
+for (const link of navigationLinks) {
+  link.addEventListener("click", () => {
+    setNavigation(false);
+    const destination = $(link.hash);
+    if (destination instanceof HTMLDetailsElement) destination.open = true;
+    destination?.focus({ preventScroll: true });
+  });
+}
+window.addEventListener("hashchange", syncNavigation);
+syncNavigation();
+
+const themeToggle = $(".theme-toggle");
+const prefersDark = matchMedia("(prefers-color-scheme: dark)");
+const activeTheme = () => root.dataset.theme ?? (prefersDark.matches ? "dark" : "light");
+const syncTheme = () => {
+  const theme = activeTheme();
+  themeToggle.textContent = `Appearance: ${theme === "dark" ? "Dark" : "Light"}`;
+  themeToggle.setAttribute("aria-label", `Switch to ${theme === "dark" ? "light" : "dark"} theme`);
+};
+themeToggle.hidden = false;
+themeToggle.addEventListener("click", () => {
+  const next = activeTheme() === "dark" ? "light" : "dark";
+  root.dataset.theme = next;
+  try { localStorage.setItem("nix-redox-theme", next); } catch {}
+  syncTheme();
+});
+prefersDark.addEventListener("change", syncTheme);
+syncTheme();
+
 const session = new RedoxSession($("#guest"));
 window.redoxDemo = session;
 let currentAction = null;

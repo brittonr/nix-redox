@@ -6,6 +6,14 @@
   <meta name="color-scheme" content="light dark">
   <meta name="description" content="Boot a real Redox guest locally in your browser, then evaluate Nix, build an output and run guest shell commands.">
   <title>Live Redox — local QEMU-WASM and Snix</title>
+  <script>
+    document.documentElement.classList.add("js");
+    try {
+      const theme = localStorage.getItem("nix-redox-theme");
+      if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+    } catch {}
+  </script>
+  <link rel="stylesheet" href="../identity.css">
   <link rel="stylesheet" href="../playground/style.css">
   <link rel="stylesheet" href="style.css">
   <script src="../coi-serviceworker.js"></script>
@@ -13,20 +21,37 @@
 </head>
 <body>
   <a class="skip" href="#vm-title">Skip to the live guest</a>
-  <header>
-    <nav aria-label="Site"><a class="brand" href="../">nix-redox <span aria-hidden="true">/</span> live lab</a><a href="../#demo">Watch the recorded demo <span aria-hidden="true">↗</span></a></nav>
-    <p class="eyebrow">REAL KERNEL / LOCAL EXECUTION</p>
-    <h1>A whole OS.<br>Right here.</h1>
-    <p class="lede">The real x86_64 Redox kernel and Snix, running locally under QEMU-WASM. No remote VM. Guest networking is disabled.</p>
-    <ol class="journey" aria-label="Getting started">
-      <li><span class="step-no">01</span><div><strong>Boot the guest</strong><p>Download and verify the immutable VM assets. First boot can take several minutes.</p></div></li>
-      <li><span class="step-no">02</span><div><strong>Wait for Ready</strong><p>Boot text is not a ready shell. Commands unlock only after the guest reports it is ready.</p></div></li>
-      <li><span class="step-no">03</span><div><strong>Evaluate. Build. Run.</strong><p>Use the guided actions or send your own shell commands to the actual guest.</p></div></li>
-    </ol>
-    <p class="scope">Experimental browser support and resource requirements: availability depends on this release's real-guest smoke evidence. Prefer a desktop browser with memory to spare; keep this tab open while the VM runs.</p>
+  <header class="app-topbar">
+    <div class="topbar-location"><button id="nav-toggle" type="button" aria-controls="workspace-nav" aria-expanded="false">Menu</button><a href="../" class="topbar-workspace">nix-redox</a><span aria-hidden="true">/</span><span class="breadcrumb">Live lab</span></div>
+    <div class="topbar-tools"><a href="../#demo">Recorded demo <span aria-hidden="true">↗</span></a><button class="theme-toggle" type="button" aria-label="Switch theme" hidden>Appearance</button></div>
   </header>
+  <aside id="workspace-nav" class="app-sidebar" aria-label="Workspace navigation">
+    <a class="brand" href="../" aria-label="nix-redox home"><span class="redox-mark" aria-hidden="true">R</span><span class="nav-text">nix-redox</span></a>
+    <nav class="app-navigation" aria-label="Live lab sections">
+      <a href="#machine"><span class="nav-number" aria-hidden="true">01</span><span class="nav-text">Machine</span></a>
+      <a href="#actions"><span class="nav-number" aria-hidden="true">02</span><span class="nav-text">Guest actions</span></a>
+      <a href="#packages"><span class="nav-number" aria-hidden="true">03</span><span class="nav-text">Packages</span></a>
+      <a href="#playground"><span class="nav-number" aria-hidden="true">04</span><span class="nav-text">Playground</span></a>
+      <a href="#raw-diagnostics"><span class="nav-number" aria-hidden="true">05</span><span class="nav-text">Diagnostics</span></a>
+    </nav>
+    <a class="rail-home" href="../"><span aria-hidden="true">←</span><span class="nav-text">Project overview</span></a>
+  </aside>
+  <div class="app-workspace">
   <main>
-    <section class="guest-section" aria-labelledby="vm-title">
+    <div class="page-header">
+      <p class="eyebrow"><span class="page-number">01</span> / REDOX WORKSPACE</p>
+      <h1>Live Redox lab</h1>
+      <p class="lede">The real x86_64 Redox kernel and Snix, running locally under QEMU-WASM. No remote VM. Guest networking is disabled.</p>
+    </div>
+    <details class="about-view"><summary>About this lab &amp; getting started</summary>
+      <ol class="journey" aria-label="Getting started">
+        <li><span class="step-no">01</span><div><strong>Boot the guest</strong><p>Download and verify the immutable VM assets. First boot can take several minutes.</p></div></li>
+        <li><span class="step-no">02</span><div><strong>Wait for Ready</strong><p>Boot text is not a ready shell. Commands unlock only after the guest reports it is ready.</p></div></li>
+        <li><span class="step-no">03</span><div><strong>Evaluate. Build. Run.</strong><p>Use the guided actions or send your own shell commands to the actual guest.</p></div></li>
+      </ol>
+      <p class="scope">Experimental browser support and resource requirements: availability depends on this release's real-guest smoke evidence. Prefer a desktop browser with memory to spare; keep this tab open while the VM runs.</p>
+    </details>
+    <section id="machine" class="guest-section panel" aria-labelledby="vm-title" tabindex="-1">
       <div class="section-heading"><p class="eyebrow">01 / THE MACHINE</p><h2 id="vm-title">Redox guest</h2><p>Start here. Downloads and elapsed time below describe real work, not an estimated completion percentage.</p></div>
       <div class="controls">
         <label>Startup <select id="mode"><option value="cold">Cold boot</option><option value="snapshot">Compatible snapshot, with cold fallback</option></select></label>
@@ -43,9 +68,9 @@
       </div>
       <p id="identity" class="identity"></p>
       <div class="terminal-shell"><div class="terminal-bar"><span>REDOX / SERIAL CONSOLE</span><span id="terminal-state">Waiting for Boot</span></div><div id="guest"><p class="terminal-empty">Your guest terminal will appear here during startup.<br>Wait for <strong>Ready</strong> before typing or running a command.</p></div></div>
-      <div class="terminal-notes"><p><strong>Focus & paste.</strong> Click the terminal to type. On Linux, paste with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> (<kbd>Ctrl</kbd>+<kbd>V</kbd> is literal-next). On a phone, the command editor below is easier. Guided actions temporarily own serial input so keystrokes cannot mix with a running command.</p><p><strong>Stop & reset.</strong> Stop terminates even an unresponsive VM. Reset cold-boots or restores the selected startup again, discarding all guest writes, profiles and build results; verified immutable downloads may be reused. <kbd>Ctrl</kbd>+<kbd>C</kbd> sends byte 0x03 when no text is selected, but this serial debug scheme is not a full POSIX TTY and does not generate SIGINT for guest programs.</p></div>
+      <details class="terminal-help"><summary>Terminal input, paste &amp; session help</summary><div class="terminal-notes"><p><strong>Focus &amp; paste.</strong> Click the terminal to type. On Linux, paste with <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd> (<kbd>Ctrl</kbd>+<kbd>V</kbd> is literal-next). On a phone, the command editor below is easier. Guided actions temporarily own serial input so keystrokes cannot mix with a running command.</p><p><strong>Stop &amp; reset.</strong> Stop terminates even an unresponsive VM. Reset cold-boots or restores the selected startup again, discarding all guest writes, profiles and build results; verified immutable downloads may be reused. <kbd>Ctrl</kbd>+<kbd>C</kbd> sends byte 0x03 when no text is selected, but this serial debug scheme is not a full POSIX TTY and does not generate SIGINT for guest programs.</p></div></details>
     </section>
-    <section aria-labelledby="guided-title">
+    <section id="actions" aria-labelledby="guided-title" tabindex="-1">
       <div class="section-heading"><p class="eyebrow">02 / INSIDE REDOX</p><h2 id="guided-title">Run real guest commands</h2><p>Everything in this section runs inside the VM through its serial input path. Shell commands are transferred as data; the guest shell then executes them.</p></div>
       <p id="action-status" class="action-status" role="status" aria-live="polite">Waiting for the guest. You can prepare commands now; execution unlocks at Ready.</p>
       <div class="command-card">
@@ -61,14 +86,15 @@ ls</textarea>
         <div class="command-card"><h3>Evaluate an expression</h3><p>A real Snix process, not the independent WASM evaluator below.</p><label for="expression">Nix expression</label><textarea id="expression" rows="3" spellcheck="false" autocapitalize="off">builtins.concatStringsSep "-" [ "hello" "Redox" ]</textarea><button id="evaluate" type="button" disabled>Evaluate in Redox</button></div>
         <div class="command-card"><h3>Build with a declared input</h3><p id="build-help">Change this input to create a different derivation and a fresh store output. Choose a new input each time; this demo rejects outputs that already exist. This is a bundled demo build, not an arbitrary flake or nixpkgs build. Allow several minutes.</p><label for="build-input">Declared build input (letters, digits, underscore or hyphen)</label><input id="build-input" value="hello-redox" pattern="[A-Za-z0-9_-]+" maxlength="128" aria-describedby="build-help"><button id="build" type="button" disabled>Build a fresh output</button></div>
       </div>
-      <div class="command-card"><h3>Explore the bundled offline environment</h3><p>Install and run the bundled ripgrep sample, then remove its profile entry; or exercise install, build and rollback fixtures. No guest network is needed. The full checks can take many minutes.</p><div class="button-row"><button id="package" type="button" disabled>Install and run bundled ripgrep</button><button id="fixtures" type="button" disabled>Run offline install/build/rollback checks</button></div></div>
+      <div id="packages" class="command-card" tabindex="-1"><p class="eyebrow">03 / PACKAGES</p><h3>Explore the bundled offline environment</h3><p>Install and run the bundled ripgrep sample, then remove its profile entry; or exercise install, build and rollback fixtures. No guest network is needed. The full checks can take many minutes.</p><div class="button-row"><button id="package" type="button" disabled>Install and run bundled ripgrep</button><button id="fixtures" type="button" disabled>Run offline install/build/rollback checks</button></div></div>
       <div class="result-heading"><h3>Guest result</h3><span class="small-label">OUTPUT + EXIT STATUS</span></div>
       <pre id="command-output" aria-label="Actual guest command output" tabindex="0">No guest command has run in this session.</pre>
     </section>
-    <section id="downloads" hidden aria-labelledby="download-title"><div class="section-heading"><p class="eyebrow">03 / VERIFIED PACKAGES</p><h2 id="download-title">Download a Redox package</h2><p>Transfer verified package objects from the browser to this guest. The transfer exclusively owns serial input until it releases the receiver.</p></div><fieldset id="transport-controls"><legend class="sr-only">Package transport</legend><div id="cache-ui"></div></fieldset></section>
-    <section id="playground" class="snix-playground" aria-label="Independent Snix WASM evaluator"></section>
-    <details><summary>Bounded raw serial diagnostics</summary><p>The raw guest transcript is bounded to 1 MiB. Download diagnostics above for session identity, timings and failure details.</p><pre id="serial" tabindex="0"></pre></details>
+    <section id="downloads" class="panel" hidden aria-labelledby="download-title"><div class="section-heading"><p class="eyebrow">03 / VERIFIED PACKAGES</p><h2 id="download-title">Download a Redox package</h2><p>Transfer verified package objects from the browser to this guest. The transfer exclusively owns serial input until it releases the receiver.</p></div><fieldset id="transport-controls"><legend class="sr-only">Package transport</legend><div id="cache-ui"></div></fieldset></section>
+    <section id="playground" class="snix-playground panel" aria-label="Independent Snix WASM evaluator" tabindex="-1"></section>
+    <details id="raw-diagnostics" tabindex="-1"><summary>Bounded raw serial diagnostics</summary><p>The raw guest transcript is bounded to 1 MiB. Download diagnostics above for session identity, timings and failure details.</p><pre id="serial" tabindex="0"></pre></details>
   </main>
   <footer><a href="../">nix-redox</a><p>Real Redox. Real Snix. Local to this browser tab.</p><a href="../#demo">Prefer a recording?</a></footer>
+  </div>
 </body>
 </html>
