@@ -151,7 +151,10 @@ let
       commonArgs
       // {
         inherit (inputs) bootloader-src uefi-src fdt-src;
-        bootloaderFeatures = [ "live" "autoboot" ];
+        bootloaderFeatures = [
+          "live"
+          "autoboot"
+        ];
       }
     );
 

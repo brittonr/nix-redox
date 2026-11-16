@@ -46,6 +46,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Redox source inputs use shallow Git transport instead of the GitLab archive
+  API, which returns HTTP 403 on hosted CI. Locked revisions, NAR hashes and
+  source timestamps are unchanged.
+
 - QEMU runners separate backend selection from `auto`/`kvm`/`tcg` acceleration;
   forced TCG uses `qemu64` and a fresh serial-command nonce rather than a boot
   banner as shell evidence. Startup reconnects to the serial console instead

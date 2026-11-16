@@ -12,7 +12,11 @@ fi
 : "${REDOX_SOURCE_BUNDLE:?missing corresponding sources and notices}"
 out=$(realpath -m "$1")
 mode=${2:-baseline}
-case "$mode" in baseline|extended) ;; *) echo 'mode must be baseline or extended' >&2; exit 2 ;; esac
+case "$mode" in baseline | extended) ;; *)
+  echo 'mode must be baseline or extended' >&2
+  exit 2
+  ;;
+esac
 if [ -e "$out" ]; then
   echo "output already exists: $out" >&2
   exit 2
@@ -37,11 +41,14 @@ if [ "$mode" = extended ]; then
   chunk_patch="$REDOX_ENGINE_PATCHES/browser-chunk.patch"
   chunk_source="$REDOX_ENGINE_PATCHES/browser-chunk.c"
   for required in "$display_patch" "$chunk_patch" "$chunk_source"; do
-    if [ ! -f "$required" ]; then echo "missing extended engine source: $required" >&2; exit 1; fi
+    if [ ! -f "$required" ]; then
+      echo "missing extended engine source: $required" >&2
+      exit 1
+    fi
   done
-  patch -d "$work/qemu" -p1 < "$display_patch"
+  patch -d "$work/qemu" -p1 <"$display_patch"
   cp "$chunk_source" "$work/qemu/block/browser-chunk.c"
-  patch -d "$work/qemu" -p1 < "$chunk_patch"
+  patch -d "$work/qemu" -p1 <"$chunk_patch"
   python3 - "$work/build-engine.sh" <<'PY'
 import pathlib, sys
 p = pathlib.Path(sys.argv[1])
@@ -105,7 +112,7 @@ cp -r "$TRYNIX_SOURCE/patches" "$out/source/trynix-patches"
 if [ "$mode" = extended ]; then cp -r "$REDOX_ENGINE_PATCHES" "$out/source/redox-patches"; fi
 # Actual image ID and output hashes are recorded; no byte reproducibility claim.
 # SDK image and linked library sources are pinned; apt tools are online.
-docker image inspect trynix-buildqemu > "$out/source/toolchain-image.json"
+docker image inspect trynix-buildqemu >"$out/source/toolchain-image.json"
 python3 - "$out" "$mode" "$REDOX_ENGINE_SOURCE" "$TRYNIX_SOURCE" <<'PY'
 import hashlib, json, pathlib, sys
 out = pathlib.Path(sys.argv[1])
