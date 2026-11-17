@@ -1,40 +1,13 @@
-// nix-redox landing page behavior: theme, copy buttons, tabs, section
-// navigation, code tinting and lazily mounted asciinema players. The page
-// stays readable without this file; see the html:not(.js) rules in style.css.
+import "./chrome.js";
+
+// Landing-only copy buttons, tabs, code tinting and lazy asciinema players.
+// The content remains readable without JavaScript.
 (() => {
   "use strict";
 
-  const root = document.documentElement;
   const $ = (selector, scope = document) => scope.querySelector(selector);
   const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
   const live = $("#live");
-
-  // ── Theme ──────────────────────────────────────────────────────────
-  // The inline script in <head> applies a stored choice before first paint.
-  const THEME_KEY = "nix-redox-theme";
-  const prefersDark = matchMedia("(prefers-color-scheme: dark)");
-  const themeToggle = $(".theme-toggle");
-  const activeTheme = () => root.dataset.theme ?? (prefersDark.matches ? "dark" : "light");
-
-  const syncTheme = () => {
-    const other = activeTheme() === "dark" ? "light" : "dark";
-    themeToggle.setAttribute("aria-label", `Switch to ${other} theme`);
-    const paper = getComputedStyle(document.body).backgroundColor;
-    for (const meta of $$('meta[name="theme-color"]')) meta.content = paper;
-  };
-
-  themeToggle.addEventListener("click", () => {
-    const next = activeTheme() === "dark" ? "light" : "dark";
-    root.dataset.theme = next;
-    try {
-      localStorage.setItem(THEME_KEY, next);
-    } catch {
-      // Storage is blocked: the choice still applies to this page view.
-    }
-    syncTheme();
-  });
-  prefersDark.addEventListener("change", syncTheme);
-  syncTheme();
 
   // ── Copy buttons ───────────────────────────────────────────────────
   document.addEventListener("click", async (event) => {
@@ -95,51 +68,6 @@
     });
   }
 
-  // ── Section navigation ─────────────────────────────────────────────
-  const masthead = $(".masthead");
-  const nav = $(".nav");
-  const navToggle = $(".nav-toggle");
-  const setMenu = (open) => {
-    masthead.classList.toggle("nav-open", open);
-    navToggle.setAttribute("aria-expanded", open);
-  };
-  // The links come before the button in the document, so opening the menu moves
-  // focus to the first one instead of leaving Tab to skip past them.
-  navToggle.addEventListener("click", () => {
-    const open = !masthead.classList.contains("nav-open");
-    setMenu(open);
-    if (open) $("a", nav).focus();
-  });
-  // Leaving the masthead, by focus or by pointer, closes the menu rather than
-  // letting the page scroll or take focus behind it.
-  for (const type of ["focusin", "pointerdown"]) {
-    document.addEventListener(type, (event) => {
-      if (!masthead.contains(event.target)) setMenu(false);
-    });
-  }
-  nav.addEventListener("click", (event) => {
-    if (event.target.closest("a")) setMenu(false);
-  });
-  document.addEventListener("keydown", (event) => {
-    if (event.key !== "Escape" || !masthead.classList.contains("nav-open")) return;
-    setMenu(false);
-    navToggle.focus();
-  });
-
-  // Mark the link of whichever section crosses a line just above mid-viewport.
-  const navLinks = new Map($$("a", nav).map((link) => [link.hash.slice(1), link]));
-  const spy = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        for (const link of navLinks.values()) link.removeAttribute("aria-current");
-        navLinks.get(entry.target.id)?.setAttribute("aria-current", "true");
-      }
-    },
-    { rootMargin: "-45% 0px -55% 0px" },
-  );
-  for (const section of $$("main > section")) spy.observe(section);
-
   // ── Code tinting: strings and comments only ────────────────────────
   const escapeHtml = (text) => text.replace(/[&<>]/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[char]);
   for (const code of $$(".code code")) {
@@ -169,7 +97,7 @@
 
   // The player measures glyphs when it mounts; use the shared local monospace
   // stack and wait for its font selection before measuring the terminal.
-  const monoFont = getComputedStyle(root).getPropertyValue("--mono").trim();
+  const monoFont = getComputedStyle(document.documentElement).getPropertyValue("--mono").trim();
 
   const mountPlayer = async (container) => {
     await Promise.all([loadPlayer(), document.fonts.load(`1em ${monoFont}`)]);

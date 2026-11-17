@@ -301,7 +301,7 @@ BOOTSTRAP = '''<!doctype html>
 <html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Selecting Redox browser revision</title>
 <main><h1>Redox browser demo</h1><p id="status" role="status">Selecting the published immutable revision…</p>
-<a href="../#demo">Return to the landing page and recordings</a></main>
+<a href="../#recording">Return to the landing page and recordings</a></main>
 <script>
 (async () => {
   const status = document.getElementById('status');

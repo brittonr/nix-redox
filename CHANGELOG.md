@@ -49,6 +49,11 @@ All notable changes to this project are documented here. The format follows
   workbench: session controls and status, the serial console beside tabbed
   Shell/Nix/Packages/WASM tools, a docked latest-result pane, and collapsible
   help, identity and diagnostics, with the landing page's saved theme.
+- The overview and live lab now share project navigation, branding, theme and
+  mobile-menu behavior. The homepage introduces the live workflow and links to
+  individual tools while retaining the native quick-start and recorded walkthrough.
+  Boot and browser-launch links use bright Redox orange with high-contrast dark
+  text; command actions remain neutral.
 - The live browser showcase exposes startup/ready/busy states, measured elapsed
   clocks and download bytes, expandable asset details, and a width-fitting
   readable serial terminal. The homepage links directly to the live demo while

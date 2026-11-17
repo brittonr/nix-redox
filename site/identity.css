@@ -25,6 +25,9 @@
  */
 :root {
   color-scheme: light dark;
+  --wrap: 76rem;
+  --gutter: clamp(1.25rem, 4vw, 2.5rem);
+  --header-h: 3.5rem;
   --background: light-dark(#ececec, #0a0a0a);
   --foreground: light-dark(#0b0b0b, #f0f0f0);
   --muted: light-dark(#f4f4f4, #171717);
@@ -47,6 +50,9 @@
   --primary-foreground: light-dark(#ffffff, #000000);
   --ring: light-dark(#0b0b0b, #ffffff);
   --brand: #fc3d21;
+  --launch: var(--brand);
+  --launch-hover: #ff6b4d;
+  --launch-foreground: #0b0b0b;
   --success: light-dark(#0b6a30, #6fd98a);
   --success-background: light-dark(#e2f0e6, #0d2615);
   --danger: light-dark(#b0001b, #ff7e8a);
@@ -109,3 +115,48 @@
 ::selection { background: var(--code-selection); }
 :where(a, button, input, select, textarea, summary, [tabindex]):focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { :root { --motion-fast: 0ms; --motion: 0ms; } }
+
+/* Project chrome is shared by the overview and the revision-pinned live lab. */
+.wrap { width: min(var(--wrap), 100% - 2 * var(--gutter)); margin-inline: auto; }
+.ico { width: 1rem; height: 1rem; flex: none; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.masthead { position: sticky; top: 0; z-index: 30; border-bottom: 1px solid var(--frame); background: var(--secondary); }
+.masthead-row { display: flex; align-items: center; gap: 1rem; min-height: var(--header-h); }
+.masthead [hidden] { display: none; }
+.brand { display: inline-flex; align-items: center; gap: .6rem; color: var(--foreground); font: 700 1rem/1 var(--mono); text-decoration: none; white-space: nowrap; }
+.brand:hover { color: var(--foreground); }
+.mark { width: 1.6rem; height: 1.6rem; flex: none; fill: none; stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.mark-nix { stroke: var(--foreground); }
+.mark-oxide { stroke: var(--brand); }
+.nav { display: flex; align-items: center; gap: .125rem; margin-left: auto; }
+.nav a { padding: .6rem; color: var(--muted-foreground); font: 500 .8rem/1 var(--mono); text-decoration: none; white-space: nowrap; }
+.nav a:hover { background: var(--muted); color: var(--foreground); }
+.nav a[aria-current="page"] { background: var(--list-active); color: var(--foreground); box-shadow: inset 0 -2px 0 var(--brand); }
+.masthead-tools { display: flex; align-items: center; gap: .5rem; margin-left: auto; }
+.masthead .icon-btn { display: inline-grid; place-items: center; flex: none; width: 2.5rem; height: 2.5rem; padding: 0; border: 1px solid transparent; border-radius: var(--radius); background: var(--secondary); color: var(--muted-foreground); cursor: pointer; }
+.masthead .icon-btn:hover { border-color: var(--border); background: var(--muted); color: var(--foreground); }
+.header-github { display: inline-flex; align-items: center; gap: .4rem; min-height: 2.5rem; padding: .55rem .8rem; border: 1px solid var(--frame); background: var(--group-box); color: var(--foreground); font: 600 .8rem/1 var(--mono); text-decoration: none; white-space: nowrap; }
+.header-github:hover { background: var(--accent); color: var(--foreground); }
+.masthead .nav-toggle { display: none; }
+
+/* Orange is reserved for entering the live guest; other commands stay neutral. */
+.btn.launch-action, button.launch-action { border-color: var(--launch-foreground); background: var(--launch); color: var(--launch-foreground); font-weight: 700; }
+.btn.launch-action:hover, button.launch-action:hover:not(:disabled) { border-color: var(--launch-foreground); background: var(--launch-hover); color: var(--launch-foreground); }
+.btn.launch-action:active, button.launch-action:active:not(:disabled) { background: var(--launch); color: var(--launch-foreground); box-shadow: inset 0 0 0 2px var(--launch-foreground); }
+button.launch-action:disabled { border-color: var(--border); background: var(--muted); color: var(--muted-foreground); opacity: 1; }
+
+@media (max-width: 63.999rem) {
+  .js .nav { display: none; position: absolute; top: 100%; left: 0; right: 0; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .25rem; margin: 0; padding: .75rem var(--gutter) 1.25rem; border-bottom: 1px solid var(--frame); background: var(--secondary); }
+  .js .nav-open .nav { display: grid; }
+  .js .nav a { display: flex; align-items: center; min-height: 2.75rem; padding: .8rem .6rem; }
+  .js .masthead .nav-toggle { display: inline-grid; }
+  html:not(.js) .masthead-row { flex-wrap: wrap; padding-top: .5rem; }
+  html:not(.js) .nav { order: 3; width: 100%; margin: 0; padding-bottom: .5rem; overflow-x: auto; }
+}
+html:not(.js) .masthead .theme-toggle { display: none; }
+@media (max-width: 22rem) {
+  .masthead-row { gap: .5rem; }
+  .masthead-tools { gap: .125rem; }
+  .header-github { padding-inline: .55rem; }
+  .header-github span { display: none; }
+}
+@media (max-width: 19.5rem) { .header-github { display: none; } }

@@ -3,12 +3,6 @@
  * Palette, local type stacks, theme preferences and square geometry are shared
  * with the live VM; only landing-specific layout tokens belong here.
  */
-:root {
-  --wrap: 76rem;
-  --gutter: clamp(1.25rem, 4vw, 2.5rem);
-  --header-h: 3.5rem;
-}
-
 /* ── Base ─────────────────────────────────────────────────────────── */
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -113,11 +107,6 @@ kbd {
   font-size: 0.78em;
 }
 
-.wrap {
-  width: min(var(--wrap), 100% - 2 * var(--gutter));
-  margin-inline: auto;
-}
-
 .sr-only {
   position: absolute;
   width: 1px;
@@ -128,17 +117,6 @@ kbd {
 }
 
 .sprite { position: absolute; width: 0; height: 0; }
-
-.ico {
-  width: 1rem;
-  height: 1rem;
-  flex: none;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
 
 .skip {
   position: absolute;
@@ -152,6 +130,7 @@ kbd {
 .skip:focus { left: 0.5rem; color: var(--background); }
 
 /* Small uppercase mono labels: section numbers, table heads, field names. */
+.native-label,
 .sheet-no,
 .fig-no,
 .term-bar,
@@ -197,124 +176,7 @@ kbd {
 }
 .btn-primary:hover { border-color: var(--primary-hover); background: var(--primary-hover); color: var(--primary-foreground); }
 
-.btn-small { padding: 0.55rem 0.8rem; font: 600 0.8rem/1 var(--mono); }
-
-.icon-btn {
-  display: inline-grid;
-  place-items: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border: 1px solid transparent;
-  border-radius: var(--radius);
-  background: var(--secondary);
-  color: var(--muted-foreground);
-  cursor: pointer;
-}
-.icon-btn:hover {
-  border-color: var(--border);
-  background: var(--muted);
-  color: var(--foreground);
-}
-
-/* ── Masthead ─────────────────────────────────────────────────────── */
-
-.masthead {
-  position: sticky;
-  top: 0;
-  z-index: 20;
-  border-bottom: 1px solid var(--frame);
-  background: var(--secondary);
-}
-
-.masthead-row {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  min-height: var(--header-h);
-}
-
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.6rem;
-  font: 700 1rem/1 var(--mono);
-  text-decoration: none;
-  white-space: nowrap;
-}
-.brand:hover { color: inherit; }
-
-.mark {
-  width: 1.6rem;
-  height: 1.6rem;
-  flex: none;
-  fill: none;
-  stroke-width: 3.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-.mark-nix { stroke: var(--foreground); }
-.mark-oxide { stroke: var(--brand); }
-
-.nav a {
-  padding: 0.5rem 0.6rem;
-  border-radius: var(--radius);
-  color: var(--muted-foreground);
-  font: 500 0.8rem/1 var(--mono);
-  text-decoration: none;
-  white-space: nowrap;
-}
-.nav a:hover { background: var(--muted); color: var(--foreground); }
-.nav a[aria-current] { background: var(--list-active); color: var(--foreground); box-shadow: inset 0 -2px 0 var(--foreground); }
-
-.masthead-tools {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-left: auto;
-}
-
-/* Below 22rem the row is narrower than its contents: close the gaps and drop the arrow. */
-@media (max-width: 22rem) {
-  .masthead-row { gap: 0.5rem; }
-  .masthead-tools { gap: 0.125rem; }
-  .masthead .btn-small { padding-inline: 0.55rem; }
-  .masthead .btn-small span { display: none; }
-}
-/* Below 19.5rem only the brand, the theme and the menu fit; GitHub stays in the footer. */
-@media (max-width: 19.5rem) {
-  .masthead .btn-small { display: none; }
-}
-
-/* Narrow screens: the section list folds behind the menu button. */
-.js .nav {
-  display: none;
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.25rem;
-  padding: 0.75rem var(--gutter) 1.25rem;
-  border-bottom: 1px solid var(--frame);
-  background: var(--background);
-}
-.js .nav-open .nav { display: grid; }
-.js .nav a { padding: 0.8rem 0.6rem; }
-
-/* Without JavaScript the list stays visible and scrolls sideways. */
-html:not(.js) .masthead-row { flex-wrap: wrap; }
-html:not(.js) .nav {
-  display: flex;
-  order: 3;
-  width: 100%;
-  padding-bottom: 0.5rem;
-  overflow-x: auto;
-}
-/* The second row makes the masthead taller, and anchors have to clear it. */
-@media not all and (min-width: 75rem) {
-  html:not(.js) { --header-h: 5.4rem; }
-}
-html:not(.js) :is(.theme-toggle, .nav-toggle, .copy, .tablist, .player-fallback) { display: none; }
+html:not(.js) :is(.copy, .tablist, .player-fallback) { display: none; }
 
 .progress { display: none; }
 
@@ -388,6 +250,9 @@ html:not(.js) :is(.theme-toggle, .nav-toggle, .copy, .tablist, .player-fallback)
   color: var(--muted-foreground);
   font-size: 0.9rem;
 }
+
+.native-label { margin-top: 2rem; color: var(--foreground); }
+.hero-copy .cmd-hero { margin-top: 0.75rem; }
 
 .actions {
   display: flex;
@@ -512,14 +377,6 @@ html:not(.js) :is(.theme-toggle, .nav-toggle, .copy, .tablist, .player-fallback)
 
 .sheet-lede { max-width: 32rem; margin-top: 1.25rem; color: var(--muted-foreground); }
 
-/* The lede of a section whose content is one wide figure sits beside the title. */
-.sheet-intro {
-  max-width: 36rem;
-  color: var(--muted-foreground);
-  font-size: clamp(1.05rem, 1rem + 0.4vw, 1.25rem);
-  line-height: 1.55;
-}
-
 /* A size container, so the figures inside lay out by the room they actually get. */
 .sheet-body { min-width: 0; container-type: inline-size; }
 .sheet-body > * + * { margin-top: 2.5rem; }
@@ -591,6 +448,41 @@ html:not(.js) .tabpanel + .tabpanel { margin-top: 1rem; }
 .notes li { padding: 1.1rem 1.25rem 1.25rem; background: var(--group-box); }
 .notes h3 { color: var(--foreground); }
 .notes p { margin-top: 0.5rem; color: var(--muted-foreground); font-size: 0.92rem; }
+
+/* ── Live lab: workflow and tool links ────────────────────────────── */
+
+.lab-flow {
+  padding: 0;
+  list-style: none;
+  counter-reset: lab-step;
+}
+.lab-flow li {
+  position: relative;
+  padding: 1rem 0 1rem 3rem;
+  border-top: 1px solid var(--frame);
+  counter-increment: lab-step;
+}
+.lab-flow li:last-child { border-bottom: 1px solid var(--frame); }
+.lab-flow li::before {
+  content: counter(lab-step, decimal-leading-zero);
+  position: absolute;
+  top: 1.1rem;
+  left: 0;
+  color: var(--muted-foreground);
+  font: var(--label-font);
+}
+.lab-flow p, .lab-links p { margin-top: 0.5rem; color: var(--muted-foreground); font-size: 0.92rem; }
+.lab-links { display: grid; gap: 1px; padding: 0; border: 1px solid var(--frame); background: var(--border); list-style: none; }
+.lab-links li { min-width: 0; padding: 1.25rem; background: var(--group-box); }
+.lab-links a { display: flex; align-items: baseline; justify-content: space-between; gap: 0.75rem; color: var(--foreground); text-decoration: none; }
+.lab-links a:hover { text-decoration: underline; }
+.lab-links a span { color: var(--brand); }
+.recording-heading { grid-column: 1 / -1; max-width: 48rem; }
+.recording-heading p { margin-top: 0.75rem; color: var(--muted-foreground); font-size: 0.92rem; }
+
+@container (min-width: 30rem) {
+  .lab-links { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* ── Figures, terminals and players ───────────────────────────────── */
 
@@ -1051,8 +943,6 @@ html:not(.js) .player { display: block; aspect-ratio: auto; padding: 0; }
   .sheet-head { container-type: inline-size; }
   .sheet-head h2 { font-size: clamp(1.9rem, 11.5cqi, 3rem); }
 
-  .sheet-intro { align-self: end; }
-
   .pipe {
     --gap: 2.75rem;
     --lane-gap: 0.75rem;
@@ -1081,21 +971,6 @@ html:not(.js) .player { display: block; aspect-ratio: auto; padding: 0; }
 }
 
 @media (min-width: 75rem) {
-  .js .nav, html:not(.js) .nav {
-    display: flex;
-    position: static;
-    order: 0;
-    width: auto;
-    gap: 0.15rem;
-    margin-inline: auto;
-    padding: 0;
-    border: 0;
-    background: none;
-    overflow: visible;
-  }
-  .js .nav a { padding: 0.5rem 0.6rem; }
-  .nav-toggle { display: none; }
-  .masthead-tools { margin-left: 0; }
   .split { grid-template-columns: minmax(0, 1fr) 21rem; align-items: start; }
 }
 
