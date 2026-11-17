@@ -5,8 +5,9 @@
 }:
 let
   revision = "34604636d7e3adbad6f7f909c98bb493f26855f9";
+  # Same mirror and fixed hash as snix-upstream-source.nix.
   upstream = pkgs.fetchgit {
-    url = "https://git.snix.dev/snix/snix.git";
+    url = "https://github.com/anthropics/snix.git";
     rev = revision;
     hash = "sha256-of/rQYKmysPEqO2Snx199VcZjey+5YxJZD3QgLQanN4=";
   };
