@@ -44,14 +44,29 @@ let
     ) ((inputs.filesystem.specialSymlinks or { }) // (inputs.filesystem.extraSpecialSymlinks or { }))
   );
 
-  # Boot-essential packages: flat-copied to /bin/ for init scripts and early boot
+  # Boot-essential packages: copied once to /bin/ for init scripts and early boot
+  # (these copies survive generation switches and store garbage collection).
+  # RedoxFS has no hard links, so every extra name used to store a full binary:
+  # a package-internal alias (uutils `cat -> coreutils`, snix `nix -> snix`)
+  # becomes a link to the one copied binary, and /usr/bin links to /bin. Links
+  # are relative so they resolve identically in the guest and in this tree.
   mkBootPackages = lib.concatStringsSep "\n" (
     builtins.map (pkg: ''
       if [ -d "${pkg}/bin" ]; then
         for f in ${pkg}/bin/*; do
           [ -e "$f" ] || continue
-          cp "$f" $out/bin/$(basename "$f") 2>/dev/null || true
-          cp "$f" $out/usr/bin/$(basename "$f") 2>/dev/null || true
+          name=$(basename "$f")
+          # Last package wins, as before; never write through an earlier link.
+          rm -f "$out/bin/$name" "$out/usr/bin/$name"
+          target=$(readlink "$f" || true)
+          if [ -n "$target" ] && [ "''${target#*/}" = "$target" ] && [ -e "${pkg}/bin/$target" ]; then
+            ln -s "$target" "$out/bin/$name"
+          else
+            cp "$f" "$out/bin/$name" 2>/dev/null || true
+          fi
+          if [ -L "$out/bin/$name" ] || [ -e "$out/bin/$name" ]; then
+            ln -s "../../bin/$name" "$out/usr/bin/$name"
+          fi
         done
       fi
       # Data packages (e.g. orbdata): merge usr/share assets into the root filesystem.
@@ -159,9 +174,10 @@ hostPkgs.runCommand "redox-root-tree"
         ${mkDirs cfg.allDirectories}
         mkdir -p $out/dev
         ${mkDevSymlinks}
-        ${mkSpecialSymlinks}
         # Boot-essential packages in /bin/ (survive generation switches)
         ${mkBootPackages}
+        # Declared links (bin/sh -> /bin/ion) take precedence over package names.
+        ${mkSpecialSymlinks}
 
         # All packages in /nix/store/ with content-addressed paths
         ${mkStorePackages}

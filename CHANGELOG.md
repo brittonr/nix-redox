@@ -53,11 +53,23 @@ All notable changes to this project are documented here. The format follows
   clocks and download bytes, expandable asset details, and a width-fitting
   readable serial terminal. The homepage links directly to the live demo while
   retaining the recording fallback.
+- Root filesystems store each boot binary once. RedoxFS has no hard links, so
+  package aliases (uutils applets, Snix's `nix*` names) and every `/usr/bin`
+  entry were full copies; they are now relative links, and declared special
+  links such as `bin/sh` keep precedence. The live demo's compressed disk falls
+  from 320 MB to 119 MB.
+- The live demo uses a 384 MiB disk with a 64 MiB ESP, so the browser holds
+  512 MiB less expanded disk. Its readiness check runs one Snix evaluation
+  instead of five, guest commands arrive as one quoted argument without a base64
+  decoder or second shell, and firmware files download concurrently.
 - `shell.nix` and `default.nix` no longer require the `flakes` experimental
   feature or copy the whole working tree into the store; `nix-build` builds the
   default disk image.
 
 ### Fixed
+
+- The default disk image builds again: duplicated alias binaries had exhausted
+  its RedoxFS partition (`redoxfs-ar: No space left on device`).
 
 - The WASM tool's **Run in Redox** status keeps the guest exit status visible
   instead of immediately reverting to the generic ready message.

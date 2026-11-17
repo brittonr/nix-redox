@@ -56,6 +56,9 @@ runs in a child shell in the same guest filesystem; use the terminal for
 interactive programs or persistent changes to shell working directory and
 environment. Source is limited to 64 KiB and editor commands have a two-minute
 timeout. A nonzero command exit is reported without disabling the ready guest.
+The script travels over the emulated serial line at roughly 1.3 KB/s as one
+quoted argument (base64 when escaping would be much longer), so a 64 KiB script
+needs about a minute to arrive; short commands add about one second of overhead.
 
 Named busy states explain when an action owns serial input. During that action,
 terminal keystrokes and competing guest actions are paused; **Stop** remains
@@ -367,6 +370,28 @@ its compressed transfer is 305.39 MiB. Resume fetches the captured raw disk
 plus 195.58 MiB of VM state: lower CPU startup time does not imply a smaller
 download. The corresponding bundle IDs start `a80f290f055a` (cold) and
 `6dd2e9ad6cd6` (resume).
+
+Those measurements predate root-filesystem deduplication. RedoxFS has no hard
+links, so aliases such as uutils applets, Snix's `nix*` names and every
+`/usr/bin` entry were stored as full copies; they are now relative links, and
+the serial profile uses a 384 MiB disk with a 64 MiB ESP. Same runner, loopback,
+verified assets already in the HTTP cache, before and after:
+
+| Metric | Before | After |
+|---|---:|---:|
+| Compressed disk transfer | 320.2 MB | 118.7 MB |
+| Expanded disk held by the browser | 896 MiB | 384 MiB |
+| Cold boot to Ready | 64.8 s | 51.0 s |
+| `Boot Complete` to Ready marker | 19.9 s | 9.4 s |
+| First command after Ready | 4.2 s | 2.4 s |
+| Later command overhead | 1.9–2.5 s | 1.0 s |
+
+The Ready check now runs one Snix evaluation instead of five. Remaining cold
+boot time is mostly firmware and engine start (about 8 s), the bootloader
+reading the 35 MiB initfs (about 9 s) and mounting the root filesystem (about
+11 s). Initfs links are not used to shrink it: their targets resolve against
+the caller's working directory. Downloaded packages still arrive over the
+serial line at about 1 KB/s.
 
 The optional backend gates take an explicit deployment tree, built with the
 extended engine and the corresponding machine/image:
