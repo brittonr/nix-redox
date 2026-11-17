@@ -366,9 +366,10 @@ export class RedoxSession extends EventTarget {
     const word = quotedWord(bytes);
     const file = `/playground/v1/.browser-expression-${token()}.nix`;
     // The source is only data in a quoted word or base64, including quotes,
-    // newlines and shell syntax.
+    // newlines and shell syntax. A failed write or decode is the result: Snix
+    // never evaluates an empty or partial file.
     const write = word ? `printf '%s' ${word} > ${file}` : `printf '%s' '${base64(bytes)}' | /bin/base64 -d > ${file}`;
-    return this.run(`${write}\n/bin/snix eval --file ${file}\nstatus=$?\n/bin/rm -f ${file}\nexit "$status"`);
+    return this.run(`${write}\nstatus=$?\nif [ "$status" -eq 0 ]; then /bin/snix eval --file ${file}; status=$?; fi\n/bin/rm -f ${file}\nexit "$status"`);
   }
 
   diagnostics() {

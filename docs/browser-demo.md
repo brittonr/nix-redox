@@ -332,9 +332,11 @@ It retains raw serial, manifest/source/runtime/bundle identities, browser versio
 phase timings, diagnostics and measured resources. Desktop validation also needs
 actual framebuffer output and keyboard/pointer interaction, not a canvas alone.
 
-Missing Snix or the serial decoder must return command-not-found status 127,
-not an apparently successful empty evaluation. The terminal stays available,
-and Reset restores both tools and permits a fresh nonce-derived evaluation.
+Missing Snix must return command-not-found status 127, not an apparently
+successful empty evaluation. Commands and expressions that are mostly non-ASCII
+use the base64 fallback: it must deliver their exact bytes, and a missing
+decoder must also return 127. The terminal stays available, and Reset restores
+both tools and permits a fresh nonce-derived evaluation.
 Fault setup is noninteractive even for write-protected guest binaries; the
 session's boot deadline must precede the outer harness execution deadline.
 
