@@ -7,6 +7,7 @@ export function mountPlayground(root, { executeExpression, guestReady = () => fa
   let directGeneration = 0;
   let guestGeneration = 0;
   let disposed = false;
+  let guestOutcome = '';
   const element = (tag, text, attrs = {}) => {
     const node = document.createElement(tag);
     node.textContent = text;
@@ -37,7 +38,10 @@ export function mountPlayground(root, { executeExpression, guestReady = () => fa
       guest.dataset.busy = 'false';
     }
     guest.disabled = disposed || typeof executeExpression !== 'function' || !guestReady() || guest.dataset.busy === 'true';
-    if (guest.dataset.busy !== 'true') guestStatus.textContent = guest.disabled ? 'Start the live Redox VM and wait for its shell to enable guest execution.' : 'Redox shell ready. This action executes a guest Snix process.';
+    if (guest.dataset.busy === 'true') return;
+    // A completed result stays visible until the guest becomes unavailable.
+    if (guest.disabled) guestOutcome = '';
+    guestStatus.textContent = guest.disabled ? 'Start the live Redox VM and wait for its shell to enable guest execution.' : guestOutcome || 'Redox shell ready. This action executes a guest Snix process.';
   }
   evaluate.onclick = async () => {
     const generation = ++directGeneration;
@@ -73,11 +77,11 @@ export function mountPlayground(root, { executeExpression, guestReady = () => fa
       const result = await executeExpression(text);
       if (disposed || generation !== guestGeneration) return;
       if (!result || typeof result.stdout !== 'string' || !Number.isInteger(result.exitCode)) throw new Error('Invalid guest execution response.');
-      guestStatus.textContent = `Actual Redox guest process exited with status ${result.exitCode}.`;
+      guestStatus.textContent = guestOutcome = `Actual Redox guest process exited with status ${result.exitCode}.`;
       const textOutput = result.stdout + (result.stderr ? '\n' + result.stderr : '');
       guestOutput.textContent = textOutput.slice(0, 32768) + (textOutput.length > 32768 ? '\n[guest display truncated]' : '');
     } catch (error) {
-      if (!disposed && generation === guestGeneration) guestStatus.textContent = `Guest execution failed: ${String(error.message ?? error).slice(0, 2048)}`;
+      if (!disposed && generation === guestGeneration) guestStatus.textContent = guestOutcome = `Guest execution failed: ${String(error.message ?? error).slice(0, 2048)}`;
     } finally {
       if (!disposed && generation === guestGeneration) {
         guest.dataset.busy = 'false';

@@ -185,6 +185,7 @@ class CacheProof:
         return self.h.page.evaluate("window.__cacheProof")
 
     def catalog_ready(self):
+        self.h.page.get_by_role("tab", name="Packages", exact=True).click()
         self.h.page.wait_for_function("""() => {
           const select=document.querySelector('#cache-ui select');
           const status=document.querySelector('#cache-ui output');
