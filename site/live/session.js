@@ -2,15 +2,37 @@ import { READY_MARKER, assetMetrics, assetURL, canonicalJSON, loadManifest, requ
 
 const TRANSCRIPT_LIMIT = 1024 * 1024;
 const MAX_COMMAND_BYTES = 65536;
+const BASH = "/nix/system/profile/bin/bash";
+// A base64 command spawns /bin/base64; at the measured ~1.3 KB/s guest serial
+// input rate, that process costs about as much as 1 KiB of extra command text.
+const DECODER_COST_BYTES = 1024;
 const token = () => [...crypto.getRandomValues(new Uint8Array(16))].map(byte => byte.toString(16).padStart(2, "0")).join("");
 const aborted = () => new DOMException("VM session ended", "AbortError");
 
-function encode(text) {
+function commandBytes(text) {
   const bytes = new TextEncoder().encode(text);
   if (bytes.byteLength > MAX_COMMAND_BYTES) throw new Error("Guest command exceeds 64 KiB");
+  return bytes;
+}
+
+function base64(bytes) {
   let binary = "";
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
+}
+
+// One printable-ASCII Bash word carrying arbitrary bytes, or null when base64
+// and its decoder process are cheaper to send. NUL keeps the base64 behavior.
+function quotedWord(bytes) {
+  if (bytes.includes(0)) return null;
+  let word = "$'";
+  for (const byte of bytes) {
+    if (byte === 0x27 || byte === 0x5c) word += `\\${String.fromCharCode(byte)}`;
+    else if (byte >= 0x20 && byte < 0x7f) word += String.fromCharCode(byte);
+    else word += `\\x${byte.toString(16).padStart(2, "0")}`;
+  }
+  word += "'";
+  return word.length <= Math.ceil(bytes.byteLength / 3) * 4 + DECODER_COST_BYTES ? word : null;
 }
 
 export class RedoxSession extends EventTarget {
@@ -110,16 +132,20 @@ export class RedoxSession extends EventTarget {
     };
     const roles = ["engine", "wasm", "worker", "firmware", "efi", "xterm", "xtermCss", "pty"];
     if (options.diskBackend === "preload" && options.mode === "cold") roles.push("disk");
-    await Promise.all(roles.map(role => fetchRole(role, this.manifest.assets[role])));
-    const pack = {};
+    // The machine firmware is already a primary role; every other pack file
+    // downloads concurrently with it instead of one request at a time afterwards.
+    const pack = { [this.manifest.machine.firmware.file]: "firmware" };
+    const packFiles = [];
     for (const [filename, asset] of Object.entries(this.manifest.firmwareFiles ?? {})) {
       if (!/^[A-Za-z0-9][A-Za-z0-9_,.-]*$/.test(filename)) throw new Error(`Unsafe firmware pack filename: ${filename}`);
-      const resolved = typeof asset === "string" ? this.manifest.assets[asset] : asset;
-      const role = `pack:${filename}`;
-      await fetchRole(role, resolved);
-      pack[filename] = role;
+      if (filename === this.manifest.machine.firmware.file) continue;
+      pack[filename] = `pack:${filename}`;
+      packFiles.push([pack[filename], typeof asset === "string" ? this.manifest.assets[asset] : asset]);
     }
-    pack[this.manifest.machine.firmware.file] = "firmware";
+    await Promise.all([
+      ...roles.map(role => fetchRole(role, this.manifest.assets[role])),
+      ...packFiles.map(([role, asset]) => fetchRole(role, asset)),
+    ]);
     let snapshot = null;
     if (options.mode === "snapshot") {
       if (!this.manifest.snapshot) throw new Error("No compatible snapshot is published for this exact revision");
@@ -284,7 +310,8 @@ export class RedoxSession extends EventTarget {
       this._assert(epoch);
       if (this.state !== "ready") throw new Error("Wait for the actual Redox shell before running a command");
       const commandToken = token();
-      const encoded = encode(source);
+      const bytes = commandBytes(source);
+      const word = quotedWord(bytes);
       const begin = `REDOX_BROWSER_BEGIN:${commandToken}`;
       const end = `REDOX_BROWSER_DEMO_COMMAND:${commandToken}:`;
       return new Promise((resolve, reject) => {
@@ -318,9 +345,14 @@ export class RedoxSession extends EventTarget {
         }, timeoutMs);
         try {
           // Script text belongs in argv, not stdin: receivers and other guest
-          // commands must retain the serial console. The sentinel preserves
-          // trailing newlines through Bash command substitution.
-          this.send(`printf '\\n${begin}\\n'; browser_command ${commandToken} /nix/system/profile/bin/bash -o pipefail -c 'decoded=$(printf "%s" "${encoded}" | /bin/base64 -d; s=$?; printf "."; exit "$s") || exit $?; decoded=\${decoded%.}; /nix/system/profile/bin/bash -c "$decoded"; s=$?; printf "\\n"; exit "$s"'\n`);
+          // commands must retain the serial console. A quoted word runs in a
+          // subshell of one fresh Bash, with no decoder or second shell process;
+          // the base64 sentinel preserves trailing newlines through command
+          // substitution. Either way the final newline ends the output line.
+          const execute = word
+            ? `${BASH} -c 'src=$1; shift; (eval "unset -v src; $src"); s=$?; printf "\\n"; exit "$s"' ${BASH} ${word}`
+            : `${BASH} -o pipefail -c 'decoded=$(printf "%s" "${base64(bytes)}" | /bin/base64 -d; s=$?; printf "."; exit "$s") || exit $?; decoded=\${decoded%.}; ${BASH} -c "$decoded"; s=$?; printf "\\n"; exit "$s"'`;
+          this.send(`printf '\\n${begin}\\n'; browser_command ${commandToken} ${execute}\n`);
         } catch (error) { finish(error); }
       });
     };
@@ -330,10 +362,14 @@ export class RedoxSession extends EventTarget {
   }
 
   async executeExpression(source) {
-    const encoded = encode(source);
+    const bytes = commandBytes(source);
+    const word = quotedWord(bytes);
     const file = `/playground/v1/.browser-expression-${token()}.nix`;
-    // The source is only base64 data, including quotes, newlines and shell syntax.
-    return this.run(`printf '%s' '${encoded}' | /bin/base64 -d > ${file}\n/bin/snix eval --file ${file}\nstatus=$?\n/bin/rm -f ${file}\nexit "$status"`);
+    // The source is only data in a quoted word or base64, including quotes,
+    // newlines and shell syntax. A failed write or decode is the result: Snix
+    // never evaluates an empty or partial file.
+    const write = word ? `printf '%s' ${word} > ${file}` : `printf '%s' '${base64(bytes)}' | /bin/base64 -d > ${file}`;
+    return this.run(`${write}\nstatus=$?\nif [ "$status" -eq 0 ]; then /bin/snix eval --file ${file}; status=$?; fi\n/bin/rm -f ${file}\nexit "$status"`);
   }
 
   diagnostics() {

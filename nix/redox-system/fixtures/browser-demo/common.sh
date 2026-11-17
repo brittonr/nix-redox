@@ -43,18 +43,26 @@ initial_state() {
   test ! -e /var/lib/browser-demo
   test ! -e /etc/redox-system/generations/2
   profile_absent
-  nix_assert 'let m = builtins.fromJSON (builtins.readFile /etc/redox-system/manifest.json); in
-      m.generation.id == 1 && m.system.hostname == "browser-demo" &&
+  local outputs first second
+  # One Snix process checks the manifest and configuration and derives both
+  # fresh-build outputs: under emulation each extra process costs seconds.
+  outputs=$("$SNIX" eval --raw --expr 'let
+      m = builtins.fromJSON (builtins.readFile /etc/redox-system/manifest.json);
+      output = input: ((import /etc/browser-demo/build.nix) { inherit input; }).outPath;
+    in if m.generation.id == 1 && m.system.hostname == "browser-demo" &&
       m.system.target == "x86_64-unknown-redox" &&
       !m.configuration.networking.enabled && !m.configuration.graphics.enabled &&
       m.configuration.hardware.networkDrivers == [] &&
       m.configuration.hardware.audioDrivers == [] &&
       !m.configuration.hardware.usbEnabled &&
-      builtins.all (p: p.name != "ripgrep") m.packages'
-  nix_assert '(import /etc/redox-system/configuration.nix) == (import /etc/browser-demo/before.nix)'
-  local first second
-  first=$(output_path first)
-  second=$(output_path second)
+      builtins.all (p: p.name != "ripgrep") m.packages &&
+      (import /etc/redox-system/configuration.nix) == (import /etc/browser-demo/before.nix)
+    then "${output "first"}\n${output "second"}"
+    else throw "browser-demo assertion failed"')
+  first=${outputs%%$'\n'*}
+  second=${outputs#*$'\n'}
+  test -n "$first"
+  test -n "$second"
   test "$first" != "$second"
   test ! -e "$first"
   test ! -e "$second"

@@ -570,15 +570,26 @@ class Harness:
                 self.retain(f"negative-{kind}")
                 self.call("stop")
                 self.page.unroute_all(behavior="wait")
-        # The outer transport decoder must not be hidden by an empty shell's
-        # successful pipeline status. Reset is still available after this error.
+        # Ordinary commands travel as one quoted word with no decoder. Text that
+        # is mostly non-ASCII takes the base64 fallback for both commands and
+        # expressions: it must deliver exact bytes, and a missing decoder must
+        # not be hidden by an empty shell's or empty file's successful status.
+        # The terminal is still available after this error.
         with self.phase("negative-missing-decoder"):
             self.open(); self.boot()
+            text = "é" * 512
+            expression = f'builtins.hashString "sha256" "{text}"'
+            command = f"/bin/snix eval --expr '{expression}'"
+            digest = '"' + hashlib.sha256(text.encode()).hexdigest() + '"'
+            for label, result in (("command", self.run(command)), ("expression", self.call("executeExpression", expression))):
+                output = successful(result, f"base64-fallback {label}")
+                require(digest in output.replace("\r", "").splitlines(), f"base64-fallback {label} changed its bytes: {output}")
             successful(self.run("rm -f /bin/base64"), "deliberately remove transport decoder")
-            result = self.call("executeExpression", "1 + 1")
-            require(result.get("status") == 127, f"missing decoder did not report guest command-not-found: {result}")
+            results = {"command": self.run(command), "expression": self.call("executeExpression", expression)}
+            for label, result in results.items():
+                require(result.get("status") == 127, f"missing decoder did not report guest command-not-found for a base64-fallback {label}: {result}")
             require(self.page.evaluate("window.redoxDemo.state") == "ready", "missing guest tool destroyed the live terminal")
-            self.evidence["negative"].append({"kind": "missing-decoder", "result": result})
+            self.evidence["negative"].append({"kind": "missing-decoder", "results": results})
             self.retain("missing-decoder"); self.call("stop")
         # Missing Snix is not an allowed skip: remove it in the actual running guest.
         self.open(); self.boot()

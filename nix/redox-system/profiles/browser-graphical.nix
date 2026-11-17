@@ -27,6 +27,8 @@ in
 serial // {
   "/boot" = serial."/boot" // {
     diskSizeMB = 1024;
+    # Default ESP: this initfs may grow to 128 MiB, beyond the serial 64 MiB ESP.
+    espSizeMB = 200;
     initfsSizeMB = 128;
     initfsEnableGraphics = true;
   };

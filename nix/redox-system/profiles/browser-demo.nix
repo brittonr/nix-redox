@@ -1,5 +1,7 @@
-# Serial-only, offline browser demonstration. Sizes intentionally retain module
-# defaults until the native and browser runners have measured this exact image.
+# Serial-only, offline browser demonstration. The browser holds the whole
+# logical disk in memory: the deduplicated root uses about 206 MiB of RedoxFS
+# (including the measured offline fixture suite, under 4 MiB), so 384 MiB keeps
+# about 110 MiB free. The ESP needs only the bootloader, kernel and initfs.
 { pkgs, lib }:
 let
   fixtureDirectory = ../fixtures/browser-demo;
@@ -33,6 +35,8 @@ assert pkgs ? snix;
   "/boot" = {
     autoBoot = true;
     liveMode = false;
+    diskSizeMB = 384;
+    espSizeMB = 64;
   };
   "/environment" = {
     # Snix is already a boot-essential seed package, not another guest build.
