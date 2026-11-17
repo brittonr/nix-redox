@@ -20,8 +20,10 @@
 { pkgs }:
 
 let
+  # The GitHub mirror of git.snix.dev serves the same commit, and the fixed
+  # hash pins identical contents; a future pin must also exist on the mirror.
   snixSrc = pkgs.fetchgit {
-    url = "https://git.snix.dev/snix/snix.git";
+    url = "https://github.com/anthropics/snix.git";
     rev = "34604636d7e3adbad6f7f909c98bb493f26855f9";
     hash = "sha256-of/rQYKmysPEqO2Snx199VcZjey+5YxJZD3QgLQanN4=";
   };

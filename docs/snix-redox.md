@@ -10,6 +10,9 @@ Redox OS integration remain in this repository.
 The local package is version **0.4.0**. Its upstream Snix source is pinned to
 `34604636d7e3adbad6f7f909c98bb493f26855f9` from
 `https://git.snix.dev/snix/snix.git`. These are separate version identities.
+Builds fetch that commit from the GitHub mirror
+`https://github.com/anthropics/snix.git`; the fixed-output hash pins identical
+contents, and a new pin must also exist on the mirror.
 
 The assembly entry points are:
 

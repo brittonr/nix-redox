@@ -56,6 +56,10 @@ All notable changes to this project are documented here. The format follows
 - `shell.nix` and `default.nix` no longer require the `flakes` experimental
   feature or copy the whole working tree into the store; `nix-build` builds the
   default disk image.
+- Builds fetch the pinned upstream Snix commit from its GitHub mirror
+  (`github.com/anthropics/snix`) instead of `git.snix.dev`, whose outage failed
+  CI and browser-preview builds. The fixed-output hash is unchanged, so source
+  contents and build outputs are identical.
 
 ### Fixed
 
