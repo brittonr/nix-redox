@@ -44,9 +44,11 @@ All notable changes to this project are documented here. The format follows
   tabs; and asciinema players that load as they scroll into view. Without
   JavaScript every panel stays visible and the recordings play as MP4s.
 - Landing and live browser surfaces share a Kiln-derived identity: neutral
-  paper/ink, local typography, square frames and semantic status signals. The
-  live lab uses compact rail/top-bar navigation, a mobile menu and the shared
-  appearance preference; adapted styling retains the MIT notice.
+  paper/ink, local typography, square frames and semantic status signals;
+  adapted styling retains the MIT notice. The live lab is one sidebar-free
+  workbench: session controls and status, the serial console beside tabbed
+  Shell/Nix/Packages/WASM tools, a docked latest-result pane, and collapsible
+  help, identity and diagnostics, with the landing page's saved theme.
 - The live browser showcase exposes startup/ready/busy states, measured elapsed
   clocks and download bytes, expandable asset details, and a width-fitting
   readable serial terminal. The homepage links directly to the live demo while
@@ -56,6 +58,9 @@ All notable changes to this project are documented here. The format follows
   default disk image.
 
 ### Fixed
+
+- The WASM tool's **Run in Redox** status keeps the guest exit status visible
+  instead of immediately reverting to the generic ready message.
 
 - Redox source inputs use shallow Git transport instead of the GitLab archive
   API, which returns HTTP 403 on hosted CI. Locked revisions, NAR hashes and

@@ -8,10 +8,13 @@ available when browser isolation or VM startup fails.
 The landing page and live workspace share `site/identity.css`, adapted from
 Kiln's neutral paper/ink palette, local typography, square frames and semantic
 status colors. Its MIT attribution is retained in the stylesheet; no Kiln
-backend or external font service is embedded. The live rail navigates actual
-sections, including the bundled package actions before the VM starts. On narrow
-screens, **Menu** expands navigation and **Escape** closes it. **Appearance**
-uses the same saved light/dark preference as the landing page.
+backend or external font service is embedded. The live lab has no sidebar: one
+workbench holds the session controls and status, the serial console, and tabbed
+**Shell**, **Nix**, **Packages** and **WASM** tools beside it (below it on narrow
+screens), with the latest guest result docked under the tools. Tabs follow the
+arrow/Home/End keyboard pattern, and `#shell`, `#nix`, `#packages` and
+`#playground` links open the matching tool. The theme toggle uses the same saved
+light/dark preference as the landing page.
 
 ## Build and serve
 
@@ -42,8 +45,9 @@ session cannot execute another guest command.
 
 Press **Boot**, then wait for **Ready**. Loading shows real download byte counts;
 booting waits for the guest readiness marker. The elapsed clock is measured time,
-not a completion estimate. Expand **Startup asset details** for per-file download
-and verification information without hiding the main terminal behind ROM logs.
+not a completion estimate. Expand **Session identity & startup asset details**
+below the workbench for the release identity and per-file download and
+verification information without hiding the console behind ROM logs.
 
 The **Shell command** editor accepts one command or a multiline Bash script.
 Example buttons only fill the editor; **Run command** starts actual guest

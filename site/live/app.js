@@ -3,57 +3,56 @@ import { createCacheTransport, mountCacheTransport } from "./cache-transport.js"
 
 const $ = selector => document.querySelector(selector);
 
-// Workspace chrome is independent of the guest/session and serial input paths.
+// Workbench chrome is independent of the guest/session and serial input paths.
 const root = document.documentElement;
-const navigation = $("#workspace-nav");
-const navigationToggle = $("#nav-toggle");
-const narrowNavigation = matchMedia("(max-width: 60rem)");
-const navigationLinks = [...navigation.querySelectorAll("nav a")];
-const setNavigation = open => {
-  navigation.classList.toggle("nav-open", open);
-  navigationToggle.setAttribute("aria-expanded", String(open));
-};
-navigationToggle.addEventListener("click", () => {
-  const open = navigationToggle.getAttribute("aria-expanded") !== "true";
-  setNavigation(open);
-  if (open) navigationLinks[0].focus();
-});
-document.addEventListener("keydown", event => {
-  if (event.key === "Escape" && navigationToggle.getAttribute("aria-expanded") === "true") {
-    setNavigation(false);
-    navigationToggle.focus();
+const toolTabs = $("#tool-tabs");
+const tabs = [...toolTabs.querySelectorAll('[role="tab"]')];
+const selectTool = (tab, updateHash = false) => {
+  for (const candidate of tabs) {
+    const selected = candidate === tab;
+    candidate.setAttribute("aria-selected", selected);
+    candidate.tabIndex = selected ? 0 : -1;
+    const panel = document.getElementById(candidate.getAttribute("aria-controls"));
+    panel.classList.toggle("is-active", selected);
+    panel.hidden = !selected;
   }
-});
-narrowNavigation.addEventListener("change", () => {
-  const focusedNavigation = navigation.contains(document.activeElement);
-  setNavigation(false);
-  if (narrowNavigation.matches && focusedNavigation) navigationToggle.focus();
-});
-const syncNavigation = () => {
-  const destination = location.hash || "#machine";
-  for (const link of navigationLinks) {
-    if (link.hash === destination) link.setAttribute("aria-current", "location");
-    else link.removeAttribute("aria-current");
-  }
-  if (destination === "#raw-diagnostics") $("#raw-diagnostics").open = true;
+  $("#guest-result").hidden = tab.getAttribute("aria-controls") === "playground";
+  if (updateHash) history.replaceState(history.state, "", "#" + tab.getAttribute("aria-controls"));
 };
-for (const link of navigationLinks) {
-  link.addEventListener("click", () => {
-    setNavigation(false);
-    const destination = $(link.hash);
-    if (destination instanceof HTMLDetailsElement) destination.open = true;
-    destination?.focus({ preventScroll: true });
-  });
-}
-window.addEventListener("hashchange", syncNavigation);
-syncNavigation();
+toolTabs.addEventListener("click", event => {
+  const tab = event.target.closest('[role="tab"]');
+  if (tab) selectTool(tab, true);
+});
+toolTabs.addEventListener("keydown", event => {
+  const index = tabs.indexOf(event.target);
+  if (index < 0) return;
+  const last = tabs.length - 1;
+  const next = {
+    ArrowRight: index === last ? 0 : index + 1,
+    ArrowLeft: index === 0 ? last : index - 1,
+    Home: 0,
+    End: last,
+  }[event.key];
+  if (next === undefined) return;
+  event.preventDefault();
+  selectTool(tabs[next], true);
+  tabs[next].focus();
+});
+const syncToolHash = () => {
+  const tab = tabs.find(candidate => location.hash === "#" + candidate.getAttribute("aria-controls"));
+  if (tab) selectTool(tab);
+  if (location.hash === "#raw-diagnostics") $("#raw-diagnostics").open = true;
+};
+selectTool(tabs[0]);
+window.addEventListener("hashchange", syncToolHash);
+syncToolHash();
 
 const themeToggle = $(".theme-toggle");
 const prefersDark = matchMedia("(prefers-color-scheme: dark)");
 const activeTheme = () => root.dataset.theme ?? (prefersDark.matches ? "dark" : "light");
 const syncTheme = () => {
   const theme = activeTheme();
-  themeToggle.textContent = `Appearance: ${theme === "dark" ? "Dark" : "Light"}`;
+  themeToggle.textContent = theme === "dark" ? "Dark" : "Light";
   themeToggle.setAttribute("aria-label", `Switch to ${theme === "dark" ? "light" : "dark"} theme`);
 };
 themeToggle.hidden = false;
@@ -84,6 +83,7 @@ let diagnosticTimer;
 let lifecycleRequest = 0;
 let disposed = false;
 const downloads = new Map();
+const identityPlaceholder = $("#identity").textContent;
 const busy = () => Boolean(currentAction || inputLock);
 const seconds = milliseconds => `${(Math.max(0, milliseconds) / 1000).toFixed(1)} s`;
 const endedSession = () => new DOMException("VM session ended", "AbortError");
@@ -128,7 +128,7 @@ function controls() {
     state.textContent = `Busy — ${currentAction.label}. Terminal input is paused while this action owns the guest serial channel.`;
     terminal = `Busy / ${currentAction.label}`;
   } else if (ready) {
-    state.textContent = "Ready — the actual Redox guest has reported its shell is ready. Type in the terminal or run a command below.";
+    state.textContent = "Ready — Redox has reported its shell is ready. Type in the console or choose a tool.";
     terminal = "Ready / input enabled";
   } else if (session.state === "loading") {
     state.textContent = `Loading — ${session.phase}. Downloading and verifying immutable assets; commands are not available yet.`;
@@ -140,7 +140,7 @@ function controls() {
     state.textContent = "Error — the VM session failed. See the error below; download diagnostics or press Boot to start a new guest.";
     terminal = "Error / VM unavailable";
   } else {
-    state.textContent = "Stopped. Press Boot, then wait for the actual guest to become Ready. No guest commands can run while stopped.";
+    state.textContent = "Stopped — Boot the guest to enable its console and commands.";
     terminal = "Stopped / press Boot";
   }
   $(".machine-status").dataset.state = session.state === "failed" || inputLock ? "failed" : $("#error").textContent ? "error" : ready && locked ? "busy" : session.state;
@@ -330,7 +330,7 @@ session.addEventListener("state", () => {
     downloads.clear();
     $("#download-list").replaceChildren();
     $("#progress").textContent = "Checking browser capabilities and immutable release metadata…";
-    $("#identity").textContent = "";
+    $("#identity").textContent = identityPlaceholder;
     bootClock = { started: session.timings.requested ?? now };
   }
   if (session.manifest && session.phase !== "capabilities" && session.phase !== "manifest") $("#identity").textContent = `Revision ${session.manifest.revision} · ${session.manifest.target} · machine ${session.manifest.machineHash} · ${session.manifest.machine.ramMiB} MiB guest RAM`;
@@ -354,7 +354,7 @@ session.addEventListener("state", () => {
     clearGuestResults();
     downloads.clear();
     $("#download-list").replaceChildren();
-    $("#identity").textContent = "";
+    $("#identity").textContent = identityPlaceholder;
     $("#progress").textContent = session.state === "failed" ? "VM session failed. No completed guest result is available; serial diagnostics may contain partial output." : "VM stopped. Verified immutable downloads may be reused on the next boot.";
     $("#guest").replaceChildren();
     const placeholder = document.createElement("p");
