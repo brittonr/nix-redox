@@ -667,12 +667,25 @@ def routing_proof(args, browser):
             missing.wait_for_selector("#status[role=alert]", timeout=30000)
             error = missing.locator("#status").inner_text()
             require(unavailable in error and "unavailable" in error.lower(), "unavailable new revision did not produce actionable visible bootstrap failure")
-            require(missing.locator("a[href='../#demo']").count() == 1 and missing.evaluate("typeof window.redoxDemo") == "undefined", "failed mutable bootstrap loaded VM code or omitted recordings access")
+            require(missing.evaluate("typeof window.redoxDemo") == "undefined", "failed mutable bootstrap loaded VM code")
+            missing.get_by_role("link").click()
+            missing.wait_for_function("""() => {
+              const player = document.querySelector('.player');
+              if (!player) return false;
+              const bounds = player.getBoundingClientRect();
+              const header = document.querySelector('.masthead').getBoundingClientRect();
+              return bounds.top >= header.bottom && bounds.top < innerHeight;
+            }""", timeout=30000)
+            recording_url = urljoin(missing.url, missing.locator("a[href$='.mp4']").first.get_attribute("href"))
+            recording = context.request.head(recording_url)
+            require(recording.status == 200 and recording.headers.get("content-type", "").split(";")[0] == "video/mp4",
+                    "bootstrap fallback did not reach an available recording")
             page.reload(wait_until="domcontentloaded")
             page.wait_for_function("!!window.redoxDemo", timeout=30000)
             require(page.url == final, "saved immutable revision followed the later channel")
             return {"kind": "real-browser-channel-routing", "selectedURL": final, "headers": probe,
-                    "laterUnavailableRevision": unavailable, "visibleError": error, "savedRevisionURL": page.url}
+                    "laterUnavailableRevision": unavailable, "visibleError": error, "savedRevisionURL": page.url,
+                    "recordingFallback": {"pageURL": missing.url, "mediaURL": recording_url, "status": recording.status}}
         finally:
             context.close(); http.shutdown()
 

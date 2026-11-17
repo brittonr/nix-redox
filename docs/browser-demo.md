@@ -5,16 +5,27 @@ QEMU compiled to WebAssembly. It is not a recording, a remote VM, or the direct
 WASM evaluator. Guest networking is disabled. The landing-page recordings remain
 available when browser isolation or VM startup fails.
 
-The landing page and live workspace share `site/identity.css`, adapted from
-Kiln's neutral paper/ink palette, local typography, square frames and semantic
-status colors. Its MIT attribution is retained in the stylesheet; no Kiln
-backend or external font service is embedded. The live lab has no sidebar: one
-workbench holds the session controls and status, the serial console, and tabbed
-**Shell**, **Nix**, **Packages** and **WASM** tools beside it (below it on narrow
-screens), with the latest guest result docked under the tools. Tabs follow the
-arrow/Home/End keyboard pattern, and `#shell`, `#nix`, `#packages` and
-`#playground` links open the matching tool. The theme toggle uses the same saved
-light/dark preference as the landing page.
+The landing page and live workspace share `site/identity.css` and
+`site/chrome.js`: one project mark, navigation, mobile menu and saved light/dark
+preference. The identity adapts Kiln's neutral paper/ink palette, local typography,
+square frames and semantic status colors; its MIT attribution remains in the
+stylesheet. No Kiln backend or external font service is embedded. Bright
+Redox-orange launch links and **Boot** distinguish starting a guest from ordinary
+commands; their dark text meets WCAG AA contrast in both themes.
+
+The homepage separates the browser serial demo from the native Orbital desktop
+and links directly to each lab tool. Opening the lab does not download or start
+the VM: **Boot** is explicit. The recorded walkthrough remains at `#recording`,
+including the revision-selector failure fallback. Lab navigation returns to the
+matching immutable overview, native quick-start and docs section.
+
+The live lab has no sidebar: one workbench holds the session controls and status,
+the serial console, and tabbed **Shell**, **Nix**, **Packages** and **WASM** tools
+beside it (below it on narrow screens), with the latest guest result docked under
+the tools. Tabs follow the arrow/Home/End keyboard pattern. The `#shell`, `#nix`,
+`#packages` and `#playground` links select the matching tool; guest-tool entry
+keeps the session controls visible, while the independent WASM evaluator needs
+no VM boot.
 
 ## Build and serve
 

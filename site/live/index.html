@@ -6,6 +6,7 @@
   <meta name="color-scheme" content="light dark">
   <meta name="description" content="Boot a real Redox guest locally in your browser, then evaluate Nix, build an output and run guest shell commands.">
   <title>Live Redox — local QEMU-WASM and Snix</title>
+  <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
   <script>
     document.documentElement.classList.add("js");
     try {
@@ -21,14 +22,38 @@
 </head>
 <body>
   <a class="skip" href="#vm-title">Skip to the live guest</a>
-  <header class="lab-header">
-    <a class="brand" href="../" aria-label="nix-redox home"><span class="redox-mark" aria-hidden="true">R</span><span>nix-redox</span></a>
-    <nav class="topbar-tools" aria-label="Project links"><a href="../#demo">Recorded demo <span aria-hidden="true">↗</span></a><button class="theme-toggle" type="button" aria-label="Switch theme" hidden>Theme</button></nav>
+  <header class="masthead">
+    <div class="wrap masthead-row">
+      <a class="brand" href="../" aria-label="nix-redox home">
+        <svg class="mark" viewBox="0 0 32 32" aria-hidden="true">
+          <path class="mark-nix" d="M5 12.5h22L20.5 6"/>
+          <path class="mark-oxide" d="M27 19.5H5l6.5 6.5"/>
+        </svg>
+        <span>nix-redox</span>
+      </a>
+      <nav id="site-nav" class="nav" aria-label="Main navigation">
+        <a href="../">Overview</a>
+        <a href="./" aria-current="page">Live lab</a>
+        <a href="../#quick-start">Run locally</a>
+        <a href="../#self-build">Self-build</a>
+        <a href="../#docs">Docs</a>
+      </nav>
+      <div class="masthead-tools">
+        <button class="icon-btn theme-toggle" type="button" aria-label="Switch color theme" hidden>
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6"/><path d="M8 2a6 6 0 0 1 0 12z" fill="currentColor" stroke="none"/></svg>
+        </button>
+        <a class="header-github" href="https://github.com/brittonr/nix-redox">GitHub <span aria-hidden="true">↗</span></a>
+        <button class="icon-btn nav-toggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="site-nav">
+          <svg class="ico" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5h12M2 8h12M2 11.5h12"/></svg>
+        </button>
+      </div>
+    </div>
   </header>
   <main>
     <div class="page-header">
+      <p class="project-context">nix-redox / browser-local workbench</p>
       <h1>Live Redox lab</h1>
-      <p class="lede">The real x86_64 Redox kernel and Snix, local to this browser tab. Boot the guest, wait for Ready, then work in the console or use the tools alongside it. Guest networking is disabled.</p>
+      <p class="lede">Run the real Redox kernel and Snix locally in this tab—no remote VM or Nix installation. Press Boot and wait for Ready; first startup can take several minutes. Experimental desktop-browser support, no guest networking, and guest writes are discarded on reset.</p>
     </div>
     <section id="machine" class="lab-workspace" aria-labelledby="vm-title" tabindex="-1">
       <div class="session-toolbar">
@@ -36,7 +61,7 @@
         <div class="controls">
           <label>Startup <select id="mode"><option value="cold">Cold boot</option><option value="snapshot">Compatible snapshot, with cold fallback</option></select></label>
           <label>Disk <select id="disk-backend"><option value="preload">Verified preload</option><option value="lazy">Lazy chunks (patched engine required)</option></select></label>
-          <div class="button-row"><button id="boot" class="primary" type="button">Boot</button><button id="stop" type="button" disabled>Stop</button><button id="reset" type="button" disabled>Reset</button></div>
+          <div class="button-row"><button id="boot" class="launch-action" type="button">Boot</button><button id="stop" type="button" disabled>Stop</button><button id="reset" type="button" disabled>Reset</button></div>
           <button id="diagnostics" class="quiet" type="button">Download diagnostics</button>
           <a class="jump-tools" href="#actions">Command tools ↓</a>
         </div>
@@ -99,6 +124,13 @@ ls</textarea>
       </div>
     </section>
   </main>
-  <footer><a href="../">Project overview</a><p>Real Redox. Real Snix. Local to this browser tab.</p></footer>
+  <footer>
+    <nav class="lab-links" aria-label="Continue with nix-redox">
+      <a href="../#quick-start">Native quick-start</a>
+      <a href="../#recording">Recorded walkthrough</a>
+      <a href="https://github.com/brittonr/nix-redox/blob/main/docs/browser-demo.md">Browser-demo docs</a>
+    </nav>
+    <p>Guest execution stays in this browser tab.</p>
+  </footer>
 </body>
 </html>

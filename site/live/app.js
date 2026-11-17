@@ -1,10 +1,10 @@
+import "../chrome.js";
 import { RedoxSession } from "./session.js";
 import { createCacheTransport, mountCacheTransport } from "./cache-transport.js";
 
 const $ = selector => document.querySelector(selector);
 
 // Workbench chrome is independent of the guest/session and serial input paths.
-const root = document.documentElement;
 const toolTabs = $("#tool-tabs");
 const tabs = [...toolTabs.querySelectorAll('[role="tab"]')];
 const selectTool = (tab, updateHash = false) => {
@@ -46,24 +46,14 @@ const syncToolHash = () => {
 selectTool(tabs[0]);
 window.addEventListener("hashchange", syncToolHash);
 syncToolHash();
-
-const themeToggle = $(".theme-toggle");
-const prefersDark = matchMedia("(prefers-color-scheme: dark)");
-const activeTheme = () => root.dataset.theme ?? (prefersDark.matches ? "dark" : "light");
-const syncTheme = () => {
-  const theme = activeTheme();
-  themeToggle.textContent = theme === "dark" ? "Dark" : "Light";
-  themeToggle.setAttribute("aria-label", `Switch to ${theme === "dark" ? "light" : "dark"} theme`);
-};
-themeToggle.hidden = false;
-themeToggle.addEventListener("click", () => {
-  const next = activeTheme() === "dark" ? "light" : "dark";
-  root.dataset.theme = next;
-  try { localStorage.setItem("nix-redox-theme", next); } catch {}
-  syncTheme();
-});
-prefersDark.addEventListener("change", syncTheme);
-syncTheme();
+// Guest-tool links choose a task, but a new session still needs an explicit
+// Boot. Keep those controls visible instead of landing below them in a panel.
+// The independent WASM evaluator and raw-diagnostic anchors keep native scroll.
+if (["#shell", "#nix", "#packages"].includes(location.hash)) {
+  const showSession = () => requestAnimationFrame(() => $("#machine").scrollIntoView({ block: "start", behavior: "instant" }));
+  if (document.readyState === "complete") showSession();
+  else window.addEventListener("load", showSession, { once: true });
+}
 
 const session = new RedoxSession($("#guest"));
 window.redoxDemo = session;
