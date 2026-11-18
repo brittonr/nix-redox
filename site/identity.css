@@ -157,6 +157,5 @@ html:not(.js) .masthead .theme-toggle { display: none; }
   .masthead-row { gap: .5rem; }
   .masthead-tools { gap: .125rem; }
   .header-github { padding-inline: .55rem; }
-  .header-github span { display: none; }
 }
 @media (max-width: 19.5rem) { .header-github { display: none; } }

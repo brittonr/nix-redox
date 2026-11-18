@@ -30,8 +30,8 @@ export function mountPlayground(root, { executeExpression, guestReady = () => fa
   const controls = element('div', '');
   controls.append(evaluate, cancel, guest);
   root.replaceChildren(title, scope, metadata, label, source, controls,
-    element('h3', 'Direct evaluator result — browser WASM'), directStatus, directOutput,
-    element('h3', 'Run in Redox — guest process output'), guestStatus, guestOutput);
+    element('h3', 'Direct evaluator result (browser WASM)'), directStatus, directOutput,
+    element('h3', 'Run in Redox (guest process output)'), guestStatus, guestOutput);
   function refreshGuestState() {
     if (!guestReady() && guest.dataset.busy === 'true') {
       ++guestGeneration;

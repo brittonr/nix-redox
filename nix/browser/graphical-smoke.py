@@ -18,6 +18,9 @@ from smoke import BASH, READY, Harness, assert_fixtures, require, successful
 
 GRAPHICAL_SHELL_READY_FILE = "/tmp/browser-graphical-shell-ready"
 GRAPHICAL_SHELL_READY = "REDOX_BROWSER_GRAPHICAL_SHELL_READY:v1:uid=0"
+# A visible, non-actionable focus target outside the VM frame. Moving focus there
+# blurs the frame, which must release held keys and buttons.
+BLUR_TARGET = "#command-output"
 
 
 # Physical US keys supported by display.js. Never insert_text(), paste, dispatch
@@ -327,7 +330,7 @@ class GraphicalHarness(Harness):
             }""", arg=before["consumedInputs"], timeout=self.args.command_timeout * 1000)
             held = self.sample(label + "-pointer-consumed")
             require(held["heldButtons"] == [0], "Browser did not retain the real held left button")
-            self.page.locator("#diagnostics").focus()
+            self.page.locator(BLUR_TARGET).focus()
             self.page.wait_for_function("""previous => {
               const d=window.redoxDemo.diagnostics().resources.display;
               return d.heldButtons.length===0 && d.releaseRequested>previous
@@ -362,7 +365,7 @@ class GraphicalHarness(Harness):
         with self.phase(label + "-focus-modifier-release"):
             self.hold_modifiers(label)
             held = self.sample(label + "-before-blur")
-            self.page.locator("#diagnostics").focus()
+            self.page.locator(BLUR_TARGET).focus()
             self.page.wait_for_function("""previous => {
               const d=window.redoxDemo.diagnostics().resources.display;
               return d && d.heldKeys?.length===0 && d.heldButtons?.length===0 && d.queuedInputs===0
