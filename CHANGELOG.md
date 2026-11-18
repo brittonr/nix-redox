@@ -54,6 +54,10 @@ All notable changes to this project are documented here. The format follows
   individual tools while retaining the native quick-start and recorded walkthrough.
   Boot and browser-launch links use bright Redox orange with high-contrast dark
   text; command actions remain neutral.
+- The homepage, live lab, README and browser-demo docs credit
+  [TryNix](https://trynix.dev/) by [Farid Zakaria](https://fzakaria.com/), whose
+  QEMU-WASM engine, build recipe and native QEMU the live lab adapts, and Kohei
+  Tokunaga's [QEMU-WASM](https://github.com/ktock/qemu-wasm), which TryNix builds on.
 - The live browser showcase exposes startup/ready/busy states, measured elapsed
   clocks and download bytes, expandable asset details, and a width-fitting
   readable serial terminal. The homepage links directly to the live demo while

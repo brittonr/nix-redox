@@ -390,3 +390,8 @@ MIT-licensed.
 - [adios](https://github.com/adisbladis/adios) — module system
 - [snix](https://snix.dev/) — Nix evaluator (patched for Redox)
 - [unit2nix](https://github.com/brittonr/unit2nix) — per-crate Nix derivations
+- [TryNix](https://trynix.dev/) by [Farid Zakaria](https://fzakaria.com/) —
+  the browser QEMU-WASM engine, build recipe and native QEMU behind the live lab
+  ([source](https://github.com/fzakaria/trynix), MIT)
+- [QEMU-WASM](https://github.com/ktock/qemu-wasm) by Kohei Tokunaga — QEMU
+  compiled to WebAssembly, which TryNix builds on

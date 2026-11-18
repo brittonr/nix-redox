@@ -5,6 +5,14 @@ QEMU compiled to WebAssembly. It is not a recording, a remote VM, or the direct
 WASM evaluator. Guest networking is disabled. The landing-page recordings remain
 available when browser isolation or VM startup fails.
 
+The browser emulator is adapted from [TryNix](https://trynix.dev/) by
+[Farid Zakaria](https://fzakaria.com/) ([source](https://github.com/fzakaria/trynix)),
+which boots any package nixpkgs ever shipped in a browser tab. nix-redox imports
+TryNix's prebuilt QEMU-WASM engine release and adapts it for Redox, reuses its
+source build recipe and patches, and uses its matching native QEMU build. TryNix
+builds on Kohei Tokunaga's [QEMU-WASM](https://github.com/ktock/qemu-wasm). Each
+release publishes TryNix's MIT license at `licenses/engine/licenses/TryNix-MIT.txt`.
+
 The landing page and live workspace share `site/identity.css` and
 `site/chrome.js`: one project mark, navigation, mobile menu and saved light/dark
 preference. The identity adapts Kiln's neutral paper/ink palette, local typography,
