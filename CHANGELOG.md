@@ -58,6 +58,14 @@ All notable changes to this project are documented here. The format follows
   [TryNix](https://trynix.dev/) by [Farid Zakaria](https://fzakaria.com/), whose
   QEMU-WASM engine, build recipe and native QEMU the live lab adapts, and Kohei
   Tokunaga's [QEMU-WASM](https://github.com/ktock/qemu-wasm), which TryNix builds on.
+- The live lab and homepage are easier to read and navigate. The lab drops the
+  Startup and Disk dropdowns (Boot always does a verified cold boot), the eyebrow,
+  filler labels, idle placeholder lines and its footer, shortens its text, and
+  folds its collapsible panels into **Help** and **Diagnostics**. The homepage
+  drops the hero fact strip, the closing call to action and the live-lab and
+  recording step lists, and merges **Inside** and **Status** into one section.
+  Headings and status text use plain sentences instead of slogan fragments, em
+  dashes and arrow glyphs.
 - The live browser showcase exposes startup/ready/busy states, measured elapsed
   clocks and download bytes, expandable asset details, and a width-fitting
   readable serial terminal. The homepage links directly to the live demo while

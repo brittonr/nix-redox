@@ -88,7 +88,7 @@ function renderElapsed() {
   const parts = [];
   if (bootClock) parts.push(`Boot ${bootClock.ended == null ? "elapsed" : bootClock.outcome}: ${seconds((bootClock.ended ?? now) - bootClock.started)}`);
   if (actionClock) parts.push(`${actionClock.label} ${actionClock.ended == null ? "elapsed" : "duration"}: ${seconds((actionClock.ended ?? now) - actionClock.started)}`);
-  $("#elapsed").textContent = parts.join(" · ") || "No boot started.";
+  $("#elapsed").textContent = parts.join(" · ");
 }
 
 function updateClock() {
@@ -105,39 +105,35 @@ function controls() {
   $("#boot").disabled = active;
   $("#stop").disabled = !active;
   $("#reset").disabled = session.state === "loading" || session.state === "starting";
-  $("#mode").disabled = active;
-  $("#disk-backend").disabled = active;
   for (const id of ["evaluate", "build", "package", "fixtures", "run-command"]) $("#" + id).disabled = !ready || locked;
   $("#transport-controls").disabled = !ready || Boolean(inputLock) || Boolean(currentAction && currentAction.source !== "transport");
   const state = $("#state");
   let terminal;
   if (ready && inputLock) {
-    state.textContent = `Input blocked. ${inputLock} Reset or Stop the VM before continuing.`;
+    state.textContent = `Input blocked. ${inputLock} Reset or Stop the VM.`;
     terminal = "Reset required";
   } else if (ready && currentAction) {
-    state.textContent = `Busy — ${currentAction.label}. Terminal input is paused while this action owns the guest serial channel.`;
+    state.textContent = `Busy: ${currentAction.label}. Console input is paused until it finishes.`;
     terminal = `Busy / ${currentAction.label}`;
   } else if (ready) {
-    state.textContent = "Ready — Redox has reported its shell is ready. Type in the console or choose a tool.";
+    state.textContent = "Ready. Type in the console or use the tools.";
     terminal = "Ready / input enabled";
   } else if (session.state === "loading") {
-    state.textContent = `Loading — ${session.phase}. Downloading and verifying immutable assets; commands are not available yet.`;
+    state.textContent = `Loading (${session.phase}). Downloading and verifying the VM.`;
     terminal = "Loading / wait for Ready";
   } else if (session.state === "starting") {
-    state.textContent = `Booting — ${session.phase}. Waiting for the actual guest ready marker, not just boot text. This can take several minutes.`;
+    state.textContent = `Booting (${session.phase}). First boot can take a few minutes.`;
     terminal = "Booting / input not ready";
   } else if (session.state === "failed") {
-    state.textContent = "Error — the VM session failed. See the error below; download diagnostics or press Boot to start a new guest.";
+    state.textContent = "Error: the VM failed. See below, or press Boot to try again.";
     terminal = "Error / VM unavailable";
   } else {
-    state.textContent = "Stopped — Boot the guest to enable its console and commands.";
+    state.textContent = "Stopped. Press Boot to start the guest.";
     terminal = "Stopped / press Boot";
   }
   $(".machine-status").dataset.state = session.state === "failed" || inputLock ? "failed" : $("#error").textContent ? "error" : ready && locked ? "busy" : session.state;
   $("#terminal-state").textContent = terminal;
-  $("#action-status").textContent = inputLock || (currentAction
-    ? `${currentAction.label} is running. ${currentAction.wait} Terminal input and other guest actions are temporarily paused; Stop terminates the VM if needed.`
-    : lastAction || (ready ? "Guest ready. Choose an action or run your own command. Results below are actual guest output." : "Waiting for the guest. You can prepare commands now; execution unlocks at Ready."));
+  $("#action-status").textContent = currentAction ? `${currentAction.label}… ${currentAction.wait}` : inputLock || lastAction || "";
   playground?.refreshGuestState();
 }
 
@@ -184,6 +180,7 @@ async function action(label, operation, { source = "guided", display = true, ret
       owner.ended = performance.now();
       currentAction = null;
       if (session.state === "ready" && !inputLock) session.setInputEnabled(true);
+      if (source === "transport") $("#progress").textContent = "";
       controls();
       updateClock();
     }
@@ -192,7 +189,7 @@ async function action(label, operation, { source = "guided", display = true, ret
 
 function bootOptions() {
   const manifestUrl = new URL(location.href).searchParams.get("manifest");
-  return { mode: $("#mode").value, diskBackend: $("#disk-backend").value, ...(manifestUrl ? { manifestUrl } : {}) };
+  return manifestUrl ? { manifestUrl } : {};
 }
 
 async function start(reset = false) {
@@ -283,9 +280,11 @@ function setupTransport() {
       session.setInputEnabled(false);
       report(new Error(`${inputLock} Reset the VM before sending more input.`));
     }
-    $("#progress").textContent = progress.received != null
+    // The catalog also loads in the background at Ready; only an install the
+    // user started reports progress here.
+    if (currentAction?.source === "transport") $("#progress").textContent = progress.received != null
       ? `Package ${progress.phase}: ${progress.path} · ${progress.received.toLocaleString()} / ${progress.total.toLocaleString()} bytes`
-      : `Package transport: ${progress.phase}${progress.message ? ` — ${progress.message}` : ""}`;
+      : `Package transport ${progress.phase}${progress.message ? `: ${progress.message}` : ""}`;
     controls();
   } });
   transport = ownTransport;
@@ -319,7 +318,7 @@ session.addEventListener("state", () => {
     clearGuestResults();
     downloads.clear();
     $("#download-list").replaceChildren();
-    $("#progress").textContent = "Checking browser capabilities and immutable release metadata…";
+    $("#progress").textContent = "Checking browser support and release metadata…";
     $("#identity").textContent = identityPlaceholder;
     bootClock = { started: session.timings.requested ?? now };
   }
@@ -329,7 +328,7 @@ session.addEventListener("state", () => {
   }
   if (session.state === "ready") {
     if (bootClock && bootClock.ended == null) { bootClock.ended = now; bootClock.outcome = "to guest Ready"; }
-    $("#progress").textContent = "Guest readiness confirmed. Required startup assets passed verification; no simulated completion signal is used.";
+    $("#progress").textContent = "";
     setupTransport();
   }
   if (["failed", "stopped"].includes(session.state)) {
@@ -345,11 +344,11 @@ session.addEventListener("state", () => {
     downloads.clear();
     $("#download-list").replaceChildren();
     $("#identity").textContent = identityPlaceholder;
-    $("#progress").textContent = session.state === "failed" ? "VM session failed. No completed guest result is available; serial diagnostics may contain partial output." : "VM stopped. Verified immutable downloads may be reused on the next boot.";
+    $("#progress").textContent = session.state === "failed" ? "VM session failed; partial output is in Diagnostics." : "";
     $("#guest").replaceChildren();
     const placeholder = document.createElement("p");
     placeholder.className = "terminal-empty";
-    placeholder.textContent = session.state === "failed" ? "The VM session failed. See the error and diagnostics, then Boot to try again." : "Guest stopped. Press Boot and wait for Ready before sending commands.";
+    placeholder.textContent = session.state === "failed" ? "The VM failed. See the error above, then press Boot to try again." : "Guest stopped. Press Boot to start again.";
     $("#guest").append(placeholder);
     if (session.state === "stopped") $("#error").textContent = "";
     $("#serial").textContent = session.transcript;
@@ -368,9 +367,9 @@ session.addEventListener("progress", event => {
       $("#download-list").append(item);
     }
     item.textContent = `${progress.name}: ${(progress.received / 1048576).toFixed(1)} / ${(progress.size / 1048576).toFixed(1)} MiB · ${progress.cached ? "verified memory cache" : progress.received === progress.size ? "received; verifying" : "downloading"}`;
-    $("#progress").textContent = `${progress.cached ? "Reusing verified" : "Downloading"} ${progress.name}: ${(progress.received / 1048576).toFixed(1)} / ${(progress.size / 1048576).toFixed(1)} MiB${!progress.cached && progress.received === progress.size ? " · received; verifying" : ""}. These are download bytes, not overall boot progress.`;
+    $("#progress").textContent = `${progress.cached ? "Reusing verified" : "Downloading"} ${progress.name}: ${(progress.received / 1048576).toFixed(1)} / ${(progress.size / 1048576).toFixed(1)} MiB${!progress.cached && progress.received === progress.size ? " · received; verifying" : ""}`;
   } else {
-    $("#progress").textContent = `${progress.phase}${progress.error ? `: ${progress.error}` : ""}${session.state === "starting" ? " — still waiting for the actual guest ready marker." : ""}`;
+    $("#progress").textContent = `${progress.phase}${progress.error ? `: ${progress.error}` : ""}${session.state === "starting" ? ". Waiting for the guest to report Ready." : ""}`;
   }
   controls();
 });

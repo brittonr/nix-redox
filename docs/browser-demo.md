@@ -62,11 +62,14 @@ session cannot execute another guest command.
 
 ## Using the showcase
 
-Press **Boot**, then wait for **Ready**. Loading shows real download byte counts;
-booting waits for the guest readiness marker. The elapsed clock is measured time,
-not a completion estimate. Expand **Session identity & startup asset details**
-below the workbench for the release identity and per-file download and
-verification information without hiding the console behind ROM logs.
+Press **Boot**, then wait for **Ready**. Boot always starts a verified cold boot
+with the preloaded disk; the test harness can still request snapshot resume or
+lazy disks through `window.redoxDemo.boot(...)`. Loading shows real download byte
+counts, and booting waits for the guest readiness marker. The elapsed clock shows
+measured time only. Below the workbench, **Help** covers console input, paste and
+Stop/Reset, and **Diagnostics** holds the release identity, per-file download and
+verification details, the raw serial log and **Download diagnostics**. The
+`#raw-diagnostics` link opens Diagnostics.
 
 The **Shell command** editor accepts one command or a multiline Bash script.
 Example buttons only fill the editor; **Run command** starts actual guest
