@@ -198,6 +198,8 @@ directory = "/usr/src/snix-redox/vendor/source-registry-0"
 linker = "/nix/system/profile/bin/cc"
 CFG
       cd /tmp/proc-fixture
+      export PATH=/nix/system/profile/bin:/bin:/usr/bin
+      export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
       export CARGO_HOME=/tmp/proc-fixture-cargo
       export CARGO_BUILD_TARGET=x86_64-unknown-redox
       export CARGO_BUILD_JOBS=2
