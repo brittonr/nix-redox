@@ -97,6 +97,12 @@ pub enum BuildError {
         drv_path: String,
         cause: Box<BuildError>,
     },
+    /// Derivation is built for a system this machine cannot execute
+    SystemMismatch {
+        drv_path: String,
+        required: String,
+        local: String,
+    },
 }
 
 impl std::fmt::Display for BuildError {
@@ -128,6 +134,17 @@ impl std::fmt::Display for BuildError {
             }
             Self::DependencyFailed { drv_path, cause } => {
                 write!(f, "dependency {drv_path} failed: {cause}")
+            }
+            Self::SystemMismatch {
+                drv_path,
+                required,
+                local,
+            } => {
+                write!(
+                    f,
+                    "derivation {drv_path} requires system '{required}', but this machine is \
+                     '{local}'; build it on a {required} host or through `snix build --bridge`"
+                )
             }
         }
     }
@@ -201,6 +218,30 @@ fn register_derivation_file(
     .map_err(|e| BuildError::Io(format!("registering derivation: {e}")))
 }
 
+/// Refuse to run a builder that targets a different system.
+///
+/// A derivation's `system` names the platform its builder executable runs on.
+/// Redox cannot execute a Linux builder, so discovering that after forking
+/// produces a confusing exec failure. Builtin fetchers are exempt: they run in
+/// this process and carry their own system marker.
+fn ensure_native_system(
+    drv: &nix_compat::derivation::Derivation,
+    drv_path: &StorePath<String>,
+) -> Result<(), BuildError> {
+    if drv.builder.starts_with("builtin:") {
+        return Ok(());
+    }
+    let local = crate::system::current_system();
+    if drv.system == local {
+        return Ok(());
+    }
+    Err(BuildError::SystemMismatch {
+        drv_path: drv_path.to_absolute_path(),
+        required: drv.system.clone(),
+        local,
+    })
+}
+
 /// Build a single derivation, unsandboxed.
 ///
 /// Assumes all input derivations have already been built (their outputs
@@ -244,6 +285,8 @@ fn build_derivation_inner(
     if all_exist {
         return build_result_from_existing(drv, drv_path, known_paths, db);
     }
+
+    ensure_native_system(drv, drv_path)?;
 
     // ── 2. Create temp build directory ─────────────────────────────────
     let build_dir =
@@ -751,6 +794,19 @@ pub fn build_needed_with_options(
     db: &PathInfoDb,
     no_sandbox: bool,
 ) -> Result<BuildResult, BuildError> {
+    // Check the requested derivation before scheduling its dependencies, so a
+    // foreign target cannot run native dependencies first.
+    if let Some(drv) = known_paths.get_drv_by_drvpath(target_drv_path) {
+        let all_exist = drv.outputs.values().all(|o| {
+            o.path
+                .as_ref()
+                .is_some_and(|p| Path::new(&p.to_absolute_path()).exists())
+        });
+        if !all_exist {
+            ensure_native_system(drv, target_drv_path)?;
+        }
+    }
+
     let build_order = topological_sort(target_drv_path, known_paths)?;
 
     let mut last_result = None;
@@ -1973,6 +2029,72 @@ mod tests {
 
         let config = sandbox::config_from_derivation(&drv, "/nix/store/out", "/tmp/build");
         assert!(config.needs_network);
+    }
+
+    #[test]
+    fn ensure_native_system_rejects_foreign_system() {
+        let mut drv = Derivation::default();
+        drv.builder = "/bin/sh".to_string();
+        drv.system = "aarch64-darwin".to_string();
+        let drv_path = StorePath::<String>::from_absolute_path(
+            b"/nix/store/4wvvbi4jwn0prsdxb7vs673qa5h9gr7x-foreign.drv",
+        )
+        .unwrap();
+
+        match ensure_native_system(&drv, &drv_path).unwrap_err() {
+            BuildError::SystemMismatch {
+                drv_path,
+                required,
+                local,
+            } => {
+                assert!(drv_path.contains("foreign.drv"));
+                assert_eq!(required, "aarch64-darwin");
+                assert_eq!(local, crate::system::current_system());
+            }
+            other => panic!("expected SystemMismatch, got: {other}"),
+        }
+    }
+
+    #[test]
+    fn ensure_native_system_accepts_local_and_builtin_builders() {
+        let drv_path = StorePath::<String>::from_absolute_path(
+            b"/nix/store/4wvvbi4jwn0prsdxb7vs673qa5h9gr7x-local.drv",
+        )
+        .unwrap();
+
+        let mut drv = Derivation::default();
+        drv.builder = "/bin/sh".to_string();
+        drv.system = crate::system::current_system();
+        assert!(ensure_native_system(&drv, &drv_path).is_ok());
+
+        let mut builtin = Derivation::default();
+        builtin.builder = "builtin:fetchurl".to_string();
+        builtin.system = "builtin".to_string();
+        assert!(ensure_native_system(&builtin, &drv_path).is_ok());
+    }
+
+    #[test]
+    fn build_needed_rejects_foreign_system_before_building() {
+        let (result, state) = crate::eval::evaluate_with_state(
+            r#"(derivation { name = "foreign-system"; builder = "/bin/true"; system = "aarch64-darwin"; }).drvPath"#,
+        )
+        .unwrap();
+
+        let drv_path = result.trim_matches('"');
+        let sp = StorePath::<String>::from_absolute_path(drv_path.as_bytes()).unwrap();
+        let tmp = tempfile::tempdir().unwrap();
+        let db = PathInfoDb::open_at(tmp.path().join("pathinfo")).unwrap();
+        let kp = state.known_paths.borrow();
+
+        match build_needed(&sp, &kp, &db).unwrap_err() {
+            BuildError::SystemMismatch {
+                required, local, ..
+            } => {
+                assert_eq!(required, "aarch64-darwin");
+                assert_eq!(local, crate::system::current_system());
+            }
+            other => panic!("expected SystemMismatch, got: {other}"),
+        }
     }
 
     #[test]

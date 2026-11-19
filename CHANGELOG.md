@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Snix evaluates flake inputs as flakes. Every lock node reachable from the
+  root is wired recursively with `self`, `sourceInfo`, `inputs`, `outputs`,
+  `_type`, and lock `rev`/`shortRev`/`lastModified`/`narHash` metadata;
+  `follows` paths resolve from the root, and `flake = false` inputs remain
+  plain source trees. The guest flake fixture now covers a nested flake input
+  with a `follows` edge.
+
 - Reproducible asciinema demo (`demo/record-e2e.py`): serial-console UEFI boot,
   login, `tree --version`, `snix eval`, a fresh `snix build`, and
   `snix system info`/`snix system services`, rendered to MP4 and published on
@@ -88,6 +95,16 @@ All notable changes to this project are documented here. The format follows
   contents and build outputs are identical.
 
 ### Fixed
+
+- `builtins.removeAttrs` forces each key before string coercion, so flake
+  wiring that passes thunked input names no longer panics with
+  `Thunk::value called on a suspended thunk`.
+
+- Snix refuses to run a builder whose derivation targets another system,
+  naming the required and local systems before any builder or dependency starts
+  and pointing at `snix build --bridge`. Flake evaluation and local execution
+  share one system identifier, so the selected attribute path and the executor
+  cannot disagree.
 
 - The default disk image builds again: duplicated alias binaries had exhausted
   its RedoxFS partition (`redoxfs-ar: No space left on device`).

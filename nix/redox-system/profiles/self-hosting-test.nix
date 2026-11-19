@@ -2866,6 +2866,26 @@ HELLONIX
                           fi
                         '
 
+                        # Nested flake input test: the root flake's `nested`
+                        # output reads `lib.lib.message`, and `lib` follows the
+                        # root's `dep` input.
+                        echo "--- flake-nested: snix build .#nested ---"
+                        /nix/system/profile/bin/bash -c '
+                          OUTPUT=$(/bin/snix build "/usr/src/test-flake#nested" 2>/tmp/flake-nested-err)
+                          EXIT=$?
+                          if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -f "$OUTPUT" ]; then
+                            RUN=$(cat "$OUTPUT")
+                            if [ "$RUN" = "nested says dep" ]; then
+                              echo "FUNC_TEST:flake-nested:PASS"
+                            else
+                              echo "FUNC_TEST:flake-nested:FAIL:wrong output: $RUN"
+                            fi
+                          else
+                            echo "FUNC_TEST:flake-nested:FAIL:exit=$EXIT output=$OUTPUT"
+                            cat /tmp/flake-nested-err 2>/dev/null | head -20
+                          fi
+                        '
+
                         # ══════════════════════════════════════════════════════
                         # COMPLEX BUILD TESTS (CC-dep + Workspace)
                         # ══════════════════════════════════════════════════════
