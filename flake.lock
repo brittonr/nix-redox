@@ -1083,13 +1083,11 @@
         "narHash": "sha256-u84922TgJNWKhcgbPPxTzi5U4MZprN9vGFgDb024rKs=",
         "ref": "master",
         "rev": "6ed72da393d54798b27620d0af7f88576a6917ce",
-        "shallow": true,
         "type": "git",
         "url": "https://gitlab.redox-os.org/redox-os/relibc.git"
       },
       "original": {
         "ref": "master",
-        "shallow": true,
         "type": "git",
         "url": "https://gitlab.redox-os.org/redox-os/relibc.git"
       }
