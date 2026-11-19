@@ -55,7 +55,9 @@
     # Use Git instead of GitLab's archive API, which denies hosted CI runners.
     # Revisions and NAR identities remain pinned in flake.lock.
     relibc-src = {
-      url = "git+https://gitlab.redox-os.org/redox-os/relibc.git?ref=master&shallow=1";
+      # Full history: the locked revision is no longer on the master tip, and a
+      # shallow fetch cannot find it in the branch history.
+      url = "git+https://gitlab.redox-os.org/redox-os/relibc.git?ref=master";
       flake = false;
     };
 
