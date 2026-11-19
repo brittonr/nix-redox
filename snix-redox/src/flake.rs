@@ -10,12 +10,12 @@
 //! ## Scope
 //!
 //! - Supports `github` and `gitlab` locked input types (via tarball URLs)
-//! - Supports `path` and `git` locked input types
-//! - Handles `flake: false` inputs (just source trees, no recursive eval)
-//! - Handles `follows` chains in the lock file
+//! - Supports `path`, `git` and `tarball` locked input types
+//! - Evaluates flake inputs recursively, with `self`, `sourceInfo`, `inputs`,
+//!   `outputs` and lock metadata, including `follows`
+//! - Handles `flake: false` inputs as plain source trees
 //! - `git` inputs: tries forge tarball first (GitHub/GitLab), falls back to git clone
-//! - Does NOT support: lock file writing, flake registries,
-//!   `--override-input`, recursive flake-of-flakes evaluation
+//! - Does NOT support: lock file writing, flake registries, `--override-input`
 //!
 //! ## Architecture
 //!
@@ -23,13 +23,13 @@
 //! .#ripgrep
 //!   → parse_installable()     → Installable { dir: ".", attr: "ripgrep" }
 //!   → parse_flake_lock()      → FlakeLock { nodes, root }
-//!   → resolve_all_inputs()    → HashMap<name, store_path>
-//!   → build_flake_eval_expr() → Nix source string
+//!   → resolve_flake_nodes()   → reachable nodes + fetched sources
+//!   → build_flake_eval_expr() → recursive Nix source string
 //!   → evaluate_with_state()   → drv path
 //!   → build_needed()          → output paths
 //! ```
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
@@ -228,11 +228,19 @@ pub fn resolve_follows(
         return Err("empty follows chain".into());
     }
 
-    // Walk the chain: start from the first node, look up each subsequent
-    // name in that node's inputs.
-    let mut current_node_name = follows[0].clone();
+    // A `follows` path starts at the root node, exactly as flake-compat and
+    // `nix/nixtamal.nix` interpret it, and each step names that node's input.
+    follow_from(lock, &lock.root, follows)
+}
 
-    for step in &follows[1..] {
+fn follow_from(
+    lock: &FlakeLock,
+    start: &str,
+    follows: &[String],
+) -> Result<String, Box<dyn std::error::Error>> {
+    let mut current_node_name = start.to_string();
+
+    for step in follows {
         let node = lock
             .nodes
             .get(&current_node_name)
@@ -248,8 +256,7 @@ pub fn resolve_follows(
                 current_node_name = target.clone();
             }
             Some(InputRef::Follows(chain)) => {
-                // Recursive follows — resolve the inner chain
-                return resolve_follows(lock, chain);
+                current_node_name = resolve_follows(lock, chain)?;
             }
             None => {
                 return Err(format!(
@@ -262,6 +269,47 @@ pub fn resolve_follows(
     }
 
     Ok(current_node_name)
+}
+
+/// Resolve one input reference from a node to the lock node it names.
+fn resolve_input_ref(
+    lock: &FlakeLock,
+    input: &InputRef,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let node_name = match input {
+        InputRef::Direct(target) => target.clone(),
+        InputRef::Follows(chain) => resolve_follows(lock, chain)?,
+    };
+    if !lock.nodes.contains_key(&node_name) {
+        return Err(format!("input names unknown node '{node_name}'").into());
+    }
+    Ok(node_name)
+}
+
+/// Every lock node reachable from the root through resolved inputs.
+fn reachable_nodes(lock: &FlakeLock) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut seen = HashSet::new();
+    let mut queue = VecDeque::from([lock.root.clone()]);
+    let mut ordered = Vec::new();
+
+    while let Some(name) = queue.pop_front() {
+        if !seen.insert(name.clone()) {
+            continue;
+        }
+        let node = lock
+            .nodes
+            .get(&name)
+            .ok_or_else(|| format!("node '{name}' not found in flake.lock"))?;
+        if let Some(inputs) = &node.inputs {
+            for input in inputs.values() {
+                queue.push_back(resolve_input_ref(lock, input)?);
+            }
+        }
+        ordered.push(name);
+    }
+
+    ordered.sort();
+    Ok(ordered)
 }
 
 /// Get all direct input names for the root node.
@@ -294,42 +342,36 @@ pub fn get_root_inputs(
 
 // ── Expression Building ────────────────────────────────────────────────────
 
-/// A resolved input ready for use in the eval expression.
+/// A reachable lock node with its fetched source and resolved input edges.
 #[derive(Debug, Clone)]
-pub struct ResolvedInput {
-    /// Input name (as declared in `flake.nix`).
+pub struct ResolvedNode {
+    /// Lock node key (`"root"`, `"nixpkgs"`, ...).
     pub name: String,
     /// Absolute store path (or local path) of the fetched source.
     pub store_path: String,
     /// Whether this input is a flake (has its own `flake.nix`).
     pub is_flake: bool,
+    /// Declared input name → resolved lock node key.
+    pub inputs: HashMap<String, String>,
+    /// Locked source metadata, absent for the root node.
+    pub locked: Option<LockedRef>,
+    /// Whether this is the flake being built.
+    pub is_root: bool,
 }
 
 /// Build the Nix expression that evaluates a flake attribute.
 ///
-/// Constructs:
-/// ```nix
-/// let
-///   flake = import /path/to/flake.nix;
-///   self = /path/to/flake;
-///   nixpkgs = /nix/store/...-nixpkgs-source;
-///   ...
-/// in (flake.outputs {
-///   self = self;
-///   nixpkgs = nixpkgs;
-///   ...
-/// }).packages."x86_64-unknown-redox".ripgrep
-/// ```
-///
-/// For `flake: false` inputs, the value is just the source path.
-/// For `flake: true` inputs, the value is `import <path>` (but we
-/// don't recursively evaluate their flake — just pass the source tree).
+/// Every reachable lock node is wired the way flake-compat and
+/// `nix/nixtamal.nix` wire it: each flake calls its own `outputs` with `self`
+/// and its resolved inputs, and exposes `outPath`, `sourceInfo`, `inputs`,
+/// `outputs`, `_type`, and the lock's `rev`/`narHash` metadata. Inputs whose
+/// lock node says `flake = false` stay plain source trees.
 pub fn build_flake_eval_expr(
     flake_dir: &Path,
-    inputs: &[ResolvedInput],
+    nodes: &[ResolvedNode],
     attr_path: &str,
     system: &str,
-) -> String {
+) -> Result<String, Box<dyn std::error::Error>> {
     let flake_dir_abs = std::fs::canonicalize(flake_dir)
         .map(|p| {
             // Strip Redox `file:` prefix from canonicalized paths
@@ -341,52 +383,194 @@ pub fn build_flake_eval_expr(
             }
         })
         .unwrap_or_else(|_| flake_dir.to_path_buf());
-    let flake_nix = flake_dir_abs.join("flake.nix");
 
+    let root_name = nodes
+        .iter()
+        .find(|node| node.is_root)
+        .map(|node| node.name.as_str())
+        .ok_or("flake expression has no root node")?;
     let full_attr = resolve_attr_path(attr_path, system);
 
+    // A recursive `nodes` attrset mirrors flake-compat and `nix/nixtamal.nix`.
+    // Each flake node evaluates its own outputs with `self` and its resolved
+    // inputs, then exposes the outputs merged with source metadata.
     let mut expr = String::new();
     expr.push_str("let\n");
-    expr.push_str(&format!(
-        "  __flake = import {};\n",
-        nix_path_literal(&flake_nix)
-    ));
-    expr.push_str(&format!(
-        "  __self = {};\n",
-        nix_path_literal(&flake_dir_abs)
-    ));
+    expr.push_str("  __nodes = {\n");
 
-    // Bind each input to its store path
-    for input in inputs {
-        let safe_name = nix_safe_ident(&input.name);
+    for node in nodes {
+        let source = if node.is_root {
+            flake_dir_abs.clone()
+        } else {
+            PathBuf::from(&node.store_path)
+        };
+
+        expr.push_str(&format!("    {} = ", nix_string_literal(&node.name)));
+        if !node.is_flake {
+            expr.push_str(&format!("{};\n", nix_path_literal(&source)));
+            continue;
+        }
+
+        expr.push_str("let\n");
+        push_node_info(&mut expr, "      ", &source, node.locked.as_ref());
+
+        expr.push_str("      __inputs = {\n");
+        let mut input_names: Vec<_> = node.inputs.iter().collect();
+        input_names.sort_by_key(|(name, _)| *name);
+        for (name, target) in input_names {
+            if !nodes.iter().any(|node| node.name == *target) {
+                return Err(format!(
+                    "input '{name}' of '{}' names unknown node '{target}'",
+                    node.name
+                )
+                .into());
+            }
+            expr.push_str(&format!(
+                "        {} = __nodes.{};\n",
+                nix_string_literal(name),
+                nix_string_literal(target)
+            ));
+        }
+        expr.push_str("      };\n");
+
         expr.push_str(&format!(
-            "  __input_{safe_name} = {};\n",
-            nix_path_literal(Path::new(&input.store_path))
+            "      __outputs = (import {}).outputs (__inputs // {{ self = __self; }});\n",
+            nix_path_literal(&source.join("flake.nix"))
         ));
+        expr.push_str("      __self = __info // {\n");
+        expr.push_str("        inputs = __inputs;\n");
+        expr.push_str("        outputs = __outputs;\n");
+        expr.push_str("        _type = \"flake\";\n");
+        expr.push_str("      };\n");
+        expr.push_str("      __flake = __outputs // __self;\n");
+        expr.push_str("    in __flake;\n");
     }
 
+    expr.push_str("  };\n");
     expr.push_str("in\n");
-    expr.push_str("  (__flake.outputs {\n");
-    expr.push_str("    self = __self;\n");
+    expr.push_str(&format!(
+        "  __nodes.{}.{full_attr}\n",
+        nix_string_literal(root_name)
+    ));
 
-    for input in inputs {
-        let safe_name = nix_safe_ident(&input.name);
-        // Pass the source path as the input value.
-        // For actual flake inputs, we'd `import` their flake.nix and call
-        // their outputs — but that requires recursive flake resolution.
-        // For now, pass the raw source tree (works for flake: false inputs
-        // and simple flake inputs that only need `self`/source access).
-        expr.push_str(&format!(
-            "    \"{name}\" = __input_{safe_name};\n",
-            name = input.name
-        ));
+    Ok(expr)
+}
+
+/// Resolve every lock node reachable from the root and fetch its source.
+///
+/// Flake inputs are evaluated recursively, so every reachable node needs a
+/// source tree. `flake = false` nodes are still fetched and bound as plain
+/// paths; only their `flake.nix` is never imported.
+pub fn resolve_flake_nodes(
+    lock: &FlakeLock,
+    flake_dir: &Path,
+) -> Result<Vec<ResolvedNode>, Box<dyn std::error::Error>> {
+    let mut resolved = Vec::new();
+
+    for name in reachable_nodes(lock)? {
+        let node = lock
+            .nodes
+            .get(&name)
+            .ok_or_else(|| format!("node '{name}' not found in flake.lock"))?;
+        let is_root = name == lock.root;
+
+        let inputs = node
+            .inputs
+            .as_ref()
+            .map(|inputs| {
+                inputs
+                    .iter()
+                    .map(|(input_name, input_ref)| {
+                        Ok((input_name.clone(), resolve_input_ref(lock, input_ref)?))
+                    })
+                    .collect::<Result<HashMap<_, _>, Box<dyn std::error::Error>>>()
+            })
+            .transpose()?
+            .unwrap_or_default();
+
+        if is_root {
+            resolved.push(ResolvedNode {
+                name,
+                store_path: flake_dir.to_string_lossy().to_string(),
+                is_flake: true,
+                inputs,
+                locked: None,
+                is_root: true,
+            });
+            continue;
+        }
+
+        let locked = node
+            .locked
+            .as_ref()
+            .ok_or_else(|| format!("input node '{name}' has no locked reference"))?;
+        let store_path = fetch_locked_input(&name, locked, flake_dir)?;
+
+        resolved.push(ResolvedNode {
+            name,
+            store_path,
+            is_flake: node.is_flake(),
+            inputs,
+            locked: Some(locked.clone()),
+            is_root: false,
+        });
     }
 
-    expr.push_str("  }).");
-    expr.push_str(&full_attr);
-    expr.push('\n');
+    Ok(resolved)
+}
 
-    expr
+fn push_node_info(expr: &mut String, indent: &str, source: &Path, locked: Option<&LockedRef>) {
+    let out_path = nix_path_literal(source);
+    let rev = locked.and_then(|l| l.rev.as_deref());
+    let short_rev = rev.map(|rev| &rev[..rev.len().min(7)]);
+    let nar_hash = locked.and_then(|l| l.nar_hash.as_deref());
+    let last_modified = locked.and_then(|l| l.last_modified);
+
+    let mut metadata = Vec::new();
+    if let Some(rev) = rev {
+        metadata.push(format!("rev = {};", nix_string_literal(rev)));
+    }
+    if let Some(short_rev) = short_rev {
+        metadata.push(format!("shortRev = {};", nix_string_literal(short_rev)));
+    }
+    if let Some(last_modified) = last_modified {
+        metadata.push(format!("lastModified = {last_modified};"));
+    }
+    if let Some(nar_hash) = nar_hash {
+        metadata.push(format!("narHash = {};", nix_string_literal(nar_hash)));
+    }
+
+    expr.push_str(&format!("{indent}__info = {{\n"));
+    expr.push_str(&format!("{indent}  outPath = {out_path};\n"));
+    expr.push_str(&format!("{indent}  sourceInfo = {{\n"));
+    expr.push_str(&format!("{indent}    outPath = {out_path};\n"));
+    for line in &metadata {
+        expr.push_str(&format!("{indent}    {line}\n"));
+    }
+    expr.push_str(&format!("{indent}  }};\n"));
+    for line in &metadata {
+        expr.push_str(&format!("{indent}  {line}\n"));
+    }
+    expr.push_str(&format!("{indent}}};\n"));
+}
+
+fn nix_string_literal(value: &str) -> String {
+    let mut escaped = String::with_capacity(value.len() + 2);
+    escaped.push('"');
+    let mut chars = value.chars().peekable();
+    while let Some(c) = chars.next() {
+        match c {
+            '\\' => escaped.push_str("\\\\"),
+            '"' => escaped.push_str("\\\""),
+            '\n' => escaped.push_str("\\n"),
+            '\r' => escaped.push_str("\\r"),
+            '\t' => escaped.push_str("\\t"),
+            '$' if chars.peek() == Some(&'{') => escaped.push_str("\\$"),
+            _ => escaped.push(c),
+        }
+    }
+    escaped.push('"');
+    escaped
 }
 
 /// Convert a filesystem path to a Nix path literal.
@@ -408,21 +592,6 @@ fn nix_path_literal(path: &Path) -> String {
     } else {
         format!("./{s}")
     }
-}
-
-/// Sanitize an input name for use as a Nix identifier.
-///
-/// Replaces `-` with `_` since Nix identifiers can't contain hyphens.
-fn nix_safe_ident(name: &str) -> String {
-    name.chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '_' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect()
 }
 
 // ── Top-Level Build ────────────────────────────────────────────────────────
@@ -458,42 +627,14 @@ pub fn build_flake_installable(
     }
     let lock = parse_flake_lock(&lock_path)?;
 
-    // Resolve root inputs
-    let root_inputs = get_root_inputs(&lock)?;
-
-    // Fetch all inputs
-    let mut resolved_inputs = Vec::new();
-    for (input_name, node_name) in &root_inputs {
-        let node = lock
-            .nodes
-            .get(node_name)
-            .ok_or_else(|| format!("node '{}' not found in flake.lock", node_name))?;
-
-        let locked = match &node.locked {
-            Some(l) => l,
-            None => {
-                eprintln!(
-                    "warning: input '{}' has no locked reference, skipping",
-                    input_name
-                );
-                continue;
-            }
-        };
-
-        let store_path = fetch_locked_input(input_name, locked)?;
-
-        resolved_inputs.push(ResolvedInput {
-            name: input_name.clone(),
-            store_path,
-            is_flake: node.is_flake(),
-        });
-    }
+    // Resolve and fetch every reachable node so nested flakes can be evaluated.
+    let nodes = resolve_flake_nodes(&lock, flake_dir)?;
 
     // Determine system
     let system = current_system();
 
     // Build eval expression
-    let expr = build_flake_eval_expr(flake_dir, &resolved_inputs, &installable.attr_path, &system);
+    let expr = build_flake_eval_expr(flake_dir, &nodes, &installable.attr_path, &system)?;
 
     eprintln!("evaluating .#{}...", installable.attr_path);
 
@@ -538,6 +679,7 @@ pub fn build_flake_installable(
 fn fetch_locked_input(
     name: &str,
     locked: &LockedRef,
+    flake_dir: &Path,
 ) -> Result<String, Box<dyn std::error::Error>> {
     match locked.type_.as_str() {
         "github" | "gitlab" => {
@@ -578,12 +720,37 @@ fn fetch_locked_input(
 
             Ok(store_path)
         }
+        "tarball" => {
+            let url = locked
+                .url
+                .as_deref()
+                .ok_or_else(|| format!("tarball input '{}' has no url field", name))?;
+            let nar_hash = locked
+                .nar_hash
+                .as_deref()
+                .ok_or_else(|| format!("tarball input '{}' has no narHash", name))?;
+            let store_path = compute_fod_store_path(name, nar_hash)?;
+            if Path::new(&store_path).exists() {
+                eprintln!("using cached input '{name}' at {store_path}");
+                return Ok(store_path);
+            }
+            eprintln!("fetching input '{name}' from {url}...");
+            fetch_and_extract_to_store(url, &store_path)?;
+            verify_nar_hash(&store_path, nar_hash)?;
+            Ok(store_path)
+        }
         "path" => {
             let path = locked
                 .path
                 .as_deref()
                 .ok_or_else(|| format!("path input '{}' has no path field", name))?;
-            Ok(path.to_string())
+            let path = Path::new(path);
+            let resolved = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                flake_dir.join(path)
+            };
+            Ok(resolved.to_string_lossy().to_string())
         }
         "git" => {
             let url = locked
@@ -914,23 +1081,6 @@ mod tests {
         assert!(resolve_tarball_url(&locked).is_none());
     }
 
-    // ── nix_safe_ident ─────────────────────────────────────────────────
-
-    #[test]
-    fn safe_ident_simple() {
-        assert_eq!(nix_safe_ident("nixpkgs"), "nixpkgs");
-    }
-
-    #[test]
-    fn safe_ident_with_hyphens() {
-        assert_eq!(nix_safe_ident("relibc-src"), "relibc_src");
-    }
-
-    #[test]
-    fn safe_ident_with_dots() {
-        assert_eq!(nix_safe_ident("nixpkgs-lib.follows"), "nixpkgs_lib_follows");
-    }
-
     // ── nix_path_literal ───────────────────────────────────────────────
 
     #[test]
@@ -1148,36 +1298,56 @@ mod tests {
             .collect(),
         };
 
-        // follows chain: ["flake-utils", "nixpkgs"] → resolves to "nixpkgs"
+        // follows chain: root input "utils" → flake-utils, then its nixpkgs
         let resolved =
-            resolve_follows(&lock, &["flake-utils".to_string(), "nixpkgs".to_string()]).unwrap();
+            resolve_follows(&lock, &["utils".to_string(), "nixpkgs".to_string()]).unwrap();
         assert_eq!(resolved, "nixpkgs");
     }
 
     // ── build_flake_eval_expr ──────────────────────────────────────────
 
     #[test]
-    fn eval_expr_simple() {
-        let inputs = vec![ResolvedInput {
-            name: "hello-src".to_string(),
-            store_path: "/nix/store/abc-source".to_string(),
-            is_flake: false,
-        }];
+    fn eval_expr_wires_flake_and_source_nodes() {
+        let nodes = vec![
+            ResolvedNode {
+                name: "root".to_string(),
+                store_path: "/tmp/myflake".to_string(),
+                is_flake: true,
+                inputs: [("hello-src".to_string(), "hello-src".to_string())]
+                    .into_iter()
+                    .collect(),
+                locked: None,
+                is_root: true,
+            },
+            ResolvedNode {
+                name: "hello-src".to_string(),
+                store_path: "/nix/store/abc-source".to_string(),
+                is_flake: false,
+                inputs: HashMap::new(),
+                locked: None,
+                is_root: false,
+            },
+        ];
 
         let expr =
-            build_flake_eval_expr(Path::new("/tmp/myflake"), &inputs, "hello", "x86_64-linux");
+            build_flake_eval_expr(Path::new("/tmp/myflake"), &nodes, "hello", "x86_64-linux")
+                .unwrap();
 
         assert!(
             expr.contains("import /tmp/myflake/flake.nix"),
             "expr: {expr}"
         );
-        assert!(expr.contains("__self = /tmp/myflake"), "expr: {expr}");
         assert!(
-            expr.contains("__input_hello_src = /nix/store/abc-source"),
+            expr.contains("\"hello-src\" = /nix/store/abc-source"),
             "expr: {expr}"
         );
         assert!(
-            expr.contains("\"hello-src\" = __input_hello_src"),
+            expr.contains("\"hello-src\" = __nodes.\"hello-src\""),
+            "expr: {expr}"
+        );
+        assert!(expr.contains("__self = __info // {"), "expr: {expr}");
+        assert!(
+            expr.contains("__flake = __outputs // __self"),
             "expr: {expr}"
         );
         assert!(
@@ -1188,16 +1358,148 @@ mod tests {
 
     #[test]
     fn eval_expr_qualified_attr() {
-        let inputs = vec![];
+        let nodes = vec![ResolvedNode {
+            name: "root".to_string(),
+            store_path: "/tmp/f".to_string(),
+            is_flake: true,
+            inputs: HashMap::new(),
+            locked: None,
+            is_root: true,
+        }];
         let expr = build_flake_eval_expr(
             Path::new("/tmp/f"),
-            &inputs,
+            &nodes,
             "packages.x86_64-linux.hello",
             "x86_64-linux",
-        );
+        )
+        .unwrap();
 
         // Qualified attrs should be used as-is
         assert!(expr.contains("packages.x86_64-linux.hello"), "expr: {expr}");
+    }
+
+    fn path_locked(path: &Path) -> LockedRef {
+        LockedRef {
+            type_: "path".to_string(),
+            owner: None,
+            repo: None,
+            rev: None,
+            nar_hash: None,
+            host: None,
+            ref_: None,
+            path: Some(path.to_string_lossy().to_string()),
+            url: None,
+            last_modified: None,
+        }
+    }
+
+    fn path_node(path: &Path, flake: bool) -> LockNode {
+        LockNode {
+            locked: Some(path_locked(path)),
+            original: None,
+            inputs: None,
+            flake: Some(flake),
+        }
+    }
+
+    #[test]
+    fn nested_flake_inputs_and_follows_evaluate() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root_dir = tmp.path().join("root");
+        let lib_dir = tmp.path().join("lib");
+        let dep_dir = tmp.path().join("dep");
+        let plain_dir = tmp.path().join("plain");
+        for dir in [&root_dir, &lib_dir, &dep_dir, &plain_dir] {
+            std::fs::create_dir(dir).unwrap();
+        }
+
+        std::fs::write(
+            root_dir.join("flake.nix"),
+            r#"
+            {
+              outputs = { self, lib, dep, plain }: {
+                packages.x86_64-linux.answer =
+                  lib.lib.greet dep.name + ":"
+                  + builtins.baseNameOf lib.lib.selfPath + ":"
+                  + builtins.readFile (plain + "/value.txt");
+              };
+            }
+            "#,
+        )
+        .unwrap();
+        std::fs::write(
+            lib_dir.join("flake.nix"),
+            r#"
+            {
+              outputs = { self, dep }: {
+                lib.greet = name: "hello " + name + "/" + dep.name;
+                lib.selfPath = self.outPath;
+              };
+            }
+            "#,
+        )
+        .unwrap();
+        std::fs::write(
+            dep_dir.join("flake.nix"),
+            r#"{ outputs = { self }: { name = "dep"; }; }"#,
+        )
+        .unwrap();
+        std::fs::write(plain_dir.join("value.txt"), "plain").unwrap();
+
+        let lock = FlakeLock {
+            version: 7,
+            root: "root".to_string(),
+            nodes: [
+                (
+                    "root".to_string(),
+                    LockNode {
+                        locked: None,
+                        original: None,
+                        inputs: Some(
+                            [
+                                ("lib".to_string(), InputRef::Direct("lib".to_string())),
+                                ("dep".to_string(), InputRef::Direct("dep".to_string())),
+                                ("plain".to_string(), InputRef::Direct("plain".to_string())),
+                            ]
+                            .into_iter()
+                            .collect(),
+                        ),
+                        flake: None,
+                    },
+                ),
+                (
+                    "lib".to_string(),
+                    LockNode {
+                        locked: Some(path_locked(&lib_dir)),
+                        original: None,
+                        inputs: Some(
+                            [(
+                                "dep".to_string(),
+                                InputRef::Follows(vec!["dep".to_string()]),
+                            )]
+                            .into_iter()
+                            .collect(),
+                        ),
+                        flake: None,
+                    },
+                ),
+                ("dep".to_string(), path_node(&dep_dir, true)),
+                ("plain".to_string(), path_node(&plain_dir, false)),
+            ]
+            .into_iter()
+            .collect(),
+        };
+
+        let nodes = resolve_flake_nodes(&lock, &root_dir).unwrap();
+        let expr = build_flake_eval_expr(
+            &root_dir,
+            &nodes,
+            "packages.x86_64-linux.answer",
+            "x86_64-linux",
+        )
+        .unwrap();
+        let (value, _) = crate::eval::evaluate_with_state(&expr).unwrap();
+        assert_eq!(value.trim_matches('"'), "hello dep/dep:lib:plain");
     }
 
     // ── compute_fod_store_path ─────────────────────────────────────────
@@ -1269,7 +1571,58 @@ mod tests {
     }
 
     #[test]
-    fn real_lock_gitlab_inputs() {
+    #[ignore = "fetches nix-redox's real flake inputs and evaluates the full flake"]
+    fn real_flake_lists_package_systems() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .to_path_buf();
+        let lock = parse_flake_lock(&root.join("flake.lock")).unwrap();
+        let nodes = resolve_flake_nodes(&lock, &root).unwrap();
+        let expr =
+            build_flake_eval_expr(&root, &nodes, "outputs.packages", "x86_64-linux").unwrap();
+        let (systems, _) =
+            crate::eval::evaluate_with_state(&format!("builtins.attrNames ({expr})")).unwrap();
+        assert!(systems.contains("x86_64-linux"), "systems: {systems}");
+    }
+
+    #[test]
+    fn real_lock_reaches_adios_flake() {
+        let lock_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("flake.lock");
+
+        if !lock_path.exists() {
+            return;
+        }
+
+        let lock = parse_flake_lock(&lock_path).unwrap();
+        let root_inputs = get_root_inputs(&lock).unwrap();
+        assert_eq!(
+            root_inputs.get("adios-flake").map(String::as_str),
+            Some("adios-flake")
+        );
+
+        let adios_flake = lock.nodes.get("adios-flake").unwrap();
+        assert!(matches!(
+            adios_flake.inputs.as_ref().unwrap().get("adios"),
+            Some(InputRef::Direct(target)) if target == "adios"
+        ));
+
+        // Every reachable edge, including follows, resolves to a lock node.
+        let reachable = reachable_nodes(&lock).unwrap();
+        assert!(reachable.iter().any(|name| name == "adios-flake"));
+        for name in &reachable {
+            let node = lock.nodes.get(name).unwrap();
+            for input in node.inputs.as_ref().into_iter().flatten().map(|(_, i)| i) {
+                resolve_input_ref(&lock, input).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn real_lock_relibc_input() {
         let lock_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .parent()
             .unwrap()
@@ -1282,14 +1635,19 @@ mod tests {
         let lock = parse_flake_lock(&lock_path).unwrap();
         let root_inputs = get_root_inputs(&lock).unwrap();
 
-        // relibc-src should be a gitlab type with custom host
+        // relibc-src has moved between GitLab and git lock entries; both must
+        // keep resolving to the Redox relibc repository.
         if let Some(node_name) = root_inputs.get("relibc-src") {
             let node = lock.nodes.get(node_name).unwrap();
             let locked = node.locked.as_ref().unwrap();
-            assert_eq!(locked.type_, "gitlab");
-            assert_eq!(locked.host.as_deref(), Some("gitlab.redox-os.org"));
-
-            let url = resolve_tarball_url(locked).unwrap();
+            let url = match locked.type_.as_str() {
+                "gitlab" => {
+                    assert_eq!(locked.host.as_deref(), Some("gitlab.redox-os.org"));
+                    resolve_tarball_url(locked).unwrap()
+                }
+                "git" => locked.url.clone().unwrap(),
+                other => panic!("unexpected relibc-src lock type: {other}"),
+            };
             assert!(url.contains("gitlab.redox-os.org"));
             assert!(url.contains("relibc"));
         }

@@ -66,6 +66,34 @@ printf 'FILE_PROBE_OK\n' > "$out"
 BUILDER
   chmod +x $out/build-file-probe.sh
 
+  # ── Nested flake inputs ────────────────────────────────────────
+  # `lib` is a flake input, `dep` is a flake input, and `lib` follows the
+  # root's `dep` instead of locking its own copy.
+  mkdir -p $out/lib $out/dep
+
+  cat > $out/lib/flake.nix << 'FLAKE'
+{
+  outputs = { self, dep }: {
+    lib.message = "nested says " + dep.value;
+  };
+}
+FLAKE
+
+  cat > $out/dep/flake.nix << 'FLAKE'
+{
+  outputs = { self }: {
+    value = "dep";
+  };
+}
+FLAKE
+
+  cat > $out/build-nested.sh << 'BUILDER'
+#!/nix/system/profile/bin/bash
+set -e
+printf '%s\n' "$message" > "$out"
+BUILDER
+  chmod +x $out/build-nested.sh
+
   # ── Tiny --file probe derivation ───────────────────────────────
   cat > $out/file-build.nix << 'NIX'
 derivation {
@@ -90,7 +118,7 @@ NIX
 {
   description = "Test flake for snix build validation";
 
-  outputs = { self, ... }: {
+  outputs = { self, lib, dep }: {
     packages."x86_64-unknown-redox".hello = derivation {
       name = "hello-flake";
       builder = "/nix/system/profile/bin/bash";
@@ -98,18 +126,49 @@ NIX
       system = "x86_64-unknown-redox";
       src = "''${builtins.toString self}/src";
     };
+
+    packages."x86_64-unknown-redox".nested = derivation {
+      name = "nested-flake";
+      builder = "/nix/system/profile/bin/bash";
+      args = [ "''${builtins.toString self}/build-nested.sh" ];
+      system = "x86_64-unknown-redox";
+      message = lib.lib.message;
+    };
+
+    checks."x86_64-unknown-redox".dependency = dep.value;
   };
 }
 FLAKE
 
   # ── flake.lock ─────────────────────────────────────────────────
-  # Minimal lock with no inputs (self-contained flake)
+  # Offline path inputs: `lib` and `dep` are flakes, and `lib` follows the
+  # root's `dep` rather than carrying an independent lock.
   cat > $out/flake.lock << 'LOCK'
 {
   "version": 7,
   "root": "root",
   "nodes": {
-    "root": {}
+    "root": {
+      "inputs": {
+        "lib": "lib",
+        "dep": "dep"
+      }
+    },
+    "lib": {
+      "locked": {
+        "type": "path",
+        "path": "./lib"
+      },
+      "inputs": {
+        "dep": [ "dep" ]
+      }
+    },
+    "dep": {
+      "locked": {
+        "type": "path",
+        "path": "./dep"
+      }
+    }
   }
 }
 LOCK

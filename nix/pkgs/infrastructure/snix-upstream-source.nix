@@ -300,6 +300,33 @@ PY
  /// This function takes an llvm triple (which may have three or four
 PATCH
 
+  # `builtins.removeAttrs` read its key list without forcing the elements.
+  # Flake wiring passes thunked attribute names, which panicked in
+  # `Value::to_str` with "Thunk::value called on a suspended thunk".
+  SNIX_UPSTREAM_OUT="$out" ${pkgs.python3}/bin/python3 - <<'PY'
+import os
+from pathlib import Path
+
+path = Path(os.environ["SNIX_UPSTREAM_OUT"]) / "eval/src/builtins/mod.rs"
+text = path.read_text()
+old = """        let keys = keys
+            .to_list()?
+            .into_iter()
+            .map(|v| v.to_str())
+            .collect::<Result<FxHashSet<_>, _>>()?;
+"""
+new = """        let mut key_set = FxHashSet::default();
+        for key in keys.to_list()? {
+            let key = generators::request_force(&co, key).await;
+            key_set.insert(key.to_str()?);
+        }
+        let keys = key_set;
+"""
+if old not in text:
+    raise SystemExit(f"expected removeAttrs snippet not found in {path}")
+path.write_text(text.replace(old, new, 1))
+PY
+
   # Make derivation_into_build_request public so snix-redox can use it.
   # Upstream keeps it pub(crate) because only snix-glue's own build
   # orchestration calls it. We need it in local_build.rs to convert

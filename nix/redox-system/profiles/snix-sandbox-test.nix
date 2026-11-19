@@ -132,6 +132,25 @@ HELLONIX
       fi
     '
 
+    # ── flake-nested: flake input evaluated as a flake, with follows ──
+    echo "--- flake-nested ---"
+    /nix/system/profile/bin/bash -c '
+      /bin/snix build "/usr/src/test-flake#nested" >/tmp/flake-nested-out 2>/tmp/flake-nested-err
+      EXIT=$?
+      OUTPUT=$(while IFS= read -r line; do case $line in /nix/store/*) printf '%s' "$line"; break;; esac; done < /tmp/flake-nested-out)
+      if [ $EXIT -eq 0 ] && [ -n "$OUTPUT" ] && [ -f "$OUTPUT" ]; then
+        RUN=$(cat "$OUTPUT")
+        if [ "$RUN" = "nested says dep" ]; then
+          echo "FUNC_TEST:flake-nested:PASS"
+        else
+          echo "FUNC_TEST:flake-nested:FAIL:wrong output: $RUN"
+        fi
+      else
+        echo "FUNC_TEST:flake-nested:FAIL:exit=$EXIT output=$OUTPUT"
+        cat /tmp/flake-nested-err 2>/dev/null | head -20 >&2
+      fi
+    '
+
     # ── file-build probes ──
     echo "--- file-build-tmp-probe ---"
     /nix/system/profile/bin/bash -c '
