@@ -151,6 +151,88 @@ HELLONIX
       fi
     '
 
+    # ── proc-macro-real: serde_derive + thiserror-impl from vendored sources ──
+    # Uses the real proc-macro crates, not the Snix bundle's local shims, and
+    # exercises default debug settings plus parallel Cargo jobs.
+    echo "--- proc-macro-real ---"
+    /nix/system/profile/bin/bash -c '
+      rm -rf /tmp/proc-fixture /tmp/proc-fixture-cargo
+      mkdir -p /tmp/proc-fixture/src /tmp/proc-fixture/.cargo
+      cat > /tmp/proc-fixture/Cargo.toml << '"'"'TOML'"'"'
+[package]
+name = "proc-fixture"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+serde = { version = "=1.0.228", features = ["derive"] }
+serde_json = "=1.0.150"
+thiserror = "=2.0.18"
+TOML
+      cat > /tmp/proc-fixture/src/main.rs << '"'"'RUST'"'"'
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Item { name: String, value: u32 }
+
+#[derive(thiserror::Error, Debug)]
+enum Error { #[error("bad: {0}")] Bad(String) }
+
+fn main() {
+    let text = serde_json::to_string(&Item { name: "redox".into(), value: 7 }).unwrap();
+    let item: Item = serde_json::from_str(&text).unwrap();
+    assert_eq!(item.value, 7);
+    let error = Error::Bad("x".into());
+    assert_eq!(error.to_string(), "bad: x");
+    println!("PROC_MACRO_REAL_OK");
+}
+RUST
+      cat > /tmp/proc-fixture/.cargo/config.toml << '"'"'CFG'"'"'
+[source.crates-io]
+replace-with = "vendored"
+
+[source.vendored]
+directory = "/usr/src/snix-redox/vendor/source-registry-0"
+
+[target.x86_64-unknown-redox]
+linker = "/nix/system/profile/bin/cc"
+CFG
+      cd /tmp/proc-fixture
+      export CARGO_HOME=/tmp/proc-fixture-cargo
+      export CARGO_BUILD_TARGET=x86_64-unknown-redox
+      export CARGO_BUILD_JOBS=2
+      export RUSTFLAGS="-Cdebuginfo=0"
+      cargo build --offline >/tmp/proc-fixture-out 2>/tmp/proc-fixture-err &
+      BUILD_PID=$!
+      SECONDS=0
+      EXIT=0
+      while kill -0 "$BUILD_PID" 2>/dev/null; do
+        if [ "$SECONDS" -ge 420 ]; then
+          kill "$BUILD_PID" 2>/dev/null
+          wait "$BUILD_PID" 2>/dev/null
+          EXIT=124
+          break
+        fi
+        sleep 2
+      done
+      if [ "$EXIT" -eq 0 ]; then
+        wait "$BUILD_PID"
+        EXIT=$?
+      fi
+      BIN=/tmp/proc-fixture/target/x86_64-unknown-redox/debug/proc-fixture
+      if [ $EXIT -eq 0 ] && [ -x "$BIN" ]; then
+        RUN=$("$BIN" 2>&1)
+        if [ "$RUN" = "PROC_MACRO_REAL_OK" ]; then
+          echo "FUNC_TEST:proc-macro-real:PASS"
+        else
+          echo "FUNC_TEST:proc-macro-real:FAIL:wrong output: $RUN"
+        fi
+      else
+        echo "FUNC_TEST:proc-macro-real:FAIL:exit=$EXIT"
+        tail -40 /tmp/proc-fixture-err 2>/dev/null >&2
+      fi
+    '
+
     # ── file-build probes ──
     echo "--- file-build-tmp-probe ---"
     /nix/system/profile/bin/bash -c '
