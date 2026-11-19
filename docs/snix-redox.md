@@ -113,15 +113,14 @@ source tree. These are **not automatically part of the normal cross-package**:
 
 ### Native dependency replacements are not all semantics-preserving
 
-The native bundle still includes compatibility shims for `prost-derive`,
-`tokio-macros`, `pin-project-internal`, `clap_derive`, `rustversion`, and other
-proc-macro crates; those are not merely build-system fixes. The
-[`serde_derive`](../snix-redox/vendor-patches/serde_derive-1.0.228/src/lib.rs)
-and `thiserror-impl` replacements have been removed: the sandbox
-`proc-macro-real` fixture and a full guest Snix build compile the real
-`serde_derive 1.0.228` and `thiserror-impl 1.0.69`/`2.0.18` crates from the
-vendored sources. The empty-query redb workaround remains in the bundle even
-though the real Serde derives now support its configuration path.
+The native bundle still includes compatibility shims for `rustversion` and
+other proc-macro crates; those are not merely build-system fixes. The
+`serde_derive`, `prost-derive` and `thiserror-impl` replacements have been
+removed: the sandbox `proc-macro-real` fixture and full guest Snix builds
+compile the real `serde_derive 1.0.228`, `prost-derive 0.13.5`, and
+`thiserror-impl 1.0.69`/`2.0.18` crates from the vendored sources. The
+empty-query redb workaround remains in the bundle even though the real Serde
+derives now support its configuration path.
 
 For the source bundle used by the `e0f0102` proof, offline Cargo metadata
 resolution selected the local `serde_derive 1.0.228`, `prost-derive 0.13.5`, and
@@ -130,9 +129,10 @@ graph is no longer the current bundle's graph.
 
 Conversely, local patch candidates for `clap_derive 4.6.0`,
 `pin-project-internal 1.1.11`, `tokio-macros 2.6.1`, and
-`serde_with_macros 3.18.0` were reported unused by that resolution. For example,
-the selected Clap derive was the registry's `4.6.1`, not the local shim whose
-parsing implementation panics. A file under `vendor-patches/` or an injected
+`serde_with_macros 3.18.0` were reported unused by that resolution and have
+been removed from the bundle's patch list. For example, the selected Clap
+derive was the registry's `4.6.1`, not the local shim whose parsing
+implementation panics. A file under `vendor-patches/` or an injected
 `[patch.crates-io]` entry is not sufficient evidence that Cargo selects it.
 Recheck the resolved graph when changing the lockfile or dependency constraints.
 
