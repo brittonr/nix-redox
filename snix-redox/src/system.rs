@@ -19,6 +19,28 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+/// The Nix system identifier of the machine running this binary.
+///
+/// Flake evaluation and local build execution share this function so the
+/// attribute path they select is always one the executor is willing to run.
+pub fn current_system() -> String {
+    #[cfg(target_os = "redox")]
+    {
+        "x86_64-unknown-redox".to_string()
+    }
+    #[cfg(not(target_os = "redox"))]
+    {
+        // Host tests and the optional Linux build bridge.
+        if cfg!(target_arch = "x86_64") {
+            "x86_64-linux".to_string()
+        } else if cfg!(target_arch = "aarch64") {
+            "aarch64-linux".to_string()
+        } else {
+            "x86_64-linux".to_string()
+        }
+    }
+}
+
 /// Default manifest path on the running Redox system
 const MANIFEST_PATH: &str = "/etc/redox-system/manifest.json";
 

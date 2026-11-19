@@ -34,6 +34,8 @@ use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
+use crate::system::current_system;
+
 // ── Installable Parsing ────────────────────────────────────────────────────
 
 /// A parsed flake installable reference.
@@ -744,27 +746,6 @@ fn verify_nar_hash(store_path: &str, expected_sri: &str) -> Result<(), Box<dyn s
 
     eprintln!("✓ verified {store_path}");
     Ok(())
-}
-
-/// Get the current system identifier.
-///
-/// Returns `x86_64-unknown-redox` on Redox, `x86_64-linux` on Linux, etc.
-fn current_system() -> String {
-    #[cfg(target_os = "redox")]
-    {
-        "x86_64-unknown-redox".to_string()
-    }
-    #[cfg(not(target_os = "redox"))]
-    {
-        // For testing on Linux
-        if cfg!(target_arch = "x86_64") {
-            "x86_64-linux".to_string()
-        } else if cfg!(target_arch = "aarch64") {
-            "aarch64-linux".to_string()
-        } else {
-            "x86_64-linux".to_string()
-        }
-    }
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────

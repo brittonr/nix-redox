@@ -89,6 +89,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- Snix refuses to run a builder whose derivation targets another system,
+  naming the required and local systems before any builder or dependency starts
+  and pointing at `snix build --bridge`. Flake evaluation and local execution
+  share one system identifier, so the selected attribute path and the executor
+  cannot disagree.
+
 - The default disk image builds again: duplicated alias binaries had exhausted
   its RedoxFS partition (`redoxfs-ar: No space left on device`).
 
