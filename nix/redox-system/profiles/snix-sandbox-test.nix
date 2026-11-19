@@ -168,8 +168,10 @@ edition = "2021"
 serde = { version = "=1.0.228", features = ["derive"] }
 serde_json = "=1.0.150"
 thiserror = "=2.0.18"
+prost = "=0.13.5"
 TOML
       cat > /tmp/proc-fixture/src/main.rs << '"'"'RUST'"'"'
+use prost::Message;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -178,12 +180,18 @@ struct Item { name: String, value: u32 }
 #[derive(thiserror::Error, Debug)]
 enum Error { #[error("bad: {0}")] Bad(String) }
 
+#[derive(Clone, PartialEq, Message)]
+struct Msg { #[prost(string, tag = "1")] name: String }
+
 fn main() {
     let text = serde_json::to_string(&Item { name: "redox".into(), value: 7 }).unwrap();
     let item: Item = serde_json::from_str(&text).unwrap();
     assert_eq!(item.value, 7);
     let error = Error::Bad("x".into());
     assert_eq!(error.to_string(), "bad: x");
+    let msg = Msg { name: "redox".into() };
+    let bytes = msg.encode_to_vec();
+    assert_eq!(Msg::decode(&*bytes).unwrap(), msg);
     println!("PROC_MACRO_REAL_OK");
 }
 RUST
