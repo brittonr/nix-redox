@@ -44,6 +44,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- The guest Snix self-build compiles the real `serde_derive` and
+  `thiserror-impl` crates from the vendored sources instead of local shims. A
+  1636-second guest build produced a working `snix` (`--version` and
+  `eval --expr "1 + 1"`). The remaining proc-macro crates keep their shims
+  until their own fixtures pass.
+
 - Redesigned the landing page (`site/`): numbered sections for running, the
   demo, the self-build proof, the build pipeline, configuration, image contents,
   status and docs; light and dark themes that follow the OS, with a toggle;
