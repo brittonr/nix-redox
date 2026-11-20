@@ -86,7 +86,9 @@ and the build filesystem proxy. The proxy permits read access to the entire
 store and several system/source paths, not only declared derivation inputs. If
 proxy setup fails, the executor falls back to scheme-level isolation with the
 real filesystem visible. Do not describe this as input-only filesystem isolation
-or an unconditional filesystem security boundary.
+or an unconditional filesystem security boundary. Exec-path tracing is disabled
+by default because parallel builders make its stderr traffic expensive; set
+`SNIX_BUILD_FS_TRACE=1` to re-enable it for diagnostics.
 
 ## Cross-build versus guest-native self-build
 
