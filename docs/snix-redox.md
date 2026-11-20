@@ -121,8 +121,8 @@ The native bundle no longer replaces proc-macro crates. The sandbox
 `thiserror-impl 1.0.69`/`2.0.18`, `rustversion 1.0.22`,
 `curve25519-dalek-derive 0.1.1`, `num_enum_derive 0.7.6`,
 `proc-macro-error-attr2 2.0.0`, and `structmeta-derive 0.1.6` crates from the
-vendored sources. The empty-query redb workaround remains in the bundle even
-though the real Serde derives support its configuration path.
+vendored sources. The empty-query redb Serde workaround is also gone: the
+default store services now deserialize their configuration normally.
 
 For the source bundle used by the `e0f0102` proof, offline Cargo metadata
 resolution selected the local `serde_derive 1.0.228`, `prost-derive 0.13.5`, and
