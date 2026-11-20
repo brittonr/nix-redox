@@ -51,6 +51,10 @@ All notable changes to this project are documented here. The format follows
   The unused `clap_derive`, `pin-project-internal`, `tokio-macros` and
   `serde_with_macros` patch entries are gone.
 
+- The guest bundle no longer patches redb to bypass Serde for a default
+  configuration. A 2508-second self-build produced a working `snix` with the
+  real derive crates and the default redb configuration.
+
 - Redesigned the landing page (`site/`): numbered sections for running, the
   demo, the self-build proof, the build pipeline, configuration, image contents,
   status and docs; light and dark themes that follow the OS, with a toggle;
