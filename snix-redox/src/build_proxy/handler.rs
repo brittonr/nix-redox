@@ -24,6 +24,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::LazyLock;
 
 use super::io_worker::{BuildFsIoWorker, MmapResult, OpenPathResult};
 
@@ -63,14 +64,28 @@ fn log_open_error(op: &str, path: &Path, errno: i32) {
 }
 
 
-fn should_trace_exec_path(path: &Path) -> bool {
+/// Exec-path tracing is diagnostic only and is expensive: every compiler
+/// invocation writes several lines to the builder's already-shared stderr.
+static BUILD_FS_TRACE: LazyLock<bool> = LazyLock::new(|| {
     matches!(
-        path.to_str(),
-        Some("/nix/system/profile/bin/cc")
-            | Some("/nix/system/profile/bin/bash")
-            | Some("/nix/system/profile/bin/cc-helper")
-            | Some("/usr/src/snix-redox/build-snix.sh")
+        std::env::var("SNIX_BUILD_FS_TRACE").ok().as_deref(),
+        Some("1") | Some("true")
     )
+});
+
+fn buildfs_trace_enabled() -> bool {
+    *BUILD_FS_TRACE
+}
+
+fn should_trace_exec_path(path: &Path) -> bool {
+    buildfs_trace_enabled()
+        && matches!(
+            path.to_str(),
+            Some("/nix/system/profile/bin/cc")
+                | Some("/nix/system/profile/bin/bash")
+                | Some("/nix/system/profile/bin/cc-helper")
+                | Some("/usr/src/snix-redox/build-snix.sh")
+        )
 }
 
 
