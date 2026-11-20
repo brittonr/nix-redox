@@ -113,14 +113,14 @@ source tree. These are **not automatically part of the normal cross-package**:
 
 ### Native dependency replacements are not all semantics-preserving
 
-The native bundle still includes compatibility shims for `rustversion` and
-other proc-macro crates; those are not merely build-system fixes. The
-`serde_derive`, `prost-derive` and `thiserror-impl` replacements have been
-removed: the sandbox `proc-macro-real` fixture and full guest Snix builds
-compile the real `serde_derive 1.0.228`, `prost-derive 0.13.5`, and
-`thiserror-impl 1.0.69`/`2.0.18` crates from the vendored sources. The
-empty-query redb workaround remains in the bundle even though the real Serde
-derives now support its configuration path.
+The native bundle no longer replaces proc-macro crates. The sandbox
+`proc-macro-real` fixture and full guest Snix builds compile the real
+`serde_derive 1.0.228`, `prost-derive 0.13.5`,
+`thiserror-impl 1.0.69`/`2.0.18`, `rustversion 1.0.22`,
+`curve25519-dalek-derive 0.1.1`, `num_enum_derive 0.7.6`,
+`proc-macro-error-attr2 2.0.0`, and `structmeta-derive 0.1.6` crates from the
+vendored sources. The empty-query redb workaround remains in the bundle even
+though the real Serde derives support its configuration path.
 
 For the source bundle used by the `e0f0102` proof, offline Cargo metadata
 resolution selected the local `serde_derive 1.0.228`, `prost-derive 0.13.5`, and

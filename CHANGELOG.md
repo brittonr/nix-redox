@@ -44,12 +44,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
-- The guest Snix self-build compiles the real `serde_derive`, `prost-derive`
-  and `thiserror-impl` crates from the vendored sources instead of local shims.
-  A 1433-second guest build produced a working `snix` (`--version` and
-  `eval --expr "1 + 1"`). The unused `clap_derive`, `pin-project-internal`,
-  `tokio-macros` and `serde_with_macros` patch entries are gone; the remaining
-  selected shims stay until their own fixtures pass.
+- The guest Snix self-build compiles every proc-macro crate from the real
+  vendored sources instead of local shims. Full guest builds of the real
+  `serde_derive`, `prost-derive`, `thiserror-impl` and the remaining derive
+  crates produce a working `snix` (`--version` and `eval --expr "1 + 1"`).
+  The unused `clap_derive`, `pin-project-internal`, `tokio-macros` and
+  `serde_with_macros` patch entries are gone.
 
 - Redesigned the landing page (`site/`): numbered sections for running, the
   demo, the self-build proof, the build pipeline, configuration, image contents,

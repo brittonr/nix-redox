@@ -31,13 +31,12 @@ pkgs.runCommand "snix-source-bundle" { } ''
   # Copy source tree with upstream crates
   cp ${combinedSrc}/Cargo.toml $out/
   cp ${combinedSrc}/Cargo.lock $out/
-  # The self-hosted Redox rustc still spins compiling some upstream proc-macro
-  # crates. serde_derive, prost-derive and thiserror-impl now build from the
-  # real vendored crates (covered by the sandbox proc-macro fixture), and the
-  # clap_derive, pin-project-internal, tokio-macros and serde_with_macros patch
-  # candidates were unused by Cargo's resolution. Only shims Cargo still
-  # selects stay here.
-  ${pkgs.perl}/bin/perl -0pi -e 's#(tracing-attributes = \{ path = "vendor-patches/tracing-attributes-0\.1\.31" \}\n)#$1reqwest-middleware = { path = "vendor-patches/reqwest-middleware-0.5.1" }\nrustversion = { path = "vendor-patches/rustversion-1.0.22" }\nreqwest-tracing = { path = "vendor-patches/reqwest-tracing-0.6.0" }\nautocfg = { path = "vendor-patches/autocfg-1.5.0" }\ncurve25519-dalek-derive = { path = "vendor-patches/curve25519-dalek-derive-0.1.1" }\nproc-macro-error-attr2 = { path = "vendor-patches/proc-macro-error-attr2-2.0.0" }\nnum_enum_derive = { path = "vendor-patches/num_enum_derive-0.7.6" }\nserde_qs = { path = "vendor-patches/serde_qs-0.12.0" }\nstructmeta-derive = { path = "vendor-patches/structmeta-derive-0.1.6" }\ntonic-health = { path = "vendor-patches/tonic-health-0.13.1" }\ntower = { path = "vendor-patches/tower-0.4.13" }\n#' $out/Cargo.toml
+  # All proc-macro crates now build from the real vendored sources. The
+  # serde/prost/thiserror derives and the remaining derive crates are covered
+  # by the guest build proof; clap_derive, pin-project-internal, tokio-macros
+  # and serde_with_macros were unused patch candidates. Keep only the
+  # non-proc-macro dependency patches that the resolution still selects.
+  ${pkgs.perl}/bin/perl -0pi -e 's#(tracing-attributes = \{ path = "vendor-patches/tracing-attributes-0\.1\.31" \}\n)#$1reqwest-middleware = { path = "vendor-patches/reqwest-middleware-0.5.1" }\nreqwest-tracing = { path = "vendor-patches/reqwest-tracing-0.6.0" }\nautocfg = { path = "vendor-patches/autocfg-1.5.0" }\nserde_qs = { path = "vendor-patches/serde_qs-0.12.0" }\ntonic-health = { path = "vendor-patches/tonic-health-0.13.1" }\ntower = { path = "vendor-patches/tower-0.4.13" }\n#' $out/Cargo.toml
   cp -r ${combinedSrc}/src $out/src
   cp -r ${combinedSrc}/upstream $out/upstream
   if [ -d ${combinedSrc}/vendor-patches ]; then
