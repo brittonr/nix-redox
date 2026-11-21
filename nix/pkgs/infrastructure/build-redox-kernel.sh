@@ -90,7 +90,7 @@ EOF
 
 # cargo -Z build-std looks for rust-src at $(rustc --print sysroot)/lib/rustlib/src/rust/library.
 # The guest sysroot is read-only, so copy rustlib into TMPDIR and overlay rust-src there.
-real_sysroot=$("$NIX_RUSTC" --print sysroot 2>/dev/null || echo "$NIX_SYSROOT")
+real_sysroot=${NIX_RUSTC%/bin/rustc}
 custom_sysroot="$TMPDIR/sysroot"
 mkdir -p "$custom_sysroot/lib/rustlib/src"
 rustlib_path="$real_sysroot/lib/rustlib"
@@ -123,7 +123,7 @@ ls -ld "$custom_sysroot/lib/rustlib/src/rust/library/std" >&2 || true
 ls -ld "$custom_sysroot/lib/rustlib/src/rust/library/windows_targets" >&2 || true
 ls -ld "$linker_script" >&2 || true
 ls -ld "$NIX_LLD_WRAPPER" >&2 || true
-ls -ld "$(dirname "$NIX_LLD_WRAPPER")/ld.lld" >&2 || true
+ls -ld "${NIX_LLD_WRAPPER%/*}/ld.lld" >&2 || true
 
 # Use RUSTC that reports custom sysroot so cargo's -Z build-std finds rust-src there.
 # cp bash to get exec permission, then overwrite contents (keeps mode on Redox).

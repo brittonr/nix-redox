@@ -82,7 +82,7 @@ CFG
 
 # cargo -Z build-std looks for rust-src at $(rustc --print sysroot)/lib/rustlib/src/rust/library.
 # The guest sysroot is read-only, so copy rustlib into TMPDIR and overlay rust-src there.
-real_sysroot=$("$NIX_RUSTC" --print sysroot 2>/dev/null || echo "$NIX_SYSROOT")
+real_sysroot=${NIX_RUSTC%/bin/rustc}
 custom_sysroot="$TMPDIR/sysroot"
 mkdir -p "$custom_sysroot/lib/rustlib/src"
 rustlib_path="$real_sysroot/lib/rustlib"
@@ -131,7 +131,7 @@ echo "[build-redox-bootloader] bootloader_linker=$bootloader_linker (lld-wrapper
 ls -ld "$custom_sysroot/lib/rustlib/src/rust/library" >&2 || true
 ls -ld "$custom_sysroot/lib/rustlib/src/rust/library/std" >&2 || true
 ls -ld "$NIX_LLD_WRAPPER" >&2 || true
-ls -ld "$(dirname "$NIX_LLD_WRAPPER")/ld.lld" >&2 || true
+ls -ld "${NIX_LLD_WRAPPER%/*}/ld.lld" >&2 || true
 
 wrapper="$TMPDIR/rustc-sysroot"
 cp "$NIX_BASH" "$wrapper"

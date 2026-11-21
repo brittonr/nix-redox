@@ -15,7 +15,7 @@ derivation {
   NIX_LLD_WRAPPER = "${tools.lldWrapper}/bin/lld-wrapper";
   NIX_OBJCOPY = "${tools.llvm}/bin/llvm-objcopy";
   NIX_SYSROOT = "${tools.sysroot}";
-  NIX_TOOL_PATH = "${tools.uutils}/bin:${tools.bash}/bin:/bin:/usr/bin";
+  NIX_TOOL_PATH = "${tools.rustc}/bin:${tools.llvm}/bin:${tools.uutils}/bin:${tools.bash}/bin:/bin:/usr/bin";
   NIX_LD_LIBRARY_PATH = "${tools.rustc}/lib:${tools.llvm}/lib:/usr/lib/rustc:/lib";
   args = [ "--noprofile" "--norc" "${./.}/build-redox-bootloader.sh" ];
   source = ./.;
