@@ -90,14 +90,27 @@ let
   # Path values are imported into the store by derivationStrict: edits to the
   # staged source, recipes or vendor trees change the native derivation IDs.
   bootstrapInputs = builtins.toJSON { inherit (seed) bootstrapInputs packages; };
+  stage0 = import ./stage0-tools.nix;
   mkNative = name: attrs: script: derivation ({
     inherit name bootstrapInputs;
     system = "x86_64-unknown-redox";
-    builder = "/nix/system/profile/bin/bash";
+    builder = "${stage0.bash}/bin/bash";
     args = [ "--noprofile" "--norc" "-c" (''
       set -eu
-      export PATH=/nix/system/profile/bin:/bin:/usr/bin
-      export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+      export NIX_BASH=${stage0.bash}/bin/bash
+      export NIX_RUSTC=${stage0.rustc}/bin/rustc
+      export NIX_CARGO=${stage0.rustc}/bin/cargo
+      export NIX_AR=${stage0.llvm}/bin/llvm-ar
+      export NIX_CC=${stage0.llvm}/bin/clang
+      export NIX_CXX=${stage0.llvm}/bin/clang++
+      export NIX_LLD_WRAPPER=${stage0.lldWrapper}/bin/lld-wrapper
+      export NIX_OBJCOPY=${stage0.llvm}/bin/llvm-objcopy
+      export NIX_MAKE=${stage0.make}/bin/make
+      export NIX_SYSROOT=${stage0.sysroot}
+      export NIX_TOOL_PATH=${stage0.uutils}/bin:${stage0.bash}/bin:/bin:/usr/bin
+      export NIX_LD_LIBRARY_PATH=${stage0.rustc}/lib:${stage0.llvm}/lib:/usr/lib/rustc:/lib
+      export PATH="$NIX_TOOL_PATH"
+      export LD_LIBRARY_PATH="$NIX_LD_LIBRARY_PATH"
     '' + script) ];
   } // attrs);
   kernel = import /usr/src/native-kernel-rebuild/kernel/build.nix;

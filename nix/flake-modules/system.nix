@@ -459,6 +459,7 @@ let
       sysrootVendor
       redoxTarget
       ;
+    seedPackages = systems.self-hosting.nativeBuildSeed.seedPackages;
     inherit (redoxLib) vendor;
     inherit (inputs)
       kernel-src

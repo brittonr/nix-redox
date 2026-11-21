@@ -17,6 +17,21 @@
   userutils ? null,
 }:
 let
+  seedTool = name:
+    let matches = builtins.filter (p: p.name == name) seedPackages; in
+    if matches == [ ] then
+      throw "native system bundle: seed has no package '${name}'"
+    else
+      (builtins.head matches).storePath;
+  stage0Tools = {
+    bash = seedTool "redox-bash";
+    uutils = seedTool "redox-uutils";
+    rustc = seedTool "rustc-redox";
+    llvm = seedTool "llvm-redox";
+    lldWrapper = seedTool "lld-wrapper";
+    make = seedTool "gnu-make";
+    sysroot = seedTool "redox-sysroot";
+  };
   seed = pkgs.writeText "native-system-seed.json" (builtins.toJSON {
     cfg = seedConfig;
     inputs = seedInputs;
@@ -36,6 +51,17 @@ pkgs.runCommand "native-system-source-bundle" { } ''
   cp ${./native-system-build.nix} $out/build.nix
   cp ${./native-initfs-tools-build.nix} $out/tools.nix
   cp ${seed} $out/seed.json
+  cat > $out/stage0-tools.nix <<EOF
+  {
+    bash = ${stage0Tools.bash};
+    uutils = ${stage0Tools.uutils};
+    rustc = ${stage0Tools.rustc};
+    llvm = ${stage0Tools.llvm};
+    lldWrapper = ${stage0Tools.lldWrapper};
+    make = ${stage0Tools.make};
+    sysroot = ${stage0Tools.sysroot};
+  }
+  EOF
   cp -r ${nixpkgsLib}/. $out/lib/
   cp ${../../redox-system/modules/build/init-scripts.nix} $out/renderers/init-scripts.nix
   cp ${../../redox-system/modules/build/pcid.nix} $out/renderers/pcid.nix
