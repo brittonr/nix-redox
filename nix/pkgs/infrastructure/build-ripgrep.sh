@@ -1,4 +1,4 @@
-#!/nix/system/profile/bin/bash
+#!/bin/bash
 # Builder script for compiling ripgrep on Redox OS.
 # Called by snix build --file build.nix as a Nix derivation builder.
 #
@@ -8,15 +8,15 @@
 #   Source bundle at /usr/src/ripgrep with vendor/ and .cargo/config.toml
 
 set -e
-export PATH=/nix/system/profile/bin:/bin:/usr/bin
-export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+export PATH="${NIX_TOOL_PATH:?}"
+export LD_LIBRARY_PATH="${NIX_LD_LIBRARY_PATH:?}"
 export HOME="$TMPDIR"
 export CARGO_HOME="$TMPDIR/cargo-home"
-export RUSTC=/nix/system/profile/bin/rustc
+export RUSTC="${NIX_RUSTC:?}"
 export CARGO_INCREMENTAL=0
 export CARGO_TARGET_DIR="$TMPDIR/target"
 export CARGO_TERM_PROGRESS_WHEN=never
-export AR=/nix/system/profile/bin/llvm-ar
+export AR="${NIX_AR:?}"
 
 mkdir -p "$CARGO_HOME" "$out/bin"
 

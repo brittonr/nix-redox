@@ -6,9 +6,10 @@
 # This enables `snix build .#ripgrep` inside a running Redox VM:
 # a real 55-crate Rust project built through a Nix flake on Redox OS.
 
-{ pkgs, ripgrep-src }:
+{ pkgs, ripgrep-src, seedPackages }:
 
 let
+  stage0Tools = import ./stage0-tools.nix { inherit seedPackages; };
   # Vendor all crate dependencies from the lockfile
   vendoredDeps = pkgs.rustPlatform.fetchCargoVendor {
     name = "ripgrep-vendor";
@@ -33,6 +34,9 @@ pkgs.runCommand "ripgrep-source-bundle" { } ''
     # Builder script and Nix derivation for snix build --file
     cp ${./build-ripgrep.sh} $out/build-ripgrep.sh
     cp ${./build-ripgrep.nix} $out/build.nix
+    cat > $out/stage0-tools.nix <<EOF
+  ${builtins.toJSON stage0Tools}
+  EOF
 
     # Cargo config for offline vendored builds.
     # fetchCargoVendor lays crates out under vendor/source-registry-0/.
@@ -48,6 +52,6 @@ pkgs.runCommand "ripgrep-source-bundle" { } ''
   target = "x86_64-unknown-redox"
 
   [target.x86_64-unknown-redox]
-  linker = "/nix/system/profile/bin/cc"
+  linker = "${stage0Tools.llvm}/bin/clang"
   EOF
 ''

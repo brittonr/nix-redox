@@ -4,9 +4,10 @@
 # crates, and all crate dependencies vendored, ready for `cargo build --offline`
 # on the guest.
 
-{ pkgs, snix-redox-src }:
+{ pkgs, snix-redox-src, seedPackages }:
 
 let
+  stage0Tools = import ./stage0-tools.nix { inherit seedPackages; };
   snixUpstreamSource = import ./snix-upstream-source.nix { inherit pkgs; };
 
   # Compose source with upstream crates (same as the cross-build does)
@@ -104,6 +105,9 @@ PY
   # Builder script and Nix derivation for snix build --file
   cp ${./build-snix.sh} $out/build-snix.sh
   cp ${./build-snix.nix} $out/build.nix
+  cat > $out/stage0-tools.nix <<EOF
+  ${builtins.toJSON stage0Tools}
+  EOF
 
   # Reuse fetchCargoVendor's exact registry/git ordering and revision pins.
   # A new git dependency can renumber source-git-N directories.

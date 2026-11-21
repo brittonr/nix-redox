@@ -1,4 +1,4 @@
-#!/nix/system/profile/bin/bash
+#!/bin/bash
 # Builder script for self-compiling snix on Redox OS.
 # Called by snix build --file build.nix as a Nix derivation builder.
 #
@@ -9,8 +9,8 @@
 
 set -e
 
-export PATH=/nix/system/profile/bin:/bin:/usr/bin
-export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+export PATH="${NIX_TOOL_PATH:?}"
+export LD_LIBRARY_PATH="${NIX_LD_LIBRARY_PATH:?}"
 export HOME="$TMPDIR"
 export CARGO_HOME="$TMPDIR/cargo-home"
 export CARGO_INCREMENTAL=0
@@ -27,9 +27,9 @@ export RAYON_NUM_THREADS=4
 # spawn (`could not exec the linker ... File exists`). Trim linker command
 # pressure while we debug that Redox/rustc spawn path.
 export RUSTFLAGS="-C panic=abort -C codegen-units=1 -C debuginfo=0"
-REAL_RUSTC=/nix/system/profile/bin/rustc
+REAL_RUSTC="${NIX_RUSTC:?}"
 export RUSTC="$REAL_RUSTC"
-export AR=/nix/system/profile/bin/llvm-ar
+export AR="${NIX_AR:?}"
 export CARGO_TERM_PROGRESS_WHEN="${CARGO_TERM_PROGRESS_WHEN:-always}"
 export CARGO_TERM_PROGRESS_WIDTH="${CARGO_TERM_PROGRESS_WIDTH:-80}"
 
@@ -48,8 +48,8 @@ fi
 
 cd "$SRCDIR"
 export PROTO_ROOT="$SRCDIR/upstream"
-if [ -x /nix/system/profile/bin/protoc ]; then
-  export PROTOC=/nix/system/profile/bin/protoc
+if command -v protoc >/dev/null 2>&1; then
+  export PROTOC="$(command -v protoc)"
 fi
 
 # Under the proxy sandbox, the builder may only write inside its declared
@@ -58,9 +58,8 @@ fi
 export SNIX_RUSTC_LOG="${TMPDIR:-/tmp}/snix-rustc.log"
 : >"$SNIX_RUSTC_LOG"
 RUSTC_WRAPPER_SH="$TMPDIR/rustc-wrapper.sh"
-cp /nix/system/profile/bin/bash "$RUSTC_WRAPPER_SH"
-cat >"$RUSTC_WRAPPER_SH" <<'EOF'
-#!/nix/system/profile/bin/bash
+printf '%s\n' "#!${NIX_BASH:?}" > "$RUSTC_WRAPPER_SH"
+cat >>"$RUSTC_WRAPPER_SH" <<'EOF'
 set -u
 
 real_rustc=$1

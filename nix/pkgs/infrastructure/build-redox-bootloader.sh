@@ -136,6 +136,7 @@ ls -ld "${NIX_LLD_WRAPPER%/*}/ld.lld" >&2 || true
 wrapper="$TMPDIR/rustc-sysroot"
 cp "$NIX_BASH" "$wrapper"
 printf '%s\n' '#!$NIX_BASH' "exec $NIX_RUSTC --sysroot $custom_sysroot \"\$@\"" >"$wrapper"
+chmod +x "$wrapper"
 export RUSTC="$wrapper"
 
 cd "$bootloader_dir"

@@ -429,12 +429,14 @@ let
   snixSourceBundle = import ../pkgs/infrastructure/snix-source-bundle.nix {
     inherit pkgs;
     snix-redox-src = ../../snix-redox;
+    seedPackages = systems.self-hosting.nativeBuildSeed.seedPackages;
   };
 
   # ripgrep source bundle for flake-build-ripgrep test
   ripgrepSourceBundle = import ../pkgs/infrastructure/ripgrep-source-bundle.nix {
     inherit pkgs;
     ripgrep-src = inputs.ripgrep-src;
+    seedPackages = systems.self-hosting.nativeBuildSeed.seedPackages;
   };
 
   # test flake bundle for `snix build .#hello` VM test
@@ -445,9 +447,11 @@ let
   # cc-dep and workspace test bundles for complex build VM tests
   ccDepTestBundle = import ../pkgs/infrastructure/cc-dep-test-bundle.nix {
     inherit pkgs;
+    seedPackages = systems.self-hosting.nativeBuildSeed.seedPackages;
   };
   workspaceTestBundle = import ../pkgs/infrastructure/workspace-test-bundle.nix {
     inherit pkgs;
+    seedPackages = systems.self-hosting.nativeBuildSeed.seedPackages;
   };
 
   nativeKernelRebuildBundle = import ../pkgs/infrastructure/native-kernel-rebuild-bundle.nix {

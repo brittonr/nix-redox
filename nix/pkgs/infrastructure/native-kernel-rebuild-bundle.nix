@@ -38,21 +38,7 @@
 
 let
   targetArch = builtins.head (lib.splitString "-" redoxTarget);
-  seedTool = name:
-    let matches = builtins.filter (p: p.name == name) seedPackages; in
-    if matches == [ ] then
-      throw "native kernel bundle: seed has no package '${name}'"
-    else
-      (builtins.head matches).storePath;
-  stage0Tools = {
-    bash = seedTool "redox-bash";
-    uutils = seedTool "redox-uutils";
-    rustc = seedTool "rustc-redox";
-    llvm = seedTool "llvm-redox";
-    lldWrapper = seedTool "lld-wrapper";
-    make = seedTool "gnu-make";
-    sysroot = seedTool "redox-sysroot";
-  };
+  stage0Tools = import ./stage0-tools.nix { inherit seedPackages; };
 
   kernelSourceTree = pkgs.stdenv.mkDerivation {
     name = "native-kernel-rebuild-kernel-src";
@@ -160,15 +146,7 @@ in
 pkgs.runCommand "native-kernel-rebuild-bundle" { nativeBuildInputs = [ pkgs.python3 ]; } ''
   mkdir -p $out/kernel/.cargo $out/bootloader/.cargo $out/rust-src
   cat > $out/stage0-tools.nix <<EOF
-  {
-    bash = ${stage0Tools.bash};
-    uutils = ${stage0Tools.uutils};
-    rustc = ${stage0Tools.rustc};
-    llvm = ${stage0Tools.llvm};
-    lldWrapper = ${stage0Tools.lldWrapper};
-    make = ${stage0Tools.make};
-    sysroot = ${stage0Tools.sysroot};
-  }
+  ${builtins.toJSON stage0Tools}
   EOF
 
   cp -r ${kernelSourceTree}/. $out/kernel

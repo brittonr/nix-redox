@@ -4,8 +4,11 @@
 # Tests that cargo workspace builds with inter-crate path dependencies work
 # inside snix's per-path sandbox.
 
-{ pkgs }:
+{ pkgs, seedPackages }:
 
+let
+  stage0Tools = import ./stage0-tools.nix { inherit seedPackages; };
+in
 pkgs.runCommand "workspace-test-bundle" { } ''
   mkdir -p $out/mylib/src $out/mybin/src $out/.cargo
 
@@ -84,10 +87,13 @@ jobs = 2
 target = "x86_64-unknown-redox"
 
 [target.x86_64-unknown-redox]
-linker = "/nix/system/profile/bin/cc"
+linker = "${stage0Tools.llvm}/bin/clang"
 CFG
 
   # build.nix + builder script (external files avoid parser issues)
   cp ${./workspace-build.nix} $out/build.nix
   cp ${./build-workspace.sh} $out/build-workspace.sh
+  cat > $out/stage0-tools.nix <<EOF
+${builtins.toJSON stage0Tools}
+EOF
 ''

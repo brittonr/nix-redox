@@ -4,9 +4,10 @@
 # cc-rs to compile the C source. Tests that the CC wrapper → clang → lld
 # pipeline works inside snix's per-path sandbox.
 
-{ pkgs }:
+{ pkgs, seedPackages }:
 
 let
+  stage0Tools = import ./stage0-tools.nix { inherit seedPackages; };
   # Vendor the cc crate and its dependency (shlex) for offline builds
   ccCrateSrc = pkgs.fetchurl {
     url = "https://crates.io/api/v1/crates/cc/1.2.21/download";
@@ -121,10 +122,13 @@ pkgs.runCommand "cc-dep-test-bundle" { } ''
   target = "x86_64-unknown-redox"
 
   [target.x86_64-unknown-redox]
-  linker = "/nix/system/profile/bin/cc"
+  linker = "${stage0Tools.llvm}/bin/clang"
   CFG
 
   # ── build.nix + builder script (for snix build --file) ────────
   cp ${./cc-dep-build.nix} $out/build.nix
   cp ${./build-cc-dep.sh} $out/build-cc-dep.sh
+  cat > $out/stage0-tools.nix <<EOF
+  ${builtins.toJSON stage0Tools}
+  EOF
 ''
