@@ -93,7 +93,5 @@ CFG
   # build.nix + builder script (external files avoid parser issues)
   cp ${./workspace-build.nix} $out/build.nix
   cp ${./build-workspace.sh} $out/build-workspace.sh
-  cat > $out/stage0-tools.nix <<EOF
-${builtins.toJSON stage0Tools}
-EOF
+  printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
 ''

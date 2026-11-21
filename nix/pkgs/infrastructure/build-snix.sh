@@ -106,6 +106,7 @@ printf '[%s] pid=%s crate=%s type=%s target=%s input=%s\n' \
 
 exec "$real_rustc" "$@"
 EOF
+chmod +x "$RUSTC_WRAPPER_SH"
 export RUSTC_WRAPPER="$RUSTC_WRAPPER_SH"
 
 CARGO_VERBOSE_ARGS=()

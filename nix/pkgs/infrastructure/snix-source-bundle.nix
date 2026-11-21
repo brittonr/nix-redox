@@ -105,9 +105,7 @@ PY
   # Builder script and Nix derivation for snix build --file
   cp ${./build-snix.sh} $out/build-snix.sh
   cp ${./build-snix.nix} $out/build.nix
-  cat > $out/stage0-tools.nix <<EOF
-  ${builtins.toJSON stage0Tools}
-  EOF
+  printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
 
   # Reuse fetchCargoVendor's exact registry/git ordering and revision pins.
   # A new git dependency can renumber source-git-N directories.
@@ -120,7 +118,7 @@ jobs = 1
 target = "x86_64-unknown-redox"
 
 [target.x86_64-unknown-redox]
-linker = "/nix/system/profile/bin/cc"
+linker = "${stage0Tools.sysroot}/bin/cc"
 
 [env]
 # Avoid the curve25519-dalek SIMD backend in the Redox guest self-compile.

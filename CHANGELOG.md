@@ -8,6 +8,13 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Native recipes resolve their builder tools from the seed's store paths.
+  `stage0-tools.nix` maps the seed manifest to bash, uutils, rustc, LLVM,
+  lld-wrapper, make and the sysroot; the kernel, bootloader, initfs-tools,
+  Snix, ripgrep, cc-dependency and workspace recipes consume those paths
+  instead of `/nix/system/profile`, so changing a seed tool changes the
+  derivation hash.
+
 - Snix evaluates flake inputs as flakes. Every lock node reachable from the
   root is wired recursively with `self`, `sourceInfo`, `inputs`, `outputs`,
   `_type`, and lock `rev`/`shortRev`/`lastModified`/`narHash` metadata;

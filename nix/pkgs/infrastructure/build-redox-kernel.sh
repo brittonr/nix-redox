@@ -41,6 +41,10 @@ extract_executable() {
 }
 
 export PATH="${NIX_TOOL_PATH:?}"
+mkdir -p "$TMPDIR/tool-bin"
+ln -sf "${NIX_CC:?}" "$TMPDIR/tool-bin/cc"
+ln -sf "${NIX_CC:?}" "$TMPDIR/tool-bin/c++"
+export PATH="$TMPDIR/tool-bin:$PATH"
 export LD_LIBRARY_PATH="${NIX_LD_LIBRARY_PATH:?}"
 export HOME="$TMPDIR/home"
 export CARGO_HOME="$TMPDIR/cargo-home"
@@ -129,7 +133,7 @@ ls -ld "${NIX_LLD_WRAPPER%/*}/ld.lld" >&2 || true
 # cp bash to get exec permission, then overwrite contents (keeps mode on Redox).
 wrapper="$TMPDIR/rustc-sysroot"
 cp "$NIX_BASH" "$wrapper"
-printf '%s\n' '#!$NIX_BASH' "exec $NIX_RUSTC --sysroot $custom_sysroot \"\$@\"" >"$wrapper"
+printf '%s\n' "#!$NIX_BASH" "exec $NIX_RUSTC --sysroot $custom_sysroot \"\$@\"" >"$wrapper"
 chmod +x "$wrapper"
 export RUSTC="$wrapper"
 

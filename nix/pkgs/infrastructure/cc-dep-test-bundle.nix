@@ -128,7 +128,5 @@ pkgs.runCommand "cc-dep-test-bundle" { } ''
   # ── build.nix + builder script (for snix build --file) ────────
   cp ${./cc-dep-build.nix} $out/build.nix
   cp ${./build-cc-dep.sh} $out/build-cc-dep.sh
-  cat > $out/stage0-tools.nix <<EOF
-  ${builtins.toJSON stage0Tools}
-  EOF
+  printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
 ''

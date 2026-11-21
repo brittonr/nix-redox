@@ -145,9 +145,7 @@ let
 in
 pkgs.runCommand "native-kernel-rebuild-bundle" { nativeBuildInputs = [ pkgs.python3 ]; } ''
   mkdir -p $out/kernel/.cargo $out/bootloader/.cargo $out/rust-src
-  cat > $out/stage0-tools.nix <<EOF
-  ${builtins.toJSON stage0Tools}
-  EOF
+  printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
 
   cp -r ${kernelSourceTree}/. $out/kernel
   chmod -R u+w $out/kernel
@@ -257,13 +255,13 @@ pkgs.runCommand "native-kernel-rebuild-bundle" { nativeBuildInputs = [ pkgs.pyth
       "sysroot_vendor_store": "${sysrootVendor}",
       "guest_bins": [
         "/bin/snix",
-        "/nix/system/profile/bin/rustc",
-        "/nix/system/profile/bin/llvm-ar",
-        "/nix/system/profile/bin/llvm-objcopy",
-        "/nix/system/profile/bin/ld.lld",
-        "/nix/system/profile/bin/lld-link",
-        "/nix/system/profile/bin/lld-wrapper",
-        "/nix/system/profile/bin/cc"
+        "${stage0Tools.rustc}/bin/rustc",
+        "${stage0Tools.llvm}/bin/llvm-ar",
+        "${stage0Tools.llvm}/bin/llvm-objcopy",
+        "${stage0Tools.llvm}/bin/ld.lld",
+        "${stage0Tools.llvm}/bin/lld-link",
+        "${stage0Tools.lldWrapper}/bin/lld-wrapper",
+        "${stage0Tools.sysroot}/bin/cc"
       ]
     },
     "guest_test_script": "run-native-kernel-rebuild-test.sh"

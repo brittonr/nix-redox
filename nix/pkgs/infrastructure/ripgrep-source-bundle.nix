@@ -34,9 +34,7 @@ pkgs.runCommand "ripgrep-source-bundle" { } ''
     # Builder script and Nix derivation for snix build --file
     cp ${./build-ripgrep.sh} $out/build-ripgrep.sh
     cp ${./build-ripgrep.nix} $out/build.nix
-    cat > $out/stage0-tools.nix <<EOF
-  ${builtins.toJSON stage0Tools}
-  EOF
+    printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
 
     # Cargo config for offline vendored builds.
     # fetchCargoVendor lays crates out under vendor/source-registry-0/.
