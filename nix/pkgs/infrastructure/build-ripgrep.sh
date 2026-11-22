@@ -8,6 +8,9 @@
 #   Source bundle at /usr/src/ripgrep with vendor/ and .cargo/config.toml
 
 set -e
+if [ -z "${NIX_TOOL_PATH:-}" ]; then
+  . "${0%/*}/tool-env.sh"
+fi
 export PATH="${NIX_TOOL_PATH:?}"
 export LD_LIBRARY_PATH="${NIX_LD_LIBRARY_PATH:?}"
 export HOME="$TMPDIR"
