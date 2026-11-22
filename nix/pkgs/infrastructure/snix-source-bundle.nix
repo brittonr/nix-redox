@@ -114,18 +114,10 @@ PY
   cat >> $out/.cargo/config.toml <<'EOF'
 
 [build]
-jobs = 1
 target = "x86_64-unknown-redox"
 
 [target.x86_64-unknown-redox]
 linker = "${stage0Tools.sysroot}/bin/cc"
-
-[env]
-# Avoid the curve25519-dalek SIMD backend in the Redox guest self-compile.
-# The SIMD backend requires curve25519-dalek-derive to generate specialized
-# AVX modules, and Redox guest rustc currently stalls or fails in proc-macro
-# expansion paths. The serial backend is sufficient for building snix.
-CARGO_CFG_CURVE25519_DALEK_BACKEND = "serial"
 EOF
 ''
 

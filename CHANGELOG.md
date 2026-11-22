@@ -51,6 +51,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- The guest Snix self-build no longer forces one Cargo job, one codegen unit,
+  `panic=abort`, no debuginfo or the serial curve25519 backend. It builds with
+  Cargo's defaults at four jobs; `self-hosting-test` passes 87/87 with the
+  resulting 455-crate build and source rebuild.
+
 - The guest Snix self-build compiles every proc-macro crate from the real
   vendored sources instead of local shims. Full guest builds of the real
   `serde_derive`, `prost-derive`, `thiserror-impl` and the remaining derive

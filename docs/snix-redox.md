@@ -104,14 +104,11 @@ workspace overrides `tonic`, `futures-macro`, and `tracing-attributes`:
 The guest source bundle adds further transformations to its copied manifest and
 source tree. These are **not automatically part of the normal cross-package**:
 
-- Additional local dependency/procedural-macro replacements.
 - Host-generated protobuf Rust modules copied into `OUT_DIR`, avoiding guest
   protobuf code generation as well as guest `protoc` execution.
-- Default-config handling for empty-query redb service URLs, bypassing native
-  Serde deserialization in that narrow case.
-- Offline vendoring, one Cargo job, the Redox linker, and a serial
-  curve25519-dalek backend. The builder also sets explicit Rayon and rustc flags
-  for current Redox compiler/runtime limitations.
+- Offline vendoring, the Redox linker, and Rayon's thread count. Cargo keeps its
+  default jobs, codegen units, unwinding, debuginfo and the default
+  curve25519-dalek backend.
 
 ### Native dependency replacements are not all semantics-preserving
 

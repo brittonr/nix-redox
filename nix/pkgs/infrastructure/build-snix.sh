@@ -14,19 +14,10 @@ export LD_LIBRARY_PATH="${NIX_LD_LIBRARY_PATH:?}"
 export HOME="$TMPDIR"
 export CARGO_HOME="$TMPDIR/cargo-home"
 export CARGO_INCREMENTAL=0
-# The full snix workspace still hits a self-hosting failure under -j2:
-# rustc reaches tower-http, then reports spurious E0463 crate-loading
-# errors for crates passed via --extern and aborts. Keep this builder at
-# -j1 for now while we debug the remaining cargo/rustc issue.
-export CARGO_BUILD_JOBS=1
 # rustc / LLVM on Redox panic if available_parallelism() reaches the
 # unimplemented _SC_NPROCESSORS_ONLN path. The regular self-hosting tests
 # export this too; keep the self-compile builder aligned.
 export RAYON_NUM_THREADS=4
-# Proxy-active self-build currently dies on the first proc-macro shared-link
-# spawn (`could not exec the linker ... File exists`). Trim linker command
-# pressure while we debug that Redox/rustc spawn path.
-export RUSTFLAGS="-C panic=abort -C codegen-units=1 -C debuginfo=0"
 REAL_RUSTC="${NIX_RUSTC:?}"
 export RUSTC="$REAL_RUSTC"
 export AR="${NIX_AR:?}"
