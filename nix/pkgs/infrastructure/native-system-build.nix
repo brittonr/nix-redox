@@ -101,13 +101,13 @@ let
       export NIX_RUSTC=${stage0.rustc}/bin/rustc
       export NIX_CARGO=${stage0.rustc}/bin/cargo
       export NIX_AR=${stage0.llvm}/bin/llvm-ar
-      export NIX_CC=${stage0.llvm}/bin/clang
-      export NIX_CXX=${stage0.llvm}/bin/clang++
+      export NIX_CC=${stage0.sysroot}/bin/cc
+      export NIX_CXX=${stage0.sysroot}/bin/cc
       export NIX_LLD_WRAPPER=${stage0.lldWrapper}/bin/lld-wrapper
       export NIX_OBJCOPY=${stage0.llvm}/bin/llvm-objcopy
       export NIX_MAKE=${stage0.make}/bin/make
       export NIX_SYSROOT=${stage0.sysroot}
-      export NIX_TOOL_PATH=${stage0.rustc}/bin:${stage0.llvm}/bin:${stage0.uutils}/bin:${stage0.bash}/bin:/bin:/usr/bin
+      export NIX_TOOL_PATH=${stage0.sysroot}/bin:${stage0.rustc}/bin:${stage0.llvm}/bin:${stage0.uutils}/bin:${stage0.bash}/bin:/bin:/usr/bin
       export NIX_LD_LIBRARY_PATH=${stage0.rustc}/lib:${stage0.llvm}/lib:/usr/lib/rustc:/lib
       export PATH="$NIX_TOOL_PATH"
       export LD_LIBRARY_PATH="$NIX_LD_LIBRARY_PATH"

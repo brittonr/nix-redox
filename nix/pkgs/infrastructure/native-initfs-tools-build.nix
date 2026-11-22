@@ -10,7 +10,7 @@ derivation {
   bootstrapInputs = builtins.readFile ./seed.json;
   args = [ "--noprofile" "--norc" "-c" ''
     set -eu
-    export PATH=${tools.rustc}/bin:${tools.llvm}/bin:${tools.uutils}/bin:${tools.bash}/bin:/bin:/usr/bin
+    export PATH=${tools.sysroot}/bin:${tools.rustc}/bin:${tools.llvm}/bin:${tools.uutils}/bin:${tools.bash}/bin:/bin:/usr/bin
     export LD_LIBRARY_PATH=${tools.rustc}/lib:${tools.llvm}/lib:/usr/lib/rustc:/lib
     export HOME="$TMPDIR/home"
     export CARGO_HOME="$TMPDIR/cargo-home"
@@ -18,7 +18,7 @@ derivation {
     export CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=1
     export RUSTC=${tools.rustc}/bin/rustc
     export AR=${tools.llvm}/bin/llvm-ar
-    export CC=${tools.llvm}/bin/clang
+    export CC=${tools.sysroot}/bin/cc
     mkdir -p "$HOME" "$CARGO_HOME" "$out/bin"
     cp -r "$source" "$TMPDIR/source"
     chmod -R u+w "$TMPDIR/source"

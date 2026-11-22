@@ -10,8 +10,8 @@ derivation {
   NIX_BASH = "${tools.bash}/bin/bash";
   NIX_RUSTC = "${tools.rustc}/bin/rustc";
   NIX_AR = "${tools.llvm}/bin/llvm-ar";
-  NIX_CC = "${tools.llvm}/bin/clang";
-  NIX_TOOL_PATH = "${tools.rustc}/bin:${tools.llvm}/bin:${tools.uutils}/bin:${tools.bash}/bin:/bin:/usr/bin";
+  NIX_CC = "${tools.sysroot}/bin/cc";
+  NIX_TOOL_PATH = "${tools.sysroot}/bin:${tools.rustc}/bin:${tools.llvm}/bin:${tools.uutils}/bin:${tools.bash}/bin:/bin:/usr/bin";
   NIX_LD_LIBRARY_PATH = "${tools.rustc}/lib:${tools.llvm}/lib:/usr/lib/rustc:/lib";
   NIX_SYSROOT = "${tools.sysroot}";
   args = [ "/usr/src/snix-redox/build-snix.sh" ];
