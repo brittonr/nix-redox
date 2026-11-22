@@ -277,6 +277,24 @@ for path, reps in source_replacements.items():
     path.write_text(text)
 PY
 
+  # The rewritten build scripts decode the pregenerated descriptor sets and
+  # generate Rust modules with pure Rust; prost must therefore be available to
+  # the build scripts as well as the runtime.
+  SNIX_UPSTREAM_OUT="$out" ${pkgs.python3}/bin/python3 - <<'PY'
+import os
+from pathlib import Path
+
+out = Path(os.environ["SNIX_UPSTREAM_OUT"])
+for crate in ("castore", "store", "build"):
+    path = out / crate / "Cargo.toml"
+    text = path.read_text()
+    old = "[build-dependencies]\nprost-build.workspace = true\n"
+    new = "[build-dependencies]\nprost-build.workspace = true\nprost.workspace = true\n"
+    if old not in text:
+        raise SystemExit(f"expected build-dependency block not found in {path}")
+    path.write_text(text.replace(old, new, 1))
+PY
+
   # NOTE: tonic tls-aws-lc → tls-ring override.
   # As of 2207a07, store/Cargo.toml uses `tonic.workspace = true` (no inline
   # features). The tls backend is controlled by the workspace [dependencies]
@@ -393,6 +411,7 @@ PY
     snix/build/protos/rpc_build.proto
 
   cat > $out/castore/build.rs <<'EOF'
+  use prost::Message;
   use std::{fs, io::Result, path::PathBuf};
 
   const DESCRIPTOR_SET: &str = "snix.castore.v1.bin";
@@ -431,15 +450,12 @@ PY
           return Ok(false);
       }
 
-      let empty: &[&str] = &[];
-      configured_builder()
-          .file_descriptor_set_path(&descriptor_path)
-          .skip_protoc_run()
-          .compile_protos(empty, empty)?;
-
+      let fds = tonic_build::FileDescriptorSet::decode(&*fs::read(&descriptor_path)?)?;
+      let mut builder = configured_builder();
       if let Some(output_path) = descriptor_output_path() {
-          let _ = fs::copy(&descriptor_path, output_path)?;
+          builder = builder.file_descriptor_set_path(output_path);
       }
+      builder.compile_fds(fds)?;
 
       Ok(true)
   }
@@ -475,6 +491,7 @@ PY
 EOF
 
   cat > $out/store/build.rs <<'EOF'
+  use prost::Message;
   use std::{fs, io::Result, path::PathBuf};
 
   const DESCRIPTOR_SET: &str = "snix.store.v1.bin";
@@ -513,15 +530,12 @@ EOF
           return Ok(false);
       }
 
-      let empty: &[&str] = &[];
-      configured_builder()
-          .file_descriptor_set_path(&descriptor_path)
-          .skip_protoc_run()
-          .compile_protos(empty, empty)?;
-
+      let fds = tonic_build::FileDescriptorSet::decode(&*fs::read(&descriptor_path)?)?;
+      let mut builder = configured_builder();
       if let Some(output_path) = descriptor_output_path() {
-          let _ = fs::copy(&descriptor_path, output_path)?;
+          builder = builder.file_descriptor_set_path(output_path);
       }
+      builder.compile_fds(fds)?;
 
       Ok(true)
   }
@@ -556,6 +570,7 @@ EOF
 EOF
 
   cat > $out/build/build.rs <<'EOF'
+  use prost::Message;
   use std::{fs, io::Result, path::PathBuf};
 
   const DESCRIPTOR_SET: &str = "snix.build.v1.bin";
@@ -594,15 +609,12 @@ EOF
           return Ok(false);
       }
 
-      let empty: &[&str] = &[];
-      configured_builder()
-          .file_descriptor_set_path(&descriptor_path)
-          .skip_protoc_run()
-          .compile_protos(empty, empty)?;
-
+      let fds = tonic_build::FileDescriptorSet::decode(&*fs::read(&descriptor_path)?)?;
+      let mut builder = configured_builder();
       if let Some(output_path) = descriptor_output_path() {
-          let _ = fs::copy(&descriptor_path, output_path)?;
+          builder = builder.file_descriptor_set_path(output_path);
       }
+      builder.compile_fds(fds)?;
 
       Ok(true)
   }

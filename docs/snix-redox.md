@@ -54,9 +54,9 @@ The upstream assembly applies these adaptations:
 - **HTTP initialization:** make upstream glue's HTTP client optional so client
   construction failure does not prevent offline evaluation/building. This is
   not a TLS-verification bypass; unavailable-client call sites can still fail.
-- **Protobuf generation:** generate descriptor sets on the host and replace the
-  three upstream protobuf build scripts with versions that can consume those
-  descriptors without a guest `protoc`.
+- **Protobuf generation:** ship descriptor sets generated on the host and patch
+  the three upstream build scripts to decode them with `prost` and generate Rust
+  modules with `tonic-build`/`prost-build`; no guest `protoc` is needed.
 
 The workspace selects rustls with the `ring` provider instead of `aws-lc-rs` for
 relibc compatibility. The local cache/download paths also use synchronous
@@ -104,8 +104,9 @@ workspace overrides `tonic`, `futures-macro`, and `tracing-attributes`:
 The guest source bundle adds further transformations to its copied manifest and
 source tree. These are **not automatically part of the normal cross-package**:
 
-- Host-generated protobuf Rust modules copied into `OUT_DIR`, avoiding guest
-  protobuf code generation as well as guest `protoc` execution.
+- Protobuf descriptor sets are generated on the host, but the Rust modules are
+  generated inside each build by `tonic-build`; no `generated-protos` sources
+  or guest `protoc` execution are involved.
 - Offline vendoring, the Redox linker, and Rayon's thread count. Cargo keeps its
   default jobs, codegen units, unwinding, debuginfo and the default
   curve25519-dalek backend.

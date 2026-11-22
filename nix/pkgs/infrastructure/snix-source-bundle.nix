@@ -44,61 +44,6 @@ pkgs.runCommand "snix-source-bundle" { } ''
     cp -r ${combinedSrc}/vendor-patches $out/vendor-patches
   fi
 
-  # The upstream build.rs files can consume pregenerated descriptor sets, but
-  # tonic_build::skip_protoc_run() still does not materialize the Rust modules
-  # that tonic::include_proto! expects on the Redox guest. Ship host-generated
-  # modules in the source bundle and copy them into OUT_DIR from build.rs.
-  chmod -R u+w $out/upstream/castore/protos $out/upstream/store/protos $out/upstream/build/protos
-  chmod u+w $out/upstream/castore/build.rs $out/upstream/store/build.rs $out/upstream/build/build.rs
-  cp $out/vendor-patches/generated-protos/snix.castore.v1.rs $out/upstream/castore/protos/snix.castore.v1.rs
-  cp $out/vendor-patches/generated-protos/snix.store.v1.rs $out/upstream/store/protos/snix.store.v1.rs
-  cp $out/vendor-patches/generated-protos/snix.build.v1.rs $out/upstream/build/protos/snix.build.v1.rs
-  SNIX_BUNDLE_OUT="$out" ${pkgs.python3}/bin/python3 - <<'PY'
-import os
-from pathlib import Path
-bundle_out = Path(os.environ["SNIX_BUNDLE_OUT"])
-for crate in ("castore", "store", "build"):
-    build_rs = bundle_out / "upstream" / crate / "build.rs"
-    text = build_rs.read_text()
-    descriptor = f"snix.{crate}.v1.bin"
-    generated = f"snix.{crate}.v1.rs"
-    marker = "fn pregenerated_rust_path() -> PathBuf"
-    if marker not in text:
-        insert = f"""
-
-fn pregenerated_rust_path() -> PathBuf {{
-    PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap())
-        .join("protos")
-        .join("{generated}")
-}}
-"""
-        anchor = "\n\n  fn compile_from_pregenerated() -> Result<bool> {"
-        if anchor not in text:
-            raise SystemExit(f"expected compile_from_pregenerated anchor not found in {build_rs}")
-        text = text.replace(anchor, insert + anchor, 1)
-    old = """      let empty: &[&str] = &[];
-      configured_builder()
-          .file_descriptor_set_path(&descriptor_path)
-          .skip_protoc_run()
-          .compile_protos(empty, empty)?;
-"""
-    new = f"""      let out_dir = PathBuf::from(std::env::var("OUT_DIR").unwrap());
-      let rust_path = pregenerated_rust_path();
-      if rust_path.is_file() {{
-          fs::copy(&rust_path, out_dir.join("{generated}"))?;
-      }} else {{
-          let empty: &[&str] = &[];
-          configured_builder()
-              .file_descriptor_set_path(&descriptor_path)
-              .skip_protoc_run()
-              .compile_protos(empty, empty)?;
-      }}
-"""
-    if old not in text:
-        raise SystemExit(f"expected pregenerated compile block not found in {build_rs}")
-    build_rs.write_text(text.replace(old, new, 1))
-PY
-
   # Copy vendored dependencies
   cp -r ${vendoredDeps} $out/vendor
 

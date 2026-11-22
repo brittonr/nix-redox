@@ -51,6 +51,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- The guest Snix build generates its protobuf Rust modules from the bundled
+  descriptor sets with `prost` and `tonic-build`. The host-generated
+  `generated-protos` sources and the bundle copy step are gone; guest builds no
+  longer need `protoc`.
+
 - The guest Snix self-build no longer forces one Cargo job, one codegen unit,
   `panic=abort`, no debuginfo or the serial curve25519 backend. It builds with
   Cargo's defaults at four jobs; `self-hosting-test` passes 87/87 with the
