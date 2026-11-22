@@ -122,11 +122,11 @@ pkgs.runCommand "cc-dep-test-bundle" { } ''
   target = "x86_64-unknown-redox"
 
   [target.x86_64-unknown-redox]
-  linker = "${stage0Tools.llvm}/bin/clang"
+  linker = "${stage0Tools.sysroot}/bin/cc"
   CFG
 
   # ── build.nix + builder script (for snix build --file) ────────
   cp ${./cc-dep-build.nix} $out/build.nix
   cp ${./build-cc-dep.sh} $out/build-cc-dep.sh
-  printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
+  printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = builtins.storePath \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
 ''

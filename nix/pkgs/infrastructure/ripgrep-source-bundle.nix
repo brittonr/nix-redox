@@ -34,7 +34,7 @@ pkgs.runCommand "ripgrep-source-bundle" { } ''
     # Builder script and Nix derivation for snix build --file
     cp ${./build-ripgrep.sh} $out/build-ripgrep.sh
     cp ${./build-ripgrep.nix} $out/build.nix
-    printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
+    printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = builtins.storePath \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
 
     # Cargo config for offline vendored builds.
     # fetchCargoVendor lays crates out under vendor/source-registry-0/.
@@ -50,6 +50,6 @@ pkgs.runCommand "ripgrep-source-bundle" { } ''
   target = "x86_64-unknown-redox"
 
   [target.x86_64-unknown-redox]
-  linker = "${stage0Tools.llvm}/bin/clang"
+  linker = "${stage0Tools.sysroot}/bin/cc"
   EOF
 ''

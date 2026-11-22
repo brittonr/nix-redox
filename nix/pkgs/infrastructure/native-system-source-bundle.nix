@@ -37,7 +37,7 @@ pkgs.runCommand "native-system-source-bundle" { } ''
   cp ${./native-system-build.nix} $out/build.nix
   cp ${./native-initfs-tools-build.nix} $out/tools.nix
   cp ${seed} $out/seed.json
-  printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
+  printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = builtins.storePath \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
   cp -r ${nixpkgsLib}/. $out/lib/
   cp ${../../redox-system/modules/build/init-scripts.nix} $out/renderers/init-scripts.nix
   cp ${../../redox-system/modules/build/pcid.nix} $out/renderers/pcid.nix

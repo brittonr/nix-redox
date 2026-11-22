@@ -87,11 +87,11 @@ jobs = 2
 target = "x86_64-unknown-redox"
 
 [target.x86_64-unknown-redox]
-linker = "${stage0Tools.llvm}/bin/clang"
+linker = "${stage0Tools.sysroot}/bin/cc"
 CFG
 
   # build.nix + builder script (external files avoid parser issues)
   cp ${./workspace-build.nix} $out/build.nix
   cp ${./build-workspace.sh} $out/build-workspace.sh
-  printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
+  printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = builtins.storePath \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
 ''
