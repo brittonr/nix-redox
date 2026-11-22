@@ -2904,11 +2904,6 @@ HELLONIX
 
                         echo "--- direct-cc-dep-script ---"
                         /nix/system/profile/bin/bash -c '
-                          export NIX_TOOL_PATH=/nix/system/profile/bin
-                          export NIX_LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
-                          export NIX_RUSTC=/nix/system/profile/bin/rustc
-                          export NIX_AR=/nix/system/profile/bin/llvm-ar
-                          export NIX_CC=/nix/system/profile/bin/cc
                           rm -rf /tmp/direct-cc-dep-out /tmp/direct-cc-dep-tmp
                           mkdir -p /tmp/direct-cc-dep-tmp
                           out=/tmp/direct-cc-dep-out TMPDIR=/tmp/direct-cc-dep-tmp /nix/system/profile/bin/bash --noprofile --norc /usr/src/cc-dep-test/build-cc-dep.sh >/tmp/direct-cc-dep-stdout 2>/tmp/direct-cc-dep-stderr
@@ -2995,11 +2990,6 @@ HELLONIX
 
                         echo "--- direct-workspace-script ---"
                         /nix/system/profile/bin/bash -c '
-                          export NIX_TOOL_PATH=/nix/system/profile/bin
-                          export NIX_LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
-                          export NIX_RUSTC=/nix/system/profile/bin/rustc
-                          export NIX_AR=/nix/system/profile/bin/llvm-ar
-                          export NIX_CC=/nix/system/profile/bin/cc
                           rm -rf /tmp/direct-workspace-out /tmp/direct-workspace-tmp
                           mkdir -p /tmp/direct-workspace-tmp
                           out=/tmp/direct-workspace-out TMPDIR=/tmp/direct-workspace-tmp /nix/system/profile/bin/bash --noprofile --norc /usr/src/workspace-test/build-workspace.sh >/tmp/direct-workspace-stdout 2>/tmp/direct-workspace-stderr

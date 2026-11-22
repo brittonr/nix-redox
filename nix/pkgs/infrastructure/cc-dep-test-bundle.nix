@@ -129,4 +129,11 @@ pkgs.runCommand "cc-dep-test-bundle" { } ''
   cp ${./cc-dep-build.nix} $out/build.nix
   cp ${./build-cc-dep.sh} $out/build-cc-dep.sh
   printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = builtins.storePath \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
+  cat > $out/tool-env.sh <<EOF
+export NIX_TOOL_PATH=${stage0Tools.sysroot}/bin:${stage0Tools.rustc}/bin:${stage0Tools.llvm}/bin:${stage0Tools.uutils}/bin:${stage0Tools.bash}/bin:/bin:/usr/bin
+export NIX_LD_LIBRARY_PATH=${stage0Tools.rustc}/lib:${stage0Tools.llvm}/lib:/usr/lib/rustc:/lib
+export NIX_RUSTC=${stage0Tools.rustc}/bin/rustc
+export NIX_AR=${stage0Tools.llvm}/bin/llvm-ar
+export NIX_CC=${stage0Tools.sysroot}/bin/cc
+EOF
 ''
