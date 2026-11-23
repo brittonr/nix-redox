@@ -14,7 +14,9 @@ All notable changes to this project are documented here. The format follows
   installed binary and verifies `--version` and `eval`. A focused
   `snix-install-test` covers the `$out`-literal package source, `$out`
   builder argument, stale-profile rejection, generation switch, and guest
-  binary. Self-hosting test: 89/89 pass.
+  binary. The installed guest-built Snix then runs the next
+  `snix system rebuild --source` (generation 3). Self-hosting test: 90/90
+  pass.
 
 - Native recipes resolve their builder tools from the seed's store paths.
   `stage0-tools.nix` maps the seed manifest to bash, uutils, rustc, LLVM,

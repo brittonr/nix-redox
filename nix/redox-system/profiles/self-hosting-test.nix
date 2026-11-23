@@ -3416,6 +3416,29 @@ TOMLEOF
                           fi
                         '
 
+                        # The installed guest-built Snix runs the next rebuild.
+                        echo "--- snix-install-next: rebuild with /bin/snix ---"
+                        /nix/system/profile/bin/bash -c '
+                          CFGDIR=/tmp/snix-install-built
+                          if [ ! -x /bin/snix ]; then
+                            echo "FUNC_TEST:snix-install-next:FAIL:no /bin/snix"
+                            exit 0
+                          fi
+                          /bin/snix system rebuild --source \
+                            --config "$CFGDIR/configuration.nix" \
+                            --manifest "$CFGDIR/manifest.json" \
+                            --gen-dir "$CFGDIR/generations" \
+                            >/tmp/snix-install-next-out 2>/tmp/snix-install-next-err
+                          EXIT=$?
+                          if [ $EXIT -eq 0 ] && [ -d "$CFGDIR/generations/3" ]; then
+                            echo "FUNC_TEST:snix-install-next:PASS"
+                          else
+                            echo "FUNC_TEST:snix-install-next:FAIL:exit=$EXIT"
+                            /bin/ls -1 "$CFGDIR/generations" 2>/dev/null
+                            /bin/cat /tmp/snix-install-next-err 2>/dev/null
+                          fi
+                        '
+
                         # The self-compile leaves multi-GB target trees under
                         # /tmp; the generated store output is retained. Free
                         # them before the live rebuild tests so the 8G/16G
