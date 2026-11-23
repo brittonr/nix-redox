@@ -293,25 +293,25 @@
     },
     "self-hosting-test": {
       "boot_cycles": [],
-      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261122T035844-self-hosting-test",
-      "duration_seconds": 5687,
-      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261122T035844-self-hosting-test/excerpt.txt",
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261123T034352-self-hosting-test",
+      "duration_seconds": 5827,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261123T034352-self-hosting-test/excerpt.txt",
       "exit_code": 0,
-      "finished_at": "2026-11-22T05:33:31-05:00",
+      "finished_at": "2026-11-23T05:20:59-05:00",
       "flow": "self-hosting-test",
       "git_dirty": true,
-      "git_rev": "af6a14a",
-      "run_id": "20261122T035844-self-hosting-test",
-      "started_at": "2026-11-22T03:58:44-05:00",
-      "summary_path": "/var/tmp/redox-self-hosting-captures/20261122T035844-self-hosting-test/summary.json",
+      "git_rev": "3168539",
+      "run_id": "20261123T034352-self-hosting-test",
+      "started_at": "2026-11-23T03:43:52-05:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261123T034352-self-hosting-test/summary.json",
       "test_counts": {
         "fail": 0,
         "failure_lines": [],
-        "pass": 87,
+        "pass": 89,
         "skip": 0,
         "tests_complete": true,
         "tests_started": true,
-        "total": 87
+        "total": 89
       },
       "verdict": "pass"
     },
@@ -335,6 +335,30 @@
         "tests_complete": true,
         "tests_started": true,
         "total": 8
+      },
+      "verdict": "pass"
+    },
+    "snix-install-test": {
+      "boot_cycles": [],
+      "capture_dir": "/var/tmp/redox-self-hosting-captures/20261123T015703-snix-install-test",
+      "duration_seconds": 39,
+      "excerpt_path": "/var/tmp/redox-self-hosting-captures/20261123T015703-snix-install-test/excerpt.txt",
+      "exit_code": 0,
+      "finished_at": "2026-11-23T01:57:42-05:00",
+      "flow": "snix-install-test",
+      "git_dirty": true,
+      "git_rev": "3168539",
+      "run_id": "20261123T015703-snix-install-test",
+      "started_at": "2026-11-23T01:57:03-05:00",
+      "summary_path": "/var/tmp/redox-self-hosting-captures/20261123T015703-snix-install-test/summary.json",
+      "test_counts": {
+        "fail": 0,
+        "failure_lines": [],
+        "pass": 1,
+        "skip": 0,
+        "tests_complete": true,
+        "tests_started": true,
+        "total": 1
       },
       "verdict": "pass"
     },
@@ -388,5 +412,5 @@
     }
   },
   "schema_version": 1,
-  "updated_at": "2026-11-22T05:33:31-05:00"
+  "updated_at": "2026-11-23T05:20:59-05:00"
 }

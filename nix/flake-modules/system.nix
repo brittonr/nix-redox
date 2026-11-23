@@ -713,6 +713,11 @@ let
       test-flake-bundle = testFlakeBundle;
       cc-dep-test-bundle = ccDepTestBundle;
       workspace-test-bundle = workspaceTestBundle;
+      snix-install-built-fixtures = pkgs.runCommand "snix-install-built-fixtures" { } ''
+        mkdir -p $out
+        cp ${pkgs.writeText "snix-install-built-packages.nix" (builtins.readFile ../redox-system/fixtures/snix-install-built-packages.nix)} $out/packages.nix
+        cp ${pkgs.writeText "snix-install-built-configuration.nix" (builtins.readFile ../redox-system/fixtures/snix-install-configuration.nix)} $out/configuration.nix
+      '';
     };
   };
   selfHostingTestRaw = mkFunctionalTest {
@@ -777,6 +782,28 @@ let
     base = snixSandboxTestRaw;
     label = "snix-sandbox-test";
     auditBundle = snixSourceBundle;
+  };
+
+  snixInstallTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/snix-install-test.nix ];
+    extraPkgs = extraPkgs // {
+      snix-install-fixtures = pkgs.runCommand "snix-install-fixtures" { } ''
+        mkdir -p $out
+        cp ${pkgs.writeText "snix-install-packages.nix" (builtins.readFile ../redox-system/fixtures/snix-install-packages.nix)} $out/packages.nix
+        cp ${pkgs.writeText "snix-install-configuration.nix" (builtins.readFile ../redox-system/fixtures/snix-install-configuration.nix)} $out/configuration.nix
+      '';
+    };
+  };
+  snixInstallTestRaw = mkFunctionalTest {
+    diskImage = snixInstallTestSystem.diskImage;
+    inherit bootloader;
+    memoryMB = 4096;
+    cpus = 2;
+    defaultTimeout = 600;
+  };
+  snixInstallTest = wrapFunctionalTest {
+    base = snixInstallTestRaw;
+    label = "snix-install-test";
   };
 
   # Focused native kernel rebuild test — builds the kernel on a Redox guest
@@ -1175,6 +1202,8 @@ in
     snix-compile-test = snixCompileTest;
 
     snix-sandbox-test = snixSandboxTest;
+    redox-snix-install-test = snixInstallTestSystem.diskImage;
+    snix-install-test = snixInstallTest;
 
     redox-parallel-build-test = parallelBuildTestSystem.diskImage;
     parallel-build-test = parallelBuildTest;

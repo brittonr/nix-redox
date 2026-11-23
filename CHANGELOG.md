@@ -8,6 +8,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Guest-built Snix installs as a system package. `snix system rebuild
+  --source` builds the package with the seed compiler, switches the
+  generation, and the self-hosting test replaces `/bin/snix` with the
+  installed binary and verifies `--version` and `eval`. A focused
+  `snix-install-test` covers the `$out`-literal package source, `$out`
+  builder argument, stale-profile rejection, generation switch, and guest
+  binary. Self-hosting test: 89/89 pass.
+
 - Native recipes resolve their builder tools from the seed's store paths.
   `stage0-tools.nix` maps the seed manifest to bash, uutils, rustc, LLVM,
   lld-wrapper, make and the sysroot; the kernel, bootloader, initfs-tools,
