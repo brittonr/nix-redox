@@ -48,6 +48,14 @@ without these headers is not an equivalent deployment. Use HTTPS outside
 localhost. Missing isolation, workers, WebAssembly or SharedArrayBuffer produces
 an explicit capability failure rather than a pretend guest session.
 
+The canonical public deployment is served at root on
+[`https://nixredox.com/`](https://nixredox.com/) (live lab at
+[`https://nixredox.com/live/`](https://nixredox.com/live/)); local preview keeps
+`--prefix` support for relocation testing. See
+[`hosting-nixredox-domain.md`](hosting-nixredox-domain.md) for the Cloudflare
+Pages + R2 deployment pipeline, redirect rules (`nixredox.org`, `www`, legacy
+GitHub Pages), and DNS/mail hygiene runbook.
+
 `browser-image` contains `redox.img`, boot files, the machine contract, and the
 mandatory fixture catalog. The serial profile contains Ion, Bash, uutils, the
 seed Snix CLI, an offline ripgrep cache, and the A → B → C runtime-closure

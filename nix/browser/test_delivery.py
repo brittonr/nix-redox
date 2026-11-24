@@ -3,6 +3,8 @@
 import gzip
 import hashlib
 import json
+import os
+import re
 import shutil
 from urllib.parse import urljoin
 from pathlib import Path
@@ -12,10 +14,12 @@ import unittest
 from urllib.error import HTTPError
 from urllib.request import urlopen
 
+from build_pages_redirect import build_redirect
 from manifest import assemble, canonical, parser
 from serve import server
 from smoke import assert_clock, assert_fixtures, mandatory_ids, successful
 from snapshot import safe_artifact_path
+from stage_cloudflare_pages import stage as stage_cloudflare_pages
 
 
 class DeliveryTests(unittest.TestCase):
@@ -251,6 +255,97 @@ class DeliveryTests(unittest.TestCase):
                      "C:/file", "https://host/file", "file?query", "file#fragment",
                      "file%2fsecret", r"dir\file", "café/file"):
             self.assertFalse(safe_artifact_path(path), path)
+
+    def test_root_deployment_and_headers_generation(self):
+        site_dir = Path(os.environ.get("REDOX_SITE_DIR", Path(__file__).resolve().parents[2] / "site"))
+        self.file("site/_headers", (site_dir / "_headers").read_bytes())
+        root, _ = self.release()
+        headers_text = (root / "_headers").read_text(encoding="utf-8")
+        # Built _headers must use Cloudflare Pages ! Cache-Control detaches and valid patterns.
+        self.assertIn("Cross-Origin-Opener-Policy: same-origin", headers_text)
+        self.assertIn("Cross-Origin-Embedder-Policy: require-corp", headers_text)
+        self.assertIn("Cross-Origin-Resource-Policy: same-origin", headers_text)
+        self.assertIn("/revisions/:revision/coi-serviceworker.js", headers_text)
+        self.assertNotIn("/*.wasm", headers_text)
+        self.assertNotIn("/revisions/*/coi-serviceworker.js", headers_text)
+        # Every asset hash directory rule must detach Cache-Control before overriding it.
+        asset_rules = re.findall(r"/assets/[a-f0-9]{64}/\*\n  ! Cache-Control\n  Cache-Control: public, max-age=31536000, immutable", headers_text)
+        self.assertGreaterEqual(len(asset_rules), 1)
+        # Root serving (prefix="/") must work alongside --prefix tests.
+        pointer = json.loads((root / "channel.json").read_bytes())
+        with server(root, port=0, prefix="/") as http:
+            threading.Thread(target=http.serve_forever, daemon=True).start()
+            self.addCleanup(http.shutdown)
+            base = f"http://127.0.0.1:{http.server_port}"
+            with urlopen(base + "/channel.json") as response:
+                self.assertEqual(response.headers["Cross-Origin-Opener-Policy"], "same-origin")
+                self.assertEqual(response.headers["Cross-Origin-Embedder-Policy"], "require-corp")
+                self.assertEqual(response.headers["Cross-Origin-Resource-Policy"], "same-origin")
+                self.assertEqual(response.headers["Cache-Control"], "no-store")
+                self.assertEqual(json.loads(response.read())["revision"], pointer["revision"])
+            with urlopen(base + "/live/") as response:
+                self.assertEqual(response.headers["Cache-Control"], "no-store")
+                self.assertIn(b"channel.json", response.read())
+            with urlopen(base + f"/revisions/{pointer['revision']}/live/") as response:
+                self.assertIn("immutable", response.headers["Cache-Control"])
+            http.shutdown()
+
+    def test_repo_site_canonical_urls_point_to_nixredox_com(self):
+        site_dir = Path(os.environ.get("REDOX_SITE_DIR", Path(__file__).resolve().parents[2] / "site"))
+        index_html = (site_dir / "index.html").read_text(encoding="utf-8")
+        live_html = (site_dir / "live/index.html").read_text(encoding="utf-8")
+        self.assertIn('<link rel="canonical" href="https://nixredox.com/">', index_html)
+        self.assertIn('<meta property="og:url" content="https://nixredox.com/">', index_html)
+        self.assertIn('<meta property="og:image" content="https://nixredox.com/assets/orbital-social.png">', index_html)
+        self.assertNotIn("brittonr.github.io/nix-redox", index_html)
+        self.assertIn('<link rel="canonical" href="https://nixredox.com/live/">', live_html)
+        self.assertNotIn("brittonr.github.io/nix-redox", live_html)
+
+    def test_cloudflare_pages_staging_splits_only_oversized_files(self):
+        root, _ = self.release()
+        small_out = self.root / "cf-small"
+        small_summary = stage_cloudflare_pages(root, small_out, max_file_bytes=25 * 1024 * 1024)
+        self.assertEqual(small_summary["overflowCount"], 0)
+        self.assertFalse((small_out / "pages/_worker.js").exists())
+        self.assertFalse((small_out / "pages/_routes.json").exists())
+        self.assertTrue((small_out / "pages/channel.json").is_file())
+
+        # Trigger overflow with a small threshold so gzipped disk goes to R2 overflow.
+        split_out = self.root / "cf-split"
+        pointer = json.loads((root / "channel.json").read_bytes())
+        manifest = json.loads((root / pointer["manifest"]["url"]).read_bytes())
+        disk_rel = manifest["assets"]["disk"]["url"].removeprefix("../../")
+        disk_size = manifest["assets"]["disk"]["size"]
+        split_summary = stage_cloudflare_pages(root, split_out, max_file_bytes=max(1, disk_size - 1))
+        self.assertGreaterEqual(split_summary["overflowCount"], 1)
+        overflow_keys = {item["key"] for item in split_summary["overflowFiles"]}
+        self.assertIn(disk_rel, overflow_keys)
+        self.assertFalse((split_out / "pages" / disk_rel).exists())
+        self.assertTrue((split_out / "r2-overflow" / disk_rel).is_file())
+        self.assertEqual((split_out / "r2-overflow" / disk_rel).read_bytes(), (root / disk_rel).read_bytes())
+        routes = json.loads((split_out / "pages/_routes.json").read_text(encoding="utf-8"))
+        self.assertEqual(routes["version"], 1)
+        self.assertIn("/" + disk_rel, routes["include"])
+        worker = (split_out / "pages/_worker.js").read_text(encoding="utf-8")
+        self.assertIn("SITE_OVERFLOW", worker)
+        self.assertIn("Cross-Origin-Opener-Policy", worker)
+        self.assertIn("Cross-Origin-Embedder-Policy", worker)
+        self.assertEqual(split_summary["pagesFiles"] + split_summary["overflowCount"], split_summary["totalFiles"])
+
+    def test_github_pages_redirect_artifact_contract(self):
+        redir = build_redirect(self.root / "gh-redirect", target="https://nixredox.com/", prefix="/nix-redox/")
+        self.assertTrue((redir / ".nojekyll").is_file())
+        index_html = (redir / "index.html").read_text(encoding="utf-8")
+        live_html = (redir / "live/index.html").read_text(encoding="utf-8")
+        notfound_html = (redir / "404.html").read_text(encoding="utf-8")
+        self.assertIn('content="0; url=https://nixredox.com/"', index_html)
+        self.assertIn('<link rel="canonical" href="https://nixredox.com/">', index_html)
+        self.assertIn('content="0; url=https://nixredox.com/live/"', live_html)
+        self.assertIn('<link rel="canonical" href="https://nixredox.com/live/">', live_html)
+        self.assertIn('var prefix = "/nix-redox/";', notfound_html)
+        self.assertIn('target.origin !== expectedOrigin', notfound_html)
+        with self.assertRaises(ValueError):
+            build_redirect(self.root / "bad-redirect", target="http://nixredox.com/")
 
 
 if __name__ == "__main__":

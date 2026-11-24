@@ -241,6 +241,7 @@ in
       type = "app";
       program = toString (
         pkgs.writeShellScript "browser-delivery-tests" ''
+          export REDOX_SITE_DIR=${../../site}
           exec ${pkgs.python3}/bin/python3 ${../browser}/test_delivery.py "$@"
         ''
       );
@@ -253,6 +254,7 @@ in
     browser-delivery =
       pkgs.runCommand "redox-browser-delivery-contracts" { nativeBuildInputs = [ pkgs.python3 ]; }
         ''
+          export REDOX_SITE_DIR=${../../site}
           python3 ${../browser}/test_delivery.py
           touch $out
         '';
