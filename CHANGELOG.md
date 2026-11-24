@@ -8,6 +8,15 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- The in-guest build path is recorded in
+  `docs/self-hosting/inguest-build-path.md`: extend the guest-native graph from
+  the seed image, keep host-only runners and publishing out of scope, and move
+  source preparation into the guest through #33. The host cross-build, host
+  Snix tests and the guest source bundle now share
+  `snix-combined-src.nix`; `checks.x86_64-linux.snix-source-agreement` fails if
+  the guest tree diverges. An opt-in `snix-second-build-test` has the installed
+  guest-built Snix build Snix again from source.
+
 - Guest-built Snix installs as a system package. `snix system rebuild
   --source` builds the package with the seed compiler, switches the
   generation, and the self-hosting test replaces `/bin/snix` with the

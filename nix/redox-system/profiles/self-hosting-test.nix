@@ -3439,6 +3439,44 @@ TOMLEOF
                           fi
                         '
 
+                        # Opt-in: have the installed guest-built Snix build
+                        # Snix again from source. The marker keeps the default
+                        # self-hosting proof at 90 tests.
+                        echo "--- snix-second-build: /bin/snix builds Snix ---"
+                        /nix/system/profile/bin/bash -c '
+                            if [ ! -e /etc/snix-second-build/marker ]; then
+                              exit 0
+                            fi
+                            SECONDDIR=/tmp/snix-second-build
+                            rm -rf "$SECONDDIR"
+                            mkdir -p "$SECONDDIR"
+                            /nix/system/profile/bin/sed "s|import ./stage0-tools.nix|import /usr/src/snix-redox/stage0-tools.nix|" /usr/src/snix-redox/build.nix > "$SECONDDIR/build.nix"
+                            /nix/system/profile/bin/sed -i "s|^  args = .*|  SECOND_BUILD = \"1\";\n  args = [ \"/usr/src/snix-redox/build-snix.sh\" \"second\" ];|" "$SECONDDIR/build.nix"
+                            /bin/snix eval --file "$SECONDDIR/build.nix" > "$SECONDDIR/eval-out" 2> "$SECONDDIR/eval-err"
+                            EVAL_EXIT=$?
+                            /bin/snix build --file "$SECONDDIR/build.nix" > "$SECONDDIR/out" 2> "$SECONDDIR/err"
+                            EXIT=$?
+                            OUT2=$(while IFS= read -r line; do case $line in /nix/store/*) printf "%s" "$line"; break;; esac; done < "$SECONDDIR/out")
+                            if [ $EXIT -eq 0 ] && [ -x "$OUT2/bin/snix" ]; then
+                              echo "FUNC_TEST:snix-second-build:PASS"
+                              echo "snix-second-output=$OUT2"
+                              "$OUT2/bin/snix" --version
+                              "$OUT2/bin/snix" eval --expr "1 + 1"
+                              echo "FUNC_TEST:snix-second-binary:PASS"
+                            else
+                              echo "FUNC_TEST:snix-second-build:FAIL:exit=$EXIT:eval=$EVAL_EXIT"
+                              echo "snix-second-output=$OUT2"
+                              echo "=== eval stdout ==="
+                              /bin/cat "$SECONDDIR/eval-out" 2>/dev/null
+                              echo "=== eval stderr ==="
+                              /bin/cat "$SECONDDIR/eval-err" 2>/dev/null
+                              echo "=== build stderr ==="
+                              /bin/cat "$SECONDDIR/err" 2>/dev/null
+                              echo "=== build.nix ==="
+                              /bin/cat "$SECONDDIR/build.nix" 2>/dev/null
+                            fi
+                        '
+
                         # The self-compile leaves multi-GB target trees under
                         # /tmp; the generated store output is retained. Free
                         # them before the live rebuild tests so the 8G/16G

@@ -55,13 +55,11 @@ let
       snixUpstreamSource = import ../pkgs/infrastructure/snix-upstream-source.nix {
         inherit pkgs;
       };
-      # Compose snix-redox source with upstream crates (same as cross-build)
-      snixCombinedSrc = pkgs.runCommand "snix-redox-combined-src" { } ''
-        cp -r ${../../snix-redox} $out
-        chmod -R u+w $out
-        rm -f $out/upstream
-        cp -r ${snixUpstreamSource} $out/upstream
-      '';
+      # Same source tree as the host cross-build and guest bundle.
+      snixCombinedSrc = import ../pkgs/infrastructure/snix-combined-src.nix {
+        inherit pkgs;
+        snix-redox-src = ../../snix-redox;
+      };
       ws = buildFromUnitGraph {
         inherit pkgs;
         src = snixCombinedSrc;
@@ -139,6 +137,23 @@ let
         diff -u ${../../docs/options.md} ${packages.optionsMarkdown}
         touch $out
       '';
+
+      # The host cross-build, host unit tests, and guest source bundle must
+      # consume one Snix source tree. The bundle exposes its tree so a future
+      # divergence fails here instead of surfacing as a guest-only build bug.
+      snix-source-agreement =
+        let
+          hostSource = import ../pkgs/infrastructure/snix-combined-src.nix {
+            inherit pkgs;
+            snix-redox-src = ../../snix-redox;
+          };
+          guestSource = packages.snix-source-bundle.combinedSrc;
+        in
+        pkgs.runCommand "check-snix-source-agreement" { } ''
+          test "${hostSource}" = "${guestSource}"
+          diff -r ${hostSource} ${guestSource} --exclude=.cargo --exclude=vendor
+          touch $out
+        '';
 
       # nix/tamal pins exactly the sources flake.lock pins (docs/nixtamal.md).
       nixtamal-pins = pkgs.runCommand "check-nixtamal-pins" { nativeBuildInputs = [ pkgs.jq ]; } ''

@@ -49,7 +49,7 @@ fi
 export SNIX_RUSTC_LOG="${TMPDIR:-/tmp}/snix-rustc.log"
 : >"$SNIX_RUSTC_LOG"
 RUSTC_WRAPPER_SH="$TMPDIR/rustc-wrapper.sh"
-printf '%s\n' "#!${NIX_BASH:?}" > "$RUSTC_WRAPPER_SH"
+printf '%s\n' "#!${NIX_BASH:?}" >"$RUSTC_WRAPPER_SH"
 cat >>"$RUSTC_WRAPPER_SH" <<'EOF'
 set -u
 

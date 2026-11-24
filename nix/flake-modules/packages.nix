@@ -569,15 +569,11 @@ let
       snixUpstreamSource = import ../pkgs/infrastructure/snix-upstream-source.nix {
         pkgs = hostPkgs;
       };
-      # Compose snix-redox source with upstream crates.
-      # The build plan references "upstream/{crate}" paths relative to the
-      # workspace root, so we need upstream/ to exist inside the source tree.
-      snixCombinedSrc = hostPkgs.runCommand "snix-redox-combined-src" { } ''
-        cp -r ${../../snix-redox} $out
-        chmod -R u+w $out
-        rm -f $out/upstream
-        cp -r ${snixUpstreamSource} $out/upstream
-      '';
+      # Same source tree as the guest bundle and host unit tests.
+      snixCombinedSrc = import ../pkgs/infrastructure/snix-combined-src.nix {
+        pkgs = hostPkgs;
+        snix-redox-src = ../../snix-redox;
+      };
       compiledSnix = mkCrossPackage {
         pname = "snix-redox";
         src = snixCombinedSrc;

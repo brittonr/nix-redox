@@ -8,15 +8,8 @@
 
 let
   stage0Tools = import ./stage0-tools.nix { inherit seedPackages; };
-  snixUpstreamSource = import ./snix-upstream-source.nix { inherit pkgs; };
-
-  # Compose source with upstream crates (same as the cross-build does)
-  combinedSrc = pkgs.runCommand "snix-redox-combined-src" { } ''
-    cp -r ${snix-redox-src} $out
-    chmod -R u+w $out
-    rm -f $out/upstream
-    cp -r ${snixUpstreamSource} $out/upstream
-  '';
+  # Same source tree as the host cross-build and host unit tests.
+  combinedSrc = import ./snix-combined-src.nix { inherit pkgs snix-redox-src; };
 
   # Vendor all crate dependencies from the lockfile
   vendoredDeps = pkgs.rustPlatform.fetchCargoVendor {
@@ -26,7 +19,7 @@ let
     hash = "sha256-imN+8Jg1BN4VKOTf7CdR0Vpmbtv2gvUSMp/Eh74LaEg=";
   };
 in
-pkgs.runCommand "snix-source-bundle" { } ''
+pkgs.runCommand "snix-source-bundle" { passthru = { inherit combinedSrc; }; } ''
   mkdir -p $out/.cargo
 
   # Copy source tree with upstream crates

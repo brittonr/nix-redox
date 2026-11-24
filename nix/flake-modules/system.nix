@@ -704,21 +704,28 @@ let
       exit $status
     '';
 
+  # Bundles shared by every self-hosting proof image.
+  selfHostingTestExtraPkgs = extraPkgs // {
+    snix-source-bundle = snixSourceBundle;
+    ripgrep-source-bundle = ripgrepSourceBundle;
+    test-flake-bundle = testFlakeBundle;
+    cc-dep-test-bundle = ccDepTestBundle;
+    workspace-test-bundle = workspaceTestBundle;
+    snix-second-build-marker = pkgs.runCommand "snix-second-build-marker" { } ''
+      mkdir -p $out
+      printf '%s\n' 1 > $out/marker
+    '';
+    snix-install-built-fixtures = pkgs.runCommand "snix-install-built-fixtures" { } ''
+      mkdir -p $out
+      cp ${pkgs.writeText "snix-install-built-packages.nix" (builtins.readFile ../redox-system/fixtures/snix-install-built-packages.nix)} $out/packages.nix
+      cp ${pkgs.writeText "snix-install-built-configuration.nix" (builtins.readFile ../redox-system/fixtures/snix-install-configuration.nix)} $out/configuration.nix
+    '';
+  };
+
   # Self-hosting test: boots self-hosting image, tests cargo build
   selfHostingTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/self-hosting-test.nix ];
-    extraPkgs = extraPkgs // {
-      snix-source-bundle = snixSourceBundle;
-      ripgrep-source-bundle = ripgrepSourceBundle;
-      test-flake-bundle = testFlakeBundle;
-      cc-dep-test-bundle = ccDepTestBundle;
-      workspace-test-bundle = workspaceTestBundle;
-      snix-install-built-fixtures = pkgs.runCommand "snix-install-built-fixtures" { } ''
-        mkdir -p $out
-        cp ${pkgs.writeText "snix-install-built-packages.nix" (builtins.readFile ../redox-system/fixtures/snix-install-built-packages.nix)} $out/packages.nix
-        cp ${pkgs.writeText "snix-install-built-configuration.nix" (builtins.readFile ../redox-system/fixtures/snix-install-configuration.nix)} $out/configuration.nix
-      '';
-    };
+    extraPkgs = selfHostingTestExtraPkgs;
   };
   selfHostingTestRaw = mkFunctionalTest {
     diskImage = selfHostingTestSystem.diskImage;
@@ -734,6 +741,24 @@ let
   selfHostingTest = wrapFunctionalTest {
     base = selfHostingTestRaw;
     label = "self-hosting-test";
+    auditBundle = snixSourceBundle;
+  };
+
+  # Opt-in: installed guest-built Snix builds Snix again from source.
+  snixSecondBuildTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/snix-second-build-test.nix ];
+    extraPkgs = selfHostingTestExtraPkgs;
+  };
+  snixSecondBuildTestRaw = mkFunctionalTest {
+    diskImage = snixSecondBuildTestSystem.diskImage;
+    inherit bootloader;
+    memoryMB = 8192;
+    cpus = 4;
+    defaultTimeout = 25200;
+  };
+  snixSecondBuildTest = wrapFunctionalTest {
+    base = snixSecondBuildTestRaw;
+    label = "snix-second-build-test";
     auditBundle = snixSourceBundle;
   };
 
@@ -1204,6 +1229,9 @@ in
     snix-sandbox-test = snixSandboxTest;
     redox-snix-install-test = snixInstallTestSystem.diskImage;
     snix-install-test = snixInstallTest;
+    snix-source-bundle = snixSourceBundle;
+    redox-snix-second-build-test = snixSecondBuildTestSystem.diskImage;
+    snix-second-build-test = snixSecondBuildTest;
 
     redox-parallel-build-test = parallelBuildTestSystem.diskImage;
     parallel-build-test = parallelBuildTest;
