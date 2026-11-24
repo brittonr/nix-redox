@@ -246,6 +246,10 @@ let
     snix-build = packages.snix;
     nixtamal-build = packages.nixtamal;
 
+    # Guest build tools (cross-compiled for Redox)
+    nasm-build = packages.redox-nasm;
+    cbindgen-build = packages.redox-cbindgen;
+
     # CLI tools
     ripgrep-cross = packages.ripgrep;
     dust-cross = packages.dust;

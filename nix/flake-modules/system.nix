@@ -117,6 +117,8 @@ let
     redox-diffutils = self'.packages.redox-diffutils or null;
     redox-sed = self'.packages.redox-sed or null;
     redox-patch = self'.packages.redox-patch or null;
+    redox-nasm = self'.packages.redox-nasm or null;
+    redox-cbindgen = self'.packages.redox-cbindgen or null;
     strace-redox = self'.packages.strace-redox or null;
 
     # Self-hosting: LLVM + Rust toolchain
@@ -704,8 +706,14 @@ let
       exit $status
     '';
 
+  buildToolsTestFixtures = import ../pkgs/infrastructure/build-tools-test-fixtures.nix {
+    inherit pkgs;
+    inherit (inputs) kernel-src relibc-src;
+  };
+
   # Bundles shared by every self-hosting proof image.
   selfHostingTestExtraPkgs = extraPkgs // {
+    build-tools-test-fixtures = buildToolsTestFixtures;
     snix-source-bundle = snixSourceBundle;
     ripgrep-source-bundle = ripgrepSourceBundle;
     test-flake-bundle = testFlakeBundle;
@@ -720,6 +728,25 @@ let
       cp ${pkgs.writeText "snix-install-built-packages.nix" (builtins.readFile ../redox-system/fixtures/snix-install-built-packages.nix)} $out/packages.nix
       cp ${pkgs.writeText "snix-install-built-configuration.nix" (builtins.readFile ../redox-system/fixtures/snix-install-configuration.nix)} $out/configuration.nix
     '';
+  };
+
+  # Focused guest build-tools parity & capability test
+  buildToolsTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/build-tools-test.nix ];
+    extraPkgs = extraPkgs // {
+      build-tools-test-fixtures = buildToolsTestFixtures;
+    };
+  };
+  buildToolsTestRaw = mkFunctionalTest {
+    diskImage = buildToolsTestSystem.diskImage;
+    inherit bootloader;
+    memoryMB = 8192;
+    cpus = 4;
+    defaultTimeout = 600;
+  };
+  buildToolsTest = wrapFunctionalTest {
+    base = buildToolsTestRaw;
+    label = "build-tools-test";
   };
 
   # Self-hosting test: boots self-hosting image, tests cargo build
@@ -1215,6 +1242,8 @@ in
 
     redox-self-hosting-test = selfHostingTestSystem.diskImage;
     self-hosting-test = selfHostingTest;
+    redox-build-tools-test = buildToolsTestSystem.diskImage;
+    build-tools-test = buildToolsTest;
 
     native-kernel-rebuild-bundle = nativeKernelRebuildBundle;
     redox-kernel-rebuild-test = kernelRebuildTestSystem.diskImage;

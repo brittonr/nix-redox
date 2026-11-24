@@ -48,6 +48,9 @@ dev
       ++ opt "redox-sysroot"
       # cmake for C/C++ projects
       ++ opt "redox-cmake"
+      # Assembler and header generator for kernel/relibc builds
+      ++ opt "redox-nasm"
+      ++ opt "redox-cbindgen"
       # Stack-growing lld launcher (fixes JOBS>=2 linker crashes)
       ++ opt "lld-wrapper";
 

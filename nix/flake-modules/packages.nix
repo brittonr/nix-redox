@@ -1143,6 +1143,10 @@ let
 
   redox-patch = import ../pkgs/userspace/patch-redox.nix cLibCommon;
 
+  redox-nasm = import ../pkgs/userspace/nasm-redox.nix cLibCommon;
+
+  redox-cbindgen = import ../pkgs/userspace/cbindgen-redox.nix standaloneCommon;
+
   redox-rustc = import ../pkgs/userspace/rustc-redox.nix (
     cLibCommon
     // {
@@ -1521,6 +1525,8 @@ in
       redox-sed
       redox-patch
       redox-cmake
+      redox-nasm
+      redox-cbindgen
       ;
 
     # Self-hosting: LLVM + Rust toolchain

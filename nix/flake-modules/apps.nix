@@ -225,6 +225,12 @@ in
       meta.description = "Build the Redox kernel natively inside a Redox guest and capture the resulting store path";
     };
 
+    build-tools-test = {
+      type = "app";
+      program = "${self'.packages.build-tools-test}/bin/functional-test";
+      meta.description = "Verify ported guest build tools (NASM, cbindgen, Python 3, Perl) inside Redox";
+    };
+
     native-rebuild-test = {
       type = "app";
       program = "${self'.packages.native-rebuild-test}/bin/functional-test";
