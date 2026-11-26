@@ -40,7 +40,13 @@ extract_executable() {
   return 1
 }
 
-export PATH="${NIX_TOOL_PATH:?}"
+# Kernel build.rs invokes nasm by name. Fail if the seed's assembler is
+# missing instead of allowing Cargo to find another copy.
+if [ ! -x "${NIX_NASM:?}" ]; then
+  echo "[build-redox-kernel] missing executable stage0 NASM: $NIX_NASM" >&2
+  exit 1
+fi
+export PATH="${NIX_NASM%/*}:${NIX_TOOL_PATH:?}"
 mkdir -p "$TMPDIR/tool-bin"
 ln -sf "${NIX_CC:?}" "$TMPDIR/tool-bin/cc"
 ln -sf "${NIX_CC:?}" "$TMPDIR/tool-bin/c++"
@@ -56,7 +62,6 @@ export RUST_BACKTRACE=1
 export AR="${NIX_AR:?}"
 export CC="${NIX_CC:?}"
 export RUST_SRC_PATH="${rustSource:-/usr/src/native-kernel-rebuild/rust-src}/library"
-export REDOX_KERNEL_USE_PREBUILT_TRAMPOLINE=1
 # The source bundle prints this compile-time ID from the executing kernel.
 export REDOX_BOOT_PROOF_ID="$out"
 export CARGO_TERM_PROGRESS_WHEN="${CARGO_TERM_PROGRESS_WHEN:-always}"

@@ -198,6 +198,10 @@ snix system services           # list declared services
 snix install ripgrep           # install a package from the binary cache
 ```
 
+For a full system rebuild on Redox, boot the `redox-native-seed` image.
+Then use Snix inside Redox to build, activate, install the EFI loader, and
+roll back on the same disk. See the [native workflow](docs/self-hosting/inguest-build-path.md).
+
 ## Host-side system management
 
 `redox-rebuild` builds configurations and tracks generations on the host:

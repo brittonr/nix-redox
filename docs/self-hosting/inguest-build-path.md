@@ -4,6 +4,37 @@ This records the decision for [#43](https://github.com/brittonr/nix-redox/issues
 nix-redox keeps one guest-native build graph and feeds it from pinned sources.
 The host produces the seed image; later builds run in the guest.
 
+## Rebuild and reboot on Redox
+
+Start with the x86_64 UEFI `redox-native-seed` disk image. An already-built
+image can be written to boot media without NixOS; to produce the initial
+image from this checkout, run `nix build .#redox-native-seed` on a Linux Nix
+builder. The seed includes Snix, the toolchain, the native source bundle,
+and a `systemSource` in `/etc/redox-system/configuration.nix`.
+
+On Redox, edit `/etc/redox-system/configuration.nix` and run as root:
+
+```sh
+snix system rebuild --dry-run
+snix system rebuild
+snix system generations
+snix system boot NEW_GENERATION --esp /scheme/disk.DEVICE/0p0
+```
+
+Replace `NEW_GENERATION` with the active generation ID and the ESP example
+with the **verified, unmounted FAT32 EFI partition** on your boot disk, not
+the whole disk. The command checks the staged kernel and initfs before
+installing the active generation's EFI executable. Reboot only after it
+succeeds. To roll back on the same disk, run
+`snix system switch-generation OLD_GENERATION`, then
+`snix system boot OLD_GENERATION --esp /scheme/disk.DEVICE/0p0` and reboot.
+
+ESP installation replaces the existing `EFI/BOOT/BOOTX64.EFI` fallback
+entry. It does not change firmware boot entries or support other EFI paths.
+The installer stages and reads back the replacement before publishing it;
+power-loss durability depends on the disk backend. Keep recovery media.
+If EFI installation fails, restore the previous generation before rebooting.
+
 ## Decision
 
 Option 1: grow the native graph in `nix/pkgs/infrastructure/native-system-build.nix`.
@@ -18,8 +49,8 @@ PCI and initfs renderers with the host module system.
 - The native graph is exercised by `native-rebuild-test`, `kernel-rebuild-test`
   and `self-hosting-test`; extending it keeps one tested path.
 
-Source preparation is host-side until #33 moves it into the guest. That is a
-known boundary, not a second build definition.
+Fetching, patching and vendoring still happen when producing the seed.
+Moving these steps into Redox is part of #33.
 
 ## Scope
 
@@ -30,7 +61,8 @@ Built in the guest:
 - the system generation and its package profile;
 - Snix from a nix-redox checkout, plus source packages selected by
   `snix system rebuild --source`;
-- disk image and ESP writes are the target of #37.
+- the fallback EFI executable can be installed by the guest; creating a
+  fresh disk image and partitioning it on Redox remain open in #37.
 
 Host-only outputs remain the QEMU and Cloud Hypervisor runners, browser assets
 and WASM engines, binary-cache publishing, and the initial seed image.
@@ -79,6 +111,6 @@ patches live in `snix-upstream-source.nix`, so both paths consume the same
 patched crates.
 
 `nix build .#checks.x86_64-linux.snix-source-agreement` fails if the guest
-bundle's combined tree differs from the host tree. Other native-graph packages
-are copied from the host derivations into the bundle, so they have no second
-source definition to drift.
+bundle's combined tree differs from the host tree. The kernel builder
+assembles trampolines with the seed's native NASM. The native graph does not
+yet rebuild every stage0 tool or userspace package.

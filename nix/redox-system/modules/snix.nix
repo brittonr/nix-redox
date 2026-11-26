@@ -30,6 +30,11 @@ in
   name = "snix";
 
   options = {
+    systemSource = {
+      type = t.string;
+      default = "";
+      description = "Guest path to the native system build expression (empty disables full native rebuilds)";
+    };
     stored = {
       type = storedConfig;
       default = {

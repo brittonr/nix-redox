@@ -50,7 +50,7 @@ let
       "installPhase"
     ];
 
-    nativeBuildInputs = [ pkgs.python3 pkgs.nasm ];
+    nativeBuildInputs = [ pkgs.python3 ];
 
     postUnpack = ''
       rm -rf $sourceRoot/redox-path
@@ -71,9 +71,6 @@ let
       fi
 
       python3 ${../system/patches/kernel/patch-kernel-ptrace-proc-handles.py} .
-      python3 ${../system/patches/kernel/patch-kernel-trampoline-fallback.py} .
-      nasm -f bin -o src/asm/x86/trampoline.bin src/asm/x86/trampoline.asm
-      nasm -f bin -o src/asm/x86_64/trampoline.bin src/asm/x86_64/trampoline.asm
       python3 ${../patches/patch-kernel-serial-no-loopback.py} src/devices/uart_16550.rs
       python3 ${./patch-native-boot-proof.py} kernel .
     '';
@@ -261,6 +258,7 @@ pkgs.runCommand "native-kernel-rebuild-bundle" { nativeBuildInputs = [ pkgs.pyth
         "${stage0Tools.llvm}/bin/ld.lld",
         "${stage0Tools.llvm}/bin/lld-link",
         "${stage0Tools.lldWrapper}/bin/lld-wrapper",
+        "${stage0Tools.nasm}/bin/nasm",
         "${stage0Tools.sysroot}/bin/cc"
       ]
     },

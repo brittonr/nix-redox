@@ -490,6 +490,43 @@ let
     }
   );
 
+  nativeSeedSystem = mkSystem {
+    modules = [
+      (
+        args:
+        let
+          seed = import ../redox-system/profiles/self-hosting.nix args;
+        in
+        seed
+        // {
+          "/boot" = seed."/boot" // {
+            diskSizeMB = 16384;
+          };
+          "/snix" = (seed."/snix" or { }) // {
+            systemSource = "/usr/src/nix-redox/build.nix";
+          };
+          "/filesystem" = (seed."/filesystem" or { }) // {
+            extraPaths = (seed."/filesystem".extraPaths or [ ]) ++ [
+              {
+                source = nativeSystemBundle;
+                target = "usr/src/nix-redox";
+              }
+              {
+                source = nativeKernelRebuildBundle;
+                target = "usr/src/native-kernel-rebuild";
+              }
+              {
+                source = snixSourceBundle;
+                target = "usr/src/snix-redox";
+              }
+            ];
+          };
+        }
+      )
+    ];
+    inherit extraPkgs;
+  };
+
   auditSnixSourceBundle = pkgs.writeShellScriptBin "audit-snix-source-bundle" ''
         set -euo pipefail
         bundle="''${1:-}"
@@ -901,7 +938,6 @@ let
     cpus = 4;
     defaultTimeout = 14400;
     nativeBootProof = {
-      redoxfs = modularPkgs.host.redoxfs;
       seedIdentities = {
         kernel = toString nativeBootProofArtifacts.kernel;
         bootloader = toString nativeBootProofArtifacts.bootloader;
@@ -1250,6 +1286,7 @@ in
     kernel-rebuild-test = kernelRebuildTest;
     native-system-source-bundle = nativeSystemBundle;
     redox-native-rebuild-test = nativeRebuildTestSystem.diskImage;
+    redox-native-seed = nativeSeedSystem.diskImage;
     native-rebuild-test = nativeRebuildTest;
 
     redox-snix-compile-test = snixCompileTestSystem.diskImage;

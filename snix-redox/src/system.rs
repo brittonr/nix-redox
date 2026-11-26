@@ -19,6 +19,9 @@ use std::path::Path;
 
 use serde::{Deserialize, Serialize};
 
+#[path = "esp.rs"]
+mod esp;
+
 /// The Nix system identifier of the machine running this binary.
 ///
 /// Flake evaluation and local build execution share this function so the
@@ -1735,6 +1738,64 @@ pub fn write_boot_default(
         fs::create_dir_all(parent)?;
     }
     fs::write(path, format!("{generation_id}\n"))?;
+    Ok(())
+}
+
+/// Install the EFI executable only after the corresponding root-filesystem
+/// boot files have been staged by activation. The ESP is never auto-guessed.
+pub(crate) fn install_boot_generation(
+    generation_id: u32,
+    esp: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let current = load_manifest_from(MANIFEST_PATH)?;
+    if current.generation.id != generation_id {
+        return Err(format!(
+            "generation {generation_id} is not active; run `snix system switch-generation {generation_id}` first"
+        )
+        .into());
+    }
+    let boot = current
+        .boot
+        .as_ref()
+        .ok_or("generation has no boot artifacts")?;
+    let efi = boot
+        .bootloader
+        .as_deref()
+        .ok_or("generation has no EFI executable")?;
+    for (name, source) in [("kernel", &boot.kernel), ("initfs", &boot.initfs)] {
+        use std::io::BufRead;
+
+        let source = source
+            .as_deref()
+            .ok_or_else(|| format!("generation has no {name}"))?;
+        let mut expected = std::io::BufReader::new(fs::File::open(source)?);
+        let active = fs::File::open(Path::new("/usr/lib/boot").join(name))?;
+        active.sync_all()?;
+        let mut active = std::io::BufReader::new(active);
+        loop {
+            let a = active.fill_buf()?;
+            let b = expected.fill_buf()?;
+            let len = a.len().min(b.len());
+            if (len == 0 && a.len() != b.len()) || a[..len] != b[..len] {
+                return Err(
+                    format!("active {name} does not match generation {generation_id}").into(),
+                );
+            }
+            if len == 0 {
+                break;
+            }
+            active.consume(len);
+            expected.consume(len);
+        }
+    }
+
+    esp::install(esp, Path::new(efi))?;
+    write_boot_default(generation_id, None)?;
+    fs::File::open(BOOT_DEFAULT_PATH)?.sync_all()?;
+    println!(
+        "Installed generation {generation_id}'s EFI executable to {}",
+        esp.display()
+    );
     Ok(())
 }
 

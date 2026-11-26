@@ -652,7 +652,8 @@ let
           #   system.{name, version}
 
           {
-            hostname = "${cfg.hostname}";
+            ${lib.optionalString (inputs.snix.systemSource != "") ''systemSource = ${builtins.toJSON inputs.snix.systemSource};
+            ''}hostname = "${cfg.hostname}";
             timezone = "${cfg.timezone}";
 
             networking = {

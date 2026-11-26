@@ -120,6 +120,15 @@ unit_with_marker() {
   done
 }
 
+proof_esp_device() (
+  # The proof attaches exactly one virtio disk. Production callers supply a
+  # verified partition explicitly, and never infer the target from this glob.
+  shopt -s nullglob
+  local esps=(/scheme/disk.*_virtio_blk/0p0)
+  [[ ${#esps[@]} == 1 ]] || fatal "$phase-esp-device" 'expected one virtio ESP partition'
+  printf '%s\n' "${esps[0]}"
+)
+
 seed_phase() {
   # Redox uutils does not provide sync. Use the real filesystem fsync operation,
   # compiled with the same offline guest toolchain as the native rebuild.
@@ -158,6 +167,9 @@ RUST
   cp /usr/lib/boot/kernel "$work/original-kernel"
   cp /usr/lib/boot/initfs "$work/original-initfs"
   original_id=$(json_value "$work/original.json" m.generation.id)
+  local esp
+  esp=$(proof_esp_device)
+  require seed-guest-efi-access "$SNIX" system boot "$original_id" --esp "$esp"
   original_hostname=$(</etc/hostname)
   # Older bootstrap manifests have no toplevel; activation deliberately uses
   # /etc/redox-system as their identity rather than leaving a native identity.
@@ -481,8 +493,10 @@ request_restart() {
   [[ $failures == 0 ]] || exit 1
   require "$next-restart-efi" test -f "$efi"
   printf '%s\n' "$next" >"$work/phase"
-  # The host installs this exact stored EFI into the existing disk's ESP; this
-  # is not a claim that production guest activation includes an ESP installer.
+  local esp id
+  esp=$(proof_esp_device)
+  id=$(json_value "$manifest" m.generation.id)
+  require "$next-guest-efi-installed" "$SNIX" system boot "$id" --esp "$esp"
   # The seed keeps PCI configuration inside initfs; only the native generation
   # also materializes it under /etc. Flush the active tree, not optional leaves.
   "$work/flush" "$work" /etc /usr/lib/boot /usr/lib/init.d "$efi"

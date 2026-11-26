@@ -12,6 +12,7 @@ derivation {
   NIX_RUSTC = "${tools.rustc}/bin/rustc";
   NIX_AR = "${tools.llvm}/bin/llvm-ar";
   NIX_CC = "${tools.sysroot}/bin/cc";
+  NIX_NASM = "${tools.nasm}/bin/nasm";
   NIX_LLD_WRAPPER = "${tools.lldWrapper}/bin/lld-wrapper";
   NIX_OBJCOPY = "${tools.llvm}/bin/llvm-objcopy";
   NIX_SYSROOT = "${tools.sysroot}";

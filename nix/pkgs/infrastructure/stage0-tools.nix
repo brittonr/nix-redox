@@ -18,5 +18,6 @@ in
   llvm = tool "llvm-redox";
   lldWrapper = tool "lld-wrapper";
   make = tool "gnu-make";
+  nasm = tool "redox-nasm";
   sysroot = tool "redox-sysroot";
 }

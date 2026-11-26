@@ -329,7 +329,7 @@ let
         -device isa-debug-exit,iobase=0xf4,iosize=0x04
         -bios "$OVMF"
         ${lib.optionalString (!diskOnly) "-kernel ${bootloader}/boot/EFI/BOOT/BOOTX64.EFI"}
-        -drive file="$IMAGE",format=raw,if=none,id=disk0
+        -drive file="$IMAGE",format=raw,if=none,id=disk0${lib.optionalString diskOnly ",cache=writethrough"}
         -device virtio-blk-pci,drive=disk0
         -display none
         -vga none
@@ -426,7 +426,7 @@ in
       extraPolling ? "",
       customReport ? null,
       # Three firmware boots on the same mutable disk; null keeps ordinary tests unchanged.
-      # { redoxfs; seedIdentities = { bootloader; kernel; initfs; }; }
+      # { seedIdentities = { bootloader; kernel; initfs; }; }
       nativeBootProof ? null,
       # Minimum timeout floor for QEMU TCG fallback (no KVM).
       # Pulled from virtualisation.chMinTimeout when available.
@@ -528,10 +528,6 @@ in
         PROOF_SEED_BOOTLOADER=${lib.escapeShellArg nativeBootProof.seedIdentities.bootloader}
         PROOF_SEED_KERNEL=${lib.escapeShellArg nativeBootProof.seedIdentities.kernel}
         PROOF_SEED_INITFS=${lib.escapeShellArg nativeBootProof.seedIdentities.initfs}
-        PROOF_EXTRACT=${nativeBootProof.redoxfs}/bin/redoxfs-extract
-        PROOF_MCOPY=${pkgs.mtools}/bin/mcopy
-        PROOF_SFDISK=${pkgs.util-linux}/bin/sfdisk
-        PROOF_JQ=${pkgs.jq}/bin/jq
         PROOF_GREP=${grep}
         PROOF_PYTHON=${pkgs.python3}/bin/python3
         ${builtins.readFile ./native-boot-proof-runner.sh}
