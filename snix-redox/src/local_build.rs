@@ -9,7 +9,7 @@
 //! 1. Evaluate Nix expression → KnownPaths with derivations
 //! 2. Topological sort: build dependencies before dependents
 //! 3. For each derivation:
-//!    a. Skip if all outputs already exist on disk
+//!    a. Skip only if all outputs exist and have valid path metadata
 //!    b. Set up temp build directory and environment
 //!    c. Execute builder with args
 //!    d. Verify outputs were created
@@ -276,17 +276,12 @@ fn build_derivation_inner(
         .unwrap_or(&drv_path.to_string())
         .to_string();
 
-    // ── 1. Check if all outputs already exist ──────────────────────────
-    let all_exist = drv.outputs.values().all(|o| {
-        o.path
-            .as_ref()
-            .is_some_and(|p| Path::new(&p.to_absolute_path()).exists())
-    });
-    if all_exist {
-        return build_result_from_existing(drv, drv_path, known_paths, db);
+    if let Some(result) = registered_build_result(drv, db)? {
+        return Ok(result);
     }
 
     ensure_native_system(drv, drv_path)?;
+    prepare_build_outputs(drv, db, Path::new(STORE_DIR))?;
 
     // ── 2. Create temp build directory ─────────────────────────────────
     let build_dir =
@@ -699,77 +694,97 @@ fn build_derivation_inner(
     })
 }
 
-/// Construct a BuildResult for outputs that already exist on disk.
-fn build_result_from_existing(
+/// A directory may have been created before a builder was interrupted.
+/// Only a complete set of registered outputs is a cache hit.
+fn registered_build_result(
     drv: &nix_compat::derivation::Derivation,
-    drv_path: &StorePath<String>,
-    known_paths: &KnownPaths,
     db: &PathInfoDb,
-) -> Result<BuildResult, BuildError> {
-    register_derivation_file(drv, drv_path, db)?;
+) -> Result<Option<BuildResult>, BuildError> {
+    let mut outputs = BTreeMap::new();
+    let mut primary = None;
+    for (name, output) in &drv.outputs {
+        let Some(path) = &output.path else {
+            return Ok(None);
+        };
+        let path = path.to_absolute_path();
+        if !output_entry_exists(Path::new(&path))? {
+            return Ok(None);
+        }
+        let Some(info) = output_path_info(db, &path)? else {
+            return Ok(None);
+        };
+        if name == "out" || primary.is_none() {
+            primary = Some(info);
+        }
+        outputs.insert(name.clone(), path);
+    }
+    Ok(primary.map(|info| BuildResult {
+        outputs,
+        references: info.references.into_iter().collect(),
+        nar_hash: info.nar_hash,
+        nar_size: info.nar_size,
+    }))
+}
 
-    let mut output_paths: BTreeMap<String, String> = BTreeMap::new();
-    for (name, out) in &drv.outputs {
-        if let Some(ref sp) = out.path {
-            output_paths.insert(name.clone(), sp.to_absolute_path());
+fn output_entry_exists(path: &Path) -> Result<bool, BuildError> {
+    match fs::symlink_metadata(path) {
+        Ok(_) => Ok(true),
+        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(e) => Err(BuildError::Io(format!("checking {}: {e}", path.display()))),
+    }
+}
+
+fn output_path_info(db: &PathInfoDb, path: &str) -> Result<Option<PathInfo>, BuildError> {
+    let info = db
+        .get(path)
+        .map_err(|e| BuildError::Io(format!("reading metadata for {path}: {e}")))?;
+    if info.as_ref().is_some_and(|info| info.store_path != path) {
+        return Err(BuildError::Io(format!("store metadata does not match {path}")));
+    }
+    Ok(info)
+}
+
+/// A retry is run after the interrupted builder has stopped. Do not overwrite
+/// a registered sibling of a missing output: it may still be in use.
+fn prepare_build_outputs(
+    drv: &nix_compat::derivation::Derivation,
+    db: &PathInfoDb,
+    store_dir: &Path,
+) -> Result<(), BuildError> {
+    let mut stale = Vec::new();
+    for output in drv.outputs.values() {
+        let Some(path) = &output.path else { continue };
+        let abs = path.to_absolute_path();
+        let disk_path = store_dir.join(path.to_string());
+        let info = output_path_info(db, &abs)?;
+        match fs::symlink_metadata(&disk_path) {
+            Ok(_) if info.is_some() => {
+                return Err(BuildError::Io(format!(
+                    "cannot rebuild incomplete output set without overwriting registered output {abs}"
+                )));
+            }
+            Ok(meta) => stale.push((disk_path, meta.is_dir())),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                // Do not let an old registration bless a new partial output.
+                if info.is_some() {
+                    db.delete(&abs)
+                        .map_err(|e| BuildError::Io(format!("invalidating {abs}: {e}")))?;
+                }
+            }
+            Err(e) => return Err(BuildError::Io(format!("checking {abs}: {e}"))),
         }
     }
-
-    let primary_out = output_paths
-        .get("out")
-        .or_else(|| output_paths.values().next())
-        .cloned()
-        .expect("derivation has outputs");
-
-    // Check if already registered
-    if let Ok(Some(info)) = db.get(&primary_out) {
-        return Ok(BuildResult {
-            outputs: output_paths,
-            references: info.references.into_iter().collect(),
-            nar_hash: info.nar_hash,
-            nar_size: info.nar_size,
-        });
-    }
-
-    // Exists on disk but not registered — scan and register.
-    // Build a BuildRequest to get refscan needles from upstream.
-    let build_request =
-        derivation_into_build_request(drv.clone(), &direct_inputs(drv, known_paths))
-            .map_err(|e| BuildError::Io(format!("converting derivation: {e}")))?;
-    let candidates = needles_to_candidates(&build_request, drv, known_paths);
-    let references = scan_references(Path::new(&primary_out), &candidates)
-        .map_err(|e| BuildError::Io(format!("scanning references: {e}")))?;
-
-    let (nar_hash, nar_size) = nar_hash_path(Path::new(&primary_out))
-        .map_err(|e| BuildError::Io(format!("computing NAR hash: {e}")))?;
-
-    for (name, path) in &output_paths {
-        let (hash, size) = if *path == primary_out {
-            (nar_hash.clone(), nar_size)
+    for (path, is_dir) in stale {
+        let result = if is_dir {
+            fs::remove_dir_all(&path)
         } else {
-            nar_hash_path(Path::new(path))
-                .map_err(|e| BuildError::Io(format!("NAR hash for {name}: {e}")))?
+            fs::remove_file(&path)
         };
-
-        let info = PathInfo {
-            store_path: path.clone(),
-            nar_hash: hash,
-            nar_size: size,
-            references: references.iter().cloned().collect(),
-            deriver: Some(drv_path.to_absolute_path()),
-            registration_time: pathinfo::current_timestamp(),
-            signatures: vec![],
-            files: vec![],
-        };
-        let _ = db.register(&info);
+        result.map_err(|e| {
+            BuildError::Io(format!("removing incomplete {}: {e}", path.display()))
+        })?;
     }
-
-    Ok(BuildResult {
-        outputs: output_paths,
-        references,
-        nar_hash,
-        nar_size,
-    })
+    Ok(())
 }
 
 // ── Dependency Resolution ──────────────────────────────────────────────────
@@ -777,8 +792,7 @@ fn build_result_from_existing(
 /// Build a derivation and all its missing dependencies.
 ///
 /// Performs a topological sort on the dependency graph and builds
-/// derivations in dependency order, skipping any whose outputs
-/// already exist on disk.
+/// derivations in dependency order, skipping registered outputs on disk.
 pub fn build_needed(
     target_drv_path: &StorePath<String>,
     known_paths: &KnownPaths,
@@ -797,12 +811,7 @@ pub fn build_needed_with_options(
     // Check the requested derivation before scheduling its dependencies, so a
     // foreign target cannot run native dependencies first.
     if let Some(drv) = known_paths.get_drv_by_drvpath(target_drv_path) {
-        let all_exist = drv.outputs.values().all(|o| {
-            o.path
-                .as_ref()
-                .is_some_and(|p| Path::new(&p.to_absolute_path()).exists())
-        });
-        if !all_exist {
+        if registered_build_result(drv, db)?.is_none() {
             ensure_native_system(drv, target_drv_path)?;
         }
     }
@@ -816,17 +825,10 @@ pub fn build_needed_with_options(
             .get_drv_by_drvpath(drv_path)
             .ok_or_else(|| BuildError::UnknownDerivation(drv_path.to_absolute_path()))?;
 
-        // Skip if all outputs already exist
-        let all_exist = drv.outputs.values().all(|o| {
-            o.path
-                .as_ref()
-                .is_some_and(|p| Path::new(&p.to_absolute_path()).exists())
-        });
-
-        if all_exist {
+        if let Some(cached) = registered_build_result(drv, db)? {
             if drv_path == target_drv_path {
-                // Target is cached — return its result
-                last_result = Some(build_result_from_existing(drv, drv_path, known_paths, db)?);
+                register_derivation_file(drv, drv_path, db)?;
+                last_result = Some(cached);
             }
             continue;
         }
@@ -1137,11 +1139,6 @@ fn build_builtin_fetcher(
         .and_then(|o| o.path.as_ref())
         .ok_or_else(|| BuildError::Io("builtin fetcher: no output path".to_string()))?
         .to_absolute_path();
-
-    // Check if already exists
-    if Path::new(&out_path).exists() {
-        return build_result_from_existing(drv, drv_path, known_paths, db);
-    }
 
     // Ensure /nix/store exists
     fs::create_dir_all(STORE_DIR)

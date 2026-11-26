@@ -8,8 +8,9 @@
 
 use std::collections::BTreeSet;
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use nix_compat::nixbase32;
 use nix_compat::store_path::StorePath;
@@ -231,8 +232,23 @@ impl PathInfoDb {
         let file = self.info_file(&info.store_path)?;
         let json = serde_json::to_string_pretty(info)
             .map_err(|e| PathInfoError::Io(format!("serializing: {e}")))?;
-        fs::write(&file, json)
-            .map_err(|e| PathInfoError::Io(format!("writing {}: {e}", file.display())))?;
+        // Never leave a truncated registration if the process stops mid-write.
+        static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
+        let (temp, mut writer) = loop {
+            let id = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+            let temp = file.with_extension(format!("tmp-{}-{id}", std::process::id()));
+            match fs::OpenOptions::new().write(true).create_new(true).open(&temp) {
+                Ok(writer) => break (temp, writer),
+                Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(e) => return Err(PathInfoError::Io(format!("creating {}: {e}", temp.display()))),
+            }
+        };
+        let result = writer.write_all(json.as_bytes());
+        drop(writer);
+        if let Err(e) = result.and_then(|()| fs::rename(&temp, &file)) {
+            let _ = fs::remove_file(&temp);
+            return Err(PathInfoError::Io(format!("writing {}: {e}", file.display())));
+        }
         Ok(())
     }
 

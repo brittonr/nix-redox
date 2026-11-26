@@ -129,6 +129,51 @@ proof_esp_device() (
   printf '%s\n' "${esps[0]}"
 )
 
+interrupted_output_retry() {
+  local fixture output marker hash info retry_dir
+  retry_dir=$(mktemp -d "$work/retry.XXXXXX")
+  fixture=$retry_dir/retry.nix
+  marker=$retry_dir/interrupt
+  cat >"$fixture" <<NIX
+derivation {
+  name = "native-interrupted-output-proof";
+  system = "x86_64-unknown-redox";
+  builder = "/nix/system/profile/bin/bash";
+  args = [ "-c" ''
+    /nix/system/profile/bin/mkdir "\$out" || exit 1
+    if test -f "$marker"; then
+      printf partial >"\$out/partial"
+      kill -KILL "\$\$"
+    fi
+    printf complete >"\$out/result"
+  '' ];
+}
+NIX
+  output=$(eval_raw "(import $fixture).outPath")
+  hash=${output##*/}
+  info=/nix/var/snix/pathinfo/${hash%%-*}.json
+  # This fixture alone uses --no-sandbox so an external marker can change
+  # between invocations without changing the derivation or output path.
+  printf interrupt >"$marker"
+  if "$SNIX" build --no-sandbox --file "$fixture" >"$work/interrupted-build.out" 2>"$work/interrupted-build.err"; then
+    fatal interrupted-build 'killed builder unexpectedly succeeded'
+  fi
+  require interrupted-output-left-on-disk test -f "$output/partial"
+  require interrupted-output-unregistered test ! -e "$info"
+  rm "$marker"
+  "$SNIX" build --no-sandbox --file "$fixture" >"$work/retried-build.out" 2>"$work/retried-build.err" || {
+    cat "$work/retried-build.err"
+    fatal interrupted-build-retried 'retry failed'
+  }
+  require interrupted-build-complete-output test -f "$output/result"
+  require interrupted-build-retried test "$(<"$output/result")" = complete
+  require interrupted-output-removed test ! -e "$output/partial"
+  require retried-output-registered test -f "$info"
+  printf interrupt >"$marker"
+  require retried-output-reused "$SNIX" build --no-sandbox --file "$fixture"
+  rm "$marker"
+}
+
 seed_phase() {
   # Redox uutils does not provide sync. Use the real filesystem fsync operation,
   # compiled with the same offline guest toolchain as the native rebuild.
@@ -198,6 +243,9 @@ RUST
   nix_check service-fixtures 'm.services.declared ? native-proof-remove && m.services.declared ? native-proof-retain && m.services.declared ? native-proof-runner'
   nix_check driver-fixture 'builtins.elem "e1000d" m.configuration.hardware.networkDrivers && m.configuration.hardware.usbEnabled'
   [[ $failures == 0 ]] || exit 1
+
+  phase=interrupted-output-retry
+  interrupted_output_retry
 
   # Snapshot the store before the rebuild. Derive identity only from the actual
   # built manifest: Rust serializes absent config fields as null, so evaluating

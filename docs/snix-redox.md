@@ -80,6 +80,14 @@ upstream Snix CLI:
 | Optional host builds | [`bridge.rs`](../snix-redox/src/bridge.rs) and [`bridge_build.rs`](../snix-redox/src/bridge_build.rs) exchange build requests/results through a shared filesystem. This route is distinct from guest-native building. |
 | Redox schemes and filesystem I/O | [`stored/`](../snix-redox/src/stored/), [`profiled/`](../snix-redox/src/profiled/), and [`file_io_worker.rs`](../snix-redox/src/file_io_worker.rs) provide lazy store access, profile views, and off-handler filesystem I/O to avoid scheme-handler deadlocks. |
 
+Native builds reuse an output only if it exists and has a path registration.
+After an interrupted build, wait for its builder processes to stop before
+retrying. Snix removes unregistered outputs at the derivation's declared paths
+and rebuilds them; it does not overwrite a registered sibling in an incomplete
+multi-output set. Do not run competing builds for the same outputs. Atomic
+metadata publication protects against a stopped process leaving half-written
+JSON; it is not a power-loss guarantee.
+
 [`sandbox.rs`](../snix-redox/src/sandbox.rs) and
 [`build_proxy/`](../snix-redox/src/build_proxy/) implement Redox scheme namespaces
 and the build filesystem proxy. The proxy permits read access to the entire
