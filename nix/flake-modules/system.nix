@@ -117,6 +117,8 @@ let
     redox-diffutils = self'.packages.redox-diffutils or null;
     redox-sed = self'.packages.redox-sed or null;
     redox-patch = self'.packages.redox-patch or null;
+    redox-nasm = self'.packages.redox-nasm or null;
+    redox-cbindgen = self'.packages.redox-cbindgen or null;
     strace-redox = self'.packages.strace-redox or null;
 
     # Self-hosting: LLVM + Rust toolchain
@@ -429,12 +431,14 @@ let
   snixSourceBundle = import ../pkgs/infrastructure/snix-source-bundle.nix {
     inherit pkgs;
     snix-redox-src = ../../snix-redox;
+    seedPackages = systems.self-hosting.nativeBuildSeed.seedPackages;
   };
 
   # ripgrep source bundle for flake-build-ripgrep test
   ripgrepSourceBundle = import ../pkgs/infrastructure/ripgrep-source-bundle.nix {
     inherit pkgs;
     ripgrep-src = inputs.ripgrep-src;
+    seedPackages = systems.self-hosting.nativeBuildSeed.seedPackages;
   };
 
   # test flake bundle for `snix build .#hello` VM test
@@ -445,9 +449,11 @@ let
   # cc-dep and workspace test bundles for complex build VM tests
   ccDepTestBundle = import ../pkgs/infrastructure/cc-dep-test-bundle.nix {
     inherit pkgs;
+    seedPackages = systems.self-hosting.nativeBuildSeed.seedPackages;
   };
   workspaceTestBundle = import ../pkgs/infrastructure/workspace-test-bundle.nix {
     inherit pkgs;
+    seedPackages = systems.self-hosting.nativeBuildSeed.seedPackages;
   };
 
   nativeKernelRebuildBundle = import ../pkgs/infrastructure/native-kernel-rebuild-bundle.nix {
@@ -459,6 +465,7 @@ let
       sysrootVendor
       redoxTarget
       ;
+    seedPackages = systems.self-hosting.nativeBuildSeed.seedPackages;
     inherit (redoxLib) vendor;
     inherit (inputs)
       kernel-src
@@ -482,6 +489,43 @@ let
       userutils = self'.packages.userutils;
     }
   );
+
+  nativeSeedSystem = mkSystem {
+    modules = [
+      (
+        args:
+        let
+          seed = import ../redox-system/profiles/self-hosting.nix args;
+        in
+        seed
+        // {
+          "/boot" = seed."/boot" // {
+            diskSizeMB = 16384;
+          };
+          "/snix" = (seed."/snix" or { }) // {
+            systemSource = "/usr/src/nix-redox/build.nix";
+          };
+          "/filesystem" = (seed."/filesystem" or { }) // {
+            extraPaths = (seed."/filesystem".extraPaths or [ ]) ++ [
+              {
+                source = nativeSystemBundle;
+                target = "usr/src/nix-redox";
+              }
+              {
+                source = nativeKernelRebuildBundle;
+                target = "usr/src/native-kernel-rebuild";
+              }
+              {
+                source = snixSourceBundle;
+                target = "usr/src/snix-redox";
+              }
+            ];
+          };
+        }
+      )
+    ];
+    inherit extraPkgs;
+  };
 
   auditSnixSourceBundle = pkgs.writeShellScriptBin "audit-snix-source-bundle" ''
         set -euo pipefail
@@ -699,16 +743,53 @@ let
       exit $status
     '';
 
+  buildToolsTestFixtures = import ../pkgs/infrastructure/build-tools-test-fixtures.nix {
+    inherit pkgs;
+    inherit (inputs) kernel-src relibc-src;
+  };
+
+  # Bundles shared by every self-hosting proof image.
+  selfHostingTestExtraPkgs = extraPkgs // {
+    build-tools-test-fixtures = buildToolsTestFixtures;
+    snix-source-bundle = snixSourceBundle;
+    ripgrep-source-bundle = ripgrepSourceBundle;
+    test-flake-bundle = testFlakeBundle;
+    cc-dep-test-bundle = ccDepTestBundle;
+    workspace-test-bundle = workspaceTestBundle;
+    snix-second-build-marker = pkgs.runCommand "snix-second-build-marker" { } ''
+      mkdir -p $out
+      printf '%s\n' 1 > $out/marker
+    '';
+    snix-install-built-fixtures = pkgs.runCommand "snix-install-built-fixtures" { } ''
+      mkdir -p $out
+      cp ${pkgs.writeText "snix-install-built-packages.nix" (builtins.readFile ../redox-system/fixtures/snix-install-built-packages.nix)} $out/packages.nix
+      cp ${pkgs.writeText "snix-install-built-configuration.nix" (builtins.readFile ../redox-system/fixtures/snix-install-configuration.nix)} $out/configuration.nix
+    '';
+  };
+
+  # Focused guest build-tools parity & capability test
+  buildToolsTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/build-tools-test.nix ];
+    extraPkgs = extraPkgs // {
+      build-tools-test-fixtures = buildToolsTestFixtures;
+    };
+  };
+  buildToolsTestRaw = mkFunctionalTest {
+    diskImage = buildToolsTestSystem.diskImage;
+    inherit bootloader;
+    memoryMB = 8192;
+    cpus = 4;
+    defaultTimeout = 600;
+  };
+  buildToolsTest = wrapFunctionalTest {
+    base = buildToolsTestRaw;
+    label = "build-tools-test";
+  };
+
   # Self-hosting test: boots self-hosting image, tests cargo build
   selfHostingTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/self-hosting-test.nix ];
-    extraPkgs = extraPkgs // {
-      snix-source-bundle = snixSourceBundle;
-      ripgrep-source-bundle = ripgrepSourceBundle;
-      test-flake-bundle = testFlakeBundle;
-      cc-dep-test-bundle = ccDepTestBundle;
-      workspace-test-bundle = workspaceTestBundle;
-    };
+    extraPkgs = selfHostingTestExtraPkgs;
   };
   selfHostingTestRaw = mkFunctionalTest {
     diskImage = selfHostingTestSystem.diskImage;
@@ -724,6 +805,24 @@ let
   selfHostingTest = wrapFunctionalTest {
     base = selfHostingTestRaw;
     label = "self-hosting-test";
+    auditBundle = snixSourceBundle;
+  };
+
+  # Opt-in: installed guest-built Snix builds Snix again from source.
+  snixSecondBuildTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/snix-second-build-test.nix ];
+    extraPkgs = selfHostingTestExtraPkgs;
+  };
+  snixSecondBuildTestRaw = mkFunctionalTest {
+    diskImage = snixSecondBuildTestSystem.diskImage;
+    inherit bootloader;
+    memoryMB = 8192;
+    cpus = 4;
+    defaultTimeout = 25200;
+  };
+  snixSecondBuildTest = wrapFunctionalTest {
+    base = snixSecondBuildTestRaw;
+    label = "snix-second-build-test";
     auditBundle = snixSourceBundle;
   };
 
@@ -774,6 +873,28 @@ let
     auditBundle = snixSourceBundle;
   };
 
+  snixInstallTestSystem = mkSystem {
+    modules = [ ../redox-system/profiles/snix-install-test.nix ];
+    extraPkgs = extraPkgs // {
+      snix-install-fixtures = pkgs.runCommand "snix-install-fixtures" { } ''
+        mkdir -p $out
+        cp ${pkgs.writeText "snix-install-packages.nix" (builtins.readFile ../redox-system/fixtures/snix-install-packages.nix)} $out/packages.nix
+        cp ${pkgs.writeText "snix-install-configuration.nix" (builtins.readFile ../redox-system/fixtures/snix-install-configuration.nix)} $out/configuration.nix
+      '';
+    };
+  };
+  snixInstallTestRaw = mkFunctionalTest {
+    diskImage = snixInstallTestSystem.diskImage;
+    inherit bootloader;
+    memoryMB = 4096;
+    cpus = 2;
+    defaultTimeout = 600;
+  };
+  snixInstallTest = wrapFunctionalTest {
+    base = snixInstallTestRaw;
+    label = "snix-install-test";
+  };
+
   # Focused native kernel rebuild test — builds the kernel on a Redox guest
   kernelRebuildTestSystem = mkSystem {
     modules = [ ../redox-system/profiles/kernel-rebuild-test.nix ];
@@ -817,7 +938,6 @@ let
     cpus = 4;
     defaultTimeout = 14400;
     nativeBootProof = {
-      redoxfs = modularPkgs.host.redoxfs;
       seedIdentities = {
         kernel = toString nativeBootProofArtifacts.kernel;
         bootloader = toString nativeBootProofArtifacts.bootloader;
@@ -1158,18 +1278,26 @@ in
 
     redox-self-hosting-test = selfHostingTestSystem.diskImage;
     self-hosting-test = selfHostingTest;
+    redox-build-tools-test = buildToolsTestSystem.diskImage;
+    build-tools-test = buildToolsTest;
 
     native-kernel-rebuild-bundle = nativeKernelRebuildBundle;
     redox-kernel-rebuild-test = kernelRebuildTestSystem.diskImage;
     kernel-rebuild-test = kernelRebuildTest;
     native-system-source-bundle = nativeSystemBundle;
     redox-native-rebuild-test = nativeRebuildTestSystem.diskImage;
+    redox-native-seed = nativeSeedSystem.diskImage;
     native-rebuild-test = nativeRebuildTest;
 
     redox-snix-compile-test = snixCompileTestSystem.diskImage;
     snix-compile-test = snixCompileTest;
 
     snix-sandbox-test = snixSandboxTest;
+    redox-snix-install-test = snixInstallTestSystem.diskImage;
+    snix-install-test = snixInstallTest;
+    snix-source-bundle = snixSourceBundle;
+    redox-snix-second-build-test = snixSecondBuildTestSystem.diskImage;
+    snix-second-build-test = snixSecondBuildTest;
 
     redox-parallel-build-test = parallelBuildTestSystem.diskImage;
     parallel-build-test = parallelBuildTest;

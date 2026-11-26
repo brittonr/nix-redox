@@ -42,11 +42,25 @@ jobs:
           nix run .#browser-delivery-tests
       - name: Real Chromium cold and snapshot gate
         run: nix run .#browser-smoke-test -- --output browser-evidence
-      - name: Enforce actual Pages size limit
-        # https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits
-        # Published sites <=1 GB; deployment <=10 minutes; soft bandwidth 100 GB/month.
+      - name: Stage Cloudflare Pages artifact (with R2 overflow for >25 MiB files)
         run: |
-          python3 - <<'PY'
+          python3 nix/browser/stage_cloudflare_pages.py browser-site cloudflare-staging
+          cat cloudflare-staging/staging-manifest.json
+      - name: Prepare GitHub Pages artifact (full site or canonical redirect)
+        id: pages_prep
+        env:
+          REDIRECT_TO_CANONICAL: ${{ vars.GITHUB_PAGES_REDIRECT_TO_CANONICAL }}
+        run: |
+          if [ "$REDIRECT_TO_CANONICAL" = "true" ]; then
+            echo "Building canonical GitHub Pages redirect -> https://nixredox.com/"
+            python3 nix/browser/build_pages_redirect.py github-pages-redirect \
+              --target https://nixredox.com/ \
+              --prefix /nix-redox/
+            echo "path=github-pages-redirect" >> "$GITHUB_OUTPUT"
+          else
+            # https://docs.github.com/en/pages/getting-started-with-github-pages/github-pages-limits
+            # Published sites <=1 GB; deployment <=10 minutes; soft bandwidth 100 GB/month.
+            python3 - <<'PY'
           import pathlib
           root = pathlib.Path('browser-site')
           size = sum(p.stat().st_size for p in root.rglob('*') if p.is_file())
@@ -54,6 +68,8 @@ jobs:
           if size > 1_000_000_000:
               raise SystemExit('Unsupported GitHub Pages artifact: exceeds 1 GB published-site limit. Use direct COOP/COEP hosting; do not drop sources, notices, or guest assets.')
           PY
+            echo "path=browser-site" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -61,12 +77,113 @@ jobs:
           path: browser-evidence/
           if-no-files-found: error
           retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-site-${{ github.sha }}
+          path: cloudflare-staging/
+          if-no-files-found: error
+          retention-days: 7
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: browser-site
+          path: ${{ steps.pages_prep.outputs.path }}
+
+  deploy-cloudflare:
+    name: Publish proven tree to Cloudflare Pages (nixredox.com)
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    environment:
+      name: cloudflare-pages
+      url: ${{ steps.cf_deploy.outputs.url }}
+    steps:
+      # No repository code executes in this privileged job. It consumes only the
+      # artifact built and gated in this same trusted-main workflow run.
+      - name: Check Cloudflare deploy credentials
+        id: cf_gate
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            {
+              echo '### Cloudflare Pages deploy skipped'
+              echo ''
+              echo 'Set repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` (plus variable `CLOUDFLARE_R2_BUCKET` for >25 MiB overflow assets and optional `CLOUDFLARE_PAGES_PROJECT`, default `nixredox`) to publish to `https://nixredox.com/`.'
+              echo 'See `docs/hosting-nixredox-domain.md`.'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Download staged Cloudflare artifact
+        if: steps.cf_gate.outputs.enabled == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: cloudflare-site-${{ github.sha }}
+          path: cloudflare-staging
+      - name: Set up Node.js for Wrangler
+        if: steps.cf_gate.outputs.enabled == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Upload >25 MiB immutable overflow assets to R2 before Pages deploy
+        if: steps.cf_gate.outputs.enabled == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_R2_BUCKET: ${{ vars.CLOUDFLARE_R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          overflow_count=$(python3 -c 'import json; print(json.load(open("cloudflare-staging/staging-manifest.json"))["overflowCount"])')
+          if [ "$overflow_count" -eq 0 ]; then
+            echo "No files exceed Cloudflare Pages 25 MiB limit; skipping R2 overflow upload."
+            exit 0
+          fi
+          if [ -z "$CLOUDFLARE_R2_BUCKET" ]; then
+            echo "::error::browser-site has ${overflow_count} file(s) >25 MiB (Cloudflare Pages per-file limit). Set repository variable CLOUDFLARE_R2_BUCKET and bind it as SITE_OVERFLOW on the Pages project. See docs/hosting-nixredox-domain.md."
+            exit 1
+          fi
+          python3 - <<'PY' > overflow-uploads.tsv
+          import json
+          manifest = json.load(open("cloudflare-staging/staging-manifest.json"))
+          for item in manifest["overflowFiles"]:
+              print(f"{item['key']}\t{item['contentType']}")
+          PY
+          while IFS=$'\t' read -r key ctype; do
+            echo "Uploading overflow object to R2: ${CLOUDFLARE_R2_BUCKET}/${key} (${ctype})"
+            npx --yes wrangler@4 r2 object put "${CLOUDFLARE_R2_BUCKET}/${key}" \
+              --file "cloudflare-staging/r2-overflow/${key}" \
+              --content-type "${ctype}" \
+              --remote < /dev/null
+          done < overflow-uploads.tsv
+      - name: Deploy proven tree to Cloudflare Pages
+        id: cf_deploy
+        if: steps.cf_gate.outputs.enabled == 'true'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_PAGES_PROJECT: ${{ vars.CLOUDFLARE_PAGES_PROJECT }}
+        run: |
+          set -euo pipefail
+          project="${CLOUDFLARE_PAGES_PROJECT:-nixredox}"
+          npx --yes wrangler@4 pages deploy cloudflare-staging/pages \
+            --project-name "$project" \
+            --branch main \
+            --commit-hash "${{ github.sha }}"
+          echo "url=https://nixredox.com/" >> "$GITHUB_OUTPUT"
+          {
+            echo '### Cloudflare Pages deployed'
+            echo ''
+            printf -- '- Project: `%s`\n' "$project"
+            echo '- Canonical URL: https://nixredox.com/'
+            printf -- '- Commit: `%s`\n' '${{ github.sha }}'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
-    name: Publish proven complete tree
+    name: Publish GitHub Pages (site or canonical redirect)
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -83,3 +200,12 @@ jobs:
       - uses: actions/configure-pages@v5
       - id: deployment
         uses: actions/deploy-pages@v4
+      - name: Record GitHub Pages mode
+        env:
+          REDIRECT_TO_CANONICAL: ${{ vars.GITHUB_PAGES_REDIRECT_TO_CANONICAL }}
+        run: |
+          if [ "$REDIRECT_TO_CANONICAL" = "true" ]; then
+            echo 'GitHub Pages mode: canonical redirect (`https://brittonr.github.io/nix-redox/` -> `https://nixredox.com/`).' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'GitHub Pages mode: full `browser-site` (set variable `GITHUB_PAGES_REDIRECT_TO_CANONICAL=true` after `https://nixredox.com/` is verified live).' >> "$GITHUB_STEP_SUMMARY"
+          fi

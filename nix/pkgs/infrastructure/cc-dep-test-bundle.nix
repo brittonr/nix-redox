@@ -4,9 +4,10 @@
 # cc-rs to compile the C source. Tests that the CC wrapper → clang → lld
 # pipeline works inside snix's per-path sandbox.
 
-{ pkgs }:
+{ pkgs, seedPackages }:
 
 let
+  stage0Tools = import ./stage0-tools.nix { inherit seedPackages; };
   # Vendor the cc crate and its dependency (shlex) for offline builds
   ccCrateSrc = pkgs.fetchurl {
     url = "https://crates.io/api/v1/crates/cc/1.2.21/download";
@@ -121,10 +122,18 @@ pkgs.runCommand "cc-dep-test-bundle" { } ''
   target = "x86_64-unknown-redox"
 
   [target.x86_64-unknown-redox]
-  linker = "/nix/system/profile/bin/cc"
+  linker = "${stage0Tools.sysroot}/bin/cc"
   CFG
 
   # ── build.nix + builder script (for snix build --file) ────────
   cp ${./cc-dep-build.nix} $out/build.nix
   cp ${./build-cc-dep.sh} $out/build-cc-dep.sh
+  printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = builtins.storePath \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
+  printf '%s\n' \
+    "export NIX_TOOL_PATH=${stage0Tools.sysroot}/bin:${stage0Tools.rustc}/bin:${stage0Tools.llvm}/bin:${stage0Tools.uutils}/bin:${stage0Tools.bash}/bin:/bin:/usr/bin" \
+    "export NIX_LD_LIBRARY_PATH=${stage0Tools.rustc}/lib:${stage0Tools.llvm}/lib:/usr/lib/rustc:/lib" \
+    "export NIX_RUSTC=${stage0Tools.rustc}/bin/rustc" \
+    "export NIX_AR=${stage0Tools.llvm}/bin/llvm-ar" \
+    "export NIX_CC=${stage0Tools.sysroot}/bin/cc" \
+    > $out/tool-env.sh
 ''

@@ -5,11 +5,11 @@ See `docs/self-hosting/proof-artifacts.md` for the capture contract.
 
 | Flow | Run ID | Finished | Commit | Tests | Capture dir |
 |---|---|---|---|---|---|
-| self-hosting-test | 20261112T180932-self-hosting-test | 2026-11-12T19:12:26-05:00 | `e0f0102` | 86/86 pass | `/var/tmp/redox-self-hosting-captures/20261112T180932-self-hosting-test` |
+| self-hosting-test | 20261123T052934-self-hosting-test | 2026-11-23T07:04:29-05:00 | `bff2526` | 90/90 pass | `/var/tmp/redox-self-hosting-captures/20261123T052934-self-hosting-test` |
 | snix-compile-test | 20261028T091421-snix-compile-test | 2026-10-28T10:08:15-04:00 | `8a9604d9` | 8/8 pass | `/var/tmp/redox-self-hosting-captures/20261028T091421-snix-compile-test` |
-| snix-sandbox-test | 20261112T001037-snix-sandbox-test | 2026-11-12T00:22:22-05:00 | `1ff012e` | 19/19 pass | `/var/tmp/redox-self-hosting-captures/20261112T001037-snix-sandbox-test` |
-| kernel-rebuild-test | 20261111T084242-kernel-rebuild-test | 2026-11-11T09:36:06-05:00 | `7e605399` | 10/10 pass | `/var/tmp/redox-self-hosting-captures/20261111T084242-kernel-rebuild-test` |
-| native-rebuild-test | 20261112T180932-native-rebuild-test | 2026-11-12T19:02:57-05:00 | `e0f0102` | 134/134 pass | `/var/tmp/redox-self-hosting-captures/20261112T180932-native-rebuild-test` |
+| snix-sandbox-test | 20261122T021951-snix-sandbox-test | 2026-11-22T02:37:18-05:00 | `aa8d62f` | 21/21 pass | `/var/tmp/redox-self-hosting-captures/20261122T021951-snix-sandbox-test` |
+| kernel-rebuild-test | 20261121T225259-kernel-rebuild-test | 2026-11-21T23:18:34-05:00 | `1318737` | 10/10 pass | `/var/tmp/redox-self-hosting-captures/20261121T225259-kernel-rebuild-test` |
+| native-rebuild-test | 20261121T232438-native-rebuild-test | 2026-11-22T00:18:06-05:00 | `1318737` | 134/134 pass | `/var/tmp/redox-self-hosting-captures/20261121T232438-native-rebuild-test` |
 | file-source-context-smoke | 20261106T152938-file-source-context-smoke | 2026-11-06T15:29:43-05:00 | `295c2479` | 6/6 pass | `/var/tmp/redox-self-hosting-captures/20261106-file-context-smoke-295c2479-3` |
 | ln-directory-smoke | 20261106T203242-ln-directory-smoke | 2026-11-06T20:32:52-05:00 | `04f6d6bb` | 6/6 pass | `/var/tmp/redox-self-hosting-captures/20261106-ln-symlink-write-after` |
 | native-cc-probe | 20261106T172358-native-cc-probe | 2026-11-06T17:24:29-05:00 | `295c2479` | 3/3 pass | `/var/tmp/redox-self-hosting-captures/20261106-native-cc-stdin-n5inr` |
@@ -17,4 +17,5 @@ See `docs/self-hosting/proof-artifacts.md` for the capture contract.
 | native-url-path-probe | 20261106T184057-native-url-path-probe | 2026-11-06T18:42:44-05:00 | `295c2479` | 2/2 pass | `/var/tmp/redox-self-hosting-captures/20261106-native-url-path-probe-7w5n-locked` |
 | proxy-abi-initial-namespace | 20261106T203206-proxy-abi-initial-namespace | 2026-11-06T20:32:15-05:00 | `04f6d6bb` | 10/10 pass | `/var/tmp/redox-self-hosting-captures/20261106-proxy-symlink-sdk-write-after` |
 | runtime-environment-smoke | 20261028T205624-runtime-environment-smoke | 2026-10-28T20:57:24-04:00 | `4d7b99f6` | 5/5 pass | `/var/tmp/redox-self-hosting-captures/20261028T205624-runtime-environment-smoke` |
+| snix-install-test | 20261123T015703-snix-install-test | 2026-11-23T01:57:42-05:00 | `3168539` | 1/1 pass | `/var/tmp/redox-self-hosting-captures/20261123T015703-snix-install-test` |
 | symlink-root-abi-diagnostic | 20261106T202700-symlink-root-abi-diagnostic | 2026-11-06T20:27:20-05:00 | `04f6d6bb` | 2/2 pass | `/var/tmp/redox-self-hosting-captures/20261106-symlink-root-abi-flags` |

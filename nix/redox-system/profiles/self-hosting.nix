@@ -48,6 +48,10 @@ dev
       ++ opt "redox-sysroot"
       # cmake for C/C++ projects
       ++ opt "redox-cmake"
+      # Keep NASM in the seed manifest and guest store for native kernel builds.
+      ++ opt "redox-nasm"
+      # Header generator for relibc builds
+      ++ opt "redox-cbindgen"
       # Stack-growing lld launcher (fixes JOBS>=2 linker crashes)
       ++ opt "lld-wrapper";
 

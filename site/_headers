@@ -1,14 +1,26 @@
-# Hosts supporting _headers should use these directly. GitHub Pages ignores this
-# file; coi-serviceworker.js is a bounded, separately tested fallback, not headers.
+# Direct-header hosts (Cloudflare Pages, etc.) apply these rules natively.
+# GitHub Pages ignores this file; coi-serviceworker.js is a bounded fallback.
+# Use "! Cache-Control" before overrides so Cloudflare Pages replaces rather
+# than concatenates the Cache-Control header from /*.
 /*
   Cross-Origin-Opener-Policy: same-origin
   Cross-Origin-Embedder-Policy: require-corp
   Cross-Origin-Resource-Policy: same-origin
   X-Content-Type-Options: nosniff
   Cache-Control: no-store
-/revisions/*
-  Cache-Control: public, max-age=31536000, immutable
-/revisions/*/coi-serviceworker.js
+
+/channel.json
+  ! Cache-Control
   Cache-Control: no-store
-/*.wasm
-  Content-Type: application/wasm
+
+/manifest.json
+  ! Cache-Control
+  Cache-Control: no-store
+
+/revisions/*
+  ! Cache-Control
+  Cache-Control: public, max-age=31536000, immutable
+
+/revisions/:revision/coi-serviceworker.js
+  ! Cache-Control
+  Cache-Control: no-store

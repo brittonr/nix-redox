@@ -125,12 +125,18 @@ Snix's typed manifest so native initfs rebuilding retains the marker service.
 Expected native identities are frozen during the first boot, not inferred from
 whatever happened to run after the restart.
 
-Before each restart the host stops and waits for the VMM, extracts the selected
-EFI file from that disk's RedoxFS, installs those exact bytes into its ESP, and
-launches firmware from the disk. QEMU does not inject a seed EFI for this flow.
-This is **host-assisted ESP installation**, not a production guest ESP installer.
-The guest fsyncs its phase state and boot files before requesting each orderly
-stop/restart; this is not a sudden-power-loss durability claim.
+The current proof asks the guest to install its selected EFI loader with
+`snix system boot N --esp PATH`. The host stops and restarts the VMM on the
+same disk without extracting files or writing the ESP. QEMU boots from the
+disk and uses write-through caching for this test. This is not a sudden
+power-loss durability claim. Historical receipts below used host-assisted
+ESP installation; they do not verify the guest installer.
+
+Focused QEMU check `redox-efi-write-proof.kdF62D8y`: a seeded FAT32 ESP
+contained a deliberately different, bootable EFI payload. The root console
+ran `snix system boot 1 --esp` on the actual virtio partition. After QEMU
+exited, a read-only extraction matched the original seed EFI byte for byte.
+This verifies a real guest write, not the native build and rollback cycle.
 
 This graph reuses the seed compiler/toolchain, libraries, existing userspace
 packages, and driver binaries. It is not an all-packages/toolchain rebuild, and
@@ -144,6 +150,41 @@ complete successfully; filtering output cannot bypass the protocol checks.
 The 16 GiB mutable image and native build scratch need host disk space; use
 `TMPDIR=/var/tmp` when `/tmp` is memory-backed or small. Capture metadata reports
 the exact run verdict; test fixtures alone are not evidence of a successful run.
+
+If an interrupted run left a stopped disk at the seed phase, resume with
+the same seed inputs:
+
+```sh
+TMPDIR=/var/tmp nix run .#native-rebuild-test -- \
+  --ch --resume-disk /path/to/stopped/redox.img --timeout 14400 --verbose
+```
+
+The runner copies the disk and leaves the input untouched. Completed
+guest store outputs can be reused, but the resumed run still has to observe
+all three firmware boots and match every executing artifact identity. A disk
+that had already selected the native or rollback phase is not a resume input.
+
+Fresh-seed Cloud Hypervisor run `20261126T144640-native-rebuild-test` passed
+**140/140** with zero failures or skips in 5138.709 seconds, without
+`--resume-disk`. Before rebuilding, the guest killed a builder after it wrote
+a partial output. It verified that the output was unregistered, retried the
+build, and confirmed a third build reused the completed, registered output. The guest then
+built the bootloader, kernel, initfs and system, installed both EFI executables
+itself, and passed all nine executing identity checks across seed, native and
+rollback boots. Capture:
+`/var/tmp/redox-self-hosting-captures/native-fresh-retry-6-20261126/`.
+
+Cloud Hypervisor run `20261126T131954-native-rebuild-test` passed **135/135**
+with zero failures or skips in 1709.815 seconds. It resumed from a copy of
+the timed-out seed disk after an incomplete bootloader output directory was
+moved aside on that copy. The guest rebuilt the bootloader, reused its
+previously built kernel and initfs, and installed both the native and rollback
+EFI executables itself. The host compared all nine executing identities with
+the frozen manifest expectations. The original disk was not modified.
+
+Capture: `/var/tmp/redox-self-hosting-captures/native-guest-esp-recovered-20261126/`.
+It includes the three serial logs, `expected-identities.log`, `summary.json`,
+and the read-only compiler log capture `guest-rebuild-live.err`.
 
 Completed Cloud Hypervisor proof: `20261106-e2e-native-19975ccf` passes
 **134/134**, with zero failures or skips, in 2531 seconds. All three cold firmware

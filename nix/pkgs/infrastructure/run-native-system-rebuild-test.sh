@@ -120,6 +120,64 @@ unit_with_marker() {
   done
 }
 
+proof_esp_device() (
+  # The proof attaches exactly one virtio disk. Production callers supply a
+  # verified partition explicitly, and never infer the target from this glob.
+  shopt -s nullglob
+  local esps=(/scheme/disk.*_virtio_blk/0p0)
+  [[ ${#esps[@]} == 1 ]] || fatal "$phase-esp-device" 'expected one virtio ESP partition'
+  printf '%s\n' "${esps[0]}"
+)
+
+interrupted_output_retry() {
+  local fixture output marker hash info retry_dir
+  # Redox has no mktemp; the pinned mkdir fails if a previous run left this.
+  retry_dir=$work/interrupted-output-retry
+  mkdir "$retry_dir"
+  fixture=$retry_dir/retry.nix
+  marker=$retry_dir/mode
+  cat >"$fixture" <<NIX
+derivation {
+  name = "native-interrupted-output-proof";
+  system = "x86_64-unknown-redox";
+  builder = "/nix/system/profile/bin/bash";
+  args = [ "-c" ''
+    # Bash builtins only: the guest's multicall uutils need their own argv[0].
+    if [[ \$(<"$marker") == interrupt ]]; then
+      printf partial >"\$out"
+      kill -KILL "\$\$"
+    fi
+    printf complete >"\$out"
+  '' ];
+}
+NIX
+  output=$(eval_raw "(import $fixture).outPath")
+  hash=${output##*/}
+  info=/nix/var/snix/pathinfo/${hash%%-*}.json
+  # This fixture alone uses --no-sandbox so an external marker can change
+  # between invocations without changing the derivation or output path.
+  printf interrupt >"$marker"
+  if "$SNIX" build --no-sandbox --file "$fixture" >"$work/interrupted-build.out" 2>"$work/interrupted-build.err"; then
+    fatal interrupted-build 'killed builder unexpectedly succeeded'
+  fi
+  if [[ ! -f $output ]]; then
+    printf 'expected output: %s\n' "$output"
+    cat "$work/interrupted-build.out" "$work/interrupted-build.err"
+  fi
+  require interrupted-output-left-on-disk test "$(<"$output")" = partial
+  require interrupted-output-unregistered test ! -e "$info"
+  printf complete >"$marker"
+  "$SNIX" build --no-sandbox --file "$fixture" >"$work/retried-build.out" 2>"$work/retried-build.err" || {
+    cat "$work/retried-build.err"
+    fatal interrupted-build-retried 'retry failed'
+  }
+  require interrupted-build-retried test "$(<"$output")" = complete
+  require retried-output-registered test -f "$info"
+  printf interrupt >"$marker"
+  require retried-output-reused "$SNIX" build --no-sandbox --file "$fixture"
+  printf complete >"$marker"
+}
+
 seed_phase() {
   # Redox uutils does not provide sync. Use the real filesystem fsync operation,
   # compiled with the same offline guest toolchain as the native rebuild.
@@ -158,6 +216,9 @@ RUST
   cp /usr/lib/boot/kernel "$work/original-kernel"
   cp /usr/lib/boot/initfs "$work/original-initfs"
   original_id=$(json_value "$work/original.json" m.generation.id)
+  local esp
+  esp=$(proof_esp_device)
+  require seed-guest-efi-access "$SNIX" system boot "$original_id" --esp "$esp"
   original_hostname=$(</etc/hostname)
   # Older bootstrap manifests have no toplevel; activation deliberately uses
   # /etc/redox-system as their identity rather than leaving a native identity.
@@ -186,6 +247,9 @@ RUST
   nix_check service-fixtures 'm.services.declared ? native-proof-remove && m.services.declared ? native-proof-retain && m.services.declared ? native-proof-runner'
   nix_check driver-fixture 'builtins.elem "e1000d" m.configuration.hardware.networkDrivers && m.configuration.hardware.usbEnabled'
   [[ $failures == 0 ]] || exit 1
+
+  phase=interrupted-output-retry
+  interrupted_output_retry
 
   # Snapshot the store before the rebuild. Derive identity only from the actual
   # built manifest: Rust serializes absent config fields as null, so evaluating
@@ -481,8 +545,10 @@ request_restart() {
   [[ $failures == 0 ]] || exit 1
   require "$next-restart-efi" test -f "$efi"
   printf '%s\n' "$next" >"$work/phase"
-  # The host installs this exact stored EFI into the existing disk's ESP; this
-  # is not a claim that production guest activation includes an ESP installer.
+  local esp id
+  esp=$(proof_esp_device)
+  id=$(json_value "$manifest" m.generation.id)
+  require "$next-guest-efi-installed" "$SNIX" system boot "$id" --esp "$esp"
   # The seed keeps PCI configuration inside initfs; only the native generation
   # also materializes it under /etc. Flush the active tree, not optional leaves.
   "$work/flush" "$work" /etc /usr/lib/boot /usr/lib/init.d "$efi"

@@ -355,7 +355,7 @@ let
           if user ? schemes then
             user.schemes
           else if (user.uid or 1) == 0 then
-            cfg.fullSchemes
+            cfg.fullSchemes ++ lib.optional (inputs.snix.systemSource != "") "disk.*"
           else if user.createHome or false then
             cfg.restrictedSchemes
           else
@@ -652,7 +652,8 @@ let
           #   system.{name, version}
 
           {
-            hostname = "${cfg.hostname}";
+            ${lib.optionalString (inputs.snix.systemSource != "") ''systemSource = ${builtins.toJSON inputs.snix.systemSource};
+            ''}hostname = "${cfg.hostname}";
             timezone = "${cfg.timezone}";
 
             networking = {

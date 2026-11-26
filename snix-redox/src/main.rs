@@ -529,6 +529,10 @@ enum SystemCommand {
         /// Path to boot default marker file
         #[arg(short, long)]
         boot_default: Option<String>,
+
+        /// Install the active generation's EFI executable to this FAT32 partition
+        #[arg(long, requires = "generation", conflicts_with_all = ["dir", "boot_default"])]
+        esp: Option<std::path::PathBuf>,
     },
 
     /// Rebuild system from configuration.nix (like nixos-rebuild switch)
@@ -975,7 +979,11 @@ fn main() {
                 generation,
                 dir,
                 boot_default,
-            } => system::boot_cmd(generation, dir.as_deref(), boot_default.as_deref()),
+                esp,
+            } => match (generation, esp) {
+                (Some(id), Some(esp)) => system::install_boot_generation(id, &esp),
+                _ => system::boot_cmd(generation, dir.as_deref(), boot_default.as_deref()),
+            },
             SystemCommand::Rebuild {
                 config,
                 dry_run,

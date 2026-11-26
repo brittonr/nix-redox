@@ -236,7 +236,11 @@ def assemble(args):
         with headers.open("a") as stream:
             for directory in sorted((root / "assets").iterdir()):
                 if directory.is_dir() and re.fullmatch(r"[a-f0-9]{64}", directory.name):
-                    stream.write(f"\n/assets/{directory.name}/*\n  Cache-Control: public, max-age=31536000, immutable\n")
+                    stream.write(
+                        f"\n/assets/{directory.name}/*\n"
+                        "  ! Cache-Control\n"
+                        "  Cache-Control: public, max-age=31536000, immutable\n"
+                    )
     # Runtime identities already bind compressed/raw disk, firmware, cache and
     # snapshot bytes. Hash only the remaining published frontend/notices here;
     # never walk assets and rehash the large disk or captured memory streams.

@@ -4,7 +4,7 @@
 [![Self-hosting](https://github.com/brittonr/nix-redox/actions/workflows/self-hosting.yml/badge.svg)](https://github.com/brittonr/nix-redox/actions/workflows/self-hosting.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Nix Flakes](https://img.shields.io/badge/Nix-flakes-5277C3?logo=nixos&logoColor=white)](https://nixos.org)
-[![Website](https://img.shields.io/badge/website-nix--redox-63b3ed)](https://brittonr.github.io/nix-redox/)
+[![Website](https://img.shields.io/badge/website-nixredox.com-63b3ed)](https://nixredox.com/)
 
 **A complete [Redox OS](https://www.redox-os.org/) distribution, built from source with Nix. One command boots a graphical Redox desktop.**
 
@@ -198,6 +198,10 @@ snix system services           # list declared services
 snix install ripgrep           # install a package from the binary cache
 ```
 
+For a full system rebuild on Redox, boot the `redox-native-seed` image.
+Then use Snix inside Redox to build, activate, install the EFI loader, and
+roll back on the same disk. See the [native workflow](docs/self-hosting/inguest-build-path.md).
+
 ## Host-side system management
 
 `redox-rebuild` builds configurations and tracks generations on the host:
@@ -328,6 +332,7 @@ and evidence rules.
 - [`docs/redox-rebuild.md`](docs/redox-rebuild.md) — host-side builds, generations and rollback
 - [`docs/binary-cache.md`](docs/binary-cache.md) — Cachix setup, trust and usage
 - [`docs/browser-demo.md`](docs/browser-demo.md) — local QEMU-WASM, offline fixtures, immutable releases, snapshots and browser evidence
+- [`docs/hosting-nixredox-domain.md`](docs/hosting-nixredox-domain.md) — `nixredox.com` canonical hosting, Cloudflare Pages/R2 deployment, redirects and DNS/mail hygiene
 - [`docs/nixos-integration.md`](docs/nixos-integration.md) — NixOS module options and VM service
 - [`docs/releases.md`](docs/releases.md) — tag, image assets and verification
 - [`docs/nixtamal.md`](docs/nixtamal.md) — building without flakes; Nixtamal pins

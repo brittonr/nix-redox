@@ -33,10 +33,12 @@
   fdt-src,
   bootloader-src,
   uefi-src,
+  seedPackages,
 }:
 
 let
   targetArch = builtins.head (lib.splitString "-" redoxTarget);
+  stage0Tools = import ./stage0-tools.nix { inherit seedPackages; };
 
   kernelSourceTree = pkgs.stdenv.mkDerivation {
     name = "native-kernel-rebuild-kernel-src";
@@ -48,7 +50,7 @@ let
       "installPhase"
     ];
 
-    nativeBuildInputs = [ pkgs.python3 pkgs.nasm ];
+    nativeBuildInputs = [ pkgs.python3 ];
 
     postUnpack = ''
       rm -rf $sourceRoot/redox-path
@@ -69,9 +71,6 @@ let
       fi
 
       python3 ${../system/patches/kernel/patch-kernel-ptrace-proc-handles.py} .
-      python3 ${../system/patches/kernel/patch-kernel-trampoline-fallback.py} .
-      nasm -f bin -o src/asm/x86/trampoline.bin src/asm/x86/trampoline.asm
-      nasm -f bin -o src/asm/x86_64/trampoline.bin src/asm/x86_64/trampoline.asm
       python3 ${../patches/patch-kernel-serial-no-loopback.py} src/devices/uart_16550.rs
       python3 ${./patch-native-boot-proof.py} kernel .
     '';
@@ -143,6 +142,7 @@ let
 in
 pkgs.runCommand "native-kernel-rebuild-bundle" { nativeBuildInputs = [ pkgs.python3 ]; } ''
   mkdir -p $out/kernel/.cargo $out/bootloader/.cargo $out/rust-src
+  printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = builtins.storePath \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
 
   cp -r ${kernelSourceTree}/. $out/kernel
   chmod -R u+w $out/kernel
@@ -252,13 +252,14 @@ pkgs.runCommand "native-kernel-rebuild-bundle" { nativeBuildInputs = [ pkgs.pyth
       "sysroot_vendor_store": "${sysrootVendor}",
       "guest_bins": [
         "/bin/snix",
-        "/nix/system/profile/bin/rustc",
-        "/nix/system/profile/bin/llvm-ar",
-        "/nix/system/profile/bin/llvm-objcopy",
-        "/nix/system/profile/bin/ld.lld",
-        "/nix/system/profile/bin/lld-link",
-        "/nix/system/profile/bin/lld-wrapper",
-        "/nix/system/profile/bin/cc"
+        "${stage0Tools.rustc}/bin/rustc",
+        "${stage0Tools.llvm}/bin/llvm-ar",
+        "${stage0Tools.llvm}/bin/llvm-objcopy",
+        "${stage0Tools.llvm}/bin/ld.lld",
+        "${stage0Tools.llvm}/bin/lld-link",
+        "${stage0Tools.lldWrapper}/bin/lld-wrapper",
+        "${stage0Tools.nasm}/bin/nasm",
+        "${stage0Tools.sysroot}/bin/cc"
       ]
     },
     "guest_test_script": "run-native-kernel-rebuild-test.sh"

@@ -6,9 +6,10 @@
 # This enables `snix build .#ripgrep` inside a running Redox VM:
 # a real 55-crate Rust project built through a Nix flake on Redox OS.
 
-{ pkgs, ripgrep-src }:
+{ pkgs, ripgrep-src, seedPackages }:
 
 let
+  stage0Tools = import ./stage0-tools.nix { inherit seedPackages; };
   # Vendor all crate dependencies from the lockfile
   vendoredDeps = pkgs.rustPlatform.fetchCargoVendor {
     name = "ripgrep-vendor";
@@ -33,6 +34,14 @@ pkgs.runCommand "ripgrep-source-bundle" { } ''
     # Builder script and Nix derivation for snix build --file
     cp ${./build-ripgrep.sh} $out/build-ripgrep.sh
     cp ${./build-ripgrep.nix} $out/build.nix
+    printf '%s\n' ${pkgs.lib.escapeShellArg ("{\n" + pkgs.lib.concatStrings (pkgs.lib.mapAttrsToList (name: value: "  ${name} = builtins.storePath \"${value}\";\n") stage0Tools) + "}")} > $out/stage0-tools.nix
+    printf '%s\n' \
+      "export NIX_TOOL_PATH=${stage0Tools.sysroot}/bin:${stage0Tools.rustc}/bin:${stage0Tools.llvm}/bin:${stage0Tools.uutils}/bin:${stage0Tools.bash}/bin:/bin:/usr/bin" \
+      "export NIX_LD_LIBRARY_PATH=${stage0Tools.rustc}/lib:${stage0Tools.llvm}/lib:/usr/lib/rustc:/lib" \
+      "export NIX_RUSTC=${stage0Tools.rustc}/bin/rustc" \
+      "export NIX_AR=${stage0Tools.llvm}/bin/llvm-ar" \
+      "export NIX_CC=${stage0Tools.sysroot}/bin/cc" \
+      > $out/tool-env.sh
 
     # Cargo config for offline vendored builds.
     # fetchCargoVendor lays crates out under vendor/source-registry-0/.
@@ -48,6 +57,6 @@ pkgs.runCommand "ripgrep-source-bundle" { } ''
   target = "x86_64-unknown-redox"
 
   [target.x86_64-unknown-redox]
-  linker = "/nix/system/profile/bin/cc"
+  linker = "${stage0Tools.sysroot}/bin/cc"
   EOF
 ''

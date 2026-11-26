@@ -1,21 +1,24 @@
 # Evaluated by Snix inside Redox; uses the host package's pinned lock/vendor.
+let
+  tools = import ./stage0-tools.nix;
+in
 derivation {
   name = "redox-initfs-tools-native";
   system = "x86_64-unknown-redox";
-  builder = "/nix/system/profile/bin/bash";
+  builder = "${tools.bash}/bin/bash";
   source = ./initfs-tools;
   bootstrapInputs = builtins.readFile ./seed.json;
   args = [ "--noprofile" "--norc" "-c" ''
     set -eu
-    export PATH=/nix/system/profile/bin:/bin:/usr/bin
-    export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+    export PATH=${tools.sysroot}/bin:${tools.rustc}/bin:${tools.llvm}/bin:${tools.uutils}/bin:${tools.bash}/bin:/bin:/usr/bin
+    export LD_LIBRARY_PATH=${tools.rustc}/lib:${tools.llvm}/lib:/usr/lib/rustc:/lib
     export HOME="$TMPDIR/home"
     export CARGO_HOME="$TMPDIR/cargo-home"
     export CARGO_TARGET_DIR="$TMPDIR/target"
     export CARGO_INCREMENTAL=0 CARGO_BUILD_JOBS=1
-    export RUSTC=/nix/system/profile/bin/rustc
-    export AR=/nix/system/profile/bin/llvm-ar
-    export CC=/nix/system/profile/bin/cc
+    export RUSTC=${tools.rustc}/bin/rustc
+    export AR=${tools.llvm}/bin/llvm-ar
+    export CC=${tools.sysroot}/bin/cc
     mkdir -p "$HOME" "$CARGO_HOME" "$out/bin"
     cp -r "$source" "$TMPDIR/source"
     chmod -R u+w "$TMPDIR/source"

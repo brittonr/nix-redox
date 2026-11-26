@@ -114,13 +114,6 @@ proof_validate_runtime() {
   done
 }
 
-# Partition locations come from this disk's GPT, not a fixed image-size guess.
-PARTITIONS=$("$PROOF_SFDISK" --json "$IMAGE") || exit 1
-SECTOR_SIZE=$(printf '%s\n' "$PARTITIONS" | "$PROOF_JQ" -er '.partitiontable.sectorsize') || exit 1
-ESP_START=$(printf '%s\n' "$PARTITIONS" | "$PROOF_JQ" -er '.partitiontable.partitions[] | select(.name == "ESP") | .start') || exit 1
-ROOT_START=$(printf '%s\n' "$PARTITIONS" | "$PROOF_JQ" -er '.partitiontable.partitions[] | select(.name == "RedoxFS") | .start') || exit 1
-ROOT_SIZE=$(printf '%s\n' "$PARTITIONS" | "$PROOF_JQ" -er '.partitiontable.partitions[] | select(.name == "RedoxFS") | .size') || exit 1
-
 if [ -n "$STOP_AFTER_SCRIPT" ]; then
   proof_fail protocol '--stop-after-script cannot bypass the three-boot proof' || true
   proof_collect
@@ -193,21 +186,8 @@ PY
     fi
 
     proof_stop_vm
-    # Host-assisted ESP installation of the actual guest filesystem bytes. No
-    # host build or serial transfer is involved, and the VMM holds no disk open.
-    if ! "$PROOF_EXTRACT" "$IMAGE" "$((ROOT_START * SECTOR_SIZE))" "$((ROOT_SIZE * SECTOR_SIZE))" "$EFI_PATH" "$WORK_DIR/next.EFI"; then
-      proof_fail esp_install "could not extract $EFI_PATH from the guest RedoxFS" || true
-      break
-    fi
-    if ! "$PROOF_MCOPY" -o -i "$IMAGE@@$((ESP_START * SECTOR_SIZE))" "$WORK_DIR/next.EFI" ::/EFI/BOOT/BOOTX64.EFI; then
-      proof_fail esp_install 'could not install extracted EFI into the disk ESP' || true
-      break
-    fi
-    if ! sync "$IMAGE"; then
-      proof_fail esp_install 'could not flush installed EFI to the disk' || true
-      break
-    fi
-    proof_result "${NEXT_PHASE}_guest_efi_installed" PASS
+    # The guest has already installed its EFI. Only restart the VMM on the
+    # same image; the next firmware identity independently verifies the write.
     proof_collect
     BOOT_INDEX=$((BOOT_INDEX + 1))
     proof_launch

@@ -311,9 +311,9 @@ pkgs.runCommand "redox-sysroot"
     # The Redox kernel only gives ~8KB main-thread stack, which overflows under
     # parallel link invocations (JOBS>=2). lld-wrapper spawns a thread with a
     # large stack and exec()s ld.lld from it.
-    LLD=/nix/system/profile/bin/lld-wrapper
-    CLANG=/nix/system/profile/bin/clang
-    ERR=/tmp/.cc-wrapper-stderr
+    LLD=''${PI_LLD:-/nix/system/profile/bin/lld-wrapper}
+    CLANG=''${PI_CLANG:-/nix/system/profile/bin/clang}
+    ERR=''${PI_CC_ERR:-''${TMPDIR:-/tmp}/.cc-wrapper-stderr}
 
     # Log raw input args for debugging
     printf '%s\n' "--- CC wrapper invocation ---" "$@" > /tmp/.cc-wrapper-raw-args

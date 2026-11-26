@@ -8,6 +8,32 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- The in-guest build path is recorded in
+  `docs/self-hosting/inguest-build-path.md`: extend the guest-native graph from
+  the seed image, keep host-only runners and publishing out of scope, and move
+  source preparation into the guest through #33. The host cross-build, host
+  Snix tests and the guest source bundle now share
+  `snix-combined-src.nix`; `checks.x86_64-linux.snix-source-agreement` fails if
+  the guest tree diverges. An opt-in `snix-second-build-test` has the installed
+  guest-built Snix build Snix again from source.
+
+- Guest-built Snix installs as a system package. `snix system rebuild
+  --source` builds the package with the seed compiler, switches the
+  generation, and the self-hosting test replaces `/bin/snix` with the
+  installed binary and verifies `--version` and `eval`. A focused
+  `snix-install-test` covers the `$out`-literal package source, `$out`
+  builder argument, stale-profile rejection, generation switch, and guest
+  binary. The installed guest-built Snix then runs the next
+  `snix system rebuild --source` (generation 3). Self-hosting test: 90/90
+  pass.
+
+- Native recipes resolve their builder tools from the seed's store paths.
+  `stage0-tools.nix` maps the seed manifest to bash, uutils, rustc, LLVM,
+  lld-wrapper, make and the sysroot; the kernel, bootloader, initfs-tools,
+  Snix, ripgrep, cc-dependency and workspace recipes consume those paths
+  instead of `/nix/system/profile`, so changing a seed tool changes the
+  derivation hash.
+
 - Snix evaluates flake inputs as flakes. Every lock node reachable from the
   root is wired recursively with `self`, `sourceInfo`, `inputs`, `outputs`,
   `_type`, and lock `rev`/`shortRev`/`lastModified`/`narHash` metadata;
@@ -43,6 +69,16 @@ All notable changes to this project are documented here. The format follows
   actions, package transfer and the playground's explicit guest execution.
 
 ### Changed
+
+- The guest Snix build generates its protobuf Rust modules from the bundled
+  descriptor sets with `prost` and `tonic-build`. The host-generated
+  `generated-protos` sources and the bundle copy step are gone; guest builds no
+  longer need `protoc`.
+
+- The guest Snix self-build no longer forces one Cargo job, one codegen unit,
+  `panic=abort`, no debuginfo or the serial curve25519 backend. It builds with
+  Cargo's defaults at four jobs; `self-hosting-test` passes 87/87 with the
+  resulting 455-crate build and source rebuild.
 
 - The guest Snix self-build compiles every proc-macro crate from the real
   vendored sources instead of local shims. Full guest builds of the real

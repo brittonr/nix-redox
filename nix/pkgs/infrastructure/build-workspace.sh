@@ -1,10 +1,13 @@
-#!/nix/system/profile/bin/bash
+#!/bin/bash
 set -e
-export PATH=/nix/system/profile/bin:/bin:/usr/bin
-export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+if [ -z "${NIX_TOOL_PATH:-}" ]; then
+  . "${0%/*}/tool-env.sh"
+fi
+export PATH="${NIX_TOOL_PATH:?}"
+export LD_LIBRARY_PATH="${NIX_LD_LIBRARY_PATH:?}"
 export HOME="$TMPDIR"
 export CARGO_HOME="$TMPDIR/cargo-home"
-export RUSTC=/nix/system/profile/bin/rustc
+export RUSTC="${NIX_RUSTC:?}"
 export CARGO_INCREMENTAL=0
 export CARGO_BUILD_JOBS=2
 export CARGO_TARGET_DIR="$TMPDIR/target"

@@ -54,9 +54,9 @@ The upstream assembly applies these adaptations:
 - **HTTP initialization:** make upstream glue's HTTP client optional so client
   construction failure does not prevent offline evaluation/building. This is
   not a TLS-verification bypass; unavailable-client call sites can still fail.
-- **Protobuf generation:** generate descriptor sets on the host and replace the
-  three upstream protobuf build scripts with versions that can consume those
-  descriptors without a guest `protoc`.
+- **Protobuf generation:** ship descriptor sets generated on the host and patch
+  the three upstream build scripts to decode them with `prost` and generate Rust
+  modules with `tonic-build`/`prost-build`; no guest `protoc` is needed.
 
 The workspace selects rustls with the `ring` provider instead of `aws-lc-rs` for
 relibc compatibility. The local cache/download paths also use synchronous
@@ -79,6 +79,14 @@ upstream Snix CLI:
 | System management | [`rebuild.rs`](../snix-redox/src/rebuild.rs), [`system.rs`](../snix-redox/src/system.rs), and [`activate.rs`](../snix-redox/src/activate.rs) implement configuration/manifest handling, native `systemSource` routing, generations, activation, boot selection, and rollback. This is our Redox management layer, not NixOS's module/activation implementation. |
 | Optional host builds | [`bridge.rs`](../snix-redox/src/bridge.rs) and [`bridge_build.rs`](../snix-redox/src/bridge_build.rs) exchange build requests/results through a shared filesystem. This route is distinct from guest-native building. |
 | Redox schemes and filesystem I/O | [`stored/`](../snix-redox/src/stored/), [`profiled/`](../snix-redox/src/profiled/), and [`file_io_worker.rs`](../snix-redox/src/file_io_worker.rs) provide lazy store access, profile views, and off-handler filesystem I/O to avoid scheme-handler deadlocks. |
+
+Native builds reuse an output only if it exists and has a path registration.
+After an interrupted build, wait for its builder processes to stop before
+retrying. Snix removes unregistered outputs at the derivation's declared paths
+and rebuilds them; it does not overwrite a registered sibling in an incomplete
+multi-output set. Do not run competing builds for the same outputs. Atomic
+metadata publication protects against a stopped process leaving half-written
+JSON; it is not a power-loss guarantee.
 
 [`sandbox.rs`](../snix-redox/src/sandbox.rs) and
 [`build_proxy/`](../snix-redox/src/build_proxy/) implement Redox scheme namespaces
@@ -104,14 +112,12 @@ workspace overrides `tonic`, `futures-macro`, and `tracing-attributes`:
 The guest source bundle adds further transformations to its copied manifest and
 source tree. These are **not automatically part of the normal cross-package**:
 
-- Additional local dependency/procedural-macro replacements.
-- Host-generated protobuf Rust modules copied into `OUT_DIR`, avoiding guest
-  protobuf code generation as well as guest `protoc` execution.
-- Default-config handling for empty-query redb service URLs, bypassing native
-  Serde deserialization in that narrow case.
-- Offline vendoring, one Cargo job, the Redox linker, and a serial
-  curve25519-dalek backend. The builder also sets explicit Rayon and rustc flags
-  for current Redox compiler/runtime limitations.
+- Protobuf descriptor sets are generated on the host, but the Rust modules are
+  generated inside each build by `tonic-build`; no `generated-protos` sources
+  or guest `protoc` execution are involved.
+- Offline vendoring, the Redox linker, and Rayon's thread count. Cargo keeps its
+  default jobs, codegen units, unwinding, debuginfo and the default
+  curve25519-dalek backend.
 
 ### Native dependency replacements are not all semantics-preserving
 

@@ -1,4 +1,4 @@
-#!/nix/system/profile/bin/bash
+#!/bin/bash
 # Builder script for rebuilding the Redox kernel on Redox OS.
 # Called by snix build --file build.nix as a Nix derivation builder.
 #
@@ -40,8 +40,18 @@ extract_executable() {
   return 1
 }
 
-export PATH=/nix/system/profile/bin:/bin:/usr/bin
-export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+# Kernel build.rs invokes nasm by name. Fail if the seed's assembler is
+# missing instead of allowing Cargo to find another copy.
+if [ ! -x "${NIX_NASM:?}" ]; then
+  echo "[build-redox-kernel] missing executable stage0 NASM: $NIX_NASM" >&2
+  exit 1
+fi
+export PATH="${NIX_NASM%/*}:${NIX_TOOL_PATH:?}"
+mkdir -p "$TMPDIR/tool-bin"
+ln -sf "${NIX_CC:?}" "$TMPDIR/tool-bin/cc"
+ln -sf "${NIX_CC:?}" "$TMPDIR/tool-bin/c++"
+export PATH="$TMPDIR/tool-bin:$PATH"
+export LD_LIBRARY_PATH="${NIX_LD_LIBRARY_PATH:?}"
 export HOME="$TMPDIR/home"
 export CARGO_HOME="$TMPDIR/cargo-home"
 export CARGO_TARGET_DIR="$TMPDIR/target"
@@ -49,10 +59,9 @@ export CARGO_INCREMENTAL=0
 export CARGO_BUILD_JOBS=1
 export RAYON_NUM_THREADS=4
 export RUST_BACKTRACE=1
-export AR=/nix/system/profile/bin/llvm-ar
-export CC=/nix/system/profile/bin/cc
+export AR="${NIX_AR:?}"
+export CC="${NIX_CC:?}"
 export RUST_SRC_PATH="${rustSource:-/usr/src/native-kernel-rebuild/rust-src}/library"
-export REDOX_KERNEL_USE_PREBUILT_TRAMPOLINE=1
 # The source bundle prints this compile-time ID from the executing kernel.
 export REDOX_BOOT_PROOF_ID="$out"
 export CARGO_TERM_PROGRESS_WHEN="${CARGO_TERM_PROGRESS_WHEN:-always}"
@@ -81,16 +90,16 @@ directory = "$kernel_source/vendor"
 offline = true
 CFG
 
-cp /nix/system/profile/bin/bash "$kernel_linker"
+cp "$NIX_BASH" "$kernel_linker"
 cat >"$kernel_linker" <<EOF
-#!/nix/system/profile/bin/bash
+#!$NIX_BASH
 printf '%s\n' "\$@" > "$kernel_linker_log.args"
-exec /nix/system/profile/bin/lld-wrapper "\$@" 2> "$kernel_linker_log.stderr"
+exec "$NIX_LLD_WRAPPER" "\$@" 2> "$kernel_linker_log.stderr"
 EOF
 
 # cargo -Z build-std looks for rust-src at $(rustc --print sysroot)/lib/rustlib/src/rust/library.
 # The guest sysroot is read-only, so copy rustlib into TMPDIR and overlay rust-src there.
-real_sysroot=$(/nix/system/profile/bin/rustc --print sysroot 2>/dev/null || echo /nix/system/profile)
+real_sysroot=${NIX_RUSTC%/bin/rustc}
 custom_sysroot="$TMPDIR/sysroot"
 mkdir -p "$custom_sysroot/lib/rustlib/src"
 rustlib_path="$real_sysroot/lib/rustlib"
@@ -122,14 +131,15 @@ ls -ld "$custom_sysroot/lib/rustlib/src/rust/library" >&2 || true
 ls -ld "$custom_sysroot/lib/rustlib/src/rust/library/std" >&2 || true
 ls -ld "$custom_sysroot/lib/rustlib/src/rust/library/windows_targets" >&2 || true
 ls -ld "$linker_script" >&2 || true
-ls -ld /nix/system/profile/bin/lld-wrapper >&2 || true
-ls -ld /nix/system/profile/bin/ld.lld >&2 || true
+ls -ld "$NIX_LLD_WRAPPER" >&2 || true
+ls -ld "${NIX_LLD_WRAPPER%/*}/ld.lld" >&2 || true
 
 # Use RUSTC that reports custom sysroot so cargo's -Z build-std finds rust-src there.
 # cp bash to get exec permission, then overwrite contents (keeps mode on Redox).
 wrapper="$TMPDIR/rustc-sysroot"
-cp /nix/system/profile/bin/bash "$wrapper"
-printf '%s\n' '#!/nix/system/profile/bin/bash' "exec /nix/system/profile/bin/rustc --sysroot $custom_sysroot \"\$@\"" >"$wrapper"
+cp "$NIX_BASH" "$wrapper"
+printf '%s\n' "#!$NIX_BASH" "exec $NIX_RUSTC --sysroot $custom_sysroot \"\$@\"" >"$wrapper"
+chmod +x "$wrapper"
 export RUSTC="$wrapper"
 
 if ! cargo metadata --manifest-path "$custom_sysroot/lib/rustlib/src/rust/library/Cargo.toml" --no-deps --format-version 1 >"$TMPDIR/kernel-rust-src-metadata.json" 2>"$TMPDIR/kernel-rust-src-metadata.err"; then
@@ -186,6 +196,6 @@ if [ -z "$kernel_bin" ] || [ ! -f "$kernel_bin" ]; then
   exit 1
 fi
 
-/nix/system/profile/bin/llvm-objcopy --strip-debug "$kernel_bin" "$out/boot/kernel"
-/nix/system/profile/bin/llvm-objcopy --only-keep-debug "$kernel_bin" "$out/boot/kernel.sym"
+"$NIX_OBJCOPY" --strip-debug "$kernel_bin" "$out/boot/kernel"
+"$NIX_OBJCOPY" --only-keep-debug "$kernel_bin" "$out/boot/kernel.sym"
 printf '%s\n' "$out" >"$out/boot-proof-id"

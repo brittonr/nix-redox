@@ -1,4 +1,4 @@
-#!/nix/system/profile/bin/bash
+#!/bin/bash
 # Builder script for rebuilding the Redox bootloader on Redox OS.
 # Called by snix build --file build.nix as a Nix derivation builder.
 #
@@ -40,8 +40,12 @@ extract_executable() {
   return 1
 }
 
-export PATH=/nix/system/profile/bin:/bin:/usr/bin
-export LD_LIBRARY_PATH=/nix/system/profile/lib:/usr/lib/rustc:/lib
+export PATH="${NIX_TOOL_PATH:?}"
+mkdir -p "$TMPDIR/tool-bin"
+ln -sf "${NIX_CC:?}" "$TMPDIR/tool-bin/cc"
+ln -sf "${NIX_CC:?}" "$TMPDIR/tool-bin/c++"
+export PATH="$TMPDIR/tool-bin:$PATH"
+export LD_LIBRARY_PATH="${NIX_LD_LIBRARY_PATH:?}"
 export HOME="$TMPDIR/home"
 export CARGO_HOME="$TMPDIR/cargo-home"
 export CARGO_TARGET_DIR="$TMPDIR/target"
@@ -49,8 +53,8 @@ export CARGO_INCREMENTAL=0
 export CARGO_BUILD_JOBS=1
 export RAYON_NUM_THREADS=4
 export RUST_BACKTRACE=1
-export AR=/nix/system/profile/bin/llvm-ar
-export CC=/nix/system/profile/bin/cc
+export AR="${NIX_AR:?}"
+export CC="${NIX_CC:?}"
 export RUST_SRC_PATH="${rustSource:-/usr/src/native-kernel-rebuild/rust-src}/library"
 export CARGO_TERM_PROGRESS_WHEN="${CARGO_TERM_PROGRESS_WHEN:-always}"
 export CARGO_TERM_PROGRESS_WIDTH="${CARGO_TERM_PROGRESS_WIDTH:-80}"
@@ -82,7 +86,7 @@ CFG
 
 # cargo -Z build-std looks for rust-src at $(rustc --print sysroot)/lib/rustlib/src/rust/library.
 # The guest sysroot is read-only, so copy rustlib into TMPDIR and overlay rust-src there.
-real_sysroot=$(/nix/system/profile/bin/rustc --print sysroot 2>/dev/null || echo /nix/system/profile)
+real_sysroot=${NIX_RUSTC%/bin/rustc}
 custom_sysroot="$TMPDIR/sysroot"
 mkdir -p "$custom_sysroot/lib/rustlib/src"
 rustlib_path="$real_sysroot/lib/rustlib"
@@ -104,9 +108,9 @@ for manifest in "$RUST_SRC_PATH"/**/Cargo.toml; do
 done
 shopt -u globstar
 
-cp /nix/system/profile/bin/bash "$bootloader_linker"
+cp "$NIX_BASH" "$bootloader_linker"
 cat >"$bootloader_linker" <<EOF
-#!/nix/system/profile/bin/bash
+#!$NIX_BASH
 printf '%s\n' "\$@" > "$bootloader_linker_log.args"
 : > "$bootloader_linker_log.rsp"
 for arg in "\$@"; do
@@ -121,7 +125,7 @@ for arg in "\$@"; do
       ;;
   esac
 done
-exec /nix/system/profile/bin/lld-wrapper "\$@" 2> "$bootloader_linker_log.stderr"
+exec "$NIX_LLD_WRAPPER" "\$@" 2> "$bootloader_linker_log.stderr"
 EOF
 
 echo "[build-redox-bootloader] real_sysroot=$real_sysroot" >&2
@@ -130,12 +134,13 @@ echo "[build-redox-bootloader] custom_sysroot=$custom_sysroot" >&2
 echo "[build-redox-bootloader] bootloader_linker=$bootloader_linker (lld-wrapper -flavor link)" >&2
 ls -ld "$custom_sysroot/lib/rustlib/src/rust/library" >&2 || true
 ls -ld "$custom_sysroot/lib/rustlib/src/rust/library/std" >&2 || true
-ls -ld /nix/system/profile/bin/lld-wrapper >&2 || true
-ls -ld /nix/system/profile/bin/ld.lld >&2 || true
+ls -ld "$NIX_LLD_WRAPPER" >&2 || true
+ls -ld "${NIX_LLD_WRAPPER%/*}/ld.lld" >&2 || true
 
 wrapper="$TMPDIR/rustc-sysroot"
-cp /nix/system/profile/bin/bash "$wrapper"
-printf '%s\n' '#!/nix/system/profile/bin/bash' "exec /nix/system/profile/bin/rustc --sysroot $custom_sysroot \"\$@\"" >"$wrapper"
+cp "$NIX_BASH" "$wrapper"
+printf '%s\n' "#!$NIX_BASH" "exec $NIX_RUSTC --sysroot $custom_sysroot \"\$@\"" >"$wrapper"
+chmod +x "$wrapper"
 export RUSTC="$wrapper"
 
 cd "$bootloader_dir"

@@ -3375,6 +3375,108 @@ TOMLEOF
                           fi
                         '
 
+                        # Install the guest-built Snix as the generation's snix
+                        # package and replace /bin/snix with it.
+                        echo "--- snix-install: select guest-built Snix ---"
+                        /nix/system/profile/bin/bash -c '
+                          OUTPUT=$(cat /tmp/snix-compile-output 2>/dev/null)
+                          if [ -z "$OUTPUT" ] || [ ! -x "$OUTPUT/bin/snix" ]; then
+                            echo "FUNC_TEST:snix-install:FAIL:no built binary"
+                            exit 0
+                          fi
+                          CFGDIR=/tmp/snix-install-built
+                          rm -rf "$CFGDIR"
+                          mkdir -p "$CFGDIR/generations"
+                          cp /etc/snix-install-built/packages.nix "$CFGDIR/packages.nix"
+                          cp /etc/snix-install-built/configuration.nix "$CFGDIR/configuration.nix"
+                          /nix/system/profile/bin/sed -i "s|@OUTPUT@|$OUTPUT|g" "$CFGDIR/packages.nix"
+                          /nix/system/profile/bin/sed -i "s|/etc/snix-install/packages.nix|$CFGDIR/packages.nix|g" "$CFGDIR/configuration.nix"
+                          cp /etc/redox-system/manifest.json "$CFGDIR/manifest.json"
+                          /bin/snix system rebuild --source \
+                            --config "$CFGDIR/configuration.nix" \
+                            --manifest "$CFGDIR/manifest.json" \
+                            --gen-dir "$CFGDIR/generations" \
+                            >/tmp/snix-install-built-out 2>/tmp/snix-install-built-err
+                          EXIT=$?
+                          if [ $EXIT -eq 0 ]; then
+                            cp /nix/system/profile/bin/snix /bin/snix 2>/tmp/snix-install-built-cp-err
+                            /bin/chmod +x /bin/snix 2>>/tmp/snix-install-built-cp-err
+                          fi
+                          if [ $EXIT -eq 0 ] && cmp -s "$OUTPUT/bin/snix" /bin/snix; then
+                            echo "FUNC_TEST:snix-install:PASS"
+                            /bin/snix --version
+                            /bin/snix eval --expr "1 + 1"
+                            echo "FUNC_TEST:snix-installed-binary:PASS"
+                          else
+                            echo "FUNC_TEST:snix-install:FAIL:exit=$EXIT"
+                            echo "snix /bin/snix -> $(readlink -f /bin/snix 2>/dev/null)"
+                            echo "snix built -> $OUTPUT/bin/snix"
+                            /bin/cat /tmp/snix-install-built-cp-err 2>/dev/null
+                            /bin/cat /tmp/snix-install-built-err 2>/dev/null
+                          fi
+                        '
+
+                        # The installed guest-built Snix runs the next rebuild.
+                        echo "--- snix-install-next: rebuild with /bin/snix ---"
+                        /nix/system/profile/bin/bash -c '
+                          CFGDIR=/tmp/snix-install-built
+                          if [ ! -x /bin/snix ]; then
+                            echo "FUNC_TEST:snix-install-next:FAIL:no /bin/snix"
+                            exit 0
+                          fi
+                          /bin/snix system rebuild --source \
+                            --config "$CFGDIR/configuration.nix" \
+                            --manifest "$CFGDIR/manifest.json" \
+                            --gen-dir "$CFGDIR/generations" \
+                            >/tmp/snix-install-next-out 2>/tmp/snix-install-next-err
+                          EXIT=$?
+                          if [ $EXIT -eq 0 ] && [ -d "$CFGDIR/generations/3" ]; then
+                            echo "FUNC_TEST:snix-install-next:PASS"
+                          else
+                            echo "FUNC_TEST:snix-install-next:FAIL:exit=$EXIT"
+                            /bin/ls -1 "$CFGDIR/generations" 2>/dev/null
+                            /bin/cat /tmp/snix-install-next-err 2>/dev/null
+                          fi
+                        '
+
+                        # Opt-in: have the installed guest-built Snix build
+                        # Snix again from source. The marker keeps the default
+                        # self-hosting proof at 90 tests.
+                        echo "--- snix-second-build: /bin/snix builds Snix ---"
+                        /nix/system/profile/bin/bash -c '
+                            if [ ! -e /etc/snix-second-build/marker ]; then
+                              exit 0
+                            fi
+                            SECONDDIR=/tmp/snix-second-build
+                            rm -rf "$SECONDDIR"
+                            mkdir -p "$SECONDDIR"
+                            /nix/system/profile/bin/sed "s|import ./stage0-tools.nix|import /usr/src/snix-redox/stage0-tools.nix|" /usr/src/snix-redox/build.nix > "$SECONDDIR/build.nix"
+                            /nix/system/profile/bin/sed -i "s|^  args = .*|  SECOND_BUILD = \"1\";\n  args = [ \"/usr/src/snix-redox/build-snix.sh\" \"second\" ];|" "$SECONDDIR/build.nix"
+                            /bin/snix eval --file "$SECONDDIR/build.nix" > "$SECONDDIR/eval-out" 2> "$SECONDDIR/eval-err"
+                            EVAL_EXIT=$?
+                            /bin/snix build --file "$SECONDDIR/build.nix" > "$SECONDDIR/out" 2> "$SECONDDIR/err"
+                            EXIT=$?
+                            OUT2=$(while IFS= read -r line; do case $line in /nix/store/*) printf "%s" "$line"; break;; esac; done < "$SECONDDIR/out")
+                            if [ $EXIT -eq 0 ] && [ -x "$OUT2/bin/snix" ]; then
+                              echo "FUNC_TEST:snix-second-build:PASS"
+                              echo "snix-second-output=$OUT2"
+                              "$OUT2/bin/snix" --version
+                              "$OUT2/bin/snix" eval --expr "1 + 1"
+                              echo "FUNC_TEST:snix-second-binary:PASS"
+                            else
+                              echo "FUNC_TEST:snix-second-build:FAIL:exit=$EXIT:eval=$EVAL_EXIT"
+                              echo "snix-second-output=$OUT2"
+                              echo "=== eval stdout ==="
+                              /bin/cat "$SECONDDIR/eval-out" 2>/dev/null
+                              echo "=== eval stderr ==="
+                              /bin/cat "$SECONDDIR/eval-err" 2>/dev/null
+                              echo "=== build stderr ==="
+                              /bin/cat "$SECONDDIR/err" 2>/dev/null
+                              echo "=== build.nix ==="
+                              /bin/cat "$SECONDDIR/build.nix" 2>/dev/null
+                            fi
+                        '
+
                         # The self-compile leaves multi-GB target trees under
                         # /tmp; the generated store output is retained. Free
                         # them before the live rebuild tests so the 8G/16G
@@ -3652,6 +3754,17 @@ selfHosting
     };
     extraPaths =
       (
+        if pkgs ? snix-install-built-fixtures then
+          [
+            {
+              source = pkgs.snix-install-built-fixtures;
+              target = "etc/snix-install-built";
+            }
+          ]
+        else
+          [ ]
+      )
+      ++ (
         if selfHosting ? "/filesystem" && selfHosting."/filesystem" ? extraPaths then
           selfHosting."/filesystem".extraPaths
         else

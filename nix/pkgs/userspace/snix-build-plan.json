@@ -345,6 +345,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#tonic-build@0.13.1",
           "externCrateName": "tonic_build"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#prost@0.13.5",
+          "externCrateName": "prost"
         }
       ],
       "procMacro": false,
@@ -536,6 +540,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#tonic-build@0.13.1",
           "externCrateName": "tonic_build"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#prost@0.13.5",
+          "externCrateName": "prost"
         }
       ],
       "procMacro": false,
@@ -1255,6 +1263,10 @@
         {
           "packageId": "registry+https://github.com/rust-lang/crates.io-index#tonic-build@0.13.1",
           "externCrateName": "tonic_build"
+        },
+        {
+          "packageId": "registry+https://github.com/rust-lang/crates.io-index#prost@0.13.5",
+          "externCrateName": "prost"
         }
       ],
       "procMacro": false,
