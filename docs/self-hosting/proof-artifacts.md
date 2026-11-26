@@ -164,6 +164,16 @@ guest store outputs can be reused, but the resumed run still has to observe
 all three firmware boots and match every executing artifact identity. A disk
 that had already selected the native or rollback phase is not a resume input.
 
+Fresh-seed Cloud Hypervisor run `20261126T144640-native-rebuild-test` passed
+**140/140** with zero failures or skips in 5138.709 seconds, without
+`--resume-disk`. Before rebuilding, the guest killed a builder after it wrote
+a partial output. It verified that the output was unregistered, retried the
+build, and confirmed a third build reused the completed, registered output. The guest then
+built the bootloader, kernel, initfs and system, installed both EFI executables
+itself, and passed all nine executing identity checks across seed, native and
+rollback boots. Capture:
+`/var/tmp/redox-self-hosting-captures/native-fresh-retry-6-20261126/`.
+
 Cloud Hypervisor run `20261126T131954-native-rebuild-test` passed **135/135**
 with zero failures or skips in 1709.815 seconds. It resumed from a copy of
 the timed-out seed disk after an incomplete bootloader output directory was

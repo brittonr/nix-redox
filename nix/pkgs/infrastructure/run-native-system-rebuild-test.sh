@@ -131,21 +131,23 @@ proof_esp_device() (
 
 interrupted_output_retry() {
   local fixture output marker hash info retry_dir
-  retry_dir=$(mktemp -d "$work/retry.XXXXXX")
+  # Redox has no mktemp; the pinned mkdir fails if a previous run left this.
+  retry_dir=$work/interrupted-output-retry
+  mkdir "$retry_dir"
   fixture=$retry_dir/retry.nix
-  marker=$retry_dir/interrupt
+  marker=$retry_dir/mode
   cat >"$fixture" <<NIX
 derivation {
   name = "native-interrupted-output-proof";
   system = "x86_64-unknown-redox";
   builder = "/nix/system/profile/bin/bash";
   args = [ "-c" ''
-    /nix/system/profile/bin/mkdir "\$out" || exit 1
-    if test -f "$marker"; then
-      printf partial >"\$out/partial"
+    # Bash builtins only: the guest's multicall uutils need their own argv[0].
+    if [[ \$(<"$marker") == interrupt ]]; then
+      printf partial >"\$out"
       kill -KILL "\$\$"
     fi
-    printf complete >"\$out/result"
+    printf complete >"\$out"
   '' ];
 }
 NIX
@@ -158,20 +160,22 @@ NIX
   if "$SNIX" build --no-sandbox --file "$fixture" >"$work/interrupted-build.out" 2>"$work/interrupted-build.err"; then
     fatal interrupted-build 'killed builder unexpectedly succeeded'
   fi
-  require interrupted-output-left-on-disk test -f "$output/partial"
+  if [[ ! -f $output ]]; then
+    printf 'expected output: %s\n' "$output"
+    cat "$work/interrupted-build.out" "$work/interrupted-build.err"
+  fi
+  require interrupted-output-left-on-disk test "$(<"$output")" = partial
   require interrupted-output-unregistered test ! -e "$info"
-  rm "$marker"
+  printf complete >"$marker"
   "$SNIX" build --no-sandbox --file "$fixture" >"$work/retried-build.out" 2>"$work/retried-build.err" || {
     cat "$work/retried-build.err"
     fatal interrupted-build-retried 'retry failed'
   }
-  require interrupted-build-complete-output test -f "$output/result"
-  require interrupted-build-retried test "$(<"$output/result")" = complete
-  require interrupted-output-removed test ! -e "$output/partial"
+  require interrupted-build-retried test "$(<"$output")" = complete
   require retried-output-registered test -f "$info"
   printf interrupt >"$marker"
   require retried-output-reused "$SNIX" build --no-sandbox --file "$fixture"
-  rm "$marker"
+  printf complete >"$marker"
 }
 
 seed_phase() {
