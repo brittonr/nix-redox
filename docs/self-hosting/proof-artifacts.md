@@ -151,6 +151,31 @@ The 16 GiB mutable image and native build scratch need host disk space; use
 `TMPDIR=/var/tmp` when `/tmp` is memory-backed or small. Capture metadata reports
 the exact run verdict; test fixtures alone are not evidence of a successful run.
 
+If an interrupted run left a stopped disk at the seed phase, resume with
+the same seed inputs:
+
+```sh
+TMPDIR=/var/tmp nix run .#native-rebuild-test -- \
+  --ch --resume-disk /path/to/stopped/redox.img --timeout 14400 --verbose
+```
+
+The runner copies the disk and leaves the input untouched. Completed
+guest store outputs can be reused, but the resumed run still has to observe
+all three firmware boots and match every executing artifact identity. A disk
+that had already selected the native or rollback phase is not a resume input.
+
+Cloud Hypervisor run `20261126T131954-native-rebuild-test` passed **135/135**
+with zero failures or skips in 1709.815 seconds. It resumed from a copy of
+the timed-out seed disk after an incomplete bootloader output directory was
+moved aside on that copy. The guest rebuilt the bootloader, reused its
+previously built kernel and initfs, and installed both the native and rollback
+EFI executables itself. The host compared all nine executing identities with
+the frozen manifest expectations. The original disk was not modified.
+
+Capture: `/var/tmp/redox-self-hosting-captures/native-guest-esp-recovered-20261126/`.
+It includes the three serial logs, `expected-identities.log`, `summary.json`,
+and the read-only compiler log capture `guest-rebuild-live.err`.
+
 Completed Cloud Hypervisor proof: `20261106-e2e-native-19975ccf` passes
 **134/134**, with zero failures or skips, in 2531 seconds. All three cold firmware
 boots use the same writable disk. The seed boot executes the original bootloader,

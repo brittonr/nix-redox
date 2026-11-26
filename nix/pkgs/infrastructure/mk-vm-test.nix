@@ -447,6 +447,7 @@ in
       VERBOSE=0
       TEST_FILTER=""
       STOP_AFTER_SCRIPT=""
+      ${lib.optionalString (nativeBootProof != null) ''RESUME_DISK=""''}
 
       usage() {
         echo "Usage: ${name} [OPTIONS]"
@@ -460,6 +461,9 @@ in
         echo "  --cpus N       Override vCPUs (TCG default: ${toString tcgCpus}; native: ${toString cpus})"
         echo "  --artifacts DIR Retain serial/VMM logs, command, identities and results"
         echo "  --timeout SEC  Set timeout (default: ${toString defaultTimeout}, env: ${timeoutEnvVar})"
+        ${lib.optionalString (
+          nativeBootProof != null
+        ) ''echo "  --resume-disk IMG Start boot 0 from a copy of a stopped seed-phase proof disk"''}
         echo "  --filter PAT   Only report tests matching pattern (substring match)"
         echo "  --stop-after-script NAME"
         echo "                 Stop after script banner NAME completes"
@@ -477,6 +481,11 @@ in
             [ $# -ge 2 ] || { echo "ERROR: --artifacts requires a directory" >&2; exit 2; }
             REDOX_VM_ARTIFACTS_DIR="$2"; shift 2 ;;
           --timeout) TIMEOUT="$2"; shift 2 ;;
+          ${lib.optionalString (nativeBootProof != null) ''
+            --resume-disk)
+              [ $# -ge 2 ] || { echo "ERROR: --resume-disk requires an image" >&2; exit 2; }
+              RESUME_DISK="$2"; shift 2 ;;
+          ''}
           --filter)  TEST_FILTER="$2"; shift 2 ;;
           --stop-after-script) STOP_AFTER_SCRIPT="$2"; shift 2 ;;
           --verbose) VERBOSE=1; shift ;;
@@ -495,7 +504,19 @@ in
       # === Setup ===
       IMAGE="$WORK_DIR/redox.img"
       GUEST_IMAGE_SOURCE=${diskImage}/redox.img
-      cp ${lib.optionalString (nativeBootProof != null) "--sparse=always"} ${diskImage}/redox.img "$IMAGE"
+      ${lib.optionalString (nativeBootProof != null) ''
+        if [ -n "$RESUME_DISK" ]; then
+          if [ ! -f "$RESUME_DISK" ] || [ "$(stat -c %s -- "$RESUME_DISK")" != "$(stat -c %s -- "$GUEST_IMAGE_SOURCE")" ]; then
+            echo "ERROR: Resume disk must be a regular image matching the seed disk size" >&2
+            exit 2
+          fi
+          GUEST_IMAGE_SOURCE=$(realpath -- "$RESUME_DISK") || exit 2
+          echo "  Resuming from a copy of $GUEST_IMAGE_SOURCE"
+        fi
+      ''}
+      cp ${
+        lib.optionalString (nativeBootProof != null) "--sparse=always --reflink=auto"
+      } -- "$GUEST_IMAGE_SOURCE" "$IMAGE" || exit 1
       chmod +w "$IMAGE"
 
       echo ""
