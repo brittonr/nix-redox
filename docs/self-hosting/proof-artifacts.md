@@ -132,6 +132,12 @@ disk and uses write-through caching for this test. This is not a sudden
 power-loss durability claim. Historical receipts below used host-assisted
 ESP installation; they do not verify the guest installer.
 
+Focused QEMU check `redox-efi-write-proof.kdF62D8y`: a seeded FAT32 ESP
+contained a deliberately different, bootable EFI payload. The root console
+ran `snix system boot 1 --esp` on the actual virtio partition. After QEMU
+exited, a read-only extraction matched the original seed EFI byte for byte.
+This verifies a real guest write, not the native build and rollback cycle.
+
 This graph reuses the seed compiler/toolchain, libraries, existing userspace
 packages, and driver binaries. It is not an all-packages/toolchain rebuild, and
 the package manager executing the graph is the seed Snix rather than the
